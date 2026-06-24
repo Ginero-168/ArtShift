@@ -5,7 +5,6 @@
  * Compact dropdowns: one visible item + popover menu.
  */
 
-import dynamic from "next/dynamic";
 import { useMemo, useRef, useState } from "react";
 import {
   IconBringForward,
@@ -42,8 +41,6 @@ import type {
   TextElement,
 } from "@/lib/engine/types";
 import { THAI_FONTS } from "@/lib/fonts";
-
-const AIImageTools = dynamic(() => import("@/components/AIImageTools"), { ssr: false });
 
 /* ——— constants ——— */
 
@@ -102,8 +99,6 @@ export default function PropertiesPanel({
   const pasteElements = useEngine((s) => s.pasteElements);
   const croppingImageId = useEngine((s) => s.croppingImageId);
   const setCroppingImageId = useEngine((s) => s.setCroppingImageId);
-  const [aiOpen, setAiOpen] = useState(false);
-
   const selected = useMemo<EngineElement[]>(() => {
     if (!slide) return [];
     return slide.elements.filter((el) => selectedIds.has(el.id) && !el.isDeleted);
@@ -494,35 +489,7 @@ export default function PropertiesPanel({
           >
             {croppingImageId === firstImage.id ? "Done" : "Crop"}
           </button>
-          <button
-            onClick={() => setAiOpen((v) => !v)}
-            style={{
-              padding: "4px 8px",
-              borderRadius: 5,
-              border: "1px solid #7c3aed",
-              background: aiOpen ? "#7c3aed" : "var(--surface-solid, #fff)",
-              color: aiOpen ? "#fff" : "#7c3aed",
-              fontSize: 11,
-              cursor: "pointer",
-              marginLeft: 4,
-            }}
-          >
-            AI
-          </button>
         </Section>
-      )}
-
-      {aiOpen && firstImage && selected.length === 1 && (
-        <AIImageTools
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            marginTop: 8,
-            zIndex: 10,
-            minWidth: 280,
-          }}
-        />
       )}
 
       {/* Opacity */}

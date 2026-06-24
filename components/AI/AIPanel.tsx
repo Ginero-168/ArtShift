@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import AIImagePanel from "@/components/AIImagePanel";
 import AIPrompt from "@/components/AIPrompt";
 
-type Tab = "generate" | "stock";
+const AIImageTools = dynamic(() => import("@/components/AIImageTools"), { ssr: false });
+
+type Tab = "generate" | "stock" | "tools";
 
 interface Props {
   onClose: () => void;
@@ -49,6 +52,7 @@ export default function AIPanel({ onClose, onInsertImage, defaultTab = "generate
           {[
             { id: "generate", label: "Generate" },
             { id: "stock", label: "Stock" },
+            { id: "tools", label: "Tools" },
           ].map((t) => (
             <button
               key={t.id}
@@ -87,6 +91,7 @@ export default function AIPanel({ onClose, onInsertImage, defaultTab = "generate
       <div style={{ overflow: "auto", padding: 12 }}>
         {tab === "generate" && <AIPrompt />}
         {tab === "stock" && <AIImagePanel onInsert={onInsertImage} />}
+        {tab === "tools" && <AIImageTools />}
       </div>
     </div>
   );
