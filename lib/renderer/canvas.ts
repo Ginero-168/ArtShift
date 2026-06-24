@@ -21,7 +21,7 @@ import type {
   ImageElement,
   TextElement,
 } from "../engine/types";
-import { clearElementCache, getCachedElement, setCachedElement } from "./cache";
+import { getCachedElement, setCachedElement } from "./cache";
 
 export type RenderCtx = {
   ctx: CanvasRenderingContext2D;

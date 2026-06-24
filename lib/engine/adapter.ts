@@ -43,7 +43,7 @@ import {
 } from "./types";
 
 const LEGACY_W = 1280;
-const LEGACY_H = 720;
+const _LEGACY_H = 720;
 
 export type LegacyConvertOptions = {
   /** Override the auto scale (default = SLIDE_W / LEGACY_W = 1.5). */

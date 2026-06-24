@@ -307,7 +307,7 @@ export function svgToSlideObjects(
   const parserError = doc.querySelector("parsererror");
   if (parserError) return null;
   const root = doc.documentElement;
-  if (!root || root.tagName.toLowerCase() !== "svg") return null;
+  if (root?.tagName.toLowerCase() !== "svg") return null;
 
   // Compute svg-local → slide-local base transform from viewBox / width / height.
   const vb = root.getAttribute("viewBox");
@@ -527,7 +527,7 @@ export function svgToSlideObjects(
 
 /** Find `<svg>` inside a text/html clipboard payload and return its serialised text. */
 export function extractSvgFromHtml(html: string): string | null {
-  if (!html || !html.includes("<svg")) return null;
+  if (!html?.includes("<svg")) return null;
   try {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const svg = doc.querySelector("svg");

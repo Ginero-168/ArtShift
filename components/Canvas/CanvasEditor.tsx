@@ -199,7 +199,7 @@ export default function CanvasEditor() {
   );
 
   const onPointerMove = useCallback(
-    (p: WorldPoint, e: React.PointerEvent) => {
+    (p: WorldPoint, _e: React.PointerEvent) => {
       const d = dragRef.current;
       if (!d || !slide) return;
       if (d.kind === "move") {

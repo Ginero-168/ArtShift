@@ -9,7 +9,7 @@
  * - Collapse button at the bottom
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";

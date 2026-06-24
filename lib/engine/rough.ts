@@ -14,7 +14,6 @@ import rough from "roughjs/bin/rough";
 import type {
   ArrowElement,
   DiamondElement,
-  EllipseElement,
   EngineElement,
   HeartElement,
   HexagonElement,

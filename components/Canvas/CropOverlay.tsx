@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement } from "@/lib/engine/types";
 import type { WorldPoint } from "./CanvasRoot";

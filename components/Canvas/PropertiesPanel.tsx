@@ -30,11 +30,10 @@ import {
   IconStrokeThin,
   IconTrash,
 } from "@/components/icons";
-import { elementWorldBBox, unionBBox } from "@/lib/engine/bounds";
+import { unionBBox } from "@/lib/engine/bounds";
 import { useEngine } from "@/lib/engine/store";
 import type {
   ArrowElement,
-  ArrowHead,
   EngineElement,
   FillStyle,
   RectElement,
@@ -97,8 +96,8 @@ export default function PropertiesPanel({
   const deleteElements = useEngine((s) => s.deleteElements);
   const groupElements = useEngine((s) => s.groupElements);
   const ungroupElements = useEngine((s) => s.ungroupElements);
-  const flipHorizontal = useEngine((s) => s.flipHorizontal);
-  const flipVertical = useEngine((s) => s.flipVertical);
+  const _flipHorizontal = useEngine((s) => s.flipHorizontal);
+  const _flipVertical = useEngine((s) => s.flipVertical);
   const copyElements = useEngine((s) => s.copyElements);
   const pasteElements = useEngine((s) => s.pasteElements);
   const croppingImageId = useEngine((s) => s.croppingImageId);
@@ -1059,7 +1058,7 @@ function AlignBtn({
 
 function alignElements(elements: EngineElement[], mode: string) {
   const updateElements = useEngine.getState().updateElements;
-  const ids = elements.map((el) => el.id);
+  const _ids = elements.map((el) => el.id);
   let target = 0;
   const patches: { id: string; patch: Partial<EngineElement> }[] = [];
 

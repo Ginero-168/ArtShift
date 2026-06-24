@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadEngine } from "@/lib/engine/persist";
-import type { EngineDoc, EngineSlide } from "@/lib/engine/types";
+import type { EngineDoc } from "@/lib/engine/types";
 import { renderSlide } from "@/lib/renderer/canvas";
 
 export default function PresentPage() {

@@ -495,7 +495,7 @@ export const useEngine = create<EngineState>((set, get) => {
     pasteElements: () => {
       const s = get();
       const clip = s.clipboard;
-      if (!clip || !clip.length) return;
+      if (!clip?.length) return;
       pushHistory(s.history, s.doc, "paste");
       const pasted: EngineElement[] = [];
       set((cur) =>

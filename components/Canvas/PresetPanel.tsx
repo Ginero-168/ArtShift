@@ -9,7 +9,7 @@
  * - Click the × button to delete a preset
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { type Preset, usePresetStore } from "@/lib/engine/presetStore";
 import { useEngine } from "@/lib/engine/store";
@@ -25,7 +25,7 @@ type Props = {
 export default function PresetPanel({ onClose }: Props) {
   const presets = usePresetStore((s) => s.presets);
   const deletePreset = usePresetStore((s) => s.deletePreset);
-  const renamePreset = usePresetStore((s) => s.renamePreset);
+  const _renamePreset = usePresetStore((s) => s.renamePreset);
   const ref = useRef<HTMLDivElement | null>(null);
 
   // Close on outside click

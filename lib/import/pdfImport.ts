@@ -19,7 +19,7 @@ export async function importPdfToImages(file: File, scale = 2): Promise<string[]
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d")!;
+    const _ctx = canvas.getContext("2d")!;
     // pdfjs-dist v5 requires 'canvas' field, not 'canvasContext'
     const renderContext = { canvas, viewport } as any;
     await page.render(renderContext).promise;
