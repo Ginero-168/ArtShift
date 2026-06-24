@@ -621,7 +621,7 @@ export const useEngine = create<EngineState>((set, get) => {
 
     loadDoc: (doc) => {
       // Clear renderer cache so stale bitmaps aren't reused.
-      import("@/lib/renderer/canvas").then((m) => m.clearElementCache?.());
+      import("@/lib/renderer/cache").then((m) => m.clearElementCache?.());
       set({
         doc,
         currentSlideId: doc.slides[0]?.id ?? "",

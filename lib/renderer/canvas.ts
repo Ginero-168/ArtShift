@@ -10,7 +10,6 @@
  */
 
 import type { RoughCanvas } from "roughjs/bin/canvas";
-import rough from "roughjs/bin/rough";
 import type { ColorAdjustments } from "../color/adjustments";
 import { applyColorAdjustments } from "../color/adjustments";
 import { freedrawPath } from "../engine/freehand";
@@ -22,6 +21,7 @@ import type {
   ImageElement,
   TextElement,
 } from "../engine/types";
+import { clearElementCache, getCachedElement, setCachedElement } from "./cache";
 
 export type RenderCtx = {
   ctx: CanvasRenderingContext2D;
@@ -31,10 +31,12 @@ export type RenderCtx = {
 
 let _rcCanvas: HTMLCanvasElement | null = null;
 let _rc: RoughCanvas | null = null;
+let _rough: typeof import("roughjs/bin/rough") | null = null;
 function roughCanvas(target: HTMLCanvasElement): RoughCanvas {
   if (_rc && _rcCanvas === target) return _rc;
+  if (!_rough) _rough = require("roughjs/bin/rough");
   _rcCanvas = target;
-  _rc = rough.canvas(target);
+  _rc = _rough!.default.canvas(target);
   return _rc;
 }
 
@@ -76,34 +78,11 @@ export function renderSlide(slide: EngineSlide, render: RenderCtx, slideW: numbe
   }
 }
 
-const _elementCache = new Map<string, HTMLCanvasElement>();
-const MAX_CACHE_SIZE = 300;
-
-function getCacheKey(el: EngineElement): string {
-  return `${el.id}:${el.version}`;
-}
-
-function pruneCache() {
-  if (_elementCache.size > MAX_CACHE_SIZE) {
-    const entries = Array.from(_elementCache.entries());
-    // Remove oldest half.
-    for (let i = 0; i < Math.floor(entries.length / 2); i++) {
-      _elementCache.delete(entries[i][0]);
-    }
-  }
-}
-
-export function clearElementCache() {
-  _elementCache.clear();
-}
-
 export function renderElement(el: EngineElement, render: RenderCtx) {
   const { ctx } = render;
-  const cacheKey = getCacheKey(el);
-  let cached = _elementCache.get(cacheKey);
+  let cached = getCachedElement(el);
 
   if (!cached) {
-    pruneCache();
     const offscreen = document.createElement("canvas");
     offscreen.width = Math.max(1, Math.ceil(el.width));
     offscreen.height = Math.max(1, Math.ceil(el.height));
@@ -112,7 +91,7 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
       renderElementContent(el, octx, render);
     }
     cached = offscreen;
-    _elementCache.set(cacheKey, cached);
+    setCachedElement(el, cached);
   }
 
   ctx.save();

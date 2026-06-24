@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { RectElement, TextElement } from "@/lib/engine/types";
 import { ApplyTemplateInputSchema, safeParse } from "@/lib/schemas";
 import { CANVAS_H, CANVAS_W, runTemplate } from "@/lib/templates";
 
@@ -32,7 +33,9 @@ describe("runTemplate", () => {
     const objs = r!.objects;
 
     // Section headers are the 3 text objects that start with an icon.
-    const headers = objs.filter((o) => o.type === "text" && /^(🥛|💪|🍃)/.test((o as any).text));
+    const headers = objs.filter(
+      (o) => o.type === "text" && /^(🥛|💪|🍃)/.test((o as TextElement).text),
+    );
     expect(headers).toHaveLength(3);
     const ys = headers.map((h) => h.y);
     expect(new Set(ys).size).toBe(1);
@@ -160,7 +163,7 @@ describe("runTemplate", () => {
       },
     });
     const cards = r!.objects.filter((o) => o.type === "rect" && o.y > 100);
-    const fills = cards.map((c) => (c as any).backgroundColor);
+    const fills = cards.map((c) => (c as RectElement).backgroundColor);
     expect(fills[0]).not.toBe(fills[1]);
   });
 });
