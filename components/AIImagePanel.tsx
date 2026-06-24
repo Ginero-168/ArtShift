@@ -1,13 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 
 interface Props {
-  onClose: () => void;
   onInsert: (dataUrl: string) => void;
 }
 
-export default function AIImagePanel({ onClose, onInsert }: Props) {
+export default function AIImagePanel({ onInsert }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ thumb: string; full: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,11 +22,14 @@ export default function AIImagePanel({ onClose, onInsert }: Props) {
         `/api/stock?source=unsplash&query=${encodeURIComponent(query)}&per_page=6`,
       );
       const data = await res.json();
-      if (data.results) {
+      const results = data.results as Array<{
+        urls?: { thumb?: string; small?: string; regular?: string; full?: string };
+      }>;
+      if (results) {
         setResults(
-          data.results.map((r: any) => ({
-            thumb: r.urls?.thumb || r.urls?.small,
-            full: r.urls?.regular || r.urls?.full,
+          results.map((r) => ({
+            thumb: r.urls?.thumb || r.urls?.small || "",
+            full: r.urls?.regular || r.urls?.full || "",
           })),
         );
       } else {
@@ -130,13 +133,16 @@ export default function AIImagePanel({ onClose, onInsert }: Props) {
               cursor: "pointer",
               borderRadius: 4,
               overflow: "hidden",
+              position: "relative",
+              height: 60,
             }}
           >
-            <img
+            <Image
               src={r.thumb}
               alt=""
-              style={{ width: "100%", height: 60, objectFit: "cover", display: "block" }}
-              loading="lazy"
+              fill
+              sizes="(max-width: 768px) 50vw, 200px"
+              style={{ objectFit: "cover" }}
             />
           </button>
         ))}

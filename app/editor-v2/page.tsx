@@ -538,7 +538,6 @@ export default function EditorV2Page() {
             {/* AI Image panel */}
             {aiImageOpen && (
               <AIImagePanel
-                onClose={() => setAiImageOpen(false)}
                 onInsert={(dataUrl) => {
                   (async () => {
                     const { loadDataURL } = await import("@/lib/engine/imageCache");

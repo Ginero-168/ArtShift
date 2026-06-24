@@ -212,7 +212,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
           const minY = Math.min(...allY);
           const maxX = Math.max(...allX);
           const maxY = Math.max(...allY);
-          const patch: any = {
+          const patch: Partial<EngineElement> = {
             x: minX,
             y: minY,
             width: Math.max(1, maxX - minX),
@@ -267,7 +267,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
           }
         }
 
-        const patch: any = {
+        const patch: Partial<EngineElement> = {
           x: minX,
           y: minY,
           width: Math.max(1, maxX - minX),
@@ -279,8 +279,9 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
         };
 
         if (start.type === "arrow") {
-          patch.startBinding = startBinding;
-          patch.endBinding = endBinding;
+          const arrowPatch = patch as Partial<ArrowElement>;
+          arrowPatch.startBinding = startBinding;
+          arrowPatch.endBinding = endBinding;
         }
 
         updateElements([{ id: start.id, patch }], "resize line");

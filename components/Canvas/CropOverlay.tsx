@@ -14,19 +14,21 @@ type Props = {
 const HANDLE_SIZE = 8;
 const MIN_SIZE = 10;
 
+type CropEdge =
+  | "left"
+  | "right"
+  | "top"
+  | "bottom"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
+
 export default function CropOverlay({ element, worldToScreen, scale }: Props) {
   const updateElements = useEngine((s) => s.updateElements);
   const setCroppingImageId = useEngine((s) => s.setCroppingImageId);
   const [drag, setDrag] = useState<{
-    edge:
-      | "left"
-      | "right"
-      | "top"
-      | "bottom"
-      | "top-left"
-      | "top-right"
-      | "bottom-left"
-      | "bottom-right";
+    edge: CropEdge;
     startX: number;
     startY: number;
     origX: number;
@@ -267,11 +269,11 @@ function Handle({
   onPointerMove,
   onPointerUp,
 }: {
-  edge: any;
+  edge: CropEdge;
   x: number;
   y: number;
   cursor: string;
-  onPointerDown: (e: React.PointerEvent, edge: any) => void;
+  onPointerDown: (e: React.PointerEvent, edge: CropEdge) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
 }) {
