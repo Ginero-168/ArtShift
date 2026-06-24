@@ -36,7 +36,6 @@ function text(
     height: number;
     fill?: string;
     align?: string;
-    [key: string]: any;
   },
 ): TextElement {
   return {
@@ -80,7 +79,6 @@ function rect(
     height: number;
     fill?: string;
     stroke?: string;
-    [key: string]: any;
   },
 ): RectElement {
   return {
@@ -930,7 +928,6 @@ function timeline(d: TimelineData): TemplateResult {
         y: trackY - dotR,
         width: dotR * 2,
         height: dotR * 2,
-        shape: "ellipse",
         fill: pal.accent,
       }),
     );
@@ -941,7 +938,6 @@ function timeline(d: TimelineData): TemplateResult {
         y: trackY - 8,
         width: 16,
         height: 16,
-        shape: "ellipse",
         fill: "#ffffff",
       }),
     );
