@@ -63,16 +63,16 @@ async function rasterizeElement(
   const origX = el.x;
   const origY = el.y;
   const origAngle = el.angle;
-  (el as any).x = 0;
-  (el as any).y = 0;
-  (el as any).angle = 0;
+  (el as EngineElement).x = 0;
+  (el as EngineElement).y = 0;
+  (el as EngineElement).angle = 0;
 
   try {
     renderElement(el, { ctx, images } as RenderCtx);
   } finally {
-    (el as any).x = origX;
-    (el as any).y = origY;
-    (el as any).angle = origAngle;
+    (el as EngineElement).x = origX;
+    (el as EngineElement).y = origY;
+    (el as EngineElement).angle = origAngle;
   }
   ctx.restore();
 
@@ -131,7 +131,7 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
       if (el.type === "image") {
         const ie = el as ImageElement;
         const img = images?.get(ie.fileId);
-        if (img && img.src) {
+        if (img?.src) {
           try {
             const data = await toDataUrl(img.src);
             s.addImage({ ...common, data });
@@ -167,7 +167,7 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
             line:
               el.strokeWidth > 0
                 ? { color: el.strokeColor.replace("#", ""), width: el.strokeWidth }
-                : { type: "none" as any },
+                : { type: "none" as const },
           });
           continue;
         }

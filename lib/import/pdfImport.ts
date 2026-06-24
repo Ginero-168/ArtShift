@@ -4,6 +4,7 @@
  */
 
 import * as pdfjsLib from "pdfjs-dist";
+import type { RenderParameters } from "pdfjs-dist/types/src/display/api";
 
 // Use the bundled worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${(pdfjsLib as unknown as { version: string }).version}/build/pdf.worker.min.mjs`;
@@ -21,7 +22,7 @@ export async function importPdfToImages(file: File, scale = 2): Promise<string[]
     canvas.height = viewport.height;
     const _ctx = canvas.getContext("2d")!;
     // pdfjs-dist v5 requires 'canvas' field, not 'canvasContext'
-    const renderContext = { canvas, viewport } as any;
+    const renderContext = { canvas, viewport } as RenderParameters;
     await page.render(renderContext).promise;
     images.push(canvas.toDataURL("image/png"));
   }

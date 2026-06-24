@@ -11,7 +11,7 @@
  */
 
 import { getCached, loadDataURL } from "./imageCache";
-import { ENGINE_SCHEMA_VERSION, type EngineDoc } from "./types";
+import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineSlide } from "./types";
 
 export type SerializedDoc = {
   doc: EngineDoc;
@@ -47,11 +47,11 @@ export function fromJSON(input: unknown): EngineDoc {
   if (!input || typeof input !== "object") throw new Error("Invalid engine doc");
   const obj = input as Partial<EngineDoc>;
   if (!Array.isArray(obj.slides)) throw new Error("Invalid engine doc: missing slides");
-  const slides = obj.slides.map((sl: any) => ({
+  const slides = obj.slides.map((sl: Partial<EngineSlide>) => ({
     ...sl,
     width: sl.width ?? 1920,
     height: sl.height ?? 1080,
-  }));
+  })) as EngineSlide[];
   return {
     id: obj.id ?? crypto.randomUUID(),
     title: obj.title ?? "Untitled",
