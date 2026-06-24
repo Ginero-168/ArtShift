@@ -11,8 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import AIImagePanel from "@/components/AIImagePanel";
-import AIPrompt from "@/components/AIPrompt";
+import AIPanel from "@/components/AI/AIPanel";
 import CanvasEditor from "@/components/Canvas/CanvasEditor";
 import LibraryPanel from "@/components/Canvas/LibraryPanel";
 import PresetPanel from "@/components/Canvas/PresetPanel";
@@ -78,7 +77,7 @@ export default function EditorV2Page() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
-  const [aiImageOpen, setAiImageOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -510,35 +509,34 @@ export default function EditorV2Page() {
               </SmallToolBtn>
             </div>
 
-            {/* AI Image button */}
+            {/* AI button */}
             <button
-              onClick={() => {
-                const input = document.getElementById("ai-image-prompt") as HTMLInputElement | null;
-                input?.focus();
-                setAiImageOpen((v) => !v);
-              }}
+              onClick={() => setAiPanelOpen((v) => !v)}
               style={{
                 width: 28,
                 height: 28,
                 borderRadius: 6,
                 border: "1px solid #7c3aed",
-                background: aiImageOpen ? "#7c3aed" : "var(--surface-solid, #fff)",
+                background: aiPanelOpen ? "#7c3aed" : "var(--surface-solid, #fff)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                color: aiImageOpen ? "#fff" : "#7c3aed",
+                color: aiPanelOpen ? "#fff" : "#7c3aed",
                 boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
               }}
-              title="AI Image"
+              title="AI"
+              aria-label="Open AI panel"
+              aria-expanded={aiPanelOpen}
             >
               <IconSparkles size={13} />
             </button>
 
-            {/* AI Image panel */}
-            {aiImageOpen && (
-              <AIImagePanel
-                onInsert={(dataUrl) => {
+            {/* AI panel */}
+            {aiPanelOpen && (
+              <AIPanel
+                onClose={() => setAiPanelOpen(false)}
+                onInsertImage={(dataUrl) => {
                   (async () => {
                     const { loadDataURL } = await import("@/lib/engine/imageCache");
                     const entry = await loadDataURL(dataUrl);
@@ -675,8 +673,6 @@ export default function EditorV2Page() {
 
           {presetOpen && <PresetPanel onClose={() => setPresetOpen(false)} />}
           {templateBrowserOpen && <TemplateBrowser onClose={() => setTemplateBrowserOpen(false)} />}
-
-          <AIPrompt />
         </div>
       </div>
 
