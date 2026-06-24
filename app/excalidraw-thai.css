@@ -1,0 +1,102 @@
+/*
+ * Thai-glyph overlay for Excalidraw fonts.
+ *
+ * Strategy: register @font-face entries that share the SAME family names as
+ * Excalidraw's bundled fonts ("Excalifont", "Virgil", "Cascadia", "Helvetica",
+ * "Nunito", "Lilita One", "Liberation Sans", "Comic Shanns", "Assistant"), but
+ * scoped to the Thai unicode block via `unicode-range`. The browser composites
+ * glyph-by-glyph: Latin still resolves to Excalidraw's original woff2 (so the
+ * hand-drawn / display look is preserved), while Thai code points fall through
+ * to the woff2 we declare here.
+ *
+ * Font pairing rationale:
+ *   - Hand-drawn  (Excalifont, Virgil)            -> Mali        (Thai handwriting)
+ *   - Mono / playful (Cascadia, Comic Shanns)     -> Sarabun     (geometric, mono-ish weight)
+ *   - Sans (Helvetica, Liberation Sans, Assistant)-> Noto Sans Thai
+ *   - Rounded sans (Nunito)                       -> Kanit
+ *   - Display heavy (Lilita One)                  -> Chakra Petch
+ *
+ * Unicode range covers the Thai block plus zero-width joiners and dotted-circle
+ * (used by Thai tone-mark rendering).
+ */
+
+@font-face {
+  font-family: "Excalifont";
+  src: url("https://fonts.gstatic.com/s/mali/v13/N0ba2SRONuN4SC3ED35yKd4.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Virgil";
+  src: url("https://fonts.gstatic.com/s/mali/v13/N0ba2SRONuN4SC3ED35yKd4.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Cascadia";
+  src: url("https://fonts.gstatic.com/s/sarabun/v14/DtVmJx26TKEr37c9aAFN.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Comic Shanns";
+  src: url("https://fonts.gstatic.com/s/sarabun/v14/DtVmJx26TKEr37c9aAFN.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Helvetica";
+  src: url("https://fonts.gstatic.com/s/notosansthai/v3/UIneX9Z71Hym8rYc67P6D-Oz7p-F_g.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("https://fonts.gstatic.com/s/notosansthai/v3/UIneX9Z71Hym8rYc67P6D-Oz7p-F_g.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Assistant";
+  src: url("https://fonts.gstatic.com/s/notosansthai/v3/UIneX9Z71Hym8rYc67P6D-Oz7p-F_g.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Nunito";
+  src: url("https://fonts.gstatic.com/s/kanit/v17/nKKZ-Go6G5tXcraVGwCKd6xB.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "Lilita One";
+  src: url("https://fonts.gstatic.com/s/chakrapetch/v13/cIf6MapbsEk7TDLdtEz1BwkWn6pgar3I1A.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0E00-0E7F, U+200B-200D, U+25CC;
+}

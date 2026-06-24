@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+dist
+.env.local
+.env
+.DS_Store
+*.log
+.vercel
+next-env.d.ts.backup
+
+# Agent/editor local configuration
+.agents
+.claude
+.devin/config.local.json
