@@ -60,7 +60,7 @@ export type Slide = {
   background: string;
   objects: SlideObject[];
   notes?: string;
-  excalidrawElements?: any[];
+  excalidrawElements?: unknown[];
 };
 
 export const CURRENT_SCHEMA_VERSION = 1 as const;

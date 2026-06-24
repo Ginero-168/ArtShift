@@ -18,7 +18,9 @@ env.allowLocalModels = false;
 const PRIMARY_MODEL_ID = "onnx-community/Florence-2-base-ft";
 const FALLBACK_MODEL_ID = "Xenova/florence-2-base";
 
+// biome-ignore lint/suspicious/noExplicitAny: third-party Florence-2 model types are complex and not imported here
 let model: any = null;
+// biome-ignore lint/suspicious/noExplicitAny: third-party Florence-2 processor types are complex and not imported here
 let processor: any = null;
 let modelLoading = false;
 
@@ -42,11 +44,11 @@ async function ensureModel(onProgress?: (p: number) => void) {
     };
 
     const [m, p] = await Promise.all([
-      (Florence2ForConditionalGeneration as any).from_pretrained(id, {
+      Florence2ForConditionalGeneration.from_pretrained(id, {
         dtype: "fp32",
         progress_callback: progressCallback,
       }),
-      (Florence2Processor as any).from_pretrained(id),
+      Florence2Processor.from_pretrained(id),
     ]);
     return { model: m, processor: p };
   }
@@ -56,7 +58,7 @@ async function ensureModel(onProgress?: (p: number) => void) {
     model = res.model;
     processor = res.processor;
     console.log("[VisionEngine] Florence-2 loaded successfully");
-  } catch (primaryErr) {
+  } catch {
     console.warn(`[VisionEngine] Primary model failed. Trying fallback...`);
     try {
       const res = await tryLoad(FALLBACK_MODEL_ID);
@@ -130,7 +132,7 @@ export async function visionDenseCaption(imageDataUrl: string, onProgress?: (p: 
 export async function visionDetect(imageDataUrl: string, onProgress?: (p: number) => void) {
   const result = await runVisionTask(imageDataUrl, "<OD>", onProgress);
   const typed = result as { bboxes?: number[][]; labels?: string[] } | undefined;
-  if (!typed || !typed.bboxes)
+  if (!typed?.bboxes)
     return {
       objects: [] as {
         label: string;
@@ -165,7 +167,7 @@ export async function visionGroundPhrase(
   const task = `<CAPTION_TO_PHRASE_GROUNDING>${phrase}`;
   const result = await runVisionTask(imageDataUrl, task, onProgress);
   const typed = result as { bboxes?: number[][]; labels?: string[] } | undefined;
-  if (!typed || !typed.bboxes)
+  if (!typed?.bboxes)
     return {
       objects: [] as {
         label: string;

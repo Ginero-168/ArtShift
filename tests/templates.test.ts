@@ -70,9 +70,9 @@ describe("runTemplate", () => {
     });
     const texts = r!.objects.filter((o) => o.type === "text");
     expect(texts).toHaveLength(2); // title + bullets
-    const bullets = texts.find((t) => (t as any).text.includes("ship"));
+    const bullets = texts.find((t) => (t as TextElement).text.includes("ship"));
     expect(bullets).toBeDefined();
-    expect((bullets as any).text).toContain("•");
+    expect((bullets as TextElement).text).toContain("•");
   });
 
   it("hero: centers the title horizontally", () => {
@@ -80,9 +80,11 @@ describe("runTemplate", () => {
       template: "hero",
       data: { title: "Welcome", subtitle: "Sub", cta: "Go" },
     });
-    const title = r!.objects.find((o) => o.type === "text" && (o as any).text === "Welcome")!;
+    const title = r!.objects.find(
+      (o) => o.type === "text" && (o as TextElement).text === "Welcome",
+    )!;
     // Title spans full content width with center alignment → visually centered.
-    expect((title as any).textAlign).toBe("center");
+    expect((title as TextElement).textAlign).toBe("center");
     expect(title.x + title.width).toBeLessThanOrEqual(CANVAS_W);
   });
 
@@ -129,7 +131,7 @@ describe("runTemplate", () => {
       data: { quote: "Design is intelligence made visible.", attribution: "Alina Wheeler" },
     });
     const attr = r!.objects.find(
-      (o) => o.type === "text" && (o as any).text.includes("Alina Wheeler"),
+      (o) => o.type === "text" && (o as TextElement).text.includes("Alina Wheeler"),
     );
     expect(attr).toBeDefined();
   });

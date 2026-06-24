@@ -215,7 +215,7 @@ function threeColumnCards(d: ThreeColumnCardsData): TemplateResult {
       fontStyle: "bold",
       align: "center",
       fill: pal.accentInk,
-    } as any),
+    }),
   );
 
   // 2. Optional centered subtitle under the bar
@@ -233,7 +233,7 @@ function threeColumnCards(d: ThreeColumnCardsData): TemplateResult {
         fontStyle: "italic",
         align: "center",
         fill: pal.textMuted,
-      } as any),
+      }),
     );
     cardsTop = barH + 18 + subH + 20;
   }
@@ -273,7 +273,7 @@ function threeColumnCards(d: ThreeColumnCardsData): TemplateResult {
         fontStyle: "bold",
         align: "left",
         fill: pal.textPrimary,
-      } as any),
+      }),
     );
 
     const bodyTop = cardsTop + pad + 40 + 12;
@@ -295,7 +295,7 @@ function threeColumnCards(d: ThreeColumnCardsData): TemplateResult {
         align: "left",
         fill: pal.textPrimary,
         lineHeight: 1.55,
-      } as any),
+      }),
     );
   }
 
@@ -327,7 +327,7 @@ function titleBullets(d: TitleBulletsData): TemplateResult {
       fontStyle: "bold",
       align: "left",
       fill: pal.textPrimary,
-    } as any),
+    }),
   );
 
   // Accent underline
@@ -356,7 +356,7 @@ function titleBullets(d: TitleBulletsData): TemplateResult {
         fontStyle: "italic",
         align: "left",
         fill: pal.textMuted,
-      } as any),
+      }),
     );
     bulletsTop += 48;
   }
@@ -374,7 +374,7 @@ function titleBullets(d: TitleBulletsData): TemplateResult {
       align: "left",
       fill: pal.textPrimary,
       lineHeight: 1.55,
-    } as any),
+    }),
   );
 
   return { objects, background: d.background ?? pal.slideBg };
@@ -434,7 +434,7 @@ function hero(d: HeroData): TemplateResult {
       fontStyle: "bold",
       align: "center",
       fill: textColor,
-    } as any),
+    }),
   );
 
   if (d.subtitle) {
@@ -449,7 +449,7 @@ function hero(d: HeroData): TemplateResult {
         fontStyle: "normal",
         align: "center",
         fill: subColor,
-      } as any),
+      }),
     );
   }
 
@@ -479,7 +479,7 @@ function hero(d: HeroData): TemplateResult {
         fontStyle: "bold",
         align: "center",
         fill: pal.accentInk,
-      } as any),
+      }),
     );
   }
 
@@ -511,7 +511,7 @@ function comparison(d: ComparisonData): TemplateResult {
       fontStyle: "bold",
       align: "center",
       fill: pal.textPrimary,
-    } as any),
+    }),
   );
 
   const toneFill = (t?: string): string => {
@@ -563,7 +563,7 @@ function comparison(d: ComparisonData): TemplateResult {
         fontStyle: "bold",
         align: "left",
         fill: toneHeaderFill(col.tone),
-      } as any),
+      }),
     );
 
     const bodyY = cardsTop + pad + 48 + 16;
@@ -579,7 +579,7 @@ function comparison(d: ComparisonData): TemplateResult {
         align: "left",
         fill: pal.textPrimary,
         lineHeight: 1.6,
-      } as any),
+      }),
     );
   }
 
@@ -634,7 +634,7 @@ function imageTextSplit(d: ImageTextSplitData): TemplateResult {
       align: "left",
       fill: pal.textPrimary,
       lineHeight: 1.2,
-    } as any),
+    }),
   );
   // Accent underline
   objects.push(
@@ -660,7 +660,7 @@ function imageTextSplit(d: ImageTextSplitData): TemplateResult {
       align: "left",
       fill: pal.textPrimary,
       lineHeight: 1.6,
-    } as any),
+    }),
   );
 
   if (d.caption) {
@@ -675,7 +675,7 @@ function imageTextSplit(d: ImageTextSplitData): TemplateResult {
         fontStyle: "italic",
         align: "left",
         fill: pal.textMuted,
-      } as any),
+      }),
     );
   }
 
@@ -709,7 +709,7 @@ function statGrid(d: StatGridData): TemplateResult {
       fontStyle: "bold",
       align: "center",
       fill: pal.textPrimary,
-    } as any),
+    }),
   );
   if (d.subtitle) {
     objects.push(
@@ -723,7 +723,7 @@ function statGrid(d: StatGridData): TemplateResult {
         fontStyle: "italic",
         align: "center",
         fill: pal.textMuted,
-      } as any),
+      }),
     );
   }
 
@@ -776,7 +776,7 @@ function statGrid(d: StatGridData): TemplateResult {
         align: "center",
         fill: pal.textPrimary,
         lineHeight: 1.1,
-      } as any),
+      }),
     );
     objects.push(
       text({
@@ -789,7 +789,7 @@ function statGrid(d: StatGridData): TemplateResult {
         align: "center",
         fill: pal.textMuted,
         lineHeight: 1.4,
-      } as any),
+      }),
     );
   }
 
@@ -822,7 +822,7 @@ function quote(d: QuoteData): TemplateResult {
       align: "left",
       fill: pal.accent,
       lineHeight: 1,
-    } as any),
+    }),
   );
 
   // Quote body centered block
@@ -838,7 +838,7 @@ function quote(d: QuoteData): TemplateResult {
       align: "center",
       fill: pal.textPrimary,
       lineHeight: 1.4,
-    } as any),
+    }),
   );
 
   // Accent bar
@@ -898,7 +898,7 @@ function timeline(d: TimelineData): TemplateResult {
       fontStyle: "bold",
       align: "center",
       fill: pal.textPrimary,
-    } as any),
+    }),
   );
 
   // Horizontal track
@@ -953,7 +953,7 @@ function timeline(d: TimelineData): TemplateResult {
         fontStyle: "bold",
         align: "center",
         fill: pal.accent,
-      } as any),
+      }),
     );
     // Label below
     objects.push(
@@ -967,7 +967,7 @@ function timeline(d: TimelineData): TemplateResult {
         fontStyle: "bold",
         align: "center",
         fill: pal.textPrimary,
-      } as any),
+      }),
     );
     if (steps[i].description) {
       objects.push(
@@ -981,7 +981,7 @@ function timeline(d: TimelineData): TemplateResult {
           align: "center",
           fill: pal.textMuted,
           lineHeight: 1.45,
-        } as any),
+        }),
       );
     }
   }
