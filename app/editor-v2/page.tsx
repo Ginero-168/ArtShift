@@ -13,7 +13,6 @@
 import { useEffect, useRef, useState } from "react";
 import AIPanel from "@/components/AI/AIPanel";
 import CanvasEditor from "@/components/Canvas/CanvasEditor";
-import LibraryPanel from "@/components/Canvas/LibraryPanel";
 import PresetPanel from "@/components/Canvas/PresetPanel";
 import SlideRail from "@/components/Canvas/SlideRail";
 import { TOOLBAR_TOOLS } from "@/components/Canvas/toolDefinitions";
@@ -21,7 +20,6 @@ import { useCanvasHotkeys } from "@/components/Canvas/useCanvasHotkeys";
 import {
   IconBrand,
   IconDownload,
-  IconLibrary,
   IconMenu,
   IconPalette,
   IconRedo,
@@ -60,7 +58,6 @@ export default function EditorV2Page() {
   const undo = useEngine((s) => s.undo);
   const redo = useEngine((s) => s.redo);
   const deleteElements = useEngine((s) => s.deleteElements);
-  const selectedIds = useEngine((s) => s.selectedIds);
   const loadDoc = useEngine((s) => s.loadDoc);
   const doc = useEngine((s) => s.doc);
   const theme = useStore((s) => s.theme);
@@ -79,7 +76,6 @@ export default function EditorV2Page() {
   const [presetOpen, setPresetOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false);
-  const [libraryOpen, setLibraryOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -565,35 +561,6 @@ export default function EditorV2Page() {
                     );
                   })();
                 }}
-              />
-            )}
-
-            {/* Library button */}
-            <button
-              onClick={() => setLibraryOpen((v) => !v)}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: "1px solid var(--stroke, #e5e7eb)",
-                background: libraryOpen ? "var(--accent, #6366f1)" : "var(--surface-solid, #fff)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: libraryOpen ? "#fff" : "var(--ink, #111)",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-              }}
-              title="Library"
-            >
-              <IconLibrary size={13} />
-            </button>
-            {libraryOpen && (
-              <LibraryPanel
-                selectedElements={
-                  currentSlide?.elements.filter((el) => selectedIds.has(el.id)) ?? []
-                }
-                onClose={() => setLibraryOpen(false)}
               />
             )}
           </div>

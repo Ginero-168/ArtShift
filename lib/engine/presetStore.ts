@@ -17,38 +17,73 @@ export interface Preset {
   name: string;
   /** Deep clones of the saved elements (ids stripped). */
   elements: EngineElement[];
+  /** Folder id the preset belongs to. */
+  folderId: string | null;
   /** ISO timestamp of creation. */
+  createdAt: number;
+}
+
+export interface PresetFolder {
+  id: string;
+  name: string;
   createdAt: number;
 }
 
 export interface PresetState {
   presets: Preset[];
+  folders: PresetFolder[];
 
   /** Save selected elements as a new preset. */
-  savePreset: (name: string, elements: EngineElement[]) => void;
+  savePreset: (name: string, elements: EngineElement[], folderId?: string | null) => void;
   /** Delete a preset by id. */
   deletePreset: (id: string) => void;
   /** Rename a preset. */
   renamePreset: (id: string, name: string) => void;
-  /** Load presets from localStorage. */
+  /** Move a preset to a folder. */
+  movePresetToFolder: (id: string, folderId: string | null) => void;
+  /** Create a new folder. */
+  createFolder: (name: string) => string;
+  /** Delete a folder and move its presets to root. */
+  deleteFolder: (id: string) => void;
+  /** Rename a folder. */
+  renameFolder: (id: string, name: string) => void;
+  /** Load presets and folders from localStorage. */
   hydrate: () => void;
 }
 
-const STORAGE_KEY = "mighty-presets";
+const PRESETS_KEY = "mighty-presets";
+const FOLDERS_KEY = "mighty-preset-folders";
 
-function persist(presets: Preset[]) {
+interface PersistedState {
+  presets: Preset[];
+  folders: PresetFolder[];
+}
+
+function persist(state: PersistedState) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(state.presets));
+    localStorage.setItem(FOLDERS_KEY, JSON.stringify(state.folders));
   } catch {
     /* quota exceeded — silently ignore */
   }
 }
 
-function loadFromStorage(): Preset[] {
+function loadPresets(): Preset[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(PRESETS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as Preset[];
+    const parsed = JSON.parse(raw) as Preset[];
+    return parsed.map((p) => ({ ...p, folderId: p.folderId ?? null }));
+  } catch {
+    return [];
+  }
+}
+
+function loadFolders(): PresetFolder[] {
+  try {
+    const raw = localStorage.getItem(FOLDERS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as PresetFolder[];
   } catch {
     return [];
   }
@@ -56,15 +91,15 @@ function loadFromStorage(): Preset[] {
 
 export const usePresetStore = create<PresetState>((set, get) => ({
   presets: [],
+  folders: [],
 
-  savePreset: (name, elements) => {
+  savePreset: (name, elements, folderId = null) => {
     const clones = elements.map((el) => {
       const c = structuredClone(el);
       c.id = ""; // will be reassigned on paste
       return c;
     });
 
-    // Normalize positions: offset so the group's top-left is at (0,0)
     let minX = Infinity,
       minY = Infinity;
     for (const el of clones) {
@@ -80,27 +115,66 @@ export const usePresetStore = create<PresetState>((set, get) => ({
       id: crypto.randomUUID(),
       name,
       elements: clones,
+      folderId,
       createdAt: Date.now(),
     };
 
-    const next = [...get().presets, preset];
+    const next = { presets: [...get().presets, preset], folders: get().folders };
     persist(next);
-    set({ presets: next });
+    set(next);
   },
 
   deletePreset: (id) => {
-    const next = get().presets.filter((p) => p.id !== id);
+    const next = { presets: get().presets.filter((p) => p.id !== id), folders: get().folders };
     persist(next);
-    set({ presets: next });
+    set(next);
   },
 
   renamePreset: (id, name) => {
-    const next = get().presets.map((p) => (p.id === id ? { ...p, name } : p));
+    const next = {
+      presets: get().presets.map((p) => (p.id === id ? { ...p, name } : p)),
+      folders: get().folders,
+    };
     persist(next);
-    set({ presets: next });
+    set(next);
+  },
+
+  movePresetToFolder: (id, folderId) => {
+    const next = {
+      presets: get().presets.map((p) => (p.id === id ? { ...p, folderId } : p)),
+      folders: get().folders,
+    };
+    persist(next);
+    set(next);
+  },
+
+  createFolder: (name) => {
+    const folder: PresetFolder = { id: crypto.randomUUID(), name, createdAt: Date.now() };
+    const next = { presets: get().presets, folders: [...get().folders, folder] };
+    persist(next);
+    set(next);
+    return folder.id;
+  },
+
+  deleteFolder: (id) => {
+    const next = {
+      presets: get().presets.map((p) => (p.folderId === id ? { ...p, folderId: null } : p)),
+      folders: get().folders.filter((f) => f.id !== id),
+    };
+    persist(next);
+    set(next);
+  },
+
+  renameFolder: (id, name) => {
+    const next = {
+      presets: get().presets,
+      folders: get().folders.map((f) => (f.id === id ? { ...f, name } : f)),
+    };
+    persist(next);
+    set(next);
   },
 
   hydrate: () => {
-    set({ presets: loadFromStorage() });
+    set({ presets: loadPresets(), folders: loadFolders() });
   },
 }));
