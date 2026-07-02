@@ -141,7 +141,6 @@ export function FillSection({
                 ids.map((id) => ({
                   id,
                   patch: {
-                    edgeStyle: k as "sharp" | "round",
                     cornerRadius: k === "round" ? 16 : 0,
                   } as Partial<EngineElement>,
                 })),

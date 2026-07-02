@@ -26,7 +26,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LumenMighty Studio",
+  title: "ArtShift",
   description: "AI-Powered Slide & Design Studio",
   manifest: "/manifest.json",
 };

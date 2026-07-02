@@ -1,5 +1,5 @@
 /**
- * Lumen Vision Engine — Local Florence-2 for browser-based image understanding.
+ * Vision Engine — Local Florence-2 for browser-based image understanding.
  * 100% client-side: captioning, OCR, object detection, dense region captioning,
  * and phrase grounding. No images leave the browser.
  */

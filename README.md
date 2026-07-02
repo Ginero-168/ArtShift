@@ -1,6 +1,6 @@
-# LumenMighty Studio
+# ArtShift
 
-**AI-Powered Slide & Design Studio** — merges Mighty's Canvas2D slide editor with Lumen Planner's local vision AI, color adjustments, background removal, and PDF import.
+**AI-Powered Slide & Design Studio** — a Canvas2D slide editor with local vision AI, color adjustments, background removal, and PDF import. **Local-first**: your documents live in the browser's `localStorage` only; nothing is stored server-side (see `ROADMAP.md` for the full rationale).
 
 > Built on **Next.js 15** + **React 19** + **TypeScript strict** + **Tailwind v4**
 
@@ -8,17 +8,17 @@
 
 ## What You Get
 
-| Feature | Source | Description |
-|---|---|---|
-| **Slide Editor** | Mighty | Pure Canvas2D engine, multi-slide deck, PPTX/PNG/PDF export |
-| **AI Chat** | Mighty + Lumen | Claude tool-use (Anthropic direct) **or** Replicate proxy |
-| **Vision AI** | Lumen | Local Florence-2: caption, OCR, object detect (100% client-side) |
-| **Color Adjustments** | Lumen | 12 real-time sliders: exposure, contrast, highlights, shadows, etc. |
-| **Background Removal** | Lumen | WaveSpeed BRIA RMBG one-click via API proxy |
-| **PDF Import** | Lumen | Import PDF pages as slide images (pdfjs-dist) |
-| **Thai Fonts** | Mighty | 15 Thai font families built-in |
-| **PWA** | Lumen | Offline-ready manifest + icons |
-| **Deploy** | Lumen | Hostinger Shared Hosting ready (.htaccess + guide) |
+| Feature | Description |
+|---|---|
+| **Slide Editor** | Pure Canvas2D engine, multi-slide deck, arrow binding, frames, PPTX/PNG/PDF export |
+| **AI Chat** | Claude tool-use (Anthropic direct) **or** Replicate proxy — mutations apply directly to the canvas |
+| **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |
+| **Color Adjustments** | 12 real-time sliders: exposure, contrast, highlights, shadows, etc. |
+| **Background Removal** | WaveSpeed BRIA RMBG one-click via API proxy |
+| **PDF Import** | Import PDF pages as slide images (pdfjs-dist) |
+| **Thai Fonts** | 15 Thai font families built-in |
+| **PWA** | Offline-ready manifest + icons |
+| **Deploy** | Hostinger Shared Hosting ready (.htaccess + guide) |
 
 ---
 
@@ -74,7 +74,7 @@ app/
   page.tsx                 Main slide editor
 components/
   Canvas/                  Canvas2D engine components
-  AIImageTools.tsx         Lumen AI tools panel (vision + color + bg removal)
+  AIImageTools.tsx         AI tools panel (vision + color + bg removal)
 lib/
   engine/                  Pure Canvas2D engine (types, store, renderer)
   vision/visionEngine.ts   Florence-2 local vision (client-side)

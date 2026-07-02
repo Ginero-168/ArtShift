@@ -34,7 +34,7 @@ export function usePasteDrop(
       if (!files) return;
       const { w: sw, h: sh } = currentSlideSize();
       for (const file of Array.from(files)) {
-        // PDF import (Lumen feature)
+        // PDF import
         if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
           const { importPdfToImages } = await import("@/lib/import/pdfImport");
           const images = await importPdfToImages(file, 2);

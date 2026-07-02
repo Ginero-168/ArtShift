@@ -8,7 +8,6 @@
  * To preserve the visual look of legacy content we set:
  *   - roughness = 0 (clean / architect)
  *   - fillStyle = "solid"
- *   - edgeStyle = cornerRadius > 0 ? "round" : "sharp"
  *
  * Coordinates are scaled by 1.5× both axes (1280→1920, 720→1080). The same
  * factor applies to widths/heights/font sizes.
@@ -132,9 +131,6 @@ function convertShape(
     strokeWidth: strokeWidth || 2,
     fillStyle: "solid" as const,
     roughness: 0 as const,
-    edgeStyle: (obj.shape === "rect" && (obj.cornerRadius ?? 0) > 0 ? "round" : "sharp") as
-      | "sharp"
-      | "round",
   };
   if (obj.shape === "rect") {
     const el = createRect(geom);

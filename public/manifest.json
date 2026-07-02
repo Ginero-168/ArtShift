@@ -1,6 +1,6 @@
 {
-  "name": "LumenMighty Studio",
-  "short_name": "LumenMighty",
+  "name": "ArtShift",
+  "short_name": "ArtShift",
   "description": "AI-Powered Slide & Design Studio",
   "start_url": "/",
   "display": "standalone",

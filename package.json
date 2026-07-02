@@ -1,8 +1,8 @@
 {
-  "name": "lumen-mighty",
+  "name": "artshift",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-Powered Slide & Design Studio — merging Mighty Slides editor with Lumen Planner AI vision and image tools",
+  "description": "ArtShift — AI-powered slide and design studio with a Canvas2D editor, local vision AI, and background removal.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -2,10 +2,10 @@
 
 /**
  * AI Image Tools Panel — compact inline version for PropertiesPanel embedding.
- * Lumen features: vision AI (caption/OCR/detect), color adjustments, background removal.
+ * Vision AI (caption/OCR/detect), color adjustments, background removal.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { removeBackground } from "@/lib/ai/removeBg";
 import type { ColorAdjustments } from "@/lib/color/adjustments";
 import { useEngine } from "@/lib/engine/store";
@@ -24,6 +24,13 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
   const [visionResult, setVisionResult] = useState<string>("");
   const [adjustments, setAdjustments] = useState<Partial<ColorAdjustments>>({});
   const [bgBusy, setBgBusy] = useState(false);
+
+  // Re-sync local slider state whenever the selected image changes, so
+  // sliders reflect that image's own stored adjustments instead of
+  // leaking values from the previously selected image.
+  useEffect(() => {
+    setAdjustments(selectedImage?.adjustments ?? {});
+  }, [selectedImage]);
 
   const getImageDataUrl = useCallback(async (): Promise<string | null> => {
     if (!selectedImage) return null;

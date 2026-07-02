@@ -16,7 +16,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     this.setState({ info });
-    console.error("[Mighty] unhandled error:", error, info);
+    console.error("[ArtShift] unhandled error:", error, info);
   }
 
   private reset = () => {

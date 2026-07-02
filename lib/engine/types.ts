@@ -17,7 +17,6 @@ export const SLIDE_H = 1080;
 
 export type StrokeStyle = "solid" | "dashed" | "dotted";
 export type FillStyle = "hachure" | "cross-hatch" | "solid" | "zigzag" | "none";
-export type EdgeStyle = "sharp" | "round";
 export type Roughness = 0 | 1 | 2; // 0 = architect, 1 = artist, 2 = cartoonist
 export type ArrowHead =
   | "none"
@@ -52,7 +51,6 @@ export type BaseElement = {
   strokeWidth: number;
   strokeStyle: StrokeStyle;
   fillStyle: FillStyle;
-  edgeStyle: EdgeStyle;
   roughness: Roughness;
   /** Stable seed so re-renders produce the same rough strokes. */
   seed: number;
@@ -85,7 +83,7 @@ export type BaseElement = {
 
 export type RectElement = BaseElement & {
   type: "rect";
-  /** 0 when edgeStyle="sharp"; >0 when "round". */
+  /** 0 = sharp corners; >0 = rounded corners. */
   cornerRadius: number;
 };
 
@@ -173,7 +171,7 @@ export type ImageElement = BaseElement & {
   naturalWidth: number;
   naturalHeight: number;
   status: "pending" | "loaded" | "error";
-  /** Color adjustments applied to this image (Lumen feature). */
+  /** Color adjustments applied to this image. */
   adjustments?: Partial<import("../color/adjustments").ColorAdjustments>;
 };
 

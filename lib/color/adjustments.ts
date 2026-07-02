@@ -1,5 +1,5 @@
 /**
- * Lumen Color Adjustments — Real-time pixel-level image filters.
+ * Color Adjustments — Real-time pixel-level image filters.
  * Applies exposure, contrast, highlights, shadows, whites, blacks,
  * vibrance, saturation, warmth, tint, sharpness, and clarity to a Canvas ImageData.
  */

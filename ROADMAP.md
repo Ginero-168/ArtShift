@@ -1,212 +1,132 @@
-# LumenMighty — Development Roadmap
+# ArtShift — Roadmap & Status
 
-> Sprint-level plan for LumenMighty Studio (Next.js 15 + React 19 + TypeScript strict + Tailwind v4).
-> Built from the current state where Phase 1 (foundation) and Phase 2 (standard editor) of the canvas rewrite are complete.
+> Single source of truth for planning. Supersedes `docs/ACTION_PLAN.md`, `docs/HANDOVER.md`,
+> and `docs/REWRITE_PLAN.md` (all removed 2026-07-02 — this file absorbs anything from them
+> that was still accurate).
+>
+> Last verified against actual code: **2026-07-02**. Previous planning docs had drifted far
+> behind reality — several "pending" roadmap items turned out to already be fully implemented.
+> Re-verify against the code before trusting a stale checklist again.
 
 ---
 
-## Current snapshot
+## Strategic direction: Local-First
+
+ArtShift is a **local-first** app by deliberate choice, not by accident:
+
+- All documents persist to `localStorage` only (`lib/engine/persist.ts`). Nothing is stored server-side.
+- There is no auth, no user accounts, no database. `app/api/*` routes are stateless proxies to
+  third-party AI services (Anthropic, Gemini, WaveSpeed, Unsplash/Pexels) — they never persist data.
+- No cross-device sync, no multi-user collaboration, no share-links. A document lives in one browser.
+
+**Why:** privacy by default (nothing leaves the browser except explicit AI calls) and zero
+backend infrastructure to run/pay for/secure. This is the tradeoff we're accepting — not a gap
+to "eventually fix". If real collaboration/sync is ever needed, treat it as a deliberate,
+large architectural decision (new backend, auth, conflict resolution), not an incremental patch.
+
+**Implications for future work:**
+- Don't build features that assume a signed-in user or server-persisted state.
+- `lib/engine/presetStore.ts`, `lib/engine/persist.ts` etc. staying `localStorage`-based is correct, not technical debt.
+- Rate limiting on `app/api/*` (`lib/rateLimit.ts`) protects *our* API keys from abuse, not user data — it's operational, not a local-first concern.
+
+---
+
+## Current status (verified against code, not assumed from old docs)
 
 | Area | Status |
-|------|--------|
-| Architecture | Next.js 15 App Router; new Canvas2D engine lives at `/editor-v2` |
-| Phase 1 & 2 | Complete (MVP + standard editor tools) |
-| Type check | `npm run typecheck` passes |
-| Tests | `npm run test` passes (51 tests) |
-| Lint | `npm run lint` fails: 15 errors + 87 warnings (`biome.json` schema is old, plus unused vars, `any`, and import-type issues) |
-| Phase 3 | Partially started but not complete (grid snap, crop UI, font picker, PPTX export, arrow binding helper) |
-| Legacy | `/editor` and the `excalidraw/` folder are still present and scheduled for removal |
+|---|---|
+| Quality gates | `npm run typecheck`, `lint` (Biome), `test` (69 tests / 9 files), `build` all pass clean |
+| Routing | Single route `/` (main editor), `/present` (presentation mode), `/api/*`. Legacy `/editor`, `/editor-v2`, `/sandbox`, and the vendored `excalidraw/` folder are gone |
+| Canvas engine | Custom Canvas2D (no Konva/Excalidraw lib) — select/move/resize/rotate, marquee, snap-to-edge + gap guides, groups, lock, flip, clipboard, undo/redo |
+| **Arrow binding** | **Done.** Bindings are created while drawing (`CanvasEditor.tsx`) and while dragging an endpoint (`Transformer.tsx`); `recomputeArrowBindings` (`lib/engine/binding.ts`) runs after add/update/delete/flip; bound endpoints render a green indicator (`BindingIndicators.tsx`) |
+| **Bound text** | **Done.** Double-click a shape spawns centered text with `containerId`; container delete/move cascades to the text (`lib/engine/store.ts`). Not yet clipped to container bounds on overflow (see Known gaps) |
+| **Grid snap** | Engine + dot-grid rendering existed but had no UI control — **added a toolbar toggle** (`app/page.tsx`, `#` button next to Presets) |
+| **Image crop** | Done — `CropOverlay.tsx` + `ImageSection.tsx` "Crop" button, `ImageElement.crop` persisted and rendered |
+| **Frames** | `FrameElement.childIds` + renderer clipping implemented (`lib/renderer/canvas.ts`) |
+| **Presets (was "Library")** | Done — `PresetPanel.tsx`, `lib/engine/presetStore.ts` |
+| **Search / Stats** | Done — `SearchReplaceModal` and `StatsModal` in `app/page.tsx` |
+| **Templates** | Done — `TemplateBrowser.tsx` wired to engine via `lib/templates.ts` |
+| **PPTX / PDF / PNG export** | Done — `lib/engine/exportPPTX.ts`, `exportPNG.ts`, Thai font fallback (`Noto Sans Thai`) |
+| **AI tool-use mapping** | Done — `lib/engine/chat.ts` (`runEngineChat`) applies AI mutations directly onto the engine store (`add_text`, `add_shape`, `add_image`, `update_object`, `delete_object`, `set_background`, `add_slide`, `apply_template`), with 1280×720 → 1920×1080 coordinate scaling |
+| **Color adjustments / vision / bg removal** | Done and wired to real engine elements (`AIImageTools.tsx` reads/writes `ImageElement.adjustments`, calls local Florence-2 vision and WaveSpeed bg removal) |
+| Branding | Renamed to **ArtShift** throughout (package.json, manifest, page title, in-app copy, AI persona). Internal `localStorage` keys (`mighty-slides:*`, `mighty-presets`) intentionally left unchanged to avoid silently orphaning existing users' saved data |
 
 ---
 
-## Sprints
+## Known gaps (verified still open — safe to trust this list)
 
-### Sprint 1 — Quality Baseline & DX Cleanup
-
-**Goal:** make `lint`, `typecheck`, `test`, and `build` all pass together before adding new features.
-
-- Update `biome.json` to schema `2.5.0` and replace the deprecated `recommended` field with `preset`.
-- Run `biome check --write` and review the diff file by file.
-- Fix `noUnusedVariables`, `useImportType`, `noExplicitAny`, and `noUnusedFunctionParameters` across `app/editor-v2/page.tsx`, `components/Canvas/*`, and `lib/engine/*`.
-- Address the small debt items from `docs/HANDOVER.md`:
-  - Skip locked elements when adding to a marquee selection.
-  - Make `lib/engine/rough.ts` honor `edgeStyle`, or remove `edgeStyle` from `lib/engine/types.ts`.
-  - Let single-element resize on rotated bboxes use `snapResize` in `components/Canvas/Transformer.tsx`.
-- Add unit tests for `lib/engine/bounds.ts`, `lib/engine/hitTest.ts`, `lib/engine/snap.ts`, and `lib/engine/binding.ts`.
-
-**Verification:**
-
-- [ ] `npm run lint`
-- [ ] `npm run typecheck`
-- [ ] `npm run test`
-- [ ] `npm run build`
+| Gap | Where | Notes |
+|---|---|---|
+| Single-element resize on a **rotated** bbox does not snap (only axis-aligned resize does) | `components/Canvas/Transformer.tsx`, the `start.angle === 0` guard | Needs projecting the moving edge into world axes before calling `snapResize`. Real geometry work; `Transformer.tsx` has **zero test coverage**, so write tests alongside this fix, don't wing it |
+| Multi-select scaling doesn't preserve rotated children's visual orientation (pure axial scale of each `x/y/w/h`) | `components/Canvas/Transformer.tsx` multi path | Acceptable for now; full fidelity needs a per-element transform matrix |
+| Bound text isn't explicitly clipped to its container | `lib/renderer/canvas.ts` | Long text can overflow a small shape. Frame clipping exists as a reference pattern to copy |
+| Dot grid color is hardcoded (`rgba(0,0,0,0.08)`), doesn't adapt to dark theme | `components/Canvas/CanvasRoot.tsx` | Cosmetic only — grid is now at least reachable via the new toggle |
+| History uses full-doc snapshots | `lib/engine/history.ts` | Fine for small decks; watch memory on very large/long-edited decks |
+| Legacy `lib/store.ts` + `lib/types.ts` still exist solely as a one-way "Import legacy" bridge (`legacyToEngineDoc`) | `app/page.tsx` hamburger menu → "Open" | Keep until confident no one still has old `mighty-slides:doc:v1` data worth importing, then delete both plus the adapter |
+| Rate limiter trusts client-supplied `x-forwarded-for` unconditionally | `lib/rateLimit.ts` | Spoofable unless the host's edge/proxy overwrites this header before it reaches Next.js. Verify on Hostinger; if untrusted, derive the key from a source the platform actually controls |
+| Zero component/interaction tests | `components/Canvas/Transformer.tsx`, `CanvasEditor.tsx`, `PropertiesPanel/*`, `AIImageTools.tsx` | All 69 existing tests hit `lib/engine/*` pure logic only. `@testing-library/react` + `happy-dom` are already configured (`vitest.config.ts`) — just unused for components |
 
 ---
 
-### Sprint 2 — Arrow Binding & Bound Text
+## Suggested order of attack
 
-**Goal:** make diagram-style flows actually work.
-
-- Create arrow bindings while drawing or dragging arrow endpoints:
-  - `components/Canvas/CanvasEditor.tsx` hit-tests near an endpoint while dragging.
-  - `components/Canvas/Transformer.tsx` adds `"start"` / `"end"` handles for arrows so endpoints can be dragged onto a shape.
-  - Store `startBinding` / `endBinding` with `focus` and `gap`.
-- Extend `lib/engine/binding.ts`:
-  - Ensure `recomputeArrowBindings` is invoked after move, resize, and flip.
-  - Render a small green dot on a bound endpoint when the arrow is selected.
-- Bound text polish:
-  - `components/Canvas/TextOverlay.tsx` keeps text centered in its container automatically.
-  - `lib/engine/store.ts` updates bound text position/size when its container changes.
-  - `lib/renderer/canvas.ts` clips bound text to the container bounds.
-
-**Verification:**
-
-- [ ] Manual test in `/editor-v2` and `/sandbox`
-- [ ] New tests for `lib/engine/binding.ts`
-- [ ] `npm run lint` and `npm run test`
+1. **Component test coverage for `Transformer.tsx`** — highest complexity, zero tests, exactly where the last real bug was found (`AIImageTools` adjustment desync was in an equally untested file).
+2. **Rotated-resize snap** — do this alongside its tests, not before them.
+3. **Bound text clipping** — small, contained, copy the frame-clipping pattern.
+4. **Decide the legacy bridge's retirement date** — once decided, delete `lib/store.ts`, `lib/types.ts`, `lib/render.ts`, `lib/clipboard.ts`, `lib/svgImport.ts`, `lib/migrate.ts` in one pass if nothing else depends on them.
+5. **Rate limiter key hardening** — quick to verify, cheap to fix if needed, protects real API budget.
 
 ---
 
-### Sprint 3 — Layout Aids & Image Crop Polish
+## Out of scope (permanent, not just deferred — consistent with Local-First)
 
-**Goal:** improve layout precision and image cropping.
-
-- Smart equal-spacing guides:
-  - Add `axis: "gap-x" | "gap-y"` to `lib/engine/snap.ts`.
-  - Render the new guides in `components/Canvas/Guides.tsx`.
-- Grid snap refinements:
-  - Separate the visual dot grid toggle from the snap toggle.
-  - Adapt dot grid color to the current light/dark theme.
-- Image crop improvements:
-  - `components/Canvas/CropOverlay.tsx` supports rotated images.
-  - `lib/renderer/canvas.ts` uses the 9-argument `drawImage` overload with the `crop` rectangle.
-  - Preserve original image aspect ratio during crop.
-- If feasible, improve multi-select resize so rotated children keep their visual orientation.
-
-**Verification:**
-
-- [ ] Crop an image, rotate it, and export a PNG
-- [ ] Test snap guides and grid toggle
-- [ ] `npm run test`
+- Live collaboration (Firebase, WebSocket, CRDTs)
+- Cloud workspace / cross-device sync / accounts
+- Mermaid → diagram, math/LaTeX, embeds (YouTube/iframe), laser pointer
+- Localization beyond Thai/English
 
 ---
 
-### Sprint 4 — Library Panel & Frames
+## Architecture reference
 
-**Goal:** add reusable assets and section containers.
+```
+app/
+  page.tsx                  Main editor (toolbar, hotkeys, autosave, export menu, stats/search modals)
+  present/page.tsx          Presentation mode
+  api/
+    chat/route.ts           Anthropic tool-use (legacy 1280x720 coordinate space; scaled by lib/engine/chat.ts)
+    generate/route.ts       Gemini proxy
+    removebg/route.ts       WaveSpeed background removal
+    stock/route.ts          Unsplash + Pexels
+    health/route.ts         Health check
+components/
+  Canvas/                   React layer: CanvasRoot (viewport), CanvasEditor (gestures),
+                             Transformer (resize/rotate/bind), PropertiesPanel/*, SlideRail,
+                             TextOverlay, CropOverlay, BindingIndicators, PresetPanel
+  AI/AIPanel.tsx            Unified AI entry point (Generate / Stock / Tools tabs)
+  AIImageTools.tsx          Vision AI + color adjustments + bg removal (operates on selected ImageElement)
+lib/
+  engine/                   Pure model + math (no React): types, factory, store (zustand),
+                             binding.ts (arrow bindings), snap.ts, history.ts, persist.ts,
+                             chat.ts (AI mutation adapter), exportPPTX.ts / exportPNG.ts
+  renderer/canvas.ts        Canvas2D scene renderer (single source of truth for editor + thumbnails + export)
+  color/adjustments.ts      12-param pixel-level color pipeline
+  vision/visionEngine.ts    Local Florence-2 (caption/OCR/detect), 100% client-side
+  store.ts, types.ts        Legacy pre-engine store — only used as the "Import legacy" bridge
+```
 
-- Library panel:
-  - Create `components/Canvas/LibraryPanel.tsx` (or `components/LibraryBrowser.tsx`).
-  - Add `lib/engine/libraryStore.ts` to save/load element groups in `localStorage["mighty-slides:library:v1"]`.
-  - Add a toolbar or properties-panel entry to open the library.
-- Frame / section container:
-  - Add `frameId` to `BaseElement` in `lib/engine/types.ts` (or extend `childIds` usage).
-  - Add `addFrame`, `moveIntoFrame`, and `removeFromFrame` actions in `lib/engine/store.ts`.
-  - `lib/renderer/canvas.ts` clips children when a frame is collapsed.
-  - `components/Canvas/CanvasEditor.tsx` selects all children when a frame is dragged.
+### Key types
 
-**Verification:**
+| Type | File |
+|---|---|
+| `EngineDoc` | `lib/engine/types.ts` — title, width, height, slides[], `snapGrid` |
+| `EngineElement` | same — discriminated union: rect, ellipse, diamond, triangle, star, hexagon, heart, plus, line, arrow, freedraw, text, image, frame |
+| `ArrowElement.startBinding` / `endBinding` | `{ elementId, gap, focus } \| null` |
+| `TextElement.containerId` | non-null when bound to a shape |
+| `ImageElement.crop` / `.adjustments` | crop rect + color adjustments, both persisted per-element |
 
-- [ ] Save and paste a library item
-- [ ] Drag a frame and verify child clipping
-- [ ] `npm run test`
+### Coordinate system
 
----
-
-### Sprint 5 — Search, Stats, and Templates Port
-
-**Goal:** help users discover and create slides faster.
-
-- Stats panel:
-  - Add a modal in `app/editor-v2/page.tsx` showing element count, slide count, and approximate storage size.
-- Search (Cmd+F):
-  - Search `TextElement.text` across the whole deck.
-  - Temporarily highlight matches in `components/Canvas/CanvasEditor.tsx`.
-- Templates port:
-  - Convert legacy templates in `lib/templates.ts` / `lib/templates/` to engine docs.
-  - Wire `components/TemplateBrowser.tsx` to the engine store.
-  - Store default templates in `public/templates/` or localStorage.
-
-**Verification:**
-
-- [ ] Open stats, run search, create a slide from a template
-- [ ] `npm run test` and `npm run build`
-
----
-
-### Sprint 6 — Export Polish & AI Integration
-
-**Goal:** complete PPTX export and make AI tool-use land on the new engine.
-
-- PPTX export:
-  - `lib/engine/exportPPTX.ts` supports arrowheads, line styles, gradients, and patterns.
-  - Preserve Thai fonts in the `fontFace` field.
-  - Fix rasterization for rough shapes, freedraw, and arrows that are not mapped to native PPTX shapes.
-- AI tool-use mapping:
-  - Add an adapter in `lib/chat.ts` or `app/api/chat/route.ts` that maps tool calls to `lib/engine/factory.ts` helpers.
-  - Support `add_rect`, `add_ellipse`, `add_text`, `add_image`, and `set_background`.
-  - Test end-to-end via `components/AIPrompt.tsx` in `/editor-v2`.
-
-**Verification:**
-
-- [ ] Export a complex slide to PPTX and open it
-- [ ] Use the AI prompt to create a shape
-- [ ] `npm run build`
-
----
-
-### Sprint 7 — Legacy Cleanup & Migration
-
-**Goal:** retire the old editor and make the new engine the default route.
-
-- Remove `components/ExcalidrawWorkspace.tsx`.
-- Remove the `excalidraw/` folder.
-- Update `app/editor/page.tsx` to use the new canvas editor.
-- Update `tsconfig.json` and `biome.json` to remove `excalidraw/` excludes.
-- Update `README.md` and `docs/HANDOVER.md` to reflect the final architecture.
-- Optionally redirect `/editor-v2` to `/editor`.
-
-**Verification:**
-
-- [ ] `npm run build`
-- [ ] `npm run lint`
-- [ ] `npm run test`
-- [ ] Manual smoke test on `/editor`
-
----
-
-## Files that will be modified frequently
-
-| File | Why |
-|------|-----|
-| `app/editor-v2/page.tsx` | Toolbar, hotkeys, export menu, stats modal |
-| `components/Canvas/CanvasEditor.tsx` | Selection, dragging, snapping, double-click |
-| `components/Canvas/Transformer.tsx` | Resize, rotate, arrow endpoint binding |
-| `components/Canvas/PropertiesPanel.tsx` | New UI for library, frame, and font controls |
-| `components/Canvas/Guides.tsx` | Smart guides |
-| `lib/engine/store.ts` | Most actions |
-| `lib/engine/binding.ts` | Arrow binding logic |
-| `lib/engine/snap.ts` | Smart guides |
-| `lib/renderer/canvas.ts` | Crop rendering, frame clipping, bound text |
-| `lib/engine/exportPPTX.ts` | Export fidelity |
-| `biome.json` | Linter configuration |
-
----
-
-## Risks / Considerations
-
-- `biome check --write` may change behavior unintentionally; review every diff.
-- Arrow binding with multi-segment arrows is complex; start with two-point arrows.
-- PPTX Thai font rendering depends on the end-user's installed fonts; always provide a fallback such as `Noto Sans Thai`.
-- Frame clipping may affect renderer performance; measure before optimizing.
-- Removing the legacy editor may break old documents; run the existing migration path first.
-
----
-
-## Verification checklist for every sprint
-
-- [ ] `npm run typecheck`
-- [ ] `npm run lint`
-- [ ] `npm run test`
-- [ ] `npm run build`
-- [ ] Manual smoke test in `/editor-v2` and `/sandbox`
+- Slide is fixed **1920×1080**. World = slide-local, top-left origin, +x right, +y down.
+- Element bbox is axis-aligned before rotation; `angle` is radians around the bbox center.
+- The AI chat tool schema still speaks 1280×720 (legacy) — `lib/engine/chat.ts` scales by 1.5× in both axes when applying mutations to the engine.

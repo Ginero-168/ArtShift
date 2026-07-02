@@ -76,7 +76,7 @@ export default function AIPrompt() {
         </div>
         <input
           className="ai-dock-input"
-          placeholder="Ask Mighty… e.g. add three bullets on the right"
+          placeholder="Ask ArtShift… e.g. add three bullets on the right"
           value={val}
           onChange={(e) => setVal(e.target.value)}
         />

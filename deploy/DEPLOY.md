@@ -1,4 +1,4 @@
-# LumenMighty — Deploy Guide
+# ArtShift — Deploy Guide
 
 ## Hostinger Shared Hosting (Node.js)
 
@@ -9,7 +9,7 @@
 ### Step 1: Build locally
 
 ```bash
-cd LumenMighty
+cd ArtShift
 npm install
 npm run build
 ```

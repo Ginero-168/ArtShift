@@ -84,8 +84,8 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
   const pptx = new PptxGenJS();
   const wIn = doc.width * PX_TO_IN;
   const hIn = doc.height * PX_TO_IN;
-  pptx.defineLayout({ name: "MIGHTY", width: wIn, height: hIn });
-  pptx.layout = "MIGHTY";
+  pptx.defineLayout({ name: "ARTSHIFT", width: wIn, height: hIn });
+  pptx.layout = "ARTSHIFT";
 
   const px = (n: number) => n * PX_TO_IN;
 

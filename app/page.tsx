@@ -4,7 +4,7 @@
  * / — Excalidraw-style canvas editor (main app route).
  *
  * Layout:
- * - TopBar (Mighty brand + title + Search/Stats/Import/Share)
+ * - TopBar (ArtShift brand + title + Search/Stats/Import/Share)
  * - SlideRail (left, collapsible)
  * - Canvas workspace with floating toolbar + hamburger menu
  * - Properties panel (left of workspace, on selection)
@@ -63,6 +63,8 @@ export default function HomePage() {
   const theme = useStore((s) => s.theme);
   const cycleTheme = useStore((s) => s.cycleTheme);
   const setSlideBackground = useEngine((s) => s.setSlideBackground);
+  const setGridSnap = useEngine((s) => s.setGridSnap);
+  const snapGrid = useEngine((s) => s.doc.snapGrid);
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const currentSlide = doc.slides.find((sl) => sl.id === currentSlideId);
 
@@ -197,7 +199,7 @@ export default function HomePage() {
             <div className="brand-mark">
               <IconBrand />
             </div>
-            <span>Mighty</span>
+            <span>ArtShift</span>
           </div>
         </div>
         <div className="topbar-right">
@@ -601,6 +603,26 @@ export default function HomePage() {
               }}
             >
               <span style={{ fontSize: 13, lineHeight: 1 }}>★</span>
+            </button>
+            <button
+              onClick={() => setGridSnap(snapGrid ? null : 16)}
+              title="Toggle grid snap"
+              style={{
+                width: 26,
+                height: 26,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 5,
+                border: "none",
+                background: snapGrid ? "var(--accent, #6366f1)" : "transparent",
+                color: snapGrid ? "#fff" : "var(--ink, #111827)",
+                cursor: "pointer",
+                transition: "all 0.12s ease",
+              }}
+              aria-pressed={!!snapGrid}
+            >
+              <span style={{ fontSize: 13, lineHeight: 1 }}>#</span>
             </button>
             <div
               style={{

@@ -42,7 +42,6 @@ function baseDefaults(): Omit<RectElement, "type" | "cornerRadius"> {
     strokeWidth: 2,
     strokeStyle: "solid",
     fillStyle: "hachure",
-    edgeStyle: "sharp",
     roughness: 1,
     seed: nextSeed(),
     groupIds: [],
