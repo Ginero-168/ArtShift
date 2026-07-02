@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Left-rail slide list for /editor-v2.
+ * Left-rail slide list for the main editor.
  *
  * Matches the Excalidraw-style slide panel:
  * - Header: "N SLIDE" count + "+" add button

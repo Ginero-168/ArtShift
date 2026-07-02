@@ -30,7 +30,7 @@ cp .env.local.example .env.local   # fill in your API keys
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — redirects to `/editor-v2`.
+Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 
 ---
 
@@ -71,7 +71,7 @@ app/
     removebg/route.ts      WaveSpeed background removal
     stock/route.ts         Unsplash + Pexels
     health/route.ts        Health check
-  editor-v2/page.tsx       Main slide editor
+  page.tsx                 Main slide editor
 components/
   Canvas/                  Canvas2D engine components
   AIImageTools.tsx         Lumen AI tools panel (vision + color + bg removal)

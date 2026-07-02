@@ -61,7 +61,7 @@ export default function PresentPage() {
         e.preventDefault();
         setIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === "Escape") {
-        window.location.href = "/editor-v2";
+        window.location.href = "/";
       }
     }
     window.addEventListener("keydown", onKey);
@@ -160,7 +160,7 @@ export default function PresentPage() {
         </button>
         <button
           onClick={() => {
-            window.location.href = "/editor-v2";
+            window.location.href = "/";
           }}
           style={{
             background: "none",

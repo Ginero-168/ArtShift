@@ -8,7 +8,7 @@
  *
  * On first load, if no engine entry exists but a legacy `mighty-slides:doc:v1`
  * is present, we transparently migrate via the adapter so users don't lose
- * work when switching to /editor-v2.
+ * work when switching to the new engine.
  */
 
 import { legacyToEngineDoc } from "./adapter";
