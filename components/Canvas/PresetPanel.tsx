@@ -412,6 +412,7 @@ function PresetCard({
       name: "preview",
       background: "transparent",
       elements,
+      layers: [],
       width: bw + minX * 2,
       height: bh + minY * 2,
     };

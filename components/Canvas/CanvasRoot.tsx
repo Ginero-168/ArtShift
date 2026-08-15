@@ -24,6 +24,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { cellsForPlacement, getAllHexCells, getHexMetrics } from "@/lib/engine/hexLayout";
+import { isObjectLocked, isObjectVisible } from "@/lib/engine/layers";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
 import { renderElement, renderSlide } from "@/lib/renderer/canvas";
 
@@ -58,6 +60,8 @@ type Props = {
   snapGrid?: number | null;
   /** Highlighted ids (rendered as a selection outline). */
   selectedIds?: ReadonlySet<string>;
+  /** The selected Layer controls whether Hex placement UI is visible. */
+  activeLayerId?: string;
   className?: string;
   /** When true, any pointer drag pans the viewport (hand tool mode). */
   handActive?: boolean;
@@ -85,6 +89,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     images,
     snapGrid,
     selectedIds,
+    activeLayerId,
     className,
     handActive,
     toolCursor,
@@ -144,13 +149,14 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
   }, [fitScale, size.w, size.h, slideW, slideH]);
 
   // Auto-fit on initial measure and whenever the active slide changes.
-  const lastSlideId = useRef<string | null>(null);
+  const lastSlideLayout = useRef<string | null>(null);
   useEffect(() => {
     if (!size.w || !size.h) return;
-    if (lastSlideId.current === slide.id) return;
-    lastSlideId.current = slide.id;
+    const layoutKey = `${slide.id}:${slide.width}:${slide.height}`;
+    if (lastSlideLayout.current === layoutKey) return;
+    lastSlideLayout.current = layoutKey;
     resetView();
-  }, [resetView, size.w, size.h, slide.id]);
+  }, [resetView, size.w, size.h, slide.height, slide.id, slide.width]);
 
   // ——— DPR-aware redraw ———
   useEffect(() => {
@@ -185,6 +191,11 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     ctx.fillRect(0, 0, slideW, slideH);
     ctx.shadowColor = "transparent";
 
+    renderSlide(slide, { ctx, images }, slideW, slideH, {
+      afterBackground: () => drawHexPlacementUI(ctx, slide, activeLayerId, selectedIds, view.scale),
+    });
+    if (draftElement) renderElement(draftElement, { ctx, images });
+
     if (snapGrid) {
       ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
       const r = Math.max(0.5, 1.5 / view.scale);
@@ -196,9 +207,6 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
         }
       }
     }
-
-    renderSlide(slide, { ctx, images }, slideW, slideH);
-    if (draftElement) renderElement(draftElement, { ctx, images });
 
     // Slide border drawn on top of content so it stays visible.
     ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
@@ -212,7 +220,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       ctx.lineWidth = 1.5 / view.scale;
       ctx.setLineDash([6 / view.scale, 4 / view.scale]);
       for (const el of slide.elements) {
-        if (el.isDeleted || !selectedIds.has(el.id)) continue;
+        if (el.isDeleted || !isObjectVisible(slide, el.id) || !selectedIds.has(el.id)) continue;
         ctx.save();
         const cx = el.x + el.width / 2;
         const cy = el.y + el.height / 2;
@@ -226,7 +234,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
     // Lock indicator on locked elements.
     for (const el of slide.elements) {
-      if (el.isDeleted || !el.locked) continue;
+      if (el.isDeleted || !isObjectVisible(slide, el.id) || !isObjectLocked(slide, el.id)) continue;
       const s = 10 / view.scale;
       const lx = el.x + el.width - s - 4 / view.scale;
       const ly = el.y + 4 / view.scale;
@@ -244,7 +252,19 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     }
 
     ctx.restore();
-  }, [slide, slideW, slideH, view, size.w, size.h, images, draftElement, selectedIds, snapGrid]);
+  }, [
+    slide,
+    slideW,
+    slideH,
+    view,
+    size.w,
+    size.h,
+    images,
+    draftElement,
+    selectedIds,
+    snapGrid,
+    activeLayerId,
+  ]);
 
   // ——— wheel zoom + scroll pan ———
   const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -460,6 +480,55 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     </div>
   );
 });
+
+function drawHexPlacementUI(
+  ctx: CanvasRenderingContext2D,
+  slide: EngineSlide,
+  activeLayerId: string | undefined,
+  selectedIds: ReadonlySet<string> | undefined,
+  scale: number,
+) {
+  const layer = slide.layers.find((candidate) => candidate.id === activeLayerId);
+  if (layer?.mode !== "block") return;
+  const grid = getHexMetrics(slide.width, slide.height);
+
+  const stateByCell = new Map<string, "occupied" | "selected">();
+  for (const objectId of layer.objectIds) {
+    const placement = layer.placements[objectId];
+    if (!placement) continue;
+    const state = selectedIds?.has(objectId) ? "selected" : "occupied";
+    for (const cell of cellsForPlacement(placement, grid)) {
+      const key = `${cell.col}:${cell.row}`;
+      if (state === "selected" || !stateByCell.has(key)) stateByCell.set(key, state);
+    }
+  }
+
+  ctx.save();
+  ctx.lineWidth = Math.max(0.75, 0.85 / Math.max(scale, 0.01));
+  const cells = getAllHexCells(slide.width, slide.height);
+  for (const cell of cells) {
+    const state = stateByCell.get(`${cell.col}:${cell.row}`);
+    if (state === "selected") {
+      ctx.fillStyle = "rgba(24, 89, 255, 0.075)";
+      ctx.strokeStyle = "rgba(24, 89, 255, 0.34)";
+    } else if (state === "occupied") {
+      ctx.fillStyle = "rgba(24, 89, 255, 0.035)";
+      ctx.strokeStyle = "rgba(24, 89, 255, 0.17)";
+    } else {
+      ctx.fillStyle = "rgba(51, 79, 134, 0.012)";
+      ctx.strokeStyle = "rgba(51, 79, 134, 0.1)";
+    }
+    ctx.beginPath();
+    cell.points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 export default CanvasRoot;
 

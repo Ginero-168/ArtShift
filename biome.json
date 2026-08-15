@@ -9,6 +9,7 @@
       "**/*.json",
       "!**/node_modules",
       "!**/.next",
+      "!**/.next-dev",
       "!**/dist",
       "!**/out",
       "!**/next-env.d.ts",

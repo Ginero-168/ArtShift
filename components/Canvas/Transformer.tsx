@@ -16,8 +16,16 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { elementWorldBBox, localToWorld, type Rect, unionBBox } from "@/lib/engine/bounds";
 import { pickTopMost } from "@/lib/engine/hitTest";
+import {
+  getInteractiveElements,
+  getLayerForObject,
+  getRenderableElements,
+  isObjectLocked,
+} from "@/lib/engine/layers";
+import { isMediaElement } from "@/lib/engine/mediaLayout";
 import { snapResize } from "@/lib/engine/snap";
 import { useEngine } from "@/lib/engine/store";
+import { getTextMinimumHeight } from "@/lib/engine/textLayout";
 import type { ArrowElement, EngineElement } from "@/lib/engine/types";
 
 const SNAP_THRESHOLD_PX = 6;
@@ -37,7 +45,9 @@ type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rot" | "sta
 export default function Transformer({ worldToScreen, scale, onGuidesChange }: Props) {
   const slide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
   const selectedIds = useEngine((s) => s.selectedIds);
-  const updateElements = useEngine((s) => s.updateElements);
+  const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
+  const previewElements = useEngine((s) => s.previewElements);
+  const commitBlockLayout = useEngine((s) => s.commitBlockLayout);
 
   const [active, setActive] = useState<HandleId | null>(null);
   const [rotateDeg, setRotateDeg] = useState<number | null>(null);
@@ -45,13 +55,14 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
     handle: HandleId;
     startClient: { x: number; y: number };
     el: EngineElement;
+    checkpointed: boolean;
     /** For multi-select scale: snapshot of all selected elements + AABB. */
     multi?: { originals: EngineElement[]; aabb: Rect };
   } | null>(null);
 
   const selectedElements = useMemo(() => {
     if (!slide) return [] as EngineElement[];
-    return slide.elements.filter((el) => selectedIds.has(el.id) && !el.isDeleted);
+    return getRenderableElements(slide).filter((el) => selectedIds.has(el.id));
   }, [slide, selectedIds]);
 
   const single = selectedElements.length === 1 ? selectedElements[0] : null;
@@ -66,26 +77,28 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
     (handle: HandleId) => (e: React.PointerEvent) => {
       // Single-select path.
       if (single) {
-        if (single.locked) return;
+        if (!slide || isObjectLocked(slide, single.id)) return;
         e.stopPropagation();
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         dragRef.current = {
           handle,
           startClient: { x: e.clientX, y: e.clientY },
           el: { ...single },
+          checkpointed: false,
         };
         setActive(handle);
         return;
       }
       // Multi-select path: snapshot AABB + originals.
       if (selectedElements.length < 2 || !bbox) return;
-      if (selectedElements.some((el) => el.locked)) return;
+      if (!slide || selectedElements.some((el) => isObjectLocked(slide, el.id))) return;
       e.stopPropagation();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       dragRef.current = {
         handle,
         startClient: { x: e.clientX, y: e.clientY },
         el: selectedElements[0],
+        checkpointed: false,
         multi: {
           originals: selectedElements.map((el) => ({ ...el })),
           aabb: { ...bbox },
@@ -93,20 +106,24 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       };
       setActive(handle);
     },
-    [bbox, selectedElements, single],
+    [bbox, selectedElements, single, slide],
   );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
+      if (!drag.checkpointed) {
+        checkpointInteraction(drag.handle === "rot" ? "rotate" : "resize");
+        drag.checkpointed = true;
+      }
       const snapGrid = useEngine.getState().doc.snapGrid;
       const dx = (e.clientX - drag.startClient.x) / scale;
       const dy = (e.clientY - drag.startClient.y) / scale;
       // Multi-element scale path.
       if (drag.multi) {
         const { originals, aabb } = drag.multi;
-        const keepAR = e.shiftKey;
+        const keepAR = e.shiftKey || originals.some(isMediaElement);
         const handle = drag.handle;
         const right = handle === "e" || handle === "ne" || handle === "se";
         const left = handle === "w" || handle === "nw" || handle === "sw";
@@ -156,8 +173,8 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
             }
             onGuidesChange?.([]);
           } else {
-            const others = slide.elements.filter(
-              (el) => !el.isDeleted && !originals.some((o) => o.id === el.id),
+            const others = getInteractiveElements(slide).filter(
+              (el) => !originals.some((original) => original.id === el.id),
             );
             const snap = snapResize(
               { x: nx, y: ny, width: nw, height: nh },
@@ -183,7 +200,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
             height: el.height * sy,
           },
         }));
-        updateElements(patches, "scale multi");
+        previewElements(patches);
         return;
       }
       const start = drag.el;
@@ -223,7 +240,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
               [absB[0] - minX, absB[1] - minY],
             ],
           };
-          updateElements([{ id: start.id, patch }], "bend line");
+          previewElements([{ id: start.id, patch }]);
           return;
         }
         if (drag.handle === "start") {
@@ -256,7 +273,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
               x: drag.handle === "start" ? absA[0] : absB[0],
               y: drag.handle === "start" ? absA[1] : absB[1],
             },
-            slide.elements.filter((e) => e.id !== start.id && !e.isDeleted),
+            getInteractiveElements(slide).filter((element) => element.id !== start.id),
           );
           if (hit && (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond")) {
             if (drag.handle === "start") startBinding = { elementId: hit.id, gap: 12, focus: 0.5 };
@@ -284,7 +301,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
           arrowPatch.endBinding = endBinding;
         }
 
-        updateElements([{ id: start.id, patch }], "resize line");
+        previewElements([{ id: start.id, patch }]);
         return;
       }
       if (drag.handle === "rot") {
@@ -298,7 +315,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
         let deg = Math.round((snapped * 180) / Math.PI) % 360;
         if (deg < 0) deg += 360;
         setRotateDeg(deg);
-        updateElements([{ id: start.id, patch: { angle: snapped } }], "rotate");
+        previewElements([{ id: start.id, patch: { angle: snapped } }]);
         return;
       }
       // Resize: edit corners of the unrotated bbox in element-local space.
@@ -311,7 +328,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       const localDy = -dx * sin + dy * cos;
       let newW = start.width;
       let newH = start.height;
-      const keepAR = e.shiftKey;
+      const keepAR = e.shiftKey || isMediaElement(start);
       const ar = start.width / Math.max(1, start.height);
 
       let px = 0.5,
@@ -341,28 +358,24 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
         case "se":
           newW = Math.max(2, start.width + localDx);
           newH = Math.max(2, start.height + localDy);
-          if (keepAR) newH = newW / ar;
           px = 0;
           py = 0;
           break;
         case "ne":
           newW = Math.max(2, start.width + localDx);
           newH = Math.max(2, start.height - localDy);
-          if (keepAR) newH = newW / ar;
           px = 0;
           py = 1;
           break;
         case "sw":
           newW = Math.max(2, start.width - localDx);
           newH = Math.max(2, start.height + localDy);
-          if (keepAR) newH = newW / ar;
           px = 1;
           py = 0;
           break;
         case "nw":
           newW = Math.max(2, start.width - localDx);
           newH = Math.max(2, start.height - localDy);
-          if (keepAR) newH = newW / ar;
           px = 1;
           py = 1;
           break;
@@ -370,12 +383,25 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
           break;
       }
 
+      if (keepAR) {
+        if (drag.handle === "e" || drag.handle === "w") {
+          newH = newW / ar;
+        } else if (drag.handle === "n" || drag.handle === "s") {
+          newW = newH * ar;
+        } else {
+          const widthChange = Math.abs(newW / start.width - 1);
+          const heightChange = Math.abs(newH / start.height - 1);
+          if (widthChange >= heightChange) newH = newW / ar;
+          else newW = newH * ar;
+        }
+      }
+
       const dx_pivot = (px - 0.5) * (start.width - newW);
       const dy_pivot = (py - 0.5) * (start.height - newH);
       let newX = start.x + (start.width - newW) / 2 + dx_pivot * cos - dy_pivot * sin;
       let newY = start.y + (start.height - newH) / 2 + dx_pivot * sin + dy_pivot * cos;
       // Snap moving edges for axis-aligned elements (rotated boxes skip snap).
-      if (start.angle === 0 && slide) {
+      if (start.angle === 0 && slide && !isMediaElement(start)) {
         const right = drag.handle === "e" || drag.handle === "ne" || drag.handle === "se";
         const leftEdge = drag.handle === "w" || drag.handle === "nw" || drag.handle === "sw";
         const bottom = drag.handle === "s" || drag.handle === "se" || drag.handle === "sw";
@@ -401,7 +427,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
           }
           onGuidesChange?.([]);
         } else {
-          const others = slide.elements.filter((el) => !el.isDeleted && el.id !== start.id);
+          const others = getInteractiveElements(slide).filter((el) => el.id !== start.id);
           const snap = snapResize(
             { x: newX, y: newY, width: newW, height: newH },
             { left: leftEdge, right, top: topEdge, bottom },
@@ -415,17 +441,26 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
           onGuidesChange?.(snap.guides);
         }
       }
-      updateElements(
-        [{ id: start.id, patch: { x: newX, y: newY, width: newW, height: newH } }],
-        "resize",
-      );
+      if (start.type === "text") {
+        const minimumHeight = getTextMinimumHeight(
+          start,
+          Math.max(1, start.text.split("\n").length),
+        );
+        if (newH < minimumHeight) {
+          const growsUp = drag.handle === "n" || drag.handle === "ne" || drag.handle === "nw";
+          if (growsUp) newY -= minimumHeight - newH;
+          newH = minimumHeight;
+        }
+      }
+      previewElements([{ id: start.id, patch: { x: newX, y: newY, width: newW, height: newH } }]);
     },
-    [onGuidesChange, scale, slide, updateElements, worldToScreen],
+    [checkpointInteraction, onGuidesChange, previewElements, scale, slide, worldToScreen],
   );
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent) => {
-      if (!dragRef.current) return;
+      const drag = dragRef.current;
+      if (!drag) return;
       dragRef.current = null;
       setActive(null);
       setRotateDeg(null);
@@ -435,13 +470,19 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       } catch {
         /* ignore */
       }
+      if (drag.checkpointed && drag.handle !== "rot" && slide) {
+        const ids = drag.multi ? drag.multi.originals.map((element) => element.id) : [drag.el.id];
+        for (const id of ids) {
+          if (getLayerForObject(slide, id)?.mode === "block") commitBlockLayout(id);
+        }
+      }
     },
-    [onGuidesChange],
+    [commitBlockLayout, onGuidesChange, slide],
   );
 
   if (!bbox || selectedElements.length === 0) return null;
 
-  const allLocked = selectedElements.every((el) => el.locked);
+  const allLocked = slide ? selectedElements.every((el) => isObjectLocked(slide, el.id)) : true;
   // For single rotated element, use oriented box; for multi use AABB.
   const handles: { id: HandleId; pt: { x: number; y: number }; cursor: string; bound?: boolean }[] =
     [];
@@ -460,7 +501,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
     for (const it of layout)
       handles.push({ id: it.id, pt: worldToScreen({ x: it.lx, y: it.ly }), cursor: it.cursor });
   }
-  if (single && !single.locked) {
+  if (single && slide && !isObjectLocked(slide, single.id)) {
     if (single.type === "line" || single.type === "arrow") {
       const pts = single.points;
       const first = pts[0] ?? [0, 0];

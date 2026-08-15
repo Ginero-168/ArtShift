@@ -9,6 +9,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useEngine } from "@/lib/engine/store";
+import {
+  getTextMinimumHeight,
+  getTextRenderPadding,
+  getTextSafePadding,
+} from "@/lib/engine/textLayout";
 import type { TextElement } from "@/lib/engine/types";
 
 type Props = {
@@ -41,10 +46,7 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
 
     // Auto-expand height
     if (!element.containerId) {
-      patch.height = Math.max(
-        element.fontSize * 1.4,
-        lines.length * element.fontSize * element.lineHeight,
-      );
+      patch.height = getTextMinimumHeight(element, lines.length);
     }
 
     // Auto-expand width using canvas measureText
@@ -70,8 +72,7 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
         if (isBullet) lineWidth += element.fontSize * 0.8;
         if (lineWidth > maxWidth) maxWidth = lineWidth;
       }
-      // Add some padding
-      const needed = maxWidth + 16;
+      const needed = maxWidth + getTextSafePadding(element.fontSize, element.padding ?? 0) * 2;
       if (!element.containerId && needed > element.width) {
         patch.width = needed;
       }
@@ -89,6 +90,18 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
     e.stopPropagation();
   };
 
+  const renderPadding = getTextRenderPadding(element) * scale;
+  const textHeight =
+    Math.max(1, value.split("\n").length) * element.fontSize * element.lineHeight * scale;
+  const boxHeight = element.height * scale;
+  const lastSafeStart = Math.max(renderPadding, boxHeight - renderPadding - textHeight);
+  const paddingTop =
+    element.verticalAlign === "middle"
+      ? Math.min(lastSafeStart, Math.max(renderPadding, (boxHeight - textHeight) / 2))
+      : element.verticalAlign === "bottom"
+        ? lastSafeStart
+        : renderPadding;
+
   return (
     <textarea
       ref={ref}
@@ -105,30 +118,19 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
         left: screen.x,
         top: screen.y,
         width: element.width * scale,
+        height: element.height * scale,
         minHeight: element.height * scale,
+        boxSizing: "border-box",
         border: "none",
         resize: "none",
         overflow: "hidden",
-        padding: 0,
-        paddingTop:
-          element.verticalAlign === "middle"
-            ? Math.max(
-                0,
-                (element.height * scale -
-                  value.split("\n").length * element.fontSize * element.lineHeight * scale) /
-                  2,
-              )
-            : element.verticalAlign === "bottom"
-              ? Math.max(
-                  0,
-                  element.height * scale -
-                    value.split("\n").length * element.fontSize * element.lineHeight * scale,
-                )
-              : 0,
+        padding: `${paddingTop}px ${renderPadding}px ${renderPadding}px`,
         margin: 0,
         outline: "2px solid #6366f1",
         outlineOffset: 2,
-        background: "transparent",
+        background:
+          element.backgroundColor === "transparent" ? "transparent" : element.backgroundColor,
+        borderRadius: (element.cornerRadius ?? 0) * scale,
         color: element.strokeColor,
         fontSize: element.fontSize * scale,
         fontFamily: element.fontFamily,

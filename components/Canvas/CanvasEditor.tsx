@@ -26,6 +26,7 @@ import {
 } from "@/lib/engine/factory";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
 import { getImageCache } from "@/lib/engine/imageCache";
+import { getInteractiveElements, getLayerForObject, isObjectLocked } from "@/lib/engine/layers";
 import { type Guide, snapBBox } from "@/lib/engine/snap";
 import { type Tool, useEngine } from "@/lib/engine/store";
 import type { EngineElement, TextElement } from "@/lib/engine/types";
@@ -39,7 +40,6 @@ import ContextMenu from "./ContextMenu";
 import CropOverlay from "./CropOverlay";
 import Guides from "./Guides";
 import Marquee from "./Marquee";
-import PropertiesPanel from "./PropertiesPanel";
 import TextOverlay from "./TextOverlay";
 import Transformer from "./Transformer";
 import { usePasteDrop } from "./usePasteDrop";
@@ -53,6 +53,7 @@ type DragState =
       start: WorldPoint;
       ids: string[];
       origins: Map<string, { x: number; y: number }>;
+      checkpointed: boolean;
     }
   | { kind: "freedraw"; points: Array<[number, number, number]> }
   | {
@@ -68,11 +69,14 @@ export default function CanvasEditor() {
   const slide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
   const tool = useEngine((s) => s.tool);
   const selectedIds = useEngine((s) => s.selectedIds);
+  const activeLayerId = useEngine((s) => s.activeLayerId);
   const snapGrid = useEngine((s) => s.doc.snapGrid);
   const setTool = useEngine((s) => s.setTool);
   const croppingImageId = useEngine((s) => s.croppingImageId);
   const addElement = useEngine((s) => s.addElement);
-  const updateElements = useEngine((s) => s.updateElements);
+  const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
+  const previewElements = useEngine((s) => s.previewElements);
+  const commitBlockLayout = useEngine((s) => s.commitBlockLayout);
   const selectOnly = useEngine((s) => s.selectOnly);
   const clearSelection = useEngine((s) => s.clearSelection);
   const deleteElements = useEngine((s) => s.deleteElements);
@@ -115,7 +119,7 @@ export default function CanvasEditor() {
       }
 
       if (tool === "select") {
-        const hit = pickTopMost(p, slide.elements);
+        const hit = pickTopMost(p, slide);
         if (hit) {
           // Expand to group members if clicked element is grouped.
           const groupIds = getSelectionWithGroup(
@@ -160,9 +164,11 @@ export default function CanvasEditor() {
           const ids = Array.from(useEngine.getState().selectedIds);
           const origins = new Map<string, { x: number; y: number }>();
           for (const el of slide.elements) {
-            if (ids.includes(el.id) && !el.locked) origins.set(el.id, { x: el.x, y: el.y });
+            if (ids.includes(el.id) && !isObjectLocked(slide, el.id)) {
+              origins.set(el.id, { x: el.x, y: el.y });
+            }
           }
-          dragRef.current = { kind: "move", start: p, ids, origins };
+          dragRef.current = { kind: "move", start: p, ids, origins, checkpointed: false };
         } else {
           // Begin marquee.
           const screen = rootRef.current?.worldToScreen(p) ?? { x: 0, y: 0 };
@@ -178,7 +184,7 @@ export default function CanvasEditor() {
       }
 
       if (tool === "eraser") {
-        const hit = pickTopMost(p, slide.elements);
+        const hit = pickTopMost(p, slide);
         if (hit) deleteElements([hit.id]);
         dragRef.current = { kind: "erase" };
         return;
@@ -203,11 +209,15 @@ export default function CanvasEditor() {
       const d = dragRef.current;
       if (!d || !slide) return;
       if (d.kind === "move") {
+        if (!d.checkpointed) {
+          checkpointInteraction("move");
+          d.checkpointed = true;
+        }
         let dx = p.x - d.start.x;
         let dy = p.y - d.start.y;
         // Snap union bbox of moving selection.
         const moving = slide.elements.filter((el) => d.origins.has(el.id));
-        const others = slide.elements.filter((el) => !d.origins.has(el.id));
+        const others = getInteractiveElements(slide).filter((el) => !d.origins.has(el.id));
         const movedNow = moving.map((el) => {
           const o = d.origins.get(el.id)!;
           return { ...el, x: o.x + dx, y: o.y + dy } as EngineElement;
@@ -227,22 +237,12 @@ export default function CanvasEditor() {
             setGuides(snap.guides);
           }
         }
-        useEngine.setState((cur) => ({
-          doc: {
-            ...cur.doc,
-            slides: cur.doc.slides.map((sl) =>
-              sl.id !== cur.currentSlideId
-                ? sl
-                : {
-                    ...sl,
-                    elements: sl.elements.map((el) => {
-                      const o = d.origins.get(el.id);
-                      return o ? ({ ...el, x: o.x + dx, y: o.y + dy } as EngineElement) : el;
-                    }),
-                  },
-            ),
-          },
-        }));
+        previewElements(
+          Array.from(d.origins.entries()).map(([id, origin]) => ({
+            id,
+            patch: { x: origin.x + dx, y: origin.y + dy },
+          })),
+        );
         return;
       }
       if (d.kind === "freedraw") {
@@ -261,14 +261,14 @@ export default function CanvasEditor() {
         return;
       }
       if (d.kind === "erase") {
-        const hit = pickTopMost(p, slide.elements);
+        const hit = pickTopMost(p, slide);
         if (hit) deleteElements([hit.id]);
         return;
       }
       // draw
       setDraft(makeDraftFor(tool, d.start, p));
     },
-    [deleteElements, slide, snapGrid, tool, view.scale],
+    [checkpointInteraction, deleteElements, previewElements, slide, snapGrid, tool, view.scale],
   );
 
   const onPointerUp = useCallback(
@@ -278,16 +278,14 @@ export default function CanvasEditor() {
       if (!d) return;
       if (d.kind === "move") {
         setGuides([]);
+        if (!d.checkpointed) return;
         const ids = d.ids;
         const slideNow = useEngine
           .getState()
           .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
         if (!slideNow) return;
-        const patches = ids
-          .map((id) => slideNow.elements.find((el) => el.id === id))
-          .filter((el): el is EngineElement => Boolean(el))
-          .map((el) => ({ id: el.id, patch: { x: el.x, y: el.y } }));
-        if (patches.length) updateElements(patches, "move");
+        const movedBlockIds = ids.filter((id) => getLayerForObject(slideNow, id)?.mode === "block");
+        for (const id of movedBlockIds) commitBlockLayout(id);
         return;
       }
       if (d.kind === "freedraw") {
@@ -304,7 +302,7 @@ export default function CanvasEditor() {
           const h = Math.abs(p.y - d.startWorld.y);
           const inside = pickIntersectRect(
             { x: minX, y: minY, width: w, height: h },
-            slide.elements.filter((el) => !el.locked),
+            getInteractiveElements(slide),
           );
           const ids = inside.map((el) => el.id);
           if (d.additive) {
@@ -322,14 +320,8 @@ export default function CanvasEditor() {
       if (d.kind !== "draw") return;
       const el = makeDraftFor(tool, d.start, p);
       if (tool === "arrow" && el && slide) {
-        const startHit = pickTopMost(
-          d.start,
-          slide.elements.filter((e) => !e.isDeleted),
-        );
-        const endHit = pickTopMost(
-          p,
-          slide.elements.filter((e) => !e.isDeleted),
-        );
+        const startHit = pickTopMost(d.start, slide);
+        const endHit = pickTopMost(p, slide);
         if (
           startHit &&
           (startHit.type === "rect" || startHit.type === "ellipse" || startHit.type === "diamond")
@@ -371,7 +363,7 @@ export default function CanvasEditor() {
         setTool("select");
       }
     },
-    [addElement, selectOnly, setTool, slide, tool, updateElements],
+    [addElement, commitBlockLayout, selectOnly, setTool, slide, tool],
   );
 
   if (!slide) return null;
@@ -407,7 +399,7 @@ export default function CanvasEditor() {
         // If right-clicking on a non-selected element, select it first.
         const world = rootRef.current?.clientToWorld(e.clientX, e.clientY);
         if (world && slide) {
-          const hit = pickTopMost(world, slide.elements);
+          const hit = pickTopMost(world, slide);
           if (hit && !selectedIds.has(hit.id)) {
             selectOnly([hit.id]);
           } else if (!hit && selectedIds.size > 0 && !e.shiftKey) {
@@ -424,6 +416,7 @@ export default function CanvasEditor() {
         images={images}
         snapGrid={snapGrid}
         selectedIds={editingText ? new Set() : selectedIds}
+        activeLayerId={activeLayerId}
         handActive={tool === "hand"}
         toolCursor={toolToCursor(tool)}
         onPointerDownWorld={onPointerDown}
@@ -464,10 +457,6 @@ export default function CanvasEditor() {
           />
         )}
       </CanvasRoot>
-      <PropertiesPanel
-        worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
-        scale={view.scale}
-      />
       {ctxMenu && <ContextMenu position={ctxMenu} onClose={() => setCtxMenu(null)} />}
     </div>
   );

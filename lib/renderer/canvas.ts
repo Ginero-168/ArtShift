@@ -13,14 +13,18 @@ import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { ColorAdjustments } from "../color/adjustments";
 import { applyColorAdjustments } from "../color/adjustments";
 import { freedrawPath } from "../engine/freehand";
+import { getRenderableElements } from "../engine/layers";
 import { buildRoughShape } from "../engine/rough";
+import { getTextRenderPadding } from "../engine/textLayout";
 import type {
   ArrowElement,
+  BookMockupElement,
   EngineElement,
   EngineSlide,
   ImageElement,
   TextElement,
 } from "../engine/types";
+import { drawBookMockup } from "./bookMockup";
 import { getCachedElement, setCachedElement } from "./cache";
 
 export type RenderCtx = {
@@ -40,16 +44,22 @@ function roughCanvas(target: HTMLCanvasElement): RoughCanvas {
   return _rc;
 }
 
-export function renderSlide(slide: EngineSlide, render: RenderCtx, slideW: number, slideH: number) {
+export function renderSlide(
+  slide: EngineSlide,
+  render: RenderCtx,
+  slideW: number,
+  slideH: number,
+  options: { afterBackground?: () => void } = {},
+) {
   const { ctx } = render;
   // Background.
   ctx.save();
   ctx.fillStyle = slide.background;
   ctx.fillRect(0, 0, slideW, slideH);
   ctx.restore();
+  options.afterBackground?.();
 
-  // Render in z-order (assumed already sorted by caller; we re-sort defensively).
-  const ordered = [...slide.elements].filter((e) => !e.isDeleted).sort((a, b) => a.z - b.z);
+  const ordered = getRenderableElements(slide);
 
   const frames = ordered.filter(
     (el) => el.type === "frame",
@@ -79,6 +89,7 @@ export function renderSlide(slide: EngineSlide, render: RenderCtx, slideW: numbe
 }
 
 export function renderElement(el: EngineElement, render: RenderCtx) {
+  if (el.isDeleted || el.visible === false) return;
   const { ctx } = render;
   let cached = getCachedElement(el);
 
@@ -186,6 +197,9 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
     case "image":
       drawImage(ctx, el as ImageElement, render);
       break;
+    case "bookMockup":
+      drawBookMockup(ctx, el as BookMockupElement, render.images?.get(el.fileId));
+      break;
     case "frame":
       drawFrame(ctx, el as import("../engine/types").FrameElement);
       break;
@@ -209,38 +223,53 @@ function drawFreedraw(ctx: CanvasRenderingContext2D, el: EngineElement) {
 }
 
 function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
+  const padding = getTextRenderPadding(el);
+  if (el.backgroundColor !== "transparent") {
+    ctx.save();
+    ctx.fillStyle = el.backgroundColor;
+    roundedRectPath(ctx, 0, 0, el.width, el.height, el.cornerRadius ?? 0);
+    ctx.fill();
+    ctx.restore();
+  }
+
   ctx.fillStyle = el.strokeColor;
   ctx.textBaseline = "top";
   ctx.textAlign =
     el.textAlign === "center" ? "center" : el.textAlign === "right" ? "right" : "left";
-  const lines = el.text.split("\n");
+  const availableWidth = Math.max(1, el.width - padding * 2);
+  const lines = el.text
+    .split("\n")
+    .flatMap((rawLine) => wrapTextLine(ctx, el, rawLine, availableWidth));
   const lh = el.fontSize * el.lineHeight;
   const totalH = lines.length * lh;
-  let y = 0;
-  if (el.verticalAlign === "middle") y = (el.height - totalH) / 2;
-  else if (el.verticalAlign === "bottom") y = el.height - totalH;
+  let y = padding;
+  const lastSafeStart = Math.max(padding, el.height - padding - totalH);
+  if (el.verticalAlign === "middle") {
+    y = Math.min(lastSafeStart, Math.max(padding, (el.height - totalH) / 2));
+  } else if (el.verticalAlign === "bottom") {
+    y = lastSafeStart;
+  }
 
   for (const rawLine of lines) {
     const isBullet = rawLine.startsWith("- ") || rawLine.startsWith("• ");
     const line = isBullet ? rawLine.slice(2) : rawLine;
     const bulletIndent = isBullet ? el.fontSize * 0.8 : 0;
 
-    const xAnchor =
-      el.textAlign === "center" ? el.width / 2 : el.textAlign === "right" ? el.width : 0;
-
-    // Draw bullet character.
-    if (isBullet) {
-      setFont(ctx, el, false, false);
-      const bx = el.textAlign === "center" ? xAnchor - bulletIndent : xAnchor;
-      ctx.fillText("•", bx, y);
-    }
-
     // Parse and render rich text segments.
     const segments = parseRichText(line);
-    let x = xAnchor;
-    if (el.textAlign === "left") x += bulletIndent;
-    if (el.textAlign === "center") x += bulletIndent / 2;
+    const lineWidth = measureSegments(ctx, el, segments);
+    let x = padding + bulletIndent;
+    if (el.textAlign === "center") x = (el.width - lineWidth + bulletIndent) / 2;
+    if (el.textAlign === "right") x = el.width - padding - lineWidth;
 
+    // Draw bullet character before switching to left-aligned segment drawing.
+    if (isBullet) {
+      setFont(ctx, el, false, false);
+      ctx.textAlign = "left";
+      ctx.fillText("•", x - bulletIndent, y);
+    }
+
+    ctx.textAlign = "left";
     for (const seg of segments) {
       setFont(ctx, el, seg.bold, seg.italic);
       const segWidth = ctx.measureText(seg.text).width;
@@ -250,6 +279,69 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
 
     y += lh;
   }
+}
+
+function wrapTextLine(
+  ctx: CanvasRenderingContext2D,
+  el: TextElement,
+  rawLine: string,
+  maxWidth: number,
+): string[] {
+  const bullet = rawLine.startsWith("- ") || rawLine.startsWith("• ");
+  const content = bullet ? rawLine.slice(2) : rawLine;
+  if (!content) return [bullet ? "• " : ""];
+  const segmenter =
+    typeof Intl !== "undefined" && "Segmenter" in Intl
+      ? new Intl.Segmenter("th", { granularity: "word" })
+      : null;
+  const tokens = segmenter
+    ? Array.from(segmenter.segment(content), (part) => part.segment)
+    : content.split(/(\s+)/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const token of tokens) {
+    const candidate = `${current}${token}`;
+    const width = measureSegments(ctx, el, parseRichText(candidate));
+    if (current && width > maxWidth) {
+      lines.push(current.trimEnd());
+      current = token.trimStart();
+    } else {
+      current = candidate;
+    }
+  }
+  if (current || !lines.length) lines.push(current.trimEnd());
+  return lines.map((line, index) => (bullet && index === 0 ? `• ${line}` : line));
+}
+
+function measureSegments(ctx: CanvasRenderingContext2D, el: TextElement, segments: Segment[]) {
+  let width = 0;
+  for (const segment of segments) {
+    setFont(ctx, el, segment.bold, segment.italic);
+    width += ctx.measureText(segment.text).width;
+  }
+  return width;
+}
+
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.min(Math.max(0, radius), width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function setFont(ctx: CanvasRenderingContext2D, el: TextElement, bold: boolean, italic: boolean) {

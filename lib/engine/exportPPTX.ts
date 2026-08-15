@@ -7,6 +7,7 @@
  */
 
 import { type RenderCtx, renderElement } from "../renderer/canvas";
+import { getRenderableElements } from "./layers";
 import type { EngineDoc, EngineElement, ImageElement, TextElement } from "./types";
 
 const PX_TO_IN = 1 / 96;
@@ -93,7 +94,7 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
     const s = pptx.addSlide();
     s.background = { color: (slide.background || "#ffffff").replace("#", "") };
 
-    const ordered = [...slide.elements].filter((e) => !e.isDeleted).sort((a, b) => a.z - b.z);
+    const ordered = getRenderableElements(slide);
 
     for (const el of ordered) {
       if (el.type === "frame") continue; // frames are structural only

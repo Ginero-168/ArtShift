@@ -11,6 +11,7 @@ import { useEngine } from "@/lib/engine/store";
 import type { ArrowElement, EngineElement, TextElement } from "@/lib/engine/types";
 import { ActionsSection } from "./PropertiesPanel/ActionsSection";
 import { ArrowSection } from "./PropertiesPanel/ArrowSection";
+import { BookMockupSection } from "./PropertiesPanel/BookMockupSection";
 import { FillSection } from "./PropertiesPanel/FillSection";
 import { ImageSection } from "./PropertiesPanel/ImageSection";
 import { OpacitySection } from "./PropertiesPanel/OpacitySection";
@@ -59,6 +60,9 @@ export default function PropertiesPanel({
     (el): el is import("@/lib/engine/types").ImageElement => el.type === "image",
   );
   const firstImage = images[0];
+  const firstBookMockup = selected.find(
+    (el): el is import("@/lib/engine/types").BookMockupElement => el.type === "bookMockup",
+  );
 
   return (
     <div
@@ -83,13 +87,15 @@ export default function PropertiesPanel({
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <FillSection
-        first={first}
-        selected={selected}
-        ids={ids}
-        apply={apply}
-        updateElements={updateElements}
-      />
+      {!firstBookMockup && (
+        <FillSection
+          first={first}
+          selected={selected}
+          ids={ids}
+          apply={apply}
+          updateElements={updateElements}
+        />
+      )}
       {firstArrow && (
         <ArrowSection firstArrow={firstArrow} arrows={arrows} updateElements={updateElements} />
       )}
@@ -106,8 +112,10 @@ export default function PropertiesPanel({
           setCroppingImageId={setCroppingImageId}
         />
       )}
+      {firstBookMockup && selected.length === 1 && (
+        <BookMockupSection mockup={firstBookMockup} apply={apply} />
+      )}
       <OpacitySection first={first} apply={apply} />
-      <ActionsSection selected={selected} />
       <ActionsSection selected={selected} />
     </div>
   );

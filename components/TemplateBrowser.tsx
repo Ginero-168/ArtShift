@@ -274,6 +274,7 @@ function TemplateThumb({
       name: "preview",
       background: result.background,
       elements: result.objects,
+      layers: [],
       width: 1920,
       height: 1080,
     };

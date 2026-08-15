@@ -1,0 +1,282 @@
+.action {
+  min-height: 29px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #cfd6e3;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #253047;
+  font: 650 10px/1 "Sarabun", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.action:hover {
+  border-color: #1859ff;
+  color: #1859ff;
+}
+
+.action > span {
+  color: #1859ff;
+  font-size: 14px;
+}
+
+.action small {
+  padding-left: 6px;
+  border-left: 1px solid #e2e6ed;
+  color: #8a93a3;
+  font: 600 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(18, 25, 38, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.dialog {
+  width: min(650px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid #cfd6e3;
+  border-radius: 8px;
+  background: #f8f9fb;
+  color: #172033;
+  box-shadow: 0 28px 80px rgba(9, 17, 32, 0.28);
+  font-family: "Sarabun", system-ui, sans-serif;
+}
+
+.dialog header,
+.dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+}
+
+.dialog header {
+  min-height: 70px;
+  padding: 0 18px;
+  border-bottom: 1px solid #dfe3ea;
+}
+
+.dialog header span {
+  color: #1859ff;
+  font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.15em;
+}
+
+.dialog h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.dialog header button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d8dde7;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #647084;
+  font-size: 19px;
+  cursor: pointer;
+}
+
+.body {
+  padding: 18px;
+}
+
+.customSize {
+  display: grid;
+  grid-template-columns: 1fr 30px 1fr 34px;
+  align-items: end;
+  gap: 8px;
+}
+
+.customSize label {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  color: #667085;
+  font-size: 9px;
+}
+
+.customSize input {
+  width: 100%;
+  height: 42px;
+  padding: 0 38px 0 11px;
+  border: 1px solid #ccd3df;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #172033;
+  font: 650 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.customSize label small {
+  position: absolute;
+  right: 10px;
+  bottom: 16px;
+  color: #9aa2b1;
+  font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.customSize > button {
+  height: 42px;
+  border: 1px solid #d4dae4;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #7c8595;
+  cursor: pointer;
+}
+
+.customSize > button.locked {
+  border-color: #1859ff;
+  color: #1859ff;
+}
+
+.referenceHeader {
+  margin: 22px 0 9px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.referenceHeader strong {
+  font-size: 11px;
+}
+
+.referenceHeader span {
+  color: #8a93a3;
+  font-size: 9px;
+}
+
+.references {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.references button {
+  min-height: 64px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d8dde7;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #283248;
+  text-align: left;
+  cursor: pointer;
+}
+
+.references button:hover,
+.references button.activeReference {
+  border-color: #1859ff;
+}
+
+.activeReference {
+  box-shadow: inset 0 0 0 1px #1859ff;
+}
+
+.ratioPreview {
+  width: 25px;
+  max-height: 40px;
+  justify-self: center;
+  border: 1px solid #1859ff;
+  background: #eaf0ff;
+}
+
+.references button > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.references strong {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.references small {
+  overflow: hidden;
+  color: #8a93a3;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reflowOption {
+  margin-top: 16px;
+  padding: 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #cdd8f4;
+  border-radius: 5px;
+  background: #f1f5ff;
+}
+
+.reflowOption input {
+  margin-top: 2px;
+  accent-color: #1859ff;
+}
+
+.reflowOption > span {
+  display: grid;
+  gap: 3px;
+}
+
+.reflowOption strong {
+  font-size: 10px;
+}
+
+.reflowOption small {
+  color: #69758b;
+  font-size: 8px;
+}
+
+.dialog footer {
+  min-height: 61px;
+  padding: 0 18px;
+  justify-content: flex-end;
+  gap: 7px;
+  border-top: 1px solid #dfe3ea;
+}
+
+.dialog footer button {
+  min-height: 32px;
+  padding: 0 13px;
+  border: 1px solid #ccd3df;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #445066;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.dialog footer button.apply {
+  border-color: #1859ff;
+  background: #1859ff;
+  color: #ffffff;
+}
+
+@media (max-width: 680px) {
+  .action small {
+    display: none;
+  }
+
+  .references {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

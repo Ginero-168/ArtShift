@@ -11,6 +11,7 @@
  */
 
 import { useEffect } from "react";
+import { BUILDER_BLOCK_MIME, createBuilderBlock, isBuilderBlockKind } from "@/lib/builder/blocks";
 import { createImage } from "@/lib/engine/factory";
 import { fileToDataURL, getImageCache, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
@@ -115,6 +116,20 @@ export function usePasteDrop(
 
     function onDrop(e: DragEvent) {
       e.preventDefault();
+      const blockKind = e.dataTransfer?.getData(BUILDER_BLOCK_MIME) ?? "";
+      if (isBuilderBlockKind(blockKind)) {
+        const state = useEngine.getState();
+        const slide = state.doc.slides.find((candidate) => candidate.id === state.currentSlideId);
+        if (!slide) return;
+        const point = clientToWorld(e.clientX, e.clientY);
+        const element = createBuilderBlock(blockKind, {
+          width: slide.width,
+          height: slide.height,
+          point,
+        });
+        addElement(element, `drop ${blockKind}`);
+        return;
+      }
       if (!e.dataTransfer?.files?.length) return;
       const world = clientToWorld(e.clientX, e.clientY);
       handleFiles(e.dataTransfer.files, world);

@@ -15,12 +15,13 @@ import {
   rotatePoint,
   worldToLocal,
 } from "./bounds";
-import type { EngineElement } from "./types";
+import { getInteractiveElements } from "./layers";
+import type { EngineElement, EngineSlide } from "./types";
 
 const HIT_TOLERANCE = 6; // px in world space
 
 export function hitTestElement(world: Point, el: EngineElement): boolean {
-  if (el.isDeleted) return false;
+  if (el.isDeleted || el.visible === false) return false;
   // Cheap reject via world bbox first.
   const bbox = elementWorldBBox(el);
   if (!pointInRect({ x: world.x, y: world.y }, expandRect(bbox, HIT_TOLERANCE))) return false;
@@ -28,6 +29,7 @@ export function hitTestElement(world: Point, el: EngineElement): boolean {
   switch (el.type) {
     case "rect":
     case "image":
+    case "bookMockup":
     case "frame":
       return hitRect(world, el);
     case "ellipse":
@@ -55,9 +57,15 @@ export function hitTestElement(world: Point, el: EngineElement): boolean {
 }
 
 /** Top-most element under `world` (last-rendered first). */
-export function pickTopMost(world: Point, elements: EngineElement[]): EngineElement | null {
-  for (let i = elements.length - 1; i >= 0; i--) {
-    if (hitTestElement(world, elements[i])) return elements[i];
+export function pickTopMost(
+  world: Point,
+  source: EngineElement[] | EngineSlide,
+): EngineElement | null {
+  const ordered = Array.isArray(source)
+    ? [...source].sort((a, b) => b.z - a.z)
+    : getInteractiveElements(source).toReversed();
+  for (const element of ordered) {
+    if (hitTestElement(world, element)) return element;
   }
   return null;
 }
@@ -66,7 +74,7 @@ export function pickTopMost(world: Point, elements: EngineElement[]): EngineElem
 export function pickInsideRect(rect: Rect, elements: EngineElement[]): EngineElement[] {
   const out: EngineElement[] = [];
   for (const el of elements) {
-    if (el.isDeleted) continue;
+    if (el.isDeleted || el.visible === false) continue;
     const b = elementWorldBBox(el);
     if (
       b.x >= rect.x &&
@@ -84,7 +92,7 @@ export function pickInsideRect(rect: Rect, elements: EngineElement[]): EngineEle
 export function pickIntersectRect(rect: Rect, elements: EngineElement[]): EngineElement[] {
   const out: EngineElement[] = [];
   for (const el of elements) {
-    if (el.isDeleted) continue;
+    if (el.isDeleted || el.visible === false) continue;
     const b = elementWorldBBox(el);
     if (
       b.x < rect.x + rect.width &&
@@ -108,6 +116,7 @@ function hitRect(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
   const filled =
     el.type === "image" ||
+    el.type === "bookMockup" ||
     (el.backgroundColor !== "transparent" && el.type !== "line" && el.type !== "arrow");
   if (filled) {
     return local.x >= 0 && local.x <= el.width && local.y >= 0 && local.y <= el.height;

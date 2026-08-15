@@ -30,6 +30,29 @@ export type ArrowHead =
 
 export type ElementId = string;
 export type GroupId = string;
+export type LayerId = string;
+
+export type LayerMode = "block" | "free";
+export type WorkspaceStrictness = 1 | 2 | 3;
+
+/**
+ * Grid placement used by the visual builder. Geometry remains cached on the
+ * element for the canvas renderer, while this normalized placement is the
+ * source of truth when blocks reflow or the artwork is resized.
+ */
+export type BlockPlacement = {
+  col: number;
+  row: number;
+  colSpan: number;
+  rowSpan: number;
+  minColSpan?: number;
+  minRowSpan?: number;
+  /** Stable library key used to describe the block in the builder UI. */
+  kind?: string;
+};
+
+/** @deprecated Legacy name retained only while schema-v1 documents migrate. */
+export type BentoBlock = BlockPlacement;
 
 // Every element shares this geometry+style envelope.
 export type BaseElement = {
@@ -64,6 +87,10 @@ export type BaseElement = {
   version: number;
   /** Soft-deleted; reaped on save. */
   isDeleted: boolean;
+  /** @deprecated Visibility is owned by EngineLayer in schema v2. */
+  visible?: boolean;
+  /** Stable builder identity, independent from Layer placement mode. */
+  builderKind?: string;
   /** Fill type: solid (default), linear gradient, or radial gradient. */
   fillType?: "solid" | "linear" | "radial";
   /** Gradient colors (start / end). Only used when fillType is linear or radial. */
@@ -77,6 +104,8 @@ export type BaseElement = {
     offsetX: number;
     offsetY: number;
   };
+  /** @deprecated Schema-v1 placement migrated into EngineLayer.placements. */
+  bento?: BentoBlock;
 };
 
 // ——— Concrete element variants ————————————————————————————————————
@@ -148,6 +177,17 @@ export type FreedrawElement = BaseElement & {
 export type TextElement = BaseElement & {
   type: "text";
   text: string;
+  /** Optional semantic style chosen from the Builder's unified Text presets. */
+  textPreset?:
+    | "title"
+    | "subtitle"
+    | "body"
+    | "quote"
+    | "author"
+    | "details"
+    | "price"
+    | "sale"
+    | "index";
   fontSize: number;
   /** CSS font-family value. */
   fontFamily: string;
@@ -159,6 +199,9 @@ export type TextElement = BaseElement & {
   containerId: ElementId | null;
   /** Cached for measurement; never trust on save. */
   baseline?: number;
+  /** Optional inset/background used by button, badge and card blocks. */
+  padding?: number;
+  cornerRadius?: number;
 };
 
 export type ImageElement = BaseElement & {
@@ -173,6 +216,49 @@ export type ImageElement = BaseElement & {
   status: "pending" | "loaded" | "error";
   /** Color adjustments applied to this image. */
   adjustments?: Partial<import("../color/adjustments").ColorAdjustments>;
+};
+
+/**
+ * Non-destructive projected book model. Camera and material values are stored
+ * independently from the element/artwork rectangle, so resizing never creates
+ * a visually different mockup or replaces its cover identity.
+ */
+export type BookMockupElement = BaseElement & {
+  type: "bookMockup";
+  /** Stable id of the cover image in the image cache. */
+  fileId: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  /** Horizontal viewing angle in degrees. */
+  yaw: number;
+  /** Vertical viewing angle in degrees. */
+  pitch: number;
+  /** Rotation around the camera axis in degrees. */
+  roll?: number;
+  /** Lens distance: low values exaggerate perspective, high values flatten it. */
+  perspective?: number;
+  /** Apparent spine thickness as a percentage of the mockup width. */
+  depth: number;
+  /** Construction/material parameters. Optional for backward-compatible documents. */
+  binding?: "paperback" | "hardcover";
+  coverThickness?: number;
+  coverOverhang?: number;
+  hingeDepth?: number;
+  pageColor?: string;
+  /** Light direction in degrees. */
+  lightAngle: number;
+  /** Light height above the book in degrees. */
+  lightElevation?: number;
+  /** Highlight/shade strength (0..1). */
+  lightIntensity: number;
+  /** Minimum illumination retained on surfaces facing away from the key light. */
+  ambientLight?: number;
+  /** Ground-shadow controls, expressed in element-local pixels. */
+  shadowBlur: number;
+  shadowOpacity: number;
+  shadowOffset: number;
+  /** Fallback tint for the visible spine and page block. */
+  spineColor: string;
 };
 
 export type FrameElement = BaseElement & {
@@ -196,17 +282,36 @@ export type EngineElement =
   | FreedrawElement
   | TextElement
   | ImageElement
+  | BookMockupElement
   | FrameElement;
 
 export type EngineElementType = EngineElement["type"];
 
 // ——— Document container ———————————————————————————————————————————
 
+/**
+ * A real layer container. Placement behavior, visibility, and locking belong
+ * here so any number of objects can move between Block and Free together.
+ */
+export type EngineLayer = {
+  id: LayerId;
+  name: string;
+  mode: LayerMode;
+  objectIds: ElementId[];
+  /** Block placements are keyed by object id; Free layers keep this empty. */
+  placements: Record<ElementId, BlockPlacement>;
+  visible: boolean;
+  locked: boolean;
+  /** Monotonic layer order; higher layers render above lower layers. */
+  z: number;
+};
+
 export type EngineSlide = {
   id: string;
   name: string;
   background: string;
   elements: EngineElement[];
+  layers: EngineLayer[];
   /** Per-slide dimensions (default = SLIDE_W × SLIDE_H). */
   width: number;
   height: number;
@@ -219,8 +324,9 @@ export type EngineDoc = {
   height: number; // = SLIDE_H
   slides: EngineSlide[];
   snapGrid: number | null;
+  workspaceStrictness: WorkspaceStrictness;
   updatedAt: number;
   schemaVersion: number;
 };
 
-export const ENGINE_SCHEMA_VERSION = 1;
+export const ENGINE_SCHEMA_VERSION = 4;

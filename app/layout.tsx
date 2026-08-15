@@ -29,6 +29,7 @@ export const metadata: Metadata = {
   title: "ArtShift",
   description: "AI-Powered Slide & Design Studio",
   manifest: "/manifest.json",
+  icons: { icon: "/icon.svg" },
 };
 
 export const viewport: Viewport = {

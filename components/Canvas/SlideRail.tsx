@@ -24,7 +24,6 @@ export default function SlideRail() {
   const addSlide = useEngine((s) => s.addSlide);
   const deleteSlide = useEngine((s) => s.deleteSlide);
   const renameSlide = useEngine((s) => s.renameSlide);
-  const setSlideDimensions = useEngine((s) => s.setSlideDimensions);
   const reorderSlides = useEngine((s) => s.reorderSlides);
 
   const [collapsed, setCollapsed] = useState(false);
@@ -41,11 +40,6 @@ export default function SlideRail() {
   } | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [sizeDialog, setSizeDialog] = useState<{
-    id: string;
-    width: number;
-    height: number;
-  } | null>(null);
 
   useEffect(() => {
     function onClick() {
@@ -266,14 +260,6 @@ export default function SlideRail() {
               setCtxMenu(null);
             }}
           />
-          <CtxItem
-            label="Dimension"
-            onClick={() => {
-              const sl = slides[ctxMenu.index];
-              if (sl) setSizeDialog({ id: sl.id, width: sl.width, height: sl.height });
-              setCtxMenu(null);
-            }}
-          />
           <div style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "3px 0" }} />
           <CtxItem
             label="Delete"
@@ -297,19 +283,6 @@ export default function SlideRail() {
             setRenamingId(null);
           }}
           onCancel={() => setRenamingId(null)}
-        />
-      )}
-
-      {/* Slide size dialog */}
-      {sizeDialog && (
-        <SizeDialog
-          width={sizeDialog.width}
-          height={sizeDialog.height}
-          onConfirm={(w, h) => {
-            if (sizeDialog) setSlideDimensions(sizeDialog.id, w, h);
-            setSizeDialog(null);
-          }}
-          onCancel={() => setSizeDialog(null)}
         />
       )}
     </aside>
@@ -596,140 +569,6 @@ function RenameOverlay({
             }}
           >
             Rename
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SizeDialog({
-  width,
-  height,
-  onConfirm,
-  onCancel,
-}: {
-  width: number;
-  height: number;
-  onConfirm: (w: number, h: number) => void;
-  onCancel: () => void;
-}) {
-  const [w, setW] = useState(String(width));
-  const [h, setH] = useState(String(height));
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 60,
-        display: "grid",
-        placeItems: "center",
-        background: "rgba(0,0,0,0.25)",
-      }}
-      onClick={onCancel}
-    >
-      <div
-        style={{
-          background: "var(--surface-solid, #fff)",
-          borderRadius: 10,
-          padding: 16,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.15)",
-          minWidth: 260,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Dimension</div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 4 }}>Width</div>
-            <input
-              type="number"
-              value={w}
-              onChange={(e) => setW(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 6,
-                border: "1px solid var(--stroke, #e5e7eb)",
-                fontSize: 13,
-              }}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 4 }}>Height</div>
-            <input
-              type="number"
-              value={h}
-              onChange={(e) => setH(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 6,
-                border: "1px solid var(--stroke, #e5e7eb)",
-                fontSize: 13,
-              }}
-            />
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-          {[
-            { label: "1920×1080", w: 1920, h: 1080 },
-            { label: "1280×720", w: 1280, h: 720 },
-            { label: "1080×1080", w: 1080, h: 1080 },
-            { label: "1080×1920", w: 1080, h: 1920 },
-            { label: "A4 (595×842)", w: 595, h: 842 },
-          ].map((p) => (
-            <button
-              key={p.label}
-              onClick={() => {
-                setW(String(p.w));
-                setH(String(p.h));
-              }}
-              style={{
-                fontSize: 10,
-                padding: "3px 8px",
-                borderRadius: 4,
-                border: "1px solid var(--stroke, #e5e7eb)",
-                background: "var(--surface-solid, #fff)",
-                cursor: "pointer",
-                color: "#6b7280",
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "1px solid var(--stroke, #e5e7eb)",
-              background: "var(--surface-solid, #fff)",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => {
-              const nw = Number(w);
-              const nh = Number(h);
-              if (nw > 0 && nh > 0) onConfirm(nw, nh);
-            }}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "none",
-              background: "var(--accent, #6366f1)",
-              color: "#fff",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            Apply
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
-const nextConfig: NextConfig = {
+const sharedConfig: NextConfig = {
   reactStrictMode: true,
   images: {
     remotePatterns: [
@@ -16,4 +17,11 @@ const nextConfig: NextConfig = {
   // distDir: "dist",
 };
 
-export default nextConfig;
+export default function nextConfig(phase: string): NextConfig {
+  return {
+    ...sharedConfig,
+    // `next dev` and `next build` may run concurrently during local QA.
+    // Separate outputs prevent a production build from invalidating dev chunks.
+    distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
+  };
+}

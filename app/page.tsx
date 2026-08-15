@@ -12,8 +12,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import AIPanel from "@/components/AI/AIPanel";
+import BlockLibrary from "@/components/Builder/BlockLibrary";
+import BuilderInspector from "@/components/Builder/BuilderInspector";
+import LayerPanel from "@/components/Builder/LayerPanel";
+import ResizeArtworkAction from "@/components/Builder/ResizeArtworkAction";
 import CanvasEditor from "@/components/Canvas/CanvasEditor";
-import PresetPanel from "@/components/Canvas/PresetPanel";
 import SlideRail from "@/components/Canvas/SlideRail";
 import { TOOLBAR_TOOLS } from "@/components/Canvas/toolDefinitions";
 import { useCanvasHotkeys } from "@/components/Canvas/useCanvasHotkeys";
@@ -75,7 +78,6 @@ export default function HomePage() {
   const [showGSlidesModal, setShowGSlidesModal] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [presetOpen, setPresetOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -203,6 +205,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="topbar-right">
+          <ResizeArtworkAction />
           <button className="ghost-btn" onClick={cycleTheme} title="Toggle theme">
             <IconPalette size={15} />
           </button>
@@ -342,8 +345,10 @@ export default function HomePage() {
       {/* ——— Main area ——— */}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <SlideRail />
+        <BlockLibrary />
         <div style={{ flex: 1, position: "relative" }} className="canvas-stage">
           {loaded && <CanvasEditor />}
+          <LayerPanel />
 
           {/* ——— Left toolbar (top-left of workspace) ——— */}
           <div
@@ -586,25 +591,6 @@ export default function HomePage() {
             }}
           >
             <button
-              onClick={() => setPresetOpen((v) => !v)}
-              title="My Presets"
-              style={{
-                width: 26,
-                height: 26,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 5,
-                border: "none",
-                background: presetOpen ? "var(--surface-hover, #f3f4f6)" : "transparent",
-                color: "var(--ink, #111827)",
-                cursor: "pointer",
-                transition: "all 0.12s ease",
-              }}
-            >
-              <span style={{ fontSize: 13, lineHeight: 1 }}>★</span>
-            </button>
-            <button
               onClick={() => setGridSnap(snapGrid ? null : 16)}
               title="Toggle grid snap"
               style={{
@@ -660,15 +646,14 @@ export default function HomePage() {
             })}
           </div>
 
-          {presetOpen && <PresetPanel onClose={() => setPresetOpen(false)} />}
           {templateBrowserOpen && <TemplateBrowser onClose={() => setTemplateBrowserOpen(false)} />}
         </div>
+        <BuilderInspector />
       </div>
 
       {/* ——— Google Slides instruction modal ——— */}
       {searchOpen && <SearchReplaceModal onClose={() => setSearchOpen(false)} />}
       {statsOpen && <StatsModal onClose={() => setStatsOpen(false)} />}
-
       {showGSlidesModal && (
         <div
           style={{

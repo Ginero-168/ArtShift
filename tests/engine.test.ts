@@ -49,10 +49,25 @@ describe("hitTest", () => {
     expect(hitTestElement({ x: 5, y: 5 }, el)).toBe(false);
   });
 
+  it("does not hit a hidden layer", () => {
+    const el = {
+      ...rect(10, 10, 100, 100),
+      backgroundColor: "#ff0000",
+      visible: false,
+    };
+    expect(hitTestElement({ x: 50, y: 50 }, el)).toBe(false);
+  });
+
   it("picks top-most by z", () => {
     const a = { ...zed(rect(0, 0, 100, 100), 1), backgroundColor: "#ff0000" };
     const b = { ...zed(rect(0, 0, 100, 100), 2), backgroundColor: "#ff0000" };
     expect(pickTopMost({ x: 50, y: 50 }, [a, b])).toBe(b);
+  });
+
+  it("picks top-most by z even when array order differs from render order", () => {
+    const top = { ...zed(rect(0, 0, 100, 100), 9), backgroundColor: "#ff0000" };
+    const bottom = { ...zed(rect(0, 0, 100, 100), 1), backgroundColor: "#0000ff" };
+    expect(pickTopMost({ x: 50, y: 50 }, [top, bottom])).toBe(top);
   });
 
   it("picks elements fully inside a rect", () => {
@@ -94,6 +109,7 @@ describe("arrow binding", () => {
       width: SLIDE_W,
       height: SLIDE_H,
       elements: [target, boundArrow],
+      layers: [],
     };
 
     const movedTarget = { ...target, x: 200, y: 200 };
@@ -134,6 +150,7 @@ describe("arrow binding", () => {
         width: SLIDE_W,
         height: SLIDE_H,
         elements: [target, boundArrow],
+        layers: [],
       };
       const result = recomputeArrowBindings(slide);
       const arrowAfter = result.elements.find((e) => e.type === "arrow")!;

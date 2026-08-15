@@ -4,8 +4,10 @@
  * agree on the shape of a "new" element.
  */
 
+import { getTextMinimumHeight, getTextSafePadding } from "./textLayout";
 import type {
   ArrowElement,
+  BookMockupElement,
   DiamondElement,
   EllipseElement,
   EngineElement,
@@ -49,6 +51,7 @@ function baseDefaults(): Omit<RectElement, "type" | "cornerRadius"> {
     z: 0,
     version: 1,
     isDeleted: false,
+    visible: true,
   };
 }
 
@@ -197,13 +200,20 @@ export function createText(opts: {
 }): TextElement {
   const fontSize = opts.fontSize ?? 24;
   const lines = opts.text.split("\n");
+  const lineHeight = 1.4;
+  const padding = getTextSafePadding(fontSize);
   return {
     ...baseDefaults(),
     type: "text",
     x: opts.x,
     y: opts.y,
     width: opts.width ?? 200,
-    height: opts.height ?? Math.max(fontSize * 1.4, lines.length * fontSize * 1.4),
+    height:
+      opts.height ??
+      Math.max(
+        fontSize * lineHeight + padding * 2,
+        getTextMinimumHeight({ fontSize, lineHeight, padding }, lines.length),
+      ),
     strokeColor: "#1b1b1f",
     backgroundColor: "transparent",
     text: opts.text,
@@ -212,8 +222,9 @@ export function createText(opts: {
     fontStyle: "normal",
     textAlign: "left",
     verticalAlign: "top",
-    lineHeight: 1.4,
+    lineHeight,
     containerId: null,
+    padding,
   };
 }
 
@@ -238,6 +249,68 @@ export function createImage(opts: {
     naturalWidth: opts.naturalWidth,
     naturalHeight: opts.naturalHeight,
     status: "loaded",
+  };
+}
+
+export function createBookMockup(opts: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fileId: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  yaw?: number;
+  pitch?: number;
+  roll?: number;
+  perspective?: number;
+  depth?: number;
+  binding?: "paperback" | "hardcover";
+  coverThickness?: number;
+  coverOverhang?: number;
+  hingeDepth?: number;
+  pageColor?: string;
+  lightAngle?: number;
+  lightElevation?: number;
+  lightIntensity?: number;
+  ambientLight?: number;
+  shadowBlur?: number;
+  shadowOpacity?: number;
+  shadowOffset?: number;
+  spineColor?: string;
+}): BookMockupElement {
+  return {
+    ...baseDefaults(),
+    type: "bookMockup",
+    x: opts.x,
+    y: opts.y,
+    width: opts.width,
+    height: opts.height,
+    fileId: opts.fileId,
+    naturalWidth: opts.naturalWidth,
+    naturalHeight: opts.naturalHeight,
+    yaw: opts.yaw ?? 18,
+    pitch: opts.pitch ?? -4,
+    roll: opts.roll ?? 0,
+    perspective: opts.perspective ?? 58,
+    depth: opts.depth ?? 12,
+    binding: opts.binding ?? "paperback",
+    coverThickness: opts.coverThickness ?? 1.2,
+    coverOverhang: opts.coverOverhang ?? 1.8,
+    hingeDepth: opts.hingeDepth ?? 3.5,
+    pageColor: opts.pageColor ?? "#f3eee2",
+    lightAngle: opts.lightAngle ?? -38,
+    lightElevation: opts.lightElevation ?? 48,
+    lightIntensity: opts.lightIntensity ?? 0.28,
+    ambientLight: opts.ambientLight ?? 0.34,
+    shadowBlur: opts.shadowBlur ?? 24,
+    shadowOpacity: opts.shadowOpacity ?? 0.28,
+    shadowOffset: opts.shadowOffset ?? 22,
+    spineColor: opts.spineColor ?? "#2f3137",
+    strokeColor: "transparent",
+    strokeWidth: 0,
+    fillStyle: "solid",
+    roughness: 0,
   };
 }
 

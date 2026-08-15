@@ -27,9 +27,8 @@ export type ToolDef = {
   hotkey: string;
 };
 
-export const TOOLBAR_TOOLS: ToolDef[] = [
-  { id: "hand", icon: IconHand, label: "Hand (pan)", hotkey: "H" },
-  { id: "select", icon: IconCursor, label: "Selection", hotkey: "V" },
+/** Shapes live in the Builder library; hotkeys still activate draw mode. */
+export const SHAPE_TOOLS: ToolDef[] = [
   { id: "rect", icon: IconSquare, label: "Rectangle", hotkey: "R" },
   { id: "diamond", icon: IconDiamond, label: "Diamond", hotkey: "D" },
   { id: "triangle", icon: IconTriangle, label: "Triangle", hotkey: "G" },
@@ -38,6 +37,11 @@ export const TOOLBAR_TOOLS: ToolDef[] = [
   { id: "heart", icon: IconHeart, label: "Heart", hotkey: "Y" },
   { id: "plus", icon: IconPlus, label: "Plus", hotkey: "P" },
   { id: "ellipse", icon: IconCircle, label: "Ellipse", hotkey: "O" },
+];
+
+export const TOOLBAR_TOOLS: ToolDef[] = [
+  { id: "hand", icon: IconHand, label: "Hand (pan)", hotkey: "H" },
+  { id: "select", icon: IconCursor, label: "Selection", hotkey: "V" },
   { id: "arrow", icon: IconArrow, label: "Arrow", hotkey: "A" },
   { id: "line", icon: IconLine, label: "Line", hotkey: "L" },
   { id: "freedraw", icon: IconFreedraw, label: "Draw", hotkey: "N" },
@@ -48,5 +52,6 @@ export const TOOLBAR_TOOLS: ToolDef[] = [
 
 export const ALL_TOOLS: { id: Tool; hotkey: string }[] = [
   ...TOOLBAR_TOOLS.map((t) => ({ id: t.id, hotkey: t.hotkey })),
+  ...SHAPE_TOOLS.map((t) => ({ id: t.id, hotkey: t.hotkey })),
   { id: "frame", hotkey: "F" },
 ];

@@ -55,10 +55,10 @@ function slugify(s: string) {
 /** Export current slide as PNG and download. */
 export async function exportCurrentSlidePNG(
   slide: EngineSlide,
-  doc: EngineDoc,
+  _doc: EngineDoc,
   images?: Map<string, HTMLImageElement>,
 ) {
-  const blob = await exportSlideToPNG(slide, doc.width, doc.height, images, 2);
+  const blob = await exportSlideToPNG(slide, slide.width, slide.height, images, 2);
   download(blob, `${slugify(slide.name || "slide")}.png`);
 }
 
@@ -66,7 +66,7 @@ export async function exportCurrentSlidePNG(
 export async function exportAllPNG(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
   for (let i = 0; i < doc.slides.length; i++) {
     const slide = doc.slides[i];
-    const blob = await exportSlideToPNG(slide, doc.width, doc.height, images, 2);
+    const blob = await exportSlideToPNG(slide, slide.width, slide.height, images, 2);
     download(blob, `${String(i + 1).padStart(2, "0")}-${slugify(slide.name)}.png`);
   }
 }
@@ -75,19 +75,27 @@ export async function exportAllPNG(doc: EngineDoc, images?: Map<string, HTMLImag
 export async function exportPDF(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({
-    orientation: doc.width >= doc.height ? "landscape" : "portrait",
+    orientation:
+      (doc.slides[0]?.width ?? doc.width) >= (doc.slides[0]?.height ?? doc.height)
+        ? "landscape"
+        : "portrait",
     unit: "px",
-    format: [doc.width, doc.height],
+    format: [doc.slides[0]?.width ?? doc.width, doc.slides[0]?.height ?? doc.height],
     hotfixes: ["px_scaling"],
   });
 
   for (let i = 0; i < doc.slides.length; i++) {
     if (i > 0) {
-      pdf.addPage([doc.width, doc.height], doc.width >= doc.height ? "landscape" : "portrait");
+      const slide = doc.slides[i];
+      pdf.addPage(
+        [slide.width, slide.height],
+        slide.width >= slide.height ? "landscape" : "portrait",
+      );
     }
-    const blob = await exportSlideToPNG(doc.slides[i], doc.width, doc.height, images, 2);
+    const slide = doc.slides[i];
+    const blob = await exportSlideToPNG(slide, slide.width, slide.height, images, 2);
     const dataUrl = await blobToDataURL(blob);
-    pdf.addImage(dataUrl, "PNG", 0, 0, doc.width, doc.height);
+    pdf.addImage(dataUrl, "PNG", 0, 0, slide.width, slide.height);
   }
 
   pdf.save(`${slugify(doc.title || "slides")}.pdf`);

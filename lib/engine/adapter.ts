@@ -32,6 +32,7 @@ import {
   createText,
 } from "./factory";
 import { loadDataURL } from "./imageCache";
+import { createEngineLayer } from "./layers";
 import {
   ENGINE_SCHEMA_VERSION,
   type EngineDoc,
@@ -63,6 +64,7 @@ export async function legacyToEngineDoc(
     height: SLIDE_H,
     slides,
     snapGrid: null,
+    workspaceStrictness: 1,
     updatedAt: legacy.updatedAt,
     schemaVersion: ENGINE_SCHEMA_VERSION,
   };
@@ -76,11 +78,14 @@ async function legacyToEngineSlide(legacy: Slide, k: number): Promise<EngineSlid
     if (!el) continue;
     elements.push({ ...el, z: z++ });
   }
+  const layer = createEngineLayer("free", { name: "Free layer 1" });
+  layer.objectIds = elements.map((element) => element.id);
   return {
     id: legacy.id,
     name: legacy.name,
     background: legacy.background,
     elements,
+    layers: [layer],
     width: SLIDE_W,
     height: SLIDE_H,
   };
