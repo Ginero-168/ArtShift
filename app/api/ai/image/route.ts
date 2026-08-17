@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { type NextRequest, NextResponse } from "next/server";
 import { enrichPrompt } from "@/lib/ai/pollinations";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
@@ -6,6 +7,32 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const imageGenLimiter = new RateLimiter(30, 60_000);
+
+async function enhancePromptWithLLM(userPrompt: string): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return enrichPrompt(userPrompt);
+
+  const model = process.env.ANTHROPIC_MODEL || "claude-opus-4-7";
+  try {
+    const client = new Anthropic({ apiKey });
+    const res = await client.messages.create({
+      model,
+      max_tokens: 150,
+      system:
+        "You are an expert AI Image Prompt Engineer for FLUX.1. Convert the user request (in Thai, English, or any language) into a single direct, highly detailed English visual prompt describing the exact subjects, quantities, action, environment, lighting, and style. Output ONLY the English prompt text without quotes, markdown, greetings, or prefixes.",
+      messages: [{ role: "user", content: userPrompt }],
+    });
+
+    const block = res.content[0];
+    if (block?.type === "text" && block.text.trim()) {
+      return block.text.trim().replace(/^["'`*]+|["'`*]+$/g, "");
+    }
+  } catch (err) {
+    console.error("LLM prompt expansion fallback:", err);
+  }
+
+  return enrichPrompt(userPrompt);
+}
 
 export async function POST(req: NextRequest) {
   const limit = imageGenLimiter.check(getClientIp(req));
@@ -29,7 +56,7 @@ export async function POST(req: NextRequest) {
     typeof body.height === "number" ? Math.min(1280, Math.max(256, body.height)) : 1024;
   const model = typeof body.model === "string" ? body.model : "flux";
 
-  const cleanPrompt = enrichPrompt(rawPrompt);
+  const cleanPrompt = await enhancePromptWithLLM(rawPrompt);
   const seed = Math.floor(Math.random() * 10_000_000);
 
   // Try Pollinations primary models with retry/fallback

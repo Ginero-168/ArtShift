@@ -163,8 +163,11 @@ export async function executeCoPilotInstruction(
     try {
       // Clean up prompt
       let cleanPrompt = prompt
-        .replace(/^(ช่วย)?(สร้างรูป|วาดรูป|generate image|create image|รูปภาพ|รูป|draw)/gi, "")
-        .replace(/^(of|about|เกี่ยวกับ|ให้หน่อย|ครับ|ค่ะ)/gi, "")
+        .replace(
+          /^(ช่วย)?(สร้างรูปภาพ|สร้างรูป|วาดรูปภาพ|วาดรูป|generate image|create image|รูปภาพ|รูป|draw|ภาพ)/gi,
+          "",
+        )
+        .replace(/(ให้หน่อย|หน่อย|นะ|ครับ|ค่ะ|จ้า|ขอ|of|about|เกี่ยวกับ)$/gi, "")
         .trim();
 
       if (!cleanPrompt) cleanPrompt = prompt;
