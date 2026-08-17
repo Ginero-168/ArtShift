@@ -33,7 +33,7 @@ export type GroupId = string;
 export type LayerId = string;
 
 export type LayerMode = "block" | "free";
-export type WorkspaceStrictness = 1 | 2 | 3;
+export type WorkspaceStrictness = number;
 
 /**
  * Grid placement used by the visual builder. Geometry remains cached on the
@@ -93,8 +93,12 @@ export type BaseElement = {
   builderKind?: string;
   /** Fill type: solid (default), linear gradient, or radial gradient. */
   fillType?: "solid" | "linear" | "radial";
-  /** Gradient colors (start / end). Only used when fillType is linear or radial. */
-  gradientColors?: [string, string];
+  /** Gradient colors array (2 or more colors). Only used when fillType is linear or radial. */
+  gradientColors?: string[];
+  /** Gradient direction angle in degrees (0-360). Default 90. */
+  gradientAngle?: number;
+  /** Gradient stop positions (0..1) matching gradientColors. Defaults to evenly spaced [0, ..., 1]. */
+  gradientStops?: number[];
   /** Pattern fill: dots, stripes, or grid. Overrides solid/gradient when set. */
   fillPattern?: "dots" | "stripes" | "grid";
   /** Shadow effect. */
@@ -104,7 +108,20 @@ export type BaseElement = {
     offsetX: number;
     offsetY: number;
   };
-  /** @deprecated Schema-v1 placement migrated into EngineLayer.placements. */
+  /** Outer glow effect. */
+  glow?: {
+    color: string;
+    blur: number;
+  };
+  /** Non-destructive compositing mode used when drawing this Object. */
+  blendMode?: "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
+  /** Layout mode for this individual object: "block" (Hex grid flow) or "free" (freeform floating). */
+  layoutMode?: LayerMode;
+  /** Human-readable label for this object layer. */
+  name?: string;
+  /** When true, this object is hidden from canvas rendering. */
+  hidden?: boolean;
+  /** Block placement when in "block" mode. */
   bento?: BentoBlock;
 };
 
@@ -174,6 +191,25 @@ export type FreedrawElement = BaseElement & {
   pressures?: number[];
 };
 
+export type VectorPathNode = {
+  /** Normalized anchor coordinates inside the element bounds (0..1). */
+  x: number;
+  y: number;
+  /** Optional normalized Bézier handle offsets from the anchor. */
+  in?: [number, number];
+  out?: [number, number];
+};
+
+export type VectorPathElement = BaseElement & {
+  type: "path";
+  nodes: VectorPathNode[];
+  closed: boolean;
+  fillRule: "nonzero" | "evenodd";
+  startArrowhead?: ArrowHead;
+  endArrowhead?: ArrowHead;
+  arrowheadScale?: number;
+};
+
 export type TextElement = BaseElement & {
   type: "text";
   text: string;
@@ -202,6 +238,8 @@ export type TextElement = BaseElement & {
   /** Optional inset/background used by button, badge and card blocks. */
   padding?: number;
   cornerRadius?: number;
+  /** Optional curvature for Text on Path / Curved Text (-100..100). */
+  pathCurvature?: number;
 };
 
 export type ImageElement = BaseElement & {
@@ -216,6 +254,20 @@ export type ImageElement = BaseElement & {
   status: "pending" | "loaded" | "error";
   /** Color adjustments applied to this image. */
   adjustments?: Partial<import("../color/adjustments").ColorAdjustments>;
+  /** Non-destructive shape mask applied after crop. */
+  mask?: {
+    shape: "rect" | "rounded" | "ellipse" | "hexagon";
+    radius?: number;
+  };
+  /** Gaussian blur in element-local pixels. */
+  filterBlur?: number;
+  /** Optional focal point for aspect-ratio-safe auto-crop (0..1). Default is center { x: 0.5, y: 0.5 }. */
+  focalPoint?: { x: number; y: number };
+  /** Optional connection to a user-approved local source file. */
+  linkedAssetId?: string;
+  sourceName?: string;
+  sourceLastModified?: number;
+  sourceSize?: number;
 };
 
 /**
@@ -254,18 +306,48 @@ export type BookMockupElement = BaseElement & {
   /** Minimum illumination retained on surfaces facing away from the key light. */
   ambientLight?: number;
   /** Ground-shadow controls, expressed in element-local pixels. */
+  showShadow?: boolean;
   shadowBlur: number;
   shadowOpacity: number;
   shadowOffset: number;
   /** Fallback tint for the visible spine and page block. */
   spineColor: string;
+  linkedAssetId?: string;
+  sourceName?: string;
+  sourceLastModified?: number;
+  sourceSize?: number;
 };
+
+export type FrameMaskShape =
+  | "rect"
+  | "circle"
+  | "roundedRect"
+  | "diamond"
+  | "triangle"
+  | "polaroid"
+  | "arch"
+  | "heart"
+  | "star"
+  | "hexagon"
+  | "plus"
+  | "blob"
+  | "customPath";
 
 export type FrameElement = BaseElement & {
   type: "frame";
   name: string;
+  shape?: FrameMaskShape;
+  cornerRadius?: number;
+  customPathNodes?: VectorPathNode[];
   /** Children rendered clipped to frame bbox. */
   childIds: ElementId[];
+  /** Optional direct image assigned inside the frame (Canva-style mask container). */
+  imageFileId?: string;
+  cropOffsetX?: number;
+  cropOffsetY?: number;
+  cropZoom?: number;
+  cropRotation?: number;
+  feather?: number;
 };
 
 export type EngineElement =
@@ -280,6 +362,7 @@ export type EngineElement =
   | LineElement
   | ArrowElement
   | FreedrawElement
+  | VectorPathElement
   | TextElement
   | ImageElement
   | BookMockupElement
@@ -309,6 +392,9 @@ export type EngineLayer = {
 export type EngineSlide = {
   id: string;
   name: string;
+  /** Root Artwork id shared by resized variants. Missing means this is a master. */
+  variantOf?: string;
+  variantLabel?: string;
   background: string;
   elements: EngineElement[];
   layers: EngineLayer[];
@@ -325,8 +411,10 @@ export type EngineDoc = {
   slides: EngineSlide[];
   snapGrid: number | null;
   workspaceStrictness: WorkspaceStrictness;
+  strictnessLevel?: 1 | 2 | 3;
+  strictnessValues?: { 2: number; 3: number };
   updatedAt: number;
   schemaVersion: number;
 };
 
-export const ENGINE_SCHEMA_VERSION = 4;
+export const ENGINE_SCHEMA_VERSION = 5;

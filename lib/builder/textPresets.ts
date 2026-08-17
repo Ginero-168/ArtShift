@@ -1,5 +1,5 @@
 import { createText } from "../engine/factory";
-import { getTextMinimumHeight, getTextSafePadding } from "../engine/textLayout";
+import { getTextSafePadding, measureTextElementHeight } from "../engine/textLayout";
 import type { TextElement } from "../engine/types";
 
 export type TextPresetId = NonNullable<TextElement["textPreset"]>;
@@ -169,8 +169,7 @@ export function textPresetPatch(
   };
   if (!blockManaged) {
     const next = { ...text, ...patch };
-    const lineCount = Math.max(1, next.text.split("\n").length);
-    patch.height = Math.max(text.height, getTextMinimumHeight(next, lineCount));
+    patch.height = Math.max(text.height, measureTextElementHeight(next));
   }
   return patch;
 }

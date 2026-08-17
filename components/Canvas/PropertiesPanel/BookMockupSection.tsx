@@ -175,28 +175,59 @@ export function BookMockupSection({
           suffix="%"
           onChange={(value) => apply({ ambientLight: value / 100 }, "mockup ambient")}
         />
-        <MockupRange
-          label="Shadow blur"
-          value={mockup.shadowBlur}
-          min={0}
-          max={80}
-          onChange={(shadowBlur) => apply({ shadowBlur }, "mockup shadow")}
-        />
-        <MockupRange
-          label="Shadow"
-          value={Math.round(mockup.shadowOpacity * 100)}
-          min={0}
-          max={75}
-          suffix="%"
-          onChange={(value) => apply({ shadowOpacity: value / 100 }, "mockup shadow")}
-        />
-        <MockupRange
-          label="Shadow offset"
-          value={mockup.shadowOffset}
-          min={0}
-          max={100}
-          onChange={(shadowOffset) => apply({ shadowOffset }, "mockup shadow")}
-        />
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            cursor: "pointer",
+            userSelect: "none",
+            fontSize: 13,
+            fontWeight: 500,
+            padding: "6px 0 2px",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={mockup.showShadow !== false}
+            onChange={(event) =>
+              apply({ showShadow: event.currentTarget.checked }, "toggle shadow")
+            }
+            style={{
+              width: 15,
+              height: 15,
+              cursor: "pointer",
+              accentColor: "#3b82f6",
+            }}
+          />
+          <span>Ground shadow</span>
+        </label>
+        {mockup.showShadow !== false ? (
+          <>
+            <MockupRange
+              label="Shadow blur"
+              value={mockup.shadowBlur}
+              min={0}
+              max={80}
+              onChange={(shadowBlur) => apply({ shadowBlur }, "mockup shadow")}
+            />
+            <MockupRange
+              label="Shadow opacity"
+              value={Math.round(mockup.shadowOpacity * 100)}
+              min={0}
+              max={75}
+              suffix="%"
+              onChange={(value) => apply({ shadowOpacity: value / 100 }, "mockup shadow")}
+            />
+            <MockupRange
+              label="Shadow offset"
+              value={mockup.shadowOffset}
+              min={0}
+              max={100}
+              onChange={(shadowOffset) => apply({ shadowOffset }, "mockup shadow")}
+            />
+          </>
+        ) : null}
       </div>
     </>
   );

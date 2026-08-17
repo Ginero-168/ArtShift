@@ -12,6 +12,7 @@ import type {
   EllipseElement,
   EngineElement,
   FrameElement,
+  FrameMaskShape,
   FreedrawElement,
   HeartElement,
   HexagonElement,
@@ -22,7 +23,9 @@ import type {
   StarElement,
   TextElement,
   TriangleElement,
+  VectorPathElement,
 } from "./types";
+import { recomputeVectorPathBounds } from "./vectorPath";
 
 let _seedCounter = 1;
 function nextSeed(): number {
@@ -189,6 +192,79 @@ export function createFreedraw(points: Array<[number, number, number]>): Freedra
   };
 }
 
+export function createVectorPath(
+  points: Array<{ x: number; y: number }>,
+  closed = false,
+): VectorPathElement {
+  const safePoints = points.length
+    ? points
+    : [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ];
+  const minX = Math.min(...safePoints.map((point) => point.x));
+  const minY = Math.min(...safePoints.map((point) => point.y));
+  const maxX = Math.max(...safePoints.map((point) => point.x));
+  const maxY = Math.max(...safePoints.map((point) => point.y));
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  return {
+    ...baseDefaults(),
+    type: "path",
+    x: minX,
+    y: minY,
+    width,
+    height,
+    nodes: safePoints.map((point) => ({
+      x: (point.x - minX) / width,
+      y: (point.y - minY) / height,
+    })),
+    closed,
+    fillRule: "nonzero",
+    backgroundColor: closed ? "#dbeafe" : "transparent",
+    fillStyle: "solid",
+    roughness: 0,
+  };
+}
+
+export function createVectorPathFromWorldNodes(
+  worldNodes: Array<{ x: number; y: number; in?: [number, number]; out?: [number, number] }>,
+  closed = false,
+): VectorPathElement {
+  const safeNodes = worldNodes.length
+    ? worldNodes
+    : [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ];
+  const minX = Math.min(...safeNodes.map((n) => n.x));
+  const minY = Math.min(...safeNodes.map((n) => n.y));
+  const maxX = Math.max(...safeNodes.map((n) => n.x));
+  const maxY = Math.max(...safeNodes.map((n) => n.y));
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  const pathEl: VectorPathElement = {
+    ...baseDefaults(),
+    type: "path",
+    x: minX,
+    y: minY,
+    width,
+    height,
+    nodes: safeNodes.map((node) => ({
+      x: (node.x - minX) / width,
+      y: (node.y - minY) / height,
+      in: node.in ? [node.in[0] / width, node.in[1] / height] : undefined,
+      out: node.out ? [node.out[0] / width, node.out[1] / height] : undefined,
+    })),
+    closed,
+    fillRule: "nonzero",
+    backgroundColor: closed ? "#dbeafe" : "transparent",
+    fillStyle: "solid",
+    roughness: 0,
+  };
+  return recomputeVectorPathBounds(pathEl, 16);
+}
+
 export function createText(opts: {
   x: number;
   y: number;
@@ -274,6 +350,7 @@ export function createBookMockup(opts: {
   lightElevation?: number;
   lightIntensity?: number;
   ambientLight?: number;
+  showShadow?: boolean;
   shadowBlur?: number;
   shadowOpacity?: number;
   shadowOffset?: number;
@@ -303,6 +380,7 @@ export function createBookMockup(opts: {
     lightElevation: opts.lightElevation ?? 48,
     lightIntensity: opts.lightIntensity ?? 0.28,
     ambientLight: opts.ambientLight ?? 0.34,
+    showShadow: opts.showShadow ?? true,
     shadowBlur: opts.shadowBlur ?? 24,
     shadowOpacity: opts.shadowOpacity ?? 0.28,
     shadowOffset: opts.shadowOffset ?? 22,
@@ -320,7 +398,13 @@ export function createFrame(opts: {
   width: number;
   height: number;
   name?: string;
+  shape?: FrameMaskShape;
+  cornerRadius?: number;
+  imageFileId?: string;
+  cropRotation?: number;
+  feather?: number;
 }): FrameElement {
+  const shape = opts.shape ?? "rect";
   return {
     ...baseDefaults(),
     type: "frame",
@@ -329,7 +413,15 @@ export function createFrame(opts: {
     width: Math.max(opts.width, 100),
     height: Math.max(opts.height, 100),
     name: opts.name ?? "Frame",
+    shape,
+    cornerRadius: opts.cornerRadius ?? (shape === "roundedRect" ? 24 : 0),
     childIds: [],
+    imageFileId: opts.imageFileId,
+    cropOffsetX: 0,
+    cropOffsetY: 0,
+    cropZoom: 1,
+    cropRotation: opts.cropRotation ?? 0,
+    feather: opts.feather ?? 0,
     strokeStyle: "solid",
     strokeWidth: 2,
     strokeColor: "#94a3b8",

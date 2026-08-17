@@ -44,6 +44,11 @@ describe("hitTest", () => {
     expect(hitTestElement({ x: 50, y: 50 }, el)).toBe(true);
   });
 
+  it("hits inside a transparent filled rect", () => {
+    const el = { ...rect(10, 10, 100, 100), backgroundColor: "transparent" };
+    expect(hitTestElement({ x: 50, y: 50 }, el)).toBe(true);
+  });
+
   it("misses outside a filled rect", () => {
     const el = { ...rect(10, 10, 100, 100), backgroundColor: "#ff0000" };
     expect(hitTestElement({ x: 5, y: 5 }, el)).toBe(false);

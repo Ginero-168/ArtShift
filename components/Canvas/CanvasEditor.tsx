@@ -8,28 +8,47 @@
  * text tool with inline editor.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { unionBBox } from "@/lib/engine/bounds";
 import {
-  createArrow,
   createDiamond,
   createEllipse,
   createFreedraw,
   createHeart,
   createHexagon,
-  createLine,
   createPlus,
   createRect,
   createStar,
   createText,
   createTriangle,
+  createVectorPath,
+  createVectorPathFromWorldNodes,
 } from "@/lib/engine/factory";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
 import { getImageCache } from "@/lib/engine/imageCache";
-import { getInteractiveElements, getLayerForObject, isObjectLocked } from "@/lib/engine/layers";
+import {
+  getInteractiveElements,
+  getLayerForObject,
+  isObjectBlock,
+  isObjectLocked,
+} from "@/lib/engine/layers";
 import { type Guide, snapBBox } from "@/lib/engine/snap";
-import { type Tool, useEngine } from "@/lib/engine/store";
-import type { EngineElement, TextElement } from "@/lib/engine/types";
+import {
+  cloneElementsForDuplicate,
+  type LineSubtype,
+  type Tool,
+  useEngine,
+} from "@/lib/engine/store";
+import type { EngineElement, TextElement, VectorPathElement } from "@/lib/engine/types";
+import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
 import BindingIndicators from "./BindingIndicators";
 import CanvasRoot, {
   type CanvasRootHandle,
@@ -38,8 +57,12 @@ import CanvasRoot, {
 } from "./CanvasRoot";
 import ContextMenu from "./ContextMenu";
 import CropOverlay from "./CropOverlay";
+import FrameEditOverlay from "./FrameEditOverlay";
 import Guides from "./Guides";
 import Marquee from "./Marquee";
+import PathNodeOverlay from "./PathNodeOverlay";
+import PenLiveOverlay from "./PenLiveOverlay";
+import SafeAreaOverlay, { type SafeAreaMode } from "./SafeAreaOverlay";
 import TextOverlay from "./TextOverlay";
 import Transformer from "./Transformer";
 import { usePasteDrop } from "./usePasteDrop";
@@ -54,6 +77,8 @@ type DragState =
       ids: string[];
       origins: Map<string, { x: number; y: number }>;
       checkpointed: boolean;
+      altKey?: boolean;
+      duplicated?: boolean;
     }
   | { kind: "freedraw"; points: Array<[number, number, number]> }
   | {
@@ -65,14 +90,32 @@ type DragState =
   | { kind: "erase" }
   | null;
 
-export default function CanvasEditor() {
-  const slide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
+export type CanvasEditorHandle = {
+  resetView: () => void;
+  getView: () => ViewTransform;
+  setView: (v: ViewTransform) => void;
+  setZoom: (scale: number) => void;
+};
+
+export type CanvasEditorProps = {
+  onViewChange?: (view: ViewTransform) => void;
+};
+
+const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function CanvasEditor(
+  { onViewChange },
+  ref,
+) {
+  const rawSlide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
   const tool = useEngine((s) => s.tool);
   const selectedIds = useEngine((s) => s.selectedIds);
   const activeLayerId = useEngine((s) => s.activeLayerId);
   const snapGrid = useEngine((s) => s.doc.snapGrid);
+  const showHexGrid = useEngine((s) => s.showHexGrid);
+  const layerFilter = useEngine((s) => s.layerFilter);
+  const lineSubtype = useEngine((s) => s.lineSubtype);
   const setTool = useEngine((s) => s.setTool);
   const croppingImageId = useEngine((s) => s.croppingImageId);
+  const setCroppingImageId = useEngine((s) => s.setCroppingImageId);
   const addElement = useEngine((s) => s.addElement);
   const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
   const previewElements = useEngine((s) => s.previewElements);
@@ -80,6 +123,20 @@ export default function CanvasEditor() {
   const selectOnly = useEngine((s) => s.selectOnly);
   const clearSelection = useEngine((s) => s.clearSelection);
   const deleteElements = useEngine((s) => s.deleteElements);
+
+  // Filter the slide elements by layerFilter ("all" | "block" | "free")
+  const slide = useMemo(() => {
+    if (!rawSlide) return undefined;
+    if (layerFilter === "all") return rawSlide;
+    const filteredElements = rawSlide.elements.filter((el) => {
+      const isBlock = isObjectBlock(rawSlide, el.id);
+      return layerFilter === "block" ? isBlock : !isBlock;
+    });
+    return {
+      ...rawSlide,
+      elements: filteredElements,
+    };
+  }, [rawSlide, layerFilter]);
 
   const rootRef = useRef<CanvasRootHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -93,9 +150,68 @@ export default function CanvasEditor() {
   } | null>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [editingFrameId, setEditingFrameId] = useState<string | null>(null);
+  const [editingPathId, setEditingPathId] = useState<string | null>(null);
+  const [penNodes, setPenNodes] = useState<
+    Array<{ x: number; y: number; in?: [number, number]; out?: [number, number] }>
+  >([]);
+  const [penHoverFirst, setPenHoverFirst] = useState(false);
+  const penDraggingRef = useRef<{ start: WorldPoint; nodeIndex: number } | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [safeAreaMode, setSafeAreaMode] = useState<SafeAreaMode>("none");
   const dragRef = useRef<DragState>(null);
   const images = getImageCache();
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      resetView: () => rootRef.current?.resetView(),
+      getView: () => rootRef.current?.getView() ?? { scale: 1, tx: 0, ty: 0 },
+      setView: (v) => rootRef.current?.setView(v),
+      setZoom: (s) => rootRef.current?.setZoom(s),
+    }),
+    [],
+  );
+
+  const handleViewChange = useCallback(
+    (nextView: ViewTransform) => {
+      setView(nextView);
+      onViewChange?.(nextView);
+    },
+    [onViewChange],
+  );
+
+  useEffect(() => {
+    if (tool === "pen") return;
+    setPenNodes([]);
+    setDraft(null);
+  }, [tool]);
+
+  useEffect(() => {
+    if (tool !== "directSelect") {
+      setEditingPathId(null);
+    }
+  }, [tool]);
+
+  useEffect(() => {
+    if (tool !== "pen") return;
+    function finishPath(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setPenNodes([]);
+        setDraft(null);
+      } else if (event.key === "Enter" && penNodes.length >= 2) {
+        const pathEl = createVectorPathFromWorldNodes(penNodes, event.shiftKey);
+        addElement(pathEl, "draw vector path");
+        setPenNodes([]);
+        setDraft(null);
+        setTool("select");
+        setEditingPathId(null);
+        selectOnly([pathEl.id]);
+      }
+    }
+    window.addEventListener("keydown", finishPath);
+    return () => window.removeEventListener("keydown", finishPath);
+  }, [addElement, penNodes, selectOnly, setTool, tool]);
 
   usePasteDrop(containerRef, (x, y) => rootRef.current?.clientToWorld(x, y) ?? { x: 0, y: 0 });
 
@@ -107,6 +223,9 @@ export default function CanvasEditor() {
 
   const onPointerDown = useCallback(
     (p: WorldPoint, e: React.PointerEvent) => {
+      if (ctxMenu) {
+        setCtxMenu(null);
+      }
       if (!slide) return;
 
       // Text tool: place a new text element and enter edit mode.
@@ -115,6 +234,63 @@ export default function CanvasEditor() {
         addElement(el, "add text");
         setEditingTextId(el.id);
         setTool("select");
+        return;
+      }
+
+      if (tool === "pen") {
+        if (
+          penNodes.length >= 2 &&
+          Math.hypot(penNodes[0].x - p.x, penNodes[0].y - p.y) < 16 / view.scale
+        ) {
+          // Click on first anchor closes the path
+          const pathEl = createVectorPathFromWorldNodes(penNodes, true);
+          addElement(pathEl, "draw vector path");
+          setPenNodes([]);
+          setDraft(null);
+          setTool("select");
+          setEditingPathId(null);
+          selectOnly([pathEl.id]);
+          return;
+        }
+
+        if (e.detail >= 2 && penNodes.length >= 2) {
+          // Double-click finishes open path
+          const pathEl = createVectorPathFromWorldNodes(penNodes, false);
+          addElement(pathEl, "draw vector path");
+          setPenNodes([]);
+          setDraft(null);
+          setTool("select");
+          setEditingPathId(null);
+          selectOnly([pathEl.id]);
+          return;
+        }
+
+        const nextNodes = [...penNodes, { x: p.x, y: p.y }];
+        setPenNodes(nextNodes);
+        penDraggingRef.current = { start: p, nodeIndex: nextNodes.length - 1 };
+        if (nextNodes.length > 1) {
+          setDraft(createVectorPathFromWorldNodes(nextNodes, false));
+        }
+        return;
+      }
+
+      if (tool === "directSelect") {
+        const hit = pickTopMost(p, slide);
+        if (hit) {
+          if (hit.type !== "path") {
+            const converted = convertElementToVectorPath(hit);
+            if (converted) {
+              useEngine
+                .getState()
+                .updateElements([{ id: hit.id, patch: converted }], "convert to editable path");
+            }
+          }
+          selectOnly([hit.id]);
+          setEditingPathId(hit.id);
+        } else if (!e.shiftKey) {
+          setEditingPathId(null);
+          clearSelection();
+        }
         return;
       }
 
@@ -133,34 +309,6 @@ export default function CanvasEditor() {
           } else if (!Array.from(groupIds).every((id) => selectedIds.has(id))) {
             selectOnly(Array.from(groupIds));
           }
-          // Double-click on text → edit.
-          if (hit.type === "text" && (e as unknown as { detail?: number }).detail === 2) {
-            setEditingTextId(hit.id);
-            return;
-          }
-          // Double-click on shape → edit/create bound text.
-          if (
-            (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond") &&
-            (e as unknown as { detail?: number }).detail === 2
-          ) {
-            const boundText = slide.elements.find(
-              (el) => el.type === "text" && (el as TextElement).containerId === hit.id,
-            );
-            if (boundText) {
-              setEditingTextId(boundText.id);
-            } else {
-              const el = createText({ x: hit.x, y: hit.y, text: "" });
-              el.width = hit.width;
-              el.height = hit.height;
-              el.containerId = hit.id;
-              el.verticalAlign = "middle";
-              el.textAlign = "center";
-              addElement(el, "add bound text");
-              setEditingTextId(el.id);
-              setTool("select");
-            }
-            return;
-          }
           const ids = Array.from(useEngine.getState().selectedIds);
           const origins = new Map<string, { x: number; y: number }>();
           for (const el of slide.elements) {
@@ -168,7 +316,15 @@ export default function CanvasEditor() {
               origins.set(el.id, { x: el.x, y: el.y });
             }
           }
-          dragRef.current = { kind: "move", start: p, ids, origins, checkpointed: false };
+          dragRef.current = {
+            kind: "move",
+            start: p,
+            ids,
+            origins,
+            checkpointed: false,
+            altKey: e.altKey,
+            duplicated: false,
+          };
         } else {
           // Begin marquee.
           const screen = rootRef.current?.worldToScreen(p) ?? { x: 0, y: 0 };
@@ -199,17 +355,105 @@ export default function CanvasEditor() {
 
       // Shape-drag tools.
       dragRef.current = { kind: "draw", start: p };
-      setDraft(makeDraftFor(tool, p, p));
+      setDraft(makeDraftFor(tool, p, p, lineSubtype));
     },
-    [addElement, clearSelection, deleteElements, selectOnly, selectedIds, setTool, slide, tool],
+    [
+      addElement,
+      clearSelection,
+      ctxMenu,
+      deleteElements,
+      lineSubtype,
+      penNodes,
+      selectOnly,
+      selectedIds,
+      setTool,
+      slide,
+      tool,
+      view.scale,
+    ],
+  );
+
+  const onDoubleClickWorld = useCallback(
+    (p: WorldPoint) => {
+      if (!slide) return;
+      const hit = pickTopMost(p, slide);
+      if (!hit) return;
+
+      if (hit.type === "frame") {
+        setEditingFrameId(hit.id);
+        return;
+      }
+      if (hit.type === "text") {
+        setEditingTextId(hit.id);
+        return;
+      }
+      if (hit.type === "image") {
+        setCroppingImageId(hit.id);
+        return;
+      }
+      if (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond") {
+        const boundText = slide.elements.find(
+          (el) => el.type === "text" && (el as TextElement).containerId === hit.id,
+        );
+        if (boundText) {
+          setEditingTextId(boundText.id);
+        } else {
+          const el = createText({ x: hit.x, y: hit.y, text: "" });
+          el.width = hit.width;
+          el.height = hit.height;
+          el.containerId = hit.id;
+          el.verticalAlign = "middle";
+          el.textAlign = "center";
+          addElement(el, "add bound text");
+          setEditingTextId(el.id);
+          setTool("select");
+        }
+      }
+    },
+    [slide, addElement, setTool, setCroppingImageId],
   );
 
   const onPointerMove = useCallback(
     (p: WorldPoint, _e: React.PointerEvent) => {
+      if (tool === "pen") {
+        if (penDraggingRef.current && penNodes.length > 0) {
+          const idx = penDraggingRef.current.nodeIndex;
+          const dx = p.x - penDraggingRef.current.start.x;
+          const dy = p.y - penDraggingRef.current.start.y;
+          const updated = penNodes.map((n, i) =>
+            i === idx
+              ? { ...n, out: [dx, dy] as [number, number], in: [-dx, -dy] as [number, number] }
+              : n,
+          );
+          setPenNodes(updated);
+          if (updated.length > 1) {
+            setDraft(createVectorPathFromWorldNodes(updated, false));
+          }
+        } else if (penNodes.length > 0) {
+          const isNearFirst =
+            penNodes.length >= 2 &&
+            Math.hypot(penNodes[0].x - p.x, penNodes[0].y - p.y) < 16 / view.scale;
+          setPenHoverFirst(isNearFirst);
+          // Preview live curve rubber-band to cursor
+          setDraft(createVectorPathFromWorldNodes([...penNodes, { x: p.x, y: p.y }], false));
+        }
+        return;
+      }
       const d = dragRef.current;
       if (!d || !slide) return;
       if (d.kind === "move") {
-        if (!d.checkpointed) {
+        const isAlt = _e.altKey || d.altKey;
+        if (isAlt && !d.duplicated) {
+          const movingElements = slide.elements.filter((el) => d.origins.has(el.id));
+          if (movingElements.length > 0) {
+            const cloned = cloneElementsForDuplicate(movingElements, 0, 0);
+            useEngine.getState().addElements(cloned, "duplicate element");
+            d.ids = cloned.map((el) => el.id);
+            d.origins = new Map(cloned.map((el) => [el.id, { x: el.x, y: el.y }]));
+            d.duplicated = true;
+            d.checkpointed = true;
+          }
+        } else if (!d.checkpointed) {
           checkpointInteraction("move");
           d.checkpointed = true;
         }
@@ -266,13 +510,24 @@ export default function CanvasEditor() {
         return;
       }
       // draw
-      setDraft(makeDraftFor(tool, d.start, p));
+      setDraft(makeDraftFor(tool, d.start, p, lineSubtype));
     },
-    [checkpointInteraction, deleteElements, previewElements, slide, snapGrid, tool, view.scale],
+    [
+      checkpointInteraction,
+      deleteElements,
+      lineSubtype,
+      penNodes,
+      previewElements,
+      slide,
+      snapGrid,
+      tool,
+      view.scale,
+    ],
   );
 
   const onPointerUp = useCallback(
     (p: WorldPoint) => {
+      penDraggingRef.current = null;
       const d = dragRef.current;
       dragRef.current = null;
       if (!d) return;
@@ -280,16 +535,50 @@ export default function CanvasEditor() {
         setGuides([]);
         if (!d.checkpointed) return;
         const ids = d.ids;
-        const slideNow = useEngine
-          .getState()
-          .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
+        const stateNow = useEngine.getState();
+        const slideNow = stateNow.doc.slides.find((sl) => sl.id === stateNow.currentSlideId);
         if (!slideNow) return;
+
+        // Canva-style: If dragging a single Image onto a Frame, snap the image into the frame!
+        if (ids.length === 1) {
+          const movedId = ids[0];
+          const movedElement = slideNow.elements.find((el) => el.id === movedId);
+          if (movedElement && movedElement.type === "image" && movedElement.fileId) {
+            const frameUnder = slideNow.elements.find(
+              (el) =>
+                !el.isDeleted &&
+                el.type === "frame" &&
+                el.id !== movedId &&
+                p.x >= el.x &&
+                p.x <= el.x + el.width &&
+                p.y >= el.y &&
+                p.y <= el.y + el.height,
+            );
+            if (frameUnder) {
+              stateNow.setFrameImage(frameUnder.id, movedElement.fileId);
+              stateNow.deleteElements([movedId]);
+              stateNow.selectOnly([frameUnder.id]);
+              return;
+            }
+          }
+        }
+
         const movedBlockIds = ids.filter((id) => getLayerForObject(slideNow, id)?.mode === "block");
         for (const id of movedBlockIds) commitBlockLayout(id);
         return;
       }
       if (d.kind === "freedraw") {
-        if (d.points.length >= 2) addElement(createFreedraw(d.points), "draw");
+        if (d.points.length >= 2) {
+          const raw = d.points;
+          const step = Math.max(1, Math.floor(raw.length / 28));
+          const sampled = raw.filter((_, i) => i % step === 0 || i === raw.length - 1);
+          const pathEl = createVectorPath(
+            sampled.map(([px, py]) => ({ x: px, y: py })),
+            false,
+          );
+          pathEl.name = "Freehand";
+          addElement(pathEl, "draw vector path");
+        }
         setDraft(null);
         setTool("select");
         return;
@@ -318,7 +607,7 @@ export default function CanvasEditor() {
       }
       // draw commit
       if (d.kind !== "draw") return;
-      const el = makeDraftFor(tool, d.start, p);
+      const el = makeDraftFor(tool, d.start, p, lineSubtype);
       if (tool === "arrow" && el && slide) {
         const startHit = pickTopMost(d.start, slide);
         const endHit = pickTopMost(p, slide);
@@ -345,7 +634,10 @@ export default function CanvasEditor() {
       }
 
       setDraft(null);
-      if (el && el.width >= 4 && el.height >= 4) {
+      const isLineLike = el?.type === "line" || el?.type === "arrow";
+      const isValidSize =
+        el && (isLineLike ? Math.hypot(el.width, el.height) >= 4 : el.width >= 4 && el.height >= 4);
+      if (el && isValidSize) {
         if (el.type === "frame" && slide) {
           const frameRect = { x: el.x, y: el.y, width: el.width, height: el.height };
           const inside = slide.elements.filter(
@@ -363,7 +655,7 @@ export default function CanvasEditor() {
         setTool("select");
       }
     },
-    [addElement, commitBlockLayout, selectOnly, setTool, slide, tool],
+    [addElement, commitBlockLayout, lineSubtype, selectOnly, setTool, slide, tool],
   );
 
   if (!slide) return null;
@@ -381,9 +673,26 @@ export default function CanvasEditor() {
   const croppingImage = slide.elements.find(
     (el) => el.id === croppingImageId && el.type === "image",
   ) as import("@/lib/engine/types").ImageElement | undefined;
+  const editingFrame = slide.elements.find(
+    (el): el is import("@/lib/engine/types").FrameElement =>
+      el.id === editingFrameId && el.type === "frame",
+  );
+  const editingPath =
+    tool === "directSelect"
+      ? editingPathId
+        ? (slide.elements.find(
+            (element) => element.id === editingPathId && element.type === "path",
+          ) as VectorPathElement | undefined)
+        : selectedIds.size === 1
+          ? (slide.elements.find(
+              (element) => selectedIds.has(element.id) && element.type === "path",
+            ) as VectorPathElement | undefined)
+          : undefined
+      : undefined;
 
-  // Skip transformer while editing text or cropping
-  const showTransformer = !editingText && !croppingImage && selectedIds.size > 0;
+  // Selection Tool ('select' / 'V') operates strictly at the whole-object level
+  const showTransformer =
+    !editingText && !croppingImage && !editingFrame && tool === "select" && selectedIds.size > 0;
 
   const editingScreenPos =
     editingText && rootRef.current
@@ -415,6 +724,7 @@ export default function CanvasEditor() {
         draftElement={draft}
         images={images}
         snapGrid={snapGrid}
+        showHexGrid={showHexGrid}
         selectedIds={editingText ? new Set() : selectedIds}
         activeLayerId={activeLayerId}
         handActive={tool === "hand"}
@@ -422,7 +732,8 @@ export default function CanvasEditor() {
         onPointerDownWorld={onPointerDown}
         onPointerMoveWorld={onPointerMove}
         onPointerUpWorld={onPointerUp}
-        onViewChange={setView}
+        onDoubleClickWorld={onDoubleClickWorld}
+        onViewChange={handleViewChange}
       >
         <Marquee rect={marqueeRect} />
         <Guides
@@ -434,11 +745,67 @@ export default function CanvasEditor() {
           elements={slide.elements}
           worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
         />
+        {editingPath ? (
+          <PathNodeOverlay
+            element={editingPath}
+            worldToScreen={(point) => rootRef.current?.worldToScreen(point) ?? { x: 0, y: 0 }}
+            clientToWorld={(x, y) => rootRef.current?.clientToWorld(x, y) ?? { x: 0, y: 0 }}
+            onExit={() => setEditingPathId(null)}
+          />
+        ) : null}
+        {tool === "pen" && penNodes.length > 0 ? (
+          <PenLiveOverlay
+            nodes={penNodes}
+            worldToScreen={(point) => rootRef.current?.worldToScreen(point) ?? { x: 0, y: 0 }}
+            isClosingHover={penHoverFirst}
+          />
+        ) : null}
         {showTransformer && (
           <Transformer
             worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
             scale={view.scale}
             onGuidesChange={setGuides}
+            onDoubleClick={() => {
+              if (selectedIds.size === 1) {
+                const id = Array.from(selectedIds)[0];
+                const el = slide.elements.find((e) => e.id === id);
+                if (el?.type === "frame") {
+                  setEditingFrameId(el.id);
+                } else if (el?.type === "text") {
+                  setEditingTextId(el.id);
+                } else if (el?.type === "image") {
+                  setCroppingImageId(el.id);
+                } else if (el?.type === "path") {
+                  setTool("directSelect");
+                  setEditingPathId(el.id);
+                } else if (
+                  el &&
+                  (el.type === "rect" ||
+                    el.type === "ellipse" ||
+                    el.type === "diamond" ||
+                    el.type === "triangle" ||
+                    el.type === "star" ||
+                    el.type === "hexagon" ||
+                    el.type === "heart" ||
+                    el.type === "plus" ||
+                    el.type === "line" ||
+                    el.type === "arrow" ||
+                    el.type === "freedraw")
+                ) {
+                  const converted = convertElementToVectorPath(el);
+                  if (converted) {
+                    useEngine
+                      .getState()
+                      .updateElements(
+                        [{ id: el.id, patch: converted }],
+                        "convert to editable path",
+                      );
+                    setTool("directSelect");
+                    setEditingPathId(el.id);
+                  }
+                }
+              }
+            }}
           />
         )}
         {editingText && editingScreenPos && (
@@ -456,38 +823,181 @@ export default function CanvasEditor() {
             scale={view.scale}
           />
         )}
+        {editingFrame && (
+          <FrameEditOverlay
+            frame={editingFrame}
+            worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
+            clientToWorld={(x, y) => rootRef.current?.clientToWorld(x, y) ?? { x: 0, y: 0 }}
+            scale={view.scale}
+            onClose={() => setEditingFrameId(null)}
+          />
+        )}
+        <SafeAreaOverlay
+          mode={safeAreaMode}
+          slideWidth={slide.width}
+          slideHeight={slide.height}
+          worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
+        />
       </CanvasRoot>
       {ctxMenu && <ContextMenu position={ctxMenu} onClose={() => setCtxMenu(null)} />}
+
+      {/* Floating Safe Area Guide Widget */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 16,
+          right: 16,
+          zIndex: 15,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: "var(--surface-solid, rgba(30, 30, 36, 0.9))",
+          backdropFilter: "blur(6px)",
+          border: "1px solid var(--stroke, rgba(255, 255, 255, 0.12))",
+          borderRadius: 8,
+          padding: "4px 8px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+        }}
+      >
+        <span style={{ fontSize: 10, color: "var(--ink-muted, #9ca3af)", fontWeight: 600 }}>
+          Safe Area:
+        </span>
+        <select
+          value={safeAreaMode}
+          onChange={(e) => setSafeAreaMode(e.target.value as SafeAreaMode)}
+          style={{
+            fontSize: 10,
+            padding: "2px 6px",
+            borderRadius: 4,
+            border: "1px solid var(--stroke, rgba(255, 255, 255, 0.15))",
+            background: "transparent",
+            color: "var(--ink, #f4f4f5)",
+            cursor: "pointer",
+            outline: "none",
+          }}
+        >
+          <option value="none" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
+            Off
+          </option>
+          <option value="tiktok-reels" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
+            TikTok / Reels (9:16)
+          </option>
+          <option value="ig-story" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
+            Instagram Story
+          </option>
+          <option value="print-bleed" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
+            Print & Bleed (3mm)
+          </option>
+        </select>
+      </div>
     </div>
   );
-}
+});
 
-function makeDraftFor(tool: Tool, a: WorldPoint, b: WorldPoint): EngineElement | null {
+export default CanvasEditor;
+
+function makeDraftFor(
+  tool: Tool,
+  a: WorldPoint,
+  b: WorldPoint,
+  lineSubtype?: LineSubtype,
+): EngineElement | null {
   const x = Math.min(a.x, b.x);
   const y = Math.min(a.y, b.y);
   const w = Math.abs(b.x - a.x);
   const h = Math.abs(b.y - a.y);
   switch (tool) {
-    case "rect":
-      return createRect({ x, y, width: w, height: h });
-    case "ellipse":
-      return createEllipse({ x, y, width: w, height: h });
-    case "diamond":
-      return createDiamond({ x, y, width: w, height: h });
-    case "triangle":
-      return createTriangle({ x, y, width: w, height: h });
-    case "star":
-      return createStar({ x, y, width: w, height: h });
-    case "hexagon":
-      return createHexagon({ x, y, width: w, height: h });
-    case "heart":
-      return createHeart({ x, y, width: w, height: h });
-    case "plus":
-      return createPlus({ x, y, width: w, height: h });
-    case "line":
-      return createLine([a.x, a.y], [b.x, b.y]);
-    case "arrow":
-      return createArrow([a.x, a.y], [b.x, b.y]);
+    case "rect": {
+      const el = createRect({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Rectangle";
+      return path;
+    }
+    case "ellipse": {
+      const el = createEllipse({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Circle";
+      return path;
+    }
+    case "diamond": {
+      const el = createDiamond({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Diamond";
+      return path;
+    }
+    case "triangle": {
+      const el = createTriangle({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Triangle";
+      return path;
+    }
+    case "star": {
+      const el = createStar({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Star";
+      return path;
+    }
+    case "hexagon": {
+      const el = createHexagon({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Hexagon";
+      return path;
+    }
+    case "heart": {
+      const el = createHeart({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Heart";
+      return path;
+    }
+    case "plus": {
+      const el = createPlus({ x, y, width: w, height: h });
+      const path = convertElementToVectorPath(el)!;
+      path.name = "Plus";
+      return path;
+    }
+    case "line": {
+      const path = createVectorPath(
+        [
+          { x: a.x, y: a.y },
+          { x: b.x, y: b.y },
+        ],
+        false,
+      );
+      path.name = "Line";
+      if (lineSubtype === "dashed") {
+        path.strokeStyle = "dashed";
+      }
+      return path;
+    }
+    case "arrow": {
+      if (lineSubtype === "curvedArrow") {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const path = createVectorPathFromWorldNodes(
+          [
+            { x: a.x, y: a.y, out: [dx * 0.4, -dy * 0.2] },
+            { x: b.x, y: b.y, in: [-dx * 0.4, dy * 0.2] },
+          ],
+          false,
+        );
+        path.name = "Curved Arrow";
+        path.endArrowhead = "arrow";
+        return path;
+      }
+      const path = createVectorPath(
+        [
+          { x: a.x, y: a.y },
+          { x: b.x, y: b.y },
+        ],
+        false,
+      );
+      path.name = lineSubtype === "doubleArrow" ? "Double Arrow" : "Arrow";
+      if (lineSubtype === "doubleArrow") {
+        path.startArrowhead = "arrow";
+      }
+      path.endArrowhead = "arrow";
+      return path;
+    }
     case "frame":
       return {
         ...createRect({ x, y, width: w, height: h }),
@@ -511,11 +1021,19 @@ function toolToCursor(tool: Tool): string {
     case "rect":
     case "ellipse":
     case "diamond":
+    case "triangle":
+    case "star":
+    case "hexagon":
+    case "heart":
+    case "plus":
     case "line":
     case "arrow":
     case "freedraw":
+    case "pen":
     case "frame":
       return "crosshair";
+    case "directSelect":
+      return "default";
     default:
       return "default";
   }

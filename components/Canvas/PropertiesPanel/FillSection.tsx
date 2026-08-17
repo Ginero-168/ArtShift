@@ -233,7 +233,8 @@ export function FillSection({
               {
                 shadow: hasShadow
                   ? undefined
-                  : { color: "rgba(0,0,0,0.15)", blur: 8, offsetX: 2, offsetY: 4 },
+                  : { color: "rgba(0,0,0,0.18)", blur: 12, offsetX: 2, offsetY: 6 },
+                glow: undefined,
               },
               "shadow",
             );
@@ -251,6 +252,33 @@ export function FillSection({
           }}
         >
           {first.shadow ? "Shadow On" : "Shadow"}
+        </button>
+      </Section>
+
+      {/* Glow */}
+      <Section>
+        <button
+          onClick={() => {
+            const hasGlow = !!first.glow;
+            apply(
+              {
+                glow: hasGlow ? undefined : { color: "#38bdf8", blur: 18 },
+                shadow: undefined,
+              },
+              "glow",
+            );
+          }}
+          style={{
+            padding: "3px 8px",
+            borderRadius: 5,
+            border: "1px solid var(--stroke, #e5e7eb)",
+            background: first.glow ? "var(--accent-light, #eef2ff)" : "var(--surface-solid, #fff)",
+            cursor: "pointer",
+            fontSize: 10,
+            color: first.glow ? "var(--accent, #6366f1)" : "var(--ink, #111)",
+          }}
+        >
+          {first.glow ? "Glow On" : "Glow"}
         </button>
       </Section>
     </>

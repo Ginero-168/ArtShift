@@ -65,4 +65,12 @@ describe("book mockup projection", () => {
     expect(geometry.surfaces.find((surface) => surface.id === "frontEdgeTop")?.visible).toBe(true);
     expect(geometry.hinge).toHaveLength(4);
   });
+
+  it("supports toggling ground shadow on and off", () => {
+    const defaultMockup = mockup();
+    expect(defaultMockup.showShadow).toBe(true);
+
+    const noShadowMockup = mockup({ showShadow: false });
+    expect(noShadowMockup.showShadow).toBe(false);
+  });
 });

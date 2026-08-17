@@ -52,20 +52,76 @@ describe("Builder element library", () => {
     expect(getBuilderBlockDefinition("indexNumber")?.kind).toBe("text");
   });
 
-  it("creates every former toolbar shape from the Library", () => {
-    const expected: Partial<Record<BuilderBlockKind, string>> = {
-      shapeRect: "rect",
-      shapeEllipse: "ellipse",
-      shapeDiamond: "diamond",
-      shapeTriangle: "triangle",
-      shapeStar: "star",
-      shapeHexagon: "hexagon",
-      shapeHeart: "heart",
-      shapePlus: "plus",
-    };
+  it("creates every former toolbar shape from the Library as a native vector path", () => {
+    const shapeKinds: BuilderBlockKind[] = [
+      "shapeRect",
+      "shapeEllipse",
+      "shapeDiamond",
+      "shapeTriangle",
+      "shapeStar",
+      "shapeHexagon",
+      "shapeHeart",
+      "shapePlus",
+    ];
 
-    for (const [kind, type] of Object.entries(expected)) {
-      expect(createBuilderBlock(kind as BuilderBlockKind, ARTWORK).type).toBe(type);
+    for (const kind of shapeKinds) {
+      const block = createBuilderBlock(kind, ARTWORK);
+      expect(block.type).toBe("path");
+      expect(block.builderKind).toBe(kind);
+      if (block.type === "path") {
+        expect(block.nodes.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("creates individual badge variants directly from the Library", () => {
+    const badgeKinds: BuilderBlockKind[] = [
+      "badge",
+      "badgeStarburst",
+      "badgeFlash",
+      "badgeRibbon",
+      "badgeSeal",
+      "badgePriceTag",
+      "badgeBookmark",
+    ];
+
+    for (const kind of badgeKinds) {
+      const def = getBuilderBlockDefinition(kind);
+      expect(def).toBeDefined();
+      expect(def?.category).toBe("Commerce");
+      const element = createBuilderBlock(kind, ARTWORK);
+      expect(element).toBeDefined();
+      expect(element.builderKind).toBe(kind);
+    }
+  });
+
+  it("places Pen (Vector) and Pen (Freehand) as the first blocks in Lines category", () => {
+    const linesBlocks = BUILDER_BLOCKS.filter((block) => block.category === "Lines");
+    expect(linesBlocks[0].kind).toBe("shapePen");
+    expect(linesBlocks[0].label).toBe("Pen (Vector)");
+    expect(linesBlocks[1].kind).toBe("shapeFreedraw");
+    expect(linesBlocks[1].label).toBe("Pen (Freehand)");
+  });
+
+  it("creates line and drawing blocks directly as unified Vector Paths from the Library", () => {
+    const lineKinds: BuilderBlockKind[] = [
+      "shapePen",
+      "shapeFreedraw",
+      "shapeLine",
+      "shapeArrow",
+      "shapeDoubleArrow",
+      "shapeDashedLine",
+      "shapeCurvedArrow",
+    ];
+
+    for (const kind of lineKinds) {
+      const def = getBuilderBlockDefinition(kind);
+      expect(def).toBeDefined();
+      expect(def?.category).toBe("Lines");
+      const element = createBuilderBlock(kind, ARTWORK);
+      expect(element).toBeDefined();
+      expect(element.builderKind).toBe(kind);
+      expect(element.type).toBe("path");
     }
   });
 });

@@ -1,4 +1,3 @@
-import { renderObjectsToBlob, renderObjectsToCanvas } from "./render";
 import { extractSvgFromHtml, svgToSlideObjects } from "./svgImport";
 import type { Slide, SlideObject } from "./types";
 
@@ -123,20 +122,11 @@ export async function writeObjectsToClipboard(objects: SlideObject[]) {
     .join("\n");
   const allText = objects.every((o) => o.type === "text");
 
-  const png = allText ? null : await renderObjectsToBlob(objects);
-  const pngDataUrl = png ? await blobToDataUrl(png) : null;
-  const bbox = objects.length ? computeBbox(objects) : null;
-
   // Pure text selection → emit rich styled HTML so Docs/Slides keep the formatting.
-  // Mixed selection → emit a PNG <img> so external apps get a faithful picture.
-  let visibleHtml: string;
-  if (allText) {
-    visibleHtml = objects.map((o) => (o.type === "text" ? textObjectToStyledHtml(o) : "")).join("");
-  } else if (pngDataUrl && bbox) {
-    visibleHtml = `<img src="${pngDataUrl}" width="${Math.round(bbox.width)}" height="${Math.round(bbox.height)}" alt="">`;
-  } else {
-    visibleHtml = "";
-  }
+  // Mixed selection → emit HTML representation.
+  const visibleHtml = allText
+    ? objects.map((o) => (o.type === "text" ? textObjectToStyledHtml(o) : "")).join("")
+    : "";
   const html = `<div ${INTERNAL_ATTR}="${encoded}">${visibleHtml}</div>`;
   const plain = textContent || " ";
 
@@ -144,41 +134,17 @@ export async function writeObjectsToClipboard(objects: SlideObject[]) {
     "text/plain": new Blob([plain], { type: "text/plain" }),
     "text/html": new Blob([html], { type: "text/html" }),
   };
-  if (png) parts["image/png"] = png;
   await writeToSystemClipboard(parts, plain);
 }
 
 export async function writeSlideToClipboard(
   slide: Slide,
-  canvasWidth: number,
-  canvasHeight: number,
+  _canvasWidth: number,
+  _canvasHeight: number,
 ) {
   const payload = JSON.stringify({ kind: "mighty-slide-full", slide });
   const encoded = encodeURIComponent(payload);
-
-  // Render the full slide (with background) to PNG so pasting into Docs/Slides gets a picture.
-  let pngBlob: Blob | null = null;
-  try {
-    const canvas = await renderObjectsToCanvas(
-      slide.objects,
-      canvasWidth,
-      canvasHeight,
-      slide.background || "#ffffff",
-      0,
-      0,
-      2,
-    );
-    pngBlob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/png"),
-    );
-  } catch {
-    pngBlob = null;
-  }
-  const pngDataUrl = pngBlob ? await blobToDataUrl(pngBlob) : null;
-
-  const visible = pngDataUrl
-    ? `<img src="${pngDataUrl}" width="${canvasWidth}" height="${canvasHeight}" alt="${escapeAttr(slide.name || "slide")}">`
-    : `<p>${escapeHtml(slide.name || "slide")}</p>`;
+  const visible = `<p>${escapeHtml(slide.name || "slide")}</p>`;
   const html = `<div ${INTERNAL_SLIDE_ATTR}="${encoded}">${visible}</div>`;
   const plainText =
     slide.objects
@@ -192,32 +158,7 @@ export async function writeSlideToClipboard(
     "text/plain": new Blob([plainText], { type: "text/plain" }),
     "text/html": new Blob([html], { type: "text/html" }),
   };
-  if (pngBlob) parts["image/png"] = pngBlob;
   await writeToSystemClipboard(parts, plainText);
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
-function computeBbox(objects: SlideObject[]) {
-  const xs = objects.map((o) => o.x);
-  const ys = objects.map((o) => o.y);
-  const xe = objects.map((o) => o.x + o.width);
-  const ye = objects.map((o) => o.y + o.height);
-  const x = Math.min(...xs);
-  const y = Math.min(...ys);
-  return {
-    x,
-    y,
-    width: Math.max(1, Math.max(...xe) - x),
-    height: Math.max(1, Math.max(...ye) - y),
-  };
 }
 
 export type PasteResult =

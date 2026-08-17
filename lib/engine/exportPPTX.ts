@@ -12,6 +12,30 @@ import type { EngineDoc, EngineElement, ImageElement, TextElement } from "./type
 
 const PX_TO_IN = 1 / 96;
 
+export type PptxSlideTransform = {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+/**
+ * PPTX has one page layout per deck. Mixed-ratio Artworks are proportionally
+ * fitted and centered into that layout instead of being stretched or clipped.
+ */
+export function getPptxSlideTransform(
+  source: { width: number; height: number },
+  target: { width: number; height: number },
+): PptxSlideTransform {
+  const sourceWidth = Math.max(1, source.width);
+  const sourceHeight = Math.max(1, source.height);
+  const scale = Math.min(target.width / sourceWidth, target.height / sourceHeight);
+  return {
+    scale,
+    offsetX: (target.width - sourceWidth * scale) / 2,
+    offsetY: (target.height - sourceHeight * scale) / 2,
+  };
+}
+
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -83,8 +107,12 @@ async function rasterizeElement(
 export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
   const PptxGenJS = (await import("pptxgenjs")).default;
   const pptx = new PptxGenJS();
-  const wIn = doc.width * PX_TO_IN;
-  const hIn = doc.height * PX_TO_IN;
+  const targetSize = {
+    width: doc.slides[0]?.width ?? doc.width,
+    height: doc.slides[0]?.height ?? doc.height,
+  };
+  const wIn = targetSize.width * PX_TO_IN;
+  const hIn = targetSize.height * PX_TO_IN;
   pptx.defineLayout({ name: "ARTSHIFT", width: wIn, height: hIn });
   pptx.layout = "ARTSHIFT";
 
@@ -93,6 +121,10 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
   for (const slide of doc.slides) {
     const s = pptx.addSlide();
     s.background = { color: (slide.background || "#ffffff").replace("#", "") };
+    const transform = getPptxSlideTransform(slide, targetSize);
+    const tx = (value: number) => transform.offsetX + value * transform.scale;
+    const ty = (value: number) => transform.offsetY + value * transform.scale;
+    const scaled = (value: number) => value * transform.scale;
 
     const ordered = getRenderableElements(slide);
 
@@ -100,10 +132,10 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
       if (el.type === "frame") continue; // frames are structural only
 
       const common = {
-        x: px(el.x),
-        y: px(el.y),
-        w: px(el.width),
-        h: px(el.height),
+        x: px(tx(el.x)),
+        y: px(ty(el.y)),
+        w: px(scaled(el.width)),
+        h: px(scaled(el.height)),
         rotate: (el.angle * 180) / Math.PI,
       };
 
@@ -112,7 +144,7 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
         const te = el as TextElement;
         s.addText(te.text, {
           ...common,
-          fontSize: Math.max(8, Math.round(te.fontSize * 0.75)),
+          fontSize: Math.max(8, Math.round(te.fontSize * transform.scale * 0.75)),
           fontFace: te.fontFamily.split(",")[0].replace(/['"]/g, "").trim() || "Noto Sans Thai",
           color: te.strokeColor.replace("#", ""),
           bold: te.fontStyle.includes("bold"),
@@ -167,7 +199,10 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
             },
             line:
               el.strokeWidth > 0
-                ? { color: el.strokeColor.replace("#", ""), width: el.strokeWidth }
+                ? {
+                    color: el.strokeColor.replace("#", ""),
+                    width: el.strokeWidth * transform.scale,
+                  }
                 : { type: "none" as const },
           });
           continue;
@@ -180,10 +215,10 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
         const pad = 4;
         s.addImage({
           data,
-          x: px(el.x - pad),
-          y: px(el.y - pad),
-          w: px(el.width + pad * 2),
-          h: px(el.height + pad * 2),
+          x: px(tx(el.x - pad)),
+          y: px(ty(el.y - pad)),
+          w: px(scaled(el.width + pad * 2)),
+          h: px(scaled(el.height + pad * 2)),
         });
       } catch {
         // silently skip unrenderable elements

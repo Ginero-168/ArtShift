@@ -76,7 +76,20 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
         const { loadDataURL } = await import("@/lib/engine/imageCache");
         const cached = await loadDataURL(resultUrl);
         updateElements([
-          { id: selectedImage.id, patch: { fileId: cached.fileId, status: "loaded" as const } },
+          {
+            id: selectedImage.id,
+            patch: {
+              fileId: cached.fileId,
+              naturalWidth: cached.width,
+              naturalHeight: cached.height,
+              crop: null,
+              status: "loaded" as const,
+              linkedAssetId: undefined,
+              sourceName: undefined,
+              sourceLastModified: undefined,
+              sourceSize: undefined,
+            },
+          },
         ]);
       }
     } catch (e) {

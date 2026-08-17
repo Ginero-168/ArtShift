@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
+import type { TemplateApplyMode } from "@/lib/engine/templateApplication";
+import { materializeTemplateAssets } from "@/lib/engine/templateAssets";
 import type { EngineSlide } from "@/lib/engine/types";
 import { renderSlide } from "@/lib/renderer/canvas";
 import { runTemplate, type TemplateName, type TemplatePayload } from "@/lib/templates";
@@ -136,6 +138,9 @@ const CATEGORIES = ["All", "Cover", "Content", "Data"];
 export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+  const [mode, setMode] = useState<TemplateApplyMode>("replace");
+  const [applying, setApplying] = useState<TemplateName | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -152,19 +157,22 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
     return matchesQuery && matchesCategory;
   });
 
-  function applyTemplate(payload: TemplatePayload) {
+  async function applyTemplate(payload: TemplatePayload) {
     const result = runTemplate(payload);
     if (!result) return;
-    const st = useEngine.getState();
-    const slide = st.doc.slides.find((sl) => sl.id === st.currentSlideId);
-    if (!slide) return;
-    for (const el of result.objects) {
-      st.addElement(el, "template " + payload.template);
+    setApplying(payload.template);
+    setError(null);
+    try {
+      const materialized = await materializeTemplateAssets(result);
+      useEngine
+        .getState()
+        .applyTemplate(materialized, mode, `template ${payload.template} (${mode})`);
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Template could not be applied.");
+    } finally {
+      setApplying(null);
     }
-    if (result.background) {
-      st.setSlideBackground(slide.id, result.background);
-    }
-    onClose();
   }
 
   return (
@@ -232,9 +240,52 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
         ))}
       </div>
 
+      <div
+        role="group"
+        aria-label="Template application mode"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}
+      >
+        {(["replace", "append"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={mode === value}
+            onClick={() => setMode(value)}
+            style={{
+              minHeight: 32,
+              borderRadius: 7,
+              border: `1px solid ${mode === value ? "var(--accent, #6366f1)" : "var(--stroke, #e5e7eb)"}`,
+              background: mode === value ? "#eef2ff" : "transparent",
+              color: "var(--ink, #111)",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {value === "replace" ? "Replace artwork" : "Add as layer"}
+          </button>
+        ))}
+      </div>
+      <p style={{ margin: 0, color: "#64748b", fontSize: 10, lineHeight: 1.4 }}>
+        {mode === "replace"
+          ? "Replaces the current artwork in one undoable action."
+          : "Keeps the artwork and adds the template as a Free layer."}
+      </p>
+      {error ? (
+        <p role="alert" style={{ margin: 0, color: "#b42318", fontSize: 11 }}>
+          {error}
+        </p>
+      ) : null}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, overflow: "auto" }}>
         {filtered.map((t) => (
-          <TemplateThumb key={t.name} def={t} onClick={() => applyTemplate(t.sampleData)} />
+          <TemplateThumb
+            key={t.name}
+            def={t}
+            disabled={applying !== null}
+            status={applying === t.name ? "Applying…" : undefined}
+            onClick={() => void applyTemplate(t.sampleData)}
+          />
         ))}
       </div>
     </div>
@@ -244,9 +295,13 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
 function TemplateThumb({
   def,
   onClick,
+  disabled,
+  status,
 }: {
   def: (typeof TEMPLATE_DEFS)[number];
   onClick: () => void;
+  disabled?: boolean;
+  status?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -285,6 +340,7 @@ function TemplateThumb({
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -294,11 +350,12 @@ function TemplateThumb({
         borderRadius: 8,
         border: "1px solid var(--stroke, #e5e7eb)",
         background: "var(--surface-solid, #fff)",
-        cursor: "pointer",
+        cursor: disabled ? "wait" : "pointer",
+        opacity: disabled && !status ? 0.55 : 1,
       }}
     >
       <canvas ref={canvasRef} style={{ borderRadius: 4, display: "block" }} />
-      <span style={{ fontSize: 10, color: "var(--ink, #111)" }}>{def.label}</span>
+      <span style={{ fontSize: 10, color: "var(--ink, #111)" }}>{status ?? def.label}</span>
     </button>
   );
 }

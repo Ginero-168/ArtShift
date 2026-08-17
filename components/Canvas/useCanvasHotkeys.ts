@@ -78,6 +78,29 @@ export function useCanvasHotkeys(onSearchOpen: () => void) {
         st.pasteElements();
         return;
       }
+      if (meta && e.altKey && selectedIds.size >= 2) {
+        const k = e.key.toLowerCase();
+        if (k === "u") {
+          e.preventDefault();
+          st.applyBooleanOperation("union");
+          return;
+        }
+        if (k === "-" || k === "_") {
+          e.preventDefault();
+          st.applyBooleanOperation("subtract");
+          return;
+        }
+        if (k === "i") {
+          e.preventDefault();
+          st.applyBooleanOperation("intersect");
+          return;
+        }
+        if (k === "x") {
+          e.preventDefault();
+          st.applyBooleanOperation("exclude");
+          return;
+        }
+      }
       if (e.key.startsWith("Arrow") && selectedIds.size) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;

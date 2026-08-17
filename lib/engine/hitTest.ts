@@ -51,6 +51,8 @@ export function hitTestElement(world: Point, el: EngineElement): boolean {
       return hitPolyline(world, el);
     case "freedraw":
       return hitFreedraw(world, el);
+    case "path":
+      return hitVectorPath(world, el);
     case "text":
       return hitText(world, el);
   }
@@ -114,21 +116,13 @@ function expandRect(r: Rect, by: number): Rect {
 
 function hitRect(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
-  const filled =
-    el.type === "image" ||
-    el.type === "bookMockup" ||
-    (el.backgroundColor !== "transparent" && el.type !== "line" && el.type !== "arrow");
-  if (filled) {
-    return local.x >= 0 && local.x <= el.width && local.y >= 0 && local.y <= el.height;
+  if (local.x >= 0 && local.x <= el.width && local.y >= 0 && local.y <= el.height) {
+    return true;
   }
-  // Outline-only: hit within tolerance of any of 4 edges.
-  if (local.x < -HIT_TOLERANCE || local.x > el.width + HIT_TOLERANCE) return false;
-  if (local.y < -HIT_TOLERANCE || local.y > el.height + HIT_TOLERANCE) return false;
-  const nearLeft = Math.abs(local.x) <= HIT_TOLERANCE;
-  const nearRight = Math.abs(local.x - el.width) <= HIT_TOLERANCE;
-  const nearTop = Math.abs(local.y) <= HIT_TOLERANCE;
-  const nearBottom = Math.abs(local.y - el.height) <= HIT_TOLERANCE;
-  return nearLeft || nearRight || nearTop || nearBottom;
+  const tol = Math.max(1, (el.strokeWidth ?? 1) / 2);
+  return (
+    local.x >= -tol && local.x <= el.width + tol && local.y >= -tol && local.y <= el.height + tol
+  );
 }
 
 function hitText(world: Point, el: EngineElement): boolean {
@@ -150,10 +144,9 @@ function hitEllipse(world: Point, el: EngineElement): boolean {
   const nx = (local.x - cx) / rx;
   const ny = (local.y - cy) / ry;
   const d = nx * nx + ny * ny;
-  if (el.backgroundColor !== "transparent") return d <= 1;
-  // Stroke-only: distance from unit circle within tolerance scaled by avg radius.
-  const tol = HIT_TOLERANCE / Math.max(1, (rx + ry) / 2);
-  return Math.abs(Math.sqrt(d) - 1) <= tol;
+  if (d <= 1) return true;
+  const tol = Math.max(1, (el.strokeWidth ?? 1) / 2) / Math.max(1, (rx + ry) / 2);
+  return d <= (1 + tol) * (1 + tol);
 }
 
 function hitDiamond(world: Point, el: EngineElement): boolean {
@@ -162,55 +155,53 @@ function hitDiamond(world: Point, el: EngineElement): boolean {
   const cy = el.height / 2;
   const dx = Math.abs(local.x - cx) / cx;
   const dy = Math.abs(local.y - cy) / cy;
-  if (el.backgroundColor !== "transparent") return dx + dy <= 1;
-  const tol = HIT_TOLERANCE / Math.max(1, (cx + cy) / 2);
-  return Math.abs(dx + dy - 1) <= tol;
+  if (dx + dy <= 1) return true;
+  const tol = Math.max(1, (el.strokeWidth ?? 1) / 2) / Math.max(1, (cx + cy) / 2);
+  return dx + dy <= 1 + tol;
 }
 
 function hitTriangle(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
-  const filled = el.backgroundColor !== "transparent";
   const pts: [number, number][] = [
     [el.width / 2, 0],
     [el.width, el.height],
     [0, el.height],
   ];
-  if (filled) return pointInPolygon(local, pts);
-  // Stroke-only: distance to any edge.
+  if (pointInPolygon(local, pts)) return true;
+  const tol = Math.max(HIT_TOLERANCE, (el.strokeWidth ?? 1) / 2 + 4);
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i];
     const b = pts[(i + 1) % pts.length];
-    if (distanceToSegment(local, a, b) <= HIT_TOLERANCE) return true;
+    if (distanceToSegment(local, a, b) <= tol) return true;
   }
   return false;
 }
 
 function hitStar(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
-  const filled = el.backgroundColor !== "transparent";
   const cx = el.width / 2;
   const cy = el.height / 2;
   const outerR = Math.min(el.width, el.height) / 2;
   const innerR = outerR * 0.4;
-  const n = (el as import("./types").StarElement).numPoints;
+  const n = (el as import("./types").StarElement).numPoints ?? 5;
   const pts: [number, number][] = [];
   for (let i = 0; i < n * 2; i++) {
     const angle = (Math.PI * i) / n - Math.PI / 2;
     const r = i % 2 === 0 ? outerR : innerR;
     pts.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r]);
   }
-  if (filled) return pointInPolygon(local, pts);
+  if (pointInPolygon(local, pts)) return true;
+  const tol = Math.max(HIT_TOLERANCE, (el.strokeWidth ?? 1) / 2 + 4);
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i];
     const b = pts[(i + 1) % pts.length];
-    if (distanceToSegment(local, a, b) <= HIT_TOLERANCE) return true;
+    if (distanceToSegment(local, a, b) <= tol) return true;
   }
   return false;
 }
 
 function hitHexagon(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
-  const filled = el.backgroundColor !== "transparent";
   const w = el.width;
   const h = el.height;
   const cx = w / 2;
@@ -221,50 +212,49 @@ function hitHexagon(world: Point, el: EngineElement): boolean {
     const angle = (Math.PI * i) / 3 - Math.PI / 2;
     pts.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r]);
   }
-  if (filled) return pointInPolygon(local, pts);
+  if (pointInPolygon(local, pts)) return true;
+  const tol = Math.max(HIT_TOLERANCE, (el.strokeWidth ?? 1) / 2 + 4);
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i];
     const b = pts[(i + 1) % pts.length];
-    if (distanceToSegment(local, a, b) <= HIT_TOLERANCE) return true;
+    if (distanceToSegment(local, a, b) <= tol) return true;
   }
   return false;
 }
 
 function hitHeart(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
-  const filled = el.backgroundColor !== "transparent";
-  if (filled) return local.x >= 0 && local.x <= el.width && local.y >= 0 && local.y <= el.height;
-  // Simplified: treat as rect for stroke hit.
-  if (local.x < -HIT_TOLERANCE || local.x > el.width + HIT_TOLERANCE) return false;
-  if (local.y < -HIT_TOLERANCE || local.y > el.height + HIT_TOLERANCE) return false;
+  if (local.x >= 0 && local.x <= el.width && local.y >= 0 && local.y <= el.height) {
+    return true;
+  }
+  const tol = Math.max(1, (el.strokeWidth ?? 1) / 2);
   return (
-    local.x <= HIT_TOLERANCE ||
-    local.x >= el.width - HIT_TOLERANCE ||
-    local.y <= HIT_TOLERANCE ||
-    local.y >= el.height - HIT_TOLERANCE
+    local.x >= -tol && local.x <= el.width + tol && local.y >= -tol && local.y <= el.height + tol
   );
 }
 
 function hitPlus(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
-  const filled = el.backgroundColor !== "transparent";
-  const t = (el as import("./types").PlusElement).crossThickness * Math.min(el.width, el.height);
+  const t =
+    ((el as import("./types").PlusElement).crossThickness ?? 0.3) * Math.min(el.width, el.height);
   const hw = t / 2;
   const cx = el.width / 2;
   const cy = el.height / 2;
-  const inVertical = local.x >= cx - hw && local.x <= cx + hw;
-  const inHorizontal = local.y >= cy - hw && local.y <= cy + hw;
-  if (filled) return inVertical || inHorizontal;
-  const nearVertEdge =
-    Math.abs(local.x - (cx - hw)) <= HIT_TOLERANCE ||
-    Math.abs(local.x - (cx + hw)) <= HIT_TOLERANCE;
-  const nearHorizEdge =
-    Math.abs(local.y - (cy - hw)) <= HIT_TOLERANCE ||
-    Math.abs(local.y - (cy + hw)) <= HIT_TOLERANCE;
+  const inVertical =
+    local.x >= cx - hw && local.x <= cx + hw && local.y >= 0 && local.y <= el.height;
+  const inHorizontal =
+    local.y >= cy - hw && local.y <= cy + hw && local.x >= 0 && local.x <= el.width;
+  if (inVertical || inHorizontal) return true;
+  const tol = Math.max(HIT_TOLERANCE, (el.strokeWidth ?? 1) / 2 + 4);
   return (
-    (inVertical && nearHorizEdge) ||
-    (inHorizontal && nearVertEdge) ||
-    (nearVertEdge && nearHorizEdge)
+    (local.x >= cx - hw - tol &&
+      local.x <= cx + hw + tol &&
+      local.y >= -tol &&
+      local.y <= el.height + tol) ||
+    (local.y >= cy - hw - tol &&
+      local.y <= cy + hw + tol &&
+      local.x >= -tol &&
+      local.x <= el.width + tol)
   );
 }
 
@@ -285,10 +275,11 @@ function hitPolyline(world: Point, el: EngineElement): boolean {
   const local = worldToLocal(el, world);
   const points = (el as { points?: Array<[number, number]> }).points;
   if (!points || points.length < 2) return false;
+  const tol = Math.max(HIT_TOLERANCE, (el.strokeWidth ?? 1) / 2 + 4);
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i];
     const b = points[i + 1];
-    if (distanceToSegment(local, a, b) <= HIT_TOLERANCE) return true;
+    if (distanceToSegment(local, a, b) <= tol) return true;
   }
   return false;
 }
@@ -298,13 +289,34 @@ function hitFreedraw(world: Point, el: EngineElement): boolean {
   const points = (el as { points: Array<[number, number, number]> }).points;
   if (!points || points.length < 2) return false;
   // Use stroke width + tolerance as the hit envelope.
-  const env = el.strokeWidth + HIT_TOLERANCE;
+  const env = Math.max(HIT_TOLERANCE, el.strokeWidth + 6);
   for (let i = 0; i < points.length - 1; i++) {
     const a: [number, number] = [points[i][0], points[i][1]];
     const b: [number, number] = [points[i + 1][0], points[i + 1][1]];
     if (distanceToSegment(local, a, b) <= env) return true;
   }
   return false;
+}
+
+function hitVectorPath(world: Point, el: Extract<EngineElement, { type: "path" }>): boolean {
+  const local = worldToLocal(el, world);
+  const points = el.nodes.map(
+    (node) => [node.x * el.width, node.y * el.height] as [number, number],
+  );
+  const tol = Math.max(HIT_TOLERANCE, (el.strokeWidth ?? 1) / 2 + 4);
+
+  // If closed shape, allow clicking anywhere in its interior
+  if (el.closed && points.length >= 3) {
+    if (pointInPolygon(local, points)) return true;
+  }
+
+  // Edge / segment distance check
+  for (let index = 0; index < points.length - 1; index++) {
+    if (distanceToSegment(local, points[index], points[index + 1]) <= tol) return true;
+  }
+  return (
+    el.closed && points.length > 2 && distanceToSegment(local, points.at(-1)!, points[0]) <= tol
+  );
 }
 
 function distanceToSegment(p: Point, a: [number, number], b: [number, number]): number {

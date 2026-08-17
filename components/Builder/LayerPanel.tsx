@@ -1,42 +1,39 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getBuilderBlockDefinition } from "@/lib/builder/blocks";
-import { getLayerObjects } from "@/lib/engine/layers";
+import {
+  IconEye,
+  IconEyeOff,
+  IconGripVertical,
+  IconLock,
+  IconTrash,
+  IconUnlock,
+} from "@/components/icons";
+import { getElementDefaultName } from "@/lib/engine/layers";
 import { useEngine } from "@/lib/engine/store";
-import type {
-  EngineElement,
-  EngineLayer,
-  LayerMode,
-  WorkspaceStrictness,
-} from "@/lib/engine/types";
+import type { LayerMode } from "@/lib/engine/types";
+import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
-
-const STRICTNESS_COPY: Record<WorkspaceStrictness, string> = {
-  1: "No shared cells",
-  2: "Overlap by 1 cell",
-  3: "Overlap by 2 cells",
-};
 
 export default function LayerPanel() {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
   const slide = useEngine((state) =>
     state.doc.slides.find((candidate) => candidate.id === state.currentSlideId),
   );
-  const activeLayerId = useEngine((state) => state.activeLayerId);
   const selectedIds = useEngine((state) => state.selectedIds);
-  const strictness = useEngine((state) => state.doc.workspaceStrictness);
-  const setActiveLayer = useEngine((state) => state.setActiveLayer);
+
   const selectOnly = useEngine((state) => state.selectOnly);
-  const addLayer = useEngine((state) => state.addLayer);
-  const setLayerMode = useEngine((state) => state.setLayerMode);
-  const setLayerVisibility = useEngine((state) => state.setLayerVisibility);
-  const setLayerLocked = useEngine((state) => state.setLayerLocked);
-  const moveLayer = useEngine((state) => state.moveLayer);
-  const moveObjectsToLayer = useEngine((state) => state.moveObjectsToLayer);
-  const setWorkspaceStrictness = useEngine((state) => state.setWorkspaceStrictness);
+  const toggleObjectLayoutMode = useEngine((state) => state.toggleObjectLayoutMode);
+  const setElementVisibility = useEngine((state) => state.setElementVisibility);
+  const setElementLocked = useEngine((state) => state.setElementLocked);
+  const reorderElement = useEngine((state) => state.reorderElement);
+  const renameElement = useEngine((state) => state.renameElement);
+  const deleteElements = useEngine((state) => state.deleteElements);
 
   useEffect(() => {
     if (!open) return;
@@ -47,31 +44,11 @@ export default function LayerPanel() {
     return () => window.removeEventListener("keydown", close);
   }, [open]);
 
-  useEffect(() => {
-    if (!activeLayerId) return;
-    setExpanded((current) => new Set(current).add(activeLayerId));
-  }, [activeLayerId]);
-
-  const layers = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return [...(slide?.layers ?? [])]
-      .sort((a, b) => b.z - a.z)
-      .filter((layer) => {
-        if (!needle || !slide) return true;
-        const objectCopy = getLayerObjects(slide, layer.id)
-          .map((object) => {
-            const copy = getObjectCopy(object);
-            return `${copy.label} ${copy.detail}`;
-          })
-          .join(" ");
-        return `${layer.name} ${layer.mode} ${objectCopy}`.toLowerCase().includes(needle);
-      });
-  }, [query, slide]);
-
-  function createLayer(mode: LayerMode) {
-    const id = addLayer(mode);
-    setExpanded((current) => new Set(current).add(id));
-  }
+  // Sort objects in descending z-order (top-most object on canvas is at the top of the list)
+  const objectLayers = useMemo(() => {
+    const elements = slide?.elements ?? [];
+    return [...elements].filter((el) => !el.isDeleted).sort((a, b) => (b.z ?? 0) - (a.z ?? 0));
+  }, [slide]);
 
   return (
     <div className={styles.layerDock}>
@@ -83,195 +60,174 @@ export default function LayerPanel() {
               <h2>Layers</h2>
             </div>
             <div className={styles.layerDrawerHeaderActions}>
-              <span>{String(slide?.layers.length ?? 0).padStart(2, "0")}</span>
               <button type="button" onClick={() => setOpen(false)} aria-label="Close layers">
                 ×
               </button>
             </div>
           </div>
 
-          <section className={styles.strictnessPanel}>
-            <div className={styles.strictnessHeading}>
-              <span>Workspace strictness</span>
-              <strong>{STRICTNESS_COPY[strictness]}</strong>
-            </div>
-            <div className={styles.strictnessTabs} role="group" aria-label="Workspace strictness">
-              {([1, 2, 3] as const).map((level) => (
-                <button
-                  type="button"
-                  key={level}
-                  aria-pressed={strictness === level}
-                  className={strictness === level ? styles.strictnessActive : undefined}
-                  onClick={() => setWorkspaceStrictness(level)}
-                >
-                  <b>{level}</b>
-                  <small>{level === 1 ? "Exact" : `+${level - 1} cell`}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <div className={styles.addLayerRow}>
-            <button type="button" onClick={() => createLayer("block")}>
-              <span className={styles.blockLayerMark}>⬡</span> Add Block layer
-            </button>
-            <button type="button" onClick={() => createLayer("free")}>
-              <span className={styles.freeLayerMark}>◇</span> Add Free layer
-            </button>
-          </div>
-
-          <label className={styles.search}>
-            <span aria-hidden="true">⌕</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder="Search layers or objects"
-              aria-label="Search layers or objects"
-            />
-          </label>
-
           <div className={styles.layerScroll}>
-            {layers.map((layer) => {
-              if (!slide) return null;
-              const objects = getLayerObjects(slide, layer.id);
-              const isActive = layer.id === activeLayerId;
-              const isExpanded = expanded.has(layer.id);
-              const selectedOutside = [...selectedIds].some(
-                (objectId) => !layer.objectIds.includes(objectId),
-              );
+            {objectLayers.map((element) => {
+              const isSelected = selectedIds.has(element.id);
+              const mode: LayerMode = element.layoutMode ?? "block";
+              const isVisible = !element.hidden;
+              const isLocked = element.locked === true;
+              const displayName = getElementDefaultName(element);
+              const isDragging = draggedId === element.id;
+              const isDragOver = dragOverId === element.id && draggedId !== element.id;
+
               return (
                 <section
-                  className={`${styles.layerCard} ${isActive ? styles.activeLayerCard : ""} ${!layer.visible ? styles.hiddenLayer : ""}`}
-                  key={layer.id}
-                  data-mode={layer.mode}
+                  className={`${styles.objectLayerCard} ${isSelected ? styles.selectedObjectCard : ""} ${!isVisible ? styles.hiddenLayer : ""} ${isDragging ? styles.layerDragging : ""} ${isDragOver ? styles.layerDragOver : ""}`}
+                  key={element.id}
+                  data-mode={mode}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", element.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDraggedId(element.id);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (dragOverId !== element.id) setDragOverId(element.id);
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverId === element.id) setDragOverId(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const sourceId = e.dataTransfer.getData("text/plain") || draggedId;
+                    if (sourceId && sourceId !== element.id) {
+                      reorderElement(sourceId, element.id);
+                    }
+                    setDraggedId(null);
+                    setDragOverId(null);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedId(null);
+                    setDragOverId(null);
+                  }}
+                  onClick={() => selectOnly([element.id])}
                 >
-                  <div className={styles.layerCardTop}>
-                    <button
-                      type="button"
-                      className={styles.layerDisclosure}
-                      onClick={() =>
-                        setExpanded((current) => {
-                          const next = new Set(current);
-                          if (next.has(layer.id)) next.delete(layer.id);
-                          else next.add(layer.id);
-                          return next;
-                        })
-                      }
-                      aria-expanded={isExpanded}
-                      aria-label={`${isExpanded ? "Collapse" : "Expand"} ${layer.name}`}
-                    >
-                      {isExpanded ? "⌄" : "›"}
-                    </button>
-                    <button
-                      className={styles.layerNameButton}
-                      type="button"
-                      aria-pressed={isActive}
-                      onClick={() => setActiveLayer(layer.id)}
-                    >
-                      <span className={styles.layerTypeGlyph}>
-                        {layer.mode === "block" ? "⬡" : "◇"}
-                      </span>
-                      <span>
-                        <strong>{layer.name}</strong>
-                        <small>
-                          {objects.length} {objects.length === 1 ? "object" : "objects"}
-                        </small>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.layerIconButton}
-                      onClick={() => setLayerVisibility(layer.id, !layer.visible)}
-                      title={layer.visible ? "Hide layer" : "Show layer"}
-                      aria-label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
-                    >
-                      {layer.visible ? "◉" : "○"}
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.layerIconButton}
-                      onClick={() => setLayerLocked(layer.id, !layer.locked)}
-                      title={layer.locked ? "Unlock layer" : "Lock layer"}
-                      aria-label={layer.locked ? `Unlock ${layer.name}` : `Lock ${layer.name}`}
-                    >
-                      {layer.locked ? "◆" : "◇"}
-                    </button>
-                  </div>
-
-                  <div className={styles.layerCardControls}>
+                  <div className={styles.objectLayerRow}>
                     <div
-                      className={styles.layerModeTabs}
-                      role="group"
-                      aria-label={`${layer.name} type`}
+                      className={styles.layerDragHandle}
+                      title="Drag to reorder layer"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <LayerModeButton
-                        mode="block"
-                        layer={layer}
-                        onChange={() => setLayerMode(layer.id, "block")}
-                      />
-                      <LayerModeButton
-                        mode="free"
-                        layer={layer}
-                        onChange={() => setLayerMode(layer.id, "free")}
-                      />
+                      <IconGripVertical size={13} />
                     </div>
-                    <div className={styles.layerOrderButtons}>
+
+                    <span className={styles.objectIconBox} data-mode={mode}>
+                      <BlockIcon
+                        kind={
+                          (element.builderKind ??
+                            element.type) as import("@/lib/builder/blocks").BuilderBlockKind
+                        }
+                        size={14}
+                      />
+                    </span>
+
+                    <div className={styles.objectNameContainer}>
+                      {editingElementId === element.id ? (
+                        <input
+                          // biome-ignore lint/a11y/noAutofocus: user initiated inline rename
+                          autoFocus
+                          className={styles.layerNameInput}
+                          value={editingName}
+                          onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => {
+                            e.stopPropagation();
+                            if (e.key === "Enter") {
+                              renameElement(element.id, editingName);
+                              setEditingElementId(null);
+                            } else if (e.key === "Escape") {
+                              setEditingElementId(null);
+                            }
+                          }}
+                          onBlur={() => {
+                            renameElement(element.id, editingName);
+                            setEditingElementId(null);
+                          }}
+                        />
+                      ) : (
+                        <span
+                          className={styles.objectNameText}
+                          title="Double-click to rename"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingElementId(element.id);
+                            setEditingName(displayName);
+                          }}
+                        >
+                          {displayName}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className={styles.objectLayerActions}>
                       <button
                         type="button"
-                        title="Move layer backward"
-                        onClick={() => moveLayer(layer.id, "backward")}
+                        className={styles.modeBadgeButton}
+                        data-mode={mode}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleObjectLayoutMode(element.id);
+                        }}
+                        title={`Click to switch to ${mode === "block" ? "Free" : "Block"} mode`}
                       >
-                        ↓
+                        {mode === "block" ? "⬡ BLOCK" : "◇ FREE"}
                       </button>
+
                       <button
                         type="button"
-                        title="Move layer forward"
-                        onClick={() => moveLayer(layer.id, "forward")}
+                        className={`${styles.layerIconButton} ${!isVisible ? styles.layerIconHidden : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setElementVisibility(element.id, !isVisible);
+                        }}
+                        title={isVisible ? "Hide object" : "Show object"}
+                        aria-label={isVisible ? `Hide ${displayName}` : `Show ${displayName}`}
                       >
-                        ↑
+                        {isVisible ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`${styles.layerIconButton} ${isLocked ? styles.layerIconLocked : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setElementLocked(element.id, !isLocked);
+                        }}
+                        title={isLocked ? "Unlock object" : "Lock object"}
+                        aria-label={isLocked ? `Unlock ${displayName}` : `Lock ${displayName}`}
+                      >
+                        {isLocked ? <IconLock size={12} /> : <IconUnlock size={12} />}
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`${styles.layerIconButton} ${styles.layerIconDelete}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteElements([element.id]);
+                        }}
+                        title="Delete object"
+                        aria-label={`Delete ${displayName}`}
+                      >
+                        <IconTrash size={12} />
                       </button>
                     </div>
                   </div>
-
-                  {isExpanded ? (
-                    <div className={styles.layerObjects}>
-                      {selectedIds.size > 0 && selectedOutside ? (
-                        <button
-                          className={styles.moveSelectionButton}
-                          type="button"
-                          onClick={() => moveObjectsToLayer([...selectedIds], layer.id)}
-                        >
-                          Move {selectedIds.size} selected here
-                        </button>
-                      ) : null}
-                      {objects.map((object) => {
-                        const copy = getObjectCopy(object);
-                        return (
-                          <button
-                            type="button"
-                            className={`${styles.objectRow} ${selectedIds.has(object.id) ? styles.selectedObjectRow : ""}`}
-                            key={object.id}
-                            onClick={() => selectOnly([object.id])}
-                          >
-                            <span>{copy.glyph}</span>
-                            <span>
-                              <strong>{copy.label}</strong>
-                              <small>{copy.detail}</small>
-                            </span>
-                          </button>
-                        );
-                      })}
-                      {!objects.length ? (
-                        <p className={styles.layerGroupEmpty}>
-                          Select this Layer, then add Blocks.
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </section>
               );
             })}
-            {!layers.length ? <p className={styles.empty}>No matching layers.</p> : null}
+            {!objectLayers.length ? (
+              <p className={styles.empty}>No matching layers or objects.</p>
+            ) : null}
           </div>
         </aside>
       ) : null}
@@ -289,50 +245,7 @@ export default function LayerPanel() {
           <i />
         </span>
         <strong>Layers</strong>
-        <b>{slide?.layers.length ?? 0}</b>
       </button>
     </div>
   );
-}
-
-function LayerModeButton({
-  mode,
-  layer,
-  onChange,
-}: {
-  mode: LayerMode;
-  layer: EngineLayer;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={layer.mode === mode}
-      className={layer.mode === mode ? styles.layerModeActive : undefined}
-      onClick={onChange}
-    >
-      {mode === "block" ? "Block" : "Free"}
-    </button>
-  );
-}
-
-function getObjectCopy(element: EngineElement) {
-  const definition = element.builderKind
-    ? getBuilderBlockDefinition(element.builderKind)
-    : undefined;
-  const typeLabel = element.type === "bookMockup" ? "3D book" : element.type;
-  const textDetail = element.type === "text" ? element.text.trim().replace(/\s+/g, " ") : "";
-  return {
-    glyph: definition?.glyph ?? objectGlyph(element),
-    label: definition?.label ?? typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1),
-    detail: textDetail ? textDetail.slice(0, 44) : (definition?.description ?? typeLabel),
-  };
-}
-
-function objectGlyph(element: EngineElement) {
-  if (element.type === "text") return "T";
-  if (element.type === "image") return "▧";
-  if (element.type === "bookMockup") return "◩";
-  if (element.type === "frame") return "□";
-  return "◇";
 }

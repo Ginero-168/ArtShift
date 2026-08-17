@@ -15,8 +15,12 @@
  */
 
 import { create } from "zustand";
+import type { TemplateResult } from "../templates";
+import { type AlignMode, alignElements, type DistributeAxis, distributeElements } from "./align";
 import { recomputeArrowBindings } from "./binding";
-import { blockRectForPlacement } from "./hexLayout";
+import { createImage } from "./factory";
+import { convertShapeToFrame, isConvertibleShape } from "./frameMask";
+import { blockRectForPlacement, getHexGridDimensions } from "./hexLayout";
 import {
   createHistory,
   type HistoryState,
@@ -24,6 +28,7 @@ import {
   undo as historyUndo,
   pushHistory,
 } from "./history";
+import { getCached } from "./imageCache";
 import {
   addObjectToLayer,
   commitBlockObject,
@@ -32,13 +37,21 @@ import {
   getInteractiveElements,
   getLayerForObject,
   isObjectLocked,
+  moveElementZ,
   moveObjectsToLayer as moveObjectsToLayerModel,
   normalizeDocumentLayers,
   reflowBlockObjects,
-  remapBlockLayersToArtwork,
+  reorderElementsInSlide,
   setBlockPlacement,
+  setElementLocked,
+  setElementVisibility,
+  setObjectLayoutMode,
+  toggleObjectLayoutMode,
 } from "./layers";
 import { isMediaElement, normalizeMediaPatch } from "./mediaLayout";
+import { resizeArtworkSlide } from "./resizeArtwork";
+import { applyTemplateToSlide, type TemplateApplyMode } from "./templateApplication";
+import { measureTextElementHeight } from "./textLayout";
 import {
   type BlockPlacement,
   ENGINE_SCHEMA_VERSION,
@@ -46,14 +59,23 @@ import {
   type EngineElement,
   type EngineLayer,
   type EngineSlide,
+  type FrameElement,
+  type FrameMaskShape,
   type LayerMode,
   SLIDE_H,
   SLIDE_W,
+  type TextElement,
   type WorkspaceStrictness,
 } from "./types";
+import {
+  applyBooleanOperation as applyBooleanOp,
+  type BooleanOperation,
+  isShapeElement,
+} from "./vectorBoolean";
 
 export type Tool =
   | "select"
+  | "directSelect"
   | "hand"
   | "rect"
   | "ellipse"
@@ -66,10 +88,21 @@ export type Tool =
   | "line"
   | "arrow"
   | "freedraw"
+  | "pen"
   | "text"
   | "image"
   | "eraser"
   | "frame";
+
+export type LayerFilter = "all" | "block" | "free";
+export type LineSubtype =
+  | "solid"
+  | "arrow"
+  | "doubleArrow"
+  | "dashed"
+  | "curvedArrow"
+  | "freedraw"
+  | "pen";
 
 export type EngineState = {
   doc: EngineDoc;
@@ -77,13 +110,19 @@ export type EngineState = {
   activeLayerId: string;
   selectedIds: Set<string>;
   tool: Tool;
+  lineSubtype: LineSubtype;
   history: HistoryState;
+  /** Whether the hex block grid overlay is visible on the canvas. */
+  showHexGrid: boolean;
+  /** Viewport layer filter: show all, block-only, or free-only elements. */
+  layerFilter: LayerFilter;
 
   // ——— selectors (call as plain functions; they rely on getState) ———
   currentSlide: () => EngineSlide | undefined;
 
   // ——— mutators ———
   setTool: (t: Tool) => void;
+  setLineSubtype: (subtype: LineSubtype) => void;
   setCurrentSlide: (id: string) => void;
   setActiveLayer: (id: string) => void;
   selectOnly: (ids: string[]) => void;
@@ -91,16 +130,27 @@ export type EngineState = {
   clearSelection: () => void;
 
   addElement: (el: EngineElement, label?: string) => void;
+  addElements: (elements: EngineElement[], label?: string) => void;
+  applyTemplate: (result: TemplateResult, mode?: TemplateApplyMode, label?: string) => void;
   /** Snap an Object in a Block layer and move collisions according to Strictness. */
   commitBlockLayout: (id: string) => void;
   updateBlockPlacement: (id: string, patch: Partial<BlockPlacement>) => void;
   addLayer: (mode: LayerMode) => string;
+  renameLayer: (id: string, name: string) => void;
   setLayerMode: (id: string, mode: LayerMode) => void;
   setLayerVisibility: (id: string, visible: boolean) => void;
   setLayerLocked: (id: string, locked: boolean) => void;
   moveLayer: (id: string, direction: "forward" | "backward") => void;
   moveObjectsToLayer: (ids: string[], layerId: string) => void;
-  setWorkspaceStrictness: (strictness: WorkspaceStrictness) => void;
+  toggleObjectLayoutMode: (elementId: string) => void;
+  setObjectLayoutMode: (elementId: string, mode: LayerMode) => void;
+  setElementVisibility: (elementId: string, visible: boolean) => void;
+  setElementLocked: (elementId: string, locked: boolean) => void;
+  moveElementZ: (elementId: string, direction: "forward" | "backward" | "front" | "back") => void;
+  reorderElement: (sourceId: string, targetId: string) => void;
+  renameElement: (elementId: string, name: string) => void;
+  setWorkspaceStrictness: (strictness: WorkspaceStrictness, customValue?: number) => void;
+  setStrictnessValue: (level: 2 | 3, value: number) => void;
   updateElements: (
     patches: Array<{ id: string; patch: Partial<EngineElement> }>,
     label?: string,
@@ -115,12 +165,27 @@ export type EngineState = {
   bringForward: (ids: string[]) => void;
   sendBackward: (ids: string[]) => void;
   selectAll: () => void;
+  alignSelectedElements: (mode: AlignMode, relativeTo?: "selection" | "slide") => void;
+  distributeSelectedElements: (axis: DistributeAxis) => void;
+  applyBooleanOperation: (op: BooleanOperation) => void;
+  setFrameImage: (frameId: string, imageFileId: string | undefined) => void;
+  setFrameShape: (frameId: string, shape: FrameMaskShape) => void;
+  detachFrameImage: (frameId: string) => void;
+  convertShapeToFrame: (elementId: string, imageFileId?: string) => FrameElement | undefined;
 
   addSlide: () => string;
   deleteSlide: (id: string) => void;
   renameSlide: (id: string, name: string) => void;
   setSlideBackground: (id: string, color: string) => void;
   setSlideDimensions: (id: string, width: number, height: number, resizeContents?: boolean) => void;
+  createArtworkVariant: (
+    sourceId: string,
+    width: number,
+    height: number,
+    name?: string,
+    resizeContents?: boolean,
+  ) => string;
+  syncElementsToVariants: (ids: string[]) => void;
   reorderSlides: (fromIndex: number, toIndex: number) => void;
 
   groupElements: (ids: string[]) => void;
@@ -128,7 +193,7 @@ export type EngineState = {
   flipHorizontal: (ids: string[]) => void;
   flipVertical: (ids: string[]) => void;
 
-  /** In-memory clipboard of elements (deep clones without ids). */
+  /** In-memory clipboard of elements with source ids for relationship remapping. */
   clipboard: EngineElement[] | null;
   copyElements: (ids: string[]) => void;
   cutElements: (ids: string[]) => void;
@@ -139,12 +204,16 @@ export type EngineState = {
   /** Replace the entire document (e.g. on file open). */
   loadDoc: (doc: EngineDoc) => void;
   setGridSnap: (size: number | null) => void;
+  setShowHexGrid: (show: boolean) => void;
+  setLayerFilter: (filter: LayerFilter) => void;
   croppingImageId: string | null;
   setCroppingImageId: (id: string | null) => void;
 };
 
 function newSlide(name: string): EngineSlide {
-  const layer = createEngineLayer("block", { name: "Block layer 1" });
+  // Absolute placement is the least surprising default for a precision editor.
+  // Block layout remains available as an explicit Layer-level behavior.
+  const layer = createEngineLayer("free", { name: "Free layer 1" });
   return {
     id: crypto.randomUUID(),
     name,
@@ -166,6 +235,8 @@ function emptyDoc(): EngineDoc {
     slides: [slide],
     snapGrid: null,
     workspaceStrictness: 1,
+    strictnessLevel: 1,
+    strictnessValues: { 2: 1, 3: 2 },
     updatedAt: Date.now(),
     schemaVersion: ENGINE_SCHEMA_VERSION,
   };
@@ -187,6 +258,9 @@ export const useEngine = create<EngineState>((set, get) => {
     tool: "select" as Tool,
     clipboard: null as EngineElement[] | null,
     history: createHistory(),
+    showHexGrid: true,
+    layerFilter: "all" as LayerFilter,
+    lineSubtype: "solid" as LineSubtype,
 
     currentSlide: () => {
       const s = get();
@@ -194,6 +268,7 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     setTool: (tool) => set({ tool }),
+    setLineSubtype: (lineSubtype) => set({ lineSubtype }),
     setCurrentSlide: (id) =>
       set((state) => {
         const slide = state.doc.slides.find((candidate) => candidate.id === id);
@@ -253,6 +328,49 @@ export const useEngine = create<EngineState>((set, get) => {
       }));
     },
 
+    addElements: (elements, label = "add elements") => {
+      if (!elements.length) return;
+      const s = get();
+      pushHistory(s.history, s.doc, label);
+      set((cur) => ({
+        ...mapCurrentSlide(cur, (sl) => {
+          let next = sl;
+          const layerId = sl.layers.some((layer) => layer.id === cur.activeLayerId)
+            ? cur.activeLayerId
+            : sl.layers[0]?.id;
+          if (!layerId) return sl;
+          for (const el of elements) {
+            const added = { ...el, z: nextZ(next) } as EngineElement;
+            next = addObjectToLayer(next, added, layerId, cur.doc.workspaceStrictness);
+          }
+          return recomputeArrowBindings(next);
+        }),
+        selectedIds: new Set(elements.map((e) => e.id)),
+      }));
+    },
+
+    applyTemplate: (result, mode = "replace", label = "apply template") => {
+      const s = get();
+      pushHistory(s.history, s.doc, label);
+      set((cur) => {
+        const current = cur.doc.slides.find((slide) => slide.id === cur.currentSlideId);
+        if (!current) return cur;
+        const outcome = applyTemplateToSlide(current, result, mode);
+        return {
+          doc: {
+            ...cur.doc,
+            slides: cur.doc.slides.map((slide) =>
+              slide.id === current.id ? outcome.slide : slide,
+            ),
+            updatedAt: Date.now(),
+          },
+          activeLayerId: outcome.layerId,
+          selectedIds: new Set(outcome.objectIds),
+          croppingImageId: null,
+        };
+      });
+    },
+
     commitBlockLayout: (id) => {
       set((cur) =>
         mapCurrentSlide(cur, (sl) =>
@@ -291,6 +409,23 @@ export const useEngine = create<EngineState>((set, get) => {
         selectedIds: new Set(),
       }));
       return layer.id;
+    },
+
+    renameLayer: (id, name) => {
+      const s = get();
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const layer = s.currentSlide()?.layers.find((candidate) => candidate.id === id);
+      if (!layer || layer.name === trimmed) return;
+      pushHistory(s.history, s.doc, "rename layer");
+      set((cur) =>
+        mapCurrentSlide(cur, (slide) => ({
+          ...slide,
+          layers: slide.layers.map((candidate) =>
+            candidate.id === id ? { ...candidate, name: trimmed } : candidate,
+          ),
+        })),
+      );
     },
 
     setLayerMode: (id, mode) => {
@@ -384,15 +519,173 @@ export const useEngine = create<EngineState>((set, get) => {
       }));
     },
 
-    setWorkspaceStrictness: (strictness) => {
+    toggleObjectLayoutMode: (elementId) => {
       const s = get();
-      if (s.doc.workspaceStrictness === strictness) return;
+      const slide = s.currentSlide();
+      if (!slide) return;
+      const element = slide.elements.find((e) => e.id === elementId);
+      if (!element) return;
+      const currentMode = element.layoutMode ?? "block";
+      const nextMode = currentMode === "block" ? "free" : "block";
+      pushHistory(s.history, s.doc, `change to ${nextMode}`);
+      set((cur) =>
+        mapCurrentSlide(cur, (sl) =>
+          recomputeArrowBindings(
+            toggleObjectLayoutMode(sl, elementId, cur.doc.workspaceStrictness),
+          ),
+        ),
+      );
+    },
+
+    setObjectLayoutMode: (elementId, mode) => {
+      const s = get();
+      const slide = s.currentSlide();
+      if (!slide) return;
+      const element = slide.elements.find((e) => e.id === elementId);
+      if (!element || element.layoutMode === mode) return;
+      pushHistory(s.history, s.doc, `change to ${mode}`);
+      set((cur) =>
+        mapCurrentSlide(cur, (sl) =>
+          recomputeArrowBindings(
+            setObjectLayoutMode(sl, elementId, mode, cur.doc.workspaceStrictness),
+          ),
+        ),
+      );
+    },
+
+    setElementVisibility: (elementId, visible) => {
+      const s = get();
+      pushHistory(s.history, s.doc, visible ? "show element" : "hide element");
+      set((cur) => ({
+        ...mapCurrentSlide(cur, (sl) => setElementVisibility(sl, elementId, visible)),
+        selectedIds: visible
+          ? cur.selectedIds
+          : new Set([...cur.selectedIds].filter((id) => id !== elementId)),
+        croppingImageId: cur.croppingImageId === elementId && !visible ? null : cur.croppingImageId,
+      }));
+    },
+
+    setElementLocked: (elementId, locked) => {
+      const s = get();
+      pushHistory(s.history, s.doc, locked ? "lock element" : "unlock element");
+      set((cur) => ({
+        ...mapCurrentSlide(cur, (sl) => setElementLocked(sl, elementId, locked)),
+        selectedIds: locked
+          ? new Set([...cur.selectedIds].filter((id) => id !== elementId))
+          : cur.selectedIds,
+      }));
+    },
+
+    moveElementZ: (elementId, direction) => {
+      const s = get();
+      pushHistory(s.history, s.doc, `reorder ${direction}`);
+      set((cur) => mapCurrentSlide(cur, (sl) => moveElementZ(sl, elementId, direction)));
+    },
+
+    reorderElement: (sourceId, targetId) => {
+      const s = get();
+      if (sourceId === targetId) return;
+      pushHistory(s.history, s.doc, "reorder layers");
+      set((cur) => mapCurrentSlide(cur, (sl) => reorderElementsInSlide(sl, sourceId, targetId)));
+    },
+
+    renameElement: (elementId, name) => {
+      const s = get();
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const element = s.currentSlide()?.elements.find((e) => e.id === elementId);
+      if (!element || element.name === trimmed) return;
+      pushHistory(s.history, s.doc, "rename element");
+      set((cur) =>
+        mapCurrentSlide(cur, (sl) => ({
+          ...sl,
+          elements: sl.elements.map((e) =>
+            e.id === elementId ? { ...e, name: trimmed, version: e.version + 1 } : e,
+          ),
+          layers: sl.layers.map((l) =>
+            l.id === elementId || l.objectIds.includes(elementId) ? { ...l, name: trimmed } : l,
+          ),
+        })),
+      );
+    },
+
+    setWorkspaceStrictness: (levelOrStrictness, customValue) => {
+      const s = get();
+      const doc = s.doc;
+      const currentValues = doc.strictnessValues ?? { 2: 1, 3: 2 };
+      let level: 1 | 2 | 3 = 1;
+      let effectiveStrictness = 1;
+      const nextValues = { ...currentValues };
+
+      if (levelOrStrictness === 1) {
+        level = 1;
+        effectiveStrictness = 1;
+      } else if (levelOrStrictness === 2) {
+        level = 2;
+        const val =
+          customValue !== undefined
+            ? Math.max(1, Math.min(99, customValue))
+            : (currentValues[2] ?? 1);
+        nextValues[2] = val;
+        effectiveStrictness = val + 1;
+      } else if (levelOrStrictness === 3) {
+        level = 3;
+        const val =
+          customValue !== undefined
+            ? Math.max(1, Math.min(99, customValue))
+            : (currentValues[3] ?? 2);
+        nextValues[3] = val;
+        effectiveStrictness = val + 1;
+      } else {
+        effectiveStrictness = Math.max(1, levelOrStrictness);
+        level = effectiveStrictness === 1 ? 1 : effectiveStrictness === 2 ? 2 : 3;
+      }
+
+      if (
+        doc.workspaceStrictness === effectiveStrictness &&
+        doc.strictnessLevel === level &&
+        doc.strictnessValues?.[2] === nextValues[2] &&
+        doc.strictnessValues?.[3] === nextValues[3]
+      ) {
+        return;
+      }
+
       pushHistory(s.history, s.doc, "workspace strictness");
       set((cur) => ({
         doc: {
           ...cur.doc,
-          workspaceStrictness: strictness,
-          slides: cur.doc.slides.map((slide) => reflowBlockObjects(slide, strictness)),
+          workspaceStrictness: effectiveStrictness,
+          strictnessLevel: level,
+          strictnessValues: nextValues,
+          slides: cur.doc.slides.map((slide) =>
+            recomputeArrowBindings(reflowBlockObjects(slide, effectiveStrictness)),
+          ),
+          updatedAt: Date.now(),
+        },
+      }));
+    },
+
+    setStrictnessValue: (level, value) => {
+      const s = get();
+      const doc = s.doc;
+      const currentValues = doc.strictnessValues ?? { 2: 1, 3: 2 };
+      const safeVal = Math.max(1, Math.min(99, Math.round(value) || 1));
+      const nextValues = { ...currentValues, [level]: safeVal };
+      const activeLevel =
+        doc.strictnessLevel ??
+        (doc.workspaceStrictness === 1 ? 1 : doc.workspaceStrictness === 2 ? 2 : 3);
+      const effectiveStrictness =
+        activeLevel === 1 ? 1 : (nextValues[activeLevel as 2 | 3] ?? 1) + 1;
+
+      pushHistory(s.history, s.doc, "workspace strictness");
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          workspaceStrictness: effectiveStrictness,
+          strictnessValues: nextValues,
+          slides: cur.doc.slides.map((slide) =>
+            recomputeArrowBindings(reflowBlockObjects(slide, effectiveStrictness)),
+          ),
           updatedAt: Date.now(),
         },
       }));
@@ -401,7 +694,9 @@ export const useEngine = create<EngineState>((set, get) => {
     updateElements: (patches, label = "update element") => {
       const s = get();
       pushHistory(s.history, s.doc, label);
-      set((cur) => mapDoc(cur, (sl) => applyElementPatches(sl, patches)));
+      set((cur) =>
+        mapDoc(cur, (sl) => applyElementPatches(sl, patches, cur.doc.workspaceStrictness)),
+      );
     },
 
     checkpointInteraction: (label) => {
@@ -410,7 +705,9 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     previewElements: (patches) => {
-      set((cur) => mapDoc(cur, (sl) => applyElementPatches(sl, patches)));
+      set((cur) =>
+        mapDoc(cur, (sl) => applyElementPatches(sl, patches, cur.doc.workspaceStrictness)),
+      );
     },
 
     deleteElements: (ids) => {
@@ -539,6 +836,243 @@ export const useEngine = create<EngineState>((set, get) => {
       if (!slide) return;
       const ids = getInteractiveElements(slide).map((el) => el.id);
       set({ selectedIds: new Set(ids) });
+    },
+
+    alignSelectedElements: (mode, relativeTo) => {
+      const s = get();
+      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+      if (!slide) return;
+      const selected = slide.elements.filter(
+        (el) => s.selectedIds.has(el.id) && !el.isDeleted && !isObjectLocked(slide, el.id),
+      );
+      if (!selected.length) return;
+      const patches = alignElements(
+        selected,
+        mode,
+        { width: slide.width, height: slide.height },
+        relativeTo,
+      );
+      if (patches.length) s.updateElements(patches);
+    },
+
+    distributeSelectedElements: (axis) => {
+      const s = get();
+      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+      if (!slide) return;
+      const selected = slide.elements.filter(
+        (el) => s.selectedIds.has(el.id) && !el.isDeleted && !isObjectLocked(slide, el.id),
+      );
+      if (selected.length < 3) return;
+      const patches = distributeElements(selected, axis);
+      if (patches.length) s.updateElements(patches);
+    },
+
+    applyBooleanOperation: (op) => {
+      const s = get();
+      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+      if (!slide) return;
+      let selected = slide.elements
+        .filter(
+          (el) =>
+            s.selectedIds.has(el.id) &&
+            !el.isDeleted &&
+            !isObjectLocked(slide, el.id) &&
+            isShapeElement(el),
+        )
+        .sort((a, b) => a.z - b.z);
+
+      // If directly selected shapes < 2, check if selection is a group with 2+ shapes
+      if (selected.length < 2) {
+        const groupIds = new Set(
+          slide.elements
+            .filter((el) => s.selectedIds.has(el.id))
+            .flatMap((el) => el.groupIds ?? []),
+        );
+        if (groupIds.size > 0) {
+          selected = slide.elements
+            .filter(
+              (el) =>
+                !el.isDeleted &&
+                !isObjectLocked(slide, el.id) &&
+                isShapeElement(el) &&
+                el.groupIds?.some((g) => groupIds.has(g)),
+            )
+            .sort((a, b) => a.z - b.z);
+        }
+      }
+
+      if (selected.length < 2) return;
+
+      const outcome = applyBooleanOp(selected, op);
+      if (!outcome) return;
+
+      const resultElements = Array.isArray(outcome) ? outcome : [outcome];
+      if (resultElements.length === 0) return;
+
+      pushHistory(s.history, s.doc, `pathfinder ${op}`);
+
+      const removedIds = new Set(selected.map((el) => el.id));
+      const nextElements = slide.elements.filter((el) => !removedIds.has(el.id));
+
+      for (const res of resultElements) {
+        res.z = nextZ({ ...slide, elements: nextElements });
+        nextElements.push(res);
+      }
+
+      const nextLayers = slide.layers.map((layer) => ({
+        ...layer,
+        objectIds: layer.objectIds
+          .filter((id) => !removedIds.has(id))
+          .concat(layer.id === s.activeLayerId ? resultElements.map((r) => r.id) : []),
+      }));
+
+      const updatedSlide = {
+        ...slide,
+        elements: nextElements,
+        layers: nextLayers,
+      };
+
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          slides: cur.doc.slides.map((sl) => (sl.id === slide.id ? updatedSlide : sl)),
+          updatedAt: Date.now(),
+        },
+        selectedIds: new Set(resultElements.map((r) => r.id)),
+      }));
+    },
+
+    setFrameImage: (frameId, imageFileId) => {
+      const s = get();
+      s.updateElements(
+        [
+          {
+            id: frameId,
+            patch: {
+              imageFileId,
+              cropOffsetX: 0,
+              cropOffsetY: 0,
+              cropZoom: 1,
+            },
+          },
+        ],
+        "set frame image",
+      );
+    },
+
+    setFrameShape: (frameId, shape) => {
+      const s = get();
+      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+      const frame = slide?.elements.find((el) => el.id === frameId);
+      s.updateElements(
+        [
+          {
+            id: frameId,
+            patch: {
+              shape,
+              cornerRadius:
+                shape === "roundedRect"
+                  ? frame && "cornerRadius" in frame && frame.cornerRadius
+                    ? frame.cornerRadius
+                    : 24
+                  : undefined,
+            },
+          },
+        ],
+        "set frame shape",
+      );
+    },
+
+    detachFrameImage: (frameId) => {
+      const s = get();
+      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+      if (!slide) return;
+      const frame = slide.elements.find((el) => el.id === frameId);
+      if (frame?.type !== "frame" || !frame.imageFileId) return;
+
+      const cached = getCached(frame.imageFileId);
+      const naturalW = cached?.width && cached.width > 0 ? cached.width : frame.width;
+      const naturalH = cached?.height && cached.height > 0 ? cached.height : frame.height;
+
+      // Preserve natural image aspect ratio based on frame size
+      const aspect = naturalW / naturalH;
+      let finalW = frame.width;
+      let finalH = frame.height;
+      if (aspect >= 1) {
+        finalW = Math.max(frame.width, frame.height * aspect);
+        finalH = finalW / aspect;
+      } else {
+        finalH = Math.max(frame.height, frame.width / aspect);
+        finalW = finalH * aspect;
+      }
+
+      const newImage = createImage({
+        fileId: frame.imageFileId,
+        x: Math.round(frame.x + (frame.width - finalW) / 2 + 20),
+        y: Math.round(frame.y + (frame.height - finalH) / 2 + 20),
+        width: Math.round(finalW),
+        height: Math.round(finalH),
+        naturalWidth: naturalW,
+        naturalHeight: naturalH,
+      });
+
+      pushHistory(s.history, s.doc, "detach frame image");
+
+      const targetLayer = getLayerForObject(slide, frameId) ?? slide.layers[0];
+      const nextSlide = targetLayer
+        ? addObjectToLayer(slide, newImage, targetLayer.id, s.doc.workspaceStrictness)
+        : { ...slide, elements: [...slide.elements, newImage] };
+
+      const updatedSlide = {
+        ...nextSlide,
+        elements: nextSlide.elements.map((el) =>
+          el.id === frameId
+            ? {
+                ...el,
+                imageFileId: undefined,
+                cropOffsetX: 0,
+                cropOffsetY: 0,
+                cropZoom: 1,
+                cropRotation: 0,
+              }
+            : el,
+        ),
+      };
+
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          slides: cur.doc.slides.map((sl) => (sl.id === slide.id ? updatedSlide : sl)),
+          updatedAt: Date.now(),
+        },
+        selectedIds: new Set([newImage.id]),
+      }));
+    },
+
+    convertShapeToFrame: (elementId, imageFileId) => {
+      const s = get();
+      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+      if (!slide) return undefined;
+      const target = slide.elements.find((el) => el.id === elementId && !el.isDeleted);
+      if (!target || !isConvertibleShape(target)) return undefined;
+
+      const frame = convertShapeToFrame(target, imageFileId);
+
+      pushHistory(s.history, s.doc, "convert shape to frame");
+
+      const nextElements = slide.elements.map((el) => (el.id === elementId ? frame : el));
+      const nextSlide = { ...slide, elements: nextElements };
+
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          slides: cur.doc.slides.map((sl) => (sl.id === slide.id ? nextSlide : sl)),
+          updatedAt: Date.now(),
+        },
+        selectedIds: new Set([frame.id]),
+      }));
+
+      return frame;
     },
 
     addSlide: () => {
@@ -677,10 +1211,6 @@ export const useEngine = create<EngineState>((set, get) => {
       const copies = slide.elements
         .filter((el) => ids.includes(el.id) && !el.isDeleted)
         .map((el) => structuredClone(el));
-      // Strip ids so paste generates new ones.
-      for (const c of copies) {
-        (c as EngineElement).id = "";
-      }
       set({ clipboard: copies });
     },
 
@@ -695,7 +1225,7 @@ export const useEngine = create<EngineState>((set, get) => {
       const clip = s.clipboard;
       if (!clip?.length) return;
       pushHistory(s.history, s.doc, "paste");
-      const pasted: EngineElement[] = [];
+      const pasted = cloneElementsForPaste(clip);
       set((cur) =>
         mapCurrentSlide(cur, (sl) => {
           let next = sl;
@@ -703,16 +1233,9 @@ export const useEngine = create<EngineState>((set, get) => {
             ? cur.activeLayerId
             : sl.layers[0]?.id;
           if (!layerId) return sl;
-          for (const proto of clip) {
-            const el = {
-              ...proto,
-              id: crypto.randomUUID(),
-              x: proto.x + 20,
-              y: proto.y + 20,
-            } as EngineElement;
+          for (const el of pasted) {
             el.z = nextZ(next);
             next = addObjectToLayer(next, el, layerId, cur.doc.workspaceStrictness);
-            pasted.push(el);
           }
           return recomputeArrowBindings(next);
         }),
@@ -747,54 +1270,82 @@ export const useEngine = create<EngineState>((set, get) => {
     setSlideDimensions: (id, width, height, resizeContents = true) => {
       const s = get();
       pushHistory(s.history, s.doc, "slide dimensions");
-      const safeWidth = Math.max(64, Math.min(10000, Math.round(width)));
-      const safeHeight = Math.max(64, Math.min(10000, Math.round(height)));
       set((cur) => ({
         doc: {
           ...cur.doc,
-          slides: cur.doc.slides.map((sl) => {
-            if (sl.id !== id) return sl;
-            if (!resizeContents) {
-              return reflowBlockObjects(
-                remapBlockLayersToArtwork(sl, safeWidth, safeHeight),
-                cur.doc.workspaceStrictness,
-              );
-            }
-            const scaleX = safeWidth / Math.max(1, sl.width);
-            const scaleY = safeHeight / Math.max(1, sl.height);
-            const typeScale = Math.sqrt(scaleX * scaleY);
-            const scaled = sl.elements.map((element) => {
-              const media = isMediaElement(element);
-              const nextWidth = element.width * (media ? typeScale : scaleX);
-              const nextHeight = element.height * (media ? typeScale : scaleY);
-              const centerX = (element.x + element.width / 2) * scaleX;
-              const centerY = (element.y + element.height / 2) * scaleY;
-              const next = {
-                ...element,
-                x: media ? centerX - nextWidth / 2 : element.x * scaleX,
-                y: media ? centerY - nextHeight / 2 : element.y * scaleY,
-                width: nextWidth,
-                height: nextHeight,
-                strokeWidth: element.strokeWidth * typeScale,
-                version: element.version + 1,
-              } as EngineElement;
-              if (next.type === "text") next.fontSize *= typeScale;
-              if (next.shadow) {
-                next.shadow = {
-                  ...next.shadow,
-                  blur: next.shadow.blur * typeScale,
-                  offsetX: next.shadow.offsetX * scaleX,
-                  offsetY: next.shadow.offsetY * scaleY,
-                };
-              }
-              return next;
-            });
-            const resized = remapBlockLayersToArtwork(
-              { ...sl, elements: scaled },
-              safeWidth,
-              safeHeight,
-            );
-            return reflowBlockObjects(resized, cur.doc.workspaceStrictness);
+          slides: cur.doc.slides.map((slide) =>
+            slide.id === id
+              ? resizeArtworkSlide(
+                  slide,
+                  width,
+                  height,
+                  cur.doc.workspaceStrictness,
+                  resizeContents,
+                )
+              : slide,
+          ),
+          updatedAt: Date.now(),
+        },
+      }));
+    },
+
+    createArtworkVariant: (sourceId, width, height, name, resizeContents = true) => {
+      const s = get();
+      const source = s.doc.slides.find((slide) => slide.id === sourceId);
+      if (!source) return "";
+      const id = crypto.randomUUID();
+      const rootId = source.variantOf ?? source.id;
+      const draft: EngineSlide = {
+        ...structuredClone(source),
+        id,
+        name: name ?? `${source.name} · ${Math.round(width)}×${Math.round(height)}`,
+        variantOf: rootId,
+        variantLabel: `${Math.round(width)}×${Math.round(height)}`,
+      };
+      const variant = resizeArtworkSlide(
+        draft,
+        width,
+        height,
+        s.doc.workspaceStrictness,
+        resizeContents,
+      );
+      pushHistory(s.history, s.doc, "create artwork variant");
+      set((cur) => ({
+        doc: { ...cur.doc, slides: [...cur.doc.slides, variant], updatedAt: Date.now() },
+        currentSlideId: id,
+        activeLayerId: variant.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
+        selectedIds: new Set(),
+      }));
+      return id;
+    },
+
+    syncElementsToVariants: (ids) => {
+      if (!ids.length) return;
+      const s = get();
+      const sourceSlide = s.currentSlide();
+      if (!sourceSlide) return;
+      const rootId = sourceSlide.variantOf ?? sourceSlide.id;
+      const sources = new Map(
+        sourceSlide.elements
+          .filter((element) => ids.includes(element.id))
+          .map((element) => [element.id, element]),
+      );
+      if (!sources.size) return;
+      pushHistory(s.history, s.doc, "sync artwork variants");
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          slides: cur.doc.slides.map((slide) => {
+            const slideRoot = slide.variantOf ?? slide.id;
+            if (slide.id === sourceSlide.id || slideRoot !== rootId) return slide;
+            return {
+              ...slide,
+              elements: slide.elements.map((element) => {
+                const source = sources.get(element.id);
+                if (!source || source.type !== element.type) return element;
+                return syncVariantElementContent(element, source);
+              }),
+            };
           }),
           updatedAt: Date.now(),
         },
@@ -812,6 +1363,9 @@ export const useEngine = create<EngineState>((set, get) => {
         },
       }));
     },
+
+    setShowHexGrid: (show) => set({ showHexGrid: show }),
+    setLayerFilter: (filter) => set({ layerFilter: filter }),
 
     reorderSlides: (fromIndex, toIndex) => {
       const s = get();
@@ -907,6 +1461,71 @@ function nextLayerZ(layers: EngineLayer[]): number {
   return layers.reduce((max, layer) => Math.max(max, layer.z), 0) + 1;
 }
 
+export function cloneElementsForDuplicate(
+  source: EngineElement[],
+  offsetX = 0,
+  offsetY = 0,
+): EngineElement[] {
+  const idMap = new Map(source.map((element) => [element.id, crypto.randomUUID()]));
+  const groupMap = new Map<string, string>();
+  for (const element of source) {
+    for (const groupId of element.groupIds) {
+      if (!groupMap.has(groupId)) groupMap.set(groupId, crypto.randomUUID());
+    }
+  }
+
+  return source.map((sourceElement) => {
+    const element = structuredClone(sourceElement);
+    element.id = idMap.get(sourceElement.id)!;
+    element.x += offsetX;
+    element.y += offsetY;
+    element.groupIds = element.groupIds.map((id) => groupMap.get(id) ?? id);
+
+    if (element.type === "arrow") {
+      element.startBinding = remapBinding(element.startBinding, idMap);
+      element.endBinding = remapBinding(element.endBinding, idMap);
+    } else if (element.type === "text" && element.containerId) {
+      element.containerId = idMap.get(element.containerId) ?? null;
+    } else if (element.type === "frame") {
+      element.childIds = element.childIds.flatMap((id) => {
+        const remapped = idMap.get(id);
+        return remapped ? [remapped] : [];
+      });
+    }
+
+    return element;
+  });
+}
+
+function cloneElementsForPaste(source: EngineElement[]): EngineElement[] {
+  return cloneElementsForDuplicate(source, 20, 20);
+}
+
+function remapBinding<T extends { elementId: string }>(
+  binding: T | null,
+  idMap: Map<string, string>,
+): T | null {
+  if (!binding) return null;
+  const elementId = idMap.get(binding.elementId);
+  return elementId ? { ...binding, elementId } : null;
+}
+
+function syncVariantElementContent(target: EngineElement, source: EngineElement): EngineElement {
+  const synced = structuredClone(source);
+  return {
+    ...synced,
+    id: target.id,
+    x: target.x,
+    y: target.y,
+    width: target.width,
+    height: target.height,
+    angle: target.angle,
+    z: target.z,
+    isDeleted: target.isDeleted,
+    version: target.version + 1,
+  } as EngineElement;
+}
+
 function activeLayerAfterHistory(doc: EngineDoc, slideId: string, preferredId: string): string {
   const slide = doc.slides.find((candidate) => candidate.id === slideId);
   if (!slide) return "";
@@ -925,11 +1544,23 @@ function mapCurrentSlide(
 function applyElementPatches(
   slide: EngineSlide,
   patches: Array<{ id: string; patch: Partial<EngineElement> }>,
+  strictness: WorkspaceStrictness,
 ): EngineSlide {
   const normalizedPatches = patches.map((item) => {
     const element = slide.elements.find((candidate) => candidate.id === item.id);
-    if (!element || !isMediaElement(element)) return item;
+    if (!element) return item;
     const layer = getLayerForObject(slide, element.id);
+    if (element.type === "text" && layer?.mode !== "block" && !element.containerId) {
+      const next = { ...element, ...item.patch } as TextElement;
+      return {
+        ...item,
+        patch: {
+          ...item.patch,
+          height: Math.max(next.height, measureTextElementHeight(next)),
+        },
+      };
+    }
+    if (!isMediaElement(element)) return item;
     const placement = layer?.mode === "block" ? layer.placements[element.id] : undefined;
     const container = placement
       ? blockRectForPlacement(placement, slide.width, slide.height)
@@ -963,7 +1594,8 @@ function applyElementPatches(
     }
   }
   const allPatches = [...normalizedPatches, ...additionalPatches];
-  return recomputeArrowBindings({
+  const patchedIds = new Set(allPatches.map((item) => item.id));
+  const patchedSlide: EngineSlide = {
     ...slide,
     elements: slide.elements.map((element) => {
       const item = allPatches.find((candidate) => candidate.id === element.id);
@@ -971,5 +1603,49 @@ function applyElementPatches(
         ? ({ ...element, ...item.patch, version: element.version + 1 } as EngineElement)
         : element;
     }),
+  };
+  return recomputeArrowBindings(growBlockTextPlacements(patchedSlide, patchedIds, strictness));
+}
+
+function growBlockTextPlacements(
+  slide: EngineSlide,
+  patchedIds: Set<string>,
+  strictness: WorkspaceStrictness,
+): EngineSlide {
+  const grid = getHexGridDimensions(slide.width, slide.height);
+  const byId = new Map(slide.elements.map((element) => [element.id, element]));
+  let changed = false;
+  const layers = slide.layers.map((layer) => {
+    if (layer.mode !== "block") return layer;
+    const placements = { ...layer.placements };
+    let layerChanged = false;
+    for (const id of layer.objectIds) {
+      if (!patchedIds.has(id)) continue;
+      const element = byId.get(id);
+      const placement = placements[id];
+      if (element?.type !== "text" || !placement) continue;
+      const rect = blockRectForPlacement(placement, slide.width, slide.height);
+      const requiredHeight = measureTextElementHeight({
+        ...element,
+        width: rect.width,
+        height: rect.height,
+      });
+      let rowSpan = placement.rowSpan;
+      const maxRowSpan = Math.max(1, grid.rows - placement.row);
+      while (
+        rowSpan < maxRowSpan &&
+        blockRectForPlacement({ ...placement, rowSpan }, slide.width, slide.height).height <
+          requiredHeight
+      ) {
+        rowSpan += 1;
+      }
+      if (rowSpan !== placement.rowSpan) {
+        placements[id] = { ...placement, rowSpan };
+        layerChanged = true;
+        changed = true;
+      }
+    }
+    return layerChanged ? { ...layer, placements } : layer;
   });
+  return changed ? reflowBlockObjects({ ...slide, layers }, strictness) : slide;
 }

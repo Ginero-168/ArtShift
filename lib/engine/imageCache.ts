@@ -23,6 +23,9 @@ export type CachedImage = {
 const cache = new Map<string, CachedImage>();
 const imageMap = new Map<string, HTMLImageElement>();
 const subscribers = new Set<() => void>();
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 80_000_000;
+const SUPPORTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export function getImageCache(): Map<string, HTMLImageElement> {
   return imageMap;
@@ -42,6 +45,9 @@ export async function loadDataURL(dataURL: string): Promise<CachedImage> {
   const existing = cache.get(fileId);
   if (existing) return existing;
   const img = await decode(dataURL);
+  if (img.naturalWidth * img.naturalHeight > MAX_IMAGE_PIXELS) {
+    throw new Error("Image is too large. Maximum decoded size is 80 megapixels.");
+  }
   const entry: CachedImage = {
     fileId,
     dataURL,
@@ -60,6 +66,7 @@ export async function loadDataURL(dataURL: string): Promise<CachedImage> {
 function decode(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    if (/^https?:/i.test(src)) img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = (err) => reject(err);
     img.src = src;
@@ -85,10 +92,25 @@ async function hashString(s: string): Promise<string> {
 }
 
 export function fileToDataURL(file: File): Promise<string> {
+  if (!isSupportedImageFile(file)) {
+    return Promise.reject(new Error("Use PNG, JPEG or WebP images."));
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return Promise.reject(new Error("Image is too large. Maximum file size is 50 MB."));
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+export function isSupportedImageFile(file: Pick<File, "name" | "type" | "size">): boolean {
+  const extension = file.name.toLowerCase().split(".").at(-1);
+  return (
+    file.size <= MAX_IMAGE_BYTES &&
+    SUPPORTED_IMAGE_TYPES.has(file.type.toLowerCase()) &&
+    (extension === "png" || extension === "jpg" || extension === "jpeg" || extension === "webp")
+  );
 }

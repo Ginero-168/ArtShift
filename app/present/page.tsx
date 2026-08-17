@@ -7,12 +7,17 @@ import { renderSlide } from "@/lib/renderer/canvas";
 
 export default function PresentPage() {
   const [doc, setDoc] = useState<EngineDoc | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    loadEngine().then((d) => setDoc(d));
+    loadEngine().then((result) => {
+      if (result.status === "loaded" || result.status === "recovered") setDoc(result.doc);
+      else if (result.status === "corrupt") setLoadError(result.message);
+      else setLoadError("No Artwork is available to present.");
+    });
   }, []);
 
   const slide = doc?.slides[index];
@@ -80,7 +85,7 @@ export default function PresentPage() {
           color: "#fff",
         }}
       >
-        Loading...
+        {loadError ?? "Loading…"}
       </div>
     );
   }

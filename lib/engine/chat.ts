@@ -16,6 +16,7 @@ import { runTemplate } from "@/lib/templates";
 import type { Mutation } from "@/lib/types";
 import { loadDataURL } from "./imageCache";
 import { useEngine } from "./store";
+import { materializeTemplateAssets } from "./templateAssets";
 import type { EngineElement, TextElement } from "./types";
 
 export type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -326,12 +327,8 @@ async function applyEngineMutation(m: Mutation): Promise<boolean> {
       if (!i) return false;
       const result = runTemplate(i as ApplyTemplateInput);
       if (!result) return false;
-      for (const el of result.objects) {
-        st.addElement(el as EngineElement, "ai template");
-      }
-      if (result.background) {
-        st.setSlideBackground(slide.id, result.background);
-      }
+      const materialized = await materializeTemplateAssets(result);
+      st.applyTemplate(materialized, "replace", "ai template");
       return true;
     }
     default:

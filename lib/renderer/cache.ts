@@ -7,18 +7,23 @@
 
 import type { EngineElement } from "../engine/types";
 
-const _elementCache = new Map<string, HTMLCanvasElement>();
+export type CachedElement = {
+  canvas: HTMLCanvasElement;
+  pad: number;
+};
+
+const _elementCache = new Map<string, CachedElement>();
 const MAX_CACHE_SIZE = 300;
 
 function getCacheKey(el: EngineElement): string {
   return `${el.id}:${el.version}`;
 }
 
-export function getCachedElement(el: EngineElement): HTMLCanvasElement | undefined {
+export function getCachedElement(el: EngineElement): CachedElement | undefined {
   return _elementCache.get(getCacheKey(el));
 }
 
-export function setCachedElement(el: EngineElement, canvas: HTMLCanvasElement) {
+export function setCachedElement(el: EngineElement, cached: CachedElement) {
   if (_elementCache.size > MAX_CACHE_SIZE) {
     const entries = Array.from(_elementCache.entries());
     // Remove oldest half.
@@ -26,7 +31,7 @@ export function setCachedElement(el: EngineElement, canvas: HTMLCanvasElement) {
       _elementCache.delete(entries[i][0]);
     }
   }
-  _elementCache.set(getCacheKey(el), canvas);
+  _elementCache.set(getCacheKey(el), cached);
 }
 
 export function clearElementCache() {

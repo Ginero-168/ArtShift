@@ -48,6 +48,10 @@ export type CanvasRootHandle = {
   resetView: () => void;
   /** Current view (scale + offset); changes are signalled via onViewChange too. */
   getView: () => ViewTransform;
+  /** Programmatically set the view (scale + offsets). */
+  setView: (v: ViewTransform) => void;
+  /** Programmatically set zoom scale centered on the viewport. */
+  setZoom: (scale: number) => void;
 };
 
 type Props = {
@@ -62,6 +66,8 @@ type Props = {
   selectedIds?: ReadonlySet<string>;
   /** The selected Layer controls whether Hex placement UI is visible. */
   activeLayerId?: string;
+  /** When false, the hex block grid overlay is hidden. */
+  showHexGrid?: boolean;
   className?: string;
   /** When true, any pointer drag pans the viewport (hand tool mode). */
   handActive?: boolean;
@@ -71,6 +77,7 @@ type Props = {
   onPointerDownWorld?: (p: WorldPoint, e: React.PointerEvent) => void;
   onPointerMoveWorld?: (p: WorldPoint, e: React.PointerEvent) => void;
   onPointerUpWorld?: (p: WorldPoint, e: React.PointerEvent) => void;
+  onDoubleClickWorld?: (p: WorldPoint, e: React.MouseEvent) => void;
   /** Notified whenever scale/translate changes; parent uses this to place overlays. */
   onViewChange?: (view: ViewTransform) => void;
   /** Children rendered on top of the canvas, inside the same container (used for overlays). */
@@ -90,12 +97,14 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     snapGrid,
     selectedIds,
     activeLayerId,
+    showHexGrid = true,
     className,
     handActive,
     toolCursor,
     onPointerDownWorld,
     onPointerMoveWorld,
     onPointerUpWorld,
+    onDoubleClickWorld,
     onViewChange,
     children,
   },
@@ -192,7 +201,11 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     ctx.shadowColor = "transparent";
 
     renderSlide(slide, { ctx, images }, slideW, slideH, {
-      afterBackground: () => drawHexPlacementUI(ctx, slide, activeLayerId, selectedIds, view.scale),
+      showFrames: true,
+      afterBackground: () =>
+        showHexGrid
+          ? drawHexPlacementUI(ctx, slide, activeLayerId, selectedIds, view.scale)
+          : undefined,
     });
     if (draftElement) renderElement(draftElement, { ctx, images });
 
@@ -264,7 +277,27 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     selectedIds,
     snapGrid,
     activeLayerId,
+    showHexGrid,
   ]);
+
+  const setZoom = useCallback(
+    (targetScale: number) => {
+      if (!size.w || !size.h) return;
+      const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, targetScale));
+      setView((v) => {
+        const cx = size.w / 2;
+        const cy = size.h / 2;
+        const wx = (cx - v.tx) / v.scale;
+        const wy = (cy - v.ty) / v.scale;
+        return {
+          scale: nextScale,
+          tx: cx - wx * nextScale,
+          ty: cy - wy * nextScale,
+        };
+      });
+    },
+    [size.w, size.h],
+  );
 
   // ——— wheel zoom + scroll pan ———
   const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -342,8 +375,15 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
   useImperativeHandle(
     ref,
-    () => ({ clientToWorld, worldToScreen, resetView, getView: () => view }),
-    [clientToWorld, worldToScreen, resetView, view],
+    () => ({
+      clientToWorld,
+      worldToScreen,
+      resetView,
+      getView: () => view,
+      setView,
+      setZoom,
+    }),
+    [clientToWorld, worldToScreen, resetView, view, setZoom],
   );
 
   // ——— pointer routing: pan vs forward to parent ———
@@ -474,6 +514,11 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      onDoubleClick={(e) => {
+        if (!containerRef.current) return;
+        const p = clientToWorld(e.clientX, e.clientY);
+        onDoubleClickWorld?.(p, e);
+      }}
     >
       <canvas ref={canvasRef} style={{ position: "absolute", inset: 0 }} />
       {children}
@@ -484,22 +529,23 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 function drawHexPlacementUI(
   ctx: CanvasRenderingContext2D,
   slide: EngineSlide,
-  activeLayerId: string | undefined,
+  _activeLayerId: string | undefined,
   selectedIds: ReadonlySet<string> | undefined,
   scale: number,
 ) {
-  const layer = slide.layers.find((candidate) => candidate.id === activeLayerId);
-  if (layer?.mode !== "block") return;
+  const blockLayers = slide.layers.filter((candidate) => candidate.mode === "block");
   const grid = getHexMetrics(slide.width, slide.height);
 
   const stateByCell = new Map<string, "occupied" | "selected">();
-  for (const objectId of layer.objectIds) {
-    const placement = layer.placements[objectId];
-    if (!placement) continue;
-    const state = selectedIds?.has(objectId) ? "selected" : "occupied";
-    for (const cell of cellsForPlacement(placement, grid)) {
-      const key = `${cell.col}:${cell.row}`;
-      if (state === "selected" || !stateByCell.has(key)) stateByCell.set(key, state);
+  for (const layer of blockLayers) {
+    for (const objectId of layer.objectIds) {
+      const placement = layer.placements[objectId];
+      if (!placement) continue;
+      const state = selectedIds?.has(objectId) ? "selected" : "occupied";
+      for (const cell of cellsForPlacement(placement, grid)) {
+        const key = `${cell.col}:${cell.row}`;
+        if (state === "selected" || !stateByCell.has(key)) stateByCell.set(key, state);
+      }
     }
   }
 
@@ -509,14 +555,14 @@ function drawHexPlacementUI(
   for (const cell of cells) {
     const state = stateByCell.get(`${cell.col}:${cell.row}`);
     if (state === "selected") {
-      ctx.fillStyle = "rgba(24, 89, 255, 0.075)";
-      ctx.strokeStyle = "rgba(24, 89, 255, 0.34)";
+      ctx.fillStyle = "rgba(24, 89, 255, 0.085)";
+      ctx.strokeStyle = "rgba(24, 89, 255, 0.38)";
     } else if (state === "occupied") {
-      ctx.fillStyle = "rgba(24, 89, 255, 0.035)";
-      ctx.strokeStyle = "rgba(24, 89, 255, 0.17)";
+      ctx.fillStyle = "rgba(24, 89, 255, 0.04)";
+      ctx.strokeStyle = "rgba(24, 89, 255, 0.2)";
     } else {
       ctx.fillStyle = "rgba(51, 79, 134, 0.012)";
-      ctx.strokeStyle = "rgba(51, 79, 134, 0.1)";
+      ctx.strokeStyle = "rgba(51, 79, 134, 0.12)";
     }
     ctx.beginPath();
     cell.points.forEach((point, index) => {

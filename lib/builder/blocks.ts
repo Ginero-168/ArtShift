@@ -1,7 +1,15 @@
 import {
+  createBookmarkRibbon,
+  createPriceTagBadge,
+  createRibbonBanner,
+  createScallopedSeal,
+  createStarburstBadge,
+} from "../engine/badgeGenerators";
+import {
   createBookMockup,
   createDiamond,
   createEllipse,
+  createFrame,
   createHeart,
   createHexagon,
   createImage,
@@ -10,6 +18,8 @@ import {
   createStar,
   createText,
   createTriangle,
+  createVectorPath,
+  createVectorPathFromWorldNodes,
 } from "../engine/factory";
 import {
   blockRectForPlacement,
@@ -19,12 +29,20 @@ import {
 } from "../engine/hexLayout";
 import { fitMediaElementToRect, isMediaElement } from "../engine/mediaLayout";
 import type { BlockPlacement, EngineElement, TextElement } from "../engine/types";
+import { convertElementToVectorPath } from "../engine/vectorPath";
 import { createTextFromPreset, DEFAULT_TEXT_PRESET_ID, type TextPresetId } from "./textPresets";
 
 export const BUILDER_BLOCK_MIME = "application/x-artshift-block";
 
 export type BuilderBlockKind =
   | "text"
+  | "frameCircle"
+  | "framePolaroid"
+  | "frameArch"
+  | "frameHeart"
+  | "frameStar"
+  | "frameRounded"
+  | "frameHexagon"
   | "shapeRect"
   | "shapeEllipse"
   | "shapeDiamond"
@@ -33,6 +51,13 @@ export type BuilderBlockKind =
   | "shapeHexagon"
   | "shapeHeart"
   | "shapePlus"
+  | "shapeLine"
+  | "shapeArrow"
+  | "shapeDoubleArrow"
+  | "shapeDashedLine"
+  | "shapeCurvedArrow"
+  | "shapeFreedraw"
+  | "shapePen"
   // Legacy kinds remain readable so existing documents do not break.
   | "heading"
   | "subtitle"
@@ -44,6 +69,12 @@ export type BuilderBlockKind =
   | "salePrice"
   | "cta"
   | "badge"
+  | "badgeStarburst"
+  | "badgeFlash"
+  | "badgeRibbon"
+  | "badgeSeal"
+  | "badgePriceTag"
+  | "badgeBookmark"
   | "coverImage"
   | "bookMockup"
   | "supportingImage"
@@ -57,7 +88,7 @@ export type BuilderBlockDefinition = {
   kind: BuilderBlockKind;
   label: string;
   description: string;
-  category: "Content" | "Commerce" | "Media" | "Shapes" | "Structure";
+  category: "Content" | "Commerce" | "Media" | "Frames" | "Shapes" | "Lines" | "Structure";
   glyph: string;
   colSpan: number;
   rowSpan: number;
@@ -90,7 +121,7 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
   {
     kind: "badge",
     label: "Promo badge",
-    description: "New · bestseller · sale",
+    description: "Pill sticker · bestseller",
     category: "Commerce",
     glyph: "★",
     colSpan: 3,
@@ -98,22 +129,77 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     minColSpan: 2,
   },
   {
-    kind: "coverImage",
-    label: "Cover image",
-    description: "Flat book cover",
-    category: "Media",
-    glyph: "▯",
+    kind: "badgeStarburst",
+    label: "Sale Starburst",
+    description: "16-pt starburst sale badge",
+    category: "Commerce",
+    glyph: "💥",
     colSpan: 4,
-    rowSpan: 6,
+    rowSpan: 4,
     minColSpan: 2,
-    minRowSpan: 3,
+    minRowSpan: 2,
+  },
+  {
+    kind: "badgeFlash",
+    label: "Flash Burst",
+    description: "24-pt flash sale burst",
+    category: "Commerce",
+    glyph: "⚡",
+    colSpan: 4,
+    rowSpan: 4,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "badgeRibbon",
+    label: "Ribbon Banner",
+    description: "Folded bestseller banner",
+    category: "Commerce",
+    glyph: "🎗️",
+    colSpan: 6,
+    rowSpan: 2,
+    minColSpan: 3,
+    minRowSpan: 1,
+  },
+  {
+    kind: "badgeSeal",
+    label: "Award Seal",
+    description: "Scalloped quality seal",
+    category: "Commerce",
+    glyph: "💮",
+    colSpan: 4,
+    rowSpan: 4,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "badgePriceTag",
+    label: "Price Tag",
+    description: "Chamfered price tag badge",
+    category: "Commerce",
+    glyph: "🏷️",
+    colSpan: 4,
+    rowSpan: 3,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "badgeBookmark",
+    label: "Bookmark Ribbon",
+    description: "Hanging ribbon tag",
+    category: "Commerce",
+    glyph: "🔖",
+    colSpan: 3,
+    rowSpan: 4,
+    minColSpan: 2,
+    minRowSpan: 2,
   },
   {
     kind: "bookMockup",
     label: "3D book",
     description: "Editable camera and light",
-    category: "Media",
-    glyph: "◩",
+    category: "Content",
+    glyph: "📘",
     colSpan: 6,
     rowSpan: 7,
     minColSpan: 3,
@@ -123,11 +209,88 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     kind: "supportingImage",
     label: "Photo",
     description: "Supporting visual",
-    category: "Media",
-    glyph: "▧",
+    category: "Content",
+    glyph: "🖼️",
     colSpan: 6,
     rowSpan: 4,
     minColSpan: 3,
+    minRowSpan: 2,
+  },
+  {
+    kind: "frameCircle",
+    label: "Circle Frame",
+    description: "Mask photo into circle",
+    category: "Frames",
+    glyph: "◎",
+    colSpan: 4,
+    rowSpan: 4,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "framePolaroid",
+    label: "Polaroid Frame",
+    description: "Classic photo card frame",
+    category: "Frames",
+    glyph: "🖼",
+    colSpan: 4,
+    rowSpan: 5,
+    minColSpan: 2,
+    minRowSpan: 3,
+  },
+  {
+    kind: "frameArch",
+    label: "Arch Frame",
+    description: "Curved architectural arch",
+    category: "Frames",
+    glyph: "∩",
+    colSpan: 4,
+    rowSpan: 5,
+    minColSpan: 2,
+    minRowSpan: 3,
+  },
+  {
+    kind: "frameHeart",
+    label: "Heart Frame",
+    description: "Romantic heart mask",
+    category: "Frames",
+    glyph: "♥",
+    colSpan: 4,
+    rowSpan: 4,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "frameStar",
+    label: "Star Frame",
+    description: "5-point star mask",
+    category: "Frames",
+    glyph: "★",
+    colSpan: 4,
+    rowSpan: 4,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "frameRounded",
+    label: "Rounded Frame",
+    description: "Soft corner photo mask",
+    category: "Frames",
+    glyph: "▢",
+    colSpan: 5,
+    rowSpan: 4,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "frameHexagon",
+    label: "Hexagon Frame",
+    description: "Geometric hexagon mask",
+    category: "Frames",
+    glyph: "⬡",
+    colSpan: 4,
+    rowSpan: 4,
+    minColSpan: 2,
     minRowSpan: 2,
   },
   {
@@ -219,6 +382,83 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     minRowSpan: 1,
   },
   {
+    kind: "shapePen",
+    label: "Pen (Vector)",
+    description: "Draw smooth Bezier curves & precision vector paths",
+    category: "Lines",
+    glyph: "✒",
+    colSpan: 4,
+    rowSpan: 2,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "shapeFreedraw",
+    label: "Pen (Freehand)",
+    description: "Draw organic freehand strokes with natural pen pressure",
+    category: "Lines",
+    glyph: "✎",
+    colSpan: 4,
+    rowSpan: 2,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
+    kind: "shapeLine",
+    label: "Line",
+    description: "Straight separator or connector",
+    category: "Lines",
+    glyph: "―",
+    colSpan: 4,
+    rowSpan: 1,
+    minColSpan: 2,
+    minRowSpan: 1,
+  },
+  {
+    kind: "shapeArrow",
+    label: "Arrow",
+    description: "Directional pointer arrow",
+    category: "Lines",
+    glyph: "→",
+    colSpan: 4,
+    rowSpan: 1,
+    minColSpan: 2,
+    minRowSpan: 1,
+  },
+  {
+    kind: "shapeDoubleArrow",
+    label: "Double Arrow",
+    description: "Two-way indicator arrow",
+    category: "Lines",
+    glyph: "↔",
+    colSpan: 4,
+    rowSpan: 1,
+    minColSpan: 2,
+    minRowSpan: 1,
+  },
+  {
+    kind: "shapeDashedLine",
+    label: "Dashed Line",
+    description: "Dotted / dashed guide line",
+    category: "Lines",
+    glyph: "╌",
+    colSpan: 4,
+    rowSpan: 1,
+    minColSpan: 2,
+    minRowSpan: 1,
+  },
+  {
+    kind: "shapeCurvedArrow",
+    label: "Curved Arrow",
+    description: "Curved pointer arrow",
+    category: "Lines",
+    glyph: "⤹",
+    colSpan: 4,
+    rowSpan: 2,
+    minColSpan: 2,
+    minRowSpan: 2,
+  },
+  {
     kind: "panel",
     label: "Color panel",
     description: "Layout surface",
@@ -262,6 +502,17 @@ const LEGACY_BLOCKS: BuilderBlockDefinition[] = [
   legacyTextBlock("price", "Price", "฿", 3, 2, 2, undefined, "Commerce"),
   legacyTextBlock("salePrice", "Sale price", "%", 4, 2, 3, undefined, "Commerce"),
   legacyTextBlock("indexNumber", "Index number", "01", 3, 3, 2, 2, "Structure"),
+  {
+    kind: "coverImage",
+    label: "Cover image",
+    description: "Flat book cover",
+    category: "Content",
+    glyph: "📖",
+    colSpan: 4,
+    rowSpan: 6,
+    minColSpan: 2,
+    minRowSpan: 3,
+  },
   {
     kind: "accentShape",
     label: "Accent shape",
@@ -377,6 +628,70 @@ function makeElement(kind: BuilderBlockKind, rect: BentoRect): EngineElement {
         padding: 12,
         cornerRadius: 999,
       });
+    case "badgeStarburst": {
+      const size = Math.min(rect.width, rect.height);
+      return createStarburstBadge({
+        x: rect.x + (rect.width - size) / 2,
+        y: rect.y + (rect.height - size) / 2,
+        width: size,
+        height: size,
+        points: 16,
+        strokeColor: "#991b1b",
+        backgroundColor: "#dc2626",
+      });
+    }
+    case "badgeFlash": {
+      const size = Math.min(rect.width, rect.height);
+      return createStarburstBadge({
+        x: rect.x + (rect.width - size) / 2,
+        y: rect.y + (rect.height - size) / 2,
+        width: size,
+        height: size,
+        points: 24,
+        innerRadiusRatio: 0.85,
+        strokeColor: "#b45309",
+        backgroundColor: "#f59e0b",
+      });
+    }
+    case "badgeRibbon":
+      return createRibbonBanner({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        strokeColor: "#92400e",
+        backgroundColor: "#fbbf24",
+      });
+    case "badgeSeal": {
+      const size = Math.min(rect.width, rect.height);
+      return createScallopedSeal({
+        x: rect.x + (rect.width - size) / 2,
+        y: rect.y + (rect.height - size) / 2,
+        width: size,
+        height: size,
+        lobes: 16,
+        strokeColor: "#065f46",
+        backgroundColor: "#059669",
+      });
+    }
+    case "badgePriceTag":
+      return createPriceTagBadge({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        strokeColor: "#1e293b",
+        backgroundColor: "#2563eb",
+      });
+    case "badgeBookmark":
+      return createBookmarkRibbon({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        strokeColor: "#4c1d95",
+        backgroundColor: "#7c3aed",
+      });
     case "coverImage":
     case "supportingImage": {
       const image = createImage({
@@ -398,6 +713,151 @@ function makeElement(kind: BuilderBlockKind, rect: BentoRect): EngineElement {
         yaw: 24,
         pitch: -8,
       });
+    case "frameCircle": {
+      const size = Math.min(rect.width, rect.height);
+      const r = {
+        x: rect.x + (rect.width - size) / 2,
+        y: rect.y + (rect.height - size) / 2,
+        width: size,
+        height: size,
+      };
+      return createFrame({ ...r, shape: "circle", name: "Circle Frame" });
+    }
+    case "framePolaroid":
+      return createFrame({ ...rect, shape: "polaroid", name: "Polaroid Frame" });
+    case "shapeLine": {
+      const path = createVectorPath(
+        [
+          { x: rect.x, y: rect.y + rect.height / 2 },
+          { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
+        ],
+        false,
+      );
+      return { ...path, name: "Line", strokeWidth: 2, strokeColor: "#1e293b" };
+    }
+    case "shapeArrow": {
+      const path = createVectorPath(
+        [
+          { x: rect.x, y: rect.y + rect.height / 2 },
+          { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
+        ],
+        false,
+      );
+      return {
+        ...path,
+        name: "Arrow",
+        endArrowhead: "arrow",
+        strokeWidth: 2,
+        strokeColor: "#1e293b",
+      };
+    }
+    case "shapeDoubleArrow": {
+      const path = createVectorPath(
+        [
+          { x: rect.x, y: rect.y + rect.height / 2 },
+          { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
+        ],
+        false,
+      );
+      return {
+        ...path,
+        name: "Double Arrow",
+        startArrowhead: "arrow",
+        endArrowhead: "arrow",
+        strokeWidth: 2,
+        strokeColor: "#1e293b",
+      };
+    }
+    case "shapeDashedLine": {
+      const path = createVectorPath(
+        [
+          { x: rect.x, y: rect.y + rect.height / 2 },
+          { x: rect.x + rect.width, y: rect.y + rect.height / 2 },
+        ],
+        false,
+      );
+      return {
+        ...path,
+        name: "Dashed Line",
+        strokeStyle: "dashed",
+        strokeWidth: 2,
+        strokeColor: "#64748b",
+      };
+    }
+    case "shapeCurvedArrow": {
+      const path = createVectorPathFromWorldNodes(
+        [
+          { x: rect.x, y: rect.y + rect.height, out: [rect.width * 0.4, -rect.height * 0.6] },
+          { x: rect.x + rect.width, y: rect.y, in: [-rect.width * 0.4, rect.height * 0.1] },
+        ],
+        false,
+      );
+      return {
+        ...path,
+        name: "Curved Arrow",
+        endArrowhead: "arrow",
+        strokeWidth: 2,
+        strokeColor: "#1e293b",
+      };
+    }
+    case "shapeFreedraw": {
+      const pts: Array<{ x: number; y: number }> = [];
+      const steps = 8;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const px = rect.x + t * rect.width;
+        const py = rect.y + rect.height / 2 + Math.sin(t * Math.PI * 2) * (rect.height * 0.3);
+        pts.push({ x: px, y: py });
+      }
+      const el = createVectorPath(pts, false);
+      return { ...el, name: "Freehand", strokeWidth: 2.5, strokeColor: "#4f46e5" };
+    }
+    case "shapePen": {
+      const p1 = { x: rect.x, y: rect.y + rect.height * 0.8 };
+      const p2 = { x: rect.x + rect.width * 0.5, y: rect.y + rect.height * 0.2 };
+      const p3 = { x: rect.x + rect.width, y: rect.y + rect.height * 0.8 };
+      const el = createVectorPath([p1, p2, p3], false);
+      return { ...el, name: "Pen Path", strokeWidth: 2.5, strokeColor: "#7c3aed" };
+    }
+    case "frameArch":
+      return createFrame({ ...rect, shape: "arch", name: "Arch Frame" });
+    case "frameHeart": {
+      const size = Math.min(rect.width, rect.height);
+      const r = {
+        x: rect.x + (rect.width - size) / 2,
+        y: rect.y + (rect.height - size) / 2,
+        width: size,
+        height: size,
+      };
+      return createFrame({ ...r, shape: "heart", name: "Heart Frame" });
+    }
+    case "frameStar": {
+      const size = Math.min(rect.width, rect.height);
+      const r = {
+        x: rect.x + (rect.width - size) / 2,
+        y: rect.y + (rect.height - size) / 2,
+        width: size,
+        height: size,
+      };
+      return createFrame({ ...r, shape: "star", name: "Star Frame" });
+    }
+    case "frameRounded":
+      return createFrame({
+        ...rect,
+        shape: "roundedRect",
+        cornerRadius: 24,
+        name: "Rounded Frame",
+      });
+    case "frameHexagon": {
+      const size = Math.min(rect.width, rect.height);
+      const r = {
+        x: rect.x + (rect.width - size) / 2,
+        y: rect.y + (rect.height - size) / 2,
+        width: size,
+        height: size,
+      };
+      return createFrame({ ...r, shape: "hexagon", name: "Hexagon Frame" });
+    }
     case "shapeRect": {
       const shape = styleShape(createRect(rect));
       shape.cornerRadius = 18;
@@ -451,7 +911,7 @@ function makeElement(kind: BuilderBlockKind, rect: BentoRect): EngineElement {
       shape.strokeColor = "transparent";
       shape.fillStyle = "solid";
       shape.roughness = 0;
-      return shape;
+      return convertElementToVectorPath(shape) ?? shape;
     }
   }
 }
@@ -477,7 +937,8 @@ function styleShape<T extends EngineElement>(element: T): T {
   element.strokeWidth = 2;
   element.fillStyle = "solid";
   element.roughness = 0;
-  return element;
+  const vector = convertElementToVectorPath(element);
+  return (vector as unknown as T) ?? element;
 }
 
 function legacyTextBlock(

@@ -1,4 +1,4 @@
-import { nanoid } from "nanoid";
+import { fitTextElementToBox } from "./engine/textLayout";
 import type { EngineElement, ImageElement, RectElement, TextElement } from "./engine/types";
 import { DEFAULT_THAI_FONT_FAMILY } from "./fonts";
 
@@ -24,7 +24,7 @@ export type TemplateResult = {
 };
 
 function nid(): string {
-  return nanoid(8);
+  return crypto.randomUUID();
 }
 
 function text(
@@ -38,7 +38,7 @@ function text(
     align?: string;
   },
 ): TextElement {
-  return {
+  return fitTextElementToBox({
     id: nid(),
     type: "text",
     angle: 0,
@@ -67,7 +67,7 @@ function text(
     y: partial.y,
     width: partial.width,
     height: partial.height,
-  } as TextElement;
+  } as TextElement);
 }
 
 function rect(
@@ -84,7 +84,7 @@ function rect(
     id: nid(),
     type: "rect",
     angle: 0,
-    opacity: 1,
+    opacity: partial.opacity ?? 1,
     strokeColor: partial.strokeColor ?? partial.stroke ?? "transparent",
     backgroundColor: partial.backgroundColor ?? partial.fill ?? "#ffffff",
     strokeWidth: partial.strokeWidth ?? 0,

@@ -12,10 +12,18 @@
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { ColorAdjustments } from "../color/adjustments";
 import { applyColorAdjustments } from "../color/adjustments";
+import { resolveMultiGradientStops } from "../color/swatches";
+import { getFramePolaroidCutout, traceFrameShapePath } from "../engine/frameMask";
 import { freedrawPath } from "../engine/freehand";
 import { getRenderableElements } from "../engine/layers";
 import { buildRoughShape } from "../engine/rough";
-import { getTextRenderPadding } from "../engine/textLayout";
+import {
+  createCanvasTextMeasure,
+  layoutText,
+  measureRichText,
+  parseRichText,
+  setCanvasTextFont,
+} from "../engine/textLayout";
 import type {
   ArrowElement,
   BookMockupElement,
@@ -49,7 +57,7 @@ export function renderSlide(
   render: RenderCtx,
   slideW: number,
   slideH: number,
-  options: { afterBackground?: () => void } = {},
+  options: { afterBackground?: () => void; showFrames?: boolean } = {},
 ) {
   const { ctx } = render;
   // Background.
@@ -59,7 +67,9 @@ export function renderSlide(
   ctx.restore();
   options.afterBackground?.();
 
-  const ordered = getRenderableElements(slide);
+  const ordered = getRenderableElements(slide).filter(
+    (element) => options.showFrames || element.type !== "frame",
+  );
 
   const frames = ordered.filter(
     (el) => el.type === "frame",
@@ -76,10 +86,16 @@ export function renderSlide(
 
     if (clipFrame) {
       ctx.save();
-      ctx.beginPath();
-      // clipFrame is unrotated for clipping simplicity in this phase
-      ctx.rect(clipFrame.x, clipFrame.y, clipFrame.width, clipFrame.height);
+      ctx.translate(clipFrame.x, clipFrame.y);
+      traceFrameShapePath(
+        ctx,
+        clipFrame.shape,
+        clipFrame.width,
+        clipFrame.height,
+        clipFrame.cornerRadius,
+      );
       ctx.clip();
+      ctx.translate(-clipFrame.x, -clipFrame.y);
       renderElement(el, render);
       ctx.restore();
     } else {
@@ -94,35 +110,43 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   let cached = getCachedElement(el);
 
   if (!cached) {
+    const pad = Math.max(32, (el.strokeWidth ?? 2) * 4 + 48);
     const offscreen = document.createElement("canvas");
-    offscreen.width = Math.max(1, Math.ceil(el.width));
-    offscreen.height = Math.max(1, Math.ceil(el.height));
+    offscreen.width = Math.max(1, Math.ceil(el.width + pad * 2));
+    offscreen.height = Math.max(1, Math.ceil(el.height + pad * 2));
     const octx = offscreen.getContext("2d");
     if (octx) {
+      octx.translate(pad, pad);
       renderElementContent(el, octx, render);
     }
-    cached = offscreen;
+    cached = { canvas: offscreen, pad };
     setCachedElement(el, cached);
   }
 
   ctx.save();
   ctx.globalAlpha *= el.opacity;
+  ctx.globalCompositeOperation = el.blendMode ?? "source-over";
   const cx = el.x + el.width / 2;
   const cy = el.y + el.height / 2;
   ctx.translate(cx, cy);
   ctx.rotate(el.angle);
-  ctx.translate(-el.width / 2, -el.height / 2);
-  ctx.drawImage(cached, 0, 0);
+  ctx.translate(-el.width / 2 - cached.pad, -el.height / 2 - cached.pad);
+  ctx.drawImage(cached.canvas, 0, 0);
   ctx.restore();
 }
 
 function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, render: RenderCtx) {
-  // Apply shadow if present.
+  // Apply shadow or glow if present.
   if (el.shadow) {
     ctx.shadowColor = el.shadow.color;
     ctx.shadowBlur = el.shadow.blur;
     ctx.shadowOffsetX = el.shadow.offsetX;
     ctx.shadowOffsetY = el.shadow.offsetY;
+  } else if (el.glow) {
+    ctx.shadowColor = el.glow.color;
+    ctx.shadowBlur = el.glow.blur;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
   }
 
   switch (el.type) {
@@ -144,22 +168,7 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
           const rc = roughCanvas(ctx.canvas);
           rc.draw(gShape);
         }
-        const colors = el.gradientColors ?? ["#6366f1", "#a855f7"];
-        let grad: CanvasGradient;
-        if (el.fillType === "linear") {
-          grad = ctx.createLinearGradient(0, 0, el.width, el.height);
-        } else {
-          grad = ctx.createRadialGradient(
-            el.width / 2,
-            el.height / 2,
-            0,
-            el.width / 2,
-            el.height / 2,
-            Math.max(el.width, el.height) / 2,
-          );
-        }
-        grad.addColorStop(0, colors[0]);
-        grad.addColorStop(1, colors[1]);
+        const grad = createShapeGradient(ctx, el);
         ctx.fillStyle = grad;
         ctx.globalAlpha = el.opacity;
         fillShapePath(ctx, el);
@@ -191,6 +200,9 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
     case "freedraw":
       drawFreedraw(ctx, el);
       break;
+    case "path":
+      drawVectorPath(ctx, el);
+      break;
     case "text":
       drawText(ctx, el);
       break;
@@ -198,14 +210,18 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
       drawImage(ctx, el as ImageElement, render);
       break;
     case "bookMockup":
-      drawBookMockup(ctx, el as BookMockupElement, render.images?.get(el.fileId));
+      drawBookMockup(
+        ctx,
+        el as BookMockupElement,
+        render.images?.get((el as BookMockupElement).fileId),
+      );
       break;
     case "frame":
-      drawFrame(ctx, el as import("../engine/types").FrameElement);
+      drawFrame(ctx, el as import("../engine/types").FrameElement, render);
       break;
   }
 
-  if (el.shadow) {
+  if (el.shadow || el.glow) {
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
@@ -222,8 +238,167 @@ function drawFreedraw(ctx: CanvasRenderingContext2D, el: EngineElement) {
   ctx.fill(path);
 }
 
+function drawVectorPath(
+  ctx: CanvasRenderingContext2D,
+  el: import("../engine/types").VectorPathElement,
+) {
+  if (el.nodes.length < 2) return;
+  const path = new Path2D();
+  const first = pathNodePoint(el, el.nodes[0]);
+  path.moveTo(first.x, first.y);
+  for (let index = 1; index < el.nodes.length; index++) {
+    appendPathSegment(path, el, el.nodes[index - 1], el.nodes[index]);
+  }
+  if (el.closed) {
+    appendPathSegment(path, el, el.nodes.at(-1)!, el.nodes[0]);
+    path.closePath();
+  }
+  if (el.closed && el.backgroundColor !== "transparent") {
+    ctx.fillStyle = vectorFillStyle(ctx, el);
+    ctx.fill(path, el.fillRule);
+  }
+  if (el.strokeWidth > 0 && el.strokeColor !== "transparent") {
+    ctx.strokeStyle = el.strokeColor;
+    ctx.lineWidth = el.strokeWidth;
+    ctx.setLineDash(
+      el.strokeStyle === "dashed" ? [12, 8] : el.strokeStyle === "dotted" ? [2, 7] : [],
+    );
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke(path);
+
+    if (el.nodes.length >= 2 && !el.closed) {
+      const scale = el.arrowheadScale ?? 1;
+      const firstNode = el.nodes[0];
+      const secondNode = el.nodes[1];
+      const lastNode = el.nodes[el.nodes.length - 1];
+      const prevLastNode = el.nodes[el.nodes.length - 2];
+
+      if (el.startArrowhead && el.startArrowhead !== "none" && firstNode && secondNode) {
+        const p0 = pathNodePoint(el, firstNode);
+        const p1 = firstNode.out
+          ? {
+              x: (firstNode.x + firstNode.out[0]) * el.width,
+              y: (firstNode.y + firstNode.out[1]) * el.height,
+            }
+          : pathNodePoint(el, secondNode);
+        drawArrowhead(
+          ctx,
+          [p0.x, p0.y],
+          [p1.x, p1.y],
+          el.startArrowhead,
+          el.strokeColor,
+          el.strokeWidth,
+          scale,
+        );
+      }
+      if (el.endArrowhead && el.endArrowhead !== "none" && lastNode && prevLastNode) {
+        const pn = pathNodePoint(el, lastNode);
+        const pnPrev = lastNode.in
+          ? {
+              x: (lastNode.x + lastNode.in[0]) * el.width,
+              y: (lastNode.y + lastNode.in[1]) * el.height,
+            }
+          : pathNodePoint(el, prevLastNode);
+        drawArrowhead(
+          ctx,
+          [pn.x, pn.y],
+          [pnPrev.x, pnPrev.y],
+          el.endArrowhead,
+          el.strokeColor,
+          el.strokeWidth,
+          scale,
+        );
+      }
+    }
+  }
+}
+
+function appendPathSegment(
+  path: Path2D,
+  el: import("../engine/types").VectorPathElement,
+  from: import("../engine/types").VectorPathNode,
+  to: import("../engine/types").VectorPathNode,
+) {
+  const end = pathNodePoint(el, to);
+  if (from.out || to.in) {
+    const start = pathNodePoint(el, from);
+    const out = from.out ?? [0, 0];
+    const incoming = to.in ?? [0, 0];
+    path.bezierCurveTo(
+      start.x + out[0] * el.width,
+      start.y + out[1] * el.height,
+      end.x + incoming[0] * el.width,
+      end.y + incoming[1] * el.height,
+      end.x,
+      end.y,
+    );
+  } else {
+    path.lineTo(end.x, end.y);
+  }
+}
+
+function pathNodePoint(
+  el: import("../engine/types").VectorPathElement,
+  node: import("../engine/types").VectorPathNode,
+) {
+  return { x: node.x * el.width, y: node.y * el.height };
+}
+
+export function createShapeGradient(
+  ctx: CanvasRenderingContext2D,
+  el: EngineElement,
+): CanvasGradient {
+  const rawColors = el.gradientColors ?? ["#6366f1", "#a855f7"];
+  const angleDeg = el.gradientAngle ?? 90;
+  const stops = resolveMultiGradientStops(rawColors, el.gradientStops);
+
+  let grad: CanvasGradient;
+  if (el.fillType === "linear") {
+    const angleRad = (angleDeg * Math.PI) / 180;
+    const cx = el.width / 2;
+    const cy = el.height / 2;
+    const len =
+      (Math.abs(el.width * Math.cos(angleRad)) + Math.abs(el.height * Math.sin(angleRad))) / 2;
+    const x0 = cx - Math.cos(angleRad) * len;
+    const y0 = cy - Math.sin(angleRad) * len;
+    const x1 = cx + Math.cos(angleRad) * len;
+    const y1 = cy + Math.sin(angleRad) * len;
+    grad = ctx.createLinearGradient(x0, y0, x1, y1);
+  } else {
+    const cx = el.width / 2;
+    const cy = el.height / 2;
+    const r = Math.max(el.width, el.height) / 2;
+    const minOffset = stops.length > 0 ? stops[0].offset : 0;
+    const maxOffset = stops.length > 0 ? stops[stops.length - 1].offset : 1;
+    grad = ctx.createRadialGradient(
+      cx,
+      cy,
+      Math.max(0, r * minOffset),
+      cx,
+      cy,
+      Math.max(1, r * Math.max(0.1, maxOffset)),
+    );
+  }
+
+  for (const stop of stops) {
+    grad.addColorStop(stop.offset, stop.color);
+  }
+  return grad;
+}
+
+function vectorFillStyle(
+  ctx: CanvasRenderingContext2D,
+  el: import("../engine/types").VectorPathElement,
+): string | CanvasGradient {
+  if (el.fillType !== "linear" && el.fillType !== "radial") return el.backgroundColor;
+  return createShapeGradient(ctx, el);
+}
+
 function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
-  const padding = getTextRenderPadding(el);
+  const measure = createCanvasTextMeasure(ctx, el);
+  const layout = layoutText(el, measure);
+  const { padding, lines, lineHeight: lh, contentHeight: totalH } = layout;
   if (el.backgroundColor !== "transparent") {
     ctx.save();
     ctx.fillStyle = el.backgroundColor;
@@ -232,16 +407,16 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
     ctx.restore();
   }
 
+  // Handle Text on Path / Curved Text
+  if (el.pathCurvature && el.pathCurvature !== 0) {
+    drawCurvedText(ctx, el, layout);
+    return;
+  }
+
   ctx.fillStyle = el.strokeColor;
   ctx.textBaseline = "top";
   ctx.textAlign =
     el.textAlign === "center" ? "center" : el.textAlign === "right" ? "right" : "left";
-  const availableWidth = Math.max(1, el.width - padding * 2);
-  const lines = el.text
-    .split("\n")
-    .flatMap((rawLine) => wrapTextLine(ctx, el, rawLine, availableWidth));
-  const lh = el.fontSize * el.lineHeight;
-  const totalH = lines.length * lh;
   let y = padding;
   const lastSafeStart = Math.max(padding, el.height - padding - totalH);
   if (el.verticalAlign === "middle") {
@@ -250,28 +425,24 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
     y = lastSafeStart;
   }
 
-  for (const rawLine of lines) {
-    const isBullet = rawLine.startsWith("- ") || rawLine.startsWith("• ");
-    const line = isBullet ? rawLine.slice(2) : rawLine;
-    const bulletIndent = isBullet ? el.fontSize * 0.8 : 0;
-
+  for (const line of lines) {
     // Parse and render rich text segments.
-    const segments = parseRichText(line);
-    const lineWidth = measureSegments(ctx, el, segments);
-    let x = padding + bulletIndent;
-    if (el.textAlign === "center") x = (el.width - lineWidth + bulletIndent) / 2;
+    const segments = parseRichText(line.text);
+    const lineWidth = measureRichText(line.text, measure);
+    let x = padding + line.bulletIndent;
+    if (el.textAlign === "center") x = (el.width - lineWidth + line.bulletIndent) / 2;
     if (el.textAlign === "right") x = el.width - padding - lineWidth;
 
     // Draw bullet character before switching to left-aligned segment drawing.
-    if (isBullet) {
-      setFont(ctx, el, false, false);
+    if (line.bullet) {
+      setCanvasTextFont(ctx, el, false, false);
       ctx.textAlign = "left";
-      ctx.fillText("•", x - bulletIndent, y);
+      ctx.fillText("•", x - line.bulletIndent, y);
     }
 
     ctx.textAlign = "left";
     for (const seg of segments) {
-      setFont(ctx, el, seg.bold, seg.italic);
+      setCanvasTextFont(ctx, el, seg.bold, seg.italic);
       const segWidth = ctx.measureText(seg.text).width;
       ctx.fillText(seg.text, x, y);
       x += segWidth;
@@ -281,45 +452,64 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
   }
 }
 
-function wrapTextLine(
+function drawCurvedText(
   ctx: CanvasRenderingContext2D,
   el: TextElement,
-  rawLine: string,
-  maxWidth: number,
-): string[] {
-  const bullet = rawLine.startsWith("- ") || rawLine.startsWith("• ");
-  const content = bullet ? rawLine.slice(2) : rawLine;
-  if (!content) return [bullet ? "• " : ""];
-  const segmenter =
-    typeof Intl !== "undefined" && "Segmenter" in Intl
-      ? new Intl.Segmenter("th", { granularity: "word" })
-      : null;
-  const tokens = segmenter
-    ? Array.from(segmenter.segment(content), (part) => part.segment)
-    : content.split(/(\s+)/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const token of tokens) {
-    const candidate = `${current}${token}`;
-    const width = measureSegments(ctx, el, parseRichText(candidate));
-    if (current && width > maxWidth) {
-      lines.push(current.trimEnd());
-      current = token.trimStart();
-    } else {
-      current = candidate;
-    }
-  }
-  if (current || !lines.length) lines.push(current.trimEnd());
-  return lines.map((line, index) => (bullet && index === 0 ? `• ${line}` : line));
-}
+  layout: import("../engine/textLayout").TextLayout,
+) {
+  const curvature = el.pathCurvature ?? 0;
+  if (curvature === 0) return;
 
-function measureSegments(ctx: CanvasRenderingContext2D, el: TextElement, segments: Segment[]) {
-  let width = 0;
-  for (const segment of segments) {
-    setFont(ctx, el, segment.bold, segment.italic);
-    width += ctx.measureText(segment.text).width;
+  const rawText = layout.lines.map((l) => l.text).join(" ");
+  if (!rawText.trim()) return;
+
+  const chars: string[] = Array.from(rawText);
+  const charWidths = chars.map((c) => {
+    setCanvasTextFont(ctx, el, false, false);
+    return ctx.measureText(c).width;
+  });
+  const totalTextWidth = charWidths.reduce((a, b) => a + b, 0);
+  if (totalTextWidth <= 0) return;
+
+  // Normalized curvature -1..1
+  const k = curvature / 100;
+  const maxSweep = Math.PI * 0.85; // Max 153 degrees arc
+  const sweepAngle = k * maxSweep;
+  const radius = Math.max(20, Math.abs(totalTextWidth / sweepAngle));
+
+  const cx = el.width / 2;
+  const cy = k > 0 ? el.height / 2 + radius - 20 : el.height / 2 - radius + 20;
+
+  let currentDist = 0;
+  const startAngle = k > 0 ? -Math.PI / 2 - sweepAngle / 2 : Math.PI / 2 - sweepAngle / 2;
+
+  ctx.save();
+  ctx.fillStyle = el.strokeColor;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i];
+    const charW = charWidths[i];
+    const midDist = currentDist + charW / 2;
+    const progress = totalTextWidth > 0 ? midDist / totalTextWidth : 0.5;
+    const angle = startAngle + progress * sweepAngle;
+
+    const px = cx + Math.cos(angle) * radius;
+    const py = cy + Math.sin(angle) * radius;
+    const tangent = k > 0 ? angle + Math.PI / 2 : angle - Math.PI / 2;
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(tangent);
+    setCanvasTextFont(ctx, el, false, false);
+    ctx.fillText(char, 0, 0);
+    ctx.restore();
+
+    currentDist += charW;
   }
-  return width;
+
+  ctx.restore();
 }
 
 function roundedRectPath(
@@ -344,48 +534,9 @@ function roundedRectPath(
   ctx.closePath();
 }
 
-function setFont(ctx: CanvasRenderingContext2D, el: TextElement, bold: boolean, italic: boolean) {
-  const weight = bold || el.fontStyle.includes("bold") ? "bold" : "normal";
-  const style = italic || el.fontStyle.includes("italic") ? "italic" : "normal";
-  ctx.font = `${weight} ${style} ${el.fontSize}px ${el.fontFamily}`;
-}
-
-type Segment = { text: string; bold: boolean; italic: boolean };
-
-function parseRichText(text: string): Segment[] {
-  const segments: Segment[] = [];
-  let i = 0;
-  let bold = false;
-  let italic = false;
-  let current = "";
-
-  function flush() {
-    if (current) {
-      segments.push({ text: current, bold, italic });
-      current = "";
-    }
-  }
-
-  while (i < text.length) {
-    if (text[i] === "*" && text[i + 1] === "*") {
-      flush();
-      bold = !bold;
-      i += 2;
-    } else if (text[i] === "*") {
-      flush();
-      italic = !italic;
-      i += 1;
-    } else {
-      current += text[i];
-      i++;
-    }
-  }
-  flush();
-  if (segments.length === 0) segments.push({ text, bold: false, italic: false });
-  return segments;
-}
-
-const _adjCache = new Map<string, HTMLCanvasElement>();
+type AdjustedImage = { canvas: HTMLCanvasElement; scaleX: number; scaleY: number };
+const _adjCache = new Map<string, AdjustedImage>();
+const MAX_ADJUSTMENT_CACHE_ENTRIES = 24;
 
 function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: RenderCtx) {
   const img = render.images?.get(el.fileId);
@@ -398,32 +549,59 @@ function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: Rend
   }
 
   let drawSrc: CanvasImageSource = img;
+  let sourceScaleX = 1;
+  let sourceScaleY = 1;
 
   // Apply color adjustments if present
   if (el.adjustments && Object.keys(el.adjustments).length > 0) {
     const cacheKey = `${el.fileId}:${stableStringify(el.adjustments)}`;
-    let adjCanvas = _adjCache.get(cacheKey);
-    if (!adjCanvas) {
-      adjCanvas = document.createElement("canvas");
-      adjCanvas.width = img.naturalWidth;
-      adjCanvas.height = img.naturalHeight;
-      const adjCtx = adjCanvas.getContext("2d")!;
-      adjCtx.drawImage(img, 0, 0);
-      const imageData = adjCtx.getImageData(0, 0, adjCanvas.width, adjCanvas.height);
-      applyColorAdjustments(imageData, el.adjustments as Partial<ColorAdjustments>);
-      adjCtx.putImageData(imageData, 0, 0);
-      _adjCache.set(cacheKey, adjCanvas);
+    let adjusted = _adjCache.get(cacheKey);
+    if (!adjusted) {
+      const maxDimension = 4096;
+      const ratio = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
+      const adjCtx = canvas.getContext("2d")!;
+      try {
+        adjCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const imageData = adjCtx.getImageData(0, 0, canvas.width, canvas.height);
+        applyColorAdjustments(imageData, el.adjustments as Partial<ColorAdjustments>);
+        adjCtx.putImageData(imageData, 0, 0);
+        adjusted = {
+          canvas,
+          scaleX: canvas.width / Math.max(1, img.naturalWidth),
+          scaleY: canvas.height / Math.max(1, img.naturalHeight),
+        };
+        _adjCache.set(cacheKey, adjusted);
+        while (_adjCache.size > MAX_ADJUSTMENT_CACHE_ENTRIES) {
+          const oldest = _adjCache.keys().next().value;
+          if (!oldest) break;
+          _adjCache.delete(oldest);
+        }
+      } catch {
+        // A remote server may deny pixel reads. Keep the original image usable
+        // and leave adjustments pending instead of crashing the render loop.
+        adjusted = undefined;
+      }
     }
-    drawSrc = adjCanvas;
+    if (adjusted) {
+      drawSrc = adjusted.canvas;
+      sourceScaleX = adjusted.scaleX;
+      sourceScaleY = adjusted.scaleY;
+    }
   }
 
+  ctx.save();
+  applyImageMask(ctx, el);
+  if ((el.filterBlur ?? 0) > 0) ctx.filter = `blur(${el.filterBlur}px)`;
   if (el.crop) {
     ctx.drawImage(
       drawSrc,
-      el.crop.x,
-      el.crop.y,
-      el.crop.width,
-      el.crop.height,
+      el.crop.x * sourceScaleX,
+      el.crop.y * sourceScaleY,
+      el.crop.width * sourceScaleX,
+      el.crop.height * sourceScaleY,
       0,
       0,
       el.width,
@@ -432,18 +610,234 @@ function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: Rend
   } else {
     ctx.drawImage(drawSrc, 0, 0, el.width, el.height);
   }
+  ctx.restore();
 }
 
-function drawFrame(ctx: CanvasRenderingContext2D, el: import("../engine/types").FrameElement) {
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(0, 0, el.width, el.height);
+function applyImageMask(ctx: CanvasRenderingContext2D, el: ImageElement) {
+  const mask = el.mask;
+  if (!mask || mask.shape === "rect") return;
+  ctx.beginPath();
+  if (mask.shape === "ellipse") {
+    ctx.ellipse(el.width / 2, el.height / 2, el.width / 2, el.height / 2, 0, 0, Math.PI * 2);
+  } else if (mask.shape === "hexagon") {
+    const inset = el.width * 0.25;
+    ctx.moveTo(inset, 0);
+    ctx.lineTo(el.width - inset, 0);
+    ctx.lineTo(el.width, el.height / 2);
+    ctx.lineTo(el.width - inset, el.height);
+    ctx.lineTo(inset, el.height);
+    ctx.lineTo(0, el.height / 2);
+    ctx.closePath();
+  } else {
+    roundedRectPath(ctx, 0, 0, el.width, el.height, mask.radius ?? 32);
+  }
+  ctx.clip();
+}
 
-  ctx.fillStyle = "#94a3b8";
-  ctx.font = "bold 12px sans-serif";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "bottom";
-  ctx.fillText(el.name, 0, -4);
+function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  el: import("../engine/types").FrameElement,
+  render: RenderCtx,
+) {
+  const w = el.width;
+  const h = el.height;
+  const shape = el.shape ?? "rect";
+  const img = el.imageFileId ? render.images?.get(el.imageFileId) : undefined;
+
+  if (shape === "polaroid") {
+    // Draw white polaroid photo card base with subtle shadow
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.14)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
+    ctx.beginPath();
+    traceFrameShapePath(ctx, "roundedRect", w, h, 6);
+    ctx.fill();
+    ctx.restore();
+
+    // Polaroid card outline
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    traceFrameShapePath(ctx, "roundedRect", w, h, 6);
+    ctx.stroke();
+  }
+
+  const bounds =
+    shape === "polaroid" ? getFramePolaroidCutout(w, h) : { x: 0, y: 0, width: w, height: h };
+
+  const drawContent = (targetCtx: CanvasRenderingContext2D) => {
+    if (img && img.width > 0 && img.height > 0) {
+      const baseScale = Math.max(bounds.width / img.width, bounds.height / img.height);
+      const zoom = el.cropZoom ?? 1;
+      const finalW = img.width * baseScale * zoom;
+      const finalH = img.height * baseScale * zoom;
+      const panX = el.cropOffsetX ?? 0;
+      const panY = el.cropOffsetY ?? 0;
+      const cx = bounds.x + bounds.width / 2 + panX;
+      const cy = bounds.y + bounds.height / 2 + panY;
+      const rotation = el.cropRotation ?? 0;
+
+      if (rotation !== 0) {
+        targetCtx.save();
+        targetCtx.translate(cx, cy);
+        targetCtx.rotate((rotation * Math.PI) / 180);
+        targetCtx.drawImage(img, -finalW / 2, -finalH / 2, finalW, finalH);
+        targetCtx.restore();
+      } else {
+        targetCtx.drawImage(img, cx - finalW / 2, cy - finalH / 2, finalW, finalH);
+      }
+    } else {
+      drawCanvaLandscapePlaceholder(targetCtx, bounds);
+    }
+  };
+
+  if (el.feather && el.feather > 0 && typeof document !== "undefined") {
+    const featherPx = Math.min(80, Math.max(1, el.feather));
+    const margin = Math.min(featherPx * 1.5, w * 0.45, h * 0.45);
+    const blurRadius = Math.max(1, margin * 0.42);
+    const innerW = w - margin * 2;
+    const innerH = h - margin * 2;
+
+    const contentCanvas = document.createElement("canvas");
+    contentCanvas.width = Math.ceil(w);
+    contentCanvas.height = Math.ceil(h);
+    const contentCtx = contentCanvas.getContext("2d");
+
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = Math.ceil(w);
+    maskCanvas.height = Math.ceil(h);
+    const maskCtx = maskCanvas.getContext("2d");
+
+    if (contentCtx && maskCtx) {
+      // 1. Draw photo covering [0, 0, w, h] so photo is fully present across the blur zone
+      drawContent(contentCtx);
+
+      // 2. Draw inset vector shape with Gaussian blur
+      maskCtx.save();
+      maskCtx.translate(margin, margin);
+      maskCtx.filter = `blur(${blurRadius}px)`;
+      maskCtx.fillStyle = "#ffffff";
+      traceFrameShapePath(maskCtx, shape, innerW, innerH, el.cornerRadius, el.customPathNodes);
+      maskCtx.fill();
+      maskCtx.restore();
+
+      // 3. Composite blurred mask over content buffer
+      contentCtx.globalCompositeOperation = "destination-in";
+      contentCtx.drawImage(maskCanvas, 0, 0);
+
+      // 4. Render feathered photo directly onto main canvas within [0, 0, w, h]
+      ctx.drawImage(contentCanvas, 0, 0);
+    }
+  } else {
+    // Crisp vector mask clip
+    ctx.save();
+    traceFrameShapePath(ctx, shape, w, h, el.cornerRadius, el.customPathNodes);
+    ctx.clip();
+    drawContent(ctx);
+    ctx.restore();
+  }
+
+  // Draw frame border/stroke if configured (only when not feathered)
+  if (
+    el.strokeWidth &&
+    el.strokeWidth > 0 &&
+    shape !== "polaroid" &&
+    (!el.feather || el.feather === 0)
+  ) {
+    ctx.save();
+    ctx.strokeStyle = el.strokeColor ?? "#94a3b8";
+    ctx.lineWidth = el.strokeWidth;
+    if (el.strokeStyle === "dashed") ctx.setLineDash([6, 6]);
+    else if (el.strokeStyle === "dotted") ctx.setLineDash([2, 4]);
+    traceFrameShapePath(ctx, shape, w, h, el.cornerRadius, el.customPathNodes);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawCanvaLandscapePlaceholder(
+  ctx: CanvasRenderingContext2D,
+  bounds: { x: number; y: number; width: number; height: number },
+) {
+  const { x, y, width: w, height: h } = bounds;
+
+  // 1. Sky Gradient Background
+  const skyGrad = ctx.createLinearGradient(x, y, x, y + h);
+  skyGrad.addColorStop(0, "#bae6fd"); // soft sky blue
+  skyGrad.addColorStop(0.65, "#e0f2fe");
+  skyGrad.addColorStop(1, "#f0f9ff");
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(x, y, w, h);
+
+  // 2. Bright Golden Sun
+  const sunRadius = Math.max(4, Math.min(w, h) * 0.12);
+  const sunX = x + w * 0.74;
+  const sunY = y + h * 0.28;
+  ctx.fillStyle = "#fde047";
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3. Fluffy Cloud
+  const cloudX = x + w * 0.28;
+  const cloudY = y + h * 0.35;
+  const cloudR = Math.max(3, Math.min(w, h) * 0.08);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.beginPath();
+  ctx.arc(cloudX, cloudY, cloudR, 0, Math.PI * 2);
+  ctx.arc(cloudX + cloudR * 0.9, cloudY - cloudR * 0.3, cloudR * 0.8, 0, Math.PI * 2);
+  ctx.arc(cloudX + cloudR * 1.7, cloudY, cloudR * 0.9, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. Distant Rolling Green Hill (Background Hill)
+  ctx.fillStyle = "#86efac"; // light grass green
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x, y + h * 0.65);
+  ctx.bezierCurveTo(x + w * 0.25, y + h * 0.48, x + w * 0.5, y + h * 0.72, x + w, y + h * 0.58);
+  ctx.lineTo(x + w, y + h);
+  ctx.closePath();
+  ctx.fill();
+
+  // 5. Front Rolling Green Hill
+  ctx.fillStyle = "#4ade80"; // vibrant grass green
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x + w, y + h * 0.72);
+  ctx.bezierCurveTo(x + w * 0.7, y + h * 0.52, x + w * 0.35, y + h * 0.78, x, y + h * 0.68);
+  ctx.closePath();
+  ctx.fill();
+
+  // 6. Subtle Mountain/Photo Glyph Badge in Center
+  const badgeSize = Math.max(16, Math.min(w, h) * 0.22);
+  const badgeX = x + (w - badgeSize) / 2;
+  const badgeY = y + (h - badgeSize) / 2;
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.beginPath();
+  ctx.roundRect
+    ? ctx.roundRect(badgeX, badgeY, badgeSize, badgeSize, 6)
+    : ctx.rect(badgeX, badgeY, badgeSize, badgeSize);
+  ctx.fill();
+
+  // Mountain icon inside badge
+  ctx.fillStyle = "#64748b";
+  ctx.beginPath();
+  const mx = badgeX + badgeSize * 0.2;
+  const my = badgeY + badgeSize * 0.75;
+  ctx.moveTo(mx, my);
+  ctx.lineTo(mx + badgeSize * 0.3, my - badgeSize * 0.4);
+  ctx.lineTo(mx + badgeSize * 0.6, my);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(mx + badgeSize * 0.25, my);
+  ctx.lineTo(mx + badgeSize * 0.45, my - badgeSize * 0.25);
+  ctx.lineTo(mx + badgeSize * 0.65, my);
+  ctx.fill();
 }
 
 function drawArrowHeads(ctx: CanvasRenderingContext2D, el: ArrowElement) {

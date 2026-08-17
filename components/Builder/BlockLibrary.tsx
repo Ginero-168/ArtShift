@@ -1,32 +1,68 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { IconChevronDown } from "@/components/icons";
 import {
   BUILDER_BLOCK_MIME,
   BUILDER_BLOCKS,
   type BuilderBlockDefinition,
+  type BuilderBlockKind,
   createBuilderBlock,
 } from "@/lib/builder/blocks";
-import { useEngine } from "@/lib/engine/store";
+import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
+import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 
 const CATEGORIES: BuilderBlockDefinition["category"][] = [
   "Content",
-  "Media",
+  "Frames",
   "Shapes",
+  "Lines",
   "Commerce",
   "Structure",
 ];
+
+const DRAWING_TOOL_MAP: Partial<
+  Record<
+    BuilderBlockKind,
+    {
+      tool: Tool;
+      lineSubtype?: LineSubtype;
+    }
+  >
+> = {
+  // Geometric Shapes (Click tool then drag to size on canvas)
+  shapeRect: { tool: "rect" },
+  shapeEllipse: { tool: "ellipse" },
+  shapeDiamond: { tool: "diamond" },
+  shapeTriangle: { tool: "triangle" },
+  shapeStar: { tool: "star" },
+  shapeHexagon: { tool: "hexagon" },
+  shapeHeart: { tool: "heart" },
+  shapePlus: { tool: "plus" },
+
+  // Lines & Drawing
+  shapeLine: { tool: "line", lineSubtype: "solid" },
+  shapeArrow: { tool: "arrow", lineSubtype: "arrow" },
+  shapeDoubleArrow: { tool: "arrow", lineSubtype: "doubleArrow" },
+  shapeDashedLine: { tool: "line", lineSubtype: "dashed" },
+  shapeCurvedArrow: { tool: "arrow", lineSubtype: "curvedArrow" },
+  shapeFreedraw: { tool: "freedraw", lineSubtype: "freedraw" },
+  shapePen: { tool: "pen", lineSubtype: "pen" },
+};
 
 export default function BlockLibrary() {
   const slide = useEngine((state) =>
     state.doc.slides.find((candidate) => candidate.id === state.currentSlideId),
   );
-  const activeLayerId = useEngine((state) => state.activeLayerId);
+  const tool = useEngine((state) => state.tool);
+  const setTool = useEngine((state) => state.setTool);
+  const lineSubtype = useEngine((state) => state.lineSubtype);
+  const setLineSubtype = useEngine((state) => state.setLineSubtype);
   const addElement = useEngine((state) => state.addElement);
   const [query, setQuery] = useState("");
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
-  const activeLayer = slide?.layers.find((layer) => layer.id === activeLayerId);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return BUILDER_BLOCKS;
@@ -38,35 +74,50 @@ export default function BlockLibrary() {
     );
   }, [query]);
 
-  function add(block: BuilderBlockDefinition) {
-    if (!slide || !activeLayer) return;
+  function toggleCategory(category: string) {
+    setCollapsedCategories((prev) => ({
+      ...prev,
+      [category]: !prev[category],
+    }));
+  }
+
+  function handleBlockClick(block: BuilderBlockDefinition) {
+    const drawingDef = DRAWING_TOOL_MAP[block.kind];
+    if (drawingDef) {
+      if (
+        tool === drawingDef.tool &&
+        (!drawingDef.lineSubtype || lineSubtype === drawingDef.lineSubtype)
+      ) {
+        setTool("select");
+      } else {
+        setTool(drawingDef.tool);
+        if (drawingDef.lineSubtype) {
+          setLineSubtype(drawingDef.lineSubtype);
+        }
+      }
+      return;
+    }
+
+    if (!slide) return;
     const element = createBuilderBlock(block.kind, {
       width: slide.width,
       height: slide.height,
-      point: activeLayer.mode === "free" ? { x: slide.width / 2, y: slide.height / 2 } : undefined,
     });
     addElement(element, `add ${block.label}`);
   }
 
+  function isBlockActive(block: BuilderBlockDefinition): boolean {
+    const drawingDef = DRAWING_TOOL_MAP[block.kind];
+    if (!drawingDef) return false;
+    if (tool !== drawingDef.tool) return false;
+    if (drawingDef.lineSubtype) {
+      return lineSubtype === drawingDef.lineSubtype;
+    }
+    return true;
+  }
+
   return (
     <aside className={styles.library} aria-label="Block library">
-      <div className={styles.libraryHeader}>
-        <div>
-          <span className={styles.kicker}>BUILD</span>
-          <h2>Blocks</h2>
-        </div>
-        <span className={styles.blockCount}>{BUILDER_BLOCKS.length}</span>
-      </div>
-
-      <div className={styles.activeLayerBanner} data-mode={activeLayer?.mode ?? "block"}>
-        <span className={styles.activeLayerSignal} aria-hidden="true" />
-        <span>
-          <small>Adding to</small>
-          <strong>{activeLayer?.name ?? "Choose a layer"}</strong>
-        </span>
-        <b>{activeLayer?.mode.toUpperCase() ?? "—"}</b>
-      </div>
-
       <label className={styles.search}>
         <span aria-hidden="true">⌕</span>
         <input
@@ -76,49 +127,60 @@ export default function BlockLibrary() {
           aria-label="Search blocks"
         />
       </label>
-      <p className={styles.hint}>
-        Blocks inherit placement from the active Layer. Drag to place or click to add.
-      </p>
       <div className={styles.libraryScroll}>
         {CATEGORIES.map((category) => {
           const blocks = filtered.filter((block) => block.category === category);
           if (!blocks.length) return null;
+          const isCollapsed = Boolean(collapsedCategories[category]);
+
           return (
             <section className={styles.blockGroup} key={category}>
-              <div className={styles.groupTitle}>
+              <button
+                type="button"
+                className={styles.groupTitleButton}
+                onClick={() => toggleCategory(category)}
+                aria-expanded={!isCollapsed}
+                title={isCollapsed ? `Expand ${category}` : `Collapse ${category}`}
+              >
                 <span>{category}</span>
-                <span>{String(blocks.length).padStart(2, "0")}</span>
-              </div>
-              <div className={styles.blockGrid}>
-                {blocks.map((block) => (
-                  <button
-                    className={styles.blockCard}
-                    key={block.kind}
-                    draggable
-                    disabled={!activeLayer || activeLayer.locked}
-                    onClick={() => add(block)}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "copy";
-                      event.dataTransfer.setData(BUILDER_BLOCK_MIME, block.kind);
-                      event.dataTransfer.setData("text/plain", block.label);
-                    }}
-                    title={
-                      activeLayer?.locked
-                        ? "Unlock the active layer before adding objects"
-                        : `Add ${block.label} to ${activeLayer?.name ?? "the active layer"}`
-                    }
-                  >
-                    <span className={styles.glyph}>{block.glyph}</span>
-                    <span className={styles.blockCopy}>
-                      <strong>{block.label}</strong>
-                      <small>{block.description}</small>
-                    </span>
-                    <span className={styles.dragHandle} aria-hidden="true">
-                      ⠿
-                    </span>
-                  </button>
-                ))}
-              </div>
+                <span
+                  className={`${styles.groupChevron} ${isCollapsed ? styles.groupChevronCollapsed : ""}`}
+                >
+                  <IconChevronDown size={11} />
+                </span>
+              </button>
+
+              {!isCollapsed ? (
+                <div className={styles.blockGrid}>
+                  {blocks.map((block) => {
+                    const active = isBlockActive(block);
+                    return (
+                      <button
+                        type="button"
+                        className={`${styles.blockCard} ${active ? styles.blockCardActive : ""}`}
+                        key={block.kind}
+                        draggable
+                        onClick={() => handleBlockClick(block)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "copy";
+                          event.dataTransfer.setData(BUILDER_BLOCK_MIME, block.kind);
+                          event.dataTransfer.setData("text/plain", block.label);
+                        }}
+                        title={
+                          DRAWING_TOOL_MAP[block.kind]
+                            ? `${block.label} · Click to draw on canvas`
+                            : `${block.label} · ${block.description}`
+                        }
+                      >
+                        <span className={styles.glyph}>
+                          <BlockIcon kind={block.kind} size={20} />
+                        </span>
+                        <span className={styles.blockLabel}>{block.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </section>
           );
         })}

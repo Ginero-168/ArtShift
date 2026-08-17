@@ -12,6 +12,22 @@ const sharedConfig: NextConfig = {
       { protocol: "https", hostname: "fonts.gstatic.com" },
     ],
   },
+  webpack(config, { webpack }) {
+    // PptxGenJS 4's ESM entry contains optional dynamic imports for Node-only
+    // path-based media. ArtShift supplies browser data URLs exclusively, so
+    // those unreachable branches must not enter the client bundle.
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      https: false,
+    };
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^node:(fs|https)$/,
+      }),
+    );
+    return config;
+  },
   // Uncomment for static export (Hostinger Shared Hosting without Node.js):
   // output: "export",
   // distDir: "dist",

@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createBookMockup, createImage, createRect, createText } from "@/lib/engine/factory";
+import {
+  createArrow,
+  createBookMockup,
+  createFrame,
+  createImage,
+  createRect,
+  createText,
+} from "@/lib/engine/factory";
 import { getHexGridDimensions } from "@/lib/engine/hexLayout";
 import { useEngine } from "@/lib/engine/store";
+import { measureTextElementHeight } from "@/lib/engine/textLayout";
 import { ENGINE_SCHEMA_VERSION } from "@/lib/engine/types";
 
 describe("engine store", () => {
@@ -75,6 +83,64 @@ describe("engine store", () => {
     const pasted = after?.elements.find((e) => e.id !== id);
     expect(afterState.selectedIds.has(pasted!.id)).toBe(true);
     expect(afterState.selectedIds.has(id!)).toBe(false);
+  });
+
+  it("remaps copied bindings, frame children, containers and groups", () => {
+    const st = useEngine.getState();
+    st.setLayerMode(st.activeLayerId, "free");
+    const target = createRect({ x: 40, y: 40, width: 180, height: 120 });
+    const arrow = createArrow([300, 100], [220, 100]);
+    arrow.endBinding = { elementId: target.id, gap: 0, focus: 0 };
+    const frame = createFrame({ x: 400, y: 40, width: 300, height: 220 });
+    const label = createText({ x: 430, y: 70, width: 220, height: 80, text: "Bound" });
+    label.containerId = frame.id;
+    frame.childIds = [label.id];
+    const groupId = "source-group";
+    target.groupIds = [groupId];
+    arrow.groupIds = [groupId];
+    for (const element of [target, arrow, frame, label]) st.addElement(element);
+
+    st.copyElements([target.id, arrow.id, frame.id, label.id]);
+    st.pasteElements();
+
+    const pasted = useEngine
+      .getState()
+      .currentSlide()!
+      .elements.filter(
+        (element) => ![target.id, arrow.id, frame.id, label.id].includes(element.id),
+      );
+    const pastedTarget = pasted.find((element) => element.type === "rect")!;
+    const pastedArrow = pasted.find((element) => element.type === "arrow");
+    const pastedFrame = pasted.find((element) => element.type === "frame");
+    const pastedLabel = pasted.find((element) => element.type === "text");
+
+    expect(pastedArrow?.endBinding?.elementId).toBe(pastedTarget.id);
+    expect(pastedFrame?.childIds).toEqual([pastedLabel?.id]);
+    expect(pastedLabel?.containerId).toBe(pastedFrame?.id);
+    expect(pastedArrow?.groupIds[0]).toBe(pastedTarget.groupIds[0]);
+    expect(pastedArrow?.groupIds[0]).not.toBe(groupId);
+  });
+
+  it("grows a Block placement when wrapped Thai text needs more rows", () => {
+    const st = useEngine.getState();
+    const text = createText({ x: 100, y: 100, width: 240, height: 60, text: "สั้น" });
+    st.addElement(text);
+    const before = useEngine.getState().currentSlide()!.layers[0].placements[text.id].rowSpan;
+
+    st.updateElements([
+      {
+        id: text.id,
+        patch: {
+          text: "หนังสือเล่มนี้จะช่วยให้คุณเข้าใจการออกแบบและสร้างงานประชาสัมพันธ์ได้รวดเร็วยิ่งขึ้นโดยไม่ตัดข้อความ",
+        },
+      },
+    ]);
+
+    const afterSlide = useEngine.getState().currentSlide()!;
+    expect(afterSlide.layers[0].placements[text.id].rowSpan).toBeGreaterThan(before);
+    expect(afterSlide.elements.find((element) => element.id === text.id)!.height).toBeGreaterThan(
+      60,
+    );
   });
 
   it("supports undo and redo", () => {
@@ -265,6 +331,29 @@ describe("engine store", () => {
     expect(resized.width / resized.height).toBeCloseTo(1.6, 5);
   });
 
+  it("grows Free text when a width change creates more wrapped lines", () => {
+    const st = useEngine.getState();
+    st.setLayerMode(st.activeLayerId, "free");
+    const title = createText({
+      x: 100,
+      y: 100,
+      width: 900,
+      height: 120,
+      fontSize: 70,
+      text: "นี่คือชื่อหนังสือภาษาไทยที่ยาวมากและไม่มีช่องว่างเพื่อทดสอบการตัดบรรทัดอย่างปลอดภัย",
+    });
+    st.addElement(title);
+    const beforeHeight = title.height;
+
+    st.updateElements([{ id: title.id, patch: { width: 260, height: 20 } }], "narrow text");
+
+    const resized = useEngine.getState().currentSlide()?.elements[0];
+    expect(resized?.type).toBe("text");
+    if (resized?.type !== "text") return;
+    expect(resized.height).toBeGreaterThan(beforeHeight);
+    expect(resized.height).toBeGreaterThanOrEqual(measureTextElementHeight(resized));
+  });
+
   it("refits a media bounding box when its source ratio changes", () => {
     const st = useEngine.getState();
     st.setLayerMode(st.activeLayerId, "free");
@@ -312,5 +401,99 @@ describe("engine store", () => {
     expect(element.y).toBeGreaterThanOrEqual(0);
     expect(element.x + element.width).toBeLessThanOrEqual(resized.width);
     expect(element.y + element.height).toBeLessThanOrEqual(resized.height);
+  });
+
+  it("creates a resized Artwork variant with stable object and asset identity", () => {
+    const st = useEngine.getState();
+    const mockup = createBookMockup({
+      x: 200,
+      y: 100,
+      width: 420,
+      height: 620,
+      fileId: "cover-asset",
+      naturalWidth: 1200,
+      naturalHeight: 1800,
+      yaw: 24,
+      pitch: -8,
+    });
+    st.addElement(mockup);
+
+    const variantId = st.createArtworkVariant("s1", 1080, 1350, "Portrait");
+    const state = useEngine.getState();
+    const variant = state.doc.slides.find((slide) => slide.id === variantId)!;
+    const variantMockup = variant.elements.find((element) => element.id === mockup.id);
+
+    expect(variant).toMatchObject({ width: 1080, height: 1350, variantOf: "s1" });
+    expect(variantMockup?.type).toBe("bookMockup");
+    if (variantMockup?.type === "bookMockup") {
+      expect(variantMockup.fileId).toBe("cover-asset");
+      expect(variantMockup.yaw).toBe(24);
+      expect(variantMockup.pitch).toBe(-8);
+    }
+  });
+
+  it("syncs content to sibling variants while preserving their geometry", () => {
+    const st = useEngine.getState();
+    const title = createText({ x: 100, y: 100, width: 500, height: 120, text: "Original" });
+    st.addElement(title);
+    const variantId = st.createArtworkVariant("s1", 1080, 1350, "Portrait");
+    const beforeMaster = useEngine
+      .getState()
+      .doc.slides.find((slide) => slide.id === "s1")!
+      .elements.find((element) => element.id === title.id)!;
+
+    useEngine.getState().updateElements([{ id: title.id, patch: { text: "Synced title" } }]);
+    useEngine.getState().syncElementsToVariants([title.id]);
+
+    const master = useEngine
+      .getState()
+      .doc.slides.find((slide) => slide.id === "s1")!
+      .elements.find((element) => element.id === title.id);
+    expect(master?.type).toBe("text");
+    if (master?.type === "text") expect(master.text).toBe("Synced title");
+    expect(master).toMatchObject({
+      x: beforeMaster.x,
+      y: beforeMaster.y,
+      width: beforeMaster.width,
+      height: beforeMaster.height,
+    });
+    expect(useEngine.getState().currentSlideId).toBe(variantId);
+  });
+
+  it("renames a layer and updates slide state with history", () => {
+    const st = useEngine.getState();
+    const slide = st.currentSlide()!;
+    const layer = slide.layers[0];
+    expect(layer.name).toBe("Block layer 1");
+
+    st.renameLayer(layer.id, "Header & Hero Elements");
+
+    const updatedSlide = useEngine.getState().currentSlide()!;
+    expect(updatedSlide.layers[0].name).toBe("Header & Hero Elements");
+  });
+
+  it("toggles hex block grid visibility", () => {
+    const st = useEngine.getState();
+    expect(st.showHexGrid).toBe(true);
+
+    st.setShowHexGrid(false);
+    expect(useEngine.getState().showHexGrid).toBe(false);
+
+    st.setShowHexGrid(true);
+    expect(useEngine.getState().showHexGrid).toBe(true);
+  });
+
+  it("updates viewport layer filter mode", () => {
+    const st = useEngine.getState();
+    expect(st.layerFilter).toBe("all");
+
+    st.setLayerFilter("block");
+    expect(useEngine.getState().layerFilter).toBe("block");
+
+    st.setLayerFilter("free");
+    expect(useEngine.getState().layerFilter).toBe("free");
+
+    st.setLayerFilter("all");
+    expect(useEngine.getState().layerFilter).toBe("all");
   });
 });

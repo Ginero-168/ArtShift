@@ -18,12 +18,14 @@ export default function ResizeArtworkAction() {
     state.doc.slides.find((candidate) => candidate.id === state.currentSlideId),
   );
   const setSlideDimensions = useEngine((state) => state.setSlideDimensions);
+  const createArtworkVariant = useEngine((state) => state.createArtworkVariant);
   const [open, setOpen] = useState(false);
   const [width, setWidth] = useState(1080);
   const [height, setHeight] = useState(1080);
   const [resizeContents, setResizeContents] = useState(true);
   const [locked, setLocked] = useState(false);
   const [ratio, setRatio] = useState(1);
+  const [operation, setOperation] = useState<"resize" | "variant">("variant");
 
   useEffect(() => {
     if (!open || !slide) return;
@@ -74,6 +76,24 @@ export default function ResizeArtworkAction() {
             </header>
 
             <div className={styles.body}>
+              <div className={styles.operationTabs} role="group" aria-label="Resize operation">
+                <button
+                  type="button"
+                  aria-pressed={operation === "variant"}
+                  onClick={() => setOperation("variant")}
+                >
+                  Create variant
+                  <small>Keep the current master</small>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={operation === "resize"}
+                  onClick={() => setOperation("resize")}
+                >
+                  Resize current
+                  <small>Change this artwork</small>
+                </button>
+              </div>
               <div className={styles.customSize}>
                 <label>
                   <span>Width</span>
@@ -176,11 +196,15 @@ export default function ResizeArtworkAction() {
                 className={styles.apply}
                 type="button"
                 onClick={() => {
-                  setSlideDimensions(slide.id, width, height, resizeContents);
+                  if (operation === "variant") {
+                    createArtworkVariant(slide.id, width, height, undefined, resizeContents);
+                  } else {
+                    setSlideDimensions(slide.id, width, height, resizeContents);
+                  }
                   setOpen(false);
                 }}
               >
-                Apply resize
+                {operation === "variant" ? "Create variant" : "Apply resize"}
               </button>
             </footer>
           </section>

@@ -12,7 +12,9 @@ export function drawBookMockup(
   image?: HTMLImageElement,
 ) {
   const geometry = getBookMockupGeometry(el);
-  drawGroundShadow(ctx, el, geometry.shadow);
+  if (el.showShadow !== false) {
+    drawGroundShadow(ctx, el, geometry.shadow);
+  }
 
   const visible = geometry.surfaces
     .filter((surface) => surface.visible)
@@ -63,6 +65,12 @@ function drawFrontCover(
   surface: BookMockupSurface,
   image?: HTMLImageElement,
 ) {
+  // Always fill solid opaque backing so transparent PNGs/textures don't make the book see-through
+  pathQuad(ctx, surface.quad);
+  ctx.fillStyle =
+    el.backgroundColor && el.backgroundColor !== "transparent" ? el.backgroundColor : "#ffffff";
+  ctx.fill();
+
   if (image?.complete && image.naturalWidth > 0) {
     drawImageInQuad(ctx, image, surface.quad);
   } else {
@@ -91,14 +99,19 @@ function drawCoverPlaceholder(
   ctx.save();
   pathQuad(ctx, quad);
   ctx.clip();
-  ctx.strokeStyle = "rgba(71, 84, 103, 0.16)";
-  ctx.lineWidth = Math.max(1, el.width * 0.003);
-  for (let offset = -bounds.height; offset < bounds.width + bounds.height; offset += 20) {
-    ctx.beginPath();
-    ctx.moveTo(bounds.x + offset, bounds.y);
-    ctx.lineTo(bounds.x + offset + bounds.height, bounds.y + bounds.height);
-    ctx.stroke();
-  }
+
+  // Subtle inner border
+  const padX = bounds.width * 0.08;
+  const padY = bounds.height * 0.08;
+  ctx.strokeStyle = "rgba(71, 84, 103, 0.18)";
+  ctx.lineWidth = Math.max(1, el.width * 0.002);
+  ctx.strokeRect(
+    bounds.x + padX,
+    bounds.y + padY,
+    bounds.width - padX * 2,
+    bounds.height - padY * 2,
+  );
+
   ctx.fillStyle = "#536176";
   ctx.font = `700 ${Math.max(11, bounds.width * 0.075)}px sans-serif`;
   ctx.textAlign = "center";
@@ -112,7 +125,7 @@ function drawPageSurface(
   el: BookMockupElement,
   surface: BookMockupSurface,
 ) {
-  const base = el.pageColor ?? "#f3eee2";
+  const base = el.pageColor ?? "#f8f4ec";
   const quad = surface.quad;
   const bounds = quadBounds(quad);
   pathQuad(ctx, quad);
@@ -122,17 +135,17 @@ function drawPageSurface(
     bounds.x + bounds.width,
     bounds.y + bounds.height,
   );
-  gradient.addColorStop(0, shadeHex(base, 12));
+  gradient.addColorStop(0, shadeHex(base, 8));
   gradient.addColorStop(0.42, base);
-  gradient.addColorStop(1, shadeHex(base, -24));
+  gradient.addColorStop(1, shadeHex(base, -18));
   ctx.fillStyle = gradient;
   ctx.fill();
 
   ctx.save();
   pathQuad(ctx, quad);
   ctx.clip();
-  ctx.strokeStyle = "rgba(92, 75, 52, 0.16)";
-  ctx.lineWidth = Math.max(0.35, Math.min(el.width, el.height) * 0.0011);
+  ctx.strokeStyle = "rgba(92, 75, 52, 0.13)";
+  ctx.lineWidth = Math.max(0.35, Math.min(el.width, el.height) * 0.001);
   const count = surface.id === "pageFore" ? 24 : 15;
   for (let index = 1; index < count; index++) {
     const amount = index / count;
@@ -154,10 +167,10 @@ function drawPageSurface(
 
   // Contact shadow where the page block meets the cover.
   const contact = ctx.createLinearGradient(quad[0].x, quad[0].y, quad[3].x, quad[3].y);
-  contact.addColorStop(0, "rgba(24, 20, 16, 0.22)");
+  contact.addColorStop(0, "rgba(24, 20, 16, 0.18)");
   contact.addColorStop(0.12, "rgba(24, 20, 16, 0)");
-  contact.addColorStop(0.86, "rgba(24, 20, 16, 0)");
-  contact.addColorStop(1, "rgba(24, 20, 16, 0.16)");
+  contact.addColorStop(0.88, "rgba(24, 20, 16, 0)");
+  contact.addColorStop(1, "rgba(24, 20, 16, 0.12)");
   pathQuad(ctx, quad);
   ctx.fillStyle = contact;
   ctx.fill();
@@ -187,7 +200,7 @@ function drawCoverSurface(
   ctx.fill();
   applyIllumination(ctx, surface.quad, surface.illumination);
   pathQuad(ctx, surface.quad);
-  ctx.strokeStyle = "rgba(8, 12, 20, 0.26)";
+  ctx.strokeStyle = "rgba(8, 12, 20, 0.22)";
   ctx.lineWidth = 0.75;
   ctx.stroke();
 }
@@ -205,17 +218,35 @@ function drawHingeAndFinish(
   pathQuad(ctx, front);
   ctx.clip();
 
+  // Subtle natural joint crease along the spine hinge
   const crease = ctx.createLinearGradient(hingeStart.x, hingeStart.y, hingeEnd.x, hingeEnd.y);
-  crease.addColorStop(0, `rgba(6, 10, 18, ${binding === "hardcover" ? 0.34 : 0.22})`);
-  crease.addColorStop(0.28, "rgba(6, 10, 18, 0.08)");
-  crease.addColorStop(0.58, `rgba(255, 255, 255, ${binding === "hardcover" ? 0.16 : 0.1})`);
+  const creaseAlpha = binding === "hardcover" ? 0.14 : 0.06;
+  crease.addColorStop(0, `rgba(6, 10, 18, ${creaseAlpha})`);
+  crease.addColorStop(0.4, "rgba(6, 10, 18, 0.02)");
+  crease.addColorStop(0.75, "rgba(255, 255, 255, 0.06)");
   crease.addColorStop(1, "rgba(255, 255, 255, 0)");
   pathQuad(ctx, hinge);
   ctx.fillStyle = crease;
   ctx.fill();
 
-  // A broad, restrained specular pass makes the cover react to the same key
-  // light while preserving the printed cover artwork.
+  // Delicate groove indent line for hardcover
+  if (binding === "hardcover") {
+    ctx.beginPath();
+    ctx.moveTo(hinge[1].x, hinge[1].y);
+    ctx.lineTo(hinge[2].x, hinge[2].y);
+    ctx.strokeStyle = "rgba(6, 10, 18, 0.14)";
+    ctx.lineWidth = Math.max(0.6, el.width * 0.0014);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(hinge[1].x + 0.6, hinge[1].y);
+    ctx.lineTo(hinge[2].x + 0.6, hinge[2].y);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = Math.max(0.6, el.width * 0.0014);
+    ctx.stroke();
+  }
+
+  // Specular light pass
   const bounds = quadBounds(front);
   const angle = ((el.lightAngle ?? -38) * Math.PI) / 180;
   const dx = Math.cos(angle) * bounds.width * 0.7;
@@ -226,17 +257,18 @@ function drawHingeAndFinish(
     bounds.x + bounds.width / 2 + dx,
     bounds.y + bounds.height / 2 + dy,
   );
-  const glossStrength = clamp(el.lightIntensity, 0, 1) * (binding === "hardcover" ? 0.2 : 0.12);
-  gloss.addColorStop(0, `rgba(255,255,255,${glossStrength})`);
-  gloss.addColorStop(0.35, "rgba(255,255,255,0)");
-  gloss.addColorStop(1, "rgba(0,0,0,0.05)");
+  const glossStrength = clamp(el.lightIntensity, 0, 1) * (binding === "hardcover" ? 0.14 : 0.09);
+  gloss.addColorStop(0, `rgba(255, 255, 255, ${glossStrength})`);
+  gloss.addColorStop(0.35, "rgba(255, 255, 255, 0)");
+  gloss.addColorStop(1, "rgba(0, 0, 0, 0.03)");
   ctx.fillStyle = gloss;
   ctx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
   ctx.restore();
 
+  // Crisp front border edge
   pathQuad(ctx, front);
-  ctx.strokeStyle = binding === "hardcover" ? "rgba(5, 8, 15, 0.46)" : "rgba(5, 8, 15, 0.3)";
-  ctx.lineWidth = Math.max(0.8, el.width * (binding === "hardcover" ? 0.0032 : 0.002));
+  ctx.strokeStyle = binding === "hardcover" ? "rgba(5, 8, 15, 0.32)" : "rgba(5, 8, 15, 0.2)";
+  ctx.lineWidth = Math.max(0.75, el.width * (binding === "hardcover" ? 0.0024 : 0.0015));
   ctx.stroke();
 }
 
@@ -256,48 +288,137 @@ function applyIllumination(ctx: CanvasRenderingContext2D, quad: MockupQuad, illu
 function drawImageInQuad(ctx: CanvasRenderingContext2D, image: HTMLImageElement, quad: MockupQuad) {
   const sourceWidth = image.naturalWidth;
   const sourceHeight = image.naturalHeight;
-  const slices = Math.max(72, Math.min(240, Math.round(sourceWidth / 5)));
+  if (!sourceWidth || !sourceHeight) return;
 
-  for (let index = 0; index < slices; index++) {
-    const amount0 = index / slices;
-    const amount1 = (index + 1) / slices;
-    const sourceX0 = sourceWidth * amount0;
-    const sourceX1 = sourceWidth * amount1;
-    const sourceSliceWidth = Math.max(0.5, sourceX1 - sourceX0);
-    const top0 = lerp(quad[0], quad[1], amount0);
-    const top1 = lerp(quad[0], quad[1], amount1);
-    const bottom0 = lerp(quad[3], quad[2], amount0);
-    const bottom1 = lerp(quad[3], quad[2], amount1);
+  // Outer clip to the exact quad boundary
+  ctx.save();
+  pathQuad(ctx, quad);
+  ctx.clip();
 
-    const a = (top1.x - top0.x) / sourceSliceWidth;
-    const b = (top1.y - top0.y) / sourceSliceWidth;
-    const c = (bottom0.x - top0.x) / sourceHeight;
-    const d = (bottom0.y - top0.y) / sourceHeight;
-    const e = top0.x - a * sourceX0;
-    const f = top0.y - b * sourceX0;
+  // Subdivide into a grid of triangles for smooth perspective mapping without vertical strip artifacts
+  const segments = 12;
+  const grid: { x: number; y: number; u: number; v: number }[][] = [];
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(top0.x, top0.y);
-    ctx.lineTo(top1.x + 1, top1.y);
-    ctx.lineTo(bottom1.x + 1, bottom1.y);
-    ctx.lineTo(bottom0.x, bottom0.y);
-    ctx.closePath();
-    ctx.clip();
-    ctx.setTransform(a, b, c, d, e, f);
-    ctx.drawImage(
-      image,
-      sourceX0,
-      0,
-      sourceSliceWidth + 1,
-      sourceHeight,
-      sourceX0,
-      0,
-      sourceSliceWidth + 1,
-      sourceHeight,
-    );
-    ctx.restore();
+  for (let gy = 0; gy <= segments; gy++) {
+    const row: { x: number; y: number; u: number; v: number }[] = [];
+    const v = gy / segments;
+    for (let gx = 0; gx <= segments; gx++) {
+      const u = gx / segments;
+      const top = lerp(quad[0], quad[1], u);
+      const bottom = lerp(quad[3], quad[2], u);
+      const pt = lerp(top, bottom, v);
+      row.push({ x: pt.x, y: pt.y, u, v });
+    }
+    grid.push(row);
   }
+
+  for (let gy = 0; gy < segments; gy++) {
+    for (let gx = 0; gx < segments; gx++) {
+      const p00 = grid[gy][gx];
+      const p10 = grid[gy][gx + 1];
+      const p01 = grid[gy + 1][gx];
+      const p11 = grid[gy + 1][gx + 1];
+
+      // Triangle 1: p00, p10, p01 (top-left, top-right, bottom-left)
+      drawTriangle(
+        ctx,
+        image,
+        p00.u * sourceWidth,
+        p00.v * sourceHeight,
+        p10.u * sourceWidth,
+        p10.v * sourceHeight,
+        p01.u * sourceWidth,
+        p01.v * sourceHeight,
+        p00.x,
+        p00.y,
+        p10.x,
+        p10.y,
+        p01.x,
+        p01.y,
+      );
+
+      // Triangle 2: p10, p11, p01 (top-right, bottom-right, bottom-left)
+      drawTriangle(
+        ctx,
+        image,
+        p10.u * sourceWidth,
+        p10.v * sourceHeight,
+        p11.u * sourceWidth,
+        p11.v * sourceHeight,
+        p01.u * sourceWidth,
+        p01.v * sourceHeight,
+        p10.x,
+        p10.y,
+        p11.x,
+        p11.y,
+        p01.x,
+        p01.y,
+      );
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawTriangle(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  u0: number,
+  v0: number,
+  u1: number,
+  v1: number,
+  u2: number,
+  v2: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+) {
+  const denom = (u0 - u2) * (v1 - v2) - (u1 - u2) * (v0 - v2);
+  if (Math.abs(denom) < 1e-6) return;
+
+  const a = ((x0 - x2) * (v1 - v2) - (x1 - x2) * (v0 - v2)) / denom;
+  const b = ((y0 - y2) * (v1 - v2) - (y1 - y2) * (v0 - v2)) / denom;
+  const c = ((x1 - x2) * (u0 - u2) - (x0 - x2) * (u1 - u2)) / denom;
+  const d = ((y1 - y2) * (u0 - u2) - (y0 - y2) * (u1 - u2)) / denom;
+  const e = x0 - a * u0 - c * v0;
+  const f = y0 - b * u0 - d * v0;
+
+  // Slightly expand triangle clipping path to prevent subpixel hairline gaps
+  const cx = (x0 + x1 + x2) / 3;
+  const cy = (y0 + y1 + y2) / 3;
+  const expand = 0.5;
+
+  const dx0 = x0 - cx;
+  const dy0 = y0 - cy;
+  const len0 = Math.hypot(dx0, dy0) || 1;
+  const ex0 = x0 + (dx0 / len0) * expand;
+  const ey0 = y0 + (dy0 / len0) * expand;
+
+  const dx1 = x1 - cx;
+  const dy1 = y1 - cy;
+  const len1 = Math.hypot(dx1, dy1) || 1;
+  const ex1 = x1 + (dx1 / len1) * expand;
+  const ey1 = y1 + (dy1 / len1) * expand;
+
+  const dx2 = x2 - cx;
+  const dy2 = y2 - cy;
+  const len2 = Math.hypot(dx2, dy2) || 1;
+  const ex2 = x2 + (dx2 / len2) * expand;
+  const ey2 = y2 + (dy2 / len2) * expand;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(ex0, ey0);
+  ctx.lineTo(ex1, ey1);
+  ctx.lineTo(ex2, ey2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.transform(a, b, c, d, e, f);
+  ctx.drawImage(image, 0, 0);
+  ctx.restore();
 }
 
 function pathQuad(ctx: CanvasRenderingContext2D, quad: MockupQuad) {

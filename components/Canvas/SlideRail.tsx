@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { IconTrash } from "@/components/icons";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
@@ -26,7 +27,7 @@ export default function SlideRail() {
   const renameSlide = useEngine((s) => s.renameSlide);
   const reorderSlides = useEngine((s) => s.reorderSlides);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
@@ -35,11 +36,36 @@ export default function SlideRail() {
   const [ctxMenu, setCtxMenu] = useState<{
     x: number;
     y: number;
-    slideId: string;
+    slideId: string | null;
     index: number;
   } | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+
+  const currentIndex = slides.findIndex((sl) => sl.id === currentSlideId);
+  const canMoveUp = currentIndex > 0;
+  const canMoveDown = currentIndex >= 0 && currentIndex < slides.length - 1;
+  const canDelete = slides.length > 1;
+
+  const handleMoveUp = () => {
+    if (!canMoveUp) return;
+    reorderSlides(currentIndex, currentIndex - 1);
+  };
+
+  const handleMoveDown = () => {
+    if (!canMoveDown) return;
+    reorderSlides(currentIndex, currentIndex + 2);
+  };
+
+  const handleDelete = () => {
+    if (!canDelete) return;
+    if (selectedSlideIds.size > 0) {
+      selectedSlideIds.forEach((id) => deleteSlide(id));
+      setSelectedSlideIds(new Set());
+    } else if (currentSlideId) {
+      deleteSlide(currentSlideId);
+    }
+  };
 
   useEffect(() => {
     function onClick() {
@@ -90,6 +116,10 @@ export default function SlideRail() {
 
   return (
     <aside
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setCtxMenu({ x: e.clientX, y: e.clientY, slideId: null, index: -1 });
+      }}
       style={{
         width: 150,
         borderRight: "1px solid var(--stroke, #e5e7eb)",
@@ -103,10 +133,9 @@ export default function SlideRail() {
       <div
         style={{
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
           alignItems: "center",
-          gap: 4,
-          padding: "7px 9px 6px",
+          padding: "6px 8px",
           borderBottom: "1px solid var(--stroke, #e5e7eb)",
         }}
       >
@@ -114,8 +143,8 @@ export default function SlideRail() {
           onClick={() => setCollapsed(true)}
           title="Collapse"
           style={{
-            width: 17,
-            height: 17,
+            width: 18,
+            height: 18,
             borderRadius: 3,
             border: "1px solid var(--stroke, #e5e7eb)",
             background: "var(--surface-solid, #fff)",
@@ -131,50 +160,111 @@ export default function SlideRail() {
         >
           ‹
         </button>
-        <button
-          onClick={addSlide}
-          style={{
-            width: 17,
-            height: 17,
-            borderRadius: 3,
-            border: "1px solid var(--stroke, #d1d5db)",
-            background: "var(--surface-solid, #fff)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 11,
-            color: "var(--ink-muted, #6b7280)",
-            lineHeight: 1,
-          }}
-          title="Add slide"
-        >
-          +
-        </button>
-        {selectedSlideIds.size > 0 && (
+
+        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
           <button
-            onClick={() => {
-              selectedSlideIds.forEach((id) => deleteSlide(id));
-              setSelectedSlideIds(new Set());
-            }}
+            onClick={handleMoveUp}
+            disabled={!canMoveUp}
             style={{
-              padding: "2px 6px",
+              width: 18,
+              height: 18,
               borderRadius: 3,
-              border: "1px solid #fca5a5",
-              background: "#fef2f2",
-              color: "#dc2626",
-              fontSize: 9,
-              cursor: "pointer",
+              border: "1px solid var(--stroke, #d1d5db)",
+              background: "var(--surface-solid, #fff)",
+              cursor: canMoveUp ? "pointer" : "not-allowed",
+              opacity: canMoveUp ? 1 : 0.35,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 10,
+              fontWeight: 600,
+              color: "var(--ink-muted, #4b5563)",
+              lineHeight: 1,
+              transition: "all 0.15s ease",
             }}
-            title={`Delete ${selectedSlideIds.size} selected`}
+            title="Move slide up (↑)"
           >
-            Delete {selectedSlideIds.size}
+            ↑
           </button>
-        )}
+
+          <button
+            onClick={handleMoveDown}
+            disabled={!canMoveDown}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 3,
+              border: "1px solid var(--stroke, #d1d5db)",
+              background: "var(--surface-solid, #fff)",
+              cursor: canMoveDown ? "pointer" : "not-allowed",
+              opacity: canMoveDown ? 1 : 0.35,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 10,
+              fontWeight: 600,
+              color: "var(--ink-muted, #4b5563)",
+              lineHeight: 1,
+              transition: "all 0.15s ease",
+            }}
+            title="Move slide down (↓)"
+          >
+            ↓
+          </button>
+
+          <button
+            onClick={addSlide}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 3,
+              border: "1px solid var(--stroke, #d1d5db)",
+              background: "var(--surface-solid, #fff)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              color: "var(--ink-muted, #374151)",
+              lineHeight: 1,
+              transition: "all 0.15s ease",
+            }}
+            title="Add slide (+)"
+          >
+            +
+          </button>
+
+          <button
+            onClick={handleDelete}
+            disabled={!canDelete}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 3,
+              border: "1px solid var(--stroke, #d1d5db)",
+              background: "var(--surface-solid, #fff)",
+              cursor: canDelete ? "pointer" : "not-allowed",
+              opacity: canDelete ? 1 : 0.35,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: canDelete ? "#ef4444" : "var(--ink-muted, #9ca3af)",
+              lineHeight: 1,
+              transition: "all 0.15s ease",
+            }}
+            title="Delete slide"
+          >
+            <IconTrash size={11} />
+          </button>
+        </div>
       </div>
 
       {/* Slide list */}
       <div
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setCtxMenu({ x: e.clientX, y: e.clientY, slideId: null, index: -1 });
+        }}
         style={{
           flex: 1,
           overflowY: "auto",
@@ -207,6 +297,7 @@ export default function SlideRail() {
             onDelete={slides.length > 1 ? () => deleteSlide(sl.id) : undefined}
             onContextMenu={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setCtxMenu({ x: e.clientX, y: e.clientY, slideId: sl.id, index: i });
             }}
             dragIndex={dragIndex}
@@ -249,27 +340,31 @@ export default function SlideRail() {
               setCtxMenu(null);
             }}
           />
-          <CtxItem
-            label="Rename"
-            onClick={() => {
-              const sl = slides[ctxMenu.index];
-              if (sl) {
-                setRenamingId(sl.id);
-                setRenameValue(sl.name.replace(/^Slide\s+/i, ""));
-              }
-              setCtxMenu(null);
-            }}
-          />
-          <div style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "3px 0" }} />
-          <CtxItem
-            label="Delete"
-            danger
-            disabled={slides.length <= 1}
-            onClick={() => {
-              if (slides.length > 1) deleteSlide(ctxMenu.slideId);
-              setCtxMenu(null);
-            }}
-          />
+          {ctxMenu.slideId ? (
+            <>
+              <CtxItem
+                label="Rename"
+                onClick={() => {
+                  const sl = slides[ctxMenu.index];
+                  if (sl) {
+                    setRenamingId(sl.id);
+                    setRenameValue(sl.name.replace(/^Slide\s+/i, ""));
+                  }
+                  setCtxMenu(null);
+                }}
+              />
+              <div style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "3px 0" }} />
+              <CtxItem
+                label="Delete"
+                danger
+                disabled={slides.length <= 1}
+                onClick={() => {
+                  if (slides.length > 1 && ctxMenu.slideId) deleteSlide(ctxMenu.slideId);
+                  setCtxMenu(null);
+                }}
+              />
+            </>
+          ) : null}
         </div>
       )}
 

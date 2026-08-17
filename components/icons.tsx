@@ -53,6 +53,12 @@ export const IconDownload = (p: Props) =>
   );
 
 export const IconCursor = (p: Props) => svg(p.size, <path d="M4 3l7 17 2.5-7 7-2.5Z" />, p);
+export const IconDirectSelect = (p: Props) =>
+  svg(
+    p.size,
+    <path d="M4 3l7 17 2.5-7 7-2.5Z" fill="currentColor" stroke="currentColor" strokeWidth="1.2" />,
+    p,
+  );
 
 export const IconText = (p: Props) =>
   svg(
@@ -186,9 +192,17 @@ export const IconAlignLeft = (p: Props) =>
   svg(
     p.size,
     <>
-      <path d="M4 6h16" />
-      <path d="M4 12h10" />
-      <path d="M4 18h14" />
+      <line
+        x1="4"
+        y1="3"
+        x2="4"
+        y2="21"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <rect x="7" y="5" width="13" height="5" rx="1.5" fill="currentColor" stroke="none" />
+      <rect x="7" y="14" width="8" height="5" rx="1.5" fill="currentColor" stroke="none" />
     </>,
     p,
   );
@@ -204,13 +218,151 @@ export const IconAlignCenter = (p: Props) =>
     p,
   );
 
+export const IconAlignCenterH = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <line
+        x1="12"
+        y1="3"
+        x2="12"
+        y2="21"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <rect x="5.5" y="5" width="13" height="5" rx="1.5" fill="currentColor" stroke="none" />
+      <rect x="8" y="14" width="8" height="5" rx="1.5" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
 export const IconAlignRight = (p: Props) =>
   svg(
     p.size,
     <>
-      <path d="M4 6h16" />
-      <path d="M10 12h10" />
-      <path d="M6 18h14" />
+      <line
+        x1="20"
+        y1="3"
+        x2="20"
+        y2="21"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <rect x="4" y="5" width="13" height="5" rx="1.5" fill="currentColor" stroke="none" />
+      <rect x="9" y="14" width="8" height="5" rx="1.5" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
+export const IconAlignTop = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <line
+        x1="3"
+        y1="4"
+        x2="21"
+        y2="4"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <rect x="5" y="7" width="5" height="13" rx="1.5" fill="currentColor" stroke="none" />
+      <rect x="14" y="7" width="5" height="8" rx="1.5" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
+export const IconAlignMiddleV = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <line
+        x1="3"
+        y1="12"
+        x2="21"
+        y2="12"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <rect x="5" y="5.5" width="5" height="13" rx="1.5" fill="currentColor" stroke="none" />
+      <rect x="14" y="8" width="5" height="8" rx="1.5" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
+export const IconAlignBottom = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <line
+        x1="3"
+        y1="20"
+        x2="21"
+        y2="20"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <rect x="5" y="4" width="5" height="13" rx="1.5" fill="currentColor" stroke="none" />
+      <rect x="14" y="9" width="5" height="8" rx="1.5" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
+export const IconDistributeH = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <line
+        x1="3"
+        y1="3"
+        x2="3"
+        y2="21"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="21"
+        y1="3"
+        x2="21"
+        y2="21"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <rect x="8.5" y="6" width="7" height="12" rx="1.5" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
+export const IconDistributeV = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <line
+        x1="3"
+        y1="3"
+        x2="21"
+        y2="3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="3"
+        y1="21"
+        x2="21"
+        y2="21"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <rect x="6" y="8.5" width="12" height="7" rx="1.5" fill="currentColor" stroke="none" />
     </>,
     p,
   );
@@ -255,6 +407,28 @@ export const IconUnlock = (p: Props) =>
     p,
   );
 
+export const IconEye = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>,
+    p,
+  );
+
+export const IconEyeOff = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </>,
+    p,
+  );
+
 export const IconTrash = (p: Props) =>
   svg(
     p.size,
@@ -267,6 +441,20 @@ export const IconTrash = (p: Props) =>
   );
 
 export const IconChevronDown = (p: Props) => svg(p.size, <path d="m6 9 6 6 6-6" />, p);
+
+export const IconGripVertical = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <circle cx="9" cy="6" r="1.25" fill="currentColor" />
+      <circle cx="9" cy="12" r="1.25" fill="currentColor" />
+      <circle cx="9" cy="18" r="1.25" fill="currentColor" />
+      <circle cx="15" cy="6" r="1.25" fill="currentColor" />
+      <circle cx="15" cy="12" r="1.25" fill="currentColor" />
+      <circle cx="15" cy="18" r="1.25" fill="currentColor" />
+    </>,
+    p,
+  );
 
 export const IconSlides = (p: Props) =>
   svg(
@@ -555,6 +743,239 @@ export const IconStats = (p: Props) =>
       <path d="M6 20V10" strokeWidth="1.8" />
       <path d="M12 20V4" strokeWidth="1.8" />
       <path d="M18 20v-8" strokeWidth="1.8" />
+    </>,
+    p,
+  );
+
+export const IconGrid = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
+    </>,
+    p,
+  );
+
+export const IconZoomIn = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+      <path d="M11 8v6M8 11h6" />
+    </>,
+    p,
+  );
+
+export const IconZoomOut = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+      <path d="M8 11h6" />
+    </>,
+    p,
+  );
+
+/** Illustrator-style Pathfinder icons */
+export const IconPathfinderUnite = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect
+        x="3"
+        y="3"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="currentColor"
+        fillOpacity="0.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="currentColor"
+        fillOpacity="0.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </>,
+    p,
+  );
+
+export const IconPathfinderMinusFront = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect
+        x="3"
+        y="3"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="currentColor"
+        fillOpacity="0.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="2 2"
+      />
+    </>,
+    p,
+  );
+
+export const IconPathfinderIntersect = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect
+        x="3"
+        y="3"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="2 2"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="2 2"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="4"
+        height="4"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1"
+      />
+    </>,
+    p,
+  );
+
+export const IconPathfinderExclude = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect
+        x="3"
+        y="3"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="currentColor"
+        fillOpacity="0.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="currentColor"
+        fillOpacity="0.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="4"
+        height="4"
+        fill="var(--surface-solid, #fff)"
+        stroke="currentColor"
+        strokeWidth="1"
+      />
+    </>,
+    p,
+  );
+
+export const IconPathfinderMinusBack = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect
+        x="3"
+        y="3"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="2 2"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="11"
+        height="11"
+        rx="1.5"
+        fill="currentColor"
+        fillOpacity="0.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </>,
+    p,
+  );
+
+export const IconPathfinderDivide = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect
+        x="3"
+        y="3"
+        width="11"
+        height="11"
+        rx="1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <rect
+        x="10"
+        y="10"
+        width="11"
+        height="11"
+        rx="1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <line x1="3" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth="1" />
+      <line x1="10" y1="3" x2="10" y2="14" stroke="currentColor" strokeWidth="1" />
     </>,
     p,
   );

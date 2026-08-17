@@ -70,8 +70,6 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
     bookWidth * clamp(el.coverThickness ?? (binding === "hardcover" ? 1.8 : 0.6), 0.2, 5) * 0.01;
   const coverThickness =
     binding === "hardcover" ? requestedCoverThickness : requestedCoverThickness * 0.45;
-  const pageWidth = Math.max(bookWidth * 0.72, bookWidth - overhang * 2);
-  const pageHeight = Math.max(bookHeight * 0.72, bookHeight - overhang * 2);
   const outerFrontZ = bookDepth / 2 + coverThickness / 2;
   const innerFrontZ = bookDepth / 2 - coverThickness / 2;
   const outerBackZ = -bookDepth / 2 - coverThickness / 2;
@@ -82,13 +80,14 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
   const surfaces = makeModelSurfaces({
     bookWidth,
     bookHeight,
-    pageWidth,
-    pageHeight,
+    overhang,
+    coverThickness,
     outerFrontZ,
     innerFrontZ,
     outerBackZ,
     pageFrontZ,
     pageBackZ,
+    binding,
   });
 
   const yaw = radians(clamp(el.yaw, -65, 65));
@@ -121,11 +120,9 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
     ...hingeModel.map(projectRaw),
   ];
   const rawBounds = boundsOf(rawPoints);
-  // The element box already follows the projected book ratio. Keep only a
-  // restrained safety margin (with extra room below for the ground shadow)
-  // so the Transformer hugs the visible mockup instead of a large container.
-  const usableWidth = elementWidth * 0.88;
-  const usableHeight = elementHeight * 0.88;
+  // Restrained safety margin so the Transformer hugs the visible mockup snug and centered
+  const usableWidth = elementWidth * 0.93;
+  const usableHeight = elementHeight * 0.91;
   const scale = Math.min(
     usableWidth / Math.max(0.001, rawBounds.width),
     usableHeight / Math.max(0.001, rawBounds.height),
@@ -134,7 +131,7 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
   const rawCenterY = rawBounds.y + rawBounds.height / 2;
   const mapPoint = (point: MockupPoint): MockupPoint => ({
     x: elementWidth * 0.5 + (point.x - rawCenterX) * scale,
-    y: elementHeight * 0.44 + (point.y - rawCenterY) * scale,
+    y: elementHeight * 0.47 + (point.y - rawCenterY) * scale,
   });
   const projectQuad = (vertices: [Vec3, Vec3, Vec3, Vec3]): MockupQuad =>
     vertices.map((point) => mapPoint(projectRaw(point))) as MockupQuad;
@@ -150,6 +147,7 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
   const intensity = clamp(el.lightIntensity, 0, 1);
 
   const projectedSurfaces: BookMockupSurface[] = surfaces.map((surface) => {
+    const quad = projectQuad(surface.vertices);
     const rotatedNormal = normalize(rotate(surface.normal));
     const rotatedVertices = surface.vertices.map(rotate);
     const center = average3(rotatedVertices);
@@ -159,12 +157,17 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
       z: cameraDistance - center.z,
     });
     const diffuse = Math.max(0, dot(rotatedNormal, light));
+    // 2D screen cross product: positive for front-facing quads in screen coords
+    const cross =
+      (quad[1].x - quad[0].x) * (quad[3].y - quad[0].y) -
+      (quad[1].y - quad[0].y) * (quad[3].x - quad[0].x);
+    const normalFacing = dot(rotatedNormal, cameraVector) > 0.01;
     return {
       id: surface.id,
-      quad: projectQuad(surface.vertices),
+      quad,
       depth: center.z,
       illumination: clamp(ambient + diffuse * intensity, 0, 1.4),
-      visible: dot(rotatedNormal, cameraVector) > 0.012,
+      visible: cross > 0.05 && normalFacing,
     };
   });
   const frontSurface = projectedSurfaces.find((surface) => surface.id === "frontCover")!;
@@ -185,17 +188,17 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
     surfaces: projectedSurfaces,
     binding,
     shadow: {
-      cx: visibleBounds.x + visibleBounds.width / 2 - Math.cos(azimuth) * shadowOffset * 0.36,
+      cx: visibleBounds.x + visibleBounds.width / 2 - Math.cos(azimuth) * shadowOffset * 0.28,
       cy: Math.min(
-        elementHeight * 0.94,
-        visibleBounds.y + visibleBounds.height + shadowOffset * 0.32,
+        elementHeight * 0.96,
+        visibleBounds.y + visibleBounds.height + 2 + shadowOffset * 0.2,
       ),
-      radiusX: Math.max(5, visibleBounds.width * 0.43),
+      radiusX: Math.max(6, visibleBounds.width * 0.45),
       radiusY: Math.max(
-        3,
-        elementHeight * 0.014 + clamp(el.shadowBlur, 0, 100) * shadowScale * 0.16,
+        3.5,
+        elementHeight * 0.016 + clamp(el.shadowBlur, 0, 100) * shadowScale * 0.14,
       ),
-      rotation: roll + yaw * 0.12,
+      rotation: roll + yaw * 0.1,
     },
   };
 }
@@ -203,35 +206,39 @@ export function getBookMockupGeometry(el: BookMockupElement): BookMockupGeometry
 function makeModelSurfaces(model: {
   bookWidth: number;
   bookHeight: number;
-  pageWidth: number;
-  pageHeight: number;
+  overhang: number;
+  coverThickness: number;
   outerFrontZ: number;
   innerFrontZ: number;
   outerBackZ: number;
   pageFrontZ: number;
   pageBackZ: number;
+  binding: "paperback" | "hardcover";
 }): ModelSurface[] {
   const {
     bookWidth: width,
     bookHeight: height,
-    pageWidth,
-    pageHeight,
+    overhang,
+    coverThickness,
     outerFrontZ,
     innerFrontZ,
     outerBackZ,
     pageFrontZ,
     pageBackZ,
+    binding,
   } = model;
   const left = -width / 2;
   const right = width / 2;
   const top = height / 2;
   const bottom = -height / 2;
-  const pageLeft = -pageWidth / 2;
-  const pageRight = pageWidth / 2;
-  const pageTop = pageHeight / 2;
-  const pageBottom = -pageHeight / 2;
 
-  return [
+  // Page block is attached to spine on left, and sits inside overhang on right, top, bottom
+  const pageLeft = left + (binding === "hardcover" ? coverThickness * 0.5 : 0);
+  const pageRight = right - overhang;
+  const pageTop = top - overhang;
+  const pageBottom = bottom + overhang;
+
+  const baseSurfaces: ModelSurface[] = [
     {
       id: "backCover",
       vertices: [
@@ -283,46 +290,6 @@ function makeModelSurfaces(model: {
       normal: { x: 0, y: -1, z: 0 },
     },
     {
-      id: "frontEdgeLeft",
-      vertices: [
-        { x: left, y: top, z: innerFrontZ },
-        { x: left, y: top, z: outerFrontZ },
-        { x: left, y: bottom, z: outerFrontZ },
-        { x: left, y: bottom, z: innerFrontZ },
-      ],
-      normal: { x: -1, y: 0, z: 0 },
-    },
-    {
-      id: "frontEdgeRight",
-      vertices: [
-        { x: right, y: top, z: outerFrontZ },
-        { x: right, y: top, z: innerFrontZ },
-        { x: right, y: bottom, z: innerFrontZ },
-        { x: right, y: bottom, z: outerFrontZ },
-      ],
-      normal: { x: 1, y: 0, z: 0 },
-    },
-    {
-      id: "frontEdgeTop",
-      vertices: [
-        { x: left, y: top, z: innerFrontZ },
-        { x: right, y: top, z: innerFrontZ },
-        { x: right, y: top, z: outerFrontZ },
-        { x: left, y: top, z: outerFrontZ },
-      ],
-      normal: { x: 0, y: 1, z: 0 },
-    },
-    {
-      id: "frontEdgeBottom",
-      vertices: [
-        { x: left, y: bottom, z: outerFrontZ },
-        { x: right, y: bottom, z: outerFrontZ },
-        { x: right, y: bottom, z: innerFrontZ },
-        { x: left, y: bottom, z: innerFrontZ },
-      ],
-      normal: { x: 0, y: -1, z: 0 },
-    },
-    {
       id: "frontCover",
       vertices: [
         { x: left, y: top, z: outerFrontZ },
@@ -333,6 +300,43 @@ function makeModelSurfaces(model: {
       normal: { x: 0, y: 0, z: 1 },
     },
   ];
+
+  if (binding === "hardcover") {
+    baseSurfaces.push(
+      {
+        id: "frontEdgeRight",
+        vertices: [
+          { x: right, y: top, z: outerFrontZ },
+          { x: right, y: top, z: innerFrontZ },
+          { x: right, y: bottom, z: innerFrontZ },
+          { x: right, y: bottom, z: outerFrontZ },
+        ],
+        normal: { x: 1, y: 0, z: 0 },
+      },
+      {
+        id: "frontEdgeTop",
+        vertices: [
+          { x: left, y: top, z: innerFrontZ },
+          { x: right, y: top, z: innerFrontZ },
+          { x: right, y: top, z: outerFrontZ },
+          { x: left, y: top, z: outerFrontZ },
+        ],
+        normal: { x: 0, y: 1, z: 0 },
+      },
+      {
+        id: "frontEdgeBottom",
+        vertices: [
+          { x: left, y: bottom, z: outerFrontZ },
+          { x: right, y: bottom, z: outerFrontZ },
+          { x: right, y: bottom, z: innerFrontZ },
+          { x: left, y: bottom, z: innerFrontZ },
+        ],
+        normal: { x: 0, y: -1, z: 0 },
+      },
+    );
+  }
+
+  return baseSurfaces;
 }
 
 function rotatePoint(point: Vec3, pitch: number, yaw: number, roll: number): Vec3 {

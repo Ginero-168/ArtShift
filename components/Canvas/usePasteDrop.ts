@@ -13,7 +13,12 @@
 import { useEffect } from "react";
 import { BUILDER_BLOCK_MIME, createBuilderBlock, isBuilderBlockKind } from "@/lib/builder/blocks";
 import { createImage } from "@/lib/engine/factory";
-import { fileToDataURL, getImageCache, loadDataURL } from "@/lib/engine/imageCache";
+import {
+  fileToDataURL,
+  getImageCache,
+  isSupportedImageFile,
+  loadDataURL,
+} from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 
 export function usePasteDrop(
@@ -71,9 +76,29 @@ export function usePasteDrop(
           continue;
         }
 
-        if (!file.type.startsWith("image/")) continue;
+        if (!isSupportedImageFile(file)) continue;
         const dataURL = await fileToDataURL(file);
         const entry = await loadDataURL(dataURL);
+
+        // Check if dropped directly onto an existing Frame on the current slide (both Block & Free layers)
+        const st = useEngine.getState();
+        const currentSlide = st.doc.slides.find((sl) => sl.id === st.currentSlideId);
+        const targetFrame = currentSlide?.elements.find(
+          (el) =>
+            !el.isDeleted &&
+            el.type === "frame" &&
+            world.x >= el.x &&
+            world.x <= el.x + el.width &&
+            world.y >= el.y &&
+            world.y <= el.y + el.height,
+        );
+
+        if (targetFrame) {
+          st.setFrameImage(targetFrame.id, entry.fileId);
+          st.selectOnly([targetFrame.id]);
+          continue;
+        }
+
         const maxW = sw / 2;
         const maxH = sh / 2;
         const ratio = Math.min(maxW / entry.width, maxH / entry.height, 1);

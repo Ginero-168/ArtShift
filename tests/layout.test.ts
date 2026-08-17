@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createBuilderBlock } from "@/lib/builder/blocks";
-import { createText } from "@/lib/engine/factory";
+import { createRect, createText } from "@/lib/engine/factory";
 import { placementOverlapCells } from "@/lib/engine/hexLayout";
 import {
   addObjectToLayer,
@@ -8,6 +8,7 @@ import {
   createEngineLayer,
   moveObjectsToLayer,
   normalizeDocumentLayers,
+  reflowBlockObjects,
 } from "@/lib/engine/layers";
 import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineSlide } from "@/lib/engine/types";
 
@@ -92,6 +93,35 @@ describe("Layer-owned placement", () => {
 
     expect(slide.layers.find((layer) => layer.id === source.id)?.objectIds).toEqual([]);
     expect(slide.layers.find((layer) => layer.id === target.id)?.objectIds).toEqual([a.id, b.id]);
+  });
+
+  it("reflows each Block Layer as an independent layout plane", () => {
+    const lower = createEngineLayer("block", { name: "Lower", z: 1 });
+    const upper = createEngineLayer("block", { name: "Upper", z: 2 });
+    const lowerObject = createRect({ x: 0, y: 0, width: 200, height: 200 });
+    const upperObject = createRect({ x: 0, y: 0, width: 200, height: 200 });
+    const sharedPlacement = { col: 2, row: 2, colSpan: 4, rowSpan: 4 };
+    lower.objectIds = [lowerObject.id];
+    upper.objectIds = [upperObject.id];
+    lower.placements[lowerObject.id] = sharedPlacement;
+    upper.placements[upperObject.id] = sharedPlacement;
+
+    const slide = reflowBlockObjects(
+      {
+        ...emptySlide([lower, upper]),
+        elements: [lowerObject, upperObject],
+      },
+      1,
+    );
+
+    expect(slide.layers[0].placements[lowerObject.id]).toMatchObject(sharedPlacement);
+    expect(slide.layers[1].placements[upperObject.id]).toMatchObject(sharedPlacement);
+    expect(slide.elements[0]).toMatchObject({
+      x: slide.elements[1].x,
+      y: slide.elements[1].y,
+      width: slide.elements[1].width,
+      height: slide.elements[1].height,
+    });
   });
 
   it("migrates schema-v1 Object placement into Layer containers", () => {

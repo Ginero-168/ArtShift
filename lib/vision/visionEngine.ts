@@ -205,3 +205,49 @@ export async function visionOcr(imageDataUrl: string, onProgress?: (p: number) =
 export async function visionOcrWithRegions(imageDataUrl: string, onProgress?: (p: number) => void) {
   return await runVisionTask(imageDataUrl, "<OCR_WITH_REGION>", onProgress);
 }
+
+/**
+ * Crops a normalized bounding box region [x_min, y_min, x_max, y_max] from an image data URL
+ * and returns the cropped sub-image as a PNG data URL along with width & height.
+ */
+export async function cropImageRegion(
+  imageDataUrl: string,
+  bbox: { x_min: number; y_min: number; x_max: number; y_max: number },
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const naturalW = img.naturalWidth || img.width;
+      const naturalH = img.naturalHeight || img.height;
+
+      const sx = Math.max(0, Math.round(bbox.x_min * naturalW));
+      const sy = Math.max(0, Math.round(bbox.y_min * naturalH));
+      const sw = Math.min(naturalW - sx, Math.round((bbox.x_max - bbox.x_min) * naturalW));
+      const sh = Math.min(naturalH - sy, Math.round((bbox.y_max - bbox.y_min) * naturalH));
+
+      if (sw <= 0 || sh <= 0) {
+        resolve({ dataUrl: imageDataUrl, width: naturalW, height: naturalH });
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = sw;
+      canvas.height = sh;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      resolve({
+        dataUrl: canvas.toDataURL("image/png"),
+        width: sw,
+        height: sh,
+      });
+    };
+    img.onerror = () => reject(new Error("Failed to load image for cropping"));
+    img.src = imageDataUrl;
+  });
+}

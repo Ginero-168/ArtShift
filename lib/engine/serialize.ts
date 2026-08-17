@@ -74,8 +74,14 @@ export function fromJSON(input: unknown): EngineDoc {
     slides,
     snapGrid: obj.snapGrid ?? null,
     workspaceStrictness: obj.workspaceStrictness ?? 1,
+    strictnessLevel:
+      obj.strictnessLevel ??
+      (obj.workspaceStrictness === 1 ? 1 : obj.workspaceStrictness === 2 ? 2 : 3),
+    strictnessValues: obj.strictnessValues ?? { 2: 1, 3: 2 },
     updatedAt: obj.updatedAt ?? Date.now(),
-    schemaVersion: obj.schemaVersion ?? ENGINE_SCHEMA_VERSION,
+    // A missing version is a schema-v1 document. Preserve that fact so
+    // normalizeDocumentLayers can run every required migration.
+    schemaVersion: obj.schemaVersion ?? 1,
   });
 }
 

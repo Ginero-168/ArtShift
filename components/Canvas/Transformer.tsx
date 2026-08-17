@@ -35,6 +35,7 @@ type Props = {
   scale: number;
   /** Notify parent of snap guides while dragging handles (multi-resize). */
   onGuidesChange?: (guides: import("@/lib/engine/snap").Guide[]) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
 };
 
 const HANDLE = 10;
@@ -42,7 +43,12 @@ const ROTATE_OFFSET = 28;
 
 type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rot" | "start" | "end" | "mid";
 
-export default function Transformer({ worldToScreen, scale, onGuidesChange }: Props) {
+export default function Transformer({
+  worldToScreen,
+  scale,
+  onGuidesChange,
+  onDoubleClick,
+}: Props) {
   const slide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
   const selectedIds = useEngine((s) => s.selectedIds);
   const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
@@ -51,9 +57,11 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
 
   const [active, setActive] = useState<HandleId | null>(null);
   const [rotateDeg, setRotateDeg] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<{
     handle: HandleId;
     startClient: { x: number; y: number };
+    initialMouseAngle?: number;
     el: EngineElement;
     checkpointed: boolean;
     /** For multi-select scale: snapshot of all selected elements + AABB. */
@@ -80,9 +88,28 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
         if (!slide || isObjectLocked(slide, single.id)) return;
         e.stopPropagation();
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+        let initialMouseAngle: number | undefined;
+        if (handle === "rot") {
+          const svgRect = svgRef.current?.getBoundingClientRect();
+          const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
+          const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
+          const cx = single.x + single.width / 2;
+          const cy = single.y + single.height / 2;
+          const screenCenter = worldToScreen({ x: cx, y: cy });
+          initialMouseAngle = Math.atan2(
+            mouseContainerY - screenCenter.y,
+            mouseContainerX - screenCenter.x,
+          );
+          let deg = Math.round((single.angle * 180) / Math.PI) % 360;
+          if (deg < 0) deg += 360;
+          setRotateDeg(deg);
+        }
+
         dragRef.current = {
           handle,
           startClient: { x: e.clientX, y: e.clientY },
+          initialMouseAngle,
           el: { ...single },
           checkpointed: false,
         };
@@ -94,9 +121,26 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       if (!slide || selectedElements.some((el) => isObjectLocked(slide, el.id))) return;
       e.stopPropagation();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+      let initialMouseAngle: number | undefined;
+      if (handle === "rot") {
+        const svgRect = svgRef.current?.getBoundingClientRect();
+        const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
+        const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
+        const cx = bbox.x + bbox.width / 2;
+        const cy = bbox.y + bbox.height / 2;
+        const screenCenter = worldToScreen({ x: cx, y: cy });
+        initialMouseAngle = Math.atan2(
+          mouseContainerY - screenCenter.y,
+          mouseContainerX - screenCenter.x,
+        );
+        setRotateDeg(0);
+      }
+
       dragRef.current = {
         handle,
         startClient: { x: e.clientX, y: e.clientY },
+        initialMouseAngle,
         el: selectedElements[0],
         checkpointed: false,
         multi: {
@@ -106,7 +150,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       };
       setActive(handle);
     },
-    [bbox, selectedElements, single, slide],
+    [bbox, selectedElements, single, slide, worldToScreen],
   );
 
   const onPointerMove = useCallback(
@@ -120,11 +164,61 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       const snapGrid = useEngine.getState().doc.snapGrid;
       const dx = (e.clientX - drag.startClient.x) / scale;
       const dy = (e.clientY - drag.startClient.y) / scale;
-      // Multi-element scale path.
+      // Multi-element scale or rotate path.
       if (drag.multi) {
         const { originals, aabb } = drag.multi;
-        const keepAR = e.shiftKey || originals.some(isMediaElement);
         const handle = drag.handle;
+
+        if (handle === "rot") {
+          const svgRect = svgRef.current?.getBoundingClientRect();
+          const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
+          const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
+          const cx = aabb.x + aabb.width / 2;
+          const cy = aabb.y + aabb.height / 2;
+          const screenCenter = worldToScreen({ x: cx, y: cy });
+
+          const currentMouseAngle = Math.atan2(
+            mouseContainerY - screenCenter.y,
+            mouseContainerX - screenCenter.x,
+          );
+          const initAngle = drag.initialMouseAngle ?? currentMouseAngle;
+          let deltaAngle = Math.atan2(
+            Math.sin(currentMouseAngle - initAngle),
+            Math.cos(currentMouseAngle - initAngle),
+          );
+
+          if (e.shiftKey) {
+            deltaAngle = Math.round(deltaAngle / (Math.PI / 12)) * (Math.PI / 12);
+          }
+
+          let deg = Math.round((deltaAngle * 180) / Math.PI) % 360;
+          if (deg < 0) deg += 360;
+          setRotateDeg(deg);
+
+          const cos = Math.cos(deltaAngle);
+          const sin = Math.sin(deltaAngle);
+
+          const patches = originals.map((el) => {
+            const elCx = el.x + el.width / 2;
+            const elCy = el.y + el.height / 2;
+            const ox = elCx - cx;
+            const oy = elCy - cy;
+            const newElCx = cx + ox * cos - oy * sin;
+            const newElCy = cy + ox * sin + oy * cos;
+            return {
+              id: el.id,
+              patch: {
+                x: newElCx - el.width / 2,
+                y: newElCy - el.height / 2,
+                angle: (el.angle ?? 0) + deltaAngle,
+              },
+            };
+          });
+          previewElements(patches);
+          return;
+        }
+
+        const keepAR = e.shiftKey || originals.some(isMediaElement);
         const right = handle === "e" || handle === "ne" || handle === "se";
         const left = handle === "w" || handle === "nw" || handle === "sw";
         const bottom = handle === "s" || handle === "se" || handle === "sw";
@@ -305,13 +399,28 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
         return;
       }
       if (drag.handle === "rot") {
+        const svgRect = svgRef.current?.getBoundingClientRect();
+        const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
+        const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
         const cx = start.x + start.width / 2;
         const cy = start.y + start.height / 2;
         const screenCenter = worldToScreen({ x: cx, y: cy });
-        const ang =
-          Math.atan2(e.clientY - screenCenter.y, e.clientX - screenCenter.x) + Math.PI / 2;
+
+        const currentMouseAngle = Math.atan2(
+          mouseContainerY - screenCenter.y,
+          mouseContainerX - screenCenter.x,
+        );
+        const initAngle = drag.initialMouseAngle ?? currentMouseAngle;
+        const deltaAngle = Math.atan2(
+          Math.sin(currentMouseAngle - initAngle),
+          Math.cos(currentMouseAngle - initAngle),
+        );
+        const rawAngle = start.angle + deltaAngle;
+
         // Snap to 15° if Shift held.
-        const snapped = e.shiftKey ? Math.round(ang / (Math.PI / 12)) * (Math.PI / 12) : ang;
+        const snapped = e.shiftKey
+          ? Math.round(rawAngle / (Math.PI / 12)) * (Math.PI / 12)
+          : rawAngle;
         let deg = Math.round((snapped * 180) / Math.PI) % 360;
         if (deg < 0) deg += 360;
         setRotateDeg(deg);
@@ -500,6 +609,13 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
     ];
     for (const it of layout)
       handles.push({ id: it.id, pt: worldToScreen({ x: it.lx, y: it.ly }), cursor: it.cursor });
+
+    // Rotate handle positioned above top-center for multi-selection / group
+    const rotScreen = worldToScreen({
+      x: bbox.x + bbox.width / 2,
+      y: bbox.y - ROTATE_OFFSET / scale,
+    });
+    handles.push({ id: "rot", pt: rotScreen, cursor: "grab" });
   }
   if (single && slide && !isObjectLocked(slide, single.id)) {
     if (single.type === "line" || single.type === "arrow") {
@@ -563,11 +679,17 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       ];
       for (const it of layout)
         handles.push({ id: it.id, pt: worldToScreen(local(it.lx, it.ly)), cursor: it.cursor });
-      // Rotate handle above top-center.
-      const top = local(w / 2, -ROTATE_OFFSET / scale);
-      handles.push({ id: "rot", pt: worldToScreen(top), cursor: "grab" });
+
+      // Rotate handle positioned above top-center along the element's local orientation.
+      const rotWorld = local(w / 2, -ROTATE_OFFSET / scale);
+      const rotScreen = worldToScreen(rotWorld);
+      handles.push({ id: "rot", pt: rotScreen, cursor: "grab" });
     }
   }
+
+  // Connecting stem line from top-center to rotate handle
+  const rotHandle = handles.find((h) => h.id === "rot");
+  const nHandle = handles.find((h) => h.id === "n");
 
   // For lines/arrows: compute all control points projected to screen
   const isLinearType = single && (single.type === "line" || single.type === "arrow");
@@ -605,6 +727,7 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
 
   return (
     <svg
+      ref={svgRef}
       role="group"
       aria-label="Selection controls"
       style={{
@@ -615,6 +738,17 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
         pointerEvents: "none",
       }}
     >
+      {/* Stem line connecting top-center handle to rotate handle */}
+      {nHandle && rotHandle && (
+        <line
+          x1={nHandle.pt.x}
+          y1={nHandle.pt.y}
+          x2={rotHandle.pt.x}
+          y2={rotHandle.pt.y}
+          stroke="#6366f1"
+          strokeWidth={1.5}
+        />
+      )}
       {lineScreenPts ? (
         /* For lines/arrows: draw dashed guide polyline through all control points */
         <polyline
@@ -628,31 +762,45 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       ) : outlineCorners ? (
         <polygon
           points={outlineCorners.map((p) => `${p.x},${p.y}`).join(" ")}
-          fill="none"
+          fill="rgba(99, 102, 241, 0.001)"
           stroke="#6366f1"
           strokeWidth={1.5}
           strokeDasharray="6 4"
+          style={{
+            pointerEvents: onDoubleClick ? "auto" : "none",
+            cursor: onDoubleClick ? "pointer" : "default",
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            onDoubleClick?.(e);
+          }}
         />
       ) : null}
-      {rotateDeg !== null && single && (
-        <g>
+      {rotateDeg !== null && rotHandle && (
+        <g
+          transform={`translate(${rotHandle.pt.x}, ${rotHandle.pt.y - 24})`}
+          style={{ pointerEvents: "none" }}
+        >
           <rect
-            x={worldToScreen({ x: single.x + single.width / 2 - 20, y: single.y - 30 }).x}
-            y={worldToScreen({ x: single.x + single.width / 2 - 20, y: single.y - 30 }).y}
-            width={40 * scale}
-            height={18 * scale}
-            rx={4 * scale}
-            fill="#6366f1"
-            opacity={0.9}
+            x={-30}
+            y={-14}
+            width={60}
+            height={28}
+            rx={6}
+            fill="#0f172a"
+            stroke="#6366f1"
+            strokeWidth={1.5}
+            filter="drop-shadow(0 4px 10px rgba(0,0,0,0.4))"
           />
           <text
-            x={worldToScreen({ x: single.x + single.width / 2, y: single.y - 21 }).x}
-            y={worldToScreen({ x: single.x + single.width / 2, y: single.y - 21 }).y}
-            fill="#fff"
-            fontSize={10 * scale}
+            x={0}
+            y={1}
+            fill="#ffffff"
+            fontSize={13}
+            fontFamily="system-ui, -apple-system, sans-serif"
+            fontWeight={700}
             textAnchor="middle"
             dominantBaseline="middle"
-            fontWeight={600}
           >
             {rotateDeg}°
           </text>
@@ -661,16 +809,43 @@ export default function Transformer({ worldToScreen, scale, onGuidesChange }: Pr
       {handles.map((h) => {
         const isLineHandle = h.id === "start" || h.id === "end";
         const isMidHandle = h.id === "mid";
-        const isCircle = isLineHandle || isMidHandle || h.id === "rot" || h.bound;
-        const r = isLineHandle ? 7 : isMidHandle ? 5 : HANDLE / 2;
+        const isRotateHandle = h.id === "rot";
+        const isCircle = isLineHandle || isMidHandle || isRotateHandle || h.bound;
+        const r = isRotateHandle ? 6.5 : isLineHandle ? 7 : isMidHandle ? 5 : HANDLE / 2;
         return (
           <g
             key={h.id}
             transform={`translate(${h.pt.x}, ${h.pt.y})`}
-            style={{ pointerEvents: "auto", cursor: h.cursor }}
+            style={{
+              pointerEvents: "auto",
+              cursor: isRotateHandle ? (active === "rot" ? "grabbing" : "grab") : h.cursor,
+            }}
           >
             <title>{handleLabel(h.id)}</title>
-            {isCircle ? (
+            {isRotateHandle ? (
+              <g>
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={6.5}
+                  fill={active === "rot" ? "#4f46e5" : "#ffffff"}
+                  stroke="#6366f1"
+                  strokeWidth={2}
+                  filter="drop-shadow(0 2px 5px rgba(0,0,0,0.22))"
+                  onPointerDown={onPointerDown(h.id)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
+                />
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={2}
+                  fill={active === "rot" ? "#ffffff" : "#6366f1"}
+                  pointerEvents="none"
+                />
+              </g>
+            ) : isCircle ? (
               <circle
                 cx={0}
                 cy={0}

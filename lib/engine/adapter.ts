@@ -20,8 +20,21 @@
  * stored as-is and decoded on demand.
  */
 
-import { shapeDiagonal } from "../shape";
 import type { ImageObject, ShapeObject, Slide, SlideDoc, SlideObject, TextObject } from "../types";
+
+function legacyShapeDiagonal(s: ShapeObject): [number, number, number, number] {
+  const w = s.width;
+  const h = s.height;
+  if (s.flipX === undefined && s.flipY === undefined && h <= 10) {
+    return [0, h / 2, w, h / 2];
+  }
+  const sx = s.flipX ? w : 0;
+  const sy = s.flipY ? h : 0;
+  const ex = s.flipX ? 0 : w;
+  const ey = s.flipY ? 0 : h;
+  return [sx, sy, ex, ey];
+}
+
 import {
   createArrow,
   createDiamond,
@@ -65,6 +78,8 @@ export async function legacyToEngineDoc(
     slides,
     snapGrid: null,
     workspaceStrictness: 1,
+    strictnessLevel: 1,
+    strictnessValues: { 2: 1, 3: 2 },
     updatedAt: legacy.updatedAt,
     schemaVersion: ENGINE_SCHEMA_VERSION,
   };
@@ -78,14 +93,31 @@ async function legacyToEngineSlide(legacy: Slide, k: number): Promise<EngineSlid
     if (!el) continue;
     elements.push({ ...el, z: z++ });
   }
-  const layer = createEngineLayer("free", { name: "Free layer 1" });
-  layer.objectIds = elements.map((element) => element.id);
+  // Legacy documents stored locking on each object. Preserve both the lock
+  // semantics and visual stacking by converting contiguous lock runs into
+  // Layer-owned state rather than silently dropping mixed locks.
+  const layers: ReturnType<typeof createEngineLayer>[] = [];
+  for (const element of elements) {
+    const locked = element.locked;
+    const previous = layers.at(-1);
+    if (!previous || previous.locked !== locked) {
+      layers.push(
+        createEngineLayer("free", {
+          name: locked ? `Locked layer ${layers.length + 1}` : `Free layer ${layers.length + 1}`,
+          locked,
+          z: layers.length + 1,
+        }),
+      );
+    }
+    layers.at(-1)!.objectIds.push(element.id);
+  }
+  if (!layers.length) layers.push(createEngineLayer("free", { name: "Free layer 1" }));
   return {
     id: legacy.id,
     name: legacy.name,
     background: legacy.background,
-    elements,
-    layers: [layer],
+    elements: elements.map((element) => ({ ...element, locked: false }) as EngineElement),
+    layers,
     width: SLIDE_W,
     height: SLIDE_H,
   };
@@ -151,7 +183,7 @@ function convertShape(
     return applyCommon({ ...createDiamond(geom), ...styleOverlay }, angle, opacity, locked);
   }
   if (obj.shape === "line" || obj.shape === "arrow") {
-    const [sx, sy, ex, ey] = shapeDiagonal(obj);
+    const [sx, sy, ex, ey] = legacyShapeDiagonal(obj);
     const a: [number, number] = [obj.x * k + sx * k, obj.y * k + sy * k];
     const b: [number, number] = [obj.x * k + ex * k, obj.y * k + ey * k];
     const base = obj.shape === "arrow" ? createArrow(a, b) : createLine(a, b);

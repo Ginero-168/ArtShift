@@ -11,6 +11,7 @@
 import { useEffect, useRef } from "react";
 import { usePresetStore } from "@/lib/engine/presetStore";
 import { useEngine } from "@/lib/engine/store";
+import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
 
 type Props = {
   /** Screen position (CSS px relative to viewport). */
@@ -45,10 +46,10 @@ export default function ContextMenu({ position, onClose }: Props) {
     function onKey(ev: KeyboardEvent) {
       if (ev.key === "Escape") onClose();
     }
-    document.addEventListener("pointerdown", onDocPointer);
+    document.addEventListener("pointerdown", onDocPointer, { capture: true });
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("pointerdown", onDocPointer);
+      document.removeEventListener("pointerdown", onDocPointer, { capture: true });
       document.removeEventListener("keydown", onKey);
     };
   }, [onClose]);
@@ -87,6 +88,34 @@ export default function ContextMenu({ position, onClose }: Props) {
       { kind: "item", label: "Flip Horizontal", hint: "⇧H", onClick: () => flipHorizontal(ids) },
       { kind: "item", label: "Flip Vertical", hint: "⇧V", onClick: () => flipVertical(ids) },
     );
+
+    if (ids.length === 1) {
+      items.push(
+        { kind: "sep" },
+        {
+          kind: "item",
+          label: "✒ Edit Vector Points",
+          hint: "Double-click",
+          onClick: () => {
+            const slide = useEngine
+              .getState()
+              .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
+            if (!slide || ids.length !== 1) return;
+            const el = slide.elements.find((e) => e.id === ids[0]);
+            if (!el) return;
+            if (el.type !== "path") {
+              const converted = convertElementToVectorPath(el);
+              if (converted) {
+                useEngine
+                  .getState()
+                  .updateElements([{ id: el.id, patch: converted }], "convert to editable path");
+              }
+            }
+            useEngine.getState().setTool("directSelect");
+          },
+        },
+      );
+    }
     if (ids.length > 1) {
       items.push(
         { kind: "sep" },

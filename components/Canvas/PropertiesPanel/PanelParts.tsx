@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   IconFillCrossHatch,
   IconFillHachure,
@@ -16,6 +17,16 @@ import {
   IconStrokeThick,
   IconStrokeThin,
 } from "@/components/icons";
+import {
+  addColorToHistory,
+  getColorHistory,
+  openEyedropper,
+  supportsEyedropper,
+} from "@/lib/color/swatches";
+import {
+  alignElements as alignEngine,
+  distributeElements as distributeEngine,
+} from "@/lib/engine/align";
 import { useEngine } from "@/lib/engine/store";
 import type {
   ArrowElement,
@@ -203,10 +214,221 @@ export function CompactColorSwatch({
   onPick: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const w = 150;
+    const h = 200;
+    let left = rect.left;
+    if (left + w > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - w - 12);
+    }
+    let top = rect.bottom + 4;
+    if (top + h > window.innerHeight - 12) {
+      top = Math.max(12, rect.top - h - 4);
+    }
+    setPos({ top, left });
+  }, []);
+
+  function handleOpen() {
+    setHistory(getColorHistory());
+    updatePosition();
+    setOpen((v) => !v);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    function handleReposition() {
+      updatePosition();
+    }
+    window.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleReposition);
+    window.addEventListener("scroll", handleReposition, true);
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleReposition);
+      window.removeEventListener("scroll", handleReposition, true);
+    };
+  }, [open, updatePosition]);
+
+  function handleColorSelect(val: string) {
+    addColorToHistory(val);
+    onPick(val);
+    setOpen(false);
+  }
+
+  async function handleEyedropper() {
+    const picked = await openEyedropper();
+    if (picked) {
+      handleColorSelect(picked);
+    }
+  }
+
+  const popover =
+    open && pos ? (
+      <div
+        ref={popoverRef}
+        style={{
+          position: "fixed",
+          top: pos.top,
+          left: pos.left,
+          zIndex: 99999,
+          background: "var(--surface-solid, #fff)",
+          border: "1px solid var(--stroke, #e5e7eb)",
+          borderRadius: 8,
+          boxShadow: "0 8px 30px rgba(0,0,0,0.18)",
+          padding: "8px",
+          width: 146,
+        }}
+      >
+        {/* Main Swatches */}
+        <div style={{ fontSize: 9, color: "#9ca3af", marginBottom: 4, fontWeight: 600 }}>
+          PALETTE
+        </div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+          {values.map((v) => (
+            <button
+              key={v}
+              onClick={() => handleColorSelect(v)}
+              style={{
+                width: 18,
+                height: 18,
+                minWidth: 18,
+                minHeight: 18,
+                borderRadius: 3,
+                border:
+                  current === v
+                    ? "2px solid var(--accent, #6366f1)"
+                    : "1px solid var(--stroke, #d1d5db)",
+                background:
+                  v === "transparent"
+                    ? "repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 50% / 4px 4px"
+                    : v,
+                cursor: "pointer",
+                padding: 0,
+              }}
+              title={v}
+            />
+          ))}
+        </div>
+
+        {/* History */}
+        {history.length > 0 && (
+          <>
+            <div style={{ fontSize: 9, color: "#9ca3af", marginBottom: 4, fontWeight: 600 }}>
+              RECENT
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+              {history.slice(0, 8).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => handleColorSelect(v)}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    minWidth: 18,
+                    minHeight: 18,
+                    borderRadius: 3,
+                    border:
+                      current === v
+                        ? "2px solid var(--accent, #6366f1)"
+                        : "1px solid var(--stroke, #d1d5db)",
+                    background: v,
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                  title={v}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Tools: Eyedropper & Native Input */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            borderTop: "1px solid var(--stroke, #f3f4f6)",
+            paddingTop: 6,
+          }}
+        >
+          {supportsEyedropper() && (
+            <button
+              type="button"
+              onClick={handleEyedropper}
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                padding: "3px 4px",
+                fontSize: 10,
+                fontWeight: 600,
+                border: "1px solid var(--stroke, #e5e7eb)",
+                borderRadius: 4,
+                background: "#f9fafb",
+                cursor: "pointer",
+                color: "var(--ink, #1f2937)",
+              }}
+              title="Pick color from screen (Eyedropper)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.71 5.63l-2.34-2.34a2.8 2.8 0 0 0-3.96 0l-2.54 2.54 1.41 1.41-1.77 1.77-1.41-1.41-5.74 5.74a3 3 0 0 0-.82 1.54L2.05 21.05a.75.75 0 0 0 .9.9l6.17-1.48a3 3 0 0 0 1.54-.82l5.74-5.74-1.41-1.41 1.77-1.77 1.41 1.41 2.54-2.54a2.8 2.8 0 0 0 0-3.97zM8.76 18.18a1.5 1.5 0 0 1-.77.41L4.35 19.45l.86-3.64a1.5 1.5 0 0 1 .41-.77l4.88-4.88 3.14 3.14-4.88 4.88z" />
+              </svg>
+              <span>Pick</span>
+            </button>
+          )}
+          <input
+            type="color"
+            value={current.startsWith("#") ? current : "#000000"}
+            onChange={(e) => handleColorSelect(e.target.value)}
+            style={{
+              width: 24,
+              height: 22,
+              padding: 0,
+              border: "none",
+              cursor: "pointer",
+              background: "transparent",
+            }}
+            title="Custom Color"
+          />
+        </div>
+      </div>
+    ) : null;
+
   return (
     <div style={{ position: "relative" }}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={triggerRef}
+        onClick={handleOpen}
         style={{
           display: "flex",
           alignItems: "center",
@@ -232,53 +454,7 @@ export function CompactColorSwatch({
         />
         <span style={{ fontSize: 8, color: "#9ca3af" }}>▼</span>
       </button>
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            zIndex: 20,
-            background: "var(--surface-solid, #fff)",
-            border: "1px solid var(--stroke, #e5e7eb)",
-            borderRadius: 6,
-            boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
-            padding: "4px",
-            display: "flex",
-            gap: 4,
-            flexWrap: "wrap",
-            width: 90,
-          }}
-        >
-          {values.map((v) => (
-            <button
-              key={v}
-              onClick={() => {
-                onPick(v);
-                setOpen(false);
-              }}
-              style={{
-                width: 18,
-                height: 18,
-                minWidth: 18,
-                minHeight: 18,
-                borderRadius: 3,
-                border:
-                  current === v
-                    ? "2px solid var(--accent, #6366f1)"
-                    : "1px solid var(--stroke, #d1d5db)",
-                background:
-                  v === "transparent"
-                    ? "repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 50% / 4px 4px"
-                    : v,
-                cursor: "pointer",
-                padding: 0,
-              }}
-              title={v}
-            />
-          ))}
-        </div>
-      )}
+      {mounted && typeof document !== "undefined" && createPortal(popover, document.body)}
     </div>
   );
 }
@@ -431,62 +607,18 @@ export function AlignBtn({
 
 export function alignElements(elements: EngineElement[], mode: string) {
   const updateElements = useEngine.getState().updateElements;
-  const _ids = elements.map((el) => el.id);
-  let target = 0;
-  const patches: { id: string; patch: Partial<EngineElement> }[] = [];
-
-  switch (mode) {
-    case "left":
-      target = Math.min(...elements.map((e) => e.x));
-      for (const el of elements) patches.push({ id: el.id, patch: { x: target } });
-      break;
-    case "centerH": {
-      const centers = elements.map((e) => e.x + e.width / 2);
-      target = centers.reduce((a, b) => a + b, 0) / centers.length;
-      for (const el of elements) patches.push({ id: el.id, patch: { x: target - el.width / 2 } });
-      break;
-    }
-    case "right":
-      target = Math.max(...elements.map((e) => e.x + e.width));
-      for (const el of elements) patches.push({ id: el.id, patch: { x: target - el.width } });
-      break;
-    case "top":
-      target = Math.min(...elements.map((e) => e.y));
-      for (const el of elements) patches.push({ id: el.id, patch: { y: target } });
-      break;
-    case "middleV": {
-      const centers = elements.map((e) => e.y + e.height / 2);
-      target = centers.reduce((a, b) => a + b, 0) / centers.length;
-      for (const el of elements) patches.push({ id: el.id, patch: { y: target - el.height / 2 } });
-      break;
-    }
-    case "bottom":
-      target = Math.max(...elements.map((e) => e.y + e.height));
-      for (const el of elements) patches.push({ id: el.id, patch: { y: target - el.height } });
-      break;
-  }
+  const alignMode =
+    mode === "centerH"
+      ? "center"
+      : mode === "middleV"
+        ? "middle"
+        : (mode as import("@/lib/engine/align").AlignMode);
+  const patches = alignEngine(elements, alignMode);
   if (patches.length) updateElements(patches, "align " + mode);
 }
 
 export function distributeElements(elements: EngineElement[], axis: "h" | "v") {
   const updateElements = useEngine.getState().updateElements;
-  const sorted = [...elements].sort((a, b) => (axis === "h" ? a.x - b.x : a.y - b.y));
-  if (sorted.length < 3) return;
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  const totalSpace = axis === "h" ? last.x + last.width - first.x : last.y + last.height - first.y;
-  const totalSize = sorted.reduce((sum, e) => sum + (axis === "h" ? e.width : e.height), 0);
-  const gap = (totalSpace - totalSize) / (sorted.length - 1);
-  const patches: { id: string; patch: Partial<EngineElement> }[] = [];
-  let pos = axis === "h" ? first.x : first.y;
-  for (const el of sorted) {
-    if (axis === "h") {
-      patches.push({ id: el.id, patch: { x: pos } });
-      pos += el.width + gap;
-    } else {
-      patches.push({ id: el.id, patch: { y: pos } });
-      pos += el.height + gap;
-    }
-  }
-  updateElements(patches, "distribute " + axis);
+  const patches = distributeEngine(elements, axis === "h" ? "horizontal" : "vertical");
+  if (patches.length) updateElements(patches, "distribute " + axis);
 }

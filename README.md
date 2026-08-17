@@ -1,6 +1,6 @@
 # ArtShift
 
-**AI-Powered Slide & Design Studio** — a Canvas2D slide editor with local vision AI, color adjustments, background removal, and PDF import. **Local-first**: your documents live in the browser's `localStorage` only; nothing is stored server-side (see `ROADMAP.md` for the full rationale).
+**Local-first artwork editor for book campaigns** — turn a cover and copy into reusable ad artwork, then resize, refine and export without rebuilding every format by hand. ArtShift combines a precision free canvas with an adaptive block layout, non-destructive image editing and editable vector output.
 
 > Built on **Next.js 15** + **React 19** + **TypeScript strict** + **Tailwind v4**
 
@@ -10,13 +10,18 @@
 
 | Feature | Description |
 |---|---|
-| **Slide Editor** | Pure Canvas2D engine, multi-slide deck, arrow binding, frames, PPTX/PNG/PDF export |
+| **Dual-mode layers** | A Layer owns many objects and can switch freely between precise Free placement and adaptive hexagonal Block layout |
+| **Artwork variants** | Create any custom size while retaining content identity, then synchronize content and appearance without destroying each variant's layout |
+| **Vector workflow** | Pen paths, draggable nodes, smoothing, gradients, clipping frames, shapes, arrows, grouping and layer stacking |
+| **Image workflow** | Aspect-safe media bounds, crop, shape masks, linked local sources, blur, blend modes and 12 non-destructive color adjustments |
+| **Thai typography** | Shared Thai-aware layout for the editor, templates and renderer with safe padding and automatic text-box growth |
+| **Templates** | Explicit Replace Artwork or Add as Layer application; template assets are materialized before one atomic document update |
+| **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
 | **AI Chat** | Claude tool-use (Anthropic direct) **or** Replicate proxy — mutations apply directly to the canvas |
 | **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |
-| **Color Adjustments** | 12 real-time sliders: exposure, contrast, highlights, shadows, etc. |
 | **Background Removal** | WaveSpeed BRIA RMBG one-click via API proxy |
 | **PDF Import** | Import PDF pages as slide images (pdfjs-dist) |
-| **Thai Fonts** | 15 Thai font families built-in |
+| **Durable local storage** | IndexedDB document/assets, serial autosave, backup recovery and safe migration from legacy localStorage documents |
 | **PWA** | Offline-ready manifest + icons |
 | **Deploy** | Hostinger Shared Hosting ready (.htaccess + guide) |
 
@@ -73,10 +78,19 @@ app/
     health/route.ts        Health check
   page.tsx                 Main slide editor
 components/
-  Canvas/                  Canvas2D engine components
+  Builder/                 Block library, layer manager, inspector and artwork resize
+  Canvas/                  Precision canvas, gestures, path nodes and overlays
+  TemplateBrowser.tsx      Atomic replace/add template workflow
   AIImageTools.tsx         AI tools panel (vision + color + bg removal)
 lib/
-  engine/                  Pure Canvas2D engine (types, store, renderer)
+  engine/                  Document model, store, layout, persistence and exporters
+    textLayout.ts          Shared Thai-aware text measurement and wrapping
+    resizeArtwork.ts       Pure ratio-aware artwork resize policy
+    templateApplication.ts Atomic template application boundary
+    vectorPath.ts          Vector-node geometry
+    linkedAssets.ts        File System Access API adapter for linked images
+    exportSVG.ts           Editable SVG serializer
+  renderer/canvas.ts       Shared editor, thumbnail and raster-export renderer
   vision/visionEngine.ts   Florence-2 local vision (client-side)
   color/adjustments.ts     12-slider pixel-level color pipeline
   ai/removeBg.ts           Background removal client
@@ -88,6 +102,14 @@ lib/
 ## Deploy
 
 See [deploy/DEPLOY.md](deploy/DEPLOY.md) for Hostinger Shared Hosting step-by-step.
+
+## Product boundary
+
+The current milestone targets the high-frequency production work around book ads: composing covers and copy, creating channel sizes, applying repeatable image treatment and handing off editable SVG. It is not yet a general PSD/AI replacement for print prepress, advanced photo compositing or complex vector illustration. See [ROADMAP.md](ROADMAP.md) for the exact completed scope and remaining gaps.
+
+## Dependency note
+
+Production audit currently reports two high-severity advisories inherited through `pptxgenjs` → `image-size`; no fixed upstream release is available. ArtShift only accepts PNG, JPEG and WebP at the application boundary, so the affected ICNS/JXL/HEIF parsers are not reachable through the editor's supported import path. Keep this exception under review when upgrading PPTX export.
 
 ---
 

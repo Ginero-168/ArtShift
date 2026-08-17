@@ -17,7 +17,7 @@ export function ImageSection({
       <button
         onClick={() => setCroppingImageId(croppingImageId === firstImage.id ? null : firstImage.id)}
         style={{
-          padding: "4px 8px",
+          padding: "4px 10px",
           borderRadius: 5,
           border: "1px solid var(--stroke, #e5e7eb)",
           background:
@@ -26,6 +26,7 @@ export function ImageSection({
               : "var(--surface-solid, #fff)",
           color: croppingImageId === firstImage.id ? "#fff" : "var(--ink, #111)",
           fontSize: 11,
+          fontWeight: 600,
           cursor: "pointer",
         }}
       >
