@@ -3,6 +3,7 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 const sharedConfig: NextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ["pptxgenjs"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
@@ -12,20 +13,23 @@ const sharedConfig: NextConfig = {
       { protocol: "https", hostname: "fonts.gstatic.com" },
     ],
   },
-  webpack(config, { webpack }) {
-    // PptxGenJS 4's ESM entry contains optional dynamic imports for Node-only
-    // path-based media. ArtShift supplies browser data URLs exclusively, so
-    // those unreachable branches must not enter the client bundle.
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      https: false,
-    };
-    config.plugins.push(
-      new webpack.IgnorePlugin({
-        resourceRegExp: /^node:(fs|https)$/,
-      }),
-    );
+  webpack(config, { isServer, webpack }) {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        https: false,
+        http: false,
+        stream: false,
+        path: false,
+        crypto: false,
+      };
+      config.plugins.push(
+        new webpack.IgnorePlugin({
+          resourceRegExp: /^node:(fs|https|http|stream|path|crypto)$/,
+        }),
+      );
+    }
     return config;
   },
   // Uncomment for static export (Hostinger Shared Hosting without Node.js):

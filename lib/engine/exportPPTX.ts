@@ -1,16 +1,12 @@
 /**
  * PPTX exporter for the engine doc.
- *
- * Maps EngineElements to PptxGenJS shapes where possible. Rough shapes
- * (roughness > 0) are rasterized to transparent PNGs and embedded as
- * images to preserve visual fidelity.
+ * Sends document and rasterized visual elements to server API route /api/export/pptx
+ * to avoid client-side bundling of Node.js modules (fs, https).
  */
 
 import { type RenderCtx, renderElement } from "../renderer/canvas";
 import { getRenderableElements } from "./layers";
-import type { EngineDoc, EngineElement, ImageElement, TextElement } from "./types";
-
-const PX_TO_IN = 1 / 96;
+import type { EngineDoc, EngineElement, ImageElement } from "./types";
 
 export type PptxSlideTransform = {
   scale: number;
@@ -59,13 +55,13 @@ function slugify(s: string) {
 
 /**
  * Rasterize a single EngineElement into a data URL at 2× resolution.
- * Used for rough shapes that can't be natively mapped to PPTX shapes.
+ * Used for rough shapes, freedraw, and vector paths that can't be natively mapped to basic PPTX shapes.
  */
 async function rasterizeElement(
   el: EngineElement,
   images?: Map<string, HTMLImageElement>,
 ): Promise<string> {
-  const pad = 4; // padding around the element
+  const pad = 4;
   const scale = 2;
   const w = el.width + pad * 2;
   const h = el.height + pad * 2;
@@ -76,7 +72,6 @@ async function rasterizeElement(
   if (!ctx) throw new Error("No 2D context");
   ctx.scale(scale, scale);
 
-  // Translate so element draws at (pad, pad) instead of (el.x, el.y)
   ctx.save();
   const cx = pad + el.width / 2;
   const cy = pad + el.height / 2;
@@ -84,7 +79,6 @@ async function rasterizeElement(
   ctx.rotate(el.angle);
   ctx.translate(-el.width / 2, -el.height / 2);
 
-  // Temporarily override element position so renderElement draws at origin
   const origX = el.x;
   const origY = el.y;
   const origAngle = el.angle;
@@ -104,132 +98,6 @@ async function rasterizeElement(
   return canvas.toDataURL("image/png");
 }
 
-export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
-  const PptxGenJS = (await import("pptxgenjs")).default;
-  const pptx = new PptxGenJS();
-  const targetSize = {
-    width: doc.slides[0]?.width ?? doc.width,
-    height: doc.slides[0]?.height ?? doc.height,
-  };
-  const wIn = targetSize.width * PX_TO_IN;
-  const hIn = targetSize.height * PX_TO_IN;
-  pptx.defineLayout({ name: "ARTSHIFT", width: wIn, height: hIn });
-  pptx.layout = "ARTSHIFT";
-
-  const px = (n: number) => n * PX_TO_IN;
-
-  for (const slide of doc.slides) {
-    const s = pptx.addSlide();
-    s.background = { color: (slide.background || "#ffffff").replace("#", "") };
-    const transform = getPptxSlideTransform(slide, targetSize);
-    const tx = (value: number) => transform.offsetX + value * transform.scale;
-    const ty = (value: number) => transform.offsetY + value * transform.scale;
-    const scaled = (value: number) => value * transform.scale;
-
-    const ordered = getRenderableElements(slide);
-
-    for (const el of ordered) {
-      if (el.type === "frame") continue; // frames are structural only
-
-      const common = {
-        x: px(tx(el.x)),
-        y: px(ty(el.y)),
-        w: px(scaled(el.width)),
-        h: px(scaled(el.height)),
-        rotate: (el.angle * 180) / Math.PI,
-      };
-
-      // Text elements
-      if (el.type === "text") {
-        const te = el as TextElement;
-        s.addText(te.text, {
-          ...common,
-          fontSize: Math.max(8, Math.round(te.fontSize * transform.scale * 0.75)),
-          fontFace: te.fontFamily.split(",")[0].replace(/['"]/g, "").trim() || "Noto Sans Thai",
-          color: te.strokeColor.replace("#", ""),
-          bold: te.fontStyle.includes("bold"),
-          italic: te.fontStyle.includes("italic"),
-          align: te.textAlign,
-          valign:
-            te.verticalAlign === "middle"
-              ? "middle"
-              : te.verticalAlign === "bottom"
-                ? "bottom"
-                : "top",
-        });
-        continue;
-      }
-
-      // Image elements
-      if (el.type === "image") {
-        const ie = el as ImageElement;
-        const img = images?.get(ie.fileId);
-        if (img?.src) {
-          try {
-            const data = await toDataUrl(img.src);
-            s.addImage({ ...common, data });
-          } catch {
-            s.addText(`[image]`, { ...common, color: "888888", fontSize: 10 });
-          }
-        } else {
-          s.addText(`[image]`, { ...common, color: "888888", fontSize: 10 });
-        }
-        continue;
-      }
-
-      // Simple shapes (roughness == 0) — map to native PPTX shapes
-      if (
-        (el.type === "rect" || el.type === "ellipse" || el.type === "diamond") &&
-        el.roughness === 0
-      ) {
-        const ST = pptx.ShapeType as Record<string, unknown>;
-        const shapeMap: Record<string, unknown> = {
-          rect: ST.roundRect ?? ST.rect,
-          ellipse: ST.ellipse,
-          diamond: ST.diamond,
-        };
-        const kind = shapeMap[el.type] as Parameters<typeof s.addShape>[0];
-        if (kind) {
-          s.addShape(kind, {
-            ...common,
-            fill: {
-              color: (el.backgroundColor || "ffffff")
-                .replace("#", "")
-                .replace("transparent", "ffffff"),
-            },
-            line:
-              el.strokeWidth > 0
-                ? {
-                    color: el.strokeColor.replace("#", ""),
-                    width: el.strokeWidth * transform.scale,
-                  }
-                : { type: "none" as const },
-          });
-          continue;
-        }
-      }
-
-      // Rough shapes + freedraw + lines/arrows → rasterize to image
-      try {
-        const data = await rasterizeElement(el, images);
-        const pad = 4;
-        s.addImage({
-          data,
-          x: px(tx(el.x - pad)),
-          y: px(ty(el.y - pad)),
-          w: px(scaled(el.width + pad * 2)),
-          h: px(scaled(el.height + pad * 2)),
-        });
-      } catch {
-        // silently skip unrenderable elements
-      }
-    }
-  }
-
-  const blob = (await pptx.write({ outputType: "blob" })) as Blob;
-  download(blob, `${slugify(doc.title || "slides")}.pptx`);
-}
-
 async function toDataUrl(src: string): Promise<string> {
   if (src.startsWith("data:")) return src;
   const res = await fetch(src, { mode: "cors" });
@@ -240,4 +108,62 @@ async function toDataUrl(src: string): Promise<string> {
     r.onerror = reject;
     r.readAsDataURL(blob);
   });
+}
+
+/**
+ * Exports the engine document to PPTX format by sending payload to /api/export/pptx.
+ */
+export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
+  const rasterizedImages: Record<string, string> = {};
+
+  // Pre-rasterize rough/complex elements and convert image assets to Data URLs on client
+  for (const slide of doc.slides) {
+    const ordered = getRenderableElements(slide);
+    for (const el of ordered) {
+      if (el.type === "image") {
+        const ie = el as ImageElement;
+        const img = images?.get(ie.fileId);
+        if (img?.src) {
+          try {
+            rasterizedImages[ie.fileId] = await toDataUrl(img.src);
+          } catch {
+            // skip if failed
+          }
+        }
+      } else if (
+        el.type !== "text" &&
+        !(
+          (el.type === "rect" || el.type === "ellipse" || el.type === "diamond") &&
+          el.roughness === 0
+        ) &&
+        el.type !== "frame"
+      ) {
+        try {
+          rasterizedImages[el.id] = await rasterizeElement(el, images);
+        } catch {
+          // skip
+        }
+      }
+    }
+  }
+
+  const response = await fetch("/api/export/pptx", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      doc,
+      rasterizedImages,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: "Export failed" }));
+    throw new Error(errorData.error || `Export failed with status ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const filename = `${slugify(doc.title || "slides")}.pptx`;
+  download(blob, filename);
 }
