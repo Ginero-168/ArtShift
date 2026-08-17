@@ -32,7 +32,6 @@ import {
   IconPalette,
   IconRedo,
   IconSettings,
-  IconSparkles,
   IconStats,
   IconUndo,
   IconZoomIn,
@@ -40,7 +39,7 @@ import {
 } from "@/components/icons";
 import { legacyToEngineDoc } from "@/lib/engine/adapter";
 
-const AIPanel = dynamic(() => import("@/components/AI/AIPanel"), { ssr: false });
+const AICoPilotBar = dynamic(() => import("@/components/AI/AICoPilotBar"), { ssr: false });
 const AIImageGeneratorModal = dynamic(() => import("@/components/AI/AIImageGeneratorModal"), {
   ssr: false,
 });
@@ -116,7 +115,6 @@ export default function HomePage() {
   const [showGSlidesModal, setShowGSlidesModal] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false);
   const [campaignStudioOpen, setCampaignStudioOpen] = useState(false);
   const [brandKitOpen, setBrandKitOpen] = useState(false);
@@ -767,65 +765,6 @@ export default function HomePage() {
               <span>✨</span>
               <span>AI Image</span>
             </button>
-
-            {/* AI button */}
-            <button
-              onClick={() => setAiPanelOpen((v) => !v)}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: "1px solid #7c3aed",
-                background: aiPanelOpen ? "#7c3aed" : "var(--surface-solid, #fff)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: aiPanelOpen ? "#fff" : "#7c3aed",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-              }}
-              title="AI Tools"
-              aria-label="Open AI panel"
-              aria-expanded={aiPanelOpen}
-            >
-              <IconSparkles size={13} />
-            </button>
-
-            {/* AI panel */}
-            {aiPanelOpen && (
-              <AIPanel
-                onClose={() => setAiPanelOpen(false)}
-                onInsertImage={(dataUrl) => {
-                  (async () => {
-                    const { loadDataURL } = await import("@/lib/engine/imageCache");
-                    const entry = await loadDataURL(dataUrl);
-                    const st = useEngine.getState();
-                    const slide = st.doc.slides.find((sl) => sl.id === st.currentSlideId);
-                    const sw = slide?.width ?? 1920;
-                    const sh = slide?.height ?? 1080;
-                    const maxW = sw * 0.6;
-                    const maxH = sh * 0.6;
-                    const ratio = Math.min(maxW / entry.width, maxH / entry.height, 1);
-                    const w = entry.width * ratio;
-                    const h = entry.height * ratio;
-                    const x = (sw - w) / 2;
-                    const y = (sh - h) / 2;
-                    st.addElement(
-                      (await import("@/lib/engine/factory")).createImage({
-                        x,
-                        y,
-                        width: w,
-                        height: h,
-                        fileId: entry.fileId,
-                        naturalWidth: entry.width,
-                        naturalHeight: entry.height,
-                      }),
-                      "ai image insert",
-                    );
-                  })();
-                }}
-              />
-            )}
           </div>
 
           {/* ——— Top-center toolbar: Hand/Cursor | Viewport Controls | Layer Filter ——— */}
@@ -1330,6 +1269,7 @@ export default function HomePage() {
               onClose={() => setAiImageModalOpen(false)}
             />
           )}
+          <AICoPilotBar />
         </div>
         <BuilderInspector />
       </div>
