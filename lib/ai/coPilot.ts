@@ -216,6 +216,11 @@ export async function executeCoPilotInstruction(
       };
     } catch (err) {
       updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);
+      return {
+        reply: `ขออภัยครับ ไม่สามารถสร้างรูปภาพได้: ${(err as Error).message}`,
+        actions,
+        suggestions: ["✨ ลองสร้างรูปภาพใหม่อีกครั้ง", "🎨 ระบุคำค้นหาเพิ่มเติม เช่น แมวส้มน่ารัก"],
+      };
     }
   }
 
@@ -287,6 +292,11 @@ export async function executeCoPilotInstruction(
       };
     } catch (err) {
       updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);
+      return {
+        reply: `ขออภัยครับ ไม่สามารถลบพื้นหลังได้: ${(err as Error).message}`,
+        actions,
+        suggestions: ["✨ ลองเลือกรูปภาพอื่นบน Canvas", "🖼️ วางรูปภาพใหม่"],
+      };
     }
   }
 
@@ -352,6 +362,11 @@ export async function executeCoPilotInstruction(
       };
     } catch (err) {
       updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);
+      return {
+        reply: `ขออภัยครับ ไม่สามารถแปลงเป็นเวกเตอร์ได้: ${(err as Error).message}`,
+        actions,
+        suggestions: ["✨ ลองเลือกรูปภาพอื่น", "🖼️ นำเข้ารูปภาพใหม่"],
+      };
     }
   }
 
@@ -402,6 +417,11 @@ export async function executeCoPilotInstruction(
       };
     } catch (err) {
       updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);
+      return {
+        reply: `ขออภัยครับ ไม่สามารถจัด Layout ได้: ${(err as Error).message}`,
+        actions,
+        suggestions: ["✨ ลองเพิ่มวัตถุลงบนสไลด์ก่อน", "🖼️ สร้างรูปภาพ"],
+      };
     }
   }
 

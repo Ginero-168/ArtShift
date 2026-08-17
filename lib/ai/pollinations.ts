@@ -48,10 +48,45 @@ export const INSPIRATION_PROMPTS = [
   "Futuristic cyberpunk city at night with neon lights and flying cars, cinematic lighting, 8k",
   "Minimalist 3D isometric room with pastel colors, cozy reading nook, ambient lighting",
   "Studio product photography of a luxury perfume bottle on marble, soft shadows, golden hour",
-  "Watercolor botanical illustration of tropical leaves and exotic flowers, clean white background",
-  "Cute fluffy baby red panda wearing a tiny backpack, soft studio lighting, ultra detailed",
-  "Abstract geometric 3D glass shapes with vibrant iridescent gradient colors and reflections",
+  "Cute watercolor illustration of a cat reading a book in a cozy cafe, whimsical, pastel colors",
+  "Vibrant flat vector illustration of an astronaut planting a flag on Mars, modern graphic design",
 ];
+
+export const THAI_KEYWORD_MAP: Record<string, string> = {
+  แมว: "cute fluffy cat, adorable, high detail, studio lighting",
+  หมา: "cute fluffy puppy dog, adorable, high quality",
+  สุนัข: "cute fluffy dog, studio portrait, high quality",
+  กาแฟ: "aesthetic iced coffee glass cup on wooden table, warm sunlight",
+  แก้วกาแฟ: "aesthetic latte art coffee cup, cafe atmosphere",
+  วิว: "beautiful scenic landscape, panoramic view, golden hour",
+  ทะเล: "beautiful tropical beach ocean with crystal clear turquoise water, sunny day",
+  ภูเขา: "majestic mountain range, misty valley, cinematic lighting",
+  ดอกไม้: "vibrant blooming colorful flowers, botanical garden, soft focus",
+  อาหาร: "delicious gourmet meal plate, professional food photography, 8k",
+  รถ: "modern sleek luxury sports car, cinematic studio lighting",
+  บ้าน: "modern minimalist architecture house, luxury interior exterior design",
+  หุ่นยนต์: "futuristic cyber robot, glowing neon details, sci-fi concept art",
+  มินิมอล: "minimalist aesthetic composition, clean background, elegant",
+  การ์ตูน: "cute 2D cartoon anime illustration, vibrant colors",
+};
+
+export function enrichPrompt(rawPrompt: string): string {
+  let prompt = rawPrompt
+    .replace(/^(ช่วย)?(สร้างรูป|วาดรูป|generate image|create image|รูปภาพ|รูป|draw|ภาพ)/gi, "")
+    .replace(/(ให้หน่อย|ครับ|ค่ะ|จ้า|หน่อย|of|about|เกี่ยวกับ)/gi, "")
+    .trim();
+
+  if (!prompt) prompt = "beautiful aesthetic digital art";
+
+  // Check if contains mapped Thai keywords
+  for (const [thaiWord, enTranslation] of Object.entries(THAI_KEYWORD_MAP)) {
+    if (prompt.includes(thaiWord)) {
+      return `${enTranslation}, ${prompt}`;
+    }
+  }
+
+  return prompt;
+}
 
 /**
  * Builds the direct Pollinations.ai image URL.
@@ -85,7 +120,8 @@ export function buildPollinationsUrl(options: PollinationsOptions): {
 }
 
 /**
- * Generates an image using Pollinations.ai and loads it into the ArtShift image cache.
+ * Generates an image using AI (via server proxy with Pollinations/FLUX backend)
+ * and loads it into the ArtShift image cache.
  */
 export async function generateAIImage(
   options: PollinationsOptions,
@@ -96,11 +132,39 @@ export async function generateAIImage(
     throw new Error("Please enter a prompt to generate an image.");
   }
 
+  // 1. Try Next.js server proxy route first (prevents browser CORS & Cloudflare 403 blocks)
+  try {
+    const apiRes = await fetch("/api/ai/image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options),
+      signal,
+    });
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.dataUrl) {
+        const cached = await loadDataURL(data.dataUrl);
+        return {
+          dataUrl: cached.dataURL,
+          fileId: cached.fileId,
+          width: cached.width,
+          height: cached.height,
+          seed: data.seed ?? 12345,
+          model: options.model ?? "flux",
+          prompt,
+        };
+      }
+    }
+  } catch {
+    // If API route fails or in unit tests, try direct upstream
+  }
+
+  // 2. Direct upstream fallback
   const { url, seed } = buildPollinationsUrl(options);
 
   const response = await fetch(url, {
     method: "GET",
-    mode: "cors",
     signal,
   });
 

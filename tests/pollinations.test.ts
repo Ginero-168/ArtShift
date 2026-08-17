@@ -91,4 +91,11 @@ describe("Pollinations.ai Text-to-Image Service", () => {
     expect(result.model).toBe("flux");
     expect(result.fileId).toBeDefined();
   });
+
+  it("enriches Thai prompts into detailed English visual prompts", async () => {
+    const { enrichPrompt } = await import("@/lib/ai/pollinations");
+    const result = enrichPrompt("สร้างรูปแมวให้หน่อย");
+    expect(result).toContain("cat");
+    expect(result.length).toBeGreaterThan("แมว".length);
+  });
 });
