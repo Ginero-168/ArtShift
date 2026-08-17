@@ -128,6 +128,53 @@ export default function BlockLibrary() {
         />
       </label>
       <div className={styles.libraryScroll}>
+        <div style={{ padding: "0 0 10px 0" }}>
+          <button
+            type="button"
+            onClick={() => useEngine.getState().setAiImageModalOpen(true)}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              borderRadius: 8,
+              border: "1px solid rgba(99, 102, 241, 0.25)",
+              background:
+                "linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.12) 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+              textAlign: "left",
+              boxShadow: "0 1px 3px rgba(99, 102, 241, 0.1)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 6,
+                  background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  fontSize: 13,
+                  boxShadow: "0 2px 6px rgba(99, 102, 241, 0.3)",
+                }}
+              >
+                ✨
+              </div>
+              <div>
+                <strong style={{ fontSize: 11, color: "#1e1b4b", display: "block" }}>
+                  AI Image Studio
+                </strong>
+                <span style={{ fontSize: 9.5, color: "#64748b" }}>Prompt to Image (FLUX)</span>
+              </div>
+            </div>
+            <span style={{ fontSize: 11, color: "#6366f1", fontWeight: 700 }}>➔</span>
+          </button>
+        </div>
+
         {CATEGORIES.map((category) => {
           const blocks = filtered.filter((block) => block.category === category);
           if (!blocks.length) return null;

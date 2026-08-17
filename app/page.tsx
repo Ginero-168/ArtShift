@@ -41,6 +41,9 @@ import {
 import { legacyToEngineDoc } from "@/lib/engine/adapter";
 
 const AIPanel = dynamic(() => import("@/components/AI/AIPanel"), { ssr: false });
+const AIImageGeneratorModal = dynamic(() => import("@/components/AI/AIImageGeneratorModal"), {
+  ssr: false,
+});
 const BrandKitModal = dynamic(() => import("@/components/Brand/BrandKitModal"), { ssr: false });
 const CampaignStudioModal = dynamic(() => import("@/components/Campaign/CampaignStudioModal"), {
   ssr: false,
@@ -100,6 +103,8 @@ export default function HomePage() {
   const setLayerFilter = useEngine((s) => s.setLayerFilter);
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const currentSlide = doc.slides.find((sl) => sl.id === currentSlideId);
+  const aiImageModalOpen = useEngine((s) => s.aiImageModalOpen);
+  const setAiImageModalOpen = useEngine((s) => s.setAiImageModalOpen);
 
   const [loaded, setLoaded] = useState(false);
   const [loadIssue, setLoadIssue] = useState<LoadIssue | null>(null);
@@ -664,6 +669,14 @@ export default function HomePage() {
                         setMenuOpen(false);
                       }}
                     />
+                    {/* AI Image Studio */}
+                    <HamburgerItem
+                      label="✨ AI Image Studio (Prompt)"
+                      onClick={() => {
+                        useEngine.getState().setAiImageModalOpen(true);
+                        setMenuOpen(false);
+                      }}
+                    />
                     {/* Campaign Studio */}
                     <HamburgerItem
                       label="Campaign Studio (Batch)"
@@ -729,6 +742,32 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* AI Image Studio Button */}
+            <button
+              onClick={() => useEngine.getState().setAiImageModalOpen(true)}
+              style={{
+                height: 28,
+                padding: "0 8px",
+                borderRadius: 6,
+                border: "1px solid rgba(99, 102, 241, 0.3)",
+                background:
+                  "linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                cursor: "pointer",
+                color: "var(--accent, #6366f1)",
+                fontWeight: 600,
+                fontSize: 11,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+              }}
+              title="AI Image Studio (Text-to-Image with FLUX.1)"
+              aria-label="Open AI Image Studio"
+            >
+              <span>✨</span>
+              <span>AI Image</span>
+            </button>
+
             {/* AI button */}
             <button
               onClick={() => setAiPanelOpen((v) => !v)}
@@ -745,7 +784,7 @@ export default function HomePage() {
                 color: aiPanelOpen ? "#fff" : "#7c3aed",
                 boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
               }}
-              title="AI"
+              title="AI Tools"
               aria-label="Open AI panel"
               aria-expanded={aiPanelOpen}
             >
@@ -1284,6 +1323,12 @@ export default function HomePage() {
           )}
           {brandKitOpen && (
             <BrandKitModal isOpen={brandKitOpen} onClose={() => setBrandKitOpen(false)} />
+          )}
+          {aiImageModalOpen && (
+            <AIImageGeneratorModal
+              isOpen={aiImageModalOpen}
+              onClose={() => setAiImageModalOpen(false)}
+            />
           )}
         </div>
         <BuilderInspector />

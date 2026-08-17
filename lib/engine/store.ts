@@ -208,6 +208,8 @@ export type EngineState = {
   setLayerFilter: (filter: LayerFilter) => void;
   croppingImageId: string | null;
   setCroppingImageId: (id: string | null) => void;
+  aiImageModalOpen: boolean;
+  setAiImageModalOpen: (open: boolean) => void;
 };
 
 function newSlide(name: string): EngineSlide {
@@ -261,6 +263,8 @@ export const useEngine = create<EngineState>((set, get) => {
     showHexGrid: true,
     layerFilter: "all" as LayerFilter,
     lineSubtype: "solid" as LineSubtype,
+    aiImageModalOpen: false,
+    setAiImageModalOpen: (open) => set({ aiImageModalOpen: open }),
 
     currentSlide: () => {
       const s = get();
