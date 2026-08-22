@@ -10,6 +10,9 @@ dist
 .vercel
 next-env.d.ts.backup
 
+# External reference project; kept as a separate repository in the workspace
+/Example Project/
+
 # Agent/editor local configuration
 .agents
 .claude
