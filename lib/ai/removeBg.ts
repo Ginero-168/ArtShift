@@ -13,6 +13,49 @@ let rmbgModel: any = null;
 let rmbgProcessor: any = null;
 let rmbgLoading = false;
 
+export type RemoveBackgroundOptions = {
+  onProgress?: (p: number) => void;
+  /** Keep the operation strictly local when false. Existing callers default to true. */
+  allowRemoteFallback?: boolean;
+  signal?: AbortSignal;
+};
+
+function createAbortError(): Error {
+  return Object.assign(new Error("Background removal was cancelled."), { name: "AbortError" });
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw createAbortError();
+}
+
+function waitFor(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  throwIfAborted(signal);
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const onAbort = () => finish(() => reject(createAbortError()));
+    const timer = setTimeout(() => finish(resolve), milliseconds);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function normalizeOptions(
+  onProgressOrOptions?: ((p: number) => void) | RemoveBackgroundOptions,
+): RemoveBackgroundOptions {
+  if (typeof onProgressOrOptions === "function") return { onProgress: onProgressOrOptions };
+  return onProgressOrOptions ?? {};
+}
+
 async function loadLocalRMBG(onProgress?: (p: number) => void) {
   if (rmbgModel && rmbgProcessor) return;
   if (rmbgLoading) {
@@ -42,15 +85,21 @@ async function loadLocalRMBG(onProgress?: (p: number) => void) {
 export async function removeBackgroundClient(
   imageDataUrl: string,
   onProgress?: (p: number) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
+  throwIfAborted(signal);
   await loadLocalRMBG(onProgress);
+  throwIfAborted(signal);
   onProgress?.(0.75);
 
   const image = await RawImage.fromURL(imageDataUrl);
+  throwIfAborted(signal);
   onProgress?.(0.85);
 
   const { pixel_values } = await rmbgProcessor(image);
+  throwIfAborted(signal);
   const { output } = await rmbgModel({ input: pixel_values });
+  throwIfAborted(signal);
   onProgress?.(0.95);
 
   const maskTensor = output[0].mul(255).to("uint8");
@@ -67,6 +116,7 @@ export async function removeBackgroundClient(
   const maskData = mask.data;
 
   for (let i = 0; i < image.width * image.height; i++) {
+    if ((i & 0x3fff) === 0) throwIfAborted(signal);
     imgData.data[i * 4] = rawData[i * 3];
     imgData.data[i * 4 + 1] = rawData[i * 3 + 1];
     imgData.data[i * 4 + 2] = rawData[i * 3 + 2];
@@ -80,20 +130,28 @@ export async function removeBackgroundClient(
 
 export async function removeBackground(
   imageDataUrl: string,
-  onProgress?: (p: number) => void,
+  onProgressOrOptions?: ((p: number) => void) | RemoveBackgroundOptions,
 ): Promise<string> {
+  const options = normalizeOptions(onProgressOrOptions);
+  const { onProgress, signal } = options;
+  const allowRemoteFallback = options.allowRemoteFallback ?? true;
+
   // Try in-browser local AI first
   try {
-    return await removeBackgroundClient(imageDataUrl, onProgress);
+    return await removeBackgroundClient(imageDataUrl, onProgress, signal);
   } catch (localErr) {
+    throwIfAborted(signal);
+    if (!allowRemoteFallback) throw localErr;
     console.warn("Local RMBG failed, falling back to server API...", localErr);
   }
 
+  throwIfAborted(signal);
   // Fallback to server API
   const postRes = await fetch("/api/removebg", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image: imageDataUrl }),
+    signal,
   });
 
   if (!postRes.ok) {
@@ -108,8 +166,11 @@ export async function removeBackground(
   }
 
   for (let i = 0; i < 60; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
-    const statusRes = await fetch(`/api/removebg?requestId=${encodeURIComponent(requestId)}`);
+    throwIfAborted(signal);
+    await waitFor(1000, signal);
+    const statusRes = await fetch(`/api/removebg?requestId=${encodeURIComponent(requestId)}`, {
+      signal,
+    });
     if (!statusRes.ok) continue;
     const statusData = await statusRes.json();
     if (statusData.status === "completed" && statusData.output?.image) {

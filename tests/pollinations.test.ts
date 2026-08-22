@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { ASPECT_RATIOS, buildPollinationsUrl, generateAIImage } from "@/lib/ai/pollinations";
+import {
+  ASPECT_RATIOS,
+  buildPollinationsUrl,
+  cleanImagePrompt,
+  generateAIImage,
+} from "@/lib/ai/pollinations";
 
 describe("Pollinations.ai Text-to-Image Service", () => {
   it("builds correct URL with all parameters", () => {
@@ -97,5 +102,9 @@ describe("Pollinations.ai Text-to-Image Service", () => {
     const result = enrichPrompt("สร้างรูปแมวให้หน่อย");
     expect(result).toContain("cat");
     expect(result.length).toBeGreaterThan("แมว".length);
+  });
+
+  it("normalizes common Thai image commands", () => {
+    expect(cleanImagePrompt("ขอภาพแมวให้หน่อย")).toBe("แมว");
   });
 });

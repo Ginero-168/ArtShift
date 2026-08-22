@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { IconChevronDown } from "@/components/icons";
 import {
@@ -12,6 +13,10 @@ import {
 import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
+
+const AIAssistancePanel = dynamic(() => import("@/components/AI/AICoPilotBar"), { ssr: false });
+
+type LibraryTab = "blocks" | "assistant";
 
 const CATEGORIES: BuilderBlockDefinition["category"][] = [
   "Content",
@@ -62,6 +67,7 @@ export default function BlockLibrary() {
   const addElement = useEngine((state) => state.addElement);
   const [query, setQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<LibraryTab>("blocks");
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -73,6 +79,8 @@ export default function BlockLibrary() {
         block.category.toLowerCase().includes(needle),
     );
   }, [query]);
+  const showAiImageStudio =
+    !query.trim() || "ai image studio prompt to image flux".includes(query.trim().toLowerCase());
 
   function toggleCategory(category: string) {
     setCollapsedCategories((prev) => ({
@@ -117,121 +125,123 @@ export default function BlockLibrary() {
   }
 
   return (
-    <aside className={styles.library} aria-label="Block library">
-      <label className={styles.search}>
-        <span aria-hidden="true">⌕</span>
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-          placeholder="Search blocks"
-          aria-label="Search blocks"
-        />
-      </label>
-      <div className={styles.libraryScroll}>
-        <div style={{ padding: "0 0 10px 0" }}>
-          <button
-            type="button"
-            onClick={() => useEngine.getState().setAiImageModalOpen(true)}
-            style={{
-              width: "100%",
-              padding: "8px 10px",
-              borderRadius: 8,
-              border: "1px solid rgba(99, 102, 241, 0.25)",
-              background:
-                "linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.12) 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              cursor: "pointer",
-              textAlign: "left",
-              boxShadow: "0 1px 3px rgba(99, 102, 241, 0.1)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 6,
-                  background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
-                  fontSize: 13,
-                  boxShadow: "0 2px 6px rgba(99, 102, 241, 0.3)",
-                }}
-              >
-                ✨
-              </div>
-              <div>
-                <strong style={{ fontSize: 11, color: "#1e1b4b", display: "block" }}>
-                  AI Image Studio
-                </strong>
-                <span style={{ fontSize: 9.5, color: "#64748b" }}>Prompt to Image (FLUX)</span>
-              </div>
-            </div>
-            <span style={{ fontSize: 11, color: "#6366f1", fontWeight: 700 }}>➔</span>
-          </button>
-        </div>
+    <aside className={styles.library} aria-label="Blocks and AI Assistance">
+      <div className={styles.libraryTabs} role="tablist" aria-label="Workspace tools">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "blocks"}
+          className={`${styles.libraryTab} ${activeTab === "blocks" ? styles.libraryTabActive : ""}`}
+          onClick={() => setActiveTab("blocks")}
+        >
+          <span aria-hidden="true">▦</span>
+          <span>Block</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "assistant"}
+          className={`${styles.libraryTab} ${activeTab === "assistant" ? styles.libraryTabActive : ""}`}
+          onClick={() => setActiveTab("assistant")}
+        >
+          <span aria-hidden="true">✦</span>
+          <span>AI Assistance</span>
+        </button>
+      </div>
 
-        {CATEGORIES.map((category) => {
-          const blocks = filtered.filter((block) => block.category === category);
-          if (!blocks.length) return null;
-          const isCollapsed = Boolean(collapsedCategories[category]);
+      <div className={styles.libraryTabPanel} hidden={activeTab !== "blocks"}>
+        <label className={styles.search}>
+          <span aria-hidden="true">⌕</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search blocks"
+            aria-label="Search blocks"
+          />
+        </label>
+        <div className={styles.libraryScroll}>
+          {CATEGORIES.map((category) => {
+            const blocks = filtered.filter((block) => block.category === category);
+            const includeAiImageStudio = category === "Content" && showAiImageStudio;
+            if (!blocks.length && !includeAiImageStudio) return null;
+            const isCollapsed = Boolean(collapsedCategories[category]);
 
-          return (
-            <section className={styles.blockGroup} key={category}>
-              <button
-                type="button"
-                className={styles.groupTitleButton}
-                onClick={() => toggleCategory(category)}
-                aria-expanded={!isCollapsed}
-                title={isCollapsed ? `Expand ${category}` : `Collapse ${category}`}
-              >
-                <span>{category}</span>
-                <span
-                  className={`${styles.groupChevron} ${isCollapsed ? styles.groupChevronCollapsed : ""}`}
+            return (
+              <section className={styles.blockGroup} key={category}>
+                <button
+                  type="button"
+                  className={styles.groupTitleButton}
+                  onClick={() => toggleCategory(category)}
+                  aria-expanded={!isCollapsed}
+                  title={isCollapsed ? `Expand ${category}` : `Collapse ${category}`}
                 >
-                  <IconChevronDown size={11} />
-                </span>
-              </button>
+                  <span>{category}</span>
+                  <span
+                    className={`${styles.groupChevron} ${isCollapsed ? styles.groupChevronCollapsed : ""}`}
+                  >
+                    <IconChevronDown size={11} />
+                  </span>
+                </button>
 
-              {!isCollapsed ? (
-                <div className={styles.blockGrid}>
-                  {blocks.map((block) => {
-                    const active = isBlockActive(block);
-                    return (
+                {!isCollapsed ? (
+                  <div className={styles.blockGrid}>
+                    {includeAiImageStudio ? (
                       <button
                         type="button"
-                        className={`${styles.blockCard} ${active ? styles.blockCardActive : ""}`}
-                        key={block.kind}
-                        draggable
-                        onClick={() => handleBlockClick(block)}
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = "copy";
-                          event.dataTransfer.setData(BUILDER_BLOCK_MIME, block.kind);
-                          event.dataTransfer.setData("text/plain", block.label);
-                        }}
-                        title={
-                          DRAWING_TOOL_MAP[block.kind]
-                            ? `${block.label} · Click to draw on canvas`
-                            : `${block.label} · ${block.description}`
-                        }
+                        className={`${styles.blockCard} ${styles.aiImageBlock}`}
+                        onClick={() => useEngine.getState().setAiImageModalOpen(true)}
+                        title="AI Image Studio · Prompt to Image (FLUX)"
+                        aria-label="AI Image Studio"
                       >
-                        <span className={styles.glyph}>
-                          <BlockIcon kind={block.kind} size={20} />
+                        <span className={styles.glyph} aria-hidden="true">
+                          ✨
                         </span>
-                        <span className={styles.blockLabel}>{block.label}</span>
+                        <span className={styles.blockLabel}>AI Image</span>
                       </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
-        {!filtered.length ? <p className={styles.empty}>No matching blocks.</p> : null}
+                    ) : null}
+                    {blocks.map((block) => {
+                      const active = isBlockActive(block);
+                      return (
+                        <button
+                          type="button"
+                          className={`${styles.blockCard} ${active ? styles.blockCardActive : ""}`}
+                          key={block.kind}
+                          draggable
+                          onClick={() => handleBlockClick(block)}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = "copy";
+                            event.dataTransfer.setData(BUILDER_BLOCK_MIME, block.kind);
+                            event.dataTransfer.setData("text/plain", block.label);
+                          }}
+                          title={
+                            DRAWING_TOOL_MAP[block.kind]
+                              ? `${block.label} · Click to draw on canvas`
+                              : `${block.label} · ${block.description}`
+                          }
+                        >
+                          <span className={styles.glyph}>
+                            <BlockIcon kind={block.kind} size={20} />
+                          </span>
+                          <span className={styles.blockLabel}>{block.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+          {!filtered.length && !showAiImageStudio ? (
+            <p className={styles.empty}>No matching blocks.</p>
+          ) : null}
+        </div>
+      </div>
+
+      <div
+        className={`${styles.libraryTabPanel} ${styles.assistantTabPanel}`}
+        hidden={activeTab !== "assistant"}
+      >
+        <AIAssistancePanel />
       </div>
     </aside>
   );

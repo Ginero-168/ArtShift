@@ -261,6 +261,8 @@ export type ImageElement = BaseElement & {
   };
   /** Gaussian blur in element-local pixels. */
   filterBlur?: number;
+  /** Non-destructive pixel eraser strokes in image-local pixels. */
+  rasterMask?: import("../raster/types").RasterMaskStroke[];
   /** Optional focal point for aspect-ratio-safe auto-crop (0..1). Default is center { x: 0.5, y: 0.5 }. */
   focalPoint?: { x: number; y: number };
   /** Optional connection to a user-approved local source file. */

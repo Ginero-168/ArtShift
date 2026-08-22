@@ -10,6 +10,7 @@ import {
   IconUnlock,
 } from "@/components/icons";
 import { getElementDefaultName } from "@/lib/engine/layers";
+import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { useEngine } from "@/lib/engine/store";
 import type { LayerMode } from "@/lib/engine/types";
 import { BlockIcon } from "./BlockIcon";
@@ -28,6 +29,7 @@ export default function LayerPanel() {
   const selectedIds = useEngine((state) => state.selectedIds);
 
   const selectOnly = useEngine((state) => state.selectOnly);
+  const toggleSelect = useEngine((state) => state.toggleSelect);
   const toggleObjectLayoutMode = useEngine((state) => state.toggleObjectLayoutMode);
   const setElementVisibility = useEngine((state) => state.setElementVisibility);
   const setElementLocked = useEngine((state) => state.setElementLocked);
@@ -108,7 +110,10 @@ export default function LayerPanel() {
                     setDraggedId(null);
                     setDragOverId(null);
                   }}
-                  onClick={() => selectOnly([element.id])}
+                  onClick={(event) => {
+                    if (isSelectionModifierPressed(event)) toggleSelect(element.id);
+                    else selectOnly([element.id]);
+                  }}
                 >
                   <div className={styles.objectLayerRow}>
                     <div

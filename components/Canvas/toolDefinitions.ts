@@ -57,6 +57,7 @@ export const TOOLBAR_TOOLS: ToolDef[] = [
   { id: "text", icon: IconText, label: "Text", hotkey: "T" },
   { id: "image", icon: IconImage, label: "Image", hotkey: "I" },
   { id: "eraser", icon: IconEraser, label: "Eraser", hotkey: "E" },
+  { id: "rasterEraser", icon: IconEraser, label: "Raster Eraser", hotkey: "⇧E" },
 ];
 
 export const ALL_TOOLS: { id: Tool; hotkey: string }[] = [

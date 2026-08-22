@@ -16,6 +16,72 @@
   border-right: 1px solid #dfe3ea;
 }
 
+.libraryTabs {
+  flex: 0 0 auto;
+  padding: 8px 9px 7px;
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: 3px;
+  border-bottom: 1px solid #dfe3ea;
+  background: #ffffff;
+}
+
+.libraryTab {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #7b8495;
+  font: 700 9px/1 "Sarabun", system-ui, sans-serif;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.libraryTab:hover {
+  color: #344054;
+  background: #f5f7fa;
+}
+
+.libraryTab:focus-visible {
+  outline: 2px solid rgba(24, 89, 255, 0.45);
+  outline-offset: 1px;
+}
+
+.libraryTabActive {
+  border-color: #d8dde7;
+  background: #f2f5fa;
+  color: #172033;
+  box-shadow: 0 1px 2px rgba(24, 35, 58, 0.08);
+}
+
+.libraryTabActive:last-child {
+  border-color: rgba(99, 102, 241, 0.25);
+  background: #f4f2ff;
+  color: #4f46e5;
+}
+
+.libraryTabPanel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.libraryTabPanel[hidden] {
+  display: none;
+}
+
+.assistantTabPanel {
+  background: #f8f9fb;
+}
+
 .libraryHeader,
 .inspectorHeader {
   min-height: 65px;
@@ -319,6 +385,16 @@
 .blockCard:hover .glyph {
   background: #dbeafe;
   transform: scale(1.1);
+}
+
+.aiImageBlock .glyph {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+.aiImageBlock:hover .glyph {
+  background: linear-gradient(135deg, #5558e8 0%, #9338e8 100%);
 }
 
 .blockLabel {

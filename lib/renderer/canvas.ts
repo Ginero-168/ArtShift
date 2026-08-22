@@ -32,6 +32,7 @@ import type {
   ImageElement,
   TextElement,
 } from "../engine/types";
+import type { RasterMaskStroke } from "../raster/types";
 import { drawBookMockup } from "./bookMockup";
 import { getCachedElement, setCachedElement } from "./cache";
 
@@ -74,15 +75,17 @@ export function renderSlide(
   const frames = ordered.filter(
     (el) => el.type === "frame",
   ) as import("../engine/types").FrameElement[];
+  const frameByChild = new Map<string, import("../engine/types").FrameElement>();
+  for (const frame of frames) {
+    for (const childId of frame.childIds) {
+      // Preserve the previous behavior when malformed data references an
+      // Object from more than one frame: the first frame wins.
+      if (!frameByChild.has(childId)) frameByChild.set(childId, frame);
+    }
+  }
 
   for (const el of ordered) {
-    let clipFrame: import("../engine/types").FrameElement | undefined;
-    for (const f of frames) {
-      if (f.childIds.includes(el.id)) {
-        clipFrame = f;
-        break;
-      }
-    }
+    const clipFrame = frameByChild.get(el.id);
 
     if (clipFrame) {
       ctx.save();
@@ -105,7 +108,7 @@ export function renderSlide(
 }
 
 export function renderElement(el: EngineElement, render: RenderCtx) {
-  if (el.isDeleted || el.visible === false) return;
+  if (el.isDeleted || el.hidden || el.visible === false) return;
   const { ctx } = render;
   let cached = getCachedElement(el);
 
@@ -609,6 +612,39 @@ function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: Rend
     );
   } else {
     ctx.drawImage(drawSrc, 0, 0, el.width, el.height);
+  }
+  ctx.filter = "none";
+  applyRasterMask(ctx, el.rasterMask, el.width, el.height);
+  ctx.restore();
+}
+
+function applyRasterMask(
+  ctx: CanvasRenderingContext2D,
+  strokes: RasterMaskStroke[] | undefined,
+  width: number,
+  height: number,
+) {
+  if (!strokes?.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const stroke of strokes) {
+    const points = stroke.points;
+    if (!points.length) continue;
+    ctx.globalAlpha = Math.max(0.05, Math.min(1, stroke.opacity));
+    ctx.lineWidth = Math.max(1, Math.min(Math.max(width, height), stroke.size));
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    if (points.length === 1) {
+      ctx.arc(points[0][0], points[0][1], ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    for (let index = 1; index < points.length; index++) {
+      ctx.lineTo(points[index][0], points[index][1]);
+    }
+    ctx.stroke();
   }
   ctx.restore();
 }

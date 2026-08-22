@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { removeBackground } from "@/lib/ai/removeBg";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
@@ -8,8 +8,10 @@ import { useEngine } from "@/lib/engine/store";
 import type { ImageElement } from "@/lib/engine/types";
 import {
   VECTORIZE_PRESET_CONFIGS,
+  VectorizeCancelledError,
   type VectorizeOptions,
   type VectorizePreset,
+  type VectorizeProgress,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
 import { resetAICache } from "@/lib/vision/resetCache";
@@ -43,6 +45,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [smoothing, setSmoothing] = useState(0.25);
   const [cornerSharpness, setCornerSharpness] = useState(0.65);
   const [minArea, setMinArea] = useState(4);
+  const vectorizeAbortRef = useRef<AbortController | null>(null);
 
   const applyPreset = (p: VectorizePreset) => {
     setPreset(p);
@@ -68,7 +71,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       return;
     }
 
+    const controller = new AbortController();
+    vectorizeAbortRef.current = controller;
     setBusy(true);
+    setProgress(0);
     setStatusMessage("Running high-precision Vector Trace...");
 
     try {
@@ -91,6 +97,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           minArea,
           ...customOpts,
         },
+        {
+          signal: controller.signal,
+          onProgress: ({ progress, stage }: VectorizeProgress) => {
+            setProgress(Math.round(progress * 100));
+            setStatusMessage(
+              stage === "loading"
+                ? "Loading image for vectorization..."
+                : stage === "quantizing"
+                  ? "Quantizing image colors..."
+                  : stage === "tracing"
+                    ? "Tracing contours in background..."
+                    : "Building editable vector paths...",
+            );
+          },
+        },
       );
 
       if (res.elements.length === 0) {
@@ -103,11 +124,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         );
       }
     } catch (err) {
-      console.error(err);
-      setStatusMessage("Vectorize error: " + (err as Error).message);
+      if (err instanceof VectorizeCancelledError || (err as Error).name === "AbortError") {
+        setStatusMessage("Vectorization cancelled.");
+      } else {
+        console.error(err);
+        setStatusMessage("Vectorize error: " + (err as Error).message);
+      }
     } finally {
+      if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
       setBusy(false);
+      setProgress(null);
     }
+  };
+
+  const cancelVectorize = () => {
+    vectorizeAbortRef.current?.abort();
   };
 
   const handleRemoveBg = async () => {
@@ -684,30 +715,50 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           </div>
 
           {/* Action Trigger Button */}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => handleVectorize()}
-            style={{
-              width: "100%",
-              padding: "6px 8px",
-              fontSize: 10,
-              fontWeight: 700,
-              borderRadius: 5,
-              border: "none",
-              background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-              color: "#fff",
-              cursor: busy ? "wait" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              boxShadow: "0 1px 3px rgba(99, 102, 241, 0.3)",
-            }}
-          >
-            <span>⚡</span>
-            <span>{busy ? "Tracing Vector..." : "Generate Vector Paths"}</span>
-          </button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleVectorize()}
+              style={{
+                flex: 1,
+                padding: "6px 8px",
+                fontSize: 10,
+                fontWeight: 700,
+                borderRadius: 5,
+                border: "none",
+                background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+                color: "#fff",
+                cursor: busy ? "wait" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                boxShadow: "0 1px 3px rgba(99, 102, 241, 0.3)",
+              }}
+            >
+              <span>⚡</span>
+              <span>{busy ? "Tracing Vector..." : "Generate Vector Paths"}</span>
+            </button>
+            {vectorizeAbortRef.current && (
+              <button
+                type="button"
+                onClick={cancelVectorize}
+                style={{
+                  padding: "6px 8px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  borderRadius: 5,
+                  border: "1px solid #fecaca",
+                  background: "#fff1f2",
+                  color: "#be123c",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -748,3 +799,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     </div>
   );
 }
+
+// Keep a default export as the stable seam for lazy loading. This avoids a
+// transient undefined component when Next.js refreshes a named export during
+// development HMR.
+export default VisionObjectIsolator;

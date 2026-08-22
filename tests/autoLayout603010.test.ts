@@ -181,4 +181,51 @@ describe("compute603010AutoLayout", () => {
     // In landscape 16:9, the 60% hero zone is on the right side (x >= 800)
     expect(heroPatch!.patch.x).toBeGreaterThanOrEqual(800);
   });
+
+  it("keeps a four-image 60/30/10 composition inside the artwork", () => {
+    const images = Array.from({ length: 4 }, (_, index) =>
+      createImage({
+        x: index * 120,
+        y: index * 80,
+        width: 320,
+        height: 420,
+        fileId: `img-${index}`,
+        naturalWidth: 800,
+        naturalHeight: 1050,
+      }),
+    );
+    const slide: EngineSlide = {
+      id: "s1",
+      name: "Four image composition",
+      background: "#ffffff",
+      width: 1920,
+      height: 1080,
+      layers: [],
+      elements: images,
+    };
+
+    const patches = compute603010AutoLayout(slide);
+
+    expect(patches).toHaveLength(4);
+    const hero = patches.find((patch) => patch.id === images[0].id)!;
+    const supporting = patches.find((patch) => patch.id === images[1].id)!;
+    const accents = patches.filter(({ id }) => images.slice(2).some((image) => image.id === id));
+
+    expect(hero.patch.x).toBeGreaterThanOrEqual(slide.width * 0.4);
+    expect(supporting.patch.x).toBeLessThan(slide.width * 0.4);
+    expect(accents).toHaveLength(2);
+    expect(accents.every(({ patch }) => (patch.y ?? 0) >= slide.height * 0.65)).toBe(true);
+    expect(accents.every(({ patch }) => (patch.width ?? 0) < (supporting.patch.width ?? 0))).toBe(
+      true,
+    );
+    expect(
+      patches.every(({ patch }) => {
+        const x = patch.x ?? 0;
+        const y = patch.y ?? 0;
+        const width = patch.width ?? 0;
+        const height = patch.height ?? 0;
+        return x >= 0 && y >= 0 && x + width <= slide.width && y + height <= slide.height;
+      }),
+    ).toBe(true);
+  });
 });

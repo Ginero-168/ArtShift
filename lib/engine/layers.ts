@@ -190,14 +190,14 @@ export function getRenderableElements(slide: EngineSlide): EngineElement[] {
     const objects = layer.objectIds
       .flatMap((id) => {
         const element = byId.get(id);
-        return element && !element.isDeleted ? [element] : [];
+        return element && !element.isDeleted && !element.hidden ? [element] : [];
       })
       .sort((a, b) => a.z - b.z);
     ordered.push(...objects);
   }
   ordered.push(
     ...slide.elements
-      .filter((element) => !owned.has(element.id) && !element.isDeleted)
+      .filter((element) => !owned.has(element.id) && !element.isDeleted && !element.hidden)
       .sort((a, b) => a.z - b.z),
   );
   return ordered;
@@ -208,7 +208,12 @@ export function getInteractiveElements(slide: EngineSlide): EngineElement[] {
     slide.layers.filter((layer) => layer.locked).flatMap((layer) => layer.objectIds),
   );
   return getRenderableElements(slide).filter(
-    (element) => !element.isDeleted && !lockedIds.has(element.id) && !element.locked,
+    (element) =>
+      !element.isDeleted &&
+      element.hidden !== true &&
+      element.visible !== false &&
+      !lockedIds.has(element.id) &&
+      !element.locked,
   );
 }
 
@@ -217,7 +222,7 @@ export function isObjectVisible(
   objectId: string,
 ): boolean {
   const element = slide.elements.find((candidate) => candidate.id === objectId);
-  if (element && (element.isDeleted || element.hidden)) return false;
+  if (element && (element.isDeleted || element.hidden || element.visible === false)) return false;
   const layer = getLayerForObject(slide, objectId);
   return layer ? layer.visible : true;
 }

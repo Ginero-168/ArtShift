@@ -196,6 +196,7 @@ describe("engine store", () => {
     st.checkpointInteraction("move");
     st.previewElements([{ id: element.id, patch: { x: 80 } }]);
     st.previewElements([{ id: element.id, patch: { x: 140 } }]);
+    st.commitInteraction();
 
     useEngine.getState().undo();
     expect(
@@ -212,6 +213,25 @@ describe("engine store", () => {
         .currentSlide()
         ?.elements.find((item) => item.id === element.id)?.x,
     ).toBe(140);
+  });
+
+  it("keeps live previews out of persistence until the interaction is committed", () => {
+    const st = useEngine.getState();
+    st.setLayerMode(st.activeLayerId, "free");
+    const element = createRect({ x: 10, y: 20, width: 100, height: 80 });
+    st.addElement(element);
+    useEngine.setState((state) => ({
+      doc: { ...state.doc, updatedAt: 1 },
+    }));
+    const beforeVersion = useEngine.getState().currentSlide()!.elements[0].version;
+
+    st.checkpointInteraction("move");
+    st.previewElements([{ id: element.id, patch: { x: 140 } }]);
+    expect(useEngine.getState().doc.updatedAt).toBe(1);
+    expect(useEngine.getState().currentSlide()!.elements[0].version).toBe(beforeVersion);
+
+    useEngine.getState().commitInteraction();
+    expect(useEngine.getState().doc.updatedAt).toBeGreaterThan(1);
   });
 
   it("reorders z-index", () => {

@@ -140,4 +140,17 @@ describe("In-Browser Vectorizer Engine (Image-to-Vector)", () => {
       expect(el.closed).toBe(true);
     }
   });
+
+  it("reports progress while vectorizing", async () => {
+    const updates: number[] = [];
+    await vectorizeImage(
+      sampleDataUrl,
+      { x: 0, y: 0, width: 100, height: 100 },
+      { mode: "color", colors: 4, detailLevel: 1 },
+      { onProgress: ({ progress }) => updates.push(progress) },
+    );
+
+    expect(updates[0]).toBeGreaterThan(0);
+    expect(updates.at(-1)).toBe(1);
+  });
 });

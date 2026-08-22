@@ -39,7 +39,6 @@ import {
 } from "@/components/icons";
 import { legacyToEngineDoc } from "@/lib/engine/adapter";
 
-const AICoPilotBar = dynamic(() => import("@/components/AI/AICoPilotBar"), { ssr: false });
 const AIImageGeneratorModal = dynamic(() => import("@/components/AI/AIImageGeneratorModal"), {
   ssr: false,
 });
@@ -92,7 +91,6 @@ export default function HomePage() {
   const redo = useEngine((s) => s.redo);
   const deleteElements = useEngine((s) => s.deleteElements);
   const loadDoc = useEngine((s) => s.loadDoc);
-  const doc = useEngine((s) => s.doc);
   const theme = useStore((s) => s.theme);
   const cycleTheme = useStore((s) => s.cycleTheme);
   const setSlideBackground = useEngine((s) => s.setSlideBackground);
@@ -101,7 +99,9 @@ export default function HomePage() {
   const layerFilter = useEngine((s) => s.layerFilter);
   const setLayerFilter = useEngine((s) => s.setLayerFilter);
   const currentSlideId = useEngine((s) => s.currentSlideId);
-  const currentSlide = doc.slides.find((sl) => sl.id === currentSlideId);
+  const currentSlideBackground = useEngine(
+    (s) => s.doc.slides.find((slide) => slide.id === s.currentSlideId)?.background ?? "#ffffff",
+  );
   const aiImageModalOpen = useEngine((s) => s.aiImageModalOpen);
   const setAiImageModalOpen = useEngine((s) => s.setAiImageModalOpen);
 
@@ -172,29 +172,35 @@ export default function HomePage() {
     };
   }, [loadDoc]);
 
-  // Auto-save
+  // Auto-save. Subscribe to revision changes without making the whole editor
+  // re-render for every live pointer preview.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!loaded) return;
-    if (persistedRevision.current === doc.updatedAt) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    const request = ++saveRequest.current;
-    saveTimer.current = setTimeout(async () => {
-      setSaveState({ status: "saving" });
-      const revision = doc.updatedAt;
-      const result = await saveEngine(doc);
-      if (request !== saveRequest.current) return;
-      if (result.ok) {
-        persistedRevision.current = revision;
-        setSaveState({ status: "saved", savedAt: result.savedAt });
-      } else {
-        setSaveState({ status: "error", message: result.message });
-      }
-    }, 600);
+    const unsubscribe = useEngine.subscribe((state, previous) => {
+      if (state.doc.updatedAt === previous.doc.updatedAt) return;
+      if (persistedRevision.current === state.doc.updatedAt) return;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      const request = ++saveRequest.current;
+      const nextDoc = state.doc;
+      saveTimer.current = setTimeout(async () => {
+        setSaveState({ status: "saving" });
+        const revision = nextDoc.updatedAt;
+        const result = await saveEngine(nextDoc);
+        if (request !== saveRequest.current) return;
+        if (result.ok) {
+          persistedRevision.current = revision;
+          setSaveState({ status: "saved", savedAt: result.savedAt });
+        } else {
+          setSaveState({ status: "error", message: result.message });
+        }
+      }, 600);
+    });
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      unsubscribe();
     };
-  }, [doc, loaded]);
+  }, [loaded]);
 
   function downloadRecoveryPayload() {
     if (!loadIssue?.recoveryPayload) return;
@@ -239,6 +245,7 @@ export default function HomePage() {
     kind: "pptx" | "pdf" | "png" | "pngAll" | "svg" | "svgAll" | "webp" | "jpg",
   ) {
     if (exportBusy) return;
+    const { doc, currentSlideId: activeSlideId } = useEngine.getState();
     setExportBusy(kind);
     try {
       const images = getImageCache();
@@ -248,18 +255,18 @@ export default function HomePage() {
       } else if (kind === "pdf") {
         await exportPDF(doc, images);
       } else if (kind === "png") {
-        const slide = doc.slides.find((sl) => sl.id === currentSlideId);
+        const slide = doc.slides.find((sl) => sl.id === activeSlideId);
         if (slide) await exportCurrentSlidePNG(slide, doc, images);
       } else if (kind === "webp") {
-        const slide = doc.slides.find((sl) => sl.id === currentSlideId);
+        const slide = doc.slides.find((sl) => sl.id === activeSlideId);
         if (slide) await exportCurrentSlideWebP(slide, doc, images);
       } else if (kind === "jpg") {
-        const slide = doc.slides.find((sl) => sl.id === currentSlideId);
+        const slide = doc.slides.find((sl) => sl.id === activeSlideId);
         if (slide) await exportCurrentSlideJPEG(slide, doc, images);
       } else if (kind === "pngAll") {
         await exportAllPNG(doc, images);
       } else if (kind === "svg") {
-        const slide = doc.slides.find((slide) => slide.id === currentSlideId);
+        const slide = doc.slides.find((slide) => slide.id === activeSlideId);
         if (slide) exportCurrentSlideSVG(slide);
       } else if (kind === "svgAll") {
         exportAllSVG(doc);
@@ -641,7 +648,7 @@ export default function HomePage() {
                     <HamburgerItem
                       label="Save to..."
                       onClick={() => {
-                        saveEngine(doc);
+                        saveEngine(useEngine.getState().doc);
                         setMenuOpen(false);
                       }}
                     />
@@ -717,14 +724,14 @@ export default function HomePage() {
                           <button
                             key={c}
                             onClick={() => {
-                              if (currentSlide) setSlideBackground(currentSlide.id, c);
+                              setSlideBackground(currentSlideId, c);
                             }}
                             style={{
                               width: 18,
                               height: 18,
                               borderRadius: 3,
                               border:
-                                currentSlide?.background === c
+                                currentSlideBackground === c
                                   ? "2px solid var(--accent, #6366f1)"
                                   : "1px solid var(--stroke, #d1d5db)",
                               background: c,
@@ -739,32 +746,6 @@ export default function HomePage() {
                 )}
               </div>
             </div>
-
-            {/* AI Image Studio Button */}
-            <button
-              onClick={() => useEngine.getState().setAiImageModalOpen(true)}
-              style={{
-                height: 28,
-                padding: "0 8px",
-                borderRadius: 6,
-                border: "1px solid rgba(99, 102, 241, 0.3)",
-                background:
-                  "linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%)",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                cursor: "pointer",
-                color: "var(--accent, #6366f1)",
-                fontWeight: 600,
-                fontSize: 11,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-              title="AI Image Studio (Text-to-Image with FLUX.1)"
-              aria-label="Open AI Image Studio"
-            >
-              <span>✨</span>
-              <span>AI Image</span>
-            </button>
           </div>
 
           {/* ——— Top-center toolbar: Hand/Cursor | Viewport Controls | Layer Filter ——— */}
@@ -1269,7 +1250,6 @@ export default function HomePage() {
               onClose={() => setAiImageModalOpen(false)}
             />
           )}
-          <AICoPilotBar />
         </div>
         <BuilderInspector />
       </div>

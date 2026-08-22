@@ -31,6 +31,9 @@ export type RunChatResult = {
 
 export type RunChatOptions = {
   onTextDelta?: (delta: string) => void;
+  onMutation?: (mutation: Mutation) => void;
+  onPlan?: (plan: unknown) => void;
+  onProgress?: (progress: unknown) => void;
   signal?: AbortSignal;
 };
 
@@ -50,8 +53,18 @@ export async function runEngineChat(
   const slide = st.currentSlide();
   const slideState = {
     canvas: { width: LEGACY_W, height: LEGACY_H },
+    slideId: slide?.id ?? st.currentSlideId,
     background: slide?.background ?? "#ffffff",
-    objects: (slide?.elements ?? []).filter((e) => !e.isDeleted).map(summarizeEngineObject),
+    selectedIds: Array.from(st.selectedIds),
+    layers: (slide?.layers ?? []).map((layer) => ({
+      id: layer.id,
+      name: layer.name,
+      mode: layer.mode,
+      locked: layer.locked,
+    })),
+    objects: (slide?.elements ?? [])
+      .filter((e) => !e.isDeleted)
+      .map((e) => summarizeEngineObject(e, st.selectedIds.has(e.id))),
   };
 
   const res = await fetch("/api/chat", {
@@ -83,6 +96,7 @@ export async function runEngineChat(
     let skipped = 0;
     for (const m of muts) {
       const ok = await applyEngineMutation(m);
+      opts.onMutation?.(m);
       if (ok) applied++;
       else skipped++;
     }
@@ -127,9 +141,14 @@ async function readSseAndApply(res: Response, opts: RunChatOptions): Promise<Run
           if (mut && typeof mut.tool === "string") {
             mutations.push(mut);
             const ok = await applyEngineMutation(mut);
+            opts.onMutation?.(mut);
             if (ok) applied++;
             else skipped++;
           }
+        } else if (event === "plan") {
+          opts.onPlan?.(data);
+        } else if (event === "progress") {
+          opts.onProgress?.(data);
         } else if (event === "error") {
           errorMsg = typeof data?.message === "string" ? data.message : "AI error";
         }
@@ -166,7 +185,7 @@ function parseSseBlock(block: string): {
   }
 }
 
-function summarizeEngineObject(el: EngineElement) {
+function summarizeEngineObject(el: EngineElement, selected = false) {
   const base = {
     id: el.id,
     type: el.type,
@@ -175,6 +194,11 @@ function summarizeEngineObject(el: EngineElement) {
     width: Math.round(el.width / SCALE_X),
     height: Math.round(el.height / SCALE_Y),
     rotation: Math.round((el.angle * 180) / Math.PI),
+    name: el.name,
+    selected,
+    locked: el.locked,
+    hidden: el.hidden ?? el.visible === false,
+    layoutMode: el.layoutMode,
   };
   if (el.type === "text") {
     return {

@@ -25,7 +25,6 @@ import {
   useState,
 } from "react";
 import { cellsForPlacement, getAllHexCells, getHexMetrics } from "@/lib/engine/hexLayout";
-import { isObjectLocked, isObjectVisible } from "@/lib/engine/layers";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
 import { renderElement, renderSlide } from "@/lib/renderer/canvas";
 
@@ -200,6 +199,18 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     ctx.fillRect(0, 0, slideW, slideH);
     ctx.shadowColor = "transparent";
 
+    const hiddenLayerObjectIds = new Set(
+      slide.layers.filter((layer) => !layer.visible).flatMap((layer) => layer.objectIds),
+    );
+    const lockedLayerObjectIds = new Set(
+      slide.layers.filter((layer) => layer.locked).flatMap((layer) => layer.objectIds),
+    );
+    const visibleObject = (element: EngineElement) =>
+      !element.isDeleted &&
+      !element.hidden &&
+      element.visible !== false &&
+      !hiddenLayerObjectIds.has(element.id);
+
     renderSlide(slide, { ctx, images }, slideW, slideH, {
       showFrames: true,
       afterBackground: () =>
@@ -228,12 +239,14 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
     // Selection outline overlay.
     if (selectedIds && selectedIds.size > 0) {
+      const elementsById = new Map(slide.elements.map((element) => [element.id, element]));
       ctx.save();
       ctx.strokeStyle = "#6366f1";
       ctx.lineWidth = 1.5 / view.scale;
       ctx.setLineDash([6 / view.scale, 4 / view.scale]);
-      for (const el of slide.elements) {
-        if (el.isDeleted || !isObjectVisible(slide, el.id) || !selectedIds.has(el.id)) continue;
+      for (const id of selectedIds) {
+        const el = elementsById.get(id);
+        if (!el || !visibleObject(el)) continue;
         ctx.save();
         const cx = el.x + el.width / 2;
         const cy = el.y + el.height / 2;
@@ -247,7 +260,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
     // Lock indicator on locked elements.
     for (const el of slide.elements) {
-      if (el.isDeleted || !isObjectVisible(slide, el.id) || !isObjectLocked(slide, el.id)) continue;
+      if (!visibleObject(el) || !(el.locked || lockedLayerObjectIds.has(el.id))) continue;
       const s = 10 / view.scale;
       const lx = el.x + el.width - s - 4 / view.scale;
       const ly = el.y + 4 / view.scale;

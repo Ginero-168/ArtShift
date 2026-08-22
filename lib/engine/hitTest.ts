@@ -21,7 +21,7 @@ import type { EngineElement, EngineSlide } from "./types";
 const HIT_TOLERANCE = 6; // px in world space
 
 export function hitTestElement(world: Point, el: EngineElement): boolean {
-  if (el.isDeleted || el.visible === false) return false;
+  if (el.isDeleted || el.hidden || el.visible === false) return false;
   // Cheap reject via world bbox first.
   const bbox = elementWorldBBox(el);
   if (!pointInRect({ x: world.x, y: world.y }, expandRect(bbox, HIT_TOLERANCE))) return false;

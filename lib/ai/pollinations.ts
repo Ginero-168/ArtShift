@@ -70,11 +70,43 @@ export const THAI_KEYWORD_MAP: Record<string, string> = {
   การ์ตูน: "cute 2D cartoon anime illustration, vibrant colors",
 };
 
-export function enrichPrompt(rawPrompt: string): string {
-  let prompt = rawPrompt
-    .replace(/^(ช่วย)?(สร้างรูป|วาดรูป|generate image|create image|รูปภาพ|รูป|draw|ภาพ)/gi, "")
-    .replace(/(ให้หน่อย|ครับ|ค่ะ|จ้า|หน่อย|of|about|เกี่ยวกับ)/gi, "")
+const IMAGE_COMMAND_PREFIX =
+  /^(?:(?:ช่วย|ขอ)\s*)?(?:สร้างรูปภาพ|สร้างรูป|วาดรูปภาพ|วาดรูป|สร้างภาพ|วาดภาพ|generate image|create image|picture of|image of|รูปภาพ|รูป|ภาพ|draw)\s*/iu;
+const IMAGE_COMMAND_SUFFIX = /\s*(?:ให้หน่อย|หน่อย|นะ|ครับ|ค่ะ|จ้า)\s*$/iu;
+const IMAGE_PROMPT_CONTEXT_PREFIX = /^(?:of|about|เกี่ยวกับ)\s*/iu;
+
+/** Removes conversational image-generation commands while preserving the visual request. */
+export function cleanImagePrompt(rawPrompt: string): string {
+  return rawPrompt
+    .trim()
+    .replace(IMAGE_COMMAND_PREFIX, "")
+    .replace(IMAGE_PROMPT_CONTEXT_PREFIX, "")
+    .replace(IMAGE_COMMAND_SUFFIX, "")
     .trim();
+}
+
+/** Identifies common Thai and English requests that should be handled by image generation. */
+export function isImageGenerationPrompt(userPrompt: string): boolean {
+  const prompt = userPrompt.trim().toLowerCase();
+  return (
+    prompt.includes("สร้างรูป") ||
+    prompt.includes("วาดรูป") ||
+    prompt.includes("สร้างภาพ") ||
+    prompt.includes("วาดภาพ") ||
+    prompt.includes("ขอรูป") ||
+    prompt.includes("ขอภาพ") ||
+    prompt.includes("generate image") ||
+    prompt.includes("create image") ||
+    (prompt.startsWith("รูป") && prompt.length > 5) ||
+    (prompt.startsWith("ภาพ") && prompt.length > 5) ||
+    prompt.includes("draw ") ||
+    prompt.includes("picture of") ||
+    prompt.includes("image of")
+  );
+}
+
+export function enrichPrompt(rawPrompt: string): string {
+  let prompt = cleanImagePrompt(rawPrompt);
 
   if (!prompt) prompt = "beautiful aesthetic digital art";
 

@@ -92,6 +92,7 @@ export type Tool =
   | "text"
   | "image"
   | "eraser"
+  | "rasterEraser"
   | "frame";
 
 export type LayerFilter = "all" | "block" | "free";
@@ -159,6 +160,8 @@ export type EngineState = {
   checkpointInteraction: (label: string) => void;
   /** Live geometry update that intentionally does not add another undo step. */
   previewElements: (patches: Array<{ id: string; patch: Partial<EngineElement> }>) => void;
+  /** Mark the end of a live interaction as one persisted document revision. */
+  commitInteraction: () => void;
   deleteElements: (ids: string[]) => void;
   bringToFront: (ids: string[]) => void;
   sendToBack: (ids: string[]) => void;
@@ -210,6 +213,9 @@ export type EngineState = {
   setCroppingImageId: (id: string | null) => void;
   aiImageModalOpen: boolean;
   setAiImageModalOpen: (open: boolean) => void;
+  /** Brush diameter in image-local pixels for the non-destructive raster eraser. */
+  rasterBrushSize: number;
+  setRasterBrushSize: (size: number) => void;
 };
 
 function newSlide(name: string): EngineSlide {
@@ -252,6 +258,34 @@ function nextZ(slide: EngineSlide): number {
 
 export const useEngine = create<EngineState>((set, get) => {
   const initial = emptyDoc();
+  type PreviewPatch = { id: string; patch: Partial<EngineElement> };
+  let pendingPreview: PreviewPatch[] | null = null;
+  let previewFrame: number | null = null;
+
+  const applyPreview = (patches: PreviewPatch[]) => {
+    set((cur) =>
+      mapDoc(cur, (sl) => applyElementPatches(sl, patches, cur.doc.workspaceStrictness), false),
+    );
+  };
+
+  const flushPendingPreview = () => {
+    if (previewFrame !== null && typeof window !== "undefined") {
+      window.cancelAnimationFrame(previewFrame);
+      previewFrame = null;
+    }
+    const patches = pendingPreview;
+    pendingPreview = null;
+    if (patches) applyPreview(patches);
+  };
+
+  const cancelPendingPreview = () => {
+    if (previewFrame !== null && typeof window !== "undefined") {
+      window.cancelAnimationFrame(previewFrame);
+    }
+    previewFrame = null;
+    pendingPreview = null;
+  };
+
   return {
     doc: initial,
     currentSlideId: initial.slides[0].id,
@@ -265,6 +299,8 @@ export const useEngine = create<EngineState>((set, get) => {
     lineSubtype: "solid" as LineSubtype,
     aiImageModalOpen: false,
     setAiImageModalOpen: (open) => set({ aiImageModalOpen: open }),
+    rasterBrushSize: 48,
+    setRasterBrushSize: (size) => set({ rasterBrushSize: Math.max(4, Math.min(512, size)) }),
 
     currentSlide: () => {
       const s = get();
@@ -696,6 +732,7 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     updateElements: (patches, label = "update element") => {
+      flushPendingPreview();
       const s = get();
       pushHistory(s.history, s.doc, label);
       set((cur) =>
@@ -709,9 +746,25 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     previewElements: (patches) => {
-      set((cur) =>
-        mapDoc(cur, (sl) => applyElementPatches(sl, patches, cur.doc.workspaceStrictness)),
-      );
+      pendingPreview = patches;
+      if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+        flushPendingPreview();
+        return;
+      }
+      if (previewFrame !== null) return;
+      previewFrame = window.requestAnimationFrame(() => {
+        previewFrame = null;
+        const next = pendingPreview;
+        pendingPreview = null;
+        if (next) applyPreview(next);
+      });
+    },
+
+    commitInteraction: () => {
+      flushPendingPreview();
+      set((cur) => ({
+        doc: { ...cur.doc, updatedAt: nextRevision(cur.doc.updatedAt) },
+      }));
     },
 
     deleteElements: (ids) => {
@@ -1436,6 +1489,7 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     loadDoc: (doc) => {
+      cancelPendingPreview();
       // Clear renderer cache so stale bitmaps aren't reused.
       import("@/lib/renderer/cache").then((m) => m.clearElementCache?.());
       const normalized = normalizeDocumentLayers(doc);
@@ -1455,9 +1509,13 @@ export const useEngine = create<EngineState>((set, get) => {
 
 // ——— internals ———
 
-function mapDoc(state: EngineState, fn: (slide: EngineSlide) => EngineSlide): Partial<EngineState> {
+function mapDoc(
+  state: EngineState,
+  fn: (slide: EngineSlide) => EngineSlide,
+  touchRevision = true,
+): Partial<EngineState> {
   return {
-    doc: mapCurrentSlide(state, fn).doc,
+    doc: mapCurrentSlide(state, fn, touchRevision).doc,
   };
 }
 
@@ -1540,9 +1598,20 @@ function activeLayerAfterHistory(doc: EngineDoc, slideId: string, preferredId: s
 function mapCurrentSlide(
   state: EngineState,
   fn: (slide: EngineSlide) => EngineSlide,
+  touchRevision = true,
 ): { doc: EngineDoc } {
   const slides = state.doc.slides.map((sl) => (sl.id === state.currentSlideId ? fn(sl) : sl));
-  return { doc: { ...state.doc, slides, updatedAt: Date.now() } };
+  return {
+    doc: {
+      ...state.doc,
+      slides,
+      updatedAt: touchRevision ? nextRevision(state.doc.updatedAt) : state.doc.updatedAt,
+    },
+  };
+}
+
+function nextRevision(previous: number): number {
+  return Math.max(Date.now(), previous + 1);
 }
 
 function applyElementPatches(
@@ -1604,11 +1673,38 @@ function applyElementPatches(
     elements: slide.elements.map((element) => {
       const item = allPatches.find((candidate) => candidate.id === element.id);
       return item
-        ? ({ ...element, ...item.patch, version: element.version + 1 } as EngineElement)
+        ? ({
+            ...element,
+            ...item.patch,
+            version: shouldInvalidateElementRender(item.patch)
+              ? element.version + 1
+              : element.version,
+          } as EngineElement)
         : element;
     }),
   };
   return recomputeArrowBindings(growBlockTextPlacements(patchedSlide, patchedIds, strictness));
+}
+
+const VIEWPORT_ONLY_PATCH_KEYS = new Set([
+  "x",
+  "y",
+  "angle",
+  "z",
+  "opacity",
+  "blendMode",
+  "hidden",
+  "visible",
+  "isDeleted",
+  "locked",
+  "name",
+  "groupIds",
+  "layoutMode",
+  "bento",
+]);
+
+function shouldInvalidateElementRender(patch: Partial<EngineElement>): boolean {
+  return Object.keys(patch).some((key) => !VIEWPORT_ONLY_PATCH_KEYS.has(key));
 }
 
 function growBlockTextPlacements(

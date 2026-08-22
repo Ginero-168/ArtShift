@@ -40,6 +40,11 @@ import {
   isObjectBlock,
   isObjectLocked,
 } from "@/lib/engine/layers";
+import {
+  applySelection,
+  isSelectionModifierPressed,
+  shouldPreserveMultiSelectionForDrag,
+} from "@/lib/engine/selection";
 import { type Guide, snapBBox } from "@/lib/engine/snap";
 import {
   cloneElementsForDuplicate,
@@ -47,8 +52,14 @@ import {
   type Tool,
   useEngine,
 } from "@/lib/engine/store";
-import type { EngineElement, TextElement, VectorPathElement } from "@/lib/engine/types";
+import type {
+  EngineElement,
+  EngineSlide,
+  TextElement,
+  VectorPathElement,
+} from "@/lib/engine/types";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
+import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
 import BindingIndicators from "./BindingIndicators";
 import CanvasRoot, {
   type CanvasRootHandle,
@@ -68,6 +79,7 @@ import Transformer from "./Transformer";
 import { usePasteDrop } from "./usePasteDrop";
 
 const SNAP_THRESHOLD_PX = 6;
+const POINTER_MOVE_THRESHOLD_PX = 3;
 
 type DragState =
   | { kind: "draw"; start: WorldPoint }
@@ -79,6 +91,7 @@ type DragState =
       checkpointed: boolean;
       altKey?: boolean;
       duplicated?: boolean;
+      clickSelection?: string[];
     }
   | { kind: "freedraw"; points: Array<[number, number, number]> }
   | {
@@ -88,6 +101,12 @@ type DragState =
       additive: boolean;
     }
   | { kind: "erase" }
+  | {
+      kind: "rasterErase";
+      elementId: string;
+      localPoints: Array<[number, number]>;
+      worldPoints: WorldPoint[];
+    }
   | null;
 
 export type CanvasEditorHandle = {
@@ -119,10 +138,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const addElement = useEngine((s) => s.addElement);
   const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
   const previewElements = useEngine((s) => s.previewElements);
+  const commitInteraction = useEngine((s) => s.commitInteraction);
   const commitBlockLayout = useEngine((s) => s.commitBlockLayout);
   const selectOnly = useEngine((s) => s.selectOnly);
   const clearSelection = useEngine((s) => s.clearSelection);
   const deleteElements = useEngine((s) => s.deleteElements);
+  const updateElements = useEngine((s) => s.updateElements);
+  const rasterBrushSize = useEngine((s) => s.rasterBrushSize);
 
   // Filter the slide elements by layerFilter ("all" | "block" | "free")
   const slide = useMemo(() => {
@@ -142,6 +164,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState<ViewTransform>({ scale: 1, tx: 0, ty: 0 });
   const [draft, setDraft] = useState<EngineElement | null>(null);
+  const [rasterBrushDraft, setRasterBrushDraft] = useState<{
+    elementId: string;
+    points: WorldPoint[];
+  } | null>(null);
   const [marqueeRect, setMarqueeRect] = useState<{
     x: number;
     y: number;
@@ -185,6 +211,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     if (tool === "pen") return;
     setPenNodes([]);
     setDraft(null);
+    if (tool !== "rasterEraser") setRasterBrushDraft(null);
   }, [tool]);
 
   useEffect(() => {
@@ -297,19 +324,18 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       if (tool === "select") {
         const hit = pickTopMost(p, slide);
         if (hit) {
-          // Expand to group members if clicked element is grouped.
-          const groupIds = getSelectionWithGroup(
-            hit,
-            slide.elements,
-            e.shiftKey ? "toggle" : "replace",
+          const groupIds = getSelectionMembers(hit, slide);
+          const additive = isSelectionModifierPressed(e);
+          const preserveSelectionForMove = shouldPreserveMultiSelectionForDrag(
             selectedIds,
+            hit.id,
+            additive,
           );
-          if (e.shiftKey) {
-            for (const id of groupIds) useEngine.getState().toggleSelect(id);
-          } else if (!Array.from(groupIds).every((id) => selectedIds.has(id))) {
-            selectOnly(Array.from(groupIds));
-          }
-          const ids = Array.from(useEngine.getState().selectedIds);
+          const nextSelection = preserveSelectionForMove
+            ? new Set(selectedIds)
+            : applySelection(selectedIds, groupIds, additive);
+          if (!preserveSelectionForMove) selectOnly(Array.from(nextSelection));
+          const ids = Array.from(nextSelection);
           const origins = new Map<string, { x: number; y: number }>();
           for (const el of slide.elements) {
             if (ids.includes(el.id) && !isObjectLocked(slide, el.id)) {
@@ -324,16 +350,18 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             checkpointed: false,
             altKey: e.altKey,
             duplicated: false,
+            clickSelection: preserveSelectionForMove ? groupIds : undefined,
           };
         } else {
           // Begin marquee.
           const screen = rootRef.current?.worldToScreen(p) ?? { x: 0, y: 0 };
-          if (!e.shiftKey) clearSelection();
+          const additive = isSelectionModifierPressed(e);
+          if (!additive) clearSelection();
           dragRef.current = {
             kind: "marquee",
             startScreen: screen,
             startWorld: p,
-            additive: e.shiftKey,
+            additive,
           };
         }
         return;
@@ -343,6 +371,21 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         const hit = pickTopMost(p, slide);
         if (hit) deleteElements([hit.id]);
         dragRef.current = { kind: "erase" };
+        return;
+      }
+
+      if (tool === "rasterEraser") {
+        const hit = pickTopMost(p, slide);
+        if (hit?.type !== "image") return;
+        selectOnly([hit.id]);
+        const local = worldToImageLocal(p, hit);
+        dragRef.current = {
+          kind: "rasterErase",
+          elementId: hit.id,
+          localPoints: [local],
+          worldPoints: [p],
+        };
+        setRasterBrushDraft({ elementId: hit.id, points: [p] });
         return;
       }
 
@@ -442,6 +485,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       const d = dragRef.current;
       if (!d || !slide) return;
       if (d.kind === "move") {
+        if (
+          !d.checkpointed &&
+          Math.hypot(p.x - d.start.x, p.y - d.start.y) < POINTER_MOVE_THRESHOLD_PX / view.scale
+        ) {
+          return;
+        }
         const isAlt = _e.altKey || d.altKey;
         if (isAlt && !d.duplicated) {
           const movingElements = slide.elements.filter((el) => d.origins.has(el.id));
@@ -489,6 +538,22 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         );
         return;
       }
+      if (d.kind === "rasterErase") {
+        const image = slide.elements.find(
+          (element): element is import("@/lib/engine/types").ImageElement =>
+            element.id === d.elementId && element.type === "image",
+        );
+        if (!image) return;
+        const local = worldToImageLocal(p, image);
+        const last = d.localPoints.at(-1);
+        if (last && Math.hypot(local[0] - last[0], local[1] - last[1]) < 2 / view.scale) {
+          return;
+        }
+        d.localPoints.push(local);
+        d.worldPoints.push(p);
+        setRasterBrushDraft({ elementId: d.elementId, points: [...d.worldPoints] });
+        return;
+      }
       if (d.kind === "freedraw") {
         d.points.push([p.x, p.y, 0.5]);
         setDraft(createFreedraw(d.points));
@@ -533,7 +598,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       if (!d) return;
       if (d.kind === "move") {
         setGuides([]);
-        if (!d.checkpointed) return;
+        if (!d.checkpointed) {
+          if (d.clickSelection) selectOnly(d.clickSelection);
+          return;
+        }
+        commitInteraction();
         const ids = d.ids;
         const stateNow = useEngine.getState();
         const slideNow = stateNow.doc.slides.find((sl) => sl.id === stateNow.currentSlideId);
@@ -565,6 +634,26 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
 
         const movedBlockIds = ids.filter((id) => getLayerForObject(slideNow, id)?.mode === "block");
         for (const id of movedBlockIds) commitBlockLayout(id);
+        return;
+      }
+      if (d.kind === "rasterErase") {
+        const image = slide?.elements.find(
+          (element): element is import("@/lib/engine/types").ImageElement =>
+            element.id === d.elementId && element.type === "image",
+        );
+        if (image && d.localPoints.length > 0) {
+          const stroke = createRasterStroke(d.localPoints, rasterBrushSize);
+          updateElements(
+            [
+              {
+                id: image.id,
+                patch: { rasterMask: appendRasterMaskStroke(image.rasterMask, stroke) },
+              },
+            ],
+            "erase image pixels",
+          );
+        }
+        setRasterBrushDraft(null);
         return;
       }
       if (d.kind === "freedraw") {
@@ -655,7 +744,18 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         setTool("select");
       }
     },
-    [addElement, commitBlockLayout, lineSubtype, selectOnly, setTool, slide, tool],
+    [
+      addElement,
+      commitBlockLayout,
+      commitInteraction,
+      lineSubtype,
+      selectOnly,
+      setTool,
+      slide,
+      tool,
+      updateElements,
+      rasterBrushSize,
+    ],
   );
 
   if (!slide) return null;
@@ -745,6 +845,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           elements={slide.elements}
           worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
         />
+        {rasterBrushDraft ? (
+          <RasterBrushPreview
+            points={rasterBrushDraft.points}
+            size={rasterBrushSize}
+            worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
+          />
+        ) : null}
         {editingPath ? (
           <PathNodeOverlay
             element={editingPath}
@@ -1017,6 +1124,7 @@ function toolToCursor(tool: Tool): string {
     case "text":
       return "text";
     case "eraser":
+    case "rasterEraser":
       return "cell";
     case "rect":
     case "ellipse":
@@ -1039,16 +1147,72 @@ function toolToCursor(tool: Tool): string {
   }
 }
 
-/** Given a clicked element, expand to all elements sharing the same innermost group. */
-function getSelectionWithGroup(
-  hit: EngineElement,
-  elements: EngineElement[],
-  mode: "replace" | "toggle",
-  currentSelected: Set<string>,
-): Set<string> {
+function worldToImageLocal(
+  point: WorldPoint,
+  image: import("@/lib/engine/types").ImageElement,
+): [number, number] {
+  const cx = image.x + image.width / 2;
+  const cy = image.y + image.height / 2;
+  const dx = point.x - cx;
+  const dy = point.y - cy;
+  const cos = Math.cos(image.angle);
+  const sin = Math.sin(image.angle);
+  return [dx * cos + dy * sin + image.width / 2, -dx * sin + dy * cos + image.height / 2];
+}
+
+function RasterBrushPreview({
+  points,
+  size,
+  worldToScreen,
+}: {
+  points: WorldPoint[];
+  size: number;
+  worldToScreen: (point: WorldPoint) => WorldPoint;
+}) {
+  const screenPoints = points.map(worldToScreen);
+  const last = screenPoints.at(-1);
+  if (!last) return null;
+  const offset = worldToScreen({ x: points.at(-1)!.x + size / 2, y: points.at(-1)!.y });
+  const radius = Math.max(2, Math.hypot(offset.x - last.x, offset.y - last.y));
+  return (
+    <svg
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+      }}
+    >
+      {screenPoints.length > 1 ? (
+        <polyline
+          points={screenPoints.map((point) => `${point.x},${point.y}`).join(" ")}
+          fill="none"
+          stroke="rgba(255,255,255,0.9)"
+          strokeWidth={Math.max(1, radius * 2)}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+      <circle
+        cx={last.x}
+        cy={last.y}
+        r={radius}
+        fill="rgba(255,255,255,0.12)"
+        stroke="#111827"
+        strokeWidth={1}
+      />
+    </svg>
+  );
+}
+
+/** Given a clicked element, expand to all eligible elements in its selection group. */
+function getSelectionMembers(hit: EngineElement, slide: EngineSlide): string[] {
+  const interactiveIds = new Set(getInteractiveElements(slide).map((element) => element.id));
   const innermost = hit.groupIds[hit.groupIds.length - 1];
   let members = innermost
-    ? elements.filter((el) => el.groupIds.includes(innermost)).map((el) => el.id)
+    ? slide.elements.filter((el) => el.groupIds.includes(innermost)).map((el) => el.id)
     : [hit.id];
 
   if (hit.type === "frame") {
@@ -1056,15 +1220,5 @@ function getSelectionWithGroup(
     members = Array.from(new Set([...members, ...frame.childIds]));
   }
 
-  if (mode === "toggle") {
-    const next = new Set(currentSelected);
-    const allSelected = members.every((id) => next.has(id));
-    if (allSelected) {
-      for (const id of members) next.delete(id);
-    } else {
-      for (const id of members) next.add(id);
-    }
-    return next;
-  }
-  return new Set(members);
+  return Array.from(new Set(members)).filter((id) => interactiveIds.has(id));
 }

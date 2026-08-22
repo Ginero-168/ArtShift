@@ -43,13 +43,15 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 
 | Variable | Required | For |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | yes (AI chat) | Claude direct SDK |
+| `ANTHROPIC_API_KEY` | yes (AI chat) | Claude direct SDK for chat and optional image prompt enhancement |
 | `ANTHROPIC_MODEL` | no | `claude-sonnet-4-5` |
 | `REPLICATE_API_TOKEN` | no | Claude via Replicate proxy |
 | `GEMINI_API_KEY` | no | `/api/generate` proxy |
 | `WAVESPEED_API_KEY` | no | Background removal |
 | `UNSPLASH_ACCESS_KEY` | no | Stock photos |
 | `PEXELS_API_KEY` | no | Stock photos |
+
+Image prompt enhancement is optional: when `ANTHROPIC_API_KEY` is unavailable, image generation continues with local Thai keyword enrichment instead of the LLM prompt engineer.
 
 ---
 

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { type NextRequest, NextResponse } from "next/server";
-import { enrichPrompt } from "@/lib/ai/pollinations";
+import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/pollinations";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ async function enhancePromptWithLLM(userPrompt: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return enrichPrompt(userPrompt);
 
-  const model = process.env.ANTHROPIC_MODEL || "claude-opus-4-7";
+  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
   try {
     const client = new Anthropic({ apiKey });
     const res = await client.messages.create({
@@ -55,8 +55,10 @@ export async function POST(req: NextRequest) {
   const height =
     typeof body.height === "number" ? Math.min(1280, Math.max(256, body.height)) : 1024;
   const model = typeof body.model === "string" ? body.model : "flux";
+  const enhance = typeof body.enhance === "boolean" ? body.enhance : true;
+  const normalizedPrompt = cleanImagePrompt(rawPrompt) || rawPrompt.trim() || "beautiful artwork";
 
-  const cleanPrompt = await enhancePromptWithLLM(rawPrompt);
+  const cleanPrompt = enhance ? await enhancePromptWithLLM(normalizedPrompt) : normalizedPrompt;
   const seed = Math.floor(Math.random() * 10_000_000);
 
   // Try Pollinations primary models with retry/fallback
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   for (const m of candidateModels) {
     const encoded = encodeURIComponent(cleanPrompt);
-    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=${m}&nologo=true`;
+    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=${m}&nologo=true&enhance=${enhance}`;
 
     try {
       const upstreamRes = await fetch(url, {

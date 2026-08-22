@@ -53,6 +53,7 @@ export default function Transformer({
   const selectedIds = useEngine((s) => s.selectedIds);
   const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
   const previewElements = useEngine((s) => s.previewElements);
+  const commitInteraction = useEngine((s) => s.commitInteraction);
   const commitBlockLayout = useEngine((s) => s.commitBlockLayout);
 
   const [active, setActive] = useState<HandleId | null>(null);
@@ -579,6 +580,7 @@ export default function Transformer({
       } catch {
         /* ignore */
       }
+      if (drag.checkpointed) commitInteraction();
       if (drag.checkpointed && drag.handle !== "rot" && slide) {
         const ids = drag.multi ? drag.multi.originals.map((element) => element.id) : [drag.el.id];
         for (const id of ids) {
@@ -586,7 +588,7 @@ export default function Transformer({
         }
       }
     },
-    [commitBlockLayout, onGuidesChange, slide],
+    [commitBlockLayout, commitInteraction, onGuidesChange, slide],
   );
 
   if (!bbox || selectedElements.length === 0) return null;

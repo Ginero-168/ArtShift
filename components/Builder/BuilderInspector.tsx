@@ -1,8 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { BookMockupSection } from "@/components/Canvas/PropertiesPanel/BookMockupSection";
-import { VisionObjectIsolator } from "@/components/Canvas/PropertiesPanel/VisionObjectIsolator";
 import {
   IconAlignBottom,
   IconAlignCenterH,
@@ -50,6 +50,13 @@ import { THAI_FONTS } from "@/lib/fonts";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 import ColorPickerInput from "./ColorPickerInput";
+
+// Vectorizer + Florence/RMBG dependencies are large and only needed for an
+// image selection. Keep them out of the editor's initial client bundle.
+const VisionObjectIsolator = dynamic(
+  () => import("@/components/Canvas/PropertiesPanel/VisionObjectIsolator"),
+  { ssr: false },
+);
 
 const DEFAULT_GRADIENT_COLORS: string[] = ["#6366f1", "#a855f7"];
 const DEFAULT_GRADIENT_STOPS: number[] = [0, 1];
@@ -1303,8 +1310,13 @@ const IMAGE_ADJUSTMENT_CONTROLS: Array<{
   { key: "contrast", label: "Contrast", min: -100, max: 100 },
   { key: "highlights", label: "Highlights", min: -100, max: 100 },
   { key: "shadows", label: "Shadows", min: -100, max: 100 },
+  { key: "whites", label: "Whites", min: -100, max: 100 },
+  { key: "blacks", label: "Blacks", min: -100, max: 100 },
+  { key: "vibrance", label: "Vibrance", min: -100, max: 100 },
   { key: "saturation", label: "Saturation", min: -100, max: 100 },
   { key: "warmth", label: "Warmth", min: -100, max: 100 },
+  { key: "tint", label: "Tint", min: -100, max: 100 },
+  { key: "clarity", label: "Clarity", min: -100, max: 100 },
 ];
 
 function ImageAdjustments({
@@ -1314,18 +1326,97 @@ function ImageAdjustments({
   element: ImageElement;
   apply: (patch: Partial<EngineElement>, label: string) => void;
 }) {
+  const tool = useEngine((state) => state.tool);
+  const setTool = useEngine((state) => state.setTool);
+  const rasterBrushSize = useEngine((state) => state.rasterBrushSize);
+  const setRasterBrushSize = useEngine((state) => state.setRasterBrushSize);
   return (
     <div className={styles.subsection}>
       <div className={styles.metaRow}>
-        <span>Non-destructive adjustments</span>
+        <span>Raster Studio</span>
         <button
           type="button"
           className={styles.textButton}
-          onClick={() => apply({ adjustments: {}, filterBlur: 0 }, "reset image adjustments")}
+          onClick={() =>
+            apply({ adjustments: {}, filterBlur: 0, rasterMask: [] }, "reset image adjustments")
+          }
         >
           Reset
         </button>
       </div>
+      <div className={styles.metaRow}>
+        <span>Pixel mask</span>
+        <div className={styles.buttonRow}>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => setTool(tool === "rasterEraser" ? "select" : "rasterEraser")}
+          >
+            {tool === "rasterEraser" ? "Exit eraser" : "Erase pixels"}
+          </button>
+          <button
+            type="button"
+            className={styles.textButton}
+            disabled={!element.rasterMask?.length}
+            onClick={() => apply({ rasterMask: [] }, "clear pixel mask")}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+      <label className={styles.field}>
+        <span>Image mask</span>
+        <select
+          value={element.mask?.shape ?? "rect"}
+          onChange={(event) => {
+            const shape = event.currentTarget.value as "rect" | "rounded" | "ellipse" | "hexagon";
+            apply(
+              {
+                mask:
+                  shape === "rect"
+                    ? undefined
+                    : { shape, radius: shape === "rounded" ? 32 : undefined },
+              },
+              "image mask",
+            );
+          }}
+        >
+          <option value="rect">Rectangle</option>
+          <option value="rounded">Rounded</option>
+          <option value="ellipse">Ellipse</option>
+          <option value="hexagon">Hexagon</option>
+        </select>
+      </label>
+      {element.mask?.shape === "rounded" ? (
+        <label className={styles.rangeField}>
+          <span>Corner radius</span>
+          <input
+            type="range"
+            min={0}
+            max={Math.round(Math.min(element.width, element.height) / 2)}
+            value={element.mask.radius ?? 32}
+            onChange={(event) =>
+              apply(
+                { mask: { shape: "rounded", radius: Number(event.currentTarget.value) } },
+                "image mask radius",
+              )
+            }
+          />
+          <output>{element.mask.radius ?? 32}</output>
+        </label>
+      ) : null}
+      <label className={styles.rangeField}>
+        <span>Brush size</span>
+        <input
+          type="range"
+          min={4}
+          max={512}
+          step={4}
+          value={rasterBrushSize}
+          onChange={(event) => setRasterBrushSize(Number(event.currentTarget.value))}
+        />
+        <output>{rasterBrushSize}</output>
+      </label>
       {IMAGE_ADJUSTMENT_CONTROLS.map((control) => (
         <label className={styles.rangeField} key={control.key}>
           <span>{control.label}</span>

@@ -10,6 +10,34 @@ export interface VisionSubjectScore {
   visualProminence: number;
 }
 
+type LayoutRect = { x: number; y: number; width: number; height: number };
+
+function isVisualMedia(el: EngineElement): boolean {
+  return el.type === "image" || el.type === "frame" || el.type === "bookMockup";
+}
+
+function gridRects(zone: LayoutRect, count: number, gap: number): LayoutRect[] {
+  if (count <= 0) return [];
+
+  // Two columns keep a pair of accents visually related. More items use a
+  // compact grid instead of an unbounded vertical stack.
+  const columns = count <= 2 ? count : Math.min(2, Math.ceil(Math.sqrt(count)));
+  const rows = Math.ceil(count / columns);
+  const cellWidth = (zone.width - gap * (columns - 1)) / columns;
+  const cellHeight = (zone.height - gap * (rows - 1)) / rows;
+
+  return Array.from({ length: count }, (_, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      x: Math.round(zone.x + column * (cellWidth + gap)),
+      y: Math.round(zone.y + row * (cellHeight + gap)),
+      width: Math.round(cellWidth),
+      height: Math.round(cellHeight),
+    };
+  });
+}
+
 /**
  * 60 / 30 / 10 Auto-Layout Algorithm
  *
@@ -122,6 +150,17 @@ export function compute603010AutoLayout(
     }
   }
 
+  // A media-only composition needs a visual rhythm, not three equally sized
+  // items stacked in the 30% zone. Keep one supporting image there and let
+  // the remaining images become small accents in a bounded grid.
+  const mediaOnlyComposition = elements.length > 1 && elements.every(isVisualMedia);
+  if (mediaOnlyComposition) {
+    secondaryElements.length = 0;
+    accentElements.length = 0;
+    secondaryElements.push(remaining[0]);
+    accentElements.push(...remaining.slice(1));
+  }
+
   // If secondary is empty and we have accents, promote the first accent to secondary
   if (secondaryElements.length === 0 && accentElements.length > 0) {
     secondaryElements.push(accentElements.shift()!);
@@ -226,9 +265,27 @@ export function compute603010AutoLayout(
     });
   }
 
+  const gap30 = Math.max(12, Math.round(slideH * 0.02));
+  const gap10 = Math.max(10, Math.round(slideH * 0.015));
+
+  if (mediaOnlyComposition) {
+    const secondaryRects = gridRects(zone30, secondaryElements.length, gap30);
+    secondaryElements.forEach((element, index) => {
+      const rect = secondaryRects[index];
+      patches.push({ id: element.id, patch: rect });
+    });
+
+    const accentRects = gridRects(zone10, accentElements.length, gap10);
+    accentElements.forEach((element, index) => {
+      const rect = accentRects[index];
+      patches.push({ id: element.id, patch: rect });
+    });
+
+    return patches;
+  }
+
   // --- 2. Layout Secondary Zone (30% Supporting - Upper/Mid Left) ---
   let currentY30 = zone30.y;
-  const gap30 = Math.max(12, Math.round(slideH * 0.02));
 
   for (const sec of secondaryElements) {
     if (sec.type === "text") {
@@ -278,7 +335,6 @@ export function compute603010AutoLayout(
 
   // --- 3. Layout Accent Zone (10% Detail / CTA - Bottom Left) ---
   let currentY10 = zone10.y;
-  const gap10 = Math.max(10, Math.round(slideH * 0.015));
 
   for (const acc of accentElements) {
     if (acc.type === "text") {

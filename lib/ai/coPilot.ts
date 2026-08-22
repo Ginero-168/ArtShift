@@ -4,7 +4,7 @@
  * edits visuals (RemoveBG, Vectorize), and arranges layouts (60-30-10).
  */
 
-import { generateAIImage } from "@/lib/ai/pollinations";
+import { cleanImagePrompt, generateAIImage, isImageGenerationPrompt } from "@/lib/ai/pollinations";
 import { removeBackground } from "@/lib/ai/removeBg";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createImage, createRect, createText } from "@/lib/engine/factory";
@@ -12,6 +12,7 @@ import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement, TextElement } from "@/lib/engine/types";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
+import type { AIMode } from "./modes";
 
 export type CoPilotRole = "user" | "assistant" | "system";
 
@@ -22,7 +23,8 @@ export type SubAgentKind =
   | "vectorizer"
   | "layout_designer"
   | "copywriter"
-  | "brand_stylist";
+  | "brand_stylist"
+  | "remote_chat";
 
 export interface SubAgentActionLog {
   id: string;
@@ -31,6 +33,7 @@ export interface SubAgentActionLog {
   description: string;
   status: "running" | "success" | "error";
   timestamp: number;
+  mode?: AIMode;
 }
 
 export interface CoPilotMessage {
@@ -58,6 +61,31 @@ export interface WorkspaceContext {
     width: number;
     height: number;
   }>;
+}
+
+export type CoPilotOptions = {
+  /** Explicit mode is required by the UI; legacy callers retain the previous API behavior. */
+  mode?: AIMode;
+  signal?: AbortSignal;
+};
+
+/** Prompts that need a specialized asset/local processor rather than the slide chat API. */
+export function isSpecializedCoPilotPrompt(userPrompt: string): boolean {
+  const prompt = userPrompt.trim();
+  const lower = prompt.toLowerCase();
+  return (
+    isImageGenerationPrompt(prompt) ||
+    lower.includes("ลบพื้นหลัง") ||
+    lower.includes("remove bg") ||
+    lower.includes("remove background") ||
+    lower.includes("ตัดพื้นหลัง") ||
+    lower.includes("ไดคัท") ||
+    lower.includes("vectorize") ||
+    lower.includes("แปลงเป็น vector") ||
+    lower.includes("แปลงเป็นเวกเตอร์") ||
+    lower.includes("auto-trace") ||
+    lower.includes("trace vector")
+  );
 }
 
 /**
@@ -100,6 +128,7 @@ export function getWorkspaceContext(): WorkspaceContext {
 export async function executeCoPilotInstruction(
   userPrompt: string,
   onActionUpdate?: (action: SubAgentActionLog) => void,
+  options: CoPilotOptions = {},
 ): Promise<{
   reply: string;
   actions: SubAgentActionLog[];
@@ -107,6 +136,8 @@ export async function executeCoPilotInstruction(
 }> {
   const prompt = userPrompt.trim();
   const lower = prompt.toLowerCase();
+  // Preserve the existing behavior for non-UI callers that do not pass a mode.
+  const mode = options.mode ?? "fast";
   const context = getWorkspaceContext();
   const actions: SubAgentActionLog[] = [];
   const st = useEngine.getState();
@@ -124,6 +155,7 @@ export async function executeCoPilotInstruction(
       description,
       status,
       timestamp: Date.now(),
+      mode,
     };
     actions.push(act);
     if (onActionUpdate) onActionUpdate(act);
@@ -144,41 +176,45 @@ export async function executeCoPilotInstruction(
   // 1. SUB-AGENT: IMAGE GENERATOR (FLUX)
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
   // -------------------------------------------------------------
-  if (
-    lower.includes("สร้างรูป") ||
-    lower.includes("วาดรูป") ||
-    lower.includes("generate image") ||
-    lower.includes("create image") ||
-    (lower.startsWith("รูป") && lower.length > 5) ||
-    lower.includes("draw ") ||
-    lower.includes("picture of") ||
-    lower.includes("image of")
-  ) {
+  if (isImageGenerationPrompt(prompt)) {
     const act = logAction(
       "image_gen",
-      "🎨 Generating Image with FLUX AI",
-      `Creating visual asset for: "${prompt}"...`,
+      mode === "eco" ? "🍃 Local Image Generation" : "🎨 Generating Image with FLUX AI",
+      mode === "eco"
+        ? `Local image generation is not installed for this workspace yet.`
+        : `Creating visual asset for: "${prompt}"...`,
     );
+
+    if (mode === "eco") {
+      updateActionStatus(
+        act,
+        "error",
+        "No on-device image model is configured; no remote request was made.",
+      );
+      return {
+        reply:
+          "โหมด Eco ยังไม่มีโมเดลสร้างภาพที่ติดตั้งบนเครื่อง จึงยังไม่ส่งงานออกอินเทอร์เน็ตครับ หากต้องการสร้างภาพตอนนี้ให้สลับเป็นโหมด Fast (∞) หรือเพิ่ม local image model ในภายหลัง",
+        actions,
+        suggestions: ["∞ สลับเป็น Fast แล้วสร้างภาพนี้", "🖼️ นำเข้ารูปภาพจากเครื่อง", "📐 จัด Layout สไลด์นี้"],
+      };
+    }
 
     try {
       // Clean up prompt
-      let cleanPrompt = prompt
-        .replace(
-          /^(ช่วย)?(สร้างรูปภาพ|สร้างรูป|วาดรูปภาพ|วาดรูป|generate image|create image|รูปภาพ|รูป|draw|ภาพ)/gi,
-          "",
-        )
-        .replace(/(ให้หน่อย|หน่อย|นะ|ครับ|ค่ะ|จ้า|ขอ|of|about|เกี่ยวกับ)$/gi, "")
-        .trim();
+      let cleanPrompt = cleanImagePrompt(prompt);
 
       if (!cleanPrompt) cleanPrompt = prompt;
 
-      const res = await generateAIImage({
+      const imageRequest = {
         prompt: cleanPrompt,
-        model: "flux-realism",
+        model: "flux-realism" as const,
         width: 1024,
         height: 1024,
         enhance: true,
-      });
+      };
+      const res = options.signal
+        ? await generateAIImage(imageRequest, options.signal)
+        : await generateAIImage(imageRequest);
 
       const maxW = context.width * 0.5;
       const maxH = context.height * 0.5;
@@ -263,7 +299,10 @@ export async function executeCoPilotInstruction(
       const cached = getCached(targetImg.fileId);
       if (!cached?.dataURL) throw new Error("Image data not found in cache");
 
-      const resultUrl = await removeBackground(cached.dataURL);
+      const resultUrl = await removeBackground(cached.dataURL, {
+        allowRemoteFallback: mode === "fast",
+        signal: options.signal,
+      });
       const newCached = await loadDataURL(resultUrl);
 
       st.updateElements(
@@ -347,6 +386,7 @@ export async function executeCoPilotInstruction(
           height: targetImg.height,
         },
         { preset: "highFidelity", colors: 16, detailLevel: 3 },
+        { signal: options.signal },
       );
 
       st.addElements(res.elements, "co-pilot vectorize image");
