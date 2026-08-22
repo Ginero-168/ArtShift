@@ -22,6 +22,7 @@ type Props = {
 export default function ContextMenu({ position, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const selectedIds = useEngine((s) => s.selectedIds);
+  const rasterSelections = useEngine((s) => s.rasterSelections);
 
   const copyElements = useEngine((s) => s.copyElements);
   const cutElements = useEngine((s) => s.cutElements);
@@ -36,6 +37,7 @@ export default function ContextMenu({ position, onClose }: Props) {
   const bringToFront = useEngine((s) => s.bringToFront);
   const sendToBack = useEngine((s) => s.sendToBack);
   const selectAll = useEngine((s) => s.selectAll);
+  const clearRasterSelection = useEngine((s) => s.clearRasterSelection);
 
   // Close on outside-click + Escape.
   useEffect(() => {
@@ -56,6 +58,7 @@ export default function ContextMenu({ position, onClose }: Props) {
 
   const ids = Array.from(selectedIds);
   const has = ids.length > 0;
+  const rasterSelectionIds = ids.filter((id) => rasterSelections[id]);
 
   const items: Array<
     | { kind: "item"; label: string; hint?: string; onClick: () => void; disabled?: boolean }
@@ -63,30 +66,38 @@ export default function ContextMenu({ position, onClose }: Props) {
   > = [];
   if (has) {
     items.push(
-      { kind: "item", label: "Cut", hint: "⌘X", onClick: () => cutElements(ids) },
-      { kind: "item", label: "Copy", hint: "⌘C", onClick: () => copyElements(ids) },
+      { kind: "item", label: "Cut", onClick: () => cutElements(ids) },
+      { kind: "item", label: "Copy", onClick: () => copyElements(ids) },
     );
+    if (rasterSelectionIds.length > 0) {
+      items.push({
+        kind: "item",
+        label: "Deselect",
+        onClick: () => {
+          for (const id of rasterSelectionIds) clearRasterSelection(id);
+        },
+      });
+    }
   }
-  items.push({ kind: "item", label: "Paste", hint: "⌘V", onClick: () => pasteElements() });
+  items.push({ kind: "item", label: "Paste", onClick: () => pasteElements() });
   if (has) {
     items.push(
       {
         kind: "item",
         label: "Duplicate",
-        hint: "⌘D",
         onClick: () => {
           copyElements(ids);
           pasteElements();
         },
       },
       { kind: "sep" },
-      { kind: "item", label: "Bring Forward", hint: "]", onClick: () => bringForward(ids) },
-      { kind: "item", label: "Send Backward", hint: "[", onClick: () => sendBackward(ids) },
-      { kind: "item", label: "Bring to Front", hint: "⌘]", onClick: () => bringToFront(ids) },
-      { kind: "item", label: "Send to Back", hint: "⌘[", onClick: () => sendToBack(ids) },
+      { kind: "item", label: "Bring Forward", onClick: () => bringForward(ids) },
+      { kind: "item", label: "Send Backward", onClick: () => sendBackward(ids) },
+      { kind: "item", label: "Bring to Front", onClick: () => bringToFront(ids) },
+      { kind: "item", label: "Send to Back", onClick: () => sendToBack(ids) },
       { kind: "sep" },
-      { kind: "item", label: "Flip Horizontal", hint: "⇧H", onClick: () => flipHorizontal(ids) },
-      { kind: "item", label: "Flip Vertical", hint: "⇧V", onClick: () => flipVertical(ids) },
+      { kind: "item", label: "Flip Horizontal", onClick: () => flipHorizontal(ids) },
+      { kind: "item", label: "Flip Vertical", onClick: () => flipVertical(ids) },
     );
 
     if (ids.length === 1) {
@@ -119,8 +130,8 @@ export default function ContextMenu({ position, onClose }: Props) {
     if (ids.length > 1) {
       items.push(
         { kind: "sep" },
-        { kind: "item", label: "Group", hint: "⌘G", onClick: () => groupElements(ids) },
-        { kind: "item", label: "Ungroup", hint: "⌘⇧G", onClick: () => ungroupElements(ids) },
+        { kind: "item", label: "Group", onClick: () => groupElements(ids) },
+        { kind: "item", label: "Ungroup", onClick: () => ungroupElements(ids) },
       );
     }
     items.push(
@@ -143,13 +154,10 @@ export default function ContextMenu({ position, onClose }: Props) {
           usePresetStore.getState().savePreset(name, elements);
         },
       },
-      { kind: "item", label: "Delete", hint: "⌫", onClick: () => deleteElements(ids) },
+      { kind: "item", label: "Delete", onClick: () => deleteElements(ids) },
     );
   } else {
-    items.push(
-      { kind: "sep" },
-      { kind: "item", label: "Select All", hint: "⌘A", onClick: () => selectAll() },
-    );
+    items.push({ kind: "sep" }, { kind: "item", label: "Select All", onClick: () => selectAll() });
   }
 
   return (

@@ -34,4 +34,31 @@ describe("raster mask edits", () => {
     expect(next).toHaveLength(2);
     expect(next[0]).toBe(existing[0]);
   });
+
+  it("stores paint metadata and keeps pressure aligned when compacting", () => {
+    const points = Array.from({ length: 1200 }, (_, index) => [index, index] as [number, number]);
+    const pressures = Array.from({ length: 1200 }, (_, index) => index / 1199);
+    const stroke = createRasterStroke(points, 18, 0.6, {
+      mode: "paint",
+      color: "#ff6b35",
+      hardness: 0.35,
+      pressures,
+    });
+    const compacted = compactRasterStroke(stroke);
+
+    expect(stroke.mode).toBe("paint");
+    expect(stroke.color).toBe("#ff6b35");
+    expect(stroke.hardness).toBe(0.35);
+    expect(compacted.pressures).toHaveLength(compacted.points.length);
+    expect(compacted.pressures?.at(-1)).toBe(1);
+  });
+
+  it("stores a Selection snapshot on brush, Pencil, or Eraser strokes", () => {
+    const stroke = createRasterStroke([[20, 20]], 32, 1, {
+      mode: "paint",
+      selectionMaskDataUrl: "data:image/png;base64,selection",
+    });
+
+    expect(stroke.selectionMaskDataUrl).toBe("data:image/png;base64,selection");
+  });
 });

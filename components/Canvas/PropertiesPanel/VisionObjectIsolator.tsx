@@ -6,6 +6,7 @@ import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement } from "@/lib/engine/types";
+import { createAlphaMaskDataUrl, createRasterSelectionOperation } from "@/lib/raster/selection";
 import {
   VECTORIZE_PRESET_CONFIGS,
   VectorizeCancelledError,
@@ -29,6 +30,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const addElement = useEngine((s) => s.addElement);
   const addElements = useEngine((s) => s.addElements);
   const selectOnly = useEngine((s) => s.selectOnly);
+  const setTool = useEngine((s) => s.setTool);
+  const setRasterSelection = useEngine((s) => s.setRasterSelection);
   const updateElements = useEngine((s) => s.updateElements);
 
   const [busy, setBusy] = useState(false);
@@ -179,6 +182,45 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Failed to remove background: " + (err as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleAutoSelectSubject = async () => {
+    const cached = getCached(element.fileId);
+    if (!cached?.dataURL) {
+      setStatusMessage("Image data not found in cache");
+      return;
+    }
+
+    setBusy(true);
+    setProgress(0);
+    setStatusMessage("Selecting subject locally...");
+
+    try {
+      const resultUrl = await removeBackground(cached.dataURL, {
+        allowRemoteFallback: false,
+        onProgress: (value) => setProgress(Math.round(value * 100)),
+      });
+      const maskDataUrl = await createAlphaMaskDataUrl(resultUrl);
+      setRasterSelection(element.id, {
+        width: element.width,
+        height: element.height,
+        operations: [
+          createRasterSelectionOperation("replace", {
+            kind: "bitmap",
+            dataUrl: maskDataUrl,
+          }),
+        ],
+      });
+      selectOnly([element.id]);
+      setTool("rasterMarquee");
+      setStatusMessage("Subject selected locally. You can refine or add to the selection.");
+    } catch (err) {
+      console.error("Auto Select Subject failed:", err);
+      setStatusMessage("Auto Select Subject failed: " + (err as Error).message);
+    } finally {
+      setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -400,6 +442,32 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           </button>
         )}
       </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={handleAutoSelectSubject}
+        title="Select the main subject locally without uploading the image"
+        style={{
+          width: "100%",
+          marginTop: 4,
+          padding: "5px 8px",
+          background: "rgba(16, 185, 129, 0.1)",
+          color: "#047857",
+          border: "1px solid rgba(16, 185, 129, 0.35)",
+          borderRadius: 5,
+          fontWeight: 700,
+          fontSize: 10,
+          cursor: busy ? "wait" : "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 4,
+        }}
+      >
+        <span>✦</span>
+        <span>{busy ? "Selecting..." : "Auto Select Subject · Local"}</span>
+      </button>
 
       {/* Row 2: Vectorize Action Button */}
       <div style={{ display: "flex", gap: 4, marginTop: 4 }}>

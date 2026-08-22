@@ -130,7 +130,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
               <button
                 type="button"
                 onClick={() => applyBooleanOperation("union")}
-                title="Unite: Merge shapes into a single unified outline (⌘⌥U)"
+                title="Unite: Merge shapes into a single unified outline"
                 style={{
                   flex: 1,
                   display: "flex",
@@ -156,7 +156,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
               <button
                 type="button"
                 onClick={() => applyBooleanOperation("subtract")}
-                title="Minus Front: Subtract top shapes from bottom shape (⌘⌥-)"
+                title="Minus Front: Subtract top shapes from bottom shape"
                 style={{
                   flex: 1,
                   display: "flex",
@@ -182,7 +182,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
               <button
                 type="button"
                 onClick={() => applyBooleanOperation("intersect")}
-                title="Intersect: Retain only overlapping intersection area (⌘⌥I)"
+                title="Intersect: Retain only overlapping intersection area"
                 style={{
                   flex: 1,
                   display: "flex",
@@ -208,7 +208,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
               <button
                 type="button"
                 onClick={() => applyBooleanOperation("exclude")}
-                title="Exclude: Remove overlapping area (XOR) (⌘⌥X)"
+                title="Exclude: Remove overlapping area (XOR)"
                 style={{
                   flex: 1,
                   display: "flex",

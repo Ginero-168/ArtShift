@@ -1141,6 +1141,19 @@
   font-family: "Sarabun", system-ui, sans-serif;
 }
 
+.layerDockRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.layerDockActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .layerDockButton {
   height: 38px;
   min-width: 116px;
