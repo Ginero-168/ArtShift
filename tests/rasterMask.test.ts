@@ -53,12 +53,24 @@ describe("raster mask edits", () => {
     expect(compacted.pressures?.at(-1)).toBe(1);
   });
 
-  it("stores a Selection snapshot on brush, Pencil, or Eraser strokes", () => {
+  it("stores a Selection snapshot without requiring a PNG per stroke", () => {
+    const selection = {
+      width: 100,
+      height: 100,
+      operations: [
+        {
+          id: "selection-1",
+          mode: "replace" as const,
+          shape: { kind: "rect" as const, x: 0.1, y: 0.1, width: 0.5, height: 0.5 },
+        },
+      ],
+    };
     const stroke = createRasterStroke([[20, 20]], 32, 1, {
       mode: "paint",
-      selectionMaskDataUrl: "data:image/png;base64,selection",
+      selection,
     });
 
-    expect(stroke.selectionMaskDataUrl).toBe("data:image/png;base64,selection");
+    expect(stroke.selection).toEqual(selection);
+    expect(stroke.selectionMaskDataUrl).toBeUndefined();
   });
 });

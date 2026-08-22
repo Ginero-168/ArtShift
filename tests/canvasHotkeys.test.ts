@@ -147,18 +147,6 @@ describe("Canvas hotkeys", () => {
     );
     st.selectOnly([image.id]);
 
-    const context = {
-      clearRect: vi.fn(),
-      drawImage: vi.fn(),
-      fillRect: vi.fn(),
-      globalCompositeOperation: "source-over",
-      fillStyle: "#fff",
-    } as unknown as CanvasRenderingContext2D;
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context);
-    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
-      "data:image/png;base64,selection",
-    );
-
     handleCanvasHotkey(new KeyboardEvent("keydown", { key: "Delete" }));
 
     const currentImage = () =>
@@ -171,8 +159,31 @@ describe("Canvas hotkeys", () => {
     expect(currentImage()?.isDeleted).toBe(false);
     expect(currentImage()?.rasterMask).toHaveLength(1);
     expect(currentImage()?.rasterMask?.[0].mode).toBe("erase");
-    expect(currentImage()?.rasterMask?.[0].selectionMaskDataUrl).toBe(
-      "data:image/png;base64,selection",
+    expect(currentImage()?.rasterMask?.[0].selection?.operations).toHaveLength(1);
+    expect(currentImage()?.rasterMask?.[0].selection?.operations[0].shape).toMatchObject({
+      kind: "rect",
+      x: 0.2,
+    });
+  });
+
+  it("deselects raster pixel selections with Command/Ctrl+D", () => {
+    const st = useEngine.getState();
+    st.setEditorMode("raster");
+    st.applyRasterSelection(
+      "image-a",
+      createRasterSelectionOperation("replace", {
+        kind: "rect",
+        x: 0,
+        y: 0,
+        width: 0.5,
+        height: 0.5,
+      }),
+      100,
+      100,
     );
+
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "d", metaKey: true }));
+
+    expect(useEngine.getState().rasterSelections).toEqual({});
   });
 });

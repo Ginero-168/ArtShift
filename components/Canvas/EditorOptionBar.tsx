@@ -1,107 +1,18 @@
 "use client";
 
-import {
-  IconBrush,
-  IconCircle,
-  IconCursor,
-  IconDirectSelect,
-  IconEraser,
-  IconFreedraw,
-  IconHand,
-  IconHexagon,
-  IconPen,
-  IconPencil,
-  IconSquare,
-  IconText,
-  IconWand,
-} from "@/components/icons";
-import { type EditorMode, type Tool, useEngine } from "@/lib/engine/store";
+import { type EditorMode, useEngine } from "@/lib/engine/store";
 import RasterToolOptions from "./RasterToolOptions";
-
-type ToolButton = {
-  id: Tool;
-  label: string;
-  title: string;
-  icon: (props: { size?: number }) => React.JSX.Element;
-};
-
-const RASTER_TOOLS: ToolButton[] = [
-  { id: "rasterMove", label: "Move", title: "Select and move objects (V)", icon: IconHand },
-  {
-    id: "rasterBrush",
-    label: "Brush",
-    title: "Paint with a soft brush (B, [ / ])",
-    icon: IconBrush,
-  },
-  {
-    id: "rasterPencil",
-    label: "Pencil",
-    title: "Paint with a hard pencil (Shift+B, [ / ])",
-    icon: IconPencil,
-  },
-  { id: "rasterMarquee", label: "Rect", title: "Rectangular Marquee (M)", icon: IconSquare },
-  {
-    id: "rasterEllipse",
-    label: "Ellipse",
-    title: "Elliptical Marquee (Shift+M)",
-    icon: IconCircle,
-  },
-  { id: "rasterLasso", label: "Lasso", title: "Freehand Lasso (L)", icon: IconFreedraw },
-  {
-    id: "rasterPolygonLasso",
-    label: "Poly",
-    title: "Polygon Lasso (Shift+L)",
-    icon: IconHexagon,
-  },
-  {
-    id: "rasterMagicWand",
-    label: "Magic Wand",
-    title: "Select contiguous similar colors (W)",
-    icon: IconWand,
-  },
-  {
-    id: "rasterQuickSelection",
-    label: "Quick Select",
-    title: "Brush-select similar pixels ([ / ])",
-    icon: IconBrush,
-  },
-  {
-    id: "rasterEraser",
-    label: "Eraser",
-    title: "Raster Eraser (E, [ / ])",
-    icon: IconEraser,
-  },
-];
-
-const VECTOR_TOOLS: ToolButton[] = [
-  { id: "select", label: "Select", title: "Select and move objects", icon: IconCursor },
-  {
-    id: "directSelect",
-    label: "Direct",
-    title: "Edit vector anchor points",
-    icon: IconDirectSelect,
-  },
-  { id: "pen", label: "Pen", title: "Draw Bezier paths", icon: IconPen },
-  { id: "freedraw", label: "Draw", title: "Draw a freehand vector path", icon: IconFreedraw },
-  { id: "text", label: "Text", title: "Create text", icon: IconText },
-];
-
-const COMMON_TOOLS: ToolButton[] = [
-  { id: "hand", label: "Pan", title: "Pan the canvas", icon: IconHand },
-];
+import {
+  COMMON_TOOL_DEFINITIONS,
+  RASTER_TOOL_DEFINITIONS,
+  TOOLS_WITH_OPTIONS,
+  VECTOR_TOOL_DEFINITIONS,
+} from "./toolRegistry";
 
 const MODE_OPTIONS: Array<{ id: EditorMode; label: string; title: string }> = [
   { id: "raster", label: "Raster", title: "Raster image editing tools" },
   { id: "vector", label: "Vector", title: "Vector object editing tools" },
 ];
-
-const TOOLS_WITH_OPTIONS = new Set<Tool>([
-  "rasterBrush",
-  "rasterPencil",
-  "rasterEraser",
-  "rasterMagicWand",
-  "rasterQuickSelection",
-]);
 
 const modeButtonStyle = (active: boolean, mode: EditorMode) => ({
   height: 28,
@@ -150,7 +61,10 @@ export default function EditorOptionBar() {
   const setEditorMode = useEngine((state) => state.setEditorMode);
   const tool = useEngine((state) => state.tool);
   const setTool = useEngine((state) => state.setTool);
-  const tools = [...COMMON_TOOLS, ...(editorMode === "raster" ? RASTER_TOOLS : VECTOR_TOOLS)];
+  const tools = [
+    ...COMMON_TOOL_DEFINITIONS,
+    ...(editorMode === "raster" ? RASTER_TOOL_DEFINITIONS : VECTOR_TOOL_DEFINITIONS),
+  ];
 
   return (
     <div

@@ -255,6 +255,7 @@ export type EngineState = {
   ) => void;
   setRasterSelection: (imageId: string, selection: RasterSelection | null) => void;
   clearRasterSelection: (imageId: string) => void;
+  clearAllRasterSelections: () => void;
 };
 
 function isRasterSelectionTool(tool: Tool): boolean {
@@ -411,6 +412,10 @@ export const useEngine = create<EngineState>((set, get) => {
         delete next[imageId];
         return { rasterSelections: next };
       }),
+    clearAllRasterSelections: () =>
+      set((state) =>
+        Object.keys(state.rasterSelections).length === 0 ? state : { rasterSelections: {} },
+      ),
 
     currentSlide: () => {
       const s = get();

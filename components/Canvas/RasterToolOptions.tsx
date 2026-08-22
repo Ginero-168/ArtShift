@@ -2,6 +2,7 @@
 
 import type { Tool } from "@/lib/engine/store";
 import { useEngine } from "@/lib/engine/store";
+import { isRasterPaintTool } from "@/lib/engine/toolBehavior";
 
 type Props = {
   tool: Tool;
@@ -22,10 +23,6 @@ const rangeStyle = {
   height: 14,
   accentColor: "var(--accent, #2563eb)",
 } as const;
-
-function isRasterPaintTool(tool: Tool): boolean {
-  return tool === "rasterBrush" || tool === "rasterPencil" || tool === "rasterEraser";
-}
 
 export default function RasterToolOptions({ tool }: Props) {
   const brushSize = useEngine((state) => state.rasterBrushSize);

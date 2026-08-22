@@ -54,32 +54,40 @@ import {
   type Tool,
   useEngine,
 } from "@/lib/engine/store";
+import {
+  isRasterBrushCursorTool,
+  isRasterPaintTool,
+  isRasterSelectionTool,
+  pointerPressure,
+  toolToCursor,
+} from "@/lib/engine/toolBehavior";
 import type {
   EngineElement,
   EngineSlide,
-  ImageElement,
   TextElement,
   VectorPathElement,
 } from "@/lib/engine/types";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
-import {
-  createMagicWandMask,
-  createQuickSelectionMask,
-  magicWandMaskToDataUrl,
-  type RasterPixelData,
-  scaledRasterSize,
-} from "@/lib/raster/magicWand";
+import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
 import {
   appendRasterPolygonPoint,
   canCommitRasterPolygon,
-  createRasterSelectionMaskDataUrl,
   createRasterSelectionOperation,
-  normalizeImagePoint,
+  type RasterSelection,
   type RasterSelectionMode,
   type RasterSelectionShape,
   selectionModeFromModifiers,
 } from "@/lib/raster/selection";
+import {
+  createMagicWandSelectionShape,
+  createMagicWandSelectionShapeAsync,
+  createRasterSelectionSample,
+  quickSelectionMaskForPoint,
+  rasterToolToShape,
+  selectionShapeFromPoints,
+  worldToImageLocal,
+} from "@/lib/raster/selectionInteraction";
 import BindingIndicators from "./BindingIndicators";
 import CanvasRoot, {
   type CanvasRootHandle,
@@ -133,6 +141,7 @@ type DragState =
       opacity: number;
       hardness: number;
       color: string;
+      selection?: RasterSelection;
       selectionMaskDataUrl?: string;
     }
   | {
@@ -250,6 +259,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [safeAreaMode, setSafeAreaMode] = useState<SafeAreaMode>("none");
   const dragRef = useRef<DragState>(null);
+  const rasterSelectionRequestRef = useRef(0);
   const rasterBrushCursorRef = useRef<HTMLDivElement | null>(null);
   const magicWandCursorRef = useRef<HTMLDivElement | null>(null);
   const images = getImageCache();
@@ -528,11 +538,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         const isPencil = tool === "rasterPencil";
         const isEraser = tool === "rasterEraser";
         const pressure = pointerPressure(e);
-        const selectionMaskDataUrl = createRasterSelectionMaskDataUrl(
-          rasterSelections[hit.id],
-          hit.width,
-          hit.height,
-        );
         dragRef.current = {
           kind: "rasterPaint",
           elementId: hit.id,
@@ -544,7 +549,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           opacity: rasterBrushOpacity,
           hardness: isPencil ? 1 : rasterBrushHardness,
           color: rasterBrushColor,
-          selectionMaskDataUrl,
+          selection: rasterSelections[hit.id],
         };
         setRasterBrushDraft({
           elementId: hit.id,
@@ -563,16 +568,35 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         const hit = pickTopMost(p, slide);
         if (hit?.type !== "image") return;
         const local = worldToImageLocal(p, hit);
-        const shape = createMagicWandSelectionShape(hit, local, rasterMagicWandTolerance, images);
-        if (!shape) return;
         const mode = selectionModeFromModifiers(e);
-        applyRasterSelection(
-          hit.id,
-          createRasterSelectionOperation(mode, shape),
-          hit.width,
-          hit.height,
-        );
-        selectOnly([hit.id]);
+        const requestId = ++rasterSelectionRequestRef.current;
+        const applyShape = (shape: RasterSelectionShape | null) => {
+          if (
+            !shape ||
+            requestId !== rasterSelectionRequestRef.current ||
+            useEngine.getState().tool !== "rasterMagicWand"
+          ) {
+            return;
+          }
+          applyRasterSelection(
+            hit.id,
+            createRasterSelectionOperation(mode, shape),
+            hit.width,
+            hit.height,
+          );
+          selectOnly([hit.id]);
+        };
+        const sample = createRasterSelectionSample(hit, images);
+        if (sample && sample.width * sample.height >= 250_000) {
+          void createMagicWandSelectionShapeAsync(
+            hit,
+            local,
+            rasterMagicWandTolerance,
+            images,
+          ).then(applyShape);
+          return;
+        }
+        applyShape(createMagicWandSelectionShape(hit, local, rasterMagicWandTolerance, images));
         return;
       }
 
@@ -1022,6 +1046,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             pressures: d.pressures,
             color: d.color,
             hardness: d.hardness,
+            selection: d.selection,
             selectionMaskDataUrl: d.selectionMaskDataUrl,
           });
           updateElements(
@@ -1413,16 +1438,32 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             <IconWand size={24} />
           </div>
         ) : null}
-        {isRasterPaintTool(tool) ? (
+        {isRasterBrushCursorTool(tool) ? (
           <div
             ref={rasterBrushCursorRef}
             aria-hidden="true"
             style={{
               position: "absolute",
-              left: -(rasterBrushSize * view.scale) / 2,
-              top: -(rasterBrushSize * view.scale) / 2,
-              width: Math.max(2, rasterBrushSize * view.scale),
-              height: Math.max(2, rasterBrushSize * view.scale),
+              left:
+                -(
+                  (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
+                  view.scale
+                ) / 2,
+              top:
+                -(
+                  (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
+                  view.scale
+                ) / 2,
+              width: Math.max(
+                2,
+                (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
+                  view.scale,
+              ),
+              height: Math.max(
+                2,
+                (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
+                  view.scale,
+              ),
               border: "1px solid rgba(17, 24, 39, 0.9)",
               borderRadius: "50%",
               boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.95)",
@@ -1608,186 +1649,6 @@ function makeDraftFor(
     default:
       return null;
   }
-}
-
-function toolToCursor(tool: Tool): string {
-  switch (tool) {
-    case "hand":
-    case "rasterMove":
-      return "grab";
-    case "text":
-      return "text";
-    case "eraser":
-      return "cell";
-    case "rasterEraser":
-    case "rasterPencil":
-    case "rasterBrush":
-      return "none";
-    case "rasterMarquee":
-    case "rasterEllipse":
-    case "rasterLasso":
-    case "rasterPolygonLasso":
-    case "rasterQuickSelection":
-      return "cell";
-    case "rasterMagicWand":
-      return "none";
-    case "rect":
-    case "ellipse":
-    case "diamond":
-    case "triangle":
-    case "star":
-    case "hexagon":
-    case "heart":
-    case "plus":
-    case "line":
-    case "arrow":
-    case "freedraw":
-    case "pen":
-    case "frame":
-      return "crosshair";
-    case "directSelect":
-      return "default";
-    default:
-      return "default";
-  }
-}
-
-function isRasterSelectionTool(tool: Tool): boolean {
-  return (
-    tool === "rasterMarquee" ||
-    tool === "rasterEllipse" ||
-    tool === "rasterLasso" ||
-    tool === "rasterPolygonLasso"
-  );
-}
-
-function isRasterPaintTool(tool: Tool): boolean {
-  return tool === "rasterEraser" || tool === "rasterPencil" || tool === "rasterBrush";
-}
-
-function createMagicWandSelectionShape(
-  image: ImageElement,
-  local: [number, number],
-  tolerance: number,
-  images: Map<string, HTMLImageElement>,
-): RasterSelectionShape | null {
-  const pixels = createRasterSelectionSample(image, images);
-  if (!pixels) return null;
-  const seedX = (local[0] / Math.max(1, image.width)) * pixels.width;
-  const seedY = (local[1] / Math.max(1, image.height)) * pixels.height;
-  const mask = createMagicWandMask(pixels, seedX, seedY, tolerance);
-  return { kind: "bitmap", dataUrl: magicWandMaskToDataUrl(mask, pixels.width, pixels.height) };
-}
-
-function createRasterSelectionSample(
-  image: ImageElement,
-  images: Map<string, HTMLImageElement>,
-): RasterPixelData | null {
-  const source = images.get(image.fileId);
-  if (!source?.complete || !source.naturalWidth || !source.naturalHeight) return null;
-
-  const crop = image.crop ?? {
-    x: 0,
-    y: 0,
-    width: source.naturalWidth,
-    height: source.naturalHeight,
-  };
-  const cropX = Math.max(0, Math.min(source.naturalWidth - 1, crop.x));
-  const cropY = Math.max(0, Math.min(source.naturalHeight - 1, crop.y));
-  const cropWidth = Math.max(1, Math.min(source.naturalWidth - cropX, crop.width));
-  const cropHeight = Math.max(1, Math.min(source.naturalHeight - cropY, crop.height));
-  const size = scaledRasterSize(cropWidth, cropHeight);
-  const canvas = document.createElement("canvas");
-  canvas.width = size.width;
-  canvas.height = size.height;
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-
-  try {
-    context.drawImage(source, cropX, cropY, cropWidth, cropHeight, 0, 0, size.width, size.height);
-    return context.getImageData(0, 0, size.width, size.height);
-  } catch {
-    // A cross-origin image without CORS headers cannot be sampled safely.
-    return null;
-  }
-}
-
-function quickSelectionMaskForPoint(
-  imageData: RasterPixelData,
-  image: ImageElement,
-  local: [number, number],
-  brushSize: number,
-  tolerance: number,
-): Uint8Array {
-  const seedX = (local[0] / Math.max(1, image.width)) * imageData.width;
-  const seedY = (local[1] / Math.max(1, image.height)) * imageData.height;
-  const sampleScaleX = imageData.width / Math.max(1, image.width);
-  const sampleScaleY = imageData.height / Math.max(1, image.height);
-  return createQuickSelectionMask(
-    imageData,
-    seedX,
-    seedY,
-    (Math.max(1, brushSize) * sampleScaleX) / 2,
-    (Math.max(1, brushSize) * sampleScaleY) / 2,
-    tolerance,
-  );
-}
-
-function rasterToolToShape(tool: Tool): "rect" | "ellipse" | "lasso" | "polygon" {
-  switch (tool) {
-    case "rasterEllipse":
-      return "ellipse";
-    case "rasterLasso":
-      return "lasso";
-    case "rasterPolygonLasso":
-      return "polygon";
-    default:
-      return "rect";
-  }
-}
-
-function selectionShapeFromPoints(
-  kind: "rect" | "ellipse" | "lasso" | "polygon",
-  points: Array<[number, number]>,
-  width: number,
-  height: number,
-): RasterSelectionShape {
-  const start = points[0] ?? [0, 0];
-  const end = points.at(-1) ?? start;
-  if (kind === "rect" || kind === "ellipse") {
-    const x = Math.min(start[0], end[0]);
-    const y = Math.min(start[1], end[1]);
-    return {
-      kind,
-      x: x / Math.max(1, width),
-      y: y / Math.max(1, height),
-      width: Math.abs(end[0] - start[0]) / Math.max(1, width),
-      height: Math.abs(end[1] - start[1]) / Math.max(1, height),
-    };
-  }
-
-  return {
-    kind,
-    points: points.map((point) => normalizeImagePoint(point, width, height)),
-  };
-}
-
-function worldToImageLocal(
-  point: WorldPoint,
-  image: import("@/lib/engine/types").ImageElement,
-): [number, number] {
-  const cx = image.x + image.width / 2;
-  const cy = image.y + image.height / 2;
-  const dx = point.x - cx;
-  const dy = point.y - cy;
-  const cos = Math.cos(image.angle);
-  const sin = Math.sin(image.angle);
-  return [dx * cos + dy * sin + image.width / 2, -dx * sin + dy * cos + image.height / 2];
-}
-
-function pointerPressure(event: React.PointerEvent): number {
-  if (event.pointerType === "mouse" || event.pressure <= 0) return 1;
-  return Math.max(0.05, Math.min(1, event.pressure));
 }
 
 function RasterBrushPreview({

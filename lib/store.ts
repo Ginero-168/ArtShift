@@ -216,6 +216,8 @@ type Store = {
   resetDoc: () => void;
 };
 
+/** @deprecated Use `lib/engine/store` for artwork state. This store remains
+ * only for theme preferences and the one-way legacy import bridge. */
 export const useStore = create<Store>((set, get) => ({
   doc: defaultDoc(),
   currentSlideId: "",

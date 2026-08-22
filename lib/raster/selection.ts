@@ -10,6 +10,9 @@
 
 import { getRasterSelectionMaskSource, registerRasterSelectionMask } from "./selectionMask";
 
+const MAX_SELECTION_MASK_CACHE_ENTRIES = 64;
+const selectionMaskCache = new Map<string, string>();
+
 export type RasterSelectionMode = "replace" | "add" | "subtract" | "intersect";
 
 export type NormalizedPoint = [number, number];
@@ -181,6 +184,9 @@ export function createRasterSelectionMaskDataUrl(
   if (!selection?.operations.length || typeof document === "undefined") return undefined;
   const safeWidth = Math.max(1, Math.ceil(width));
   const safeHeight = Math.max(1, Math.ceil(height));
+  const cacheKey = selectionMaskCacheKey(selection, safeWidth, safeHeight);
+  const cached = selectionMaskCache.get(cacheKey);
+  if (cached) return cached;
   const canvas = document.createElement("canvas");
   canvas.width = safeWidth;
   canvas.height = safeHeight;
@@ -215,8 +221,20 @@ export function createRasterSelectionMaskDataUrl(
   }
   context.globalCompositeOperation = "source-over";
   const dataUrl = canvas.toDataURL("image/png");
+  selectionMaskCache.set(cacheKey, dataUrl);
+  while (selectionMaskCache.size > MAX_SELECTION_MASK_CACHE_ENTRIES) {
+    const oldest = selectionMaskCache.keys().next().value;
+    if (!oldest) break;
+    selectionMaskCache.delete(oldest);
+  }
   registerRasterSelectionMask(dataUrl, canvas);
   return dataUrl;
+}
+
+function selectionMaskCacheKey(selection: RasterSelection, width: number, height: number): string {
+  // Operation ids are stable for immutable selection snapshots. Avoid hashing
+  // polygon/bitmap payloads on every render while still separating dimensions.
+  return `${width}x${height}:${selection.operations.map((operation) => operation.id).join(",")}`;
 }
 
 /** Convert a transparent subject result into a lightweight grayscale mask. */

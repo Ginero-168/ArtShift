@@ -1,3 +1,4 @@
+import type { RasterSelection } from "./selection";
 import type { RasterMaskStroke } from "./types";
 
 const MAX_STROKE_POINTS = 512;
@@ -33,6 +34,7 @@ export function createRasterStroke(
     pressures?: number[];
     color?: string;
     hardness?: number;
+    selection?: RasterSelection;
     selectionMaskDataUrl?: string;
   } = {},
 ): RasterMaskStroke {
@@ -45,6 +47,7 @@ export function createRasterStroke(
     opacity: Math.max(0.05, Math.min(1, opacity)),
     color: options.color,
     hardness: options.hardness === undefined ? undefined : clamp01(options.hardness),
+    selection: options.selection,
     selectionMaskDataUrl: options.selectionMaskDataUrl,
   };
 }

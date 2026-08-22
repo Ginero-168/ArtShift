@@ -4,6 +4,8 @@
  * Coordinates are stored in the image element's local space so an edit stays
  * attached when the image is moved, rotated, cropped, or resized.
  */
+import type { RasterSelection } from "./selection";
+
 export type RasterMaskStroke = {
   id: string;
   mode: "erase" | "paint";
@@ -16,5 +18,7 @@ export type RasterMaskStroke = {
   /** 1 is a hard Pencil edge; lower values create a softer Brush edge. */
   hardness?: number;
   /** Snapshot of the active pixel Selection. Empty pixels outside it are ignored. */
+  selection?: RasterSelection;
+  /** Legacy serialized mask. New strokes use `selection` to avoid a PNG per stroke. */
   selectionMaskDataUrl?: string;
 };

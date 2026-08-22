@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useEngine } from "@/lib/engine/store";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
-import { createRasterSelectionMaskDataUrl } from "@/lib/raster/selection";
 import { RASTER_TOOL_HOTKEYS } from "./rasterHotkeys";
 
 export function handleCanvasHotkey(event: KeyboardEvent) {
@@ -24,6 +23,13 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
       event.preventDefault();
       if (event.shiftKey) st.redo();
       else st.undo();
+      return;
+    }
+    if (commandKey === "d" && !event.shiftKey) {
+      if (st.editorMode === "raster") {
+        event.preventDefault();
+        st.clearAllRasterSelections();
+      }
       return;
     }
     if (commandKey === "y" && event.ctrlKey && !event.shiftKey) {
@@ -75,17 +81,11 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
             element.id === id && element.type === "image",
         );
         if (!image) return [];
-        const selectionMaskDataUrl = createRasterSelectionMaskDataUrl(
-          st.rasterSelections[id],
-          image.width,
-          image.height,
-        );
-        if (!selectionMaskDataUrl) return [];
         const stroke = createRasterStroke(
           [[image.width / 2, image.height / 2]],
           Math.max(1, Math.hypot(image.width, image.height) * 2),
           1,
-          { mode: "erase", hardness: 1, selectionMaskDataUrl },
+          { mode: "erase", hardness: 1, selection: st.rasterSelections[id] },
         );
         return [
           {

@@ -33,7 +33,7 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "@/components/icons";
-import { legacyToEngineDoc } from "@/lib/engine/adapter";
+import { importLegacyStoreDocument } from "@/lib/engine/legacyBridge";
 
 const AIImageGeneratorModal = dynamic(() => import("@/components/AI/AIImageGeneratorModal"), {
   ssr: false,
@@ -229,8 +229,7 @@ export default function HomePage() {
   useCanvasHotkeys();
 
   async function importLegacy() {
-    const legacy = useStore.getState().doc;
-    const engineDoc = await legacyToEngineDoc(legacy);
+    const engineDoc = await importLegacyStoreDocument();
     loadDoc(engineDoc);
     setMenuOpen(false);
   }

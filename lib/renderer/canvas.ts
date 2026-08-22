@@ -32,6 +32,7 @@ import type {
   ImageElement,
   TextElement,
 } from "../engine/types";
+import { createRasterSelectionMaskDataUrl } from "../raster/selection";
 import { getRasterSelectionMaskSource } from "../raster/selectionMask";
 import type { RasterMaskStroke } from "../raster/types";
 import { drawBookMockup } from "./bookMockup";
@@ -628,8 +629,15 @@ function applyRasterMask(
   ctx.save();
   for (const stroke of strokes) {
     if (!stroke.points.length) continue;
-    if (stroke.selectionMaskDataUrl && element) {
-      const selectionMask = getRasterSelectionMaskSource(stroke.selectionMaskDataUrl);
+    const selectionMaskDataUrl = stroke.selection
+      ? createRasterSelectionMaskDataUrl(
+          stroke.selection,
+          element?.width ?? 0,
+          element?.height ?? 0,
+        )
+      : stroke.selectionMaskDataUrl;
+    if (selectionMaskDataUrl && element) {
+      const selectionMask = getRasterSelectionMaskSource(selectionMaskDataUrl);
       if (selectionMask) drawClippedRasterStroke(ctx, element, stroke, selectionMask);
       continue;
     }
