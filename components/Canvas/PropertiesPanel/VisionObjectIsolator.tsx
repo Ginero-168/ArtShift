@@ -15,6 +15,7 @@ import {
   type VectorizeProgress,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
+import { findAlphaComponents } from "@/lib/vision/alphaComponents";
 import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, visionDetect } from "@/lib/vision/visionEngine";
@@ -44,6 +45,35 @@ async function measureAlphaCoverage(dataUrl: string): Promise<number> {
   context.drawImage(image, 0, 0);
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
   return alphaCoverageFromRgba(pixels);
+}
+
+async function detectAlphaObjectBoxes(dataUrl: string): Promise<DetectedObject[]> {
+  const image = new Image();
+  image.src = dataUrl;
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Could not inspect the transparent foreground."));
+  });
+
+  const naturalWidth = image.naturalWidth || image.width;
+  const naturalHeight = image.naturalHeight || image.height;
+  const scale = Math.min(1, 512 / Math.max(naturalWidth, naturalHeight));
+  const width = Math.max(1, Math.round(naturalWidth * scale));
+  const height = Math.max(1, Math.round(naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not create the fast extraction canvas.");
+
+  context.drawImage(image, 0, 0, width, height);
+  const rgba = context.getImageData(0, 0, width, height).data;
+  return findAlphaComponents(rgba, width, height, {
+    alphaThreshold: 24,
+    minAreaRatio: 0.0005,
+    maxComponents: 64,
+    padding: 2,
+  }).map(({ area: _area, ...box }) => ({ label: "object", ...box }));
 }
 
 export function VisionObjectIsolator({ element }: { element: ImageElement }) {
@@ -365,6 +395,51 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     }
   };
 
+  const handleExtractFast = async () => {
+    const url = await getImageDataUrl();
+    if (!url) {
+      setStatusMessage("Image data not found in cache");
+      return;
+    }
+
+    setBusy(true);
+    setProgress(0);
+    setStatusMessage("Removing background for fast extraction...");
+
+    try {
+      const foregroundUrl = await removeBackground(url, {
+        mode: rasterExecutionMode,
+        onProgress: (value) => setProgress(Math.round(value * 70)),
+      });
+      setDetectedForegroundUrl(foregroundUrl);
+      setProgress(74);
+      const objects = await detectAlphaObjectBoxes(foregroundUrl);
+      setDetectedObjects(objects);
+      if (objects.length === 0) {
+        setStatusMessage("No separate foreground objects found");
+        return;
+      }
+
+      setStatusMessage(`Extracting ${objects.length} objects without Vision AI...`);
+      const newElements = await extractObjectBatch(foregroundUrl, objects, (value) =>
+        setProgress(74 + value * 25),
+      );
+      if (newElements.length === 0) {
+        setStatusMessage("No visible foreground objects were found");
+        return;
+      }
+      addElements(newElements, "fast extract foreground objects");
+      selectOnly(newElements.map((el) => el.id));
+      setStatusMessage(`Fast-extracted ${newElements.length} transparent objects!`);
+    } catch (err) {
+      console.error(err);
+      setStatusMessage("Fast extraction failed: " + (err as Error).message);
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
   const isolateSingleObject = async (obj: DetectedObject) => {
     const url = await getImageDataUrl();
     if (!url) return;
@@ -491,6 +566,31 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           }}
         >
           {busy ? "Extracting..." : "Extract All"}
+        </button>
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={handleExtractFast}
+          title="Remove the background and split visible regions without Florence-2"
+          style={{
+            flex: 1,
+            padding: "5px 6px",
+            background: "#0f172a",
+            color: "#fff",
+            border: "none",
+            borderRadius: 5,
+            fontWeight: 600,
+            fontSize: 9.5,
+            cursor: busy ? "wait" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 3,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {busy ? "Processing..." : "Extract Fast"}
         </button>
       </div>
 
