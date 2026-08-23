@@ -14,6 +14,7 @@ import {
   type VectorizeProgress,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
+import { shouldRefineAlphaAnalysis } from "@/lib/vision/adaptiveAlpha";
 import { findAlphaComponents } from "@/lib/vision/alphaComponents";
 import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
 import {
@@ -52,7 +53,10 @@ async function measureAlphaCoverage(dataUrl: string): Promise<number> {
   return alphaCoverageFromRgba(pixels);
 }
 
-async function detectAlphaObjectBoxes(dataUrl: string): Promise<DetectedObject[]> {
+async function detectAlphaObjectBoxes(
+  dataUrl: string,
+  maxDimension = 768,
+): Promise<DetectedObject[]> {
   const image = new Image();
   image.src = dataUrl;
   await new Promise<void>((resolve, reject) => {
@@ -62,7 +66,6 @@ async function detectAlphaObjectBoxes(dataUrl: string): Promise<DetectedObject[]
 
   const naturalWidth = image.naturalWidth || image.width;
   const naturalHeight = image.naturalHeight || image.height;
-  const maxDimension = 768;
   const scale = Math.min(1, maxDimension / Math.max(naturalWidth, naturalHeight));
   const width = Math.max(1, Math.round(naturalWidth * scale));
   const height = Math.max(1, Math.round(naturalHeight * scale));
@@ -87,6 +90,19 @@ async function detectAlphaObjectBoxes(dataUrl: string): Promise<DetectedObject[]
     .slice(0, 128)
     .sort((first, second) => first.y_min - second.y_min || first.x_min - second.x_min)
     .map(({ area: _area, ...box }) => ({ label: "object", ...box }));
+}
+
+async function detectAdaptiveAlphaObjectBoxes(
+  dataUrl: string,
+  visionObjects: readonly DetectedObject[],
+  onRefine?: () => void,
+): Promise<DetectedObject[]> {
+  const baseObjects = await detectAlphaObjectBoxes(dataUrl);
+  if (!shouldRefineAlphaAnalysis(visionObjects, baseObjects)) return baseObjects;
+
+  onRefine?.();
+  const refinedObjects = await detectAlphaObjectBoxes(dataUrl, 1536);
+  return refinedObjects.length >= baseObjects.length ? refinedObjects : baseObjects;
 }
 
 export function VisionObjectIsolator({ element }: { element: ImageElement }) {
@@ -371,7 +387,14 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
       setProgress(67);
       setStatusMessage("Combining Florence labels with foreground components...");
-      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl);
+      const alphaObjects = await detectAdaptiveAlphaObjectBoxes(
+        foregroundUrl,
+        visionObjects,
+        () => {
+          setProgress(69);
+          setStatusMessage("Refining small foreground details...");
+        },
+      );
       const objects = mergeVisionWithAlphaComponents(visionObjects, alphaObjects);
       setDetectedObjects(objects);
       if (objects.length === 0) {
