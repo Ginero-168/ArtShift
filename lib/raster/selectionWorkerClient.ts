@@ -41,6 +41,49 @@ export function runMagicWandWorker(
   });
 }
 
+/**
+ * Sample and select an image inside the worker. This avoids the synchronous
+ * HTMLImageElement -> canvas -> getImageData readback on the UI thread for
+ * large Magic Wand operations. The caller retains the existing ImageData
+ * fallback for browsers without ImageBitmap/OffscreenCanvas support.
+ */
+export function runMagicWandWorkerFromBitmap(
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+  seedX: number,
+  seedY: number,
+  tolerance: number,
+): Promise<Uint8Array> {
+  if (typeof Worker === "undefined") {
+    return Promise.reject(new Error("Raster selection workers are unavailable."));
+  }
+
+  const selectionWorker = getWorker();
+  const id = nextJobId++;
+  return new Promise<Uint8Array>((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    try {
+      selectionWorker.postMessage(
+        {
+          id,
+          kind: "magicWandBitmap",
+          bitmap,
+          width,
+          height,
+          seedX,
+          seedY,
+          tolerance,
+        },
+        [bitmap],
+      );
+    } catch (error) {
+      pending.delete(id);
+      reject(error instanceof Error ? error : new Error("Could not transfer image to worker."));
+    }
+  });
+}
+
 function getWorker(): Worker {
   if (worker) return worker;
   worker = new Worker(new URL("./selection.worker.ts", import.meta.url), { type: "module" });

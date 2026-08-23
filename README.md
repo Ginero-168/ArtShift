@@ -22,7 +22,7 @@
 | **Background Removal** | WaveSpeed BRIA RMBG one-click via API proxy |
 | **PDF Import** | Import PDF pages as slide images (pdfjs-dist) |
 | **Durable local storage** | IndexedDB document/assets, serial autosave, backup recovery and safe migration from legacy localStorage documents |
-| **PWA** | Offline-ready manifest + icons |
+| **PWA** | Install metadata + icons; offline caching is not enabled yet |
 | **Deploy** | Hostinger Shared Hosting ready (.htaccess + guide) |
 
 ---
@@ -111,7 +111,7 @@ The current milestone targets the high-frequency production work around book ads
 
 ## Dependency note
 
-Production audit currently reports two high-severity advisories inherited through `pptxgenjs` → `image-size`; no fixed upstream release is available. ArtShift only accepts PNG, JPEG and WebP at the application boundary, so the affected ICNS/JXL/HEIF parsers are not reachable through the editor's supported import path. Keep this exception under review when upgrading PPTX export.
+Production audit currently reports two high-severity advisories inherited through `pptxgenjs` → `image-size`; no fixed upstream release is available. The PPTX server adapter now enforces a bounded request, document/object budgets, and a PNG/JPEG/WebP-only base64 allowlist before PptxGenJS sees input. Keep this exception under review when upgrading PPTX export.
 
 ---
 

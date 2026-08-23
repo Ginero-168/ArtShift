@@ -1,6 +1,6 @@
 # ArtShift — Product and Engineering Roadmap
 
-> Last verified against the code on **2026-08-15**.
+> Last verified against the code on **2026-08-23**.
 
 ## Product focus
 
@@ -43,3 +43,17 @@ npm run typecheck
 npm run test
 npm run build
 ```
+
+## Next engineering phases
+
+The production-studio milestones above are complete. Raster work is now tracked
+as a separate foundation so the Photoshop-style tools can grow without making
+the existing vector, layout, campaign, and export workflows unstable.
+
+| Phase | Focus | Exit condition |
+|---|---|---|
+| **Raster Core v1** | One active pixel Selection model, shared by Delete, Brush, Pencil and Eraser | Every pixel edit respects the same Selection and creates one undo step |
+| **Raster Performance v1** | Worker/OffscreenCanvas jobs, cancellation, progress, dirty-region rendering | Large selections and thumbnails do not block pointer interaction |
+| **Raster Retouch v1** | Feather, invert, transform selection, Auto Subject and Healing spike | Tools are isolated behind a tested raster job seam |
+| **Eco/Fast adapters** | Local Worker/WASM path and API path with the same job contract | Users can switch execution mode without changing the document model |
+| **Desktop spike** | Tauri platform adapters and static frontend split | Local files and persistence work without coupling the editor to Next API routes |

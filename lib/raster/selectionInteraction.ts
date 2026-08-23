@@ -7,7 +7,7 @@ import {
   scaledRasterSize,
 } from "./magicWand";
 import { normalizeImagePoint, type RasterSelectionShape } from "./selection";
-import { runMagicWandWorker } from "./selectionWorkerClient";
+import { runMagicWandWorker, runMagicWandWorkerFromBitmap } from "./selectionWorkerClient";
 
 export type ImageLocalPoint = [number, number];
 export type RasterWorldPoint = { x: number; y: number };
@@ -115,16 +115,63 @@ export async function createMagicWandSelectionShapeAsync(
   tolerance: number,
   images: Map<string, HTMLImageElement>,
 ): Promise<RasterSelectionShape | null> {
-  const pixels = createRasterSelectionSample(image, images);
-  if (!pixels) return null;
-  const seedX = (local[0] / Math.max(1, image.width)) * pixels.width;
-  const seedY = (local[1] / Math.max(1, image.height)) * pixels.height;
+  const source = images.get(image.fileId);
+  if (!source?.complete || !source.naturalWidth || !source.naturalHeight) return null;
+  const sampleSize = getRasterSampleSize(image, source);
+  const seedX = (local[0] / Math.max(1, image.width)) * sampleSize.width;
+  const seedY = (local[1] / Math.max(1, image.height)) * sampleSize.height;
+
   try {
+    if (typeof createImageBitmap === "function") {
+      const crop = getRasterCrop(image, source);
+      const bitmap = await createImageBitmap(source, crop.x, crop.y, crop.width, crop.height, {
+        resizeWidth: sampleSize.width,
+        resizeHeight: sampleSize.height,
+        resizeQuality: "high",
+      });
+      const mask = await runMagicWandWorkerFromBitmap(
+        bitmap,
+        sampleSize.width,
+        sampleSize.height,
+        seedX,
+        seedY,
+        tolerance,
+      );
+      return {
+        kind: "bitmap",
+        dataUrl: magicWandMaskToDataUrl(mask, sampleSize.width, sampleSize.height),
+      };
+    }
+
+    const pixels = createRasterSelectionSample(image, images);
+    if (!pixels) return null;
     const mask = await runMagicWandWorker(pixels, seedX, seedY, tolerance);
     return { kind: "bitmap", dataUrl: magicWandMaskToDataUrl(mask, pixels.width, pixels.height) };
   } catch {
     return createMagicWandSelectionShape(image, local, tolerance, images);
   }
+}
+
+function getRasterCrop(image: ImageElement, source: HTMLImageElement) {
+  const crop = image.crop ?? {
+    x: 0,
+    y: 0,
+    width: source.naturalWidth,
+    height: source.naturalHeight,
+  };
+  const x = Math.max(0, Math.min(source.naturalWidth - 1, crop.x));
+  const y = Math.max(0, Math.min(source.naturalHeight - 1, crop.y));
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.min(source.naturalWidth - x, crop.width)),
+    height: Math.max(1, Math.min(source.naturalHeight - y, crop.height)),
+  };
+}
+
+function getRasterSampleSize(image: ImageElement, source: HTMLImageElement) {
+  const crop = getRasterCrop(image, source);
+  return scaledRasterSize(crop.width, crop.height);
 }
 
 export function quickSelectionMaskForPoint(
