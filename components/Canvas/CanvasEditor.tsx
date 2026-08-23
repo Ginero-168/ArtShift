@@ -84,7 +84,7 @@ import {
   createMagicWandSelectionShape,
   createMagicWandSelectionShapeAsync,
   createRasterSelectionSample,
-  quickSelectionMaskForPoint,
+  quickSelectionMaskForPointAsync,
   rasterToolToShape,
   selectionShapeFromPoints,
   worldToImageLocal,
@@ -162,8 +162,13 @@ type DragState =
       tolerance: number;
       brushSize: number;
       lastLocal?: [number, number];
+      pending: boolean;
+      generation: number;
+      finishOnComplete?: boolean;
     }
   | null;
+
+type QuickSelectionDrag = Extract<DragState, { kind: "rasterQuickSelection" }>;
 
 export type CanvasEditorHandle = {
   resetView: () => void;
@@ -218,6 +223,31 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     [currentSlide, updateElements],
   );
 
+  const commitQuickSelection = useCallback(
+    (drag: QuickSelectionDrag) => {
+      const state = useEngine.getState();
+      const activeSlide = state.doc.slides.find(
+        (candidate) => candidate.id === state.currentSlideId,
+      );
+      const image = activeSlide?.elements.find(
+        (element): element is import("@/lib/engine/types").ImageElement =>
+          element.id === drag.elementId && element.type === "image",
+      );
+      if (image && drag.mask.some((value) => value !== 0)) {
+        const shape: RasterSelectionShape = {
+          kind: "bitmap",
+          dataUrl: magicWandMaskToDataUrl(drag.mask, drag.imageData.width, drag.imageData.height),
+        };
+        editorController.commitRasterSelection(
+          image.id,
+          createRasterSelectionOperation(drag.mode, shape),
+        );
+      }
+      setRasterSelectionDraft(null);
+    },
+    [editorController],
+  );
+
   // Filter the slide elements by layerFilter ("all" | "block" | "free")
   const slide = useMemo(() => {
     if (!rawSlide) return undefined;
@@ -269,6 +299,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [safeAreaMode, setSafeAreaMode] = useState<SafeAreaMode>("none");
   const dragRef = useRef<DragState>(null);
+  const quickSelectionRequestRef = useRef(0);
+  const quickSelectionAbortRef = useRef<AbortController | null>(null);
   const rasterSelectionRequestRef = useRef(0);
   const rasterBrushCursorRef = useRef<HTMLDivElement | null>(null);
   const magicWandCursorRef = useRef<HTMLDivElement | null>(null);
@@ -318,6 +350,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   );
 
   useEffect(() => {
+    if (tool !== "rasterQuickSelection") {
+      quickSelectionAbortRef.current?.abort();
+      quickSelectionAbortRef.current = null;
+      quickSelectionRequestRef.current += 1;
+    }
     if (tool === "pen") return;
     setPenNodes([]);
     setDraft(null);
@@ -335,6 +372,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       }
     }
   }, [tool]);
+
+  useEffect(() => {
+    return () => quickSelectionAbortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (tool !== "directSelect") {
@@ -610,31 +651,82 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         const imageData = createRasterSelectionSample(hit, images);
         if (!imageData) return;
         const local = worldToImageLocal(p, hit);
-        const mask = quickSelectionMaskForPoint(
-          imageData,
-          hit,
-          local,
-          rasterQuickSelectionSize,
-          rasterMagicWandTolerance,
-        );
         const mode = selectionModeFromModifiers(e);
-        const dataUrl = magicWandMaskToDataUrl(mask, imageData.width, imageData.height);
-        dragRef.current = {
+        quickSelectionAbortRef.current?.abort();
+        const abortController = new AbortController();
+        quickSelectionAbortRef.current = abortController;
+        const drag: QuickSelectionDrag = {
           kind: "rasterQuickSelection",
           elementId: hit.id,
           imageData,
-          mask,
+          mask: new Uint8Array(imageData.width * imageData.height),
           mode,
           tolerance: rasterMagicWandTolerance,
           brushSize: rasterQuickSelectionSize,
           lastLocal: local,
+          pending: true,
+          generation: 0,
         };
+        dragRef.current = drag;
         setRasterSelectionDraft({
           elementId: hit.id,
-          shape: { kind: "bitmap", dataUrl },
+          shape: {
+            kind: "bitmap",
+            dataUrl: magicWandMaskToDataUrl(drag.mask, imageData.width, imageData.height),
+          },
           mode,
         });
         selectOnly([hit.id]);
+        const requestId = ++quickSelectionRequestRef.current;
+        void quickSelectionMaskForPointAsync(
+          imageData,
+          hit,
+          local,
+          drag.brushSize,
+          drag.tolerance,
+          abortController.signal,
+        )
+          .then((stamp) => {
+            const current = dragRef.current;
+            if (
+              current !== drag ||
+              current.kind !== "rasterQuickSelection" ||
+              current.generation !== drag.generation ||
+              quickSelectionRequestRef.current !== requestId
+            ) {
+              return;
+            }
+            for (let i = 0; i < current.mask.length; i++) {
+              if (stamp[i]) current.mask[i] = 1;
+            }
+            current.pending = false;
+            setRasterSelectionDraft({
+              elementId: current.elementId,
+              shape: {
+                kind: "bitmap",
+                dataUrl: magicWandMaskToDataUrl(
+                  current.mask,
+                  current.imageData.width,
+                  current.imageData.height,
+                ),
+              },
+              mode: current.mode,
+            });
+            if (current.finishOnComplete) {
+              dragRef.current = null;
+              commitQuickSelection(current);
+            }
+          })
+          .catch(() => {
+            const current = dragRef.current;
+            if (current === drag && current.kind === "rasterQuickSelection") {
+              current.pending = false;
+              if (current.finishOnComplete) {
+                dragRef.current = null;
+                setRasterSelectionDraft(null);
+              }
+            }
+          });
         return;
       }
 
@@ -706,6 +798,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       rasterMagicWandTolerance,
       rasterQuickSelectionSize,
       activeRasterSelection,
+      commitQuickSelection,
       editorController,
       setTool,
       slide,
@@ -906,25 +999,62 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         ) {
           return;
         }
-        const stamp = quickSelectionMaskForPoint(
+        d.lastLocal = local;
+        d.pending = true;
+        const generation = ++d.generation;
+        quickSelectionAbortRef.current?.abort();
+        const abortController = new AbortController();
+        quickSelectionAbortRef.current = abortController;
+        const requestId = ++quickSelectionRequestRef.current;
+        void quickSelectionMaskForPointAsync(
           d.imageData,
           image,
           local,
           d.brushSize,
           d.tolerance,
-        );
-        for (let i = 0; i < d.mask.length; i++) {
-          if (stamp[i]) d.mask[i] = 1;
-        }
-        d.lastLocal = local;
-        setRasterSelectionDraft({
-          elementId: d.elementId,
-          shape: {
-            kind: "bitmap",
-            dataUrl: magicWandMaskToDataUrl(d.mask, d.imageData.width, d.imageData.height),
-          },
-          mode: d.mode,
-        });
+          abortController.signal,
+        )
+          .then((stamp) => {
+            const current = dragRef.current;
+            if (
+              current !== d ||
+              current.kind !== "rasterQuickSelection" ||
+              current.generation !== generation ||
+              quickSelectionRequestRef.current !== requestId
+            ) {
+              return;
+            }
+            for (let i = 0; i < current.mask.length; i++) {
+              if (stamp[i]) current.mask[i] = 1;
+            }
+            current.pending = false;
+            setRasterSelectionDraft({
+              elementId: current.elementId,
+              shape: {
+                kind: "bitmap",
+                dataUrl: magicWandMaskToDataUrl(
+                  current.mask,
+                  current.imageData.width,
+                  current.imageData.height,
+                ),
+              },
+              mode: current.mode,
+            });
+            if (current.finishOnComplete) {
+              dragRef.current = null;
+              commitQuickSelection(current);
+            }
+          })
+          .catch(() => {
+            const current = dragRef.current;
+            if (current === d && current.kind === "rasterQuickSelection") {
+              current.pending = false;
+              if (current.finishOnComplete) {
+                dragRef.current = null;
+                setRasterSelectionDraft(null);
+              }
+            }
+          });
         return;
       }
       if (d.kind === "rasterSelection") {
@@ -975,6 +1105,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     },
     [
       checkpointInteraction,
+      commitQuickSelection,
       deleteElements,
       lineSubtype,
       penNodes,
@@ -994,6 +1125,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       if (d.kind === "rasterSelection" && d.shape === "polygon") {
         // Polygon Lasso is click-to-add. Keep its session alive until a
         // double-click or Enter closes the polygon.
+        return;
+      }
+      if (d.kind === "rasterQuickSelection" && d.pending) {
+        d.finishOnComplete = true;
         return;
       }
       dragRef.current = null;
@@ -1061,21 +1196,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
       if (d.kind === "rasterQuickSelection") {
-        const image = slide?.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (image && d.mask.some((value) => value !== 0)) {
-          const shape: RasterSelectionShape = {
-            kind: "bitmap",
-            dataUrl: magicWandMaskToDataUrl(d.mask, d.imageData.width, d.imageData.height),
-          };
-          editorController.commitRasterSelection(
-            image.id,
-            createRasterSelectionOperation(d.mode, shape),
-          );
-        }
-        setRasterSelectionDraft(null);
+        commitQuickSelection(d);
         return;
       }
       if (d.kind === "rasterSelection") {
@@ -1186,6 +1307,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       addElement,
       commitBlockLayout,
       commitInteraction,
+      commitQuickSelection,
       lineSubtype,
       selectOnly,
       setTool,

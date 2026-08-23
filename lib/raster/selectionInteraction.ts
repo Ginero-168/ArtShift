@@ -1,4 +1,5 @@
 import type { ImageElement } from "../engine/types";
+import { getLocalRasterProcessor } from "./localRasterProcessor";
 import {
   createMagicWandMask,
   createQuickSelectionMask,
@@ -7,7 +8,7 @@ import {
   scaledRasterSize,
 } from "./magicWand";
 import { normalizeImagePoint, type RasterSelectionShape } from "./selection";
-import { runMagicWandWorker, runMagicWandWorkerFromBitmap } from "./selectionWorkerClient";
+import { runMagicWandWorkerFromBitmap } from "./selectionWorkerClient";
 
 export type ImageLocalPoint = [number, number];
 export type RasterWorldPoint = { x: number; y: number };
@@ -145,8 +146,18 @@ export async function createMagicWandSelectionShapeAsync(
 
     const pixels = createRasterSelectionSample(image, images);
     if (!pixels) return null;
-    const mask = await runMagicWandWorker(pixels, seedX, seedY, tolerance);
-    return { kind: "bitmap", dataUrl: magicWandMaskToDataUrl(mask, pixels.width, pixels.height) };
+    const result = await getLocalRasterProcessor().execute({
+      kind: "magicWand",
+      pixels,
+      seedX,
+      seedY,
+      tolerance,
+    });
+    if (result.kind !== "mask") throw new Error("Raster processor returned no Selection mask.");
+    return {
+      kind: "bitmap",
+      dataUrl: magicWandMaskToDataUrl(result.mask, pixels.width, pixels.height),
+    };
   } catch {
     return createMagicWandSelectionShape(image, local, tolerance, images);
   }
@@ -193,4 +204,32 @@ export function quickSelectionMaskForPoint(
     (Math.max(1, brushSize) * sampleScaleY) / 2,
     tolerance,
   );
+}
+
+export async function quickSelectionMaskForPointAsync(
+  imageData: RasterPixelData,
+  image: ImageElement,
+  local: ImageLocalPoint,
+  brushSize: number,
+  tolerance: number,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  const seedX = (local[0] / Math.max(1, image.width)) * imageData.width;
+  const seedY = (local[1] / Math.max(1, image.height)) * imageData.height;
+  const sampleScaleX = imageData.width / Math.max(1, image.width);
+  const sampleScaleY = imageData.height / Math.max(1, image.height);
+  const result = await getLocalRasterProcessor().execute(
+    {
+      kind: "quickSelection",
+      pixels: imageData,
+      seedX,
+      seedY,
+      radiusX: (Math.max(1, brushSize) * sampleScaleX) / 2,
+      radiusY: (Math.max(1, brushSize) * sampleScaleY) / 2,
+      tolerance,
+    },
+    { signal },
+  );
+  if (result.kind !== "mask") throw new Error("Raster processor returned no Quick Selection mask.");
+  return result.mask;
 }
