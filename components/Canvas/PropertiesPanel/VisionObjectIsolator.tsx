@@ -16,6 +16,7 @@ import {
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
 import { findAlphaComponents } from "@/lib/vision/alphaComponents";
+import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
 import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, visionDetect } from "@/lib/vision/visionEngine";
@@ -328,6 +329,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         onProgress?.((index + 1) / objects.length);
         continue;
       }
+      const cached = await loadDataURL(cropped.dataUrl);
+      const asset = createCachedImageAsset(cached);
       const width = Math.max(20, Math.round(element.width * (obj.x_max - obj.x_min)));
       const height = Math.max(20, Math.round(element.height * (obj.y_max - obj.y_min)));
       const newImg = createImage({
@@ -335,9 +338,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         y: Math.round(element.y + element.height * obj.y_min),
         width,
         height,
-        fileId: cropped.dataUrl,
-        naturalWidth: cropped.width,
-        naturalHeight: cropped.height,
+        ...asset,
       });
       newElements.push(newImg);
       onProgress?.((index + 1) / objects.length);
@@ -454,14 +455,14 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           mode: rasterExecutionMode,
         }));
       const cropped = await cropImageRegion(foregroundUrl, obj);
+      const cached = await loadDataURL(cropped.dataUrl);
+      const asset = createCachedImageAsset(cached);
       const newImg = createImage({
         x: Math.round(element.x + element.width * obj.x_min),
         y: Math.round(element.y + element.height * obj.y_min),
         width: Math.max(20, Math.round(element.width * (obj.x_max - obj.x_min))),
         height: Math.max(20, Math.round(element.height * (obj.y_max - obj.y_min))),
-        fileId: cropped.dataUrl,
-        naturalWidth: cropped.width,
-        naturalHeight: cropped.height,
+        ...asset,
       });
 
       addElement(newImg, `isolate ${obj.label}`);

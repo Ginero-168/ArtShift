@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
 import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
 
 describe("Vision AI Object Isolator & Calculations", () => {
@@ -57,5 +58,13 @@ describe("Vision AI Object Isolator & Calculations", () => {
     expect(coverage).toBe(0.5);
     expect(hasUsableForeground(0.005)).toBe(false);
     expect(hasUsableForeground(coverage)).toBe(true);
+  });
+
+  it("uses the image cache key instead of a raw data URL for extracted objects", () => {
+    expect(createCachedImageAsset({ fileId: "asset-hash", width: 320, height: 180 })).toEqual({
+      fileId: "asset-hash",
+      naturalWidth: 320,
+      naturalHeight: 180,
+    });
   });
 });
