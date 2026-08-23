@@ -256,7 +256,34 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     }
   };
 
-  const handleDetect = async () => {
+  const extractObjectBatch = async (
+    url: string,
+    objects: DetectedObject[],
+    onProgress?: (progress: number) => void,
+  ) => {
+    const newElements = [];
+
+    for (const [index, obj] of objects.entries()) {
+      const cropped = await cropImageRegion(url, obj);
+      const width = Math.max(20, Math.round(element.width * (obj.x_max - obj.x_min)));
+      const height = Math.max(20, Math.round(element.height * (obj.y_max - obj.y_min)));
+      const newImg = createImage({
+        x: Math.round(element.x + element.width * obj.x_min),
+        y: Math.round(element.y + element.height * obj.y_min),
+        width,
+        height,
+        fileId: cropped.dataUrl,
+        naturalWidth: cropped.width,
+        naturalHeight: cropped.height,
+      });
+      newElements.push(newImg);
+      onProgress?.(60 + ((index + 1) / objects.length) * 35);
+    }
+
+    return newElements;
+  };
+
+  const handleExtractAll = async () => {
     const url = await getImageDataUrl();
     if (!url) {
       setStatusMessage("Image data not found in cache");
@@ -265,16 +292,19 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(10);
-    setStatusMessage("Scanning image with Vision AI...");
+    setStatusMessage("Detecting objects, then extracting all...");
 
     try {
       const res = await visionDetect(url, (p) => setProgress(Math.round(p * 100)));
+      setDetectedObjects(res.objects);
       if (res.objects.length === 0) {
-        setStatusMessage("No distinct objects detected");
-        setDetectedObjects([]);
+        setStatusMessage("No distinct objects found to extract");
       } else {
-        setDetectedObjects(res.objects);
-        setStatusMessage(`Found ${res.objects.length} isolated objects`);
+        setStatusMessage(`Extracting all ${res.objects.length} objects...`);
+        const newElements = await extractObjectBatch(url, res.objects, setProgress);
+        addElements(newElements, "extract all detected objects");
+        selectOnly(newElements.map((el) => el.id));
+        setStatusMessage(`Extracted ${newElements.length} objects!`);
       }
     } catch (err) {
       console.error(err);
@@ -295,10 +325,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     try {
       const cropped = await cropImageRegion(url, obj);
       const newImg = createImage({
-        x: element.x + 20,
-        y: element.y + 20,
-        width: Math.round(element.width * (obj.x_max - obj.x_min)),
-        height: Math.round(element.height * (obj.y_max - obj.y_min)),
+        x: Math.round(element.x + element.width * obj.x_min),
+        y: Math.round(element.y + element.height * obj.y_min),
+        width: Math.max(20, Math.round(element.width * (obj.x_max - obj.x_min))),
+        height: Math.max(20, Math.round(element.height * (obj.y_max - obj.y_min))),
         fileId: cropped.dataUrl,
         naturalWidth: cropped.width,
         naturalHeight: cropped.height,
@@ -310,43 +340,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     } catch (err) {
       console.error(err);
       setStatusMessage("Extraction failed: " + (err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const isolateAllObjects = async () => {
-    const url = await getImageDataUrl();
-    if (!url || detectedObjects.length === 0) return;
-
-    setBusy(true);
-    setStatusMessage(`Extracting all ${detectedObjects.length} objects...`);
-
-    try {
-      const newElements = [];
-      let offset = 20;
-
-      for (const obj of detectedObjects) {
-        const cropped = await cropImageRegion(url, obj);
-        const newImg = createImage({
-          x: element.x + offset,
-          y: element.y + offset,
-          width: Math.round(element.width * (obj.x_max - obj.x_min)),
-          height: Math.round(element.height * (obj.y_max - obj.y_min)),
-          fileId: cropped.dataUrl,
-          naturalWidth: cropped.width,
-          naturalHeight: cropped.height,
-        });
-        newElements.push(newImg);
-        offset += 24;
-      }
-
-      addElements(newElements, "isolate all objects");
-      selectOnly(newElements.map((el) => el.id));
-      setStatusMessage(`Extracted ${newElements.length} objects!`);
-    } catch (err) {
-      console.error(err);
-      setStatusMessage("Batch extraction failed: " + (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -394,7 +387,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         </div>
       </div>
 
-      {/* Row 1: AI Tools (Remove BG & Auto-Detect) */}
+      {/* Row 1: AI Tools (Remove BG & Extract All) */}
       <div style={{ display: "flex", gap: 4 }}>
         <button
           type="button"
@@ -424,7 +417,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         <button
           type="button"
           disabled={busy}
-          onClick={handleDetect}
+          onClick={handleExtractAll}
+          title="Detect and extract every detected object immediately"
           style={{
             flex: 1,
             padding: "5px 8px",
@@ -441,28 +435,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             gap: 3,
           }}
         >
-          {busy ? "Scanning..." : "Auto-Detect"}
+          {busy ? "Extracting..." : "Extract All"}
         </button>
-
-        {detectedObjects.length > 1 && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={isolateAllObjects}
-            style={{
-              padding: "5px 8px",
-              background: "#0f172a",
-              color: "#fff",
-              border: "none",
-              borderRadius: 5,
-              fontWeight: 600,
-              fontSize: 10,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            Extract All
-          </button>
-        )}
       </div>
 
       <button
