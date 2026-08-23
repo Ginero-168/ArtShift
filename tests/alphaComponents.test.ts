@@ -56,4 +56,13 @@ describe("alpha component extraction", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0]).toMatchObject({ x_min: 0.31, x_max: 0.5 });
   });
+
+  it("does not merge separate nearby objects from a small padded overlap", () => {
+    const merged = mergeAlphaComponents([
+      { x_min: 0.1, y_min: 0.1, x_max: 0.2, y_max: 0.2, area: 100 },
+      { x_min: 0.19, y_min: 0.1, x_max: 0.29, y_max: 0.2, area: 100 },
+    ]);
+
+    expect(merged).toHaveLength(2);
+  });
 });

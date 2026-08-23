@@ -368,7 +368,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     foregroundUrl: string,
     objects: DetectedObject[],
     onProgress?: (progress: number) => void,
-    options: { maskSession?: Sam2Session } = {},
+    options: { maskSession?: Sam2Session; trimTransparent?: boolean } = {},
   ) => {
     const newElements = [];
 
@@ -387,7 +387,15 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       } else {
         cropped = await cropImageRegion(foregroundUrl, obj);
       }
-      const trimmed = await trimTransparentRegion(cropped.dataUrl, 2);
+      const trimmed = options.trimTransparent
+        ? await trimTransparentRegion(cropped.dataUrl, 2)
+        : {
+            dataUrl: cropped.dataUrl,
+            width: cropped.width,
+            height: cropped.height,
+            offsetX: 0,
+            offsetY: 0,
+          };
       const alphaCoverage = await measureAlphaCoverage(trimmed.dataUrl);
       if (!hasUsableForeground(alphaCoverage)) {
         onProgress?.((index + 1) / objects.length);
@@ -453,7 +461,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
       setProgress(67);
       setStatusMessage("Recovering objects missed by Florence-2...");
-      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl, { quality: "accurate" });
+      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl, {
+        quality: extractionQuality === "precision" ? "accurate" : "fast",
+      });
       let semanticObjects = visionObjects;
       if (extractionQuality === "precision") {
         setStatusMessage("Expanding object proposals with Grounding DINO...");
@@ -513,7 +523,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         foregroundUrl,
         objects,
         (value) => setProgress(70 + value * 28),
-        { maskSession },
+        { maskSession, trimTransparent: extractionQuality === "precision" },
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");
@@ -594,26 +604,13 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           mode: rasterExecutionMode,
         }));
       const cropped = await cropImageRegion(foregroundUrl, obj);
-      const trimmed = await trimTransparentRegion(cropped.dataUrl, 2);
-      const cached = await loadDataURL(trimmed.dataUrl);
+      const cached = await loadDataURL(cropped.dataUrl);
       const asset = createCachedImageAsset(cached);
-      const objectWidth = obj.x_max - obj.x_min;
-      const objectHeight = obj.y_max - obj.y_min;
-      const x = obj.x_min + objectWidth * (trimmed.offsetX / Math.max(1, cropped.width));
-      const y = obj.y_min + objectHeight * (trimmed.offsetY / Math.max(1, cropped.height));
       const newImg = createImage({
-        x: Math.round(element.x + element.width * x),
-        y: Math.round(element.y + element.height * y),
-        width: Math.max(
-          20,
-          Math.round(element.width * objectWidth * (trimmed.width / Math.max(1, cropped.width))),
-        ),
-        height: Math.max(
-          20,
-          Math.round(
-            element.height * objectHeight * (trimmed.height / Math.max(1, cropped.height)),
-          ),
-        ),
+        x: Math.round(element.x + element.width * obj.x_min),
+        y: Math.round(element.y + element.height * obj.y_min),
+        width: Math.max(20, Math.round(element.width * (obj.x_max - obj.x_min))),
+        height: Math.max(20, Math.round(element.height * (obj.y_max - obj.y_min))),
         ...asset,
       });
 
@@ -808,7 +805,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             padding: "2px 4px",
           }}
         >
-          <option value="balanced">Balanced · Hybrid</option>
+          <option value="balanced">Balanced · Stable Hybrid</option>
           <option value="precision">Precision · SAM 2</option>
         </select>
       </div>

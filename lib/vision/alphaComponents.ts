@@ -67,7 +67,7 @@ export function mapAlphaComponentToImage(
 /** Merge duplicate component boxes reported by overlapping tiles. */
 export function mergeAlphaComponents(
   components: readonly AlphaComponentBox[],
-  overlapThreshold = 0.08,
+  overlapThreshold = 0.35,
 ): AlphaComponentBox[] {
   const merged: AlphaComponentBox[] = [];
   for (const component of components) {
