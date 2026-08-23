@@ -205,6 +205,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const selectOnly = useEngine((s) => s.selectOnly);
   const clearSelection = useEngine((s) => s.clearSelection);
   const deleteElements = useEngine((s) => s.deleteElements);
+  const addElements = useEngine((s) => s.addElements);
+  const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
   const updateElements = useEngine((s) => s.updateElements);
   const currentSlide = useEngine((s) => s.currentSlide);
   const rasterBrushSize = useEngine((s) => s.rasterBrushSize);
@@ -224,9 +226,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       createEditorController({
         currentSlide,
         updateElements,
-        applyRasterSelection: useEngine.getState().applyRasterSelection,
+        applyRasterSelection,
       }),
-    [currentSlide, updateElements],
+    [applyRasterSelection, currentSlide, updateElements],
   );
 
   const commitQuickSelection = useCallback(
@@ -926,7 +928,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           const movingElements = slide.elements.filter((el) => d.origins.has(el.id));
           if (movingElements.length > 0) {
             const cloned = cloneElementsForDuplicate(movingElements, 0, 0);
-            useEngine.getState().addElements(cloned, "duplicate element");
+            addElements(cloned, "duplicate element");
             d.ids = cloned.map((el) => el.id);
             d.origins = new Map(cloned.map((el) => [el.id, { x: el.x, y: el.y }]));
             d.duplicated = true;
@@ -1113,6 +1115,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       setDraft(makeDraftFor(tool, d.start, p, lineSubtype, _e.shiftKey));
     },
     [
+      addElements,
       checkpointInteraction,
       commitQuickSelection,
       deleteElements,
