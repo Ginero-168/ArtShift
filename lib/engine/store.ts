@@ -149,6 +149,8 @@ export type EngineState = {
 
   // ——— selectors (call as plain functions; they rely on getState) ———
   currentSlide: () => EngineSlide | undefined;
+  currentTool: () => Tool;
+  currentSelection: () => ReadonlySet<string>;
 
   // ——— mutators ———
   setTool: (t: Tool) => void;
@@ -483,6 +485,8 @@ export const useEngine = create<EngineState>((set, get) => {
       const s = get();
       return s.doc.slides.find((sl) => sl.id === s.currentSlideId);
     },
+    currentTool: () => get().tool,
+    currentSelection: () => get().selectedIds,
 
     setTool: (tool) =>
       set((state) => ({

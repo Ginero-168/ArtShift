@@ -119,7 +119,7 @@ The current milestone targets the high-frequency production work around book ads
 
 ## Dependency note
 
-Production audit currently reports two high-severity advisories inherited through `pptxgenjs` → `image-size`; no fixed upstream release is available. The PPTX server adapter now enforces a bounded request, document/object budgets, and a PNG/JPEG/WebP-only base64 allowlist before PptxGenJS sees input. Keep this exception under review when upgrading PPTX export.
+Production audit currently reports two high-severity advisories inherited through `pptxgenjs` → `image-size`; no fixed upstream release is available. Do not use `npm audit fix --force`, because its suggested downgrade is a breaking PPTX change. The PPTX server adapter now enforces a bounded request, document/object budgets, strict PNG/JPEG/WebP byte signatures, and a base64 allowlist before PptxGenJS sees input. Keep this exception under review when upgrading PPTX export.
 
 ---
 
