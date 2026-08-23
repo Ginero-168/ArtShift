@@ -33,6 +33,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const setTool = useEngine((s) => s.setTool);
   const setRasterSelection = useEngine((s) => s.setRasterSelection);
   const updateElements = useEngine((s) => s.updateElements);
+  const rasterExecutionMode = useEngine((s) => s.rasterExecutionMode);
 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -152,10 +153,29 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     }
 
     setBusy(true);
-    setStatusMessage("Removing background with AI...");
+    setProgress(0);
+    setStatusMessage(
+      rasterExecutionMode === "eco"
+        ? "Preparing local background removal..."
+        : "Sending background removal to Fast API...",
+    );
 
     try {
-      const resultUrl = await removeBackground(cached.dataURL);
+      const resultUrl = await removeBackground(cached.dataURL, {
+        mode: rasterExecutionMode,
+        onProgress: (value) => {
+          setProgress(Math.round(value * 100));
+          setStatusMessage(
+            value < 0.1
+              ? "Preparing image..."
+              : value < 0.75
+                ? rasterExecutionMode === "eco"
+                  ? "Running locally in the background..."
+                  : "Waiting for Fast API..."
+                : "Refining foreground edges...",
+          );
+        },
+      });
       const newCached = await loadDataURL(resultUrl);
       updateElements(
         [
@@ -182,6 +202,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Failed to remove background: " + (err as Error).message);
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -198,6 +219,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     try {
       const resultUrl = await removeBackground(cached.dataURL, {
+        mode: rasterExecutionMode,
         allowRemoteFallback: false,
         onProgress: (value) => setProgress(Math.round(value * 100)),
       });
@@ -447,7 +469,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         type="button"
         disabled={busy}
         onClick={handleAutoSelectSubject}
-        title="Select the main subject locally without uploading the image"
+        title={
+          rasterExecutionMode === "eco"
+            ? "Select the main subject locally without uploading the image"
+            : "Select the main subject with the Fast API"
+        }
         style={{
           width: "100%",
           marginTop: 4,
@@ -466,7 +492,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         }}
       >
         <span>✦</span>
-        <span>{busy ? "Selecting..." : "Auto Select Subject · Local"}</span>
+        <span>
+          {busy
+            ? "Selecting..."
+            : `Auto Select Subject · ${rasterExecutionMode === "eco" ? "Local" : "Fast"}`}
+        </span>
       </button>
 
       {/* Row 2: Vectorize Action Button */}

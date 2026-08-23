@@ -300,6 +300,7 @@ export async function executeCoPilotInstruction(
       if (!cached?.dataURL) throw new Error("Image data not found in cache");
 
       const resultUrl = await removeBackground(cached.dataURL, {
+        mode,
         allowRemoteFallback: mode === "fast",
         signal: options.signal,
       });
