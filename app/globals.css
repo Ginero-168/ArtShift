@@ -183,6 +183,16 @@ button {
     opacity: 1;
   }
 }
+
+@keyframes raster-selection-marching-ants {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.raster-selection-outline {
+  animation: raster-selection-marching-ants 0.7s linear infinite;
+}
 @keyframes pulse-ring {
   0% {
     box-shadow: 0 0 0 0 var(--accent-soft);
@@ -216,7 +226,18 @@ button {
   z-index: 30;
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-.topbar-center { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 0 0 auto; }
+.topbar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(68vw, 880px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.topbar-center::-webkit-scrollbar { display: none; }
 .topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex: 1; min-width: 0; }
 .save-state {
   display: inline-flex;

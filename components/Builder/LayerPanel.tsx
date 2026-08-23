@@ -13,8 +13,10 @@ import { getElementDefaultName } from "@/lib/engine/layers";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { useEngine } from "@/lib/engine/store";
 import type { LayerMode } from "@/lib/engine/types";
+import AutoLayoutAction from "./AutoLayoutAction";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
+import ResizeArtworkAction from "./ResizeArtworkAction";
 
 export default function LayerPanel() {
   const [open, setOpen] = useState(false);
@@ -237,20 +239,26 @@ export default function LayerPanel() {
         </aside>
       ) : null}
 
-      <button
-        type="button"
-        className={`${styles.layerDockButton} ${open ? styles.layerDockButtonOpen : ""}`}
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-        aria-label="Open layers"
-      >
-        <span className={styles.layerStackIcon} aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <strong>Layers</strong>
-      </button>
+      <div className={styles.layerDockRow}>
+        <button
+          type="button"
+          className={`${styles.layerDockButton} ${open ? styles.layerDockButtonOpen : ""}`}
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+          aria-label="Open layers"
+        >
+          <span className={styles.layerStackIcon} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <strong>Layers</strong>
+        </button>
+        <div className={styles.layerDockActions} role="group" aria-label="Artwork actions">
+          <AutoLayoutAction />
+          <ResizeArtworkAction />
+        </div>
+      </div>
     </div>
   );
 }

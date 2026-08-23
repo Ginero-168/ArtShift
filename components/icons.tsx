@@ -103,6 +103,28 @@ export const IconPlus = (p: Props) => svg(p.size, <path d="M12 5v14M5 12h14" />,
 
 export const IconLine = (p: Props) => svg(p.size, <path d="M4 20 20 4" />, p);
 
+export const IconBrush = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="m4 20 8-8" />
+      <path d="m11 11 5-5 3 3-5 5Z" fill="currentColor" />
+      <path d="M8 16c-2.5 0-4 1.5-4 4 2.5 0 4-1.5 4-4Z" />
+    </>,
+    p,
+  );
+
+export const IconPencil = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="m4 20 4.5-1 10-10-3.5-3.5-10 10Z" />
+      <path d="m13.5 6.5 3.5 3.5" />
+      <path d="m4 20 1-4" />
+    </>,
+    p,
+  );
+
 export const IconArrow = (p: Props) =>
   svg(
     p.size,
@@ -151,6 +173,17 @@ export const IconSparkles = (p: Props) =>
       <path d="M12 3 13.5 8 19 9.5 13.5 11 12 16 10.5 11 5 9.5 10.5 8Z" />
       <path d="M19 15v4" />
       <path d="M17 17h4" />
+    </>,
+    p,
+  );
+
+export const IconWand = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="m4 20 10-10" />
+      <path d="m13 4 1.2 2.8L17 8l-2.8 1.2L13 12l-1.2-2.8L9 8l2.8-1.2Z" />
+      <path d="m18 14 .7 1.3L20 16l-1.3.7L18 18l-.7-1.3L16 16l1.3-.7Z" />
     </>,
     p,
   );

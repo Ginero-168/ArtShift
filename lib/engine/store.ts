@@ -15,6 +15,17 @@
  */
 
 import { create } from "zustand";
+import {
+  type ActiveRasterSelection,
+  appendActiveRasterSelection,
+  clearActiveRasterSelection,
+  setActiveRasterSelection,
+} from "../raster/activeSelection";
+import {
+  invertRasterSelection,
+  type RasterSelection,
+  type RasterSelectionOperation,
+} from "../raster/selection";
 import type { TemplateResult } from "../templates";
 import { type AlignMode, alignElements, type DistributeAxis, distributeElements } from "./align";
 import { recomputeArrowBindings } from "./binding";
@@ -29,6 +40,7 @@ import {
   pushHistory,
 } from "./history";
 import { getCached } from "./imageCache";
+import { createInteractionController, type PreviewPatch } from "./interactionController";
 import {
   addObjectToLayer,
   commitBlockObject,
@@ -75,6 +87,7 @@ import {
 
 export type Tool =
   | "select"
+  | "rasterMove"
   | "directSelect"
   | "hand"
   | "rect"
@@ -93,9 +106,18 @@ export type Tool =
   | "image"
   | "eraser"
   | "rasterEraser"
+  | "rasterPencil"
+  | "rasterBrush"
+  | "rasterMarquee"
+  | "rasterEllipse"
+  | "rasterLasso"
+  | "rasterPolygonLasso"
+  | "rasterMagicWand"
+  | "rasterQuickSelection"
   | "frame";
 
 export type LayerFilter = "all" | "block" | "free";
+export type EditorMode = "raster" | "vector";
 export type LineSubtype =
   | "solid"
   | "arrow"
@@ -110,6 +132,7 @@ export type EngineState = {
   currentSlideId: string;
   activeLayerId: string;
   selectedIds: Set<string>;
+  editorMode: EditorMode;
   tool: Tool;
   lineSubtype: LineSubtype;
   history: HistoryState;
@@ -123,6 +146,7 @@ export type EngineState = {
 
   // ——— mutators ———
   setTool: (t: Tool) => void;
+  setEditorMode: (mode: EditorMode) => void;
   setLineSubtype: (subtype: LineSubtype) => void;
   setCurrentSlide: (id: string) => void;
   setActiveLayer: (id: string) => void;
@@ -213,10 +237,68 @@ export type EngineState = {
   setCroppingImageId: (id: string | null) => void;
   aiImageModalOpen: boolean;
   setAiImageModalOpen: (open: boolean) => void;
-  /** Brush diameter in image-local pixels for the non-destructive raster eraser. */
+  /** Brush/Pencil diameter in image-local pixels for non-destructive raster strokes. */
   rasterBrushSize: number;
   setRasterBrushSize: (size: number) => void;
+  rasterBrushOpacity: number;
+  setRasterBrushOpacity: (opacity: number) => void;
+  rasterBrushHardness: number;
+  setRasterBrushHardness: (hardness: number) => void;
+  rasterBrushColor: string;
+  setRasterBrushColor: (color: string) => void;
+  /** Color-distance tolerance for contiguous Raster Magic Wand selections. */
+  rasterMagicWandTolerance: number;
+  setRasterMagicWandTolerance: (tolerance: number) => void;
+  /** Diameter of the Raster Quick Selection brush in image-local pixels. */
+  rasterQuickSelectionSize: number;
+  setRasterQuickSelectionSize: (size: number) => void;
+  /** The one Photoshop-style pixel Selection currently attached to an image. */
+  activeRasterSelection: ActiveRasterSelection;
+  applyRasterSelection: (
+    imageId: string,
+    operation: RasterSelectionOperation,
+    width: number,
+    height: number,
+  ) => void;
+  setRasterSelection: (imageId: string, selection: RasterSelection | null) => void;
+  invertActiveRasterSelection: () => void;
+  clearRasterSelection: (imageId: string) => void;
+  clearAllRasterSelections: () => void;
 };
+
+function isRasterSelectionTool(tool: Tool): boolean {
+  return (
+    tool === "rasterMarquee" ||
+    tool === "rasterEllipse" ||
+    tool === "rasterLasso" ||
+    tool === "rasterPolygonLasso" ||
+    tool === "rasterMagicWand" ||
+    tool === "rasterQuickSelection"
+  );
+}
+
+function isVectorTool(tool: Tool): boolean {
+  return (
+    tool === "select" ||
+    tool === "directSelect" ||
+    tool === "rect" ||
+    tool === "ellipse" ||
+    tool === "diamond" ||
+    tool === "triangle" ||
+    tool === "star" ||
+    tool === "hexagon" ||
+    tool === "heart" ||
+    tool === "plus" ||
+    tool === "line" ||
+    tool === "arrow" ||
+    tool === "freedraw" ||
+    tool === "pen" ||
+    tool === "text" ||
+    tool === "image" ||
+    tool === "eraser" ||
+    tool === "frame"
+  );
+}
 
 function newSlide(name: string): EngineSlide {
   // Absolute placement is the least surprising default for a precision editor.
@@ -258,39 +340,18 @@ function nextZ(slide: EngineSlide): number {
 
 export const useEngine = create<EngineState>((set, get) => {
   const initial = emptyDoc();
-  type PreviewPatch = { id: string; patch: Partial<EngineElement> };
-  let pendingPreview: PreviewPatch[] | null = null;
-  let previewFrame: number | null = null;
-
-  const applyPreview = (patches: PreviewPatch[]) => {
+  const interactionController = createInteractionController((patches: PreviewPatch[]) => {
     set((cur) =>
       mapDoc(cur, (sl) => applyElementPatches(sl, patches, cur.doc.workspaceStrictness), false),
     );
-  };
-
-  const flushPendingPreview = () => {
-    if (previewFrame !== null && typeof window !== "undefined") {
-      window.cancelAnimationFrame(previewFrame);
-      previewFrame = null;
-    }
-    const patches = pendingPreview;
-    pendingPreview = null;
-    if (patches) applyPreview(patches);
-  };
-
-  const cancelPendingPreview = () => {
-    if (previewFrame !== null && typeof window !== "undefined") {
-      window.cancelAnimationFrame(previewFrame);
-    }
-    previewFrame = null;
-    pendingPreview = null;
-  };
+  });
 
   return {
     doc: initial,
     currentSlideId: initial.slides[0].id,
     activeLayerId: initial.slides[0].layers[0].id,
     selectedIds: new Set<string>(),
+    editorMode: "vector" as EditorMode,
     tool: "select" as Tool,
     clipboard: null as EngineElement[] | null,
     history: createHistory(),
@@ -300,14 +361,85 @@ export const useEngine = create<EngineState>((set, get) => {
     aiImageModalOpen: false,
     setAiImageModalOpen: (open) => set({ aiImageModalOpen: open }),
     rasterBrushSize: 48,
-    setRasterBrushSize: (size) => set({ rasterBrushSize: Math.max(4, Math.min(512, size)) }),
+    setRasterBrushSize: (size) => set({ rasterBrushSize: Math.max(1, Math.min(512, size)) }),
+    rasterBrushOpacity: 1,
+    setRasterBrushOpacity: (opacity) =>
+      set({ rasterBrushOpacity: Math.max(0.05, Math.min(1, opacity)) }),
+    rasterBrushHardness: 0.7,
+    setRasterBrushHardness: (hardness) =>
+      set({ rasterBrushHardness: Math.max(0, Math.min(1, hardness)) }),
+    rasterBrushColor: "#111827",
+    setRasterBrushColor: (color) => set({ rasterBrushColor: color }),
+    rasterMagicWandTolerance: 32,
+    setRasterMagicWandTolerance: (tolerance) =>
+      set({ rasterMagicWandTolerance: Math.max(0, Math.min(255, tolerance)) }),
+    rasterQuickSelectionSize: 96,
+    setRasterQuickSelectionSize: (size) =>
+      set({ rasterQuickSelectionSize: Math.max(1, Math.min(512, size)) }),
+    activeRasterSelection: null,
+    applyRasterSelection: (imageId, operation, width, height) =>
+      set((state) => {
+        const next = appendActiveRasterSelection(
+          state.activeRasterSelection,
+          imageId,
+          operation,
+          width,
+          height,
+        );
+        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
+      }),
+    setRasterSelection: (imageId, selection) =>
+      set((state) => {
+        const next =
+          selection && selection.operations.length > 0
+            ? setActiveRasterSelection(imageId, selection)
+            : null;
+        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
+      }),
+    invertActiveRasterSelection: () =>
+      set((state) => {
+        const active = state.activeRasterSelection;
+        if (!active) return state;
+        const inverted = invertRasterSelection(
+          active.selection,
+          active.selection.width,
+          active.selection.height,
+        );
+        return inverted
+          ? { activeRasterSelection: { imageId: active.imageId, selection: inverted } }
+          : state;
+      }),
+    clearRasterSelection: (imageId) =>
+      set((state) => {
+        const next = clearActiveRasterSelection(state.activeRasterSelection, imageId);
+        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
+      }),
+    clearAllRasterSelections: () =>
+      set((state) =>
+        state.activeRasterSelection === null ? state : { activeRasterSelection: null },
+      ),
 
     currentSlide: () => {
       const s = get();
       return s.doc.slides.find((sl) => sl.id === s.currentSlideId);
     },
 
-    setTool: (tool) => set({ tool }),
+    setTool: (tool) =>
+      set((state) => ({
+        tool,
+        editorMode:
+          tool === "rasterMove" ||
+          isRasterSelectionTool(tool) ||
+          tool === "rasterEraser" ||
+          tool === "rasterPencil" ||
+          tool === "rasterBrush"
+            ? "raster"
+            : isVectorTool(tool)
+              ? "vector"
+              : state.editorMode,
+      })),
+    setEditorMode: (editorMode) =>
+      set({ editorMode, tool: editorMode === "raster" ? "rasterMove" : "select" }),
     setLineSubtype: (lineSubtype) => set({ lineSubtype }),
     setCurrentSlide: (id) =>
       set((state) => {
@@ -316,6 +448,7 @@ export const useEngine = create<EngineState>((set, get) => {
           currentSlideId: id,
           activeLayerId: slide?.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
           selectedIds: new Set(),
+          activeRasterSelection: null,
         };
       }),
     setActiveLayer: (id) =>
@@ -732,7 +865,7 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     updateElements: (patches, label = "update element") => {
-      flushPendingPreview();
+      interactionController.flush();
       const s = get();
       pushHistory(s.history, s.doc, label);
       set((cur) =>
@@ -746,22 +879,11 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     previewElements: (patches) => {
-      pendingPreview = patches;
-      if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-        flushPendingPreview();
-        return;
-      }
-      if (previewFrame !== null) return;
-      previewFrame = window.requestAnimationFrame(() => {
-        previewFrame = null;
-        const next = pendingPreview;
-        pendingPreview = null;
-        if (next) applyPreview(next);
-      });
+      interactionController.preview(patches);
     },
 
     commitInteraction: () => {
-      flushPendingPreview();
+      interactionController.flush();
       set((cur) => ({
         doc: { ...cur.doc, updatedAt: nextRevision(cur.doc.updatedAt) },
       }));
@@ -792,7 +914,12 @@ export const useEngine = create<EngineState>((set, get) => {
       set((cur) => {
         const next = new Set(cur.selectedIds);
         for (const id of ids) next.delete(id);
-        return { selectedIds: next, croppingImageId: null };
+        const clearsRasterSelection = ids.includes(cur.activeRasterSelection?.imageId ?? "");
+        return {
+          selectedIds: next,
+          croppingImageId: null,
+          ...(clearsRasterSelection ? { activeRasterSelection: null } : {}),
+        };
       });
     },
 
@@ -1469,6 +1596,7 @@ export const useEngine = create<EngineState>((set, get) => {
           s.activeLayerId,
         ),
         selectedIds: new Set(),
+        activeRasterSelection: null,
       });
     },
     redo: () => {
@@ -1485,11 +1613,12 @@ export const useEngine = create<EngineState>((set, get) => {
           s.activeLayerId,
         ),
         selectedIds: new Set(),
+        activeRasterSelection: null,
       });
     },
 
     loadDoc: (doc) => {
-      cancelPendingPreview();
+      interactionController.cancel();
       // Clear renderer cache so stale bitmaps aren't reused.
       import("@/lib/renderer/cache").then((m) => m.clearElementCache?.());
       const normalized = normalizeDocumentLayers(doc);
@@ -1500,6 +1629,7 @@ export const useEngine = create<EngineState>((set, get) => {
         selectedIds: new Set(),
         history: createHistory(),
         croppingImageId: null,
+        activeRasterSelection: null,
       });
     },
     croppingImageId: null,

@@ -75,6 +75,8 @@ type Props = {
   /** Forwarded pointer events with slide-local coords. */
   onPointerDownWorld?: (p: WorldPoint, e: React.PointerEvent) => void;
   onPointerMoveWorld?: (p: WorldPoint, e: React.PointerEvent) => void;
+  onPointerMoveScreen?: (p: { x: number; y: number }) => void;
+  onPointerLeaveCanvas?: () => void;
   onPointerUpWorld?: (p: WorldPoint, e: React.PointerEvent) => void;
   onDoubleClickWorld?: (p: WorldPoint, e: React.MouseEvent) => void;
   /** Notified whenever scale/translate changes; parent uses this to place overlays. */
@@ -102,6 +104,8 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     toolCursor,
     onPointerDownWorld,
     onPointerMoveWorld,
+    onPointerMoveScreen,
+    onPointerLeaveCanvas,
     onPointerUpWorld,
     onDoubleClickWorld,
     onViewChange,
@@ -113,6 +117,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ scale: 1, tx: 0, ty: 0 });
+  const [rasterMaskVersion, setRasterMaskVersion] = useState(0);
   const [spaceDown, setSpaceDown] = useState(false);
   const panRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const touchRef = useRef<{
@@ -125,6 +130,12 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     centerX: number;
     centerY: number;
   } | null>(null);
+
+  useEffect(() => {
+    const redraw = () => setRasterMaskVersion((version) => version + 1);
+    window.addEventListener("artshift:raster-mask-ready", redraw);
+    return () => window.removeEventListener("artshift:raster-mask-ready", redraw);
+  }, []);
 
   // ——— resize observer ———
   useLayoutEffect(() => {
@@ -170,6 +181,9 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !size.w || !size.h) return;
+    // This state bump redraws elements whose decoded selection mask arrived
+    // after the element cache was first rendered.
+    void rasterMaskVersion;
     const dpr = window.devicePixelRatio || 1;
     const wantW = Math.round(size.w * dpr);
     const wantH = Math.round(size.h * dpr);
@@ -291,6 +305,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     snapGrid,
     activeLayerId,
     showHexGrid,
+    rasterMaskVersion,
   ]);
 
   const setZoom = useCallback(
@@ -425,9 +440,11 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
         }));
         return;
       }
+      const rect = e.currentTarget.getBoundingClientRect();
+      onPointerMoveScreen?.({ x: e.clientX - rect.left, y: e.clientY - rect.top });
       onPointerMoveWorld?.(clientToWorld(e.clientX, e.clientY), e);
     },
-    [clientToWorld, onPointerMoveWorld],
+    [clientToWorld, onPointerMoveScreen, onPointerMoveWorld],
   );
 
   const onPointerUp = useCallback(
@@ -524,6 +541,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={onPointerLeaveCanvas}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}

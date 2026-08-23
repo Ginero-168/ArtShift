@@ -98,6 +98,51 @@ async function rasterizeElement(
   return canvas.toDataURL("image/png");
 }
 
+/**
+ * Rasterize an ImageElement without the generic element padding. This keeps
+ * the PPTX image bounds identical to the editor bounds while preserving
+ * crop, mask, adjustment, blur, opacity, and non-destructive pixel edits.
+ */
+async function rasterizeImageElement(
+  el: ImageElement,
+  images?: Map<string, HTMLImageElement>,
+): Promise<string> {
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(el.width * scale));
+  canvas.height = Math.max(1, Math.round(el.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No 2D context");
+  ctx.scale(scale, scale);
+
+  const origX = el.x;
+  const origY = el.y;
+  const origAngle = el.angle;
+  el.x = 0;
+  el.y = 0;
+  el.angle = 0;
+  try {
+    renderElement(el, { ctx, images } as RenderCtx);
+  } finally {
+    el.x = origX;
+    el.y = origY;
+    el.angle = origAngle;
+  }
+
+  return canvas.toDataURL("image/png");
+}
+
+export function shouldRasterizeImageForPptx(el: ImageElement): boolean {
+  return Boolean(
+    el.crop ||
+      el.mask ||
+      (el.adjustments && Object.keys(el.adjustments).length > 0) ||
+      (el.filterBlur ?? 0) > 0 ||
+      (el.rasterMask?.length ?? 0) > 0 ||
+      el.opacity !== 1,
+  );
+}
+
 async function toDataUrl(src: string): Promise<string> {
   if (src.startsWith("data:")) return src;
   const res = await fetch(src, { mode: "cors" });
@@ -125,7 +170,9 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
         const img = images?.get(ie.fileId);
         if (img?.src) {
           try {
-            rasterizedImages[ie.fileId] = await toDataUrl(img.src);
+            rasterizedImages[ie.fileId] = shouldRasterizeImageForPptx(ie)
+              ? await rasterizeImageElement(ie, images)
+              : await toDataUrl(img.src);
           } catch {
             // skip if failed
           }

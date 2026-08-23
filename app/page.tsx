@@ -12,22 +12,18 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import AutoLayoutAction from "@/components/Builder/AutoLayoutAction";
 import BlockLibrary from "@/components/Builder/BlockLibrary";
 import BuilderInspector from "@/components/Builder/BuilderInspector";
 import LayerPanel from "@/components/Builder/LayerPanel";
-import ResizeArtworkAction from "@/components/Builder/ResizeArtworkAction";
 import CanvasEditor, { type CanvasEditorHandle } from "@/components/Canvas/CanvasEditor";
+import EditorOptionBar from "@/components/Canvas/EditorOptionBar";
 import SlideRail from "@/components/Canvas/SlideRail";
 import { useCanvasHotkeys } from "@/components/Canvas/useCanvasHotkeys";
 import {
   IconBrand,
   IconChevronDown,
-  IconCursor,
-  IconDirectSelect,
   IconDownload,
   IconGrid,
-  IconHand,
   IconMenu,
   IconPalette,
   IconRedo,
@@ -37,7 +33,7 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "@/components/icons";
-import { legacyToEngineDoc } from "@/lib/engine/adapter";
+import { importLegacyStoreDocument } from "@/lib/engine/legacyBridge";
 
 const AIImageGeneratorModal = dynamic(() => import("@/components/AI/AIImageGeneratorModal"), {
   ssr: false,
@@ -85,8 +81,6 @@ type SaveState =
 /* ——— Main component ——— */
 
 export default function HomePage() {
-  const tool = useEngine((s) => s.tool);
-  const setTool = useEngine((s) => s.setTool);
   const undo = useEngine((s) => s.undo);
   const redo = useEngine((s) => s.redo);
   const deleteElements = useEngine((s) => s.deleteElements);
@@ -232,11 +226,10 @@ export default function HomePage() {
   }, [menuOpen]);
 
   // Hotkeys
-  useCanvasHotkeys(() => setSearchOpen(true));
+  useCanvasHotkeys();
 
   async function importLegacy() {
-    const legacy = useStore.getState().doc;
-    const engineDoc = await legacyToEngineDoc(legacy);
+    const engineDoc = await importLegacyStoreDocument();
     loadDoc(engineDoc);
     setMenuOpen(false);
   }
@@ -386,8 +379,7 @@ export default function HomePage() {
           </span>
         </div>
         <div className="topbar-center">
-          <AutoLayoutAction />
-          <ResizeArtworkAction />
+          <EditorOptionBar />
         </div>
         <div className="topbar-right">
           <button className="ghost-btn" onClick={cycleTheme} title="Toggle theme">
@@ -631,7 +623,6 @@ export default function HomePage() {
                     {/* Open */}
                     <HamburgerItem
                       label="Open"
-                      shortcut="⌘O"
                       onClick={() => {
                         importLegacy();
                       }}
@@ -655,16 +646,17 @@ export default function HomePage() {
                     {/* Export */}
                     <HamburgerItem
                       label="Export image..."
-                      shortcut="⌘⇧E"
                       onClick={() => {
                         runExport("png");
                       }}
                     />
                     {/* Find */}
                     <HamburgerItem
-                      label="Find on canvas"
-                      shortcut="⌘F"
-                      onClick={() => setMenuOpen(false)}
+                      label="Find on Artwork"
+                      onClick={() => {
+                        setSearchOpen(true);
+                        setMenuOpen(false);
+                      }}
                     />
                     {/* Templates */}
                     <HamburgerItem
@@ -699,7 +691,7 @@ export default function HomePage() {
                       }}
                     />
                     {/* Help */}
-                    <HamburgerItem label="Help" shortcut="?" onClick={() => setMenuOpen(false)} />
+                    <HamburgerItem label="Help" onClick={() => setMenuOpen(false)} />
                     {/* Reset */}
                     <HamburgerItem label="Reset the canvas" onClick={resetCanvas} />
 
@@ -748,13 +740,12 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* ——— Top-center toolbar: Hand/Cursor | Viewport Controls | Layer Filter ——— */}
+          {/* ——— Top-right toolbar: Viewport Controls | Layer Filter ——— */}
           <div
             style={{
               position: "absolute",
               top: 9,
-              left: "50%",
-              transform: "translateX(-50%)",
+              right: 9,
               zIndex: 10,
               display: "flex",
               alignItems: "center",
@@ -771,7 +762,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={undo}
-                title="Undo · ⌘Z"
+                title="Undo"
                 style={{
                   width: 26,
                   height: 26,
@@ -791,7 +782,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={redo}
-                title="Redo · ⌘⇧Z"
+                title="Redo"
                 style={{
                   width: 26,
                   height: 26,
@@ -820,81 +811,7 @@ export default function HomePage() {
               }}
             />
 
-            {/* 1. Tools: Hand & Selection */}
-            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <button
-                type="button"
-                onClick={() => setTool("hand")}
-                title="Hand (pan) — H"
-                style={{
-                  width: 26,
-                  height: 26,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: tool === "hand" ? "var(--accent, #6366f1)" : "transparent",
-                  color: tool === "hand" ? "#fff" : "var(--ink, #111827)",
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <IconHand size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setTool("select")}
-                title="Selection (Whole Object) — V"
-                style={{
-                  width: 26,
-                  height: 26,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: tool === "select" ? "var(--accent, #6366f1)" : "transparent",
-                  color: tool === "select" ? "#fff" : "var(--ink, #111827)",
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <IconCursor size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setTool("directSelect")}
-                title="Direct Selection (Anchor Points & Bezier Curves) — A"
-                style={{
-                  width: 26,
-                  height: 26,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: tool === "directSelect" ? "var(--accent, #6366f1)" : "transparent",
-                  color: tool === "directSelect" ? "#fff" : "var(--ink, #111827)",
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <IconDirectSelect size={14} />
-              </button>
-            </div>
-
-            {/* DIVIDER */}
-            <div
-              style={{
-                width: 1,
-                height: 18,
-                background: "var(--stroke, #e5e7eb)",
-                margin: "0 3px",
-              }}
-            />
-
-            {/* 2. Viewport Controls: Grid, Zoom Out, Zoom %, Zoom In */}
+            {/* Viewport Controls: Grid, Zoom Out, Zoom %, Zoom In */}
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
               {/* Block Grid Toggle */}
               <button
@@ -1100,7 +1017,6 @@ export default function HomePage() {
                       }}
                     >
                       <span>Fit to screen</span>
-                      <span style={{ fontSize: 9, color: "var(--ink-muted, #9ca3af)" }}>⌘0</span>
                     </button>
                   </div>
                 )}

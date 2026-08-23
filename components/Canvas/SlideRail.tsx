@@ -14,7 +14,7 @@ import { IconTrash } from "@/components/icons";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
-import { renderSlide } from "@/lib/renderer/canvas";
+import { renderSlideThumbnail } from "@/lib/renderer/thumbnail";
 
 const THUMB_W = 120;
 
@@ -430,7 +430,7 @@ function SlideThumb({
     ctx.fillRect(0, 0, THUMB_W, thumbH);
     ctx.save();
     ctx.scale(sx, sx);
-    renderSlide(slide, { ctx, images: getImageCache() }, slide.width, slide.height);
+    renderSlideThumbnail(slide, { ctx, images: getImageCache() });
     ctx.restore();
   }, [slide]);
 

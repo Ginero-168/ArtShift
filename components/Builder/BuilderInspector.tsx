@@ -395,7 +395,7 @@ export default function BuilderInspector() {
                       padding: 2,
                     }}
                     onClick={() => applyBooleanOperation("union")}
-                    title="Unite: Merge shapes into one (⌘⌥U)"
+                    title="Unite: Merge shapes into one"
                   >
                     <IconPathfinderUnite size={14} />
                     <span style={{ fontSize: 8.5, fontWeight: 600 }}>Unite</span>
@@ -415,7 +415,7 @@ export default function BuilderInspector() {
                       padding: 2,
                     }}
                     onClick={() => applyBooleanOperation("subtract")}
-                    title="Minus Front: Cut bottom with top shapes (⌘⌥-)"
+                    title="Minus Front: Cut bottom with top shapes"
                   >
                     <IconPathfinderMinusFront size={14} />
                     <span style={{ fontSize: 8.5, fontWeight: 600 }}>Minus Front</span>
@@ -435,7 +435,7 @@ export default function BuilderInspector() {
                       padding: 2,
                     }}
                     onClick={() => applyBooleanOperation("intersect")}
-                    title="Intersect: Keep overlapping area (⌘⌥I)"
+                    title="Intersect: Keep overlapping area"
                   >
                     <IconPathfinderIntersect size={14} />
                     <span style={{ fontSize: 8.5, fontWeight: 600 }}>Intersect</span>
@@ -455,7 +455,7 @@ export default function BuilderInspector() {
                       padding: 2,
                     }}
                     onClick={() => applyBooleanOperation("exclude")}
-                    title="Exclude: Remove overlapping area (⌘⌥X)"
+                    title="Exclude: Remove overlapping area"
                   >
                     <IconPathfinderExclude size={14} />
                     <span style={{ fontSize: 8.5, fontWeight: 600 }}>Exclude</span>
@@ -1409,7 +1409,7 @@ function ImageAdjustments({
         <span>Brush size</span>
         <input
           type="range"
-          min={4}
+          min={1}
           max={512}
           step={4}
           value={rasterBrushSize}

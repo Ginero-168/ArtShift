@@ -32,6 +32,8 @@ import type {
   ImageElement,
   TextElement,
 } from "../engine/types";
+import { createRasterSelectionMaskDataUrl } from "../raster/selection";
+import { getRasterSelectionMaskSource } from "../raster/selectionMask";
 import type { RasterMaskStroke } from "../raster/types";
 import { drawBookMockup } from "./bookMockup";
 import { getCachedElement, setCachedElement } from "./cache";
@@ -614,39 +616,130 @@ function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: Rend
     ctx.drawImage(drawSrc, 0, 0, el.width, el.height);
   }
   ctx.filter = "none";
-  applyRasterMask(ctx, el.rasterMask, el.width, el.height);
+  applyRasterMask(ctx, el.rasterMask, el);
   ctx.restore();
 }
 
 function applyRasterMask(
   ctx: CanvasRenderingContext2D,
   strokes: RasterMaskStroke[] | undefined,
-  width: number,
-  height: number,
+  element?: ImageElement,
 ) {
   if (!strokes?.length) return;
   ctx.save();
-  ctx.globalCompositeOperation = "destination-out";
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
   for (const stroke of strokes) {
-    const points = stroke.points;
-    if (!points.length) continue;
-    ctx.globalAlpha = Math.max(0.05, Math.min(1, stroke.opacity));
-    ctx.lineWidth = Math.max(1, Math.min(Math.max(width, height), stroke.size));
-    ctx.beginPath();
-    ctx.moveTo(points[0][0], points[0][1]);
-    if (points.length === 1) {
-      ctx.arc(points[0][0], points[0][1], ctx.lineWidth / 2, 0, Math.PI * 2);
-      ctx.fill();
+    if (!stroke.points.length) continue;
+    const selectionMaskDataUrl = stroke.selection
+      ? createRasterSelectionMaskDataUrl(
+          stroke.selection,
+          element?.width ?? 0,
+          element?.height ?? 0,
+        )
+      : stroke.selectionMaskDataUrl;
+    if (stroke.selection) {
+      // A Selection-constrained stroke must never fall back to an unrestricted
+      // paint/erase operation while its bitmap mask is being decoded.
+      if (!selectionMaskDataUrl || !element) continue;
+      const selectionMask = getRasterSelectionMaskSource(selectionMaskDataUrl);
+      if (selectionMask) drawClippedRasterStroke(ctx, element, stroke, selectionMask);
       continue;
     }
-    for (let index = 1; index < points.length; index++) {
-      ctx.lineTo(points[index][0], points[index][1]);
+    if (stroke.selectionMaskDataUrl && element) {
+      const selectionMask = getRasterSelectionMaskSource(stroke.selectionMaskDataUrl);
+      if (selectionMask) drawClippedRasterStroke(ctx, element, stroke, selectionMask);
+      continue;
     }
-    ctx.stroke();
+    ctx.globalCompositeOperation = stroke.mode === "paint" ? "source-over" : "destination-out";
+    ctx.globalAlpha = Math.max(0.05, Math.min(1, stroke.opacity));
+    drawRasterStroke(ctx, stroke, stroke.mode === "paint" ? stroke.color : "#ffffff");
   }
   ctx.restore();
+}
+
+function drawClippedRasterStroke(
+  ctx: CanvasRenderingContext2D,
+  element: ImageElement,
+  stroke: RasterMaskStroke,
+  selectionMask: CanvasImageSource,
+) {
+  const layer = document.createElement("canvas");
+  layer.width = ctx.canvas.width;
+  layer.height = ctx.canvas.height;
+  const layerContext = layer.getContext("2d");
+  if (!layerContext) return;
+
+  const transform = ctx.getTransform();
+  layerContext.setTransform(
+    transform.a,
+    transform.b,
+    transform.c,
+    transform.d,
+    transform.e,
+    transform.f,
+  );
+  layerContext.globalAlpha = Math.max(0.05, Math.min(1, stroke.opacity));
+  drawRasterStroke(layerContext, stroke, stroke.mode === "paint" ? stroke.color : "#ffffff");
+
+  // Keep only the part of the stroke inside the saved Selection.
+  layerContext.globalAlpha = 1;
+  layerContext.globalCompositeOperation = "destination-in";
+  layerContext.drawImage(selectionMask, 0, 0, element.width, element.height);
+
+  // Composite in canvas pixels so the element-local translation is not applied twice.
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = stroke.mode === "paint" ? "source-over" : "destination-out";
+  ctx.drawImage(layer, 0, 0);
+  ctx.restore();
+}
+
+function drawRasterStroke(
+  ctx: CanvasRenderingContext2D,
+  stroke: RasterMaskStroke,
+  color = "#111827",
+) {
+  const points = stroke.points;
+  const hardness = Math.max(0, Math.min(1, stroke.hardness ?? 1));
+  const baseRadius = Math.max(0.5, stroke.size / 2);
+  const pressures = stroke.pressures ?? [];
+  const stamp = (x: number, y: number, pressure: number) => {
+    const radius = Math.max(0.5, baseRadius * Math.max(0.05, Math.min(1, pressure)));
+    ctx.beginPath();
+    if (hardness >= 0.999) {
+      ctx.fillStyle = color;
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    const innerRadius = radius * hardness;
+    const gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, radius);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(Math.max(0.01, Math.min(0.98, hardness)), color);
+    gradient.addColorStop(1, "transparent");
+    ctx.fillStyle = gradient;
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  const pressureAt = (index: number) => pressures[index] ?? 1;
+  stamp(points[0][0], points[0][1], pressureAt(0));
+  for (let index = 1; index < points.length; index++) {
+    const from = points[index - 1];
+    const to = points[index];
+    const distance = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    const spacing = Math.max(0.75, baseRadius * (hardness >= 0.999 ? 0.35 : 0.2));
+    const steps = Math.max(1, Math.ceil(distance / spacing));
+    for (let step = 1; step <= steps; step++) {
+      const t = step / steps;
+      stamp(
+        from[0] + (to[0] - from[0]) * t,
+        from[1] + (to[1] - from[1]) * t,
+        pressureAt(index - 1) + (pressureAt(index) - pressureAt(index - 1)) * t,
+      );
+    }
+  }
 }
 
 function applyImageMask(ctx: CanvasRenderingContext2D, el: ImageElement) {

@@ -14,6 +14,10 @@ npm install
 npm run build
 ```
 
+The current application uses Next.js server routes for AI, stock search,
+background removal, catalog ingestion, and PPTX export. A normal build writes
+the `.next/` runtime and must be started by a Node.js host with `npm run start`.
+
 ### Step 2: Upload to Hostinger
 
 Upload these files/folders via File Manager or FTP:
@@ -50,12 +54,19 @@ In hPanel Node.js → click **Run/Start**.
 
 ## Static Export (No Server)
 
-If you only need the slide editor without AI backend:
+Static export is not the default build for this project because the current
+`next.config.ts` does not enable `output: "export"` and server routes cannot run
+from static files. Use a separate static-export configuration only if you need
+the editor without AI, stock, background-removal, catalog, or PPTX server APIs.
+
+If that split has been enabled:
 
 ```bash
 npm run build
 ```
 
-Upload the `out/` folder contents to any static host (GitHub Pages, Netlify, Vercel, etc).
+Upload the generated `out/` folder contents to any static host (GitHub Pages,
+Netlify, Vercel, etc). Do not treat the current default `.next/` output as
+static `out/` content.
 
 **Note:** AI features (chat, background removal, stock search) require the API backend.

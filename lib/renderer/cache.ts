@@ -16,7 +16,7 @@ const _elementCache = new Map<string, CachedElement>();
 const MAX_CACHE_SIZE = 300;
 
 function getCacheKey(el: EngineElement): string {
-  return `${el.id}:${el.version}`;
+  return `${el.type}:${el.id}:${el.version}`;
 }
 
 export function getCachedElement(el: EngineElement): CachedElement | undefined {

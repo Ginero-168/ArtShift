@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import PptxGenJS from "pptxgenjs";
 import { getPptxSlideTransform } from "@/lib/engine/exportPPTX";
 import { getRenderableElements } from "@/lib/engine/layers";
-import type { EngineDoc, ImageElement, TextElement } from "@/lib/engine/types";
+import { PPTX_EXPORT_LIMITS, parsePptxExportPayload } from "@/lib/engine/pptxPayload";
+import type { ImageElement, TextElement } from "@/lib/engine/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,15 +12,28 @@ const PX_TO_IN = 1 / 96;
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { doc, rasterizedImages } = body as {
-      doc: EngineDoc;
-      rasterizedImages?: Record<string, string>;
-    };
+    const declaredLength = Number(req.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > PPTX_EXPORT_LIMITS.bodyBytes) {
+      return NextResponse.json({ error: "PPTX export payload is too large" }, { status: 413 });
+    }
 
-    if (!doc || !Array.isArray(doc.slides)) {
+    const raw = await req.arrayBuffer();
+    if (raw.byteLength > PPTX_EXPORT_LIMITS.bodyBytes) {
+      return NextResponse.json({ error: "PPTX export payload is too large" }, { status: 413 });
+    }
+
+    let body: unknown;
+    try {
+      body = JSON.parse(new TextDecoder().decode(raw));
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    }
+
+    const payload = parsePptxExportPayload(body);
+    if (!payload) {
       return NextResponse.json({ error: "Invalid document structure" }, { status: 400 });
     }
+    const { doc, rasterizedImages } = payload;
 
     const pptx = new PptxGenJS();
     const targetSize = {
@@ -143,6 +157,7 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+        "Cache-Control": "no-store",
       },
     });
   } catch (error) {
