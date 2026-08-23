@@ -18,6 +18,7 @@ import {
 import { findAlphaComponents } from "@/lib/vision/alphaComponents";
 import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
 import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
+import { mergeVisionWithAlphaComponents } from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, visionDetect } from "@/lib/vision/visionEngine";
 
@@ -359,33 +360,48 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setStatusMessage("Detecting objects, then extracting all...");
 
     try {
-      const res = await visionDetect(url, (p) => setProgress(Math.round(p * 100)));
-      setDetectedObjects(res.objects);
-      if (res.objects.length === 0) {
-        setStatusMessage("No distinct objects found to extract");
+      let visionObjects: DetectedObject[] = [];
+      try {
+        const res = await visionDetect(url, (p) => setProgress(Math.round(p * 25)));
+        visionObjects = res.objects;
+      } catch (error) {
+        console.warn("Florence-2 detection failed; continuing with foreground geometry.", error);
+        setStatusMessage("Florence-2 missed or could not detect objects; completing locally...");
+      }
+
+      setDetectedObjects(visionObjects);
+      setProgress(30);
+      setStatusMessage("Separating foreground pixels...");
+      const foregroundUrl = await removeBackground(url, {
+        mode: rasterExecutionMode,
+        onProgress: (value) => setProgress(30 + value * 35),
+      });
+      setDetectedForegroundUrl(foregroundUrl);
+
+      setProgress(67);
+      setStatusMessage("Recovering objects missed by Florence-2...");
+      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl);
+      const objects = mergeVisionWithAlphaComponents(visionObjects, alphaObjects);
+      setDetectedObjects(objects);
+      if (objects.length === 0) {
+        setStatusMessage("No visible foreground objects were found");
+        return;
+      }
+
+      setStatusMessage(`Extracting all ${objects.length} transparent objects...`);
+      const newElements = await extractObjectBatch(foregroundUrl, objects, (value) =>
+        setProgress(70 + value * 28),
+      );
+      if (newElements.length === 0) {
+        setStatusMessage("No visible foreground objects were found");
       } else {
-        setProgress(35);
-        setStatusMessage("Separating foreground pixels...");
-        const foregroundUrl = await removeBackground(url, {
-          mode: rasterExecutionMode,
-          onProgress: (value) => setProgress(35 + value * 35),
-        });
-        setDetectedForegroundUrl(foregroundUrl);
-        setStatusMessage(`Extracting all ${res.objects.length} transparent objects...`);
-        const newElements = await extractObjectBatch(foregroundUrl, res.objects, (value) =>
-          setProgress(70 + value * 28),
+        addElements(newElements, "extract all detected objects");
+        selectOnly(newElements.map((el) => el.id));
+        setStatusMessage(
+          newElements.length === objects.length
+            ? `Extracted ${newElements.length} transparent objects!`
+            : `Extracted ${newElements.length} objects; skipped empty detections.`,
         );
-        if (newElements.length === 0) {
-          setStatusMessage("No visible foreground objects were found");
-        } else {
-          addElements(newElements, "extract all detected objects");
-          selectOnly(newElements.map((el) => el.id));
-          setStatusMessage(
-            newElements.length === res.objects.length
-              ? `Extracted ${newElements.length} transparent objects!`
-              : `Extracted ${newElements.length} objects; skipped empty detections.`,
-          );
-        }
       }
     } catch (err) {
       console.error(err);

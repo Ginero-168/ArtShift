@@ -1,0 +1,46 @@
+import { describe, expect, it } from "vitest";
+import { mergeVisionWithAlphaComponents } from "@/lib/vision/objectBoxes";
+
+describe("hybrid vision object boxes", () => {
+  it("keeps separate alpha components inside one coarse Florence box", () => {
+    const objects = mergeVisionWithAlphaComponents(
+      [
+        {
+          label: "product group",
+          x_min: 0.1,
+          y_min: 0.1,
+          x_max: 0.9,
+          y_max: 0.9,
+        },
+      ],
+      [
+        { x_min: 0.1, y_min: 0.2, x_max: 0.3, y_max: 0.4, area: 100 },
+        { x_min: 0.6, y_min: 0.5, x_max: 0.85, y_max: 0.8, area: 160 },
+      ],
+    );
+
+    expect(objects).toHaveLength(2);
+    expect(objects.map((object) => object.label)).toEqual(["product group", "product group"]);
+  });
+
+  it("adds alpha-only objects and preserves Florence-only objects", () => {
+    const objects = mergeVisionWithAlphaComponents(
+      [{ label: "shirt", x_min: 0.65, y_min: 0.65, x_max: 0.95, y_max: 0.95 }],
+      [{ x_min: 0.05, y_min: 0.1, x_max: 0.2, y_max: 0.25, area: 60 }],
+    );
+
+    expect(objects).toEqual([
+      { label: "object", x_min: 0.05, y_min: 0.1, x_max: 0.2, y_max: 0.25 },
+      { label: "shirt", x_min: 0.65, y_min: 0.65, x_max: 0.95, y_max: 0.95 },
+    ]);
+  });
+
+  it("falls back to Florence boxes when foreground components are unavailable", () => {
+    const objects = mergeVisionWithAlphaComponents(
+      [{ label: "cap", x_min: 0.2, y_min: 0.3, x_max: 0.4, y_max: 0.5 }],
+      [],
+    );
+
+    expect(objects).toEqual([{ label: "cap", x_min: 0.2, y_min: 0.3, x_max: 0.4, y_max: 0.5 }]);
+  });
+});
