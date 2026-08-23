@@ -39,6 +39,19 @@ describe("LocalRasterProcessor", () => {
       expect(Array.from(result.data)).toEqual([10, 20, 30, 0, 40, 50, 60, 255]);
   });
 
+  it("keeps only selected pixels for a keep mask", async () => {
+    const result = await processor.execute({
+      kind: "selectionMask",
+      pixels: pixels([10, 20, 30, 255, 40, 50, 60, 255], 2, 1),
+      mask: new Uint8Array([1, 0]),
+      mode: "keep",
+    });
+
+    expect(result.kind).toBe("pixels");
+    if (result.kind === "pixels")
+      expect(Array.from(result.data)).toEqual([10, 20, 30, 255, 40, 50, 60, 0]);
+  });
+
   it("resizes thumbnail pixel jobs and reports progress", async () => {
     const updates: number[] = [];
     const result = await processor.execute(

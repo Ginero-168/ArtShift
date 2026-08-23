@@ -163,10 +163,10 @@ export function executeRasterJobLocally(
     case "selectionMask": {
       const data = job.pixels.data.slice();
       for (let index = 0; index < job.mask.length; index++) {
-        if (!job.mask[index]) continue;
         const alpha = index * 4 + 3;
-        if (job.mode === "erase") data[alpha] = 0;
-        else data[alpha] = Math.round((data[alpha] * job.mask[index]) / 255);
+        if (job.mode === "erase" ? job.mask[index] !== 0 : job.mask[index] === 0) {
+          data[alpha] = 0;
+        }
       }
       result = { kind: "pixels", width: job.pixels.width, height: job.pixels.height, data };
       break;
