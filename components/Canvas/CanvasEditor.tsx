@@ -71,6 +71,7 @@ import type {
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
 import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
 import { createRasterStroke } from "@/lib/raster/mask";
+import { getRasterProcessor } from "@/lib/raster/processorFactory";
 import {
   appendRasterPolygonPoint,
   canCommitRasterPolygon,
@@ -212,7 +213,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterBrushColor = useEngine((s) => s.rasterBrushColor);
   const rasterMagicWandTolerance = useEngine((s) => s.rasterMagicWandTolerance);
   const rasterQuickSelectionSize = useEngine((s) => s.rasterQuickSelectionSize);
+  const rasterExecutionMode = useEngine((s) => s.rasterExecutionMode);
   const activeRasterSelection = useEngine((s) => s.activeRasterSelection);
+  const rasterProcessor = useMemo(
+    () => getRasterProcessor(rasterExecutionMode),
+    [rasterExecutionMode],
+  );
   const editorController = useMemo(
     () =>
       createEditorController({
@@ -638,6 +644,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             local,
             rasterMagicWandTolerance,
             images,
+            rasterProcessor,
           ).then(applyShape);
           return;
         }
@@ -685,6 +692,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           drag.brushSize,
           drag.tolerance,
           abortController.signal,
+          rasterProcessor,
         )
           .then((stamp) => {
             const current = dragRef.current;
@@ -797,6 +805,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       rasterBrushSize,
       rasterMagicWandTolerance,
       rasterQuickSelectionSize,
+      rasterProcessor,
       activeRasterSelection,
       commitQuickSelection,
       editorController,

@@ -39,6 +39,8 @@ export default function ContextMenu({ position, onClose }: Props) {
   const sendToBack = useEngine((s) => s.sendToBack);
   const selectAll = useEngine((s) => s.selectAll);
   const invertActiveRasterSelection = useEngine((s) => s.invertActiveRasterSelection);
+  const featherActiveRasterSelection = useEngine((s) => s.featherActiveRasterSelection);
+  const transformActiveRasterSelection = useEngine((s) => s.transformActiveRasterSelection);
   const clearRasterSelection = useEngine((s) => s.clearRasterSelection);
 
   // Close on outside-click + Escape.
@@ -76,6 +78,27 @@ export default function ContextMenu({ position, onClose }: Props) {
         kind: "item",
         label: "Invert Selection",
         onClick: invertActiveRasterSelection,
+      });
+      items.push({
+        kind: "item",
+        label: "Feather Selection…",
+        onClick: () => {
+          const value = window.prompt("Feather radius (px)", "8");
+          if (value === null) return;
+          const radius = Number(value);
+          if (Number.isFinite(radius) && radius >= 0) featherActiveRasterSelection(radius);
+        },
+      });
+      items.push({
+        kind: "item",
+        label: "Transform Selection…",
+        onClick: () => {
+          const value = window.prompt("Scale X, Scale Y, Offset X, Offset Y", "1, 1, 0, 0");
+          if (value === null) return;
+          const values = value.split(",").map(Number);
+          if (values.length !== 4 || values.some((number) => !Number.isFinite(number))) return;
+          transformActiveRasterSelection(values[0], values[1], values[2], values[3]);
+        },
       });
       items.push({
         kind: "item",

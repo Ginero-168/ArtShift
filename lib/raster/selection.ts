@@ -277,6 +277,81 @@ export function invertRasterSelection(
   };
 }
 
+/** Soften the active mask while preserving it as a non-destructive bitmap selection. */
+export function featherRasterSelection(
+  selection: RasterSelection,
+  width: number,
+  height: number,
+  radius: number,
+): RasterSelection | null {
+  if (typeof document === "undefined") return null;
+  const maskDataUrl = createRasterSelectionMaskDataUrl(selection, width, height);
+  if (!maskDataUrl) return null;
+  const source = getRasterSelectionMaskSource(maskDataUrl);
+  if (!source) return null;
+  const safeWidth = Math.max(1, Math.ceil(width));
+  const safeHeight = Math.max(1, Math.ceil(height));
+  const canvas = document.createElement("canvas");
+  canvas.width = safeWidth;
+  canvas.height = safeHeight;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.clearRect(0, 0, safeWidth, safeHeight);
+  context.filter = `blur(${Math.max(0, Math.min(256, radius))}px)`;
+  context.drawImage(source, 0, 0, safeWidth, safeHeight);
+  context.filter = "none";
+  const dataUrl = canvas.toDataURL("image/png");
+  registerRasterSelectionMask(dataUrl, canvas);
+  return bitmapSelection(dataUrl, safeWidth, safeHeight);
+}
+
+/** Translate and scale a selection around its image-local center. */
+export function transformRasterSelection(
+  selection: RasterSelection,
+  width: number,
+  height: number,
+  scaleX: number,
+  scaleY: number,
+  offsetX: number,
+  offsetY: number,
+): RasterSelection | null {
+  if (typeof document === "undefined") return null;
+  const maskDataUrl = createRasterSelectionMaskDataUrl(selection, width, height);
+  if (!maskDataUrl) return null;
+  const source = getRasterSelectionMaskSource(maskDataUrl);
+  if (!source) return null;
+  const safeWidth = Math.max(1, Math.ceil(width));
+  const safeHeight = Math.max(1, Math.ceil(height));
+  const canvas = document.createElement("canvas");
+  canvas.width = safeWidth;
+  canvas.height = safeHeight;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.clearRect(0, 0, safeWidth, safeHeight);
+  context.save();
+  context.translate(safeWidth / 2 + offsetX, safeHeight / 2 + offsetY);
+  context.scale(Number.isFinite(scaleX) ? scaleX : 1, Number.isFinite(scaleY) ? scaleY : 1);
+  context.drawImage(source, -safeWidth / 2, -safeHeight / 2, safeWidth, safeHeight);
+  context.restore();
+  const dataUrl = canvas.toDataURL("image/png");
+  registerRasterSelectionMask(dataUrl, canvas);
+  return bitmapSelection(dataUrl, safeWidth, safeHeight);
+}
+
+function bitmapSelection(dataUrl: string, width: number, height: number): RasterSelection {
+  return {
+    width,
+    height,
+    operations: [
+      {
+        id: crypto.randomUUID(),
+        mode: "replace",
+        shape: { kind: "bitmap", dataUrl },
+      },
+    ],
+  };
+}
+
 function selectionMaskCacheKey(selection: RasterSelection, width: number, height: number): string {
   // Operation ids are stable for immutable selection snapshots. Avoid hashing
   // polygon/bitmap payloads on every render while still separating dimensions.
