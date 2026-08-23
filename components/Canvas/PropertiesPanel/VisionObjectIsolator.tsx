@@ -27,7 +27,11 @@ import {
   mergeAlphaComponents,
 } from "@/lib/vision/alphaComponents";
 import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
-import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
+import {
+  alphaCoverageFromRgba,
+  hasUsableForeground,
+  isForegroundForSource,
+} from "@/lib/vision/foreground";
 import { mergeVisionWithAlphaComponents } from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
 import {
@@ -141,6 +145,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [progress, setProgress] = useState<number | null>(null);
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [detectedForegroundUrl, setDetectedForegroundUrl] = useState<string | null>(null);
+  const [detectedForegroundFileId, setDetectedForegroundFileId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [extractionQuality, setExtractionQuality] = useState<"balanced" | "precision">("balanced");
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
@@ -159,8 +164,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   useEffect(() => {
     if (!currentFileId) return;
     setDetectedObjects([]);
-    setDetectedForegroundUrl(null);
-  }, [currentFileId]);
+    if (detectedForegroundFileId !== currentFileId) {
+      setDetectedForegroundUrl(null);
+      setDetectedForegroundFileId(null);
+    }
+  }, [currentFileId, detectedForegroundFileId]);
 
   const applyPreset = (p: VectorizePreset) => {
     setPreset(p);
@@ -307,6 +315,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         ],
         "remove background",
       );
+      setDetectedForegroundUrl(resultUrl);
+      setDetectedForegroundFileId(newCached.fileId);
+      setDetectedObjects([]);
       setStatusMessage("Background removed successfully!");
     } catch (err) {
       console.warn("Remove BG failed:", err);
@@ -329,12 +340,18 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setStatusMessage("Selecting subject locally...");
 
     try {
-      const resultUrl = await removeBackground(cached.dataURL, {
-        mode: rasterExecutionMode,
-        allowRemoteFallback: false,
-        onProgress: (value) => setProgress(Math.round(value * 100)),
-      });
-      const maskDataUrl = await createAlphaMaskDataUrl(resultUrl);
+      const foregroundUrl = isForegroundForSource(
+        element.fileId,
+        detectedForegroundFileId,
+        detectedForegroundUrl,
+      )
+        ? detectedForegroundUrl
+        : await removeBackground(cached.dataURL, {
+            mode: rasterExecutionMode,
+            allowRemoteFallback: false,
+            onProgress: (value) => setProgress(Math.round(value * 100)),
+          });
+      const maskDataUrl = await createAlphaMaskDataUrl(foregroundUrl);
       setRasterSelection(element.id, {
         width: element.width,
         height: element.height,
@@ -455,12 +472,27 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
       setDetectedObjects(visionObjects);
       setProgress(30);
-      setStatusMessage("Separating foreground pixels...");
-      const foregroundUrl = await removeBackground(url, {
-        mode: rasterExecutionMode,
-        onProgress: (value) => setProgress(30 + value * 35),
-      });
+      const reusableForeground = isForegroundForSource(
+        element.fileId,
+        detectedForegroundFileId,
+        detectedForegroundUrl,
+      )
+        ? detectedForegroundUrl
+        : null;
+      let foregroundUrl: string;
+      if (reusableForeground) {
+        foregroundUrl = reusableForeground;
+        setProgress(65);
+        setStatusMessage("Using the existing background-removed foreground...");
+      } else {
+        setStatusMessage("Separating foreground pixels...");
+        foregroundUrl = await removeBackground(url, {
+          mode: rasterExecutionMode,
+          onProgress: (value) => setProgress(30 + value * 35),
+        });
+      }
       setDetectedForegroundUrl(foregroundUrl);
+      setDetectedForegroundFileId(element.fileId);
 
       setProgress(67);
       setStatusMessage("Recovering objects missed by Florence-2...");
@@ -560,11 +592,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setStatusMessage("Removing background for fast extraction...");
 
     try {
-      const foregroundUrl = await removeBackground(url, {
-        mode: rasterExecutionMode,
-        onProgress: (value) => setProgress(Math.round(value * 70)),
-      });
+      const reusableForeground = isForegroundForSource(
+        element.fileId,
+        detectedForegroundFileId,
+        detectedForegroundUrl,
+      )
+        ? detectedForegroundUrl
+        : null;
+      const foregroundUrl =
+        reusableForeground ??
+        (await removeBackground(url, {
+          mode: rasterExecutionMode,
+          onProgress: (value) => setProgress(Math.round(value * 70)),
+        }));
       setDetectedForegroundUrl(foregroundUrl);
+      setDetectedForegroundFileId(element.fileId);
       setProgress(74);
       const objects = await detectAlphaObjectBoxes(foregroundUrl, { quality: "fast" });
       setDetectedObjects(objects);

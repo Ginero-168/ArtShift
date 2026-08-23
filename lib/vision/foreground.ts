@@ -71,3 +71,12 @@ export function shouldPreserveForegroundPixel(
 ): boolean {
   return Number.isFinite(sourceAlpha) && (sourceAlpha >= alphaThreshold || maskValue > 0);
 }
+
+/** Check that a cached foreground URL belongs to the currently displayed source asset. */
+export function isForegroundForSource(
+  sourceFileId: string,
+  foregroundFileId: string | null,
+  foregroundUrl: string | null,
+): foregroundUrl is string {
+  return Boolean(foregroundUrl && foregroundFileId === sourceFileId);
+}

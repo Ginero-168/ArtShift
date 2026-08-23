@@ -4,6 +4,7 @@ import {
   alphaBoundsFromRgba,
   alphaCoverageFromRgba,
   hasUsableForeground,
+  isForegroundForSource,
   shouldPreserveForegroundPixel,
 } from "@/lib/vision/foreground";
 
@@ -69,6 +70,16 @@ describe("Vision AI Object Isolator & Calculations", () => {
     expect(shouldPreserveForegroundPixel(255, 0)).toBe(true);
     expect(shouldPreserveForegroundPixel(0, 0)).toBe(false);
     expect(shouldPreserveForegroundPixel(0, 255)).toBe(true);
+  });
+
+  it("reuses a foreground result only for the source image that produced it", () => {
+    expect(
+      isForegroundForSource("foreground-file", "foreground-file", "data:image/png;base64,x"),
+    ).toBe(true);
+    expect(isForegroundForSource("new-source", "foreground-file", "data:image/png;base64,x")).toBe(
+      false,
+    );
+    expect(isForegroundForSource("foreground-file", "foreground-file", null)).toBe(false);
   });
 
   it("uses the image cache key instead of a raw data URL for extracted objects", () => {
