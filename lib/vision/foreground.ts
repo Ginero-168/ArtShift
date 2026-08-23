@@ -1,3 +1,10 @@
+export type AlphaBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 /** Return the proportion of pixels that contain visible foreground alpha. */
 export function alphaCoverageFromRgba(data: ArrayLike<number>, alphaThreshold = 20): number {
   const pixelCount = Math.floor(data.length / 4);
@@ -8,6 +15,47 @@ export function alphaCoverageFromRgba(data: ArrayLike<number>, alphaThreshold = 
     if (Number(data[index]) >= alphaThreshold) foregroundPixels++;
   }
   return foregroundPixels / pixelCount;
+}
+
+/** Find the tight visible bounds of an RGBA buffer with optional padding. */
+export function alphaBoundsFromRgba(
+  data: ArrayLike<number>,
+  width: number,
+  height: number,
+  alphaThreshold = 8,
+  padding = 0,
+): AlphaBounds | null {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width < 1 ||
+    height < 1 ||
+    data.length < width * height * 4
+  ) {
+    return null;
+  }
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (Number(data[(y * width + x) * 4 + 3]) < alphaThreshold) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return null;
+  const safePadding = Math.max(0, Math.floor(padding));
+  const x = Math.max(0, minX - safePadding);
+  const y = Math.max(0, minY - safePadding);
+  const right = Math.min(width, maxX + safePadding + 1);
+  const bottom = Math.min(height, maxY + safePadding + 1);
+  return { x, y, width: right - x, height: bottom - y };
 }
 
 /** Ignore detector boxes whose transparent crop contains no useful subject. */

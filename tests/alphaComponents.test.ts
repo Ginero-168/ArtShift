@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { findAlphaComponents } from "@/lib/vision/alphaComponents";
+import {
+  createAlphaTiles,
+  findAlphaComponents,
+  mapAlphaComponentToImage,
+  mergeAlphaComponents,
+} from "@/lib/vision/alphaComponents";
 
 describe("alpha component extraction", () => {
   it("returns separate normalized boxes for disconnected foreground regions", () => {
@@ -22,5 +27,33 @@ describe("alpha component extraction", () => {
 
     expect(boxes).toHaveLength(1);
     expect(boxes[0].area).toBe(9);
+  });
+
+  it("creates overlapping tiles that cover the full image", () => {
+    expect(createAlphaTiles(1400, 900, 512, 64)).toEqual([
+      { x: 0, y: 0, width: 512, height: 512 },
+      { x: 448, y: 0, width: 512, height: 512 },
+      { x: 888, y: 0, width: 512, height: 512 },
+      { x: 0, y: 388, width: 512, height: 512 },
+      { x: 448, y: 388, width: 512, height: 512 },
+      { x: 888, y: 388, width: 512, height: 512 },
+    ]);
+  });
+
+  it("maps and merges a component duplicated across overlapping tiles", () => {
+    const tile = { x: 448, y: 0, width: 512, height: 512 };
+    const mapped = mapAlphaComponentToImage(
+      { x_min: 0, y_min: 0.2, x_max: 0.4, y_max: 0.6, area: 100 },
+      tile,
+      1400,
+      900,
+    );
+    const merged = mergeAlphaComponents([
+      { x_min: 0.31, y_min: 0.1, x_max: 0.5, y_max: 0.35, area: 120 },
+      mapped,
+    ]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ x_min: 0.31, x_max: 0.5 });
   });
 });

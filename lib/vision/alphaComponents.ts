@@ -13,6 +13,85 @@ export type AlphaComponentOptions = {
   padding?: number;
 };
 
+export type AlphaTile = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/** Build overlapping tiles for high-resolution foreground analysis. */
+export function createAlphaTiles(
+  width: number,
+  height: number,
+  tileSize: number,
+  overlap: number,
+): AlphaTile[] {
+  if (width < 1 || height < 1 || tileSize < 1) return [];
+  const safeTileSize = Math.min(tileSize, Math.max(width, height));
+  const safeOverlap = Math.max(0, Math.min(overlap, safeTileSize - 1));
+  const step = Math.max(1, safeTileSize - safeOverlap);
+  const xPositions = axisPositions(width, safeTileSize, step);
+  const yPositions = axisPositions(height, safeTileSize, step);
+
+  return yPositions.flatMap((y) =>
+    xPositions.map((x) => ({
+      x,
+      y,
+      width: Math.min(safeTileSize, width - x),
+      height: Math.min(safeTileSize, height - y),
+    })),
+  );
+}
+
+/** Convert a component reported in tile coordinates into full-image coordinates. */
+export function mapAlphaComponentToImage(
+  component: AlphaComponentBox,
+  tile: AlphaTile,
+  imageWidth: number,
+  imageHeight: number,
+): AlphaComponentBox {
+  const minX = tile.x + component.x_min * tile.width;
+  const minY = tile.y + component.y_min * tile.height;
+  const maxX = tile.x + component.x_max * tile.width;
+  const maxY = tile.y + component.y_max * tile.height;
+  return {
+    x_min: minX / imageWidth,
+    y_min: minY / imageHeight,
+    x_max: maxX / imageWidth,
+    y_max: maxY / imageHeight,
+    area: component.area,
+  };
+}
+
+/** Merge duplicate component boxes reported by overlapping tiles. */
+export function mergeAlphaComponents(
+  components: readonly AlphaComponentBox[],
+  overlapThreshold = 0.08,
+): AlphaComponentBox[] {
+  const merged: AlphaComponentBox[] = [];
+  for (const component of components) {
+    const matchIndex = merged.findIndex((candidate) =>
+      hasComponentOverlap(candidate, component, overlapThreshold),
+    );
+    if (matchIndex < 0) {
+      merged.push({ ...component });
+      continue;
+    }
+
+    const match = merged[matchIndex];
+    merged[matchIndex] = {
+      x_min: Math.min(match.x_min, component.x_min),
+      y_min: Math.min(match.y_min, component.y_min),
+      x_max: Math.max(match.x_max, component.x_max),
+      y_max: Math.max(match.y_max, component.y_max),
+      area: match.area + component.area,
+    };
+  }
+
+  return merged.sort((first, second) => first.y_min - second.y_min || first.x_min - second.x_min);
+}
+
 /** Find connected foreground regions in an RGBA image and return normalized boxes. */
 export function findAlphaComponents(
   rgba: ArrayLike<number>,
@@ -94,4 +173,38 @@ export function findAlphaComponents(
     .sort((a, b) => b.area - a.area)
     .slice(0, maxComponents)
     .sort((a, b) => a.y_min - b.y_min || a.x_min - b.x_min);
+}
+
+function axisPositions(length: number, tileSize: number, step: number): number[] {
+  if (length <= tileSize) return [0];
+  const positions: number[] = [];
+  for (let position = 0; position < length; position += step) {
+    positions.push(Math.min(position, length - tileSize));
+    if (positions.at(-1) === length - tileSize) break;
+  }
+  return positions;
+}
+
+function hasComponentOverlap(
+  first: AlphaComponentBox,
+  second: AlphaComponentBox,
+  threshold: number,
+): boolean {
+  const intersection = intersectionArea(first, second);
+  const smallerArea = Math.min(boxArea(first), boxArea(second));
+  return smallerArea > 0 && intersection / smallerArea >= threshold;
+}
+
+function boxArea(box: Pick<AlphaComponentBox, "x_min" | "y_min" | "x_max" | "y_max">): number {
+  return Math.max(0, box.x_max - box.x_min) * Math.max(0, box.y_max - box.y_min);
+}
+
+function intersectionArea(
+  first: Pick<AlphaComponentBox, "x_min" | "y_min" | "x_max" | "y_max">,
+  second: Pick<AlphaComponentBox, "x_min" | "y_min" | "x_max" | "y_max">,
+): number {
+  return (
+    Math.max(0, Math.min(first.x_max, second.x_max) - Math.max(first.x_min, second.x_min)) *
+    Math.max(0, Math.min(first.y_max, second.y_max) - Math.max(first.y_min, second.y_min))
+  );
 }

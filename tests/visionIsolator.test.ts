@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
-import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
+import {
+  alphaBoundsFromRgba,
+  alphaCoverageFromRgba,
+  hasUsableForeground,
+} from "@/lib/vision/foreground";
 
 describe("Vision AI Object Isolator & Calculations", () => {
   it("calculates correct pixel crop bounds from normalized bounding boxes", () => {
@@ -65,6 +69,18 @@ describe("Vision AI Object Isolator & Calculations", () => {
       fileId: "asset-hash",
       naturalWidth: 320,
       naturalHeight: 180,
+    });
+  });
+
+  it("finds tight alpha bounds without trimming the visible edge", () => {
+    const rgba = new Uint8ClampedArray(5 * 4 * 4);
+    for (const pixel of [7, 8, 12, 13]) rgba[pixel * 4 + 3] = 255;
+
+    expect(alphaBoundsFromRgba(rgba, 5, 4, 8, 1)).toEqual({
+      x: 1,
+      y: 0,
+      width: 4,
+      height: 4,
     });
   });
 });
