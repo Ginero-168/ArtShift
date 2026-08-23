@@ -14,8 +14,13 @@ import {
   type VectorizeProgress,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
-import { shouldRefineAlphaAnalysis } from "@/lib/vision/adaptiveAlpha";
-import { findAlphaComponents } from "@/lib/vision/alphaComponents";
+import { createSam2Session, type Sam2Session } from "@/lib/vision/advancedVision";
+import {
+  createAlphaTiles,
+  findAlphaComponents,
+  mapAlphaComponentToImage,
+  mergeAlphaComponents,
+} from "@/lib/vision/alphaComponents";
 import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
 import {
   alphaCoverageFromRgba,
@@ -24,7 +29,13 @@ import {
 } from "@/lib/vision/foreground";
 import { mergeVisionWithAlphaComponents } from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
-import { cropImageRegion, visionDenseDetect, visionDetect } from "@/lib/vision/visionEngine";
+import {
+  cropImageRegion,
+  cropImageRegionWithMask,
+  trimTransparentRegion,
+  visionDenseDetect,
+  visionDetect,
+} from "@/lib/vision/visionEngine";
 import { mergeVisionDetections, shouldRunVisionRecall } from "@/lib/vision/visionRecall";
 
 interface DetectedObject {
@@ -93,17 +104,62 @@ async function detectAlphaObjectBoxes(
     .map(({ area: _area, ...box }) => ({ label: "object", ...box }));
 }
 
-async function detectAdaptiveAlphaObjectBoxes(
-  dataUrl: string,
-  visionObjects: readonly DetectedObject[],
-  onRefine?: () => void,
-): Promise<DetectedObject[]> {
-  const baseObjects = await detectAlphaObjectBoxes(dataUrl);
-  if (!shouldRefineAlphaAnalysis(visionObjects, baseObjects)) return baseObjects;
+/** Restore the old precision geometry without exposing a second UI mode. */
+async function detectPrecisionAlphaObjectBoxes(dataUrl: string): Promise<DetectedObject[]> {
+  const image = new Image();
+  image.src = dataUrl;
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Could not inspect the transparent foreground."));
+  });
 
-  onRefine?.();
-  const refinedObjects = await detectAlphaObjectBoxes(dataUrl, 1536);
-  return refinedObjects.length >= baseObjects.length ? refinedObjects : baseObjects;
+  const naturalWidth = image.naturalWidth || image.width;
+  const naturalHeight = image.naturalHeight || image.height;
+  const maxDimension = 1024;
+  const scale = Math.min(1, maxDimension / Math.max(naturalWidth, naturalHeight));
+  const width = Math.max(1, Math.round(naturalWidth * scale));
+  const height = Math.max(1, Math.round(naturalHeight * scale));
+  const fullCanvas = document.createElement("canvas");
+  fullCanvas.width = width;
+  fullCanvas.height = height;
+  const fullContext = fullCanvas.getContext("2d");
+  if (!fullContext) throw new Error("Could not create the precision analysis canvas.");
+  fullContext.drawImage(image, 0, 0, width, height);
+
+  const components = createAlphaTiles(width, height, 768, 96).flatMap((tile) => {
+    const tileCanvas = document.createElement("canvas");
+    tileCanvas.width = tile.width;
+    tileCanvas.height = tile.height;
+    const tileContext = tileCanvas.getContext("2d");
+    if (!tileContext) return [];
+    tileContext.drawImage(
+      fullCanvas,
+      tile.x,
+      tile.y,
+      tile.width,
+      tile.height,
+      0,
+      0,
+      tile.width,
+      tile.height,
+    );
+    const rgba = tileContext.getImageData(0, 0, tile.width, tile.height).data;
+    return findAlphaComponents(rgba, tile.width, tile.height, {
+      alphaThreshold: 24,
+      minAreaRatio: 0.00025,
+      maxComponents: 64,
+      padding: 3,
+      thinComponentMinArea: 8,
+      thinComponentMaxThickness: 8,
+      thinComponentMinLength: 12,
+    }).map((component) => mapAlphaComponentToImage(component, tile, width, height));
+  });
+
+  return mergeAlphaComponents(components)
+    .sort((first, second) => second.area - first.area)
+    .slice(0, 128)
+    .sort((first, second) => first.y_min - second.y_min || first.x_min - second.x_min)
+    .map(({ area: _area, ...box }) => ({ label: "object", ...box }));
 }
 
 export function VisionObjectIsolator({ element }: { element: ImageElement }) {
@@ -313,25 +369,60 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     foregroundUrl: string,
     objects: DetectedObject[],
     onProgress?: (progress: number) => void,
+    options: { maskSession?: Sam2Session; maskSourceUrl?: string; trimTransparent?: boolean } = {},
   ) => {
     const newElements = [];
 
     for (const [index, obj] of objects.entries()) {
-      const cropped = await cropImageRegion(foregroundUrl, obj);
-      const alphaCoverage = await measureAlphaCoverage(cropped.dataUrl);
+      let cropped: Awaited<ReturnType<typeof cropImageRegion>>;
+      if (options.maskSession && options.maskSourceUrl) {
+        try {
+          const mask = await options.maskSession.segment(obj, (progress) =>
+            onProgress?.((index + progress) / Math.max(1, objects.length)),
+          );
+          cropped = await cropImageRegionWithMask(options.maskSourceUrl, obj, mask, {
+            preserveExistingAlpha: false,
+          });
+        } catch (error) {
+          console.warn("SAM 2 mask failed for one object; using the foreground crop.", error);
+          cropped = await cropImageRegion(foregroundUrl, obj);
+        }
+      } else {
+        cropped = await cropImageRegion(foregroundUrl, obj);
+      }
+      const trimmed = options.trimTransparent
+        ? await trimTransparentRegion(cropped.dataUrl, 2)
+        : {
+            dataUrl: cropped.dataUrl,
+            width: cropped.width,
+            height: cropped.height,
+            offsetX: 0,
+            offsetY: 0,
+          };
+      const alphaCoverage = await measureAlphaCoverage(trimmed.dataUrl);
       if (!hasUsableForeground(alphaCoverage)) {
         onProgress?.((index + 1) / objects.length);
         continue;
       }
-      const cached = await loadDataURL(cropped.dataUrl);
+      const cached = await loadDataURL(trimmed.dataUrl);
       const asset = createCachedImageAsset(cached);
       const objectWidth = obj.x_max - obj.x_min;
       const objectHeight = obj.y_max - obj.y_min;
+      const x = obj.x_min + objectWidth * (trimmed.offsetX / Math.max(1, cropped.width));
+      const y = obj.y_min + objectHeight * (trimmed.offsetY / Math.max(1, cropped.height));
       const newImg = createImage({
-        x: Math.round(element.x + element.width * obj.x_min),
-        y: Math.round(element.y + element.height * obj.y_min),
-        width: Math.max(20, Math.round(element.width * objectWidth)),
-        height: Math.max(20, Math.round(element.height * objectHeight)),
+        x: Math.round(element.x + element.width * x),
+        y: Math.round(element.y + element.height * y),
+        width: Math.max(
+          20,
+          Math.round(element.width * objectWidth * (trimmed.width / Math.max(1, cropped.width))),
+        ),
+        height: Math.max(
+          20,
+          Math.round(
+            element.height * objectHeight * (trimmed.height / Math.max(1, cropped.height)),
+          ),
+        ),
         ...asset,
       });
       newElements.push(newImg);
@@ -387,15 +478,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setDetectedForegroundFileId(element.fileId);
 
       setProgress(67);
-      setStatusMessage("Combining Florence labels with foreground components...");
-      const alphaObjects = await detectAdaptiveAlphaObjectBoxes(
-        foregroundUrl,
-        visionObjects,
-        () => {
-          setProgress(69);
-          setStatusMessage("Refining small foreground details...");
-        },
-      );
+      setStatusMessage("Running precision foreground analysis...");
+      const alphaObjects = await detectPrecisionAlphaObjectBoxes(foregroundUrl);
       let recalledVisionObjects = visionObjects;
       let usedVisionRecall = false;
       if (shouldRunVisionRecall(visionObjects, alphaObjects)) {
@@ -417,9 +501,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       }
 
       setStatusMessage(`Extracting all ${objects.length} transparent objects...`);
-      const extractionStart = usedVisionRecall ? 76 : 70;
-      const newElements = await extractObjectBatch(foregroundUrl, objects, (value) =>
-        setProgress(extractionStart + value * (98 - extractionStart)),
+      let maskSession: Sam2Session | undefined;
+      setProgress(72);
+      setStatusMessage("Loading precision masks locally...");
+      try {
+        maskSession = await createSam2Session(url, (value) => setProgress(72 + value * 4));
+      } catch (error) {
+        console.warn("SAM 2 precision masks unavailable; using precision crops.", error);
+        setStatusMessage("Precision masks unavailable; continuing with detailed crops...");
+      }
+      const extractionStart = usedVisionRecall ? 77 : 76;
+      const newElements = await extractObjectBatch(
+        foregroundUrl,
+        objects,
+        (value) => setProgress(extractionStart + value * (98 - extractionStart)),
+        { maskSession, maskSourceUrl: url, trimTransparent: true },
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");

@@ -335,6 +335,7 @@ export async function cropImageRegionWithMask(
   imageDataUrl: string,
   bbox: { x_min: number; y_min: number; x_max: number; y_max: number },
   mask: VisionMask,
+  options: { preserveExistingAlpha?: boolean } = {},
 ): Promise<{ dataUrl: string; width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -366,12 +367,12 @@ export async function cropImageRegionWithMask(
         for (let x = 0; x < sw; x++) {
           const sourceX = Math.min(mask.width - 1, Math.floor(((sx + x) / naturalW) * mask.width));
           const pixelOffset = (y * sw + x) * 4;
-          if (
-            !shouldPreserveForegroundPixel(
-              pixels.data[pixelOffset + 3],
-              mask.data[sourceY * mask.width + sourceX],
-            )
-          ) {
+          const maskValue = mask.data[sourceY * mask.width + sourceX];
+          const shouldKeep =
+            (options.preserveExistingAlpha ?? true)
+              ? shouldPreserveForegroundPixel(pixels.data[pixelOffset + 3], maskValue)
+              : maskValue > 0;
+          if (!shouldKeep) {
             pixels.data[pixelOffset + 3] = 0;
           }
         }
