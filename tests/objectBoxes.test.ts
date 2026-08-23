@@ -23,6 +23,30 @@ describe("hybrid vision object boxes", () => {
     expect(objects.map((object) => object.label)).toEqual(["product group", "product group"]);
   });
 
+  it("keeps a small accessory such as a straw with its main object", () => {
+    const objects = mergeVisionWithAlphaComponents(
+      [{ label: "cup", x_min: 0.2, y_min: 0.1, x_max: 0.5, y_max: 0.7 }],
+      [
+        { x_min: 0.24, y_min: 0.28, x_max: 0.48, y_max: 0.7, area: 1000 },
+        { x_min: 0.31, y_min: 0.1, x_max: 0.34, y_max: 0.3, area: 20 },
+      ],
+    );
+
+    expect(objects).toEqual([{ label: "cup", x_min: 0.24, y_min: 0.1, x_max: 0.48, y_max: 0.7 }]);
+  });
+
+  it("attaches a nearby alpha-only accessory to its semantic object", () => {
+    const objects = mergeVisionWithAlphaComponents(
+      [{ label: "cup", x_min: 0.2, y_min: 0.3, x_max: 0.5, y_max: 0.7 }],
+      [
+        { x_min: 0.24, y_min: 0.32, x_max: 0.48, y_max: 0.7, area: 1000 },
+        { x_min: 0.31, y_min: 0.1, x_max: 0.34, y_max: 0.31, area: 20 },
+      ],
+    );
+
+    expect(objects).toEqual([{ label: "cup", x_min: 0.24, y_min: 0.1, x_max: 0.48, y_max: 0.7 }]);
+  });
+
   it("adds alpha-only objects and preserves Florence-only objects", () => {
     const objects = mergeVisionWithAlphaComponents(
       [{ label: "shirt", x_min: 0.65, y_min: 0.65, x_max: 0.95, y_max: 0.95 }],

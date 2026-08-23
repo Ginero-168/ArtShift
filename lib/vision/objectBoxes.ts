@@ -56,8 +56,8 @@ export function mergeVisionWithAlphaComponents(
   const validAlphaComponents = alphaComponents.filter(isValidBox);
   if (validAlphaComponents.length === 0) return sortBoxes([...validVisionObjects]);
 
-  const usedVisionIndexes = new Set<number>();
-  const alphaObjects = validAlphaComponents.map(({ area: _area, ...component }) => {
+  const assignments = validAlphaComponents.map((rawComponent, alphaIndex) => {
+    const { area: _area, ...component } = rawComponent;
     let bestVisionIndex = -1;
     let bestCoverage = 0;
 
@@ -71,17 +71,108 @@ export function mergeVisionWithAlphaComponents(
       }
     }
 
-    if (bestVisionIndex >= 0 && bestCoverage >= 0.25) {
-      usedVisionIndexes.add(bestVisionIndex);
-      return { label: validVisionObjects[bestVisionIndex].label, ...component };
-    }
-
-    return { label: "object", ...component };
+    return {
+      alphaIndex,
+      component,
+      visionIndex: bestCoverage >= 0.25 ? bestVisionIndex : -1,
+    };
   });
+
+  const usedVisionIndexes = new Set<number>();
+  const groupedAlphaIndexes = new Set<number>();
+  const alphaObjects: VisionObjectBox[] = [];
+  const groupedComponents = new Map<number, typeof assignments>();
+  const primaryAssignments = new Map<number, (typeof assignments)[number]>();
+
+  for (const [visionIndex] of validVisionObjects.entries()) {
+    const assigned = assignments.filter((assignment) => assignment.visionIndex === visionIndex);
+    if (!assigned.length) continue;
+
+    usedVisionIndexes.add(visionIndex);
+    const primary = [...assigned].sort(
+      (first, second) => area(second.component) - area(first.component),
+    )[0];
+    const accessories = assigned.filter(
+      (assignment) =>
+        assignment.alphaIndex !== primary.alphaIndex &&
+        isNearbyAccessory(primary.component, assignment.component),
+    );
+    const grouped = [primary, ...accessories];
+    groupedComponents.set(visionIndex, grouped);
+    primaryAssignments.set(visionIndex, primary);
+    for (const component of grouped) groupedAlphaIndexes.add(component.alphaIndex);
+  }
+
+  // A thin accessory can sit just outside Florence's coarse box (common with
+  // straws and handles). Attach it to the nearest semantic primary only when
+  // it is both small and immediately adjacent; comparable nearby objects stay
+  // independent.
+  for (const assignment of assignments) {
+    if (assignment.visionIndex >= 0 || groupedAlphaIndexes.has(assignment.alphaIndex)) continue;
+
+    const nearest = [...primaryAssignments.entries()]
+      .map(([visionIndex, primary]) => ({
+        distance: accessoryDistance(primary.component, assignment.component),
+        primary,
+        visionIndex,
+      }))
+      .filter(({ primary }) => isNearbyAccessory(primary.component, assignment.component))
+      .sort((first, second) => first.distance - second.distance)[0];
+
+    if (!nearest) continue;
+    groupedComponents.get(nearest.visionIndex)?.push(assignment);
+    groupedAlphaIndexes.add(assignment.alphaIndex);
+  }
+
+  for (const [visionIndex, components] of groupedComponents.entries()) {
+    const merged = components.reduce(
+      (current, component) => unionBoxes(current, component.component),
+      components[0].component,
+    );
+    alphaObjects.push({ label: validVisionObjects[visionIndex].label, ...merged });
+  }
+
+  for (const assignment of assignments) {
+    if (groupedAlphaIndexes.has(assignment.alphaIndex)) continue;
+    alphaObjects.push({
+      label:
+        assignment.visionIndex >= 0 ? validVisionObjects[assignment.visionIndex].label : "object",
+      ...assignment.component,
+    });
+  }
 
   const uncoveredVisionObjects = validVisionObjects.filter(
     (_object, index) => !usedVisionIndexes.has(index),
   );
 
   return sortBoxes([...alphaObjects, ...uncoveredVisionObjects]);
+}
+
+function isNearbyAccessory(primary: NormalizedBox, candidate: NormalizedBox): boolean {
+  const primaryArea = area(primary);
+  const candidateArea = area(candidate);
+  if (primaryArea <= 0 || candidateArea / primaryArea > 0.35) return false;
+
+  return accessoryDistance(primary, candidate) <= 0.04;
+}
+
+function accessoryDistance(primary: NormalizedBox, candidate: NormalizedBox): number {
+  const horizontalGap = Math.max(
+    0,
+    Math.max(primary.x_min, candidate.x_min) - Math.min(primary.x_max, candidate.x_max),
+  );
+  const verticalGap = Math.max(
+    0,
+    Math.max(primary.y_min, candidate.y_min) - Math.min(primary.y_max, candidate.y_max),
+  );
+  return Math.max(horizontalGap, verticalGap);
+}
+
+function unionBoxes(first: NormalizedBox, second: NormalizedBox): NormalizedBox {
+  return {
+    x_min: Math.min(first.x_min, second.x_min),
+    y_min: Math.min(first.y_min, second.y_min),
+    x_max: Math.max(first.x_max, second.x_max),
+    y_max: Math.max(first.y_max, second.y_max),
+  };
 }
