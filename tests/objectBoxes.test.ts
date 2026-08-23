@@ -47,6 +47,18 @@ describe("hybrid vision object boxes", () => {
     expect(objects).toEqual([{ label: "cup", x_min: 0.24, y_min: 0.1, x_max: 0.48, y_max: 0.7 }]);
   });
 
+  it("removes a duplicate Florence box when alpha geometry already covers it", () => {
+    const objects = mergeVisionWithAlphaComponents(
+      [
+        { label: "cup", x_min: 0.2, y_min: 0.2, x_max: 0.5, y_max: 0.7 },
+        { label: "cup", x_min: 0.21, y_min: 0.21, x_max: 0.49, y_max: 0.69 },
+      ],
+      [{ x_min: 0.24, y_min: 0.25, x_max: 0.48, y_max: 0.68, area: 1000 }],
+    );
+
+    expect(objects).toEqual([{ label: "cup", x_min: 0.24, y_min: 0.25, x_max: 0.48, y_max: 0.68 }]);
+  });
+
   it("adds alpha-only objects and preserves Florence-only objects", () => {
     const objects = mergeVisionWithAlphaComponents(
       [{ label: "shirt", x_min: 0.65, y_min: 0.65, x_max: 0.95, y_max: 0.95 }],

@@ -141,9 +141,15 @@ export function mergeVisionWithAlphaComponents(
     });
   }
 
-  const uncoveredVisionObjects = validVisionObjects.filter(
-    (_object, index) => !usedVisionIndexes.has(index),
-  );
+  const uncoveredVisionObjects = validVisionObjects
+    .filter((_object, index) => !usedVisionIndexes.has(index))
+    .filter(
+      (visionObject) =>
+        !alphaObjects.some((alphaObject) => {
+          const visionArea = area(visionObject);
+          return visionArea > 0 && intersectionArea(visionObject, alphaObject) / visionArea >= 0.5;
+        }),
+    );
 
   return sortBoxes([...alphaObjects, ...uncoveredVisionObjects]);
 }

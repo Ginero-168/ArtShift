@@ -14,17 +14,7 @@ import {
   type VectorizeProgress,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
-import {
-  createSam2Session,
-  groundingDinoDetect,
-  type Sam2Session,
-} from "@/lib/vision/advancedVision";
-import {
-  createAlphaTiles,
-  findAlphaComponents,
-  mapAlphaComponentToImage,
-  mergeAlphaComponents,
-} from "@/lib/vision/alphaComponents";
+import { findAlphaComponents } from "@/lib/vision/alphaComponents";
 import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
 import {
   alphaCoverageFromRgba,
@@ -33,12 +23,7 @@ import {
 } from "@/lib/vision/foreground";
 import { mergeVisionWithAlphaComponents } from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
-import {
-  cropImageRegion,
-  cropImageRegionWithMask,
-  trimTransparentRegion,
-  visionDetect,
-} from "@/lib/vision/visionEngine";
+import { cropImageRegion, visionDetect } from "@/lib/vision/visionEngine";
 
 interface DetectedObject {
   label: string;
@@ -67,10 +52,7 @@ async function measureAlphaCoverage(dataUrl: string): Promise<number> {
   return alphaCoverageFromRgba(pixels);
 }
 
-async function detectAlphaObjectBoxes(
-  dataUrl: string,
-  options: { quality?: "fast" | "accurate" } = {},
-): Promise<DetectedObject[]> {
+async function detectAlphaObjectBoxes(dataUrl: string): Promise<DetectedObject[]> {
   const image = new Image();
   image.src = dataUrl;
   await new Promise<void>((resolve, reject) => {
@@ -80,8 +62,7 @@ async function detectAlphaObjectBoxes(
 
   const naturalWidth = image.naturalWidth || image.width;
   const naturalHeight = image.naturalHeight || image.height;
-  const quality = options.quality ?? "fast";
-  const maxDimension = quality === "accurate" ? 1024 : 512;
+  const maxDimension = 768;
   const scale = Math.min(1, maxDimension / Math.max(naturalWidth, naturalHeight));
   const width = Math.max(1, Math.round(naturalWidth * scale));
   const height = Math.max(1, Math.round(naturalHeight * scale));
@@ -92,41 +73,18 @@ async function detectAlphaObjectBoxes(
   if (!fullContext) throw new Error("Could not create the foreground analysis canvas.");
   fullContext.drawImage(image, 0, 0, width, height);
 
-  const tileSize = quality === "accurate" ? 768 : 512;
-  const overlap = quality === "accurate" ? 96 : 0;
-  const tiles = createAlphaTiles(width, height, tileSize, overlap);
-  const components = tiles.flatMap((tile) => {
-    const tileCanvas = document.createElement("canvas");
-    tileCanvas.width = tile.width;
-    tileCanvas.height = tile.height;
-    const tileContext = tileCanvas.getContext("2d");
-    if (!tileContext) return [];
-    tileContext.drawImage(
-      fullCanvas,
-      tile.x,
-      tile.y,
-      tile.width,
-      tile.height,
-      0,
-      0,
-      tile.width,
-      tile.height,
-    );
-    const rgba = tileContext.getImageData(0, 0, tile.width, tile.height).data;
-    return findAlphaComponents(rgba, tile.width, tile.height, {
-      alphaThreshold: 24,
-      minAreaRatio: quality === "accurate" ? 0.00025 : 0.0005,
-      maxComponents: 64,
-      padding: quality === "accurate" ? 3 : 2,
-      thinComponentMinArea: quality === "accurate" ? 12 : 8,
-      thinComponentMaxThickness: 8,
-      thinComponentMinLength: 12,
-    }).map((component) => mapAlphaComponentToImage(component, tile, width, height));
-  });
-
-  return mergeAlphaComponents(components)
+  const rgba = fullContext.getImageData(0, 0, width, height).data;
+  return findAlphaComponents(rgba, width, height, {
+    alphaThreshold: 24,
+    minAreaRatio: 0.0005,
+    maxComponents: 128,
+    padding: 2,
+    thinComponentMinArea: 8,
+    thinComponentMaxThickness: 8,
+    thinComponentMinLength: 12,
+  })
     .sort((first, second) => second.area - first.area)
-    .slice(0, quality === "accurate" ? 128 : 64)
+    .slice(0, 128)
     .sort((first, second) => first.y_min - second.y_min || first.x_min - second.x_min)
     .map(({ area: _area, ...box }) => ({ label: "object", ...box }));
 }
@@ -144,7 +102,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [detectedForegroundUrl, setDetectedForegroundUrl] = useState<string | null>(null);
   const [detectedForegroundFileId, setDetectedForegroundFileId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [extractionQuality, setExtractionQuality] = useState<"balanced" | "precision">("balanced");
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -339,58 +296,25 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     foregroundUrl: string,
     objects: DetectedObject[],
     onProgress?: (progress: number) => void,
-    options: { maskSession?: Sam2Session; trimTransparent?: boolean } = {},
   ) => {
     const newElements = [];
 
     for (const [index, obj] of objects.entries()) {
-      let cropped: Awaited<ReturnType<typeof cropImageRegion>>;
-      if (options.maskSession) {
-        try {
-          const mask = await options.maskSession.segment(obj, (progress) =>
-            onProgress?.((index + progress) / Math.max(1, objects.length)),
-          );
-          cropped = await cropImageRegionWithMask(foregroundUrl, obj, mask);
-        } catch (error) {
-          console.warn("SAM 2 mask failed for one object; using the hybrid crop.", error);
-          cropped = await cropImageRegion(foregroundUrl, obj);
-        }
-      } else {
-        cropped = await cropImageRegion(foregroundUrl, obj);
-      }
-      const trimmed = options.trimTransparent
-        ? await trimTransparentRegion(cropped.dataUrl, 2)
-        : {
-            dataUrl: cropped.dataUrl,
-            width: cropped.width,
-            height: cropped.height,
-            offsetX: 0,
-            offsetY: 0,
-          };
-      const alphaCoverage = await measureAlphaCoverage(trimmed.dataUrl);
+      const cropped = await cropImageRegion(foregroundUrl, obj);
+      const alphaCoverage = await measureAlphaCoverage(cropped.dataUrl);
       if (!hasUsableForeground(alphaCoverage)) {
         onProgress?.((index + 1) / objects.length);
         continue;
       }
-      const cached = await loadDataURL(trimmed.dataUrl);
+      const cached = await loadDataURL(cropped.dataUrl);
       const asset = createCachedImageAsset(cached);
       const objectWidth = obj.x_max - obj.x_min;
       const objectHeight = obj.y_max - obj.y_min;
-      const x = obj.x_min + objectWidth * (trimmed.offsetX / Math.max(1, cropped.width));
-      const y = obj.y_min + objectHeight * (trimmed.offsetY / Math.max(1, cropped.height));
-      const width = Math.max(
-        20,
-        Math.round(element.width * objectWidth * (trimmed.width / Math.max(1, cropped.width))),
-      );
-      const height = Math.max(
-        20,
-        Math.round(element.height * objectHeight * (trimmed.height / Math.max(1, cropped.height))),
-      );
       const newImg = createImage({
-        x: Math.round(element.x + element.width * x),
-        y: Math.round(element.y + element.height * y),
-        width,
-        height,
+        x: Math.round(element.x + element.width * obj.x_min),
+        y: Math.round(element.y + element.height * obj.y_min),
+        width: Math.max(20, Math.round(element.width * objectWidth)),
+        height: Math.max(20, Math.round(element.height * objectHeight)),
         ...asset,
       });
       newElements.push(newImg);
@@ -446,47 +370,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setDetectedForegroundFileId(element.fileId);
 
       setProgress(67);
-      setStatusMessage("Recovering objects missed by Florence-2...");
-      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl, {
-        quality: extractionQuality === "precision" ? "accurate" : "fast",
-      });
-      let semanticObjects = visionObjects;
-      if (extractionQuality === "precision") {
-        setStatusMessage("Expanding object proposals with Grounding DINO...");
-        try {
-          const labels = [
-            ...new Set([
-              ...visionObjects.map((object) => object.label),
-              "object",
-              "product",
-              "bag",
-              "shirt",
-              "bottle",
-              "cup",
-              "cap",
-              "tree",
-              "keychain",
-              "box",
-              "book",
-              "container",
-              "package",
-              "clothing",
-              "sign",
-            ]),
-          ];
-          const groundingObjects = await groundingDinoDetect(url, labels, (value) =>
-            setProgress(67 + value * 2),
-          );
-          semanticObjects = [
-            ...semanticObjects,
-            ...groundingObjects.map(({ score: _score, ...object }) => object),
-          ];
-        } catch (error) {
-          console.warn("Grounding DINO unavailable; continuing with Florence proposals.", error);
-          setStatusMessage("Grounding DINO unavailable; continuing with hybrid extraction...");
-        }
-      }
-      const objects = mergeVisionWithAlphaComponents(semanticObjects, alphaObjects);
+      setStatusMessage("Combining Florence labels with foreground components...");
+      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl);
+      const objects = mergeVisionWithAlphaComponents(visionObjects, alphaObjects);
       setDetectedObjects(objects);
       if (objects.length === 0) {
         setStatusMessage("No visible foreground objects were found");
@@ -494,22 +380,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       }
 
       setStatusMessage(`Extracting all ${objects.length} transparent objects...`);
-      let maskSession: Sam2Session | undefined;
-      if (extractionQuality === "precision") {
-        setProgress(69);
-        setStatusMessage("Loading SAM 2 precision masks locally...");
-        try {
-          maskSession = await createSam2Session(url, (value) => setProgress(67 + value * 3));
-        } catch (error) {
-          console.warn("SAM 2 precision masks unavailable; using hybrid extraction.", error);
-          setStatusMessage("SAM 2 unavailable; continuing with hybrid extraction...");
-        }
-      }
-      const newElements = await extractObjectBatch(
-        foregroundUrl,
-        objects,
-        (value) => setProgress(70 + value * 28),
-        { maskSession, trimTransparent: extractionQuality === "precision" },
+      const newElements = await extractObjectBatch(foregroundUrl, objects, (value) =>
+        setProgress(70 + value * 28),
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");
@@ -559,7 +431,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
       setProgress(74);
-      const objects = await detectAlphaObjectBoxes(foregroundUrl, { quality: "fast" });
+      const objects = await detectAlphaObjectBoxes(foregroundUrl);
       setDetectedObjects(objects);
       if (objects.length === 0) {
         setStatusMessage("No separate foreground objects found");
@@ -738,38 +610,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         >
           {busy ? "Processing..." : "Extract Fast"}
         </button>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 6,
-          marginTop: 4,
-          padding: "3px 5px",
-          borderRadius: 4,
-          background: "rgba(99, 102, 241, 0.05)",
-        }}
-      >
-        <span style={{ fontSize: 9, color: "#475569" }}>Extraction quality</span>
-        <select
-          value={extractionQuality}
-          disabled={busy}
-          onChange={(event) => setExtractionQuality(event.target.value as "balanced" | "precision")}
-          title="Precision uses a locally cached SAM 2 mask for each extracted object"
-          style={{
-            border: "1px solid rgba(99, 102, 241, 0.25)",
-            borderRadius: 4,
-            background: "#fff",
-            color: "#1e1b4b",
-            fontSize: 9,
-            padding: "2px 4px",
-          }}
-        >
-          <option value="balanced">Balanced · Stable Hybrid</option>
-          <option value="precision">Precision · SAM 2</option>
-        </select>
       </div>
 
       {/* Row 2: Vectorize Action Button */}
