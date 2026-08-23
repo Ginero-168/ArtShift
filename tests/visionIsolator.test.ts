@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
 
 describe("Vision AI Object Isolator & Calculations", () => {
   it("calculates correct pixel crop bounds from normalized bounding boxes", () => {
@@ -48,5 +49,13 @@ describe("Vision AI Object Isolator & Calculations", () => {
     expect(objHeight).toBe(150); // 0.5 * 300
     expect(objX).toBe(300); // 100 + 400*0.5
     expect(objY).toBe(320); // 200 + 300*0.4
+  });
+
+  it("rejects transparent detector crops instead of creating empty rectangles", () => {
+    const coverage = alphaCoverageFromRgba(new Uint8ClampedArray([0, 0, 0, 0, 0, 0, 0, 255]));
+
+    expect(coverage).toBe(0.5);
+    expect(hasUsableForeground(0.005)).toBe(false);
+    expect(hasUsableForeground(coverage)).toBe(true);
   });
 });

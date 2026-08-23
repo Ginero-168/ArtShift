@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { removeBackground } from "@/lib/ai/removeBg";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
@@ -15,6 +15,7 @@ import {
   type VectorizeProgress,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
+import { alphaCoverageFromRgba, hasUsableForeground } from "@/lib/vision/foreground";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, visionDetect } from "@/lib/vision/visionEngine";
 
@@ -24,6 +25,25 @@ interface DetectedObject {
   y_min: number;
   x_max: number;
   y_max: number;
+}
+
+async function measureAlphaCoverage(dataUrl: string): Promise<number> {
+  const image = new Image();
+  image.src = dataUrl;
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Could not inspect extracted foreground."));
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext("2d");
+  if (!context || canvas.width < 1 || canvas.height < 1) return 0;
+
+  context.drawImage(image, 0, 0);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  return alphaCoverageFromRgba(pixels);
 }
 
 export function VisionObjectIsolator({ element }: { element: ImageElement }) {
@@ -38,6 +58,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
+  const [detectedForegroundUrl, setDetectedForegroundUrl] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -50,6 +71,13 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [cornerSharpness, setCornerSharpness] = useState(0.65);
   const [minArea, setMinArea] = useState(4);
   const vectorizeAbortRef = useRef<AbortController | null>(null);
+  const currentFileId = element.fileId;
+
+  useEffect(() => {
+    if (!currentFileId) return;
+    setDetectedObjects([]);
+    setDetectedForegroundUrl(null);
+  }, [currentFileId]);
 
   const applyPreset = (p: VectorizePreset) => {
     setPreset(p);
@@ -257,14 +285,19 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   };
 
   const extractObjectBatch = async (
-    url: string,
+    foregroundUrl: string,
     objects: DetectedObject[],
     onProgress?: (progress: number) => void,
   ) => {
     const newElements = [];
 
     for (const [index, obj] of objects.entries()) {
-      const cropped = await cropImageRegion(url, obj);
+      const cropped = await cropImageRegion(foregroundUrl, obj);
+      const alphaCoverage = await measureAlphaCoverage(cropped.dataUrl);
+      if (!hasUsableForeground(alphaCoverage)) {
+        onProgress?.((index + 1) / objects.length);
+        continue;
+      }
       const width = Math.max(20, Math.round(element.width * (obj.x_max - obj.x_min)));
       const height = Math.max(20, Math.round(element.height * (obj.y_max - obj.y_min)));
       const newImg = createImage({
@@ -277,7 +310,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         naturalHeight: cropped.height,
       });
       newElements.push(newImg);
-      onProgress?.(60 + ((index + 1) / objects.length) * 35);
+      onProgress?.((index + 1) / objects.length);
     }
 
     return newElements;
@@ -300,11 +333,28 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       if (res.objects.length === 0) {
         setStatusMessage("No distinct objects found to extract");
       } else {
-        setStatusMessage(`Extracting all ${res.objects.length} objects...`);
-        const newElements = await extractObjectBatch(url, res.objects, setProgress);
-        addElements(newElements, "extract all detected objects");
-        selectOnly(newElements.map((el) => el.id));
-        setStatusMessage(`Extracted ${newElements.length} objects!`);
+        setProgress(35);
+        setStatusMessage("Separating foreground pixels...");
+        const foregroundUrl = await removeBackground(url, {
+          mode: rasterExecutionMode,
+          onProgress: (value) => setProgress(35 + value * 35),
+        });
+        setDetectedForegroundUrl(foregroundUrl);
+        setStatusMessage(`Extracting all ${res.objects.length} transparent objects...`);
+        const newElements = await extractObjectBatch(foregroundUrl, res.objects, (value) =>
+          setProgress(70 + value * 28),
+        );
+        if (newElements.length === 0) {
+          setStatusMessage("No visible foreground objects were found");
+        } else {
+          addElements(newElements, "extract all detected objects");
+          selectOnly(newElements.map((el) => el.id));
+          setStatusMessage(
+            newElements.length === res.objects.length
+              ? `Extracted ${newElements.length} transparent objects!`
+              : `Extracted ${newElements.length} objects; skipped empty detections.`,
+          );
+        }
       }
     } catch (err) {
       console.error(err);
@@ -323,7 +373,12 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setStatusMessage(`Extracting ${obj.label}...`);
 
     try {
-      const cropped = await cropImageRegion(url, obj);
+      const foregroundUrl =
+        detectedForegroundUrl ??
+        (await removeBackground(url, {
+          mode: rasterExecutionMode,
+        }));
+      const cropped = await cropImageRegion(foregroundUrl, obj);
       const newImg = createImage({
         x: Math.round(element.x + element.width * obj.x_min),
         y: Math.round(element.y + element.height * obj.y_min),
