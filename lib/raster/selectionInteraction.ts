@@ -7,6 +7,7 @@ import {
   type RasterPixelData,
   scaledRasterSize,
 } from "./magicWand";
+import type { RasterProcessor } from "./processor";
 import { normalizeImagePoint, type RasterSelectionShape } from "./selection";
 import { runMagicWandWorkerFromBitmap } from "./selectionWorkerClient";
 
@@ -115,6 +116,7 @@ export async function createMagicWandSelectionShapeAsync(
   local: ImageLocalPoint,
   tolerance: number,
   images: Map<string, HTMLImageElement>,
+  processor: RasterProcessor = getLocalRasterProcessor(),
 ): Promise<RasterSelectionShape | null> {
   const source = images.get(image.fileId);
   if (!source?.complete || !source.naturalWidth || !source.naturalHeight) return null;
@@ -123,7 +125,7 @@ export async function createMagicWandSelectionShapeAsync(
   const seedY = (local[1] / Math.max(1, image.height)) * sampleSize.height;
 
   try {
-    if (typeof createImageBitmap === "function") {
+    if (processor.capabilities().worker && typeof createImageBitmap === "function") {
       const crop = getRasterCrop(image, source);
       const bitmap = await createImageBitmap(source, crop.x, crop.y, crop.width, crop.height, {
         resizeWidth: sampleSize.width,
@@ -146,7 +148,7 @@ export async function createMagicWandSelectionShapeAsync(
 
     const pixels = createRasterSelectionSample(image, images);
     if (!pixels) return null;
-    const result = await getLocalRasterProcessor().execute({
+    const result = await processor.execute({
       kind: "magicWand",
       pixels,
       seedX,
@@ -213,12 +215,13 @@ export async function quickSelectionMaskForPointAsync(
   brushSize: number,
   tolerance: number,
   signal?: AbortSignal,
+  processor: RasterProcessor = getLocalRasterProcessor(),
 ): Promise<Uint8Array> {
   const seedX = (local[0] / Math.max(1, image.width)) * imageData.width;
   const seedY = (local[1] / Math.max(1, image.height)) * imageData.height;
   const sampleScaleX = imageData.width / Math.max(1, image.width);
   const sampleScaleY = imageData.height / Math.max(1, image.height);
-  const result = await getLocalRasterProcessor().execute(
+  const result = await processor.execute(
     {
       kind: "quickSelection",
       pixels: imageData,
