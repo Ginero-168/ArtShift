@@ -24,7 +24,8 @@ import {
 } from "@/lib/vision/foreground";
 import { mergeVisionWithAlphaComponents } from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
-import { cropImageRegion, visionDetect } from "@/lib/vision/visionEngine";
+import { cropImageRegion, visionDenseDetect, visionDetect } from "@/lib/vision/visionEngine";
+import { mergeVisionDetections, shouldRunVisionRecall } from "@/lib/vision/visionRecall";
 
 interface DetectedObject {
   label: string;
@@ -395,7 +396,20 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           setStatusMessage("Refining small foreground details...");
         },
       );
-      const objects = mergeVisionWithAlphaComponents(visionObjects, alphaObjects);
+      let recalledVisionObjects = visionObjects;
+      let usedVisionRecall = false;
+      if (shouldRunVisionRecall(visionObjects, alphaObjects)) {
+        setStatusMessage("Improving Florence-2 recall for missed objects...");
+        try {
+          const recall = await visionDenseDetect(url, (value) => setProgress(69 + value * 6));
+          recalledVisionObjects = mergeVisionDetections(visionObjects, recall.objects);
+          usedVisionRecall = recall.objects.length > 0;
+        } catch (error) {
+          console.warn("Florence-2 dense recall failed; keeping the primary detections.", error);
+        }
+      }
+
+      const objects = mergeVisionWithAlphaComponents(recalledVisionObjects, alphaObjects);
       setDetectedObjects(objects);
       if (objects.length === 0) {
         setStatusMessage("No visible foreground objects were found");
@@ -403,8 +417,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       }
 
       setStatusMessage(`Extracting all ${objects.length} transparent objects...`);
+      const extractionStart = usedVisionRecall ? 76 : 70;
       const newElements = await extractObjectBatch(foregroundUrl, objects, (value) =>
-        setProgress(70 + value * 28),
+        setProgress(extractionStart + value * (98 - extractionStart)),
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");

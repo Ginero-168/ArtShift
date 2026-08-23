@@ -14,6 +14,8 @@ import {
 } from "@huggingface/transformers";
 import type { VisionMask } from "./advancedVision";
 import { alphaBoundsFromRgba, shouldPreserveForegroundPixel } from "./foreground";
+import type { VisionObjectBox } from "./objectBoxes";
+import { getVisionGenerationConfig } from "./visionGeneration";
 
 env.allowLocalModels = false;
 
@@ -95,7 +97,7 @@ async function runVisionTask(
   const inputs = await processor(image, prompts);
   if (onProgress) onProgress(0.75);
 
-  const outputs = await model.generate({ ...inputs, max_new_tokens: 1024 });
+  const outputs = await model.generate({ ...inputs, ...getVisionGenerationConfig(taskPrompt) });
   if (onProgress) onProgress(0.9);
 
   const generatedText = processor.batch_decode(outputs, {
@@ -137,32 +139,39 @@ export async function visionDenseCaption(imageDataUrl: string, onProgress?: (p: 
 
 export async function visionDetect(imageDataUrl: string, onProgress?: (p: number) => void) {
   const result = await runVisionTask(imageDataUrl, "<OD>", onProgress);
+  return { objects: await normalizeVisionObjects(result, imageDataUrl) };
+}
+
+/** Dense-region recall pass used only when foreground geometry outnumbers OD. */
+export async function visionDenseDetect(imageDataUrl: string, onProgress?: (p: number) => void) {
+  const result = await runVisionTask(imageDataUrl, "<DENSE_REGION_CAPTION>", onProgress);
+  return { objects: await normalizeVisionObjects(result, imageDataUrl) };
+}
+
+async function normalizeVisionObjects(
+  result: unknown,
+  imageDataUrl: string,
+  fallbackLabel = "object",
+): Promise<VisionObjectBox[]> {
   const typed = result as { bboxes?: number[][]; labels?: string[] } | undefined;
-  if (!typed?.bboxes)
-    return {
-      objects: [] as {
-        label: string;
-        x_min: number;
-        y_min: number;
-        x_max: number;
-        y_max: number;
-      }[],
-    };
+  if (!typed?.bboxes) return [];
 
-  const { labels, bboxes } = typed;
   const image = await RawImage.fromURL(imageDataUrl);
-  const width = image.width;
-  const height = image.height;
+  const width = Math.max(1, image.width);
+  const height = Math.max(1, image.height);
 
-  const objects = bboxes.map((box: number[], i: number) => ({
-    label: labels?.[i] || "object",
-    x_min: box[0] / width,
-    y_min: box[1] / height,
-    x_max: box[2] / width,
-    y_max: box[3] / height,
-  }));
-
-  return { objects };
+  return typed.bboxes.flatMap((box: number[], index: number) => {
+    if (box.length < 4 || !box.slice(0, 4).every(Number.isFinite)) return [];
+    return [
+      {
+        label: typed.labels?.[index] || fallbackLabel,
+        x_min: box[0] / width,
+        y_min: box[1] / height,
+        x_max: box[2] / width,
+        y_max: box[3] / height,
+      },
+    ];
+  });
 }
 
 export async function visionGroundPhrase(
