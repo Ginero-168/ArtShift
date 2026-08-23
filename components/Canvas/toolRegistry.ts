@@ -41,7 +41,7 @@ function shortcutFor(id: Tool): Pick<ToolDefinition, "hotkey" | "shiftKey"> {
 }
 
 export const COMMON_TOOL_DEFINITIONS: ToolDefinition[] = [
-  { id: "hand", icon: IconHand, label: "Pan", title: "Pan the canvas" },
+  { id: "hand", icon: IconHand, label: "Pan", title: "Pan the Artwork" },
 ];
 
 export const VECTOR_TOOL_DEFINITIONS: ToolDefinition[] = [

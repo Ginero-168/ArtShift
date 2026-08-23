@@ -636,8 +636,16 @@ function applyRasterMask(
           element?.height ?? 0,
         )
       : stroke.selectionMaskDataUrl;
-    if (selectionMaskDataUrl && element) {
+    if (stroke.selection) {
+      // A Selection-constrained stroke must never fall back to an unrestricted
+      // paint/erase operation while its bitmap mask is being decoded.
+      if (!selectionMaskDataUrl || !element) continue;
       const selectionMask = getRasterSelectionMaskSource(selectionMaskDataUrl);
+      if (selectionMask) drawClippedRasterStroke(ctx, element, stroke, selectionMask);
+      continue;
+    }
+    if (stroke.selectionMaskDataUrl && element) {
+      const selectionMask = getRasterSelectionMaskSource(stroke.selectionMaskDataUrl);
       if (selectionMask) drawClippedRasterStroke(ctx, element, stroke, selectionMask);
       continue;
     }

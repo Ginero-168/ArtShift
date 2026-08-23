@@ -651,7 +651,13 @@ export default function HomePage() {
                       }}
                     />
                     {/* Find */}
-                    <HamburgerItem label="Find on canvas" onClick={() => setMenuOpen(false)} />
+                    <HamburgerItem
+                      label="Find on Artwork"
+                      onClick={() => {
+                        setSearchOpen(true);
+                        setMenuOpen(false);
+                      }}
+                    />
                     {/* Templates */}
                     <HamburgerItem
                       label="Templates"
