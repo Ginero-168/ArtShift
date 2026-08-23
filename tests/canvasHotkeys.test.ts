@@ -184,6 +184,6 @@ describe("Canvas hotkeys", () => {
 
     handleCanvasHotkey(new KeyboardEvent("keydown", { key: "d", metaKey: true }));
 
-    expect(useEngine.getState().rasterSelections).toEqual({});
+    expect(useEngine.getState().activeRasterSelection).toBeNull();
   });
 });

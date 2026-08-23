@@ -57,3 +57,17 @@ the existing vector, layout, campaign, and export workflows unstable.
 | **Raster Retouch v1** | Feather, invert, transform selection, Auto Subject and Healing spike | Tools are isolated behind a tested raster job seam |
 | **Eco/Fast adapters** | Local Worker/WASM path and API path with the same job contract | Users can switch execution mode without changing the document model |
 | **Desktop spike** | Tauri platform adapters and static frontend split | Local files and persistence work without coupling the editor to Next API routes |
+
+### Current implementation status
+
+- Raster Core v1: active pixel Selection is now a single image-scoped state;
+  Delete, Brush, Pencil, Eraser, Magic Wand, Quick Selection and Auto Subject
+  all resolve the same Selection seam.
+- Interaction scheduling: pointer previews are coalesced through
+  `lib/engine/interactionController.ts` while the store remains the document
+  transaction boundary.
+- Raster Performance v1: large Magic Wand sampling uses ImageBitmap and a
+  Worker with an automatic Canvas2D fallback. Quick Selection's repeated
+  growth pass and dirty-region rendering remain the next performance slice.
+- Quality: Playwright smoke coverage now verifies the Raster toolbar and tool
+  options through a real browser.

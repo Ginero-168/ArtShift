@@ -12,6 +12,7 @@ import { useEffect, useRef } from "react";
 import { usePresetStore } from "@/lib/engine/presetStore";
 import { useEngine } from "@/lib/engine/store";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
+import { selectionForImage } from "@/lib/raster/activeSelection";
 
 type Props = {
   /** Screen position (CSS px relative to viewport). */
@@ -22,7 +23,7 @@ type Props = {
 export default function ContextMenu({ position, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const selectedIds = useEngine((s) => s.selectedIds);
-  const rasterSelections = useEngine((s) => s.rasterSelections);
+  const activeRasterSelection = useEngine((s) => s.activeRasterSelection);
 
   const copyElements = useEngine((s) => s.copyElements);
   const cutElements = useEngine((s) => s.cutElements);
@@ -37,6 +38,7 @@ export default function ContextMenu({ position, onClose }: Props) {
   const bringToFront = useEngine((s) => s.bringToFront);
   const sendToBack = useEngine((s) => s.sendToBack);
   const selectAll = useEngine((s) => s.selectAll);
+  const invertActiveRasterSelection = useEngine((s) => s.invertActiveRasterSelection);
   const clearRasterSelection = useEngine((s) => s.clearRasterSelection);
 
   // Close on outside-click + Escape.
@@ -58,7 +60,7 @@ export default function ContextMenu({ position, onClose }: Props) {
 
   const ids = Array.from(selectedIds);
   const has = ids.length > 0;
-  const rasterSelectionIds = ids.filter((id) => rasterSelections[id]);
+  const rasterSelectionIds = ids.filter((id) => selectionForImage(activeRasterSelection, id));
 
   const items: Array<
     | { kind: "item"; label: string; hint?: string; onClick: () => void; disabled?: boolean }
@@ -70,6 +72,11 @@ export default function ContextMenu({ position, onClose }: Props) {
       { kind: "item", label: "Copy", onClick: () => copyElements(ids) },
     );
     if (rasterSelectionIds.length > 0) {
+      items.push({
+        kind: "item",
+        label: "Invert Selection",
+        onClick: invertActiveRasterSelection,
+      });
       items.push({
         kind: "item",
         label: "Deselect",

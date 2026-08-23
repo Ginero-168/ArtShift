@@ -65,6 +65,8 @@ Image prompt enhancement is optional: when `ANTHROPIC_API_KEY` is unavailable, i
 | `npm run lint` | Biome check |
 | `npm run lint:fix` | Biome auto-fix |
 | `npm run test` | Vitest run |
+| `npm run test:e2e` | Playwright browser smoke tests |
+| `npm run verify` | Lint + typecheck + unit tests + production build |
 
 ---
 

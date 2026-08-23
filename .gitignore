@@ -18,3 +18,4 @@ next-env.d.ts.backup
 .claude
 .devin/config.local.json
 *.tsbuildinfo
+test-results/

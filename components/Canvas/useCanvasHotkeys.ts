@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useEngine } from "@/lib/engine/store";
+import { selectionForImage } from "@/lib/raster/activeSelection";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
 import { RASTER_TOOL_HOTKEYS } from "./rasterHotkeys";
 
@@ -72,7 +73,7 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
     const slide = st.currentSlide();
     const selectedRasterImages = Array.from(selectedIds).filter((id) => {
       const element = slide?.elements.find((candidate) => candidate.id === id);
-      return element?.type === "image" && Boolean(st.rasterSelections[id]);
+      return element?.type === "image" && Boolean(selectionForImage(st.activeRasterSelection, id));
     });
     if (selectedRasterImages.length > 0) {
       const patches = selectedRasterImages.flatMap((id) => {
@@ -85,7 +86,11 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
           [[image.width / 2, image.height / 2]],
           Math.max(1, Math.hypot(image.width, image.height) * 2),
           1,
-          { mode: "erase", hardness: 1, selection: st.rasterSelections[id] },
+          {
+            mode: "erase",
+            hardness: 1,
+            selection: selectionForImage(st.activeRasterSelection, id),
+          },
         );
         return [
           {

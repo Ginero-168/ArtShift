@@ -16,7 +16,13 @@
 
 import { create } from "zustand";
 import {
-  appendRasterSelection,
+  type ActiveRasterSelection,
+  appendActiveRasterSelection,
+  clearActiveRasterSelection,
+  setActiveRasterSelection,
+} from "../raster/activeSelection";
+import {
+  invertRasterSelection,
   type RasterSelection,
   type RasterSelectionOperation,
 } from "../raster/selection";
@@ -34,6 +40,7 @@ import {
   pushHistory,
 } from "./history";
 import { getCached } from "./imageCache";
+import { createInteractionController, type PreviewPatch } from "./interactionController";
 import {
   addObjectToLayer,
   commitBlockObject,
@@ -245,8 +252,8 @@ export type EngineState = {
   /** Diameter of the Raster Quick Selection brush in image-local pixels. */
   rasterQuickSelectionSize: number;
   setRasterQuickSelectionSize: (size: number) => void;
-  /** Ephemeral pixel selections, keyed by ImageElement id. */
-  rasterSelections: Record<string, RasterSelection>;
+  /** The one Photoshop-style pixel Selection currently attached to an image. */
+  activeRasterSelection: ActiveRasterSelection;
   applyRasterSelection: (
     imageId: string,
     operation: RasterSelectionOperation,
@@ -254,6 +261,7 @@ export type EngineState = {
     height: number,
   ) => void;
   setRasterSelection: (imageId: string, selection: RasterSelection | null) => void;
+  invertActiveRasterSelection: () => void;
   clearRasterSelection: (imageId: string) => void;
   clearAllRasterSelections: () => void;
 };
@@ -332,33 +340,11 @@ function nextZ(slide: EngineSlide): number {
 
 export const useEngine = create<EngineState>((set, get) => {
   const initial = emptyDoc();
-  type PreviewPatch = { id: string; patch: Partial<EngineElement> };
-  let pendingPreview: PreviewPatch[] | null = null;
-  let previewFrame: number | null = null;
-
-  const applyPreview = (patches: PreviewPatch[]) => {
+  const interactionController = createInteractionController((patches: PreviewPatch[]) => {
     set((cur) =>
       mapDoc(cur, (sl) => applyElementPatches(sl, patches, cur.doc.workspaceStrictness), false),
     );
-  };
-
-  const flushPendingPreview = () => {
-    if (previewFrame !== null && typeof window !== "undefined") {
-      window.cancelAnimationFrame(previewFrame);
-      previewFrame = null;
-    }
-    const patches = pendingPreview;
-    pendingPreview = null;
-    if (patches) applyPreview(patches);
-  };
-
-  const cancelPendingPreview = () => {
-    if (previewFrame !== null && typeof window !== "undefined") {
-      window.cancelAnimationFrame(previewFrame);
-    }
-    previewFrame = null;
-    pendingPreview = null;
-  };
+  });
 
   return {
     doc: initial,
@@ -390,31 +376,47 @@ export const useEngine = create<EngineState>((set, get) => {
     rasterQuickSelectionSize: 96,
     setRasterQuickSelectionSize: (size) =>
       set({ rasterQuickSelectionSize: Math.max(1, Math.min(512, size)) }),
-    rasterSelections: {},
+    activeRasterSelection: null,
     applyRasterSelection: (imageId, operation, width, height) =>
       set((state) => {
-        const current = state.rasterSelections[imageId];
-        if (!current && operation.mode !== "replace") return state;
-        const next = appendRasterSelection(current, operation, width, height);
-        return { rasterSelections: { ...state.rasterSelections, [imageId]: next } };
+        const next = appendActiveRasterSelection(
+          state.activeRasterSelection,
+          imageId,
+          operation,
+          width,
+          height,
+        );
+        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
       }),
     setRasterSelection: (imageId, selection) =>
       set((state) => {
-        const next = { ...state.rasterSelections };
-        if (selection && selection.operations.length > 0) next[imageId] = selection;
-        else delete next[imageId];
-        return { rasterSelections: next };
+        const next =
+          selection && selection.operations.length > 0
+            ? setActiveRasterSelection(imageId, selection)
+            : null;
+        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
+      }),
+    invertActiveRasterSelection: () =>
+      set((state) => {
+        const active = state.activeRasterSelection;
+        if (!active) return state;
+        const inverted = invertRasterSelection(
+          active.selection,
+          active.selection.width,
+          active.selection.height,
+        );
+        return inverted
+          ? { activeRasterSelection: { imageId: active.imageId, selection: inverted } }
+          : state;
       }),
     clearRasterSelection: (imageId) =>
       set((state) => {
-        if (!state.rasterSelections[imageId]) return state;
-        const next = { ...state.rasterSelections };
-        delete next[imageId];
-        return { rasterSelections: next };
+        const next = clearActiveRasterSelection(state.activeRasterSelection, imageId);
+        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
       }),
     clearAllRasterSelections: () =>
       set((state) =>
-        Object.keys(state.rasterSelections).length === 0 ? state : { rasterSelections: {} },
+        state.activeRasterSelection === null ? state : { activeRasterSelection: null },
       ),
 
     currentSlide: () => {
@@ -446,6 +448,7 @@ export const useEngine = create<EngineState>((set, get) => {
           currentSlideId: id,
           activeLayerId: slide?.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
           selectedIds: new Set(),
+          activeRasterSelection: null,
         };
       }),
     setActiveLayer: (id) =>
@@ -862,7 +865,7 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     updateElements: (patches, label = "update element") => {
-      flushPendingPreview();
+      interactionController.flush();
       const s = get();
       pushHistory(s.history, s.doc, label);
       set((cur) =>
@@ -876,22 +879,11 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     previewElements: (patches) => {
-      pendingPreview = patches;
-      if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-        flushPendingPreview();
-        return;
-      }
-      if (previewFrame !== null) return;
-      previewFrame = window.requestAnimationFrame(() => {
-        previewFrame = null;
-        const next = pendingPreview;
-        pendingPreview = null;
-        if (next) applyPreview(next);
-      });
+      interactionController.preview(patches);
     },
 
     commitInteraction: () => {
-      flushPendingPreview();
+      interactionController.flush();
       set((cur) => ({
         doc: { ...cur.doc, updatedAt: nextRevision(cur.doc.updatedAt) },
       }));
@@ -922,7 +914,12 @@ export const useEngine = create<EngineState>((set, get) => {
       set((cur) => {
         const next = new Set(cur.selectedIds);
         for (const id of ids) next.delete(id);
-        return { selectedIds: next, croppingImageId: null };
+        const clearsRasterSelection = ids.includes(cur.activeRasterSelection?.imageId ?? "");
+        return {
+          selectedIds: next,
+          croppingImageId: null,
+          ...(clearsRasterSelection ? { activeRasterSelection: null } : {}),
+        };
       });
     },
 
@@ -1599,6 +1596,7 @@ export const useEngine = create<EngineState>((set, get) => {
           s.activeLayerId,
         ),
         selectedIds: new Set(),
+        activeRasterSelection: null,
       });
     },
     redo: () => {
@@ -1615,11 +1613,12 @@ export const useEngine = create<EngineState>((set, get) => {
           s.activeLayerId,
         ),
         selectedIds: new Set(),
+        activeRasterSelection: null,
       });
     },
 
     loadDoc: (doc) => {
-      cancelPendingPreview();
+      interactionController.cancel();
       // Clear renderer cache so stale bitmaps aren't reused.
       import("@/lib/renderer/cache").then((m) => m.clearElementCache?.());
       const normalized = normalizeDocumentLayers(doc);
@@ -1630,7 +1629,7 @@ export const useEngine = create<EngineState>((set, get) => {
         selectedIds: new Set(),
         history: createHistory(),
         croppingImageId: null,
-        rasterSelections: {},
+        activeRasterSelection: null,
       });
     },
     croppingImageId: null,

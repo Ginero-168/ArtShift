@@ -68,6 +68,7 @@ import type {
   VectorPathElement,
 } from "@/lib/engine/types";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
+import { selectionForImage } from "@/lib/raster/activeSelection";
 import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
 import {
@@ -205,7 +206,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterBrushColor = useEngine((s) => s.rasterBrushColor);
   const rasterMagicWandTolerance = useEngine((s) => s.rasterMagicWandTolerance);
   const rasterQuickSelectionSize = useEngine((s) => s.rasterQuickSelectionSize);
-  const rasterSelections = useEngine((s) => s.rasterSelections);
+  const activeRasterSelection = useEngine((s) => s.activeRasterSelection);
   const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
 
   // Filter the slide elements by layerFilter ("all" | "block" | "free")
@@ -549,7 +550,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           opacity: rasterBrushOpacity,
           hardness: isPencil ? 1 : rasterBrushHardness,
           color: rasterBrushColor,
-          selection: rasterSelections[hit.id],
+          selection: selectionForImage(activeRasterSelection, hit.id),
         };
         setRasterBrushDraft({
           elementId: hit.id,
@@ -702,7 +703,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       rasterBrushSize,
       rasterMagicWandTolerance,
       rasterQuickSelectionSize,
-      rasterSelections,
+      activeRasterSelection,
       setTool,
       slide,
       tool,
@@ -1295,7 +1296,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         {rasterSelectionImage ? (
           <RasterSelectionOverlay
             image={rasterSelectionImage}
-            selection={rasterSelections[rasterSelectionImage.id]}
+            selection={selectionForImage(activeRasterSelection, rasterSelectionImage.id)}
             draft={
               rasterSelectionDraft?.elementId === rasterSelectionImage.id
                 ? rasterSelectionDraft

@@ -231,6 +231,52 @@ export function createRasterSelectionMaskDataUrl(
   return dataUrl;
 }
 
+/** Invert a mask buffer without changing its RGB channels. */
+export function invertSelectionAlpha(data: Uint8ClampedArray): Uint8ClampedArray {
+  const next = data.slice();
+  for (let i = 3; i < next.length; i += 4) next[i] = 255 - next[i];
+  return next;
+}
+
+/** Create a replace-selection bitmap for the Photoshop-style Invert command. */
+export function invertRasterSelection(
+  selection: RasterSelection,
+  width: number,
+  height: number,
+): RasterSelection | null {
+  if (typeof document === "undefined") return null;
+  const maskDataUrl = createRasterSelectionMaskDataUrl(selection, width, height);
+  if (!maskDataUrl) return null;
+  const source = getRasterSelectionMaskSource(maskDataUrl);
+  if (!source) return null;
+
+  const safeWidth = Math.max(1, Math.ceil(width));
+  const safeHeight = Math.max(1, Math.ceil(height));
+  const canvas = document.createElement("canvas");
+  canvas.width = safeWidth;
+  canvas.height = safeHeight;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.clearRect(0, 0, safeWidth, safeHeight);
+  context.drawImage(source, 0, 0, safeWidth, safeHeight);
+  const imageData = context.getImageData(0, 0, safeWidth, safeHeight);
+  imageData.data.set(invertSelectionAlpha(imageData.data));
+  context.putImageData(imageData, 0, 0);
+  const dataUrl = canvas.toDataURL("image/png");
+  registerRasterSelectionMask(dataUrl, canvas);
+  return {
+    width: safeWidth,
+    height: safeHeight,
+    operations: [
+      {
+        id: crypto.randomUUID(),
+        mode: "replace",
+        shape: { kind: "bitmap", dataUrl },
+      },
+    ],
+  };
+}
+
 function selectionMaskCacheKey(selection: RasterSelection, width: number, height: number): string {
   // Operation ids are stable for immutable selection snapshots. Avoid hashing
   // polygon/bitmap payloads on every render while still separating dimensions.
