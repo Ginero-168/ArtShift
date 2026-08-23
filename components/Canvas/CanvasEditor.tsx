@@ -19,6 +19,7 @@ import {
 } from "react";
 import { IconWand } from "@/components/icons";
 import { unionBBox } from "@/lib/engine/bounds";
+import { createEditorController } from "@/lib/engine/editorController";
 import {
   createDiamond,
   createEllipse,
@@ -68,9 +69,8 @@ import type {
   VectorPathElement,
 } from "@/lib/engine/types";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
-import { selectionForImage } from "@/lib/raster/activeSelection";
 import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
-import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
+import { createRasterStroke } from "@/lib/raster/mask";
 import {
   appendRasterPolygonPoint,
   canCommitRasterPolygon,
@@ -200,6 +200,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const clearSelection = useEngine((s) => s.clearSelection);
   const deleteElements = useEngine((s) => s.deleteElements);
   const updateElements = useEngine((s) => s.updateElements);
+  const currentSlide = useEngine((s) => s.currentSlide);
   const rasterBrushSize = useEngine((s) => s.rasterBrushSize);
   const rasterBrushOpacity = useEngine((s) => s.rasterBrushOpacity);
   const rasterBrushHardness = useEngine((s) => s.rasterBrushHardness);
@@ -207,7 +208,15 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterMagicWandTolerance = useEngine((s) => s.rasterMagicWandTolerance);
   const rasterQuickSelectionSize = useEngine((s) => s.rasterQuickSelectionSize);
   const activeRasterSelection = useEngine((s) => s.activeRasterSelection);
-  const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
+  const editorController = useMemo(
+    () =>
+      createEditorController({
+        currentSlide,
+        updateElements,
+        applyRasterSelection: useEngine.getState().applyRasterSelection,
+      }),
+    [currentSlide, updateElements],
+  );
 
   // Filter the slide elements by layerFilter ("all" | "block" | "free")
   const slide = useMemo(() => {
@@ -367,9 +376,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       }
 
       if (event.key !== "Enter" || !canCommitRasterPolygon(current.localPoints)) return;
-      const slideNow = useEngine
-        .getState()
-        .doc.slides.find((candidate) => candidate.id === useEngine.getState().currentSlideId);
+      const slideNow = currentSlide();
       const image = slideNow?.elements.find(
         (element): element is import("@/lib/engine/types").ImageElement =>
           element.id === current.elementId && element.type === "image",
@@ -382,11 +389,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         image.width,
         image.height,
       );
-      applyRasterSelection(
+      editorController.commitRasterSelection(
         image.id,
         createRasterSelectionOperation(current.mode, shape),
-        image.width,
-        image.height,
       );
       dragRef.current = null;
       setRasterSelectionDraft(null);
@@ -395,7 +400,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
 
     window.addEventListener("keydown", finishPolygon);
     return () => window.removeEventListener("keydown", finishPolygon);
-  }, [applyRasterSelection, selectOnly, tool]);
+  }, [currentSlide, editorController, selectOnly, tool]);
 
   usePasteDrop(containerRef, (x, y) => rootRef.current?.clientToWorld(x, y) ?? { x: 0, y: 0 });
 
@@ -550,7 +555,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           opacity: rasterBrushOpacity,
           hardness: isPencil ? 1 : rasterBrushHardness,
           color: rasterBrushColor,
-          selection: selectionForImage(activeRasterSelection, hit.id),
+          selection: editorController.selectionForImage(activeRasterSelection, hit.id),
         };
         setRasterBrushDraft({
           elementId: hit.id,
@@ -579,11 +584,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           ) {
             return;
           }
-          applyRasterSelection(
+          editorController.commitRasterSelection(
             hit.id,
             createRasterSelectionOperation(mode, shape),
-            hit.width,
-            hit.height,
           );
           selectOnly([hit.id]);
         };
@@ -688,7 +691,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     },
     [
       addElement,
-      applyRasterSelection,
       clearSelection,
       ctxMenu,
       deleteElements,
@@ -704,6 +706,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       rasterMagicWandTolerance,
       rasterQuickSelectionSize,
       activeRasterSelection,
+      editorController,
       setTool,
       slide,
       tool,
@@ -733,11 +736,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             image.width,
             image.height,
           );
-          applyRasterSelection(
+          editorController.commitRasterSelection(
             image.id,
             createRasterSelectionOperation(polygon.mode, shape),
-            image.width,
-            image.height,
           );
           dragRef.current = null;
           setRasterSelectionDraft(null);
@@ -780,7 +781,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         }
       }
     },
-    [applyRasterSelection, slide, addElement, selectOnly, setTool, setCroppingImageId, tool],
+    [editorController, slide, addElement, selectOnly, setTool, setCroppingImageId, tool],
   );
 
   const onPointerMove = useCallback(
@@ -1050,13 +1051,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             selection: d.selection,
             selectionMaskDataUrl: d.selectionMaskDataUrl,
           });
-          updateElements(
-            [
-              {
-                id: image.id,
-                patch: { rasterMask: appendRasterMaskStroke(image.rasterMask, stroke) },
-              },
-            ],
+          editorController.commitRasterStroke(
+            image.id,
+            stroke,
             d.mode === "erase" ? "erase image pixels" : "paint image pixels",
           );
         }
@@ -1073,11 +1070,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             kind: "bitmap",
             dataUrl: magicWandMaskToDataUrl(d.mask, d.imageData.width, d.imageData.height),
           };
-          applyRasterSelection(
+          editorController.commitRasterSelection(
             image.id,
             createRasterSelectionOperation(d.mode, shape),
-            image.width,
-            image.height,
           );
         }
         setRasterSelectionDraft(null);
@@ -1094,7 +1089,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         ) {
           const shape = selectionShapeFromPoints(d.shape, d.localPoints, image.width, image.height);
           const operation = createRasterSelectionOperation(d.mode, shape);
-          applyRasterSelection(image.id, operation, image.width, image.height);
+          editorController.commitRasterSelection(image.id, operation);
         }
         setRasterSelectionDraft(null);
         return;
@@ -1196,8 +1191,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       setTool,
       slide,
       tool,
-      updateElements,
-      applyRasterSelection,
+      editorController,
     ],
   );
 
@@ -1296,7 +1290,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         {rasterSelectionImage ? (
           <RasterSelectionOverlay
             image={rasterSelectionImage}
-            selection={selectionForImage(activeRasterSelection, rasterSelectionImage.id)}
+            selection={editorController.selectionForImage(
+              activeRasterSelection,
+              rasterSelectionImage.id,
+            )}
             draft={
               rasterSelectionDraft?.elementId === rasterSelectionImage.id
                 ? rasterSelectionDraft
