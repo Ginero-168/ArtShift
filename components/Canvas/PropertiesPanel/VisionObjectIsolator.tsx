@@ -115,6 +115,9 @@ async function detectAlphaObjectBoxes(
       minAreaRatio: quality === "accurate" ? 0.00025 : 0.0005,
       maxComponents: 64,
       padding: quality === "accurate" ? 3 : 2,
+      thinComponentMinArea: quality === "accurate" ? 12 : 8,
+      thinComponentMaxThickness: 8,
+      thinComponentMinLength: 12,
     }).map((component) => mapAlphaComponentToImage(component, tile, width, height));
   });
 

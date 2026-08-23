@@ -11,6 +11,9 @@ export type AlphaComponentOptions = {
   minAreaRatio?: number;
   maxComponents?: number;
   padding?: number;
+  thinComponentMinArea?: number;
+  thinComponentMaxThickness?: number;
+  thinComponentMinLength?: number;
 };
 
 export type AlphaTile = {
@@ -113,6 +116,9 @@ export function findAlphaComponents(
   const minArea = Math.max(1, Math.ceil(width * height * (options.minAreaRatio ?? 0.0005)));
   const maxComponents = Math.max(1, Math.floor(options.maxComponents ?? 64));
   const padding = Math.max(0, Math.floor(options.padding ?? 1));
+  const thinComponentMinArea = Math.max(0, Math.floor(options.thinComponentMinArea ?? 0));
+  const thinComponentMaxThickness = Math.max(1, Math.floor(options.thinComponentMaxThickness ?? 4));
+  const thinComponentMinLength = Math.max(1, Math.floor(options.thinComponentMinLength ?? 12));
   const pixelCount = width * height;
   const foreground = new Uint8Array(pixelCount);
   const visited = new Uint8Array(pixelCount);
@@ -159,7 +165,13 @@ export function findAlphaComponents(
       }
     }
 
-    if (area < minArea) continue;
+    const componentWidth = maxX - minX + 1;
+    const componentHeight = maxY - minY + 1;
+    const isThinComponent =
+      thinComponentMinArea > 0 &&
+      Math.min(componentWidth, componentHeight) <= thinComponentMaxThickness &&
+      Math.max(componentWidth, componentHeight) >= thinComponentMinLength;
+    if (area < minArea && (!isThinComponent || area < thinComponentMinArea)) continue;
     components.push({
       x_min: Math.max(0, (minX - padding) / width),
       y_min: Math.max(0, (minY - padding) / height),

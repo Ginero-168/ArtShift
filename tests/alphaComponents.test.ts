@@ -29,6 +29,24 @@ describe("alpha component extraction", () => {
     expect(boxes[0].area).toBe(9);
   });
 
+  it("keeps thin line-like foreground accessories below the normal area cutoff", () => {
+    const width = 512;
+    const height = 512;
+    const rgba = new Uint8ClampedArray(width * height * 4);
+    for (let y = 80; y < 130; y++) rgba[(y * width + 240) * 4 + 3] = 255;
+
+    const boxes = findAlphaComponents(rgba, width, height, {
+      minAreaRatio: 0.0005,
+      thinComponentMinArea: 8,
+      thinComponentMaxThickness: 8,
+      thinComponentMinLength: 12,
+      padding: 0,
+    });
+
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]).toMatchObject({ x_min: 240 / width, x_max: 241 / width });
+  });
+
   it("creates overlapping tiles that cover the full image", () => {
     expect(createAlphaTiles(1400, 900, 512, 64)).toEqual([
       { x: 0, y: 0, width: 512, height: 512 },

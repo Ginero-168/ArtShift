@@ -39,7 +39,7 @@ describe("hybrid vision object boxes", () => {
     const objects = mergeVisionWithAlphaComponents(
       [{ label: "cup", x_min: 0.2, y_min: 0.3, x_max: 0.5, y_max: 0.7 }],
       [
-        { x_min: 0.24, y_min: 0.32, x_max: 0.48, y_max: 0.7, area: 1000 },
+        { x_min: 0.24, y_min: 0.38, x_max: 0.48, y_max: 0.7, area: 1000 },
         { x_min: 0.31, y_min: 0.1, x_max: 0.34, y_max: 0.31, area: 20 },
       ],
     );

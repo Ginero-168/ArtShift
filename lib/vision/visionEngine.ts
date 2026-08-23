@@ -13,7 +13,7 @@ import {
   RawImage,
 } from "@huggingface/transformers";
 import type { VisionMask } from "./advancedVision";
-import { alphaBoundsFromRgba } from "./foreground";
+import { alphaBoundsFromRgba, shouldPreserveForegroundPixel } from "./foreground";
 
 env.allowLocalModels = false;
 
@@ -356,8 +356,14 @@ export async function cropImageRegionWithMask(
         const sourceY = Math.min(mask.height - 1, Math.floor(((sy + y) / naturalH) * mask.height));
         for (let x = 0; x < sw; x++) {
           const sourceX = Math.min(mask.width - 1, Math.floor(((sx + x) / naturalW) * mask.width));
-          if (mask.data[sourceY * mask.width + sourceX] === 0) {
-            pixels.data[(y * sw + x) * 4 + 3] = 0;
+          const pixelOffset = (y * sw + x) * 4;
+          if (
+            !shouldPreserveForegroundPixel(
+              pixels.data[pixelOffset + 3],
+              mask.data[sourceY * mask.width + sourceX],
+            )
+          ) {
+            pixels.data[pixelOffset + 3] = 0;
           }
         }
       }

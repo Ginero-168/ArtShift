@@ -4,6 +4,7 @@ import {
   alphaBoundsFromRgba,
   alphaCoverageFromRgba,
   hasUsableForeground,
+  shouldPreserveForegroundPixel,
 } from "@/lib/vision/foreground";
 
 describe("Vision AI Object Isolator & Calculations", () => {
@@ -62,6 +63,12 @@ describe("Vision AI Object Isolator & Calculations", () => {
     expect(coverage).toBe(0.5);
     expect(hasUsableForeground(0.005)).toBe(false);
     expect(hasUsableForeground(coverage)).toBe(true);
+  });
+
+  it("does not let a segmentation mask erase known foreground pixels", () => {
+    expect(shouldPreserveForegroundPixel(255, 0)).toBe(true);
+    expect(shouldPreserveForegroundPixel(0, 0)).toBe(false);
+    expect(shouldPreserveForegroundPixel(0, 255)).toBe(true);
   });
 
   it("uses the image cache key instead of a raw data URL for extracted objects", () => {

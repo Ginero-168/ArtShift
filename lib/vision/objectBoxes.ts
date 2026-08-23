@@ -153,7 +153,7 @@ function isNearbyAccessory(primary: NormalizedBox, candidate: NormalizedBox): bo
   const candidateArea = area(candidate);
   if (primaryArea <= 0 || candidateArea / primaryArea > 0.35) return false;
 
-  return accessoryDistance(primary, candidate) <= 0.04;
+  return accessoryDistance(primary, candidate) <= 0.08;
 }
 
 function accessoryDistance(primary: NormalizedBox, candidate: NormalizedBox): number {

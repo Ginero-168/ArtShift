@@ -62,3 +62,12 @@ export function alphaBoundsFromRgba(
 export function hasUsableForeground(coverage: number, minimum = 0.01): boolean {
   return Number.isFinite(coverage) && coverage >= minimum;
 }
+
+/** Keep foreground pixels that were already present before an optional segmentation mask. */
+export function shouldPreserveForegroundPixel(
+  sourceAlpha: number,
+  maskValue: number,
+  alphaThreshold = 8,
+): boolean {
+  return Number.isFinite(sourceAlpha) && (sourceAlpha >= alphaThreshold || maskValue > 0);
+}
