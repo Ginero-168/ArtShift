@@ -6,7 +6,6 @@ import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement } from "@/lib/engine/types";
-import { createAlphaMaskDataUrl, createRasterSelectionOperation } from "@/lib/raster/selection";
 import {
   VECTORIZE_PRESET_CONFIGS,
   VectorizeCancelledError,
@@ -136,8 +135,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const addElement = useEngine((s) => s.addElement);
   const addElements = useEngine((s) => s.addElements);
   const selectOnly = useEngine((s) => s.selectOnly);
-  const setTool = useEngine((s) => s.setTool);
-  const setRasterSelection = useEngine((s) => s.setRasterSelection);
   const updateElements = useEngine((s) => s.updateElements);
   const rasterExecutionMode = useEngine((s) => s.rasterExecutionMode);
 
@@ -322,52 +319,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     } catch (err) {
       console.warn("Remove BG failed:", err);
       setStatusMessage("Failed to remove background: " + (err as Error).message);
-    } finally {
-      setBusy(false);
-      setProgress(null);
-    }
-  };
-
-  const handleAutoSelectSubject = async () => {
-    const cached = getCached(element.fileId);
-    if (!cached?.dataURL) {
-      setStatusMessage("Image data not found in cache");
-      return;
-    }
-
-    setBusy(true);
-    setProgress(0);
-    setStatusMessage("Selecting subject locally...");
-
-    try {
-      const foregroundUrl = isForegroundForSource(
-        element.fileId,
-        detectedForegroundFileId,
-        detectedForegroundUrl,
-      )
-        ? detectedForegroundUrl
-        : await removeBackground(cached.dataURL, {
-            mode: rasterExecutionMode,
-            allowRemoteFallback: false,
-            onProgress: (value) => setProgress(Math.round(value * 100)),
-          });
-      const maskDataUrl = await createAlphaMaskDataUrl(foregroundUrl);
-      setRasterSelection(element.id, {
-        width: element.width,
-        height: element.height,
-        operations: [
-          createRasterSelectionOperation("replace", {
-            kind: "bitmap",
-            dataUrl: maskDataUrl,
-          }),
-        ],
-      });
-      selectOnly([element.id]);
-      setTool("rasterMarquee");
-      setStatusMessage("Subject selected locally. You can refine or add to the selection.");
-    } catch (err) {
-      console.warn("Auto Select Subject failed:", err);
-      setStatusMessage("Auto Select Subject failed: " + (err as Error).message);
     } finally {
       setBusy(false);
       setProgress(null);
@@ -788,40 +739,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           {busy ? "Processing..." : "Extract Fast"}
         </button>
       </div>
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={handleAutoSelectSubject}
-        title={
-          rasterExecutionMode === "eco"
-            ? "Select the main subject locally without uploading the image"
-            : "Select the main subject with the Fast API"
-        }
-        style={{
-          width: "100%",
-          marginTop: 4,
-          padding: "5px 8px",
-          background: "rgba(16, 185, 129, 0.1)",
-          color: "#047857",
-          border: "1px solid rgba(16, 185, 129, 0.35)",
-          borderRadius: 5,
-          fontWeight: 700,
-          fontSize: 10,
-          cursor: busy ? "wait" : "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 4,
-        }}
-      >
-        <span>✦</span>
-        <span>
-          {busy
-            ? "Selecting..."
-            : `Auto Select Subject · ${rasterExecutionMode === "eco" ? "Local" : "Fast"}`}
-        </span>
-      </button>
 
       <div
         style={{
