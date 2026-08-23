@@ -1,6 +1,6 @@
 import { appendRasterMaskStroke } from "../raster/mask";
 import type { RasterSelection, RasterSelectionOperation } from "../raster/selection";
-import type { RasterMaskStroke } from "../raster/types";
+import type { RasterMaskStroke, RasterRetouchEdit } from "../raster/types";
 import { applySelection } from "./selection";
 import type { EngineSlide, ImageElement } from "./types";
 
@@ -27,6 +27,8 @@ export type EditorController = {
   ): string[];
   /** Append one non-destructive Raster stroke as one document mutation. */
   commitRasterStroke(imageId: string, stroke: RasterMaskStroke, label?: string): boolean;
+  /** Append one bounded derived Healing/Clone patch as one document mutation. */
+  commitRasterRetouch(imageId: string, edit: RasterRetouchEdit, label?: string): boolean;
   /** Commit a Selection operation using dimensions owned by the image model. */
   commitRasterSelection(imageId: string, operation: RasterSelectionOperation): boolean;
   /** Return the active Selection only when it belongs to the requested image. */
@@ -76,6 +78,16 @@ export function createEditorController(actions: EditorControllerActions): Editor
       const image = imageFor(imageId);
       if (!image) return false;
       actions.applyRasterSelection(image.id, operation, image.width, image.height);
+      return true;
+    },
+
+    commitRasterRetouch(imageId, edit, label = `${edit.mode} image pixels`) {
+      const image = imageFor(imageId);
+      if (!image) return false;
+      actions.updateElements(
+        [{ id: image.id, patch: { rasterEdits: [...(image.rasterEdits ?? []), edit] } }],
+        label,
+      );
       return true;
     },
 

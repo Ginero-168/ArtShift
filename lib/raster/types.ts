@@ -22,3 +22,16 @@ export type RasterMaskStroke = {
   /** Legacy serialized mask. New strokes use `selection` to avoid a PNG per stroke. */
   selectionMaskDataUrl?: string;
 };
+
+/** A bounded derived patch for Healing/Clone Stamp. The source image remains untouched. */
+export type RasterRetouchEdit = {
+  id: string;
+  mode: "heal" | "clone";
+  dataUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  selection?: RasterSelection;
+};

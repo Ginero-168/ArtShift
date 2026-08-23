@@ -11,7 +11,6 @@
 
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { ColorAdjustments } from "../color/adjustments";
-import { applyColorAdjustments } from "../color/adjustments";
 import { resolveMultiGradientStops } from "../color/swatches";
 import { getFramePolaroidCutout, traceFrameShapePath } from "../engine/frameMask";
 import { freedrawPath } from "../engine/freehand";
@@ -32,9 +31,11 @@ import type {
   ImageElement,
   TextElement,
 } from "../engine/types";
+import { getRasterRetouchSource } from "../raster/retouchSource";
 import { createRasterSelectionMaskDataUrl } from "../raster/selection";
 import { getRasterSelectionMaskSource } from "../raster/selectionMask";
-import type { RasterMaskStroke } from "../raster/types";
+import type { RasterMaskStroke, RasterRetouchEdit } from "../raster/types";
+import { getRasterAdjustedImage, getRasterAdjustedImageSync } from "./adjustmentCache";
 import { drawBookMockup } from "./bookMockup";
 import { getCachedElement, setCachedElement } from "./cache";
 
@@ -42,6 +43,8 @@ export type RenderCtx = {
   ctx: CanvasRenderingContext2D;
   /** Optional image cache keyed by `ImageElement.fileId`. */
   images?: Map<string, HTMLImageElement>;
+  /** Defer pixel filters to the Worker; exports leave this false for determinism. */
+  deferRasterJobs?: boolean;
 };
 
 let _rcCanvas: HTMLCanvasElement | null = null;
@@ -539,10 +542,6 @@ function roundedRectPath(
   ctx.closePath();
 }
 
-type AdjustedImage = { canvas: HTMLCanvasElement; scaleX: number; scaleY: number };
-const _adjCache = new Map<string, AdjustedImage>();
-const MAX_ADJUSTMENT_CACHE_ENTRIES = 24;
-
 function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: RenderCtx) {
   const img = render.images?.get(el.fileId);
   if (!img?.complete || img.naturalWidth === 0) {
@@ -559,37 +558,9 @@ function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: Rend
 
   // Apply color adjustments if present
   if (el.adjustments && Object.keys(el.adjustments).length > 0) {
-    const cacheKey = `${el.fileId}:${stableStringify(el.adjustments)}`;
-    let adjusted = _adjCache.get(cacheKey);
-    if (!adjusted) {
-      const maxDimension = 4096;
-      const ratio = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * ratio));
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * ratio));
-      const adjCtx = canvas.getContext("2d")!;
-      try {
-        adjCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const imageData = adjCtx.getImageData(0, 0, canvas.width, canvas.height);
-        applyColorAdjustments(imageData, el.adjustments as Partial<ColorAdjustments>);
-        adjCtx.putImageData(imageData, 0, 0);
-        adjusted = {
-          canvas,
-          scaleX: canvas.width / Math.max(1, img.naturalWidth),
-          scaleY: canvas.height / Math.max(1, img.naturalHeight),
-        };
-        _adjCache.set(cacheKey, adjusted);
-        while (_adjCache.size > MAX_ADJUSTMENT_CACHE_ENTRIES) {
-          const oldest = _adjCache.keys().next().value;
-          if (!oldest) break;
-          _adjCache.delete(oldest);
-        }
-      } catch {
-        // A remote server may deny pixel reads. Keep the original image usable
-        // and leave adjustments pending instead of crashing the render loop.
-        adjusted = undefined;
-      }
-    }
+    const adjusted = render.deferRasterJobs
+      ? getRasterAdjustedImage(el.fileId, img, el.adjustments as Partial<ColorAdjustments>)
+      : getRasterAdjustedImageSync(el.fileId, img, el.adjustments as Partial<ColorAdjustments>);
     if (adjusted) {
       drawSrc = adjusted.canvas;
       sourceScaleX = adjusted.scaleX;
@@ -617,7 +588,61 @@ function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, render: Rend
   }
   ctx.filter = "none";
   applyRasterMask(ctx, el.rasterMask, el);
+  applyRasterRetouch(ctx, el.rasterEdits, el);
   ctx.restore();
+}
+
+function applyRasterRetouch(
+  ctx: CanvasRenderingContext2D,
+  edits: RasterRetouchEdit[] | undefined,
+  element: ImageElement,
+) {
+  if (!edits?.length) return;
+  for (const edit of edits) {
+    const source = getRasterRetouchSource(edit.dataUrl);
+    if (!source) continue;
+    const selectionMaskDataUrl = edit.selection
+      ? createRasterSelectionMaskDataUrl(edit.selection, element.width, element.height)
+      : undefined;
+    if (edit.selection && !selectionMaskDataUrl) continue;
+    const selectionMask = selectionMaskDataUrl
+      ? getRasterSelectionMaskSource(selectionMaskDataUrl)
+      : undefined;
+    if (edit.selection && !selectionMask) continue;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.05, Math.min(1, edit.opacity));
+    if (selectionMask) {
+      const layer = document.createElement("canvas");
+      layer.width = ctx.canvas.width;
+      layer.height = ctx.canvas.height;
+      const layerContext = layer.getContext("2d");
+      if (!layerContext) {
+        ctx.restore();
+        continue;
+      }
+      const transform = ctx.getTransform();
+      layerContext.setTransform(
+        transform.a,
+        transform.b,
+        transform.c,
+        transform.d,
+        transform.e,
+        transform.f,
+      );
+      layerContext.globalAlpha = ctx.globalAlpha;
+      layerContext.drawImage(source, edit.x, edit.y, edit.width, edit.height);
+      layerContext.globalAlpha = 1;
+      layerContext.globalCompositeOperation = "destination-in";
+      layerContext.drawImage(selectionMask, 0, 0, element.width, element.height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(layer, 0, 0);
+    } else {
+      ctx.drawImage(source, edit.x, edit.y, edit.width, edit.height);
+    }
+    ctx.restore();
+  }
 }
 
 function applyRasterMask(
@@ -1217,17 +1242,4 @@ function drawPattern(
     }
   }
   ctx.globalAlpha = 1;
-}
-
-function stableStringify(obj: Record<string, unknown>): string {
-  const keys = Object.keys(obj).sort();
-  const sorted: Record<string, unknown> = {};
-  for (const key of keys) {
-    const value = obj[key];
-    sorted[key] =
-      typeof value === "object" && value !== null && !Array.isArray(value)
-        ? stableStringify(value as Record<string, unknown>)
-        : value;
-  }
-  return JSON.stringify(sorted);
 }

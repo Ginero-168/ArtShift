@@ -59,6 +59,7 @@ import {
 import {
   isRasterBrushCursorTool,
   isRasterPaintTool,
+  isRasterRetouchTool,
   isRasterSelectionTool,
   pointerPressure,
   toolToCursor,
@@ -73,6 +74,7 @@ import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
 import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { getRasterProcessor } from "@/lib/raster/processorFactory";
+import { createRasterRetouchEdit } from "@/lib/raster/retouch";
 import {
   appendRasterPolygonPoint,
   canCommitRasterPolygon,
@@ -104,6 +106,7 @@ import Guides from "./Guides";
 import Marquee from "./Marquee";
 import PathNodeOverlay from "./PathNodeOverlay";
 import PenLiveOverlay from "./PenLiveOverlay";
+import RasterPerformanceOverlay from "./RasterPerformanceOverlay";
 import RasterSelectionOverlay from "./RasterSelectionOverlay";
 import SafeAreaOverlay, { type SafeAreaMode } from "./SafeAreaOverlay";
 import TextOverlay from "./TextOverlay";
@@ -145,6 +148,17 @@ type DragState =
       color: string;
       selection?: RasterSelection;
       selectionMaskDataUrl?: string;
+    }
+  | {
+      kind: "rasterRetouch";
+      elementId: string;
+      mode: "heal" | "clone";
+      localPoints: Array<[number, number]>;
+      worldPoints: WorldPoint[];
+      sourcePoint?: [number, number];
+      size: number;
+      opacity: number;
+      selection?: RasterSelection;
     }
   | {
       kind: "rasterSelection";
@@ -312,6 +326,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterSelectionRequestRef = useRef(0);
   const rasterBrushCursorRef = useRef<HTMLDivElement | null>(null);
   const magicWandCursorRef = useRef<HTMLDivElement | null>(null);
+  const rasterCloneSourcesRef = useRef(new Map<string, [number, number]>());
   const images = getImageCache();
 
   const moveRasterBrushCursor = useCallback((point: { x: number; y: number }) => {
@@ -607,6 +622,40 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           hardness: isPencil ? 1 : rasterBrushHardness,
           color: rasterBrushColor,
           mode: isEraser ? "erase" : "paint",
+        });
+        return;
+      }
+
+      if (isRasterRetouchTool(tool)) {
+        const hit = pickTopMost(p, slide);
+        if (hit?.type !== "image") return;
+        selectOnly([hit.id]);
+        const local = worldToImageLocal(p, hit);
+        if (tool === "rasterClone" && e.altKey) {
+          rasterCloneSourcesRef.current.set(hit.id, local);
+          return;
+        }
+        const mode = tool === "rasterHealing" ? "heal" : "clone";
+        dragRef.current = {
+          kind: "rasterRetouch",
+          elementId: hit.id,
+          mode,
+          localPoints: [local],
+          worldPoints: [p],
+          sourcePoint: rasterCloneSourcesRef.current.get(hit.id),
+          size: rasterBrushSize,
+          opacity: rasterBrushOpacity,
+          selection: editorController.selectionForImage(activeRasterSelection, hit.id),
+        };
+        setRasterBrushDraft({
+          elementId: hit.id,
+          points: [p],
+          pressures: [1],
+          size: rasterBrushSize,
+          opacity: rasterBrushOpacity,
+          hardness: rasterBrushHardness,
+          color: "#64748b",
+          mode: "paint",
         });
         return;
       }
@@ -968,6 +1017,29 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         });
         return;
       }
+      if (d.kind === "rasterRetouch") {
+        const image = slide.elements.find(
+          (element): element is import("@/lib/engine/types").ImageElement =>
+            element.id === d.elementId && element.type === "image",
+        );
+        if (!image) return;
+        const local = worldToImageLocal(p, image);
+        const last = d.localPoints.at(-1);
+        if (last && Math.hypot(local[0] - last[0], local[1] - last[1]) < 2 / view.scale) return;
+        d.localPoints.push(local);
+        d.worldPoints.push(p);
+        setRasterBrushDraft({
+          elementId: d.elementId,
+          points: [...d.worldPoints],
+          pressures: d.worldPoints.map(() => 1),
+          size: d.size,
+          opacity: d.opacity,
+          hardness: rasterBrushHardness,
+          color: "#64748b",
+          mode: "paint",
+        });
+        return;
+      }
       if (d.kind === "rasterQuickSelection") {
         const image = slide.elements.find(
           (element): element is import("@/lib/engine/types").ImageElement =>
@@ -1098,6 +1170,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       snapGrid,
       tool,
       view.scale,
+      rasterBrushHardness,
     ],
   );
 
@@ -1175,6 +1248,35 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             stroke,
             d.mode === "erase" ? "erase image pixels" : "paint image pixels",
           );
+        }
+        setRasterBrushDraft(null);
+        return;
+      }
+      if (d.kind === "rasterRetouch") {
+        const image = slide?.elements.find(
+          (element): element is import("@/lib/engine/types").ImageElement =>
+            element.id === d.elementId && element.type === "image",
+        );
+        if (image) {
+          const pixels = createRasterSelectionSample(image, images);
+          if (pixels) {
+            void createRasterRetouchEdit(image, pixels, {
+              mode: d.mode,
+              points: d.localPoints,
+              sourcePoint: d.sourcePoint,
+              size: d.size,
+              opacity: d.opacity,
+              selection: d.selection,
+            }).then((edit) => {
+              if (edit) {
+                editorController.commitRasterRetouch(
+                  image.id,
+                  edit,
+                  d.mode === "heal" ? "heal image pixels" : "clone image pixels",
+                );
+              }
+            });
+          }
         }
         setRasterBrushDraft(null);
         return;
@@ -1296,6 +1398,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       slide,
       tool,
       editorController,
+      images,
     ],
   );
 
@@ -1580,6 +1683,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           />
         ) : null}
       </CanvasRoot>
+      <RasterPerformanceOverlay />
       {ctxMenu && <ContextMenu position={ctxMenu} onClose={() => setCtxMenu(null)} />}
 
       {/* Floating Safe Area Guide Widget */}

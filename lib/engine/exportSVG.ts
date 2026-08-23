@@ -190,6 +190,13 @@ function serializeText(element: Extract<EngineElement, { type: "text" }>): strin
 
 function serializeImage(element: Extract<EngineElement, { type: "image" }>): string {
   const href = getCached(element.fileId)?.dataURL ?? "";
+  const retouch = (offsetX = 0, offsetY = 0) =>
+    (element.rasterEdits ?? [])
+      .map(
+        (edit) =>
+          `<image href="${escapeXml(edit.dataUrl)}" x="${n(edit.x + offsetX)}" y="${n(edit.y + offsetY)}" width="${n(edit.width)}" height="${n(edit.height)}" opacity="${n(edit.opacity)}" preserveAspectRatio="none"/>`,
+      )
+      .join("");
   const clip =
     element.mask && element.mask.shape !== "rect"
       ? ` clip-path="url(#mask-${escapeId(element.id)})"`
@@ -199,12 +206,12 @@ function serializeImage(element: Extract<EngineElement, { type: "image" }>): str
     ? ` data-artshift-adjustments="${escapeXml(JSON.stringify(element.adjustments))}"`
     : "";
   if (!href) {
-    return `<rect width="${n(element.width)}" height="${n(element.height)}" fill="#e5e7eb"${clip}${filter}${adjustmentData}/>`;
+    return `<g><rect width="${n(element.width)}" height="${n(element.height)}" fill="#e5e7eb"${clip}${filter}${adjustmentData}/>${retouch()}</g>`;
   }
   if (element.crop) {
-    return `<svg width="${n(element.width)}" height="${n(element.height)}" viewBox="${n(element.crop.x)} ${n(element.crop.y)} ${n(element.crop.width)} ${n(element.crop.height)}" preserveAspectRatio="none"${clip}${filter}${adjustmentData}><image href="${escapeXml(href)}" width="${n(element.naturalWidth)}" height="${n(element.naturalHeight)}"/></svg>`;
+    return `<svg width="${n(element.width)}" height="${n(element.height)}" viewBox="${n(element.crop.x)} ${n(element.crop.y)} ${n(element.crop.width)} ${n(element.crop.height)}" preserveAspectRatio="none"${clip}${filter}${adjustmentData}><image href="${escapeXml(href)}" width="${n(element.naturalWidth)}" height="${n(element.naturalHeight)}"/>${retouch(element.crop.x, element.crop.y)}</svg>`;
   }
-  return `<image href="${escapeXml(href)}" width="${n(element.width)}" height="${n(element.height)}" preserveAspectRatio="none"${clip}${filter}${adjustmentData}/>`;
+  return `<g><image href="${escapeXml(href)}" width="${n(element.width)}" height="${n(element.height)}" preserveAspectRatio="none"${clip}${filter}${adjustmentData}/>${retouch()}</g>`;
 }
 
 function elementDefinition(element: EngineElement): string[] {

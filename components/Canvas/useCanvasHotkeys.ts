@@ -54,7 +54,9 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
     (st.tool === "rasterBrush" ||
       st.tool === "rasterPencil" ||
       st.tool === "rasterEraser" ||
-      st.tool === "rasterQuickSelection")
+      st.tool === "rasterQuickSelection" ||
+      st.tool === "rasterHealing" ||
+      st.tool === "rasterClone")
   ) {
     event.preventDefault();
     if (st.tool === "rasterQuickSelection") {

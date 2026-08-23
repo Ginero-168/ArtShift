@@ -188,6 +188,28 @@ export const IconWand = (p: Props) =>
     p,
   );
 
+export const IconHealing = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="m5 19 14-14" />
+      <path d="m8 6 10 10" />
+      <path d="M4 12h4M16 12h4M12 4v4M12 16v4" />
+    </>,
+    p,
+  );
+
+export const IconClone = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <circle cx="8" cy="8" r="4" />
+      <circle cx="16" cy="16" r="4" />
+      <path d="M11 11 13 13" />
+    </>,
+    p,
+  );
+
 export const IconReturn = (p: Props) =>
   svg(
     p.size,

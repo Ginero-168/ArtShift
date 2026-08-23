@@ -1,9 +1,17 @@
 # Platform seams
 
-ArtShift keeps raster processing, file access, persistence, and AI transport behind small ports. The browser adapters are the default implementation today; a Tauri desktop build can provide native adapters without changing EditorController or RasterProcessor consumers.
+ArtShift keeps the editor and document model independent from the runtime that
+hosts it. The shared boundary is `lib/platform/services.ts`:
 
-- `lib/raster/processor.ts`: Local and API raster implementations share one job contract.
-- `lib/raster/opencvJsAdapter.ts`: OpenCV.js is lazy-loaded only for advanced local retouch jobs; the base editor does not pay the WASM startup cost.
-- `lib/platform/fileSystem.ts`: import/export bytes and native file dialogs.
-- `lib/platform/persistence.ts`: autosave and project persistence.
-- `lib/platform/aiTransport.ts`: remote AI requests and desktop-local transports.
+- `FileSystemPort` owns open/save bytes.
+- `PersistencePort` owns project/session persistence.
+- `AiTransportPort` owns network AI requests.
+- `RasterProcessor` owns pixel jobs and has Local/Eco and API/Fast adapters.
+
+The browser currently provides the default implementations. A future Tauri
+shell should provide native implementations at its entry point and inject them
+through `PlatformServicesFactory`. It should not import Tauri APIs from React
+components or the Zustand store.
+
+This keeps desktop work on a separate branch and prevents a native filesystem
+or transport decision from coupling the web editor to a single deployment.

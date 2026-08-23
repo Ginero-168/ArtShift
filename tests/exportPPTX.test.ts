@@ -52,5 +52,22 @@ describe("PPTX mixed-ratio export", () => {
         ],
       }),
     ).toBe(true);
+    expect(
+      shouldRasterizeImageForPptx({
+        ...image,
+        rasterEdits: [
+          {
+            id: "edit-1",
+            mode: "heal",
+            dataUrl: "data:image/png;base64,AAAA",
+            x: 10,
+            y: 10,
+            width: 20,
+            height: 20,
+            opacity: 1,
+          },
+        ],
+      }),
+    ).toBe(true);
   });
 });

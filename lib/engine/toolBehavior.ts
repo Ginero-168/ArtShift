@@ -13,6 +13,8 @@ export function toolToCursor(tool: Tool): string {
     case "rasterEraser":
     case "rasterPencil":
     case "rasterBrush":
+    case "rasterHealing":
+    case "rasterClone":
       return "none";
     case "rasterMarquee":
     case "rasterEllipse":
@@ -56,8 +58,17 @@ export function isRasterPaintTool(tool: Tool): boolean {
   return tool === "rasterEraser" || tool === "rasterPencil" || tool === "rasterBrush";
 }
 
+export function isRasterRetouchTool(tool: Tool): boolean {
+  return tool === "rasterHealing" || tool === "rasterClone";
+}
+
 export function isRasterBrushCursorTool(tool: Tool): boolean {
-  return isRasterPaintTool(tool) || tool === "rasterQuickSelection";
+  return (
+    isRasterPaintTool(tool) ||
+    tool === "rasterQuickSelection" ||
+    tool === "rasterHealing" ||
+    tool === "rasterClone"
+  );
 }
 
 export function pointerPressure(sample: { pointerType: string; pressure: number }): number {

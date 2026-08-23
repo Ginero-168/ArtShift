@@ -17,4 +17,6 @@ export const RASTER_TOOL_HOTKEYS: RasterToolHotkey[] = [
   { id: "rasterPolygonLasso", key: "l", shiftKey: true },
   { id: "rasterMagicWand", key: "w" },
   { id: "rasterEraser", key: "e" },
+  { id: "rasterHealing", key: "j" },
+  { id: "rasterClone", key: "s" },
 ];

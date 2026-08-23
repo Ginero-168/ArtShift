@@ -99,6 +99,8 @@ describe("raster selection model", () => {
       { id: "rasterPolygonLasso", key: "l", shiftKey: true },
       { id: "rasterMagicWand", key: "w" },
       { id: "rasterEraser", key: "e" },
+      { id: "rasterHealing", key: "j" },
+      { id: "rasterClone", key: "s" },
     ]);
   });
 });

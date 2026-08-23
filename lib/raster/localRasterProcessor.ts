@@ -9,20 +9,31 @@ import {
   type RasterResult,
 } from "./processor";
 import { canRunRasterWorker, executeRasterJobInWorker } from "./rasterWorkerClient";
+import { recordRasterJob } from "./telemetry";
 
 let processor: LocalRasterProcessor | null = null;
 
 export class LocalRasterProcessor implements RasterProcessor {
   execute(job: RasterJob, options: RasterJobOptions = {}): Promise<RasterResult> {
-    if (canRunRasterWorker()) {
-      return executeRasterJobInWorker(job, options).catch((error) => {
-        if (error instanceof RasterJobBudgetError || error instanceof RasterJobCancelledError) {
-          throw error;
-        }
-        return executeRasterJobLocallyAsync(job, options);
-      });
-    }
-    return executeRasterJobLocallyAsync(job, options);
+    const started = now();
+    const execute = canRunRasterWorker()
+      ? executeRasterJobInWorker(job, options).catch((error) => {
+          if (error instanceof RasterJobBudgetError || error instanceof RasterJobCancelledError) {
+            throw error;
+          }
+          return executeRasterJobLocallyAsync(job, options);
+        })
+      : executeRasterJobLocallyAsync(job, options);
+    return execute.then(
+      (result) => {
+        recordRasterJob(job.kind, now() - started, true);
+        return result;
+      },
+      (error) => {
+        recordRasterJob(job.kind, now() - started, false);
+        throw error;
+      },
+    );
   }
 
   capabilities(): RasterCapabilities {
@@ -36,6 +47,10 @@ export class LocalRasterProcessor implements RasterProcessor {
       jobKinds: ["magicWand", "quickSelection", "selectionMask", "filter", "thumbnail"],
     };
   }
+}
+
+function now(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
 }
 
 export function getLocalRasterProcessor(): LocalRasterProcessor {

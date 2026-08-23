@@ -117,6 +117,8 @@ export type Tool =
   | "rasterPolygonLasso"
   | "rasterMagicWand"
   | "rasterQuickSelection"
+  | "rasterHealing"
+  | "rasterClone"
   | "frame";
 
 export type LayerFilter = "all" | "block" | "free";

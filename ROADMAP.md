@@ -54,7 +54,7 @@ the existing vector, layout, campaign, and export workflows unstable.
 |---|---|---|
 | **Raster Core v1** | One active pixel Selection model, shared by Delete, Brush, Pencil and Eraser | Complete — one Selection seam, undo/redo snapshots for Selection state, and one raster edit transaction per committed stroke/job |
 | **Raster Performance v1** | Worker/OffscreenCanvas jobs, cancellation, progress, pixel/memory budgets, benchmark | Complete foundation — Magic Wand and Quick Selection leave the pointer path; generic jobs cover selection masks, filters and thumbnails; cancellation yields during long jobs and Slide Rail thumbnails use the async processor |
-| **Raster Retouch v1** | Marching ants, feather, invert, transform selection, Auto Subject and Healing spike | Complete spike — mask-boundary overlay, OpenCV.js lazy loader, `cv.inpaint` Healing adapter and GrabCut Auto Subject adapter are available behind an optional seam |
+| **Raster Retouch v1** | Marching ants, feather, invert, transform selection, Auto Subject, Healing and Clone | Complete v1 — Auto Subject is wired into Raster options; Healing and Clone commit bounded non-destructive patches with one undo transaction per job |
 | **Eco/Fast adapters** | Local Worker/WASM path and API path with the same job contract | Complete — `RasterProcessor` plus Local/API implementations, selectable UI mode, and an optional paid provider configured through `RASTER_API_URL` |
 | **Desktop seam** | File System, Persistence and AI Transport ports before Tauri | Complete — browser adapters are isolated; Tauri implementation can be added independently |
 | **Modernization experiment** | Next 16, TypeScript 6, and no custom webpack in a separate branch | Complete experiment — see `codex/artshift-modernization-next16-ts6` |
@@ -75,8 +75,13 @@ the existing vector, layout, campaign, and export workflows unstable.
   `npm run benchmark:raster`.
 - Raster Retouch v1: bitmap Selection feedback traces the mask boundary for
   marching ants; Invert, Feather and Transform Selection are available from
-  the canvas context menu; `opencvJsAdapter.ts` lazy-loads the optional
-  OpenCV.js WASM runtime for inpainting and GrabCut subject masks.
+  the canvas context menu; Auto Subject is exposed beside Magic Wand and
+  Quick Selection; Healing and Clone use bounded non-destructive patches;
+  `opencvJsAdapter.ts` lazy-loads OpenCV.js for inpainting and GrabCut subject
+  masks, with a deterministic local clone fallback.
+- Raster observability: append `?perf=1` to the editor URL for the opt-in
+  Worker/API telemetry HUD. The HUD reports p95, last duration and failures
+  per raster job without adding production UI weight.
 - Eco/Fast and Desktop: the editor can switch between local and API raster
   processing. Fast can forward the same bounded job payload to a paid provider
   through `RASTER_API_URL`, while platform ports keep file access, persistence

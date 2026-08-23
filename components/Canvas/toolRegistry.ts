@@ -2,12 +2,14 @@ import {
   IconArrow,
   IconBrush,
   IconCircle,
+  IconClone,
   IconCursor,
   IconDiamond,
   IconDirectSelect,
   IconEraser,
   IconFreedraw,
   IconHand,
+  IconHealing,
   IconHeart,
   IconHexagon,
   IconImage,
@@ -127,6 +129,18 @@ export const RASTER_TOOL_DEFINITIONS: ToolDefinition[] = [
     title: "Raster Eraser (E, [ / ])",
     ...shortcutFor("rasterEraser"),
   },
+  {
+    id: "rasterHealing",
+    icon: IconHealing,
+    label: "Healing",
+    title: "Repair pixels with Healing Brush",
+  },
+  {
+    id: "rasterClone",
+    icon: IconClone,
+    label: "Clone",
+    title: "Clone pixels from an Alt-click source",
+  },
 ];
 
 export const SHAPE_TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -156,4 +170,6 @@ export const TOOLS_WITH_OPTIONS = new Set<Tool>([
   "rasterEraser",
   "rasterMagicWand",
   "rasterQuickSelection",
+  "rasterHealing",
+  "rasterClone",
 ]);

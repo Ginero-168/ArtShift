@@ -1338,7 +1338,10 @@ function ImageAdjustments({
           type="button"
           className={styles.textButton}
           onClick={() =>
-            apply({ adjustments: {}, filterBlur: 0, rasterMask: [] }, "reset image adjustments")
+            apply(
+              { adjustments: {}, filterBlur: 0, rasterMask: [], rasterEdits: [] },
+              "reset image adjustments",
+            )
           }
         >
           Reset
@@ -1363,6 +1366,17 @@ function ImageAdjustments({
             Clear
           </button>
         </div>
+      </div>
+      <div className={styles.metaRow}>
+        <span>Retouch patches</span>
+        <button
+          type="button"
+          className={styles.textButton}
+          disabled={!element.rasterEdits?.length}
+          onClick={() => apply({ rasterEdits: [] }, "clear retouch patches")}
+        >
+          Clear {element.rasterEdits?.length ? `(${element.rasterEdits.length})` : ""}
+        </button>
       </div>
       <label className={styles.field}>
         <span>Image mask</span>

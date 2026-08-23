@@ -225,14 +225,14 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       element.visible !== false &&
       !hiddenLayerObjectIds.has(element.id);
 
-    renderSlide(slide, { ctx, images }, slideW, slideH, {
+    renderSlide(slide, { ctx, images, deferRasterJobs: true }, slideW, slideH, {
       showFrames: true,
       afterBackground: () =>
         showHexGrid
           ? drawHexPlacementUI(ctx, slide, activeLayerId, selectedIds, view.scale)
           : undefined,
     });
-    if (draftElement) renderElement(draftElement, { ctx, images });
+    if (draftElement) renderElement(draftElement, { ctx, images, deferRasterJobs: true });
 
     if (snapGrid) {
       ctx.fillStyle = "rgba(0, 0, 0, 0.08)";

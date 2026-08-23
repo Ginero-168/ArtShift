@@ -15,7 +15,7 @@ Runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`).
 | **Dual-mode layers** | A Layer owns many objects and can switch freely between precise Free placement and adaptive hexagonal Block layout |
 | **Artwork variants** | Create any custom size while retaining content identity, then synchronize content and appearance without destroying each variant's layout |
 | **Vector workflow** | Pen paths, draggable nodes, smoothing, gradients, clipping frames, shapes, arrows, grouping and layer stacking |
-| **Image workflow** | Aspect-safe media bounds, crop, shape masks, linked local sources, blur, blend modes and 12 non-destructive color adjustments |
+| **Image workflow** | Aspect-safe media bounds, crop, shape masks, linked local sources, blur, blend modes, 12 non-destructive color adjustments, shared Selection, Auto Subject, Healing and Clone patches |
 | **Thai typography** | Shared Thai-aware layout for the editor, templates and renderer with safe padding and automatic text-box growth |
 | **Templates** | Explicit Replace Artwork or Add as Layer application; template assets are materialized before one atomic document update |
 | **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
@@ -100,6 +100,7 @@ lib/
     linkedAssets.ts        File System Access API adapter for linked images
     exportSVG.ts           Editable SVG serializer
   renderer/canvas.ts       Shared editor, thumbnail and raster-export renderer
+  raster/                  Selection, Worker jobs, Eco/Fast processors and retouch adapters
   vision/visionEngine.ts   Florence-2 local vision (client-side)
   color/adjustments.ts     12-slider pixel-level color pipeline
   ai/removeBg.ts           Background removal client

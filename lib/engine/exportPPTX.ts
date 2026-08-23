@@ -139,6 +139,7 @@ export function shouldRasterizeImageForPptx(el: ImageElement): boolean {
       (el.adjustments && Object.keys(el.adjustments).length > 0) ||
       (el.filterBlur ?? 0) > 0 ||
       (el.rasterMask?.length ?? 0) > 0 ||
+      (el.rasterEdits?.length ?? 0) > 0 ||
       el.opacity !== 1,
   );
 }

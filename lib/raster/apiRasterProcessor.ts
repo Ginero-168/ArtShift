@@ -7,6 +7,7 @@ import {
   type RasterProcessor,
   type RasterResult,
 } from "./processor";
+import { recordRasterJob } from "./telemetry";
 
 export class RasterApiError extends Error {
   constructor(
@@ -25,25 +26,32 @@ export class ApiRasterProcessor implements RasterProcessor {
   ) {}
 
   async execute(job: RasterJob, options: RasterJobOptions = {}): Promise<RasterResult> {
-    assertRasterJobBudget(job, options);
-    if (options.signal?.aborted) throw new DOMException("Raster job cancelled.", "AbortError");
-    options.onProgress?.({ progress: 0.05, stage: "queued" });
-    const response = await this.fetcher(this.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job: encodeRasterJob(job) }),
-      signal: options.signal,
-    });
-    if (!response.ok)
-      throw new RasterApiError(
-        `Raster API failed with status ${response.status}.`,
-        response.status,
-      );
-    const payload = (await response.json()) as { result?: EncodedRasterResult };
-    const result = decodeRasterResult(payload.result);
-    if (!result) throw new RasterApiError("Raster API returned an invalid result.");
-    options.onProgress?.({ progress: 1, stage: "complete" });
-    return result;
+    const started = now();
+    try {
+      assertRasterJobBudget(job, options);
+      if (options.signal?.aborted) throw new DOMException("Raster job cancelled.", "AbortError");
+      options.onProgress?.({ progress: 0.05, stage: "queued" });
+      const response = await this.fetcher(this.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job: encodeRasterJob(job) }),
+        signal: options.signal,
+      });
+      if (!response.ok)
+        throw new RasterApiError(
+          `Raster API failed with status ${response.status}.`,
+          response.status,
+        );
+      const payload = (await response.json()) as { result?: EncodedRasterResult };
+      const result = decodeRasterResult(payload.result);
+      if (!result) throw new RasterApiError("Raster API returned an invalid result.");
+      options.onProgress?.({ progress: 1, stage: "complete" });
+      recordRasterJob(job.kind, now() - started, true);
+      return result;
+    } catch (error) {
+      recordRasterJob(job.kind, now() - started, false);
+      throw error;
+    }
   }
 
   capabilities(): RasterCapabilities {
@@ -57,4 +65,8 @@ export class ApiRasterProcessor implements RasterProcessor {
       jobKinds: ["magicWand", "quickSelection", "selectionMask", "filter", "thumbnail"],
     };
   }
+}
+
+function now(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
 }
