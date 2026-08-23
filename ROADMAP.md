@@ -52,11 +52,12 @@ the existing vector, layout, campaign, and export workflows unstable.
 
 | Phase | Focus | Exit condition |
 |---|---|---|
-| **Raster Core v1** | One active pixel Selection model, shared by Delete, Brush, Pencil and Eraser | Every pixel edit respects the same Selection and creates one undo step |
-| **Raster Performance v1** | Worker/OffscreenCanvas jobs, cancellation, progress, dirty-region rendering | Large selections and thumbnails do not block pointer interaction |
-| **Raster Retouch v1** | Feather, invert, transform selection, Auto Subject and Healing spike | Tools are isolated behind a tested raster job seam |
-| **Eco/Fast adapters** | Local Worker/WASM path and API path with the same job contract | Users can switch execution mode without changing the document model |
-| **Desktop spike** | Tauri platform adapters and static frontend split | Local files and persistence work without coupling the editor to Next API routes |
+| **Raster Core v1** | One active pixel Selection model, shared by Delete, Brush, Pencil and Eraser | Complete — one Selection seam and one raster edit transaction per committed stroke/job |
+| **Raster Performance v1** | Worker/OffscreenCanvas jobs, cancellation, progress, pixel/memory budgets, benchmark | Complete foundation — Magic Wand and Quick Selection leave the pointer path; generic jobs cover selection masks, filters and thumbnails |
+| **Raster Retouch v1** | Marching ants, feather, invert, transform selection, Auto Subject and Healing spike | Complete foundation — mask-boundary overlay and OpenCV adapter seam are in place; OpenCV WASM runtime remains optional |
+| **Eco/Fast adapters** | Local Worker/WASM path and API path with the same job contract | Complete — `RasterProcessor` plus Local/API implementations and selectable UI mode |
+| **Desktop seam** | File System, Persistence and AI Transport ports before Tauri | Complete — browser adapters are isolated; Tauri implementation can be added independently |
+| **Modernization experiment** | Next 16, TypeScript 6, and no custom webpack in a separate branch | Complete experiment — see `codex/artshift-modernization-next16-ts6` |
 
 ### Current implementation status
 
@@ -66,8 +67,15 @@ the existing vector, layout, campaign, and export workflows unstable.
 - Interaction scheduling: pointer previews are coalesced through
   `lib/engine/interactionController.ts` while the store remains the document
   transaction boundary.
-- Raster Performance v1: large Magic Wand sampling uses ImageBitmap and a
-  Worker with an automatic Canvas2D fallback. Quick Selection's repeated
-  growth pass and dirty-region rendering remain the next performance slice.
-- Quality: Playwright smoke coverage now verifies the Raster toolbar and tool
-  options through a real browser.
+- Raster Performance v1: `RasterJob` now carries cancellation, progress and
+  pixel/memory budgets; LocalRasterProcessor uses a transferable Worker when
+  available and the 1024×1024 baseline is recorded by
+  `npm run benchmark:raster`.
+- Raster Retouch v1: bitmap Selection feedback traces the mask boundary for
+  marching ants; Invert, Feather and Transform Selection are available from
+  the canvas context menu; `opencvAdapter.ts` is an optional injected spike.
+- Eco/Fast and Desktop: the editor can switch between local and API raster
+  processing, while platform ports keep file access, persistence and AI
+  transport independent of Next.js.
+- Modernization: Next 16.3.2 + TypeScript 6.0.3 + no custom webpack passed
+  lint, typecheck, test and build on the dedicated experiment branch.
