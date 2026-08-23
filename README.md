@@ -21,6 +21,7 @@ Runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`).
 | **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
 | **AI Chat** | Claude tool-use (Anthropic direct) **or** Replicate proxy — mutations apply directly to the canvas |
 | **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |
+| **Raster execution** | Eco uses bounded local Worker/Canvas processing; Fast can proxy the same job contract to a paid provider via `RASTER_API_URL` |
 | **Background Removal** | WaveSpeed BRIA RMBG one-click via API proxy |
 | **PDF Import** | Import PDF pages as slide images (pdfjs-dist) |
 | **Durable local storage** | IndexedDB document/assets, serial autosave, backup recovery and safe migration from legacy localStorage documents |
@@ -52,6 +53,8 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 | `WAVESPEED_API_KEY` | no | Background removal |
 | `UNSPLASH_ACCESS_KEY` | no | Stock photos |
 | `PEXELS_API_KEY` | no | Stock photos |
+| `RASTER_API_URL` | no | Paid Fast raster provider endpoint |
+| `RASTER_API_KEY` | no | Bearer token for the Fast raster provider |
 
 Image prompt enhancement is optional: when `ANTHROPIC_API_KEY` is unavailable, image generation continues with local Thai keyword enrichment instead of the LLM prompt engineer.
 

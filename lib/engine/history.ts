@@ -11,12 +11,25 @@
  * multi-element drag commits.
  */
 
+import type { ActiveRasterSelection } from "../raster/activeSelection";
 import type { EngineDoc } from "./types";
 
 const MAX_SNAPSHOTS = 50;
 const COALESCE_MS = 500;
 
-export type HistoryEntry = { label: string; doc: EngineDoc; at: number };
+export type HistoryEntry = {
+  label: string;
+  doc: EngineDoc;
+  at: number;
+  /** Present when the snapshot also represents pixel-selection state. */
+  rasterSelection?: ActiveRasterSelection;
+};
+
+export type HistoryTransition = {
+  doc: EngineDoc;
+  /** `undefined` means this older/document-only entry has no selection snapshot. */
+  rasterSelection: ActiveRasterSelection | undefined;
+};
 
 export type HistoryState = {
   past: HistoryEntry[];
@@ -40,12 +53,17 @@ export function createHistory(): HistoryState {
   };
 }
 
-export function pushHistory(state: HistoryState, doc: EngineDoc, label: string): void {
+export function pushHistory(
+  state: HistoryState,
+  doc: EngineDoc,
+  label: string,
+  rasterSelection?: ActiveRasterSelection,
+): void {
   const now = Date.now();
   if (state.batchDepth > 0) {
     if (state.batchSnapped) return;
     state.batchSnapped = true;
-    appendSnapshot(state, doc, label, now);
+    appendSnapshot(state, doc, label, now, rasterSelection);
     return;
   }
   if (label && label === state.lastLabel && now - state.lastAt < COALESCE_MS) {
@@ -54,11 +72,24 @@ export function pushHistory(state: HistoryState, doc: EngineDoc, label: string):
   }
   state.lastLabel = label;
   state.lastAt = now;
-  appendSnapshot(state, doc, label, now);
+  appendSnapshot(state, doc, label, now, rasterSelection);
 }
 
-function appendSnapshot(state: HistoryState, doc: EngineDoc, label: string, at: number): void {
-  state.past.push({ label, doc: structuredClone(doc), at });
+function appendSnapshot(
+  state: HistoryState,
+  doc: EngineDoc,
+  label: string,
+  at: number,
+  rasterSelection?: ActiveRasterSelection,
+): void {
+  state.past.push({
+    label,
+    doc: structuredClone(doc),
+    at,
+    ...(rasterSelection !== undefined
+      ? { rasterSelection: rasterSelection ? structuredClone(rasterSelection) : null }
+      : {}),
+  });
   if (state.past.length > MAX_SNAPSHOTS) state.past.shift();
   state.future = [];
 }
@@ -83,17 +114,49 @@ export async function batchHistory<T>(
 }
 
 export function undo(state: HistoryState, current: EngineDoc): EngineDoc | null {
-  const prev = state.past.pop();
-  if (!prev) return null;
-  state.future.push({ label: prev.label, doc: structuredClone(current), at: Date.now() });
-  return prev.doc;
+  return undoWithMetadata(state, current, undefined)?.doc ?? null;
 }
 
 export function redo(state: HistoryState, current: EngineDoc): EngineDoc | null {
+  return redoWithMetadata(state, current, undefined)?.doc ?? null;
+}
+
+/** Undo while preserving the optional Selection snapshot carried by the entry. */
+export function undoWithMetadata(
+  state: HistoryState,
+  current: EngineDoc,
+  currentRasterSelection: ActiveRasterSelection | undefined,
+): HistoryTransition | null {
+  const prev = state.past.pop();
+  if (!prev) return null;
+  state.future.push({
+    label: prev.label,
+    doc: structuredClone(current),
+    at: Date.now(),
+    ...(currentRasterSelection !== undefined
+      ? { rasterSelection: currentRasterSelection ? structuredClone(currentRasterSelection) : null }
+      : {}),
+  });
+  return { doc: prev.doc, rasterSelection: prev.rasterSelection };
+}
+
+/** Redo while preserving the optional Selection snapshot carried by the entry. */
+export function redoWithMetadata(
+  state: HistoryState,
+  current: EngineDoc,
+  currentRasterSelection: ActiveRasterSelection | undefined,
+): HistoryTransition | null {
   const next = state.future.pop();
   if (!next) return null;
-  state.past.push({ label: next.label, doc: structuredClone(current), at: Date.now() });
-  return next.doc;
+  state.past.push({
+    label: next.label,
+    doc: structuredClone(current),
+    at: Date.now(),
+    ...(currentRasterSelection !== undefined
+      ? { rasterSelection: currentRasterSelection ? structuredClone(currentRasterSelection) : null }
+      : {}),
+  });
+  return { doc: next.doc, rasterSelection: next.rasterSelection };
 }
 
 export function canUndo(state: HistoryState): boolean {

@@ -49,6 +49,8 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `WAVESPEED_API_KEY` | For background removal |
 | `UNSPLASH_ACCESS_KEY` | Stock photos |
 | `PEXELS_API_KEY` | Stock photos |
+| `RASTER_API_URL` | Optional paid Fast raster provider endpoint |
+| `RASTER_API_KEY` | Optional bearer token for the raster provider |
 
 ### Step 4: Start the app
 

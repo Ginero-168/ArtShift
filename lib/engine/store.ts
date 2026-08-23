@@ -38,8 +38,8 @@ import { blockRectForPlacement, getHexGridDimensions } from "./hexLayout";
 import {
   createHistory,
   type HistoryState,
-  redo as historyRedo,
-  undo as historyUndo,
+  redoWithMetadata as historyRedoWithMetadata,
+  undoWithMetadata as historyUndoWithMetadata,
   pushHistory,
 } from "./history";
 import { getCached } from "./imageCache";
@@ -393,22 +393,25 @@ export const useEngine = create<EngineState>((set, get) => {
     activeRasterSelection: null,
     applyRasterSelection: (imageId, operation, width, height) =>
       set((state) => {
-        const next = appendActiveRasterSelection(
-          state.activeRasterSelection,
-          imageId,
-          operation,
-          width,
-          height,
-        );
-        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
+        const before = state.activeRasterSelection;
+        const next = appendActiveRasterSelection(before, imageId, operation, width, height);
+        if (next === before) return state;
+        // Selection edits are first-class transactions. The document snapshot
+        // is intentionally unchanged, but Cmd/Ctrl+Z must restore the prior
+        // mask instead of deleting the image or merely clearing the overlay.
+        pushHistory(state.history, state.doc, `raster selection ${operation.id}`, before);
+        return { activeRasterSelection: next };
       }),
     setRasterSelection: (imageId, selection) =>
       set((state) => {
+        const before = state.activeRasterSelection;
         const next =
           selection && selection.operations.length > 0
             ? setActiveRasterSelection(imageId, selection)
             : null;
-        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
+        if (next === before) return state;
+        pushHistory(state.history, state.doc, "raster selection set", before);
+        return { activeRasterSelection: next };
       }),
     invertActiveRasterSelection: () =>
       set((state) => {
@@ -419,9 +422,9 @@ export const useEngine = create<EngineState>((set, get) => {
           active.selection.width,
           active.selection.height,
         );
-        return inverted
-          ? { activeRasterSelection: { imageId: active.imageId, selection: inverted } }
-          : state;
+        if (!inverted) return state;
+        pushHistory(state.history, state.doc, "raster selection invert", active);
+        return { activeRasterSelection: { imageId: active.imageId, selection: inverted } };
       }),
     featherActiveRasterSelection: (radius) =>
       set((state) => {
@@ -433,9 +436,9 @@ export const useEngine = create<EngineState>((set, get) => {
           active.selection.height,
           radius,
         );
-        return feathered
-          ? { activeRasterSelection: { imageId: active.imageId, selection: feathered } }
-          : state;
+        if (!feathered) return state;
+        pushHistory(state.history, state.doc, "raster selection feather", active);
+        return { activeRasterSelection: { imageId: active.imageId, selection: feathered } };
       }),
     transformActiveRasterSelection: (scaleX, scaleY, offsetX, offsetY) =>
       set((state) => {
@@ -450,19 +453,29 @@ export const useEngine = create<EngineState>((set, get) => {
           offsetX,
           offsetY,
         );
-        return transformed
-          ? { activeRasterSelection: { imageId: active.imageId, selection: transformed } }
-          : state;
+        if (!transformed) return state;
+        pushHistory(state.history, state.doc, "raster selection transform", active);
+        return { activeRasterSelection: { imageId: active.imageId, selection: transformed } };
       }),
     clearRasterSelection: (imageId) =>
       set((state) => {
-        const next = clearActiveRasterSelection(state.activeRasterSelection, imageId);
-        return next === state.activeRasterSelection ? state : { activeRasterSelection: next };
+        const before = state.activeRasterSelection;
+        const next = clearActiveRasterSelection(before, imageId);
+        if (next === before) return state;
+        pushHistory(state.history, state.doc, "raster selection clear", before);
+        return { activeRasterSelection: next };
       }),
     clearAllRasterSelections: () =>
-      set((state) =>
-        state.activeRasterSelection === null ? state : { activeRasterSelection: null },
-      ),
+      set((state) => {
+        if (state.activeRasterSelection === null) return state;
+        pushHistory(
+          state.history,
+          state.doc,
+          "raster selection clear",
+          state.activeRasterSelection,
+        );
+        return { activeRasterSelection: null };
+      }),
 
     currentSlide: () => {
       const s = get();
@@ -1629,8 +1642,9 @@ export const useEngine = create<EngineState>((set, get) => {
 
     undo: () => {
       const s = get();
-      const prev = historyUndo(s.history, s.doc);
-      if (!prev) return;
+      const transition = historyUndoWithMetadata(s.history, s.doc, s.activeRasterSelection);
+      if (!transition) return;
+      const prev = transition.doc;
       const stillExists = prev.slides.find((sl) => sl.id === s.currentSlideId);
       set({
         doc: prev,
@@ -1641,13 +1655,15 @@ export const useEngine = create<EngineState>((set, get) => {
           s.activeLayerId,
         ),
         selectedIds: new Set(),
-        activeRasterSelection: null,
+        activeRasterSelection:
+          transition.rasterSelection === undefined ? null : transition.rasterSelection,
       });
     },
     redo: () => {
       const s = get();
-      const next = historyRedo(s.history, s.doc);
-      if (!next) return;
+      const transition = historyRedoWithMetadata(s.history, s.doc, s.activeRasterSelection);
+      if (!transition) return;
+      const next = transition.doc;
       const stillExists = next.slides.find((sl) => sl.id === s.currentSlideId);
       set({
         doc: next,
@@ -1658,7 +1674,8 @@ export const useEngine = create<EngineState>((set, get) => {
           s.activeLayerId,
         ),
         selectedIds: new Set(),
-        activeRasterSelection: null,
+        activeRasterSelection:
+          transition.rasterSelection === undefined ? null : transition.rasterSelection,
       });
     },
 

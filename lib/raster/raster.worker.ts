@@ -1,6 +1,6 @@
 import {
   assertRasterJobBudget,
-  executeRasterJobLocally,
+  executeRasterJobLocallyAsync,
   type RasterJob,
   type RasterJobOptions,
   type RasterResult,
@@ -52,9 +52,10 @@ async function execute(request: ExecuteRequest) {
       onProgress: ({ progress, stage }) => {
         if (!cancelled.has(id)) workerScope.postMessage({ type: "progress", id, progress, stage });
       },
+      cancelCheck: () => cancelled.has(id),
     };
     assertRasterJobBudget(job, options);
-    const result = executeRasterJobLocally(job, options);
+    const result = await executeRasterJobLocallyAsync(job, options);
     if (cancelled.has(id)) throw new DOMException("Raster job cancelled.", "AbortError");
     const serialized = serializeResult(result);
     const transfer: Transferable[] = [];

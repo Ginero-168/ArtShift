@@ -14,7 +14,7 @@ import { IconTrash } from "@/components/icons";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
-import { renderSlideThumbnail } from "@/lib/renderer/thumbnail";
+import { renderSlideThumbnail, renderSlideThumbnailAsync } from "@/lib/renderer/thumbnail";
 
 const THUMB_W = 120;
 
@@ -418,20 +418,26 @@ function SlideThumb({
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
+    const controller = new AbortController();
     const dpr = window.devicePixelRatio || 1;
     const thumbH = Math.round((THUMB_W * slide.height) / slide.width);
     canvas.width = Math.round(THUMB_W * dpr);
     canvas.height = Math.round(thumbH * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const sx = THUMB_W / slide.width;
-    ctx.fillStyle = slide.background || "#fff";
-    ctx.fillRect(0, 0, THUMB_W, thumbH);
-    ctx.save();
-    ctx.scale(sx, sx);
-    renderSlideThumbnail(slide, { ctx, images: getImageCache() });
-    ctx.restore();
+    void renderSlideThumbnailAsync(slide, canvas, getImageCache(), controller.signal).catch(() => {
+      // Preserve the old synchronous path when a browser blocks pixel readback
+      // or does not provide a usable Worker/Canvas implementation.
+      if (controller.signal.aborted) return;
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.fillStyle = slide.background || "#fff";
+      context.fillRect(0, 0, THUMB_W, thumbH);
+      context.save();
+      context.scale(THUMB_W / slide.width, THUMB_W / slide.width);
+      renderSlideThumbnail(slide, { ctx: context, images: getImageCache() });
+      context.restore();
+    });
+    return () => controller.abort();
   }, [slide]);
 
   return (

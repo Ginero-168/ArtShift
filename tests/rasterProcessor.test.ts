@@ -98,4 +98,22 @@ describe("LocalRasterProcessor", () => {
       ),
     ).rejects.toBeInstanceOf(RasterJobCancelledError);
   });
+
+  it("cancels a large flood fill while it is still processing", async () => {
+    const controller = new AbortController();
+    const data = new Uint8ClampedArray(512 * 512 * 4);
+    for (let index = 3; index < data.length; index += 4) data[index] = 255;
+    const job = processor.execute(
+      {
+        kind: "magicWand",
+        pixels: pixels(Array.from(data), 512, 512),
+        seedX: 0,
+        seedY: 0,
+        tolerance: 0,
+      },
+      { signal: controller.signal },
+    );
+    setTimeout(() => controller.abort(), 0);
+    await expect(job).rejects.toBeInstanceOf(RasterJobCancelledError);
+  });
 });

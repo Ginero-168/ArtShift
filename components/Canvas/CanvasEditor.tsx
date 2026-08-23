@@ -18,7 +18,6 @@ import {
   useState,
 } from "react";
 import { IconWand } from "@/components/icons";
-import { unionBBox } from "@/lib/engine/bounds";
 import { createEditorController } from "@/lib/engine/editorController";
 import {
   createDiamond,
@@ -34,6 +33,12 @@ import {
   createVectorPath,
   createVectorPathFromWorldNodes,
 } from "@/lib/engine/factory";
+import {
+  calculateMovePreview,
+  isMeaningfulMove,
+  resolveMarqueeSelection,
+  resolveObjectPointerSelection,
+} from "@/lib/engine/gestureController";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
 import { getImageCache } from "@/lib/engine/imageCache";
 import {
@@ -42,13 +47,9 @@ import {
   isObjectBlock,
   isObjectLocked,
 } from "@/lib/engine/layers";
-import {
-  applySelection,
-  isSelectionModifierPressed,
-  shouldPreserveMultiSelectionForDrag,
-} from "@/lib/engine/selection";
+import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { constrainShapeDrag } from "@/lib/engine/shapeDrag";
-import { type Guide, snapBBox } from "@/lib/engine/snap";
+import type { Guide } from "@/lib/engine/snap";
 import {
   cloneElementsForDuplicate,
   type LineSubtype,
@@ -109,7 +110,6 @@ import TextOverlay from "./TextOverlay";
 import Transformer from "./Transformer";
 import { usePasteDrop } from "./usePasteDrop";
 
-const SNAP_THRESHOLD_PX = 6;
 const POINTER_MOVE_THRESHOLD_PX = 3;
 
 type DragState =
@@ -536,17 +536,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         const hit = pickTopMost(p, slide);
         if (hit) {
           const groupIds = getSelectionMembers(hit, slide);
-          const additive = isSelectionModifierPressed(e);
-          const preserveSelectionForMove = shouldPreserveMultiSelectionForDrag(
-            selectedIds,
-            hit.id,
-            additive,
-          );
-          const nextSelection = preserveSelectionForMove
-            ? new Set(selectedIds)
-            : applySelection(selectedIds, groupIds, additive);
-          if (!preserveSelectionForMove) selectOnly(Array.from(nextSelection));
-          const ids = Array.from(nextSelection);
+          const resolution = resolveObjectPointerSelection(selectedIds, hit.id, groupIds, e);
+          if (!resolution.clickSelection) selectOnly(resolution.ids);
+          const ids = resolution.ids;
           const origins = new Map<string, { x: number; y: number }>();
           for (const el of slide.elements) {
             if (ids.includes(el.id) && !isObjectLocked(slide, el.id)) {
@@ -561,7 +553,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             checkpointed: false,
             altKey: e.altKey,
             duplicated: false,
-            clickSelection: preserveSelectionForMove ? groupIds : undefined,
+            clickSelection: resolution.clickSelection,
           };
         } else {
           // Begin marquee for both Vector Select and Raster Move.
@@ -919,7 +911,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       if (d.kind === "move") {
         if (
           !d.checkpointed &&
-          Math.hypot(p.x - d.start.x, p.y - d.start.y) < POINTER_MOVE_THRESHOLD_PX / view.scale
+          !isMeaningfulMove(d.start, p, POINTER_MOVE_THRESHOLD_PX / view.scale)
         ) {
           return;
         }
@@ -938,36 +930,16 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           checkpointInteraction("move");
           d.checkpointed = true;
         }
-        let dx = p.x - d.start.x;
-        let dy = p.y - d.start.y;
-        // Snap union bbox of moving selection.
-        const moving = slide.elements.filter((el) => d.origins.has(el.id));
-        const others = getInteractiveElements(slide).filter((el) => !d.origins.has(el.id));
-        const movedNow = moving.map((el) => {
-          const o = d.origins.get(el.id)!;
-          return { ...el, x: o.x + dx, y: o.y + dy } as EngineElement;
+        const preview = calculateMovePreview({
+          start: d.start,
+          current: p,
+          origins: d.origins,
+          slide,
+          snapGrid,
+          snapThreshold: 6 / view.scale,
         });
-        const bbox = unionBBox(movedNow);
-        if (bbox) {
-          if (snapGrid) {
-            const targetX = Math.round(bbox.x / snapGrid) * snapGrid;
-            const targetY = Math.round(bbox.y / snapGrid) * snapGrid;
-            dx += targetX - bbox.x;
-            dy += targetY - bbox.y;
-            setGuides([]);
-          } else {
-            const snap = snapBBox(bbox, others, SNAP_THRESHOLD_PX / view.scale);
-            dx += snap.dx;
-            dy += snap.dy;
-            setGuides(snap.guides);
-          }
-        }
-        previewElements(
-          Array.from(d.origins.entries()).map(([id, origin]) => ({
-            id,
-            patch: { x: origin.x + dx, y: origin.y + dy },
-          })),
-        );
+        setGuides(preview.guides);
+        previewElements(preview.patches);
         return;
       }
       if (d.kind === "rasterPaint") {
@@ -1255,9 +1227,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           );
           const ids = inside.map((el) => el.id);
           if (d.additive) {
-            const merged = new Set(useEngine.getState().selectedIds);
-            for (const id of ids) merged.add(id);
-            selectOnly(Array.from(merged));
+            selectOnly(resolveMarqueeSelection(useEngine.getState().selectedIds, ids, true));
           } else {
             selectOnly(ids);
           }

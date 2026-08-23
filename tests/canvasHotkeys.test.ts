@@ -186,4 +186,39 @@ describe("Canvas hotkeys", () => {
 
     expect(useEngine.getState().activeRasterSelection).toBeNull();
   });
+
+  it("undoes and redoes a raster Selection without deleting the image", () => {
+    const st = useEngine.getState();
+    const image = createImage({
+      x: 40,
+      y: 40,
+      width: 320,
+      height: 240,
+      fileId: "image-selection-history",
+      naturalWidth: 320,
+      naturalHeight: 240,
+    });
+    st.addElement(image);
+    st.applyRasterSelection(
+      image.id,
+      createRasterSelectionOperation("replace", {
+        kind: "rect",
+        x: 0.1,
+        y: 0.1,
+        width: 0.25,
+        height: 0.25,
+      }),
+      image.width,
+      image.height,
+    );
+
+    expect(useEngine.getState().activeRasterSelection?.imageId).toBe(image.id);
+    useEngine.getState().undo();
+    expect(useEngine.getState().activeRasterSelection).toBeNull();
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+
+    useEngine.getState().redo();
+    expect(useEngine.getState().activeRasterSelection?.imageId).toBe(image.id);
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+  });
 });

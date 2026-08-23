@@ -16,6 +16,19 @@ export type RasterPixelData = {
   data: Uint8ClampedArray;
 };
 
+export type RasterAlgorithmOptions = {
+  shouldCancel?: () => boolean;
+  onProgress?: (progress: number) => void;
+  yieldEvery?: number;
+};
+
+export class RasterAlgorithmCancelledError extends Error {
+  constructor() {
+    super("Raster algorithm cancelled.");
+    this.name = "RasterAlgorithmCancelledError";
+  }
+}
+
 /**
  * Select the contiguous region whose RGBA distance from the seed is within
  * tolerance. A four-neighbour flood fill matches Photoshop's contiguous mode.
@@ -169,6 +182,160 @@ export function createQuickSelectionMask(
   return mask;
 }
 
+/**
+ * Cooperative async variant used by the generic Worker protocol. Yielding to
+ * the event loop lets a queued cancel message reach the Worker while a large
+ * flood fill is still in progress.
+ */
+export async function createMagicWandMaskAsync(
+  imageData: RasterPixelData,
+  seedX: number,
+  seedY: number,
+  tolerance: number,
+  options: RasterAlgorithmOptions = {},
+): Promise<Uint8Array> {
+  const width = Math.max(0, Math.floor(imageData.width));
+  const height = Math.max(0, Math.floor(imageData.height));
+  const total = width * height;
+  const mask = new Uint8Array(total);
+  if (!total || imageData.data.length < total * 4) return mask;
+
+  const x = clampInt(seedX, 0, width - 1);
+  const y = clampInt(seedY, 0, height - 1);
+  const seedOffset = (y * width + x) * 4;
+  const source = imageData.data;
+  const sr = source[seedOffset];
+  const sg = source[seedOffset + 1];
+  const sb = source[seedOffset + 2];
+  const sa = source[seedOffset + 3];
+  const maxDistance = Math.max(0, Math.min(255, Number.isFinite(tolerance) ? tolerance : 0));
+  const maxDistanceSquared = maxDistance * maxDistance;
+  const matches = (pixelIndex: number) => {
+    const offset = pixelIndex * 4;
+    const dr = source[offset] - sr;
+    const dg = source[offset + 1] - sg;
+    const db = source[offset + 2] - sb;
+    const da = source[offset + 3] - sa;
+    return (dr * dr + dg * dg + db * db + da * da) / 4 <= maxDistanceSquared;
+  };
+
+  const seedIndex = y * width + x;
+  if (!matches(seedIndex)) return mask;
+  const visited = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let head = 0;
+  let tail = 0;
+  queue[tail++] = seedIndex;
+  visited[seedIndex] = 1;
+  mask[seedIndex] = 1;
+  const yieldEvery = Math.max(256, options.yieldEvery ?? 8_192);
+
+  while (head < tail) {
+    if (options.shouldCancel?.()) throw new RasterAlgorithmCancelledError();
+    const current = queue[head++];
+    const currentX = current % width;
+    const currentY = Math.floor(current / width);
+    const neighbours = [
+      currentX > 0 ? current - 1 : -1,
+      currentX < width - 1 ? current + 1 : -1,
+      currentY > 0 ? current - width : -1,
+      currentY < height - 1 ? current + width : -1,
+    ];
+    for (const neighbour of neighbours) {
+      if (neighbour < 0 || visited[neighbour]) continue;
+      visited[neighbour] = 1;
+      if (!matches(neighbour)) continue;
+      mask[neighbour] = 1;
+      queue[tail++] = neighbour;
+    }
+    if (head % yieldEvery === 0) {
+      options.onProgress?.(head / Math.max(1, total));
+      await yieldToEventLoop();
+    }
+  }
+  options.onProgress?.(1);
+  return mask;
+}
+
+export async function createQuickSelectionMaskAsync(
+  imageData: RasterPixelData,
+  seedX: number,
+  seedY: number,
+  radiusX: number,
+  radiusY: number,
+  tolerance: number,
+  options: RasterAlgorithmOptions = {},
+): Promise<Uint8Array> {
+  const width = Math.max(0, Math.floor(imageData.width));
+  const height = Math.max(0, Math.floor(imageData.height));
+  const total = width * height;
+  const mask = new Uint8Array(total);
+  if (!total || imageData.data.length < total * 4) return mask;
+
+  const x = clampInt(seedX, 0, width - 1);
+  const y = clampInt(seedY, 0, height - 1);
+  const safeRadiusX = Math.max(1, Number.isFinite(radiusX) ? radiusX : 1);
+  const safeRadiusY = Math.max(1, Number.isFinite(radiusY) ? radiusY : 1);
+  const maxDistance = Math.max(0, Math.min(255, Number.isFinite(tolerance) ? tolerance : 0));
+  const maxDistanceSquared = maxDistance * maxDistance;
+  const source = imageData.data;
+  const seedOffset = (y * width + x) * 4;
+  const sr = source[seedOffset];
+  const sg = source[seedOffset + 1];
+  const sb = source[seedOffset + 2];
+  const sa = source[seedOffset + 3];
+  const isInsideBrush = (pixelIndex: number) => {
+    const pixelX = pixelIndex % width;
+    const pixelY = Math.floor(pixelIndex / width);
+    const dx = (pixelX - x) / safeRadiusX;
+    const dy = (pixelY - y) / safeRadiusY;
+    return dx * dx + dy * dy <= 1;
+  };
+  const matches = (pixelIndex: number) => {
+    const offset = pixelIndex * 4;
+    const dr = source[offset] - sr;
+    const dg = source[offset + 1] - sg;
+    const db = source[offset + 2] - sb;
+    const da = source[offset + 3] - sa;
+    return (dr * dr + dg * dg + db * db + da * da) / 4 <= maxDistanceSquared;
+  };
+
+  const seedIndex = y * width + x;
+  if (!isInsideBrush(seedIndex) || !matches(seedIndex)) return mask;
+  const visited = new Uint8Array(total);
+  const queue: number[] = [seedIndex];
+  let head = 0;
+  visited[seedIndex] = 1;
+  mask[seedIndex] = 1;
+  const yieldEvery = Math.max(256, options.yieldEvery ?? 8_192);
+
+  while (head < queue.length) {
+    if (options.shouldCancel?.()) throw new RasterAlgorithmCancelledError();
+    const current = queue[head++];
+    const currentX = current % width;
+    const currentY = Math.floor(current / width);
+    const neighbours = [
+      currentX > 0 ? current - 1 : -1,
+      currentX < width - 1 ? current + 1 : -1,
+      currentY > 0 ? current - width : -1,
+      currentY < height - 1 ? current + width : -1,
+    ];
+    for (const neighbour of neighbours) {
+      if (neighbour < 0 || visited[neighbour]) continue;
+      visited[neighbour] = 1;
+      if (!isInsideBrush(neighbour) || !matches(neighbour)) continue;
+      mask[neighbour] = 1;
+      queue.push(neighbour);
+    }
+    if (head % yieldEvery === 0) {
+      options.onProgress?.(head / Math.max(1, total));
+      await yieldToEventLoop();
+    }
+  }
+  options.onProgress?.(1);
+  return mask;
+}
+
 /** Convert a binary mask to a blue, transparent PNG for the selection overlay. */
 export function magicWandMaskToDataUrl(mask: Uint8Array, width: number, height: number): string {
   if (typeof document === "undefined") {
@@ -209,4 +376,8 @@ export function scaledRasterSize(width: number, height: number, maxPixels = MAX_
 function clampInt(value: number, min: number, max: number): number {
   if (max < min) return min;
   return Math.max(min, Math.min(max, Math.floor(Number.isFinite(value) ? value : min)));
+}
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }

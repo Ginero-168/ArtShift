@@ -53,6 +53,7 @@ export class ApiRasterProcessor implements RasterProcessor {
       cancellation: true,
       progress: true,
       maxPixels: 2_000_000,
+      maxBytes: 64 * 1024 * 1024,
       jobKinds: ["magicWand", "quickSelection", "selectionMask", "filter", "thumbnail"],
     };
   }

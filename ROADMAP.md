@@ -52,10 +52,10 @@ the existing vector, layout, campaign, and export workflows unstable.
 
 | Phase | Focus | Exit condition |
 |---|---|---|
-| **Raster Core v1** | One active pixel Selection model, shared by Delete, Brush, Pencil and Eraser | Complete — one Selection seam and one raster edit transaction per committed stroke/job |
-| **Raster Performance v1** | Worker/OffscreenCanvas jobs, cancellation, progress, pixel/memory budgets, benchmark | Complete foundation — Magic Wand and Quick Selection leave the pointer path; generic jobs cover selection masks, filters and thumbnails |
-| **Raster Retouch v1** | Marching ants, feather, invert, transform selection, Auto Subject and Healing spike | Complete foundation — mask-boundary overlay and OpenCV adapter seam are in place; OpenCV WASM runtime remains optional |
-| **Eco/Fast adapters** | Local Worker/WASM path and API path with the same job contract | Complete — `RasterProcessor` plus Local/API implementations and selectable UI mode |
+| **Raster Core v1** | One active pixel Selection model, shared by Delete, Brush, Pencil and Eraser | Complete — one Selection seam, undo/redo snapshots for Selection state, and one raster edit transaction per committed stroke/job |
+| **Raster Performance v1** | Worker/OffscreenCanvas jobs, cancellation, progress, pixel/memory budgets, benchmark | Complete foundation — Magic Wand and Quick Selection leave the pointer path; generic jobs cover selection masks, filters and thumbnails; cancellation yields during long jobs and Slide Rail thumbnails use the async processor |
+| **Raster Retouch v1** | Marching ants, feather, invert, transform selection, Auto Subject and Healing spike | Complete spike — mask-boundary overlay, OpenCV.js lazy loader, `cv.inpaint` Healing adapter and GrabCut Auto Subject adapter are available behind an optional seam |
+| **Eco/Fast adapters** | Local Worker/WASM path and API path with the same job contract | Complete — `RasterProcessor` plus Local/API implementations, selectable UI mode, and an optional paid provider configured through `RASTER_API_URL` |
 | **Desktop seam** | File System, Persistence and AI Transport ports before Tauri | Complete — browser adapters are isolated; Tauri implementation can be added independently |
 | **Modernization experiment** | Next 16, TypeScript 6, and no custom webpack in a separate branch | Complete experiment — see `codex/artshift-modernization-next16-ts6` |
 
@@ -63,19 +63,23 @@ the existing vector, layout, campaign, and export workflows unstable.
 
 - Raster Core v1: active pixel Selection is now a single image-scoped state;
   Delete, Brush, Pencil, Eraser, Magic Wand, Quick Selection and Auto Subject
-  all resolve the same Selection seam.
+  all resolve the same Selection seam. Selection operations now participate in
+  the same undo/redo timeline as document mutations.
 - Interaction scheduling: pointer previews are coalesced through
   `lib/engine/interactionController.ts` while the store remains the document
   transaction boundary.
 - Raster Performance v1: `RasterJob` now carries cancellation, progress and
   pixel/memory budgets; LocalRasterProcessor uses a transferable Worker when
-  available and the 1024×1024 baseline is recorded by
+  available, long flood-fills yield for cancellation, Slide Rail thumbnails
+  use the async processor, and the 1024×1024 baseline is recorded by
   `npm run benchmark:raster`.
 - Raster Retouch v1: bitmap Selection feedback traces the mask boundary for
   marching ants; Invert, Feather and Transform Selection are available from
-  the canvas context menu; `opencvAdapter.ts` is an optional injected spike.
+  the canvas context menu; `opencvJsAdapter.ts` lazy-loads the optional
+  OpenCV.js WASM runtime for inpainting and GrabCut subject masks.
 - Eco/Fast and Desktop: the editor can switch between local and API raster
-  processing, while platform ports keep file access, persistence and AI
-  transport independent of Next.js.
+  processing. Fast can forward the same bounded job payload to a paid provider
+  through `RASTER_API_URL`, while platform ports keep file access, persistence
+  and AI transport independent of Next.js.
 - Modernization: Next 16.3.2 + TypeScript 6.0.3 + no custom webpack passed
   lint, typecheck, test and build on the dedicated experiment branch.

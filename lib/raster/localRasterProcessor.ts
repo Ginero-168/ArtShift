@@ -1,5 +1,5 @@
 import {
-  executeRasterJobLocally,
+  executeRasterJobLocallyAsync,
   type RasterCapabilities,
   type RasterJob,
   RasterJobBudgetError,
@@ -19,10 +19,10 @@ export class LocalRasterProcessor implements RasterProcessor {
         if (error instanceof RasterJobBudgetError || error instanceof RasterJobCancelledError) {
           throw error;
         }
-        return executeRasterJobLocally(job, options);
+        return executeRasterJobLocallyAsync(job, options);
       });
     }
-    return Promise.resolve().then(() => executeRasterJobLocally(job, options));
+    return executeRasterJobLocallyAsync(job, options);
   }
 
   capabilities(): RasterCapabilities {
@@ -32,6 +32,7 @@ export class LocalRasterProcessor implements RasterProcessor {
       cancellation: canRunRasterWorker(),
       progress: true,
       maxPixels: 2_000_000,
+      maxBytes: 64 * 1024 * 1024,
       jobKinds: ["magicWand", "quickSelection", "selectionMask", "filter", "thumbnail"],
     };
   }
