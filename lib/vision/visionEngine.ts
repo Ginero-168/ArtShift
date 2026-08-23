@@ -7,9 +7,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {
+  AutoProcessor,
   env,
   Florence2ForConditionalGeneration,
-  Florence2Processor,
   RawImage,
 } from "@huggingface/transformers";
 import type { VisionMask } from "./advancedVision";
@@ -18,7 +18,7 @@ import { alphaBoundsFromRgba } from "./foreground";
 env.allowLocalModels = false;
 
 const PRIMARY_MODEL_ID = "onnx-community/Florence-2-base-ft";
-const FALLBACK_MODEL_ID = "Xenova/florence-2-base";
+const FALLBACK_MODEL_ID = "onnx-community/Florence-2-base";
 
 // biome-ignore lint/suspicious/noExplicitAny: third-party Florence-2 model types are complex and not imported here
 let model: any = null;
@@ -50,7 +50,7 @@ async function ensureModel(onProgress?: (p: number) => void) {
         dtype: "fp32",
         progress_callback: progressCallback,
       }),
-      Florence2Processor.from_pretrained(id),
+      AutoProcessor.from_pretrained(id),
     ]);
     return { model: m, processor: p };
   }
@@ -67,7 +67,10 @@ async function ensureModel(onProgress?: (p: number) => void) {
       model = res.model;
       processor = res.processor;
     } catch (fallbackErr) {
-      console.error("[VisionEngine] Failed to load Florence-2:", fallbackErr);
+      console.warn(
+        "[VisionEngine] Failed to load Florence-2; local vision is unavailable:",
+        fallbackErr,
+      );
       model = null;
       processor = null;
       throw new Error("VISION_MODEL_LOAD_FAILED: " + (fallbackErr as Error).message);
@@ -88,13 +91,14 @@ async function runVisionTask(
   const image = await RawImage.fromURL(imageDataUrl);
   if (onProgress) onProgress(0.6);
 
-  const inputs = await processor(image, taskPrompt);
+  const prompts = processor.construct_prompts(taskPrompt);
+  const inputs = await processor(image, prompts);
   if (onProgress) onProgress(0.75);
 
   const outputs = await model.generate({ ...inputs, max_new_tokens: 1024 });
   if (onProgress) onProgress(0.9);
 
-  const generatedText = processor.tokenizer.batch_decode(outputs, {
+  const generatedText = processor.batch_decode(outputs, {
     skip_special_tokens: false,
   })[0];
   const parsed = processor.post_process_generation(generatedText, taskPrompt, [

@@ -25,6 +25,14 @@ export type Sam2Session = {
   segment: (box: VisionBox, onProgress?: (progress: number) => void) => Promise<VisionMask>;
 };
 
+/** Build the text query passed to Grounding DINO's single-image pipeline. */
+export function createGroundingDinoTextQuery(candidateLabels: readonly string[]): string {
+  const labels = [...new Set(candidateLabels.map((label) => label.trim()).filter(Boolean))]
+    .map((label) => label.replace(/[.]+$/g, ""))
+    .filter(Boolean);
+  return labels.length ? `${labels.join(". ")}.` : "";
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: Transformers.js model types are runtime-generated.
 let groundingDinoPromise: Promise<any> | null = null;
 // biome-ignore lint/suspicious/noExplicitAny: Transformers.js model types are runtime-generated.
@@ -36,8 +44,8 @@ export async function groundingDinoDetect(
   candidateLabels: readonly string[],
   onProgress?: (progress: number) => void,
 ): Promise<VisionBox[]> {
-  const labels = [...new Set(candidateLabels.map((label) => label.trim()).filter(Boolean))];
-  if (!labels.length) return [];
+  const textQuery = createGroundingDinoTextQuery(candidateLabels);
+  if (!textQuery) return [];
   const { pipeline, RawImage } = await import("@huggingface/transformers");
   let detector = groundingDinoPromise;
   if (!detector) {
@@ -51,7 +59,7 @@ export async function groundingDinoDetect(
     groundingDinoPromise = detector;
   }
   const [detectorPipeline, image] = await Promise.all([detector, RawImage.fromURL(imageDataUrl)]);
-  const detections = await detectorPipeline(image, labels);
+  const detections = await detectorPipeline(image, textQuery);
   const width = Math.max(1, image.width);
   const height = Math.max(1, image.height);
 

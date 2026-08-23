@@ -239,7 +239,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       if (err instanceof VectorizeCancelledError || (err as Error).name === "AbortError") {
         setStatusMessage("Vectorization cancelled.");
       } else {
-        console.error(err);
+        console.warn("Vectorize failed:", err);
         setStatusMessage("Vectorize error: " + (err as Error).message);
       }
     } finally {
@@ -306,7 +306,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       );
       setStatusMessage("Background removed successfully!");
     } catch (err) {
-      console.error("Remove BG failed:", err);
+      console.warn("Remove BG failed:", err);
       setStatusMessage("Failed to remove background: " + (err as Error).message);
     } finally {
       setBusy(false);
@@ -346,7 +346,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setTool("rasterMarquee");
       setStatusMessage("Subject selected locally. You can refine or add to the selection.");
     } catch (err) {
-      console.error("Auto Select Subject failed:", err);
+      console.warn("Auto Select Subject failed:", err);
       setStatusMessage("Auto Select Subject failed: " + (err as Error).message);
     } finally {
       setBusy(false);
@@ -527,7 +527,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         );
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Extract All failed:", err);
       setStatusMessage("Detection failed: " + (err as Error).message);
     } finally {
       setBusy(false);
@@ -572,7 +572,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       selectOnly(newElements.map((el) => el.id));
       setStatusMessage(`Fast-extracted ${newElements.length} transparent objects!`);
     } catch (err) {
-      console.error(err);
+      console.warn("Fast extraction failed:", err);
       setStatusMessage("Fast extraction failed: " + (err as Error).message);
     } finally {
       setBusy(false);
@@ -621,7 +621,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       selectOnly([newImg.id]);
       setStatusMessage(`Extracted ${obj.label} to canvas!`);
     } catch (err) {
-      console.error(err);
+      console.warn("Object extraction failed:", err);
       setStatusMessage("Extraction failed: " + (err as Error).message);
     } finally {
       setBusy(false);
