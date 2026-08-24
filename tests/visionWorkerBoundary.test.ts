@@ -73,4 +73,22 @@ describe("Florence browser execution boundary", () => {
       /[\\/]@techstark[\\/]opencv-js[\\/]dist[\\/]opencv\.js$/,
     );
   });
+
+  it("keeps OpenCV.js behind a server asset boundary", () => {
+    const root = process.cwd();
+    const adapterSource = readFileSync(path.join(root, "lib/raster/opencvJsAdapter.ts"), "utf8");
+    const routePath = path.join(root, "app/api/raster/opencv/route.ts");
+
+    expect(existsSync(routePath)).toBe(true);
+    expect(adapterSource).not.toContain("@techstark/opencv-js");
+    expect(adapterSource).toContain("/api/raster/opencv");
+    if (!existsSync(routePath)) return;
+
+    const routeSource = readFileSync(routePath, "utf8");
+    expect(routeSource).toContain("node:fs/promises");
+    expect(routeSource).toContain('"@techstark"');
+    expect(routeSource).toContain('"opencv-js"');
+    expect(routeSource).toContain('"dist"');
+    expect(routeSource).toContain('"opencv.js"');
+  });
 });
