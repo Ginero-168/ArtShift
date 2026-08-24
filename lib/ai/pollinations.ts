@@ -1,6 +1,6 @@
 /**
- * Pollinations.ai Text-to-Image Client for ArtShift
- * Free, zero-setup, open-source AI image generation (FLUX.1 / SDXL Turbo).
+ * Provider-neutral AI Image Studio client.
+ * Provider credentials and concrete model routing stay on the ArtShift server.
  */
 
 import { loadDataURL } from "@/lib/engine/imageCache";
@@ -31,7 +31,6 @@ export interface PollinationsOptions {
   height?: number;
   seed?: number;
   enhance?: boolean;
-  nologo?: boolean;
 }
 
 export interface GeneratedImageResult {
@@ -121,39 +120,8 @@ export function enrichPrompt(rawPrompt: string): string {
 }
 
 /**
- * Builds the direct Pollinations.ai image URL.
- */
-export function buildPollinationsUrl(options: PollinationsOptions): {
-  url: string;
-  seed: number;
-} {
-  const {
-    prompt,
-    model = "flux",
-    width = 1024,
-    height = 1024,
-    seed = Math.floor(Math.random() * 10000000),
-    enhance = true,
-    nologo = true,
-  } = options;
-
-  const encodedPrompt = encodeURIComponent(prompt.trim());
-  const params = new URLSearchParams({
-    width: String(width),
-    height: String(height),
-    seed: String(seed),
-    model,
-    nologo: String(nologo),
-    enhance: String(enhance),
-  });
-
-  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?${params.toString()}`;
-  return { url, seed };
-}
-
-/**
- * Generates an image using AI (via server proxy with Pollinations/FLUX backend)
- * and loads it into the ArtShift image cache.
+ * Generates an image through the server-owned AI Runtime and loads it into
+ * the ArtShift image cache.
  */
 export async function generateAIImage(
   options: PollinationsOptions,
@@ -164,65 +132,39 @@ export async function generateAIImage(
     throw new Error("Please enter a prompt to generate an image.");
   }
 
-  // 1. Try Next.js server proxy route first (prevents browser CORS & Cloudflare 403 blocks)
+  let apiRes: Response;
   try {
-    const apiRes = await fetch("/api/ai/image", {
+    apiRes = await fetch("/api/ai/image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(options),
       signal,
     });
-
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      if (data.dataUrl) {
-        const cached = await loadDataURL(data.dataUrl);
-        return {
-          dataUrl: cached.dataURL,
-          fileId: cached.fileId,
-          width: cached.width,
-          height: cached.height,
-          seed: data.seed ?? 12345,
-          model: options.model ?? "flux",
-          prompt,
-        };
-      }
-    }
-  } catch {
-    // If API route fails or in unit tests, try direct upstream
+  } catch (error) {
+    throw new Error("AI Image Studio could not reach the ArtShift server.", { cause: error });
   }
 
-  // 2. Direct upstream fallback
-  const { url, seed } = buildPollinationsUrl(options);
-
-  const response = await fetch(url, {
-    method: "GET",
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to generate image from AI (Status ${response.status}). Please check your internet connection or try again.`,
-    );
+  const data = (await apiRes.json().catch(() => ({}))) as {
+    dataUrl?: string;
+    seed?: number;
+    error?: string;
+  };
+  if (!apiRes.ok) {
+    throw new Error(data.error || `AI Image Studio failed with status ${apiRes.status}.`);
   }
-
-  const blob = await response.blob();
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  if (!data.dataUrl?.startsWith("data:image/")) {
+    throw new Error("AI Image Studio returned an invalid image payload.");
+  }
 
   // Cache in local engine image cache
-  const cached = await loadDataURL(dataUrl);
+  const cached = await loadDataURL(data.dataUrl);
 
   return {
     dataUrl: cached.dataURL,
     fileId: cached.fileId,
     width: cached.width,
     height: cached.height,
-    seed,
+    seed: data.seed ?? options.seed ?? 0,
     model: options.model ?? "flux",
     prompt,
   };

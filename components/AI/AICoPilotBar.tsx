@@ -184,7 +184,7 @@ export default function AICoPilotBar() {
           reply = `โหมด Fast ยังใช้งานไม่ได้: ${result.error}`;
           suggestions = [
             "🍃 สลับเป็น Eco เพื่อทำงาน local",
-            "ลองตรวจสอบ ANTHROPIC_API_KEY แล้วส่งคำสั่งอีกครั้ง",
+            "ตรวจสอบ Provider status ที่ปุ่มเฟือง แล้วส่งคำสั่งอีกครั้ง",
           ];
         } else {
           fastActions[0] = {

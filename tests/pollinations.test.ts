@@ -1,31 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-  ASPECT_RATIOS,
-  buildPollinationsUrl,
-  cleanImagePrompt,
-  generateAIImage,
-} from "@/lib/ai/pollinations";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ASPECT_RATIOS, cleanImagePrompt, generateAIImage } from "@/lib/ai/pollinations";
 
 describe("Pollinations.ai Text-to-Image Service", () => {
-  it("builds correct URL with all parameters", () => {
-    const res = buildPollinationsUrl({
-      prompt: "a majestic golden eagle soaring over mountains",
-      model: "flux-realism",
-      width: 1280,
-      height: 720,
-      seed: 12345,
-      enhance: true,
-      nologo: true,
-    });
-
-    expect(res.url).toContain("https://image.pollinations.ai/prompt/a%20majestic%20golden%20eagle");
-    expect(res.url).toContain("width=1280");
-    expect(res.url).toContain("height=720");
-    expect(res.url).toContain("seed=12345");
-    expect(res.url).toContain("model=flux-realism");
-    expect(res.url).toContain("nologo=true");
-    expect(res.url).toContain("enhance=true");
-    expect(res.seed).toBe(12345);
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("provides standard aspect ratio options", () => {
@@ -45,25 +23,14 @@ describe("Pollinations.ai Text-to-Image Service", () => {
     const mockDataUrl =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-    const mockBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" });
-
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        blob: vi.fn().mockResolvedValue(mockBlob),
+        status: 200,
+        json: vi.fn().mockResolvedValue({ dataUrl: mockDataUrl, seed: 999 }),
       }),
     );
-
-    // Mock FileReader
-    class MockFileReader {
-      result = mockDataUrl;
-      onloadend: (() => void) | null = null;
-      readAsDataURL() {
-        if (this.onloadend) this.onloadend();
-      }
-    }
-    vi.stubGlobal("FileReader", MockFileReader);
 
     // Mock Image for imageCache
     class MockImage {
@@ -95,6 +62,25 @@ describe("Pollinations.ai Text-to-Image Service", () => {
     expect(result.seed).toBe(999);
     expect(result.model).toBe("flux");
     expect(result.fileId).toBeDefined();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/ai/image",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("fails closed instead of bypassing the server with a direct provider request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: vi.fn().mockResolvedValue({ error: "Provider is not configured." }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(generateAIImage({ prompt: "test prompt" })).rejects.toThrow(
+      "Provider is not configured.",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/ai/image");
   });
 
   it("enriches Thai prompts into detailed English visual prompts", async () => {

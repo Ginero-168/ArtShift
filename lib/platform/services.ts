@@ -1,4 +1,5 @@
-import { type AiTransportPort, browserAiTransport } from "./aiTransport";
+import { browserAiRuntime } from "../ai-runtime/client";
+import type { AiRuntime } from "../ai-runtime/contracts";
 import { browserFileSystem, type FileSystemPort } from "./fileSystem";
 import { localStoragePersistence, type PersistencePort } from "./persistence";
 
@@ -6,13 +7,13 @@ import { localStoragePersistence, type PersistencePort } from "./persistence";
 export type PlatformServices = {
   fileSystem: FileSystemPort;
   persistence: PersistencePort;
-  aiTransport: AiTransportPort;
+  aiRuntime: AiRuntime;
 };
 
 export const browserPlatformServices: PlatformServices = {
   fileSystem: browserFileSystem,
   persistence: localStoragePersistence,
-  aiTransport: browserAiTransport,
+  aiRuntime: browserAiRuntime,
 };
 
 /**

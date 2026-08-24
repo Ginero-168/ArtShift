@@ -35,16 +35,16 @@ export default function AIPrompt() {
   function friendlyError(raw: string): string {
     const lower = raw.toLowerCase();
     if (lower.includes("credit balance is too low")) {
-      return "Anthropic API credits exhausted. Top up at console.anthropic.com/settings/billing and try again.";
+      return "The selected AI provider has insufficient credit. Check Models & cache → Providers & usage.";
     }
     if (lower.includes("rate_limit") || lower.includes("rate limit")) {
-      return "Hit Anthropic rate limit — wait a few seconds and retry.";
+      return "The selected AI provider is rate-limited. Wait a few seconds and retry.";
     }
     if (lower.includes("invalid api key") || lower.includes("authentication")) {
-      return "Invalid ANTHROPIC_API_KEY. Check your .env.local.";
+      return "The selected AI provider is not authenticated. Check the server environment and provider status.";
     }
     if (lower.includes("overloaded")) {
-      return "Anthropic is overloaded right now. Try again in a moment.";
+      return "The selected AI provider is overloaded. Try again in a moment.";
     }
     return raw.length > 240 ? `${raw.slice(0, 240)}…` : raw;
   }

@@ -488,6 +488,23 @@ button {
   transition: width 0.2s ease;
 }
 .model-manager-list { display: grid; gap: 7px; }
+.model-manager-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 9px;
+  padding-top: 12px;
+  border-top: 1px solid var(--stroke);
+}
+.model-manager-section-head h3 {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.model-manager-section-head > span {
+  color: var(--ink-muted);
+  font-size: 9px;
+}
 .model-manager-card {
   padding: 10px;
   border: 1px solid var(--stroke);
@@ -534,7 +551,7 @@ button {
   color: #b91c1c;
   font-size: 9px;
 }
-.model-manager-card-foot { min-height: 22px; }
+.model-manager-card-foot { min-height: 22px; flex-wrap: wrap; }
 .model-manager-card-actions { display: flex; gap: 4px; }
 .model-manager-mini-button,
 .model-manager-action-button {
