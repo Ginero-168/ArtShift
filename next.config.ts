@@ -10,7 +10,7 @@ const florenceBrowserEntry = path.join(
 
 const sharedConfig: NextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ["pptxgenjs", "transformers-florence-v3"],
+  serverExternalPackages: ["pptxgenjs"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },

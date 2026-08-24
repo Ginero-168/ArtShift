@@ -21,6 +21,7 @@ describe("Florence browser execution boundary", () => {
 
   it("resolves Florence to the browser runtime during client builds", () => {
     const config = nextConfig("phase-production-build");
+    expect(config.serverExternalPackages).not.toContain("transformers-florence-v3");
     const runtimeConfig = {
       resolve: { alias: {} as Record<string, string> },
       plugins: [] as unknown[],
