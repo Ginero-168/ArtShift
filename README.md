@@ -19,10 +19,10 @@ Runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`).
 | **Thai typography** | Shared Thai-aware layout for the editor, templates and renderer with safe padding and automatic text-box growth |
 | **Templates** | Explicit Replace Artwork or Add as Layer application; template assets are materialized before one atomic document update |
 | **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
-| **AI Chat** | Claude tool-use (Anthropic direct) **or** Replicate proxy — mutations apply directly to the canvas |
+| **AI Chat** | Provider-neutral AI Runtime with Anthropic tool-use — mutations apply directly to the canvas |
 | **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |
 | **Raster execution** | Eco uses bounded local Worker/Canvas processing; Fast can proxy the same job contract to a paid provider via `RASTER_API_URL` |
-| **Background Removal** | WaveSpeed BRIA RMBG one-click via API proxy |
+| **Background Removal** | Local RMBG Worker; images stay on the device |
 | **PDF Import** | Import PDF pages as slide images (pdfjs-dist) |
 | **Durable local storage** | IndexedDB document/assets, serial autosave, backup recovery and safe migration from legacy localStorage documents |
 | **PWA** | Install metadata + icons; offline caching is not enabled yet |
@@ -48,15 +48,22 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | yes (AI chat) | Claude direct SDK for chat and optional image prompt enhancement |
 | `ANTHROPIC_MODEL` | no | `claude-sonnet-4-5` |
-| `REPLICATE_API_TOKEN` | no | Claude via Replicate proxy |
-| `GEMINI_API_KEY` | no | `/api/generate` proxy |
-| `WAVESPEED_API_KEY` | no | Background removal |
+| `REPLICATE_API_TOKEN` | no | Opt-in cloud semantic Vision Assist; never Remove BG/Extract |
+| `REPLICATE_GPT4O_MINI_VERSION` | no | Pinned economy Vision wrapper version |
+| `REPLICATE_GEMINI_3_FLASH_VERSION` | no | Pinned quality Vision wrapper version |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | no | Optional direct Google adapter |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | no | Optional direct OpenAI adapter |
+| `POLLINATIONS_API_KEY` | no | AI Image Studio generation adapter |
+| `POLLINATIONS_MODEL_*` | no | Server-owned mapping from stable image presets to provider models |
+| `AI_MONTHLY_BUDGET_USD` | no | Server-side estimated monthly budget guard |
 | `UNSPLASH_ACCESS_KEY` | no | Stock photos |
 | `PEXELS_API_KEY` | no | Stock photos |
 | `RASTER_API_URL` | no | Paid Fast raster provider endpoint |
 | `RASTER_API_KEY` | no | Bearer token for the Fast raster provider |
 
 Image prompt enhancement is optional: when `ANTHROPIC_API_KEY` is unavailable, image generation continues with local Thai keyword enrichment instead of the LLM prompt engineer.
+
+Provider integration, consent, fallback and cost rules are documented in [docs/AI_RUNTIME.md](docs/AI_RUNTIME.md).
 
 ---
 
@@ -80,9 +87,10 @@ Image prompt enhancement is optional: when `ANTHROPIC_API_KEY` is unavailable, i
 ```
 app/
   api/
-    chat/route.ts          Anthropic tool-use + Replicate proxy
-    generate/route.ts      Gemini proxy
-    removebg/route.ts      WaveSpeed background removal
+    chat/route.ts          Tool-use loop over the normalized AI Runtime
+    ai/execute/route.ts    Validated task endpoint with consent/budget policy
+    ai/status/route.ts     Provider, model, usage and cache status
+    generate/route.ts      Retired provider-passthrough tombstone
     stock/route.ts         Unsplash + Pexels
     health/route.ts        Health check
   page.tsx                 Main slide editor
@@ -103,7 +111,9 @@ lib/
   raster/                  Selection, Worker jobs, Eco/Fast processors and retouch adapters
   vision/visionEngine.ts   Florence-2 local vision (client-side)
   color/adjustments.ts     12-slider pixel-level color pipeline
-  ai/removeBg.ts           Background removal client
+  ai-runtime/              Task contracts, policy, routing, usage and browser adapter
+  ai/removeBg.ts           Local background-removal runtime
+  server/ai/adapters/      Server-only provider integrations and model mapping
   import/pdfImport.ts      PDF → raster images
 ```
 

@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "benchmark:raster": "vitest bench tests/rasterProcessor.bench.ts --run",
+    "benchmark:ai": "vitest bench tests/aiRuntime.bench.ts --run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",

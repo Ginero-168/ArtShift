@@ -15,9 +15,25 @@ import {
   releaseModelRuntime,
   subscribeModelRegistry,
 } from "@/lib/ai/modelRegistry";
+import type { AiCapabilities, AiProviderStatus } from "@/lib/ai-runtime/contracts";
 
 type ModelManagerPanelProps = {
   onResetProject: () => void;
+};
+
+type RemoteAiReport = {
+  capabilities: AiCapabilities;
+  budget: {
+    monthlyBudgetUsd?: number;
+    persistence: "memory";
+    monthlyUsage: {
+      requests: number;
+      failures: number;
+      estimatedUsd: number;
+      inputTokens: number;
+      outputTokens: number;
+    };
+  };
 };
 
 const EMPTY_SERVER_SNAPSHOT = getModelStates;
@@ -42,6 +58,25 @@ function formatStorageUsage(report: CacheStorageReport | null): string {
   return `${formatBytes(report.usageBytes)} used${report.quotaBytes ? ` of ${formatBytes(report.quotaBytes)}` : ""}`;
 }
 
+function providerTone(provider: AiProviderStatus): string {
+  if (provider.state === "ready") return "is-loaded";
+  if (provider.state === "degraded") return "is-loading";
+  return "is-failed";
+}
+
+function formatProviderPricing(provider: AiProviderStatus): string {
+  const pricing = provider.models.find((model) => model.pricing)?.pricing;
+  if (!pricing) return "Pricing unavailable";
+  if (typeof pricing.perRunUsd === "number") return `$${pricing.perRunUsd.toFixed(4)} / run`;
+  if (
+    typeof pricing.inputPerMillionTokens === "number" ||
+    typeof pricing.outputPerMillionTokens === "number"
+  ) {
+    return `$${pricing.inputPerMillionTokens ?? "—"} in · $${pricing.outputPerMillionTokens ?? "—"} out / 1M`;
+  }
+  return pricing.note ?? "Usage-based pricing";
+}
+
 export default function ModelManagerPanel({ onResetProject }: ModelManagerPanelProps) {
   const models = useSyncExternalStore(
     subscribeModelRegistry,
@@ -49,6 +84,7 @@ export default function ModelManagerPanel({ onResetProject }: ModelManagerPanelP
     EMPTY_SERVER_SNAPSHOT,
   );
   const [report, setReport] = useState<CacheStorageReport | null>(null);
+  const [remoteReport, setRemoteReport] = useState<RemoteAiReport | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,6 +93,9 @@ export default function ModelManagerPanel({ onResetProject }: ModelManagerPanelP
     setRefreshing(true);
     try {
       setReport(await inspectModelCache());
+      const response = await fetch("/api/ai/status", { cache: "no-store" });
+      if (response.ok) setRemoteReport((await response.json()) as RemoteAiReport);
+      else setRemoteReport(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not inspect browser storage.");
     } finally {
@@ -91,6 +130,25 @@ export default function ModelManagerPanel({ onResetProject }: ModelManagerPanelP
     },
     [refresh],
   );
+
+  const clearRemoteResultCache = useCallback(async () => {
+    setBusyId("remote-result-cache");
+    setNotice(null);
+    try {
+      const response = await fetch("/api/ai/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear-result-cache" }),
+      });
+      if (!response.ok) throw new Error("Could not clear the server AI result cache.");
+      setNotice("Server AI result cache cleared.");
+      await refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "AI cache operation failed.");
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh]);
 
   const loadedCount = models.filter((model) => model.status === "loaded").length;
   const loadingCount = models.filter((model) => model.status === "loading").length;
@@ -218,6 +276,77 @@ export default function ModelManagerPanel({ onResetProject }: ModelManagerPanelP
           );
         })}
       </div>
+
+      <div className="model-manager-section-head">
+        <div>
+          <div className="model-manager-kicker">Remote runtime</div>
+          <h3>Providers & usage</h3>
+        </div>
+        <span>
+          {remoteReport
+            ? `${remoteReport.budget.monthlyUsage.requests} requests this month`
+            : "Unavailable"}
+        </span>
+      </div>
+
+      {remoteReport && (
+        <>
+          <div className="model-manager-storage">
+            <div className="model-manager-row-head">
+              <span>Estimated monthly AI cost</span>
+              <span>${remoteReport.budget.monthlyUsage.estimatedUsd.toFixed(4)}</span>
+            </div>
+            <div className="model-manager-storage-meta">
+              <span>
+                {remoteReport.budget.monthlyUsage.inputTokens.toLocaleString()} input ·{" "}
+                {remoteReport.budget.monthlyUsage.outputTokens.toLocaleString()} output tokens
+              </span>
+              <span>
+                {remoteReport.budget.monthlyBudgetUsd
+                  ? `$${remoteReport.budget.monthlyBudgetUsd.toFixed(2)} budget`
+                  : "No server budget configured"}{" "}
+                · in-memory estimate
+              </span>
+            </div>
+          </div>
+
+          <div className="model-manager-list">
+            {remoteReport.capabilities.providers.map((provider) => (
+              <article className="model-manager-card" key={provider.id}>
+                <div className="model-manager-card-head">
+                  <span
+                    className={`model-manager-dot ${providerTone(provider)}`}
+                    aria-hidden="true"
+                  />
+                  <div className="model-manager-card-title">
+                    <strong>{provider.label}</strong>
+                    <span>{provider.tasks.join(" · ") || "No exposed tasks"}</span>
+                  </div>
+                  <span className={`model-manager-status ${providerTone(provider)}`}>
+                    {provider.state === "ready" ? "Ready" : provider.state.replace("-", " ")}
+                  </span>
+                </div>
+                <p>{provider.message ?? formatProviderPricing(provider)}</p>
+                <div className="model-manager-card-foot">
+                  <span>
+                    {provider.models.map((model) => model.alias ?? model.id).join(" · ") ||
+                      "No models"}
+                  </span>
+                  <span>{formatProviderPricing(provider)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <button
+            className="model-manager-action-button"
+            onClick={() => void clearRemoteResultCache()}
+            disabled={busyId !== null}
+          >
+            Clear server AI result cache
+          </button>
+        </>
+      )}
 
       <div className="model-manager-actions">
         <button

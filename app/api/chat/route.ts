@@ -1,14 +1,14 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { type NextRequest, NextResponse } from "next/server";
+import type { AiChatContent, AiChatMessage, AiToolDefinition } from "@/lib/ai-runtime/contracts";
 import { searchImages } from "@/lib/imageLibrary";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
+import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { TEMPLATE_MANIFEST } from "@/lib/templates";
 import type { Mutation } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
 const chatLimiter = new RateLimiter(30, 60_000);
 
 const TEMPLATE_REGISTRY = Object.entries(TEMPLATE_MANIFEST)
@@ -116,12 +116,12 @@ function buildSystem(slideState: unknown): string {
   ].join("\n");
 }
 
-const tools: Anthropic.Tool[] = [
+const tools: AiToolDefinition[] = [
   {
     name: "add_text",
     description:
       "Create a text object on the current slide. Coordinates are in pixels on a 1280x720 canvas. Origin is top-left.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         text: { type: "string" },
@@ -140,7 +140,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "add_shape",
     description: "Create a shape on the current slide.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         shape: { type: "string", enum: ["rect", "ellipse", "triangle", "line", "arrow"] },
@@ -160,7 +160,7 @@ const tools: Anthropic.Tool[] = [
     name: "add_image",
     description:
       "Create an image object from a URL (https). Do not invent URLs — only use URLs the user has supplied.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         src: { type: "string" },
@@ -176,7 +176,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "update_object",
     description: "Update fields on an existing object by id.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         id: { type: "string" },
@@ -192,7 +192,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "delete_object",
     description: "Delete an object by id from the current slide.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: { id: { type: "string" } },
       required: ["id"],
@@ -201,7 +201,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "set_background",
     description: "Set the current slide's background color.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: { color: { type: "string" } },
       required: ["color"],
@@ -210,7 +210,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "add_slide",
     description: "Add a new blank slide after the current slide and select it.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: { name: { type: "string" } },
     },
@@ -219,7 +219,7 @@ const tools: Anthropic.Tool[] = [
     name: "apply_template",
     description:
       "Replace the current slide with a pixel-perfect deterministic layout. PREFER this over multiple add_text / add_shape calls when building a composed slide. The engine handles alignment, spacing, and card sizing automatically — you only provide the content. Available templates and their required fields are listed in the system prompt.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         template: {
@@ -248,7 +248,7 @@ const tools: Anthropic.Tool[] = [
     name: "plan_deck",
     description:
       "Announce the outline of a multi-slide deck BEFORE building any slide. CALL THIS FIRST whenever you will produce 2+ slides in one turn. It does NOT modify the document — it only shows the user what's coming so they can follow progress and leave comments. After planning, build each slide with `add_slide` + `apply_template`, in the exact order you planned.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         title: {
@@ -291,7 +291,7 @@ const tools: Anthropic.Tool[] = [
     name: "search_image",
     description:
       "Look up 3 stock photo URLs that match a topic query (Thai or English). Returns a JSON object with an `images` array. You MUST call this before using `apply_template` with a template that has an image slot (`hero`, `image-text-split`). Never invent URLs.",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         query: {
@@ -304,6 +304,23 @@ const tools: Anthropic.Tool[] = [
     },
   },
 ];
+
+function normalizeChatMessages(value: unknown): AiChatMessage[] | null {
+  if (!Array.isArray(value) || value.length > 50) return null;
+  const messages: AiChatMessage[] = [];
+  let totalCharacters = 0;
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const role = (item as { role?: unknown }).role;
+    const content = (item as { content?: unknown }).content;
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string") return null;
+    if (content.length > 32_000) return null;
+    totalCharacters += content.length;
+    if (totalCharacters > 128_000) return null;
+    messages.push({ role, content });
+  }
+  return messages;
+}
 
 function sseLine(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -318,8 +335,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -330,34 +345,15 @@ export async function POST(req: NextRequest) {
   const wantStream =
     req.headers.get("accept")?.includes("text/event-stream") || body.stream === true;
 
-  if (!apiKey) {
-    const msg = "AI agent is not configured on this server.";
-    if (wantStream) {
-      return new Response(sseLine("text", { delta: msg }) + sseLine("done", { applied: 0 }), {
-        status: 503,
-        headers: {
-          "content-type": "text/event-stream",
-          "cache-control": "no-cache, no-transform",
-          "x-accel-buffering": "no",
-        },
-      });
-    }
-    return NextResponse.json({ error: msg }, { status: 503 });
+  const userMessages = normalizeChatMessages(body.messages);
+  if (!userMessages) {
+    return NextResponse.json({ error: "Invalid or oversized chat messages." }, { status: 400 });
   }
-
-  const userMessages = (body.messages ?? []) as Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
   const slideState = body.slideState;
-  const client = new Anthropic({ apiKey });
+  const ai = getServerAiRuntime();
 
   const system = buildSystem(slideState);
-
-  const messages: Anthropic.MessageParam[] = userMessages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
+  const messages: AiChatMessage[] = [...userMessages];
 
   if (!wantStream) {
     // Non-streaming fallback (kept for backwards-compat/tests)
@@ -365,43 +361,28 @@ export async function POST(req: NextRequest) {
     let finalText = "";
     try {
       for (let step = 0; step < 14; step++) {
-        const resp = await client.messages.create({
-          model: MODEL,
-          max_tokens: 8192,
-          system,
-          tools,
-          messages,
-        });
-
-        const assistantContent = resp.content;
-        messages.push({ role: "assistant", content: assistantContent });
-
-        const toolUses = assistantContent.filter(
-          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+        const execution = await ai.execute(
+          "assistant.chat",
+          { messages, system, tools, maxTokens: 8_192 },
+          { profile: "quality", cache: false, signal: req.signal },
         );
-        const textBlocks = assistantContent.filter(
-          (b): b is Anthropic.TextBlock => b.type === "text",
-        );
+        const result = execution.output;
+        messages.push(result.assistantMessage);
+        const toolUses = result.toolCalls;
+        if (result.text) finalText = result.text;
 
-        if (textBlocks.length) {
-          finalText = textBlocks
-            .map((t) => t.text)
-            .join("\n")
-            .trim();
-        }
-
-        if (!toolUses.length || resp.stop_reason === "end_turn") {
+        if (!toolUses.length || result.stopReason === "end_turn") {
           break;
         }
 
-        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        const toolResults: AiChatContent[] = [];
         for (const tu of toolUses) {
           if (tu.name === "search_image") {
-            const q = String((tu.input as { query?: unknown })?.query ?? "");
+            const q = String(tu.input.query ?? "");
             const images = searchImages(q, 3);
             toolResults.push({
               type: "tool_result",
-              tool_use_id: tu.id,
+              toolCallId: tu.id,
               content: JSON.stringify({ images }),
             });
             continue;
@@ -410,18 +391,18 @@ export async function POST(req: NextRequest) {
             // Plan is metadata only — do not emit as mutation.
             toolResults.push({
               type: "tool_result",
-              tool_use_id: tu.id,
+              toolCallId: tu.id,
               content: "plan recorded; proceed to build slides",
             });
             continue;
           }
           mutations.push({
             tool: tu.name,
-            input: (tu.input ?? {}) as Record<string, unknown>,
+            input: tu.input,
           });
           toolResults.push({
             type: "tool_result",
-            tool_use_id: tu.id,
+            toolCallId: tu.id,
             content: "applied",
           });
         }
@@ -450,42 +431,38 @@ export async function POST(req: NextRequest) {
       };
       try {
         for (let step = 0; step < 14; step++) {
-          const s = client.messages.stream({
-            model: MODEL,
-            max_tokens: 8192,
-            system,
-            tools,
-            messages,
-          });
-
-          // Forward text deltas to the client in real time.
-          s.on("text", (delta: string) => {
-            if (delta) send("text", { delta });
-          });
-
-          const finalMsg = await s.finalMessage();
-          messages.push({ role: "assistant", content: finalMsg.content });
-
-          const toolUses = finalMsg.content.filter(
-            (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+          const execution = await ai.execute(
+            "assistant.chat",
+            { messages, system, tools, maxTokens: 8_192 },
+            {
+              profile: "quality",
+              cache: false,
+              signal: req.signal,
+              onTextDelta: (delta) => {
+                if (delta) send("text", { delta });
+              },
+            },
           );
+          const result = execution.output;
+          messages.push(result.assistantMessage);
+          const toolUses = result.toolCalls;
 
           // Emit any tool_use as a mutation event before the next turn.
           // `search_image` and `plan_deck` are executed server-side and do NOT become mutations.
-          const toolResults: Anthropic.ToolResultBlockParam[] = [];
+          const toolResults: AiChatContent[] = [];
           for (const tu of toolUses) {
             if (tu.name === "search_image") {
-              const q = String((tu.input as { query?: unknown })?.query ?? "");
+              const q = String(tu.input.query ?? "");
               const images = searchImages(q, 3);
               toolResults.push({
                 type: "tool_result",
-                tool_use_id: tu.id,
+                toolCallId: tu.id,
                 content: JSON.stringify({ images }),
               });
               continue;
             }
             if (tu.name === "plan_deck") {
-              const input = (tu.input ?? {}) as {
+              const input = tu.input as {
                 title?: string;
                 slides?: Array<{ title: string; summary: string; template: string }>;
               };
@@ -497,14 +474,14 @@ export async function POST(req: NextRequest) {
               send("plan", deckPlan);
               toolResults.push({
                 type: "tool_result",
-                tool_use_id: tu.id,
+                toolCallId: tu.id,
                 content: "plan recorded; proceed to build slides",
               });
               continue;
             }
             const mut: Mutation = {
               tool: tu.name,
-              input: (tu.input ?? {}) as Record<string, unknown>,
+              input: tu.input,
             };
             send("mutation", mut);
             // Emit progress whenever a slide's layout gets applied.
@@ -519,12 +496,12 @@ export async function POST(req: NextRequest) {
             }
             toolResults.push({
               type: "tool_result",
-              tool_use_id: tu.id,
+              toolCallId: tu.id,
               content: "applied",
             });
           }
 
-          if (!toolUses.length || finalMsg.stop_reason === "end_turn") break;
+          if (!toolUses.length || result.stopReason === "end_turn") break;
 
           messages.push({ role: "user", content: toolResults });
         }

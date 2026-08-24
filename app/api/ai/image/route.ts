@@ -1,45 +1,20 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { type NextRequest, NextResponse } from "next/server";
 import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/pollinations";
+import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
+import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const imageGenLimiter = new RateLimiter(30, 60_000);
-
-async function enhancePromptWithLLM(userPrompt: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return enrichPrompt(userPrompt);
-
-  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5";
-  try {
-    const client = new Anthropic({ apiKey });
-    const res = await client.messages.create({
-      model,
-      max_tokens: 150,
-      system:
-        "You are an expert AI Image Prompt Engineer for FLUX.1. Convert the user request (in Thai, English, or any language) into a single direct, highly detailed English visual prompt describing the exact subjects, quantities, action, environment, lighting, and style. Output ONLY the English prompt text without quotes, markdown, greetings, or prefixes.",
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const block = res.content[0];
-    if (block?.type === "text" && block.text.trim()) {
-      return block.text.trim().replace(/^["'`*]+|["'`*]+$/g, "");
-    }
-  } catch (err) {
-    console.error("LLM prompt expansion fallback:", err);
-  }
-
-  return enrichPrompt(userPrompt);
-}
+const imageGenLimiter = new RateLimiter(20, 60_000);
 
 export async function POST(req: NextRequest) {
   const limit = imageGenLimiter.check(getClientIp(req));
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Please wait a moment." },
-      { status: 429 },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
     );
   }
 
@@ -51,81 +26,83 @@ export async function POST(req: NextRequest) {
   }
 
   const rawPrompt = typeof body.prompt === "string" ? body.prompt : "beautiful artwork";
-  const width = typeof body.width === "number" ? Math.min(1280, Math.max(256, body.width)) : 1024;
-  const height =
-    typeof body.height === "number" ? Math.min(1280, Math.max(256, body.height)) : 1024;
-  const model = typeof body.model === "string" ? body.model : "flux";
-  const enhance = typeof body.enhance === "boolean" ? body.enhance : true;
   const normalizedPrompt = cleanImagePrompt(rawPrompt) || rawPrompt.trim() || "beautiful artwork";
+  if (normalizedPrompt.length > 32_000) {
+    return NextResponse.json({ error: "Image prompt is too long." }, { status: 400 });
+  }
+  const width = boundedDimension(body.width);
+  const height = boundedDimension(body.height);
+  const enhance = body.enhance !== false;
+  const modelAlias = imageModelAlias(body.model);
+  const ai = getServerAiRuntime();
 
-  const cleanPrompt = enhance ? await enhancePromptWithLLM(normalizedPrompt) : normalizedPrompt;
-  const seed = Math.floor(Math.random() * 10_000_000);
-
-  // Try Pollinations primary models with retry/fallback
-  const candidateModels = [model, "flux", "turbo"];
-  let imageBuffer: ArrayBuffer | null = null;
-  let contentType = "image/jpeg";
-
-  for (const m of candidateModels) {
-    const encoded = encodeURIComponent(cleanPrompt);
-    const url = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=${m}&nologo=true&enhance=${enhance}`;
-
+  let prompt = normalizedPrompt;
+  let promptWarning: string | undefined;
+  if (enhance) {
     try {
-      const upstreamRes = await fetch(url, {
-        method: "GET",
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+      const enhanced = await ai.execute(
+        "prompt.enhance",
+        { prompt: normalizedPrompt, purpose: "image" },
+        {
+          profile: "economy",
+          cloudConsent: true,
+          allowFallback: false,
+          timeoutMs: 20_000,
+          maxCostUsd: 0.02,
+          signal: req.signal,
         },
-        signal: AbortSignal.timeout(25_000),
-      });
-
-      if (upstreamRes.ok) {
-        const ct = upstreamRes.headers.get("content-type");
-        if (ct && (ct.startsWith("image/") || ct === "application/octet-stream")) {
-          imageBuffer = await upstreamRes.arrayBuffer();
-          if (imageBuffer.byteLength > 1000) {
-            contentType = ct.startsWith("image/") ? ct : "image/jpeg";
-            break;
-          }
-        }
-      }
+      );
+      prompt = enhanced.output.prompt;
     } catch {
-      // Try next candidate model
+      prompt = enrichPrompt(normalizedPrompt);
+      promptWarning = "Cloud prompt enhancement was unavailable; local enrichment was used.";
     }
   }
 
-  // Fallback: If AI upstream fails, fetch from Unsplash stock source
-  if (!imageBuffer) {
-    try {
-      const unsplashUrl = `https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=${width}&h=${height}&fit=crop&q=80`;
-      const stockRes = await fetch(unsplashUrl, { signal: AbortSignal.timeout(10_000) });
-      if (stockRes.ok) {
-        imageBuffer = await stockRes.arrayBuffer();
-        contentType = "image/jpeg";
-      }
-    } catch {
-      // fallback failed
-    }
-  }
-
-  if (!imageBuffer || imageBuffer.byteLength === 0) {
-    return NextResponse.json(
-      { error: "Failed to generate image from AI servers. Please try again." },
-      { status: 502 },
+  try {
+    const execution = await ai.execute(
+      "image.generate",
+      { prompt, width, height, enhance: false },
+      {
+        profile: "economy",
+        modelAlias,
+        allowFallback: false,
+        timeoutMs: 90_000,
+        signal: req.signal,
+      },
     );
+    return NextResponse.json({
+      success: true,
+      ...execution.output,
+      provider: execution.metadata.provider,
+      model: execution.metadata.model,
+      usage: execution.metadata.usage,
+      warnings: [promptWarning, ...execution.metadata.warnings].filter(Boolean),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Image generation failed.";
+    const status = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH" ? 503 : 502;
+    return NextResponse.json({ error: message }, { status });
   }
+}
 
-  const base64 = Buffer.from(imageBuffer).toString("base64");
-  const dataUrl = `data:${contentType};base64,${base64}`;
+function boundedDimension(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(2_048, Math.max(256, Math.round(value)))
+    : 1_024;
+}
 
-  return NextResponse.json({
-    success: true,
-    dataUrl,
-    prompt: cleanPrompt,
-    width,
-    height,
-    seed,
-  });
+function imageModelAlias(value: unknown): string {
+  switch (value) {
+    case "flux-realism":
+      return "image-realism";
+    case "flux-anime":
+      return "image-anime";
+    case "flux-3d":
+      return "image-3d";
+    case "turbo":
+      return "image-fast";
+    default:
+      return "image-primary";
+  }
 }

@@ -44,9 +44,11 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | Variable | Description |
 |---|---|
 | `ANTHROPIC_API_KEY` | For AI chat |
-| `REPLICATE_API_TOKEN` | For Replicate AI backend |
-| `GEMINI_API_KEY` | For Gemini proxy |
-| `WAVESPEED_API_KEY` | For background removal |
+| `REPLICATE_API_TOKEN` | Optional cloud semantic Vision Assist |
+| `GEMINI_API_KEY` | Optional direct Google provider adapter |
+| `OPENAI_API_KEY` | Optional direct OpenAI provider adapter |
+| `POLLINATIONS_API_KEY` | AI Image Studio generation |
+| `AI_MONTHLY_BUDGET_USD` | Optional monthly AI budget guard |
 | `UNSPLASH_ACCESS_KEY` | Stock photos |
 | `PEXELS_API_KEY` | Stock photos |
 | `RASTER_API_URL` | Optional paid Fast raster provider endpoint |
@@ -63,7 +65,8 @@ In hPanel Node.js → click **Run/Start**.
 Static export is not the default build for this project because the current
 `next.config.ts` does not enable `output: "export"` and server routes cannot run
 from static files. Use a separate static-export configuration only if you need
-the editor without AI, stock, background-removal, catalog, or PPTX server APIs.
+the editor without cloud AI, stock, catalog, or PPTX server APIs. Local Remove
+BG and Extract remain browser features, but model files must be cached first.
 
 The current repository does not ship a static-export build script. If a future
 static-only branch enables `output: "export"` and removes the server routes from
