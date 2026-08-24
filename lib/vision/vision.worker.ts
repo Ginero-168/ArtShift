@@ -3,7 +3,7 @@ import {
   env,
   Florence2ForConditionalGeneration,
   RawImage,
-} from "transformers-florence-v3";
+} from "./florenceBrowserRuntime.js";
 import { getVisionGenerationConfig } from "./visionGeneration";
 import type {
   VisionWorkerMessage,

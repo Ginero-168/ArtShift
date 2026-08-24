@@ -4,7 +4,7 @@
 
 > Built on **Next.js 15** + **React 19** + **TypeScript strict** + **Tailwind v4**
 
-Runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`).
+Recommended local runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`). Production supports Node.js **22.18.0–22.x**.
 
 ---
 
