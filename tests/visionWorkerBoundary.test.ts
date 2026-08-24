@@ -37,4 +37,22 @@ describe("Florence browser execution boundary", () => {
 
     expect(resolved.resolve.alias["transformers-florence-v3$"]).toMatch(/transformers\.web\.js$/);
   });
+
+  it("keeps the server-side worker compilation on the browser runtime too", () => {
+    const config = nextConfig("phase-production-build");
+    const runtimeConfig = {
+      resolve: { alias: {} as Record<string, string> },
+      plugins: [] as unknown[],
+    };
+
+    const resolved = config.webpack?.(
+      runtimeConfig as never,
+      {
+        isServer: true,
+        webpack: { IgnorePlugin: class IgnorePlugin {} },
+      } as never,
+    ) as typeof runtimeConfig;
+
+    expect(resolved.resolve.alias["transformers-florence-v3$"]).toMatch(/transformers\.web\.js$/);
+  });
 });

@@ -21,14 +21,15 @@ const sharedConfig: NextConfig = {
     ],
   },
   webpack(config, { isServer, webpack }) {
+    // The package export condition can resolve its Node entry while Next is
+    // compiling the Web Worker. Force the browser build in both the client
+    // and server compilation passes so webpack never traverses
+    // onnxruntime-node's native .node binaries.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "transformers-florence-v3$": florenceBrowserEntry,
+    };
     if (!isServer) {
-      // The package export condition can resolve its Node entry while Next is
-      // compiling the Web Worker. Force the browser build so webpack never
-      // traverses onnxruntime-node's native .node binaries.
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        "transformers-florence-v3$": florenceBrowserEntry,
-      };
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
