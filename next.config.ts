@@ -14,6 +14,7 @@ const sharedConfig: NextConfig = {
     ],
   },
   webpack(config, { isServer, webpack }) {
+    config.module.noParse = /[\\/]@techstark[\\/]opencv-js[\\/]dist[\\/]opencv\.js$/;
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
