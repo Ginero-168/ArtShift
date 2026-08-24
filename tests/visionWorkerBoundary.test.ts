@@ -37,6 +37,7 @@ describe("Florence browser execution boundary", () => {
   it("stubs fs during server compilation for browser-only raster packages", () => {
     const config = nextConfig("phase-production-build");
     const runtimeConfig = {
+      module: { noParse: undefined as RegExp | undefined },
       resolve: { fallback: {} as Record<string, false | string> },
       plugins: [] as unknown[],
     };
@@ -50,5 +51,26 @@ describe("Florence browser execution boundary", () => {
     ) as typeof runtimeConfig;
 
     expect(resolved.resolve.fallback.fs).toBe(false);
+  });
+
+  it("does not parse OpenCV's Node-only require branch in Webpack", () => {
+    const config = nextConfig("phase-production-build");
+    const runtimeConfig = {
+      module: { noParse: undefined as RegExp | undefined },
+      resolve: { fallback: {} as Record<string, false | string> },
+      plugins: [] as unknown[],
+    };
+
+    const resolved = config.webpack?.(
+      runtimeConfig as never,
+      {
+        isServer: true,
+        webpack: { IgnorePlugin: class IgnorePlugin {} },
+      } as never,
+    ) as typeof runtimeConfig;
+
+    expect(resolved.module.noParse).toEqual(
+      /[\\/]@techstark[\\/]opencv-js[\\/]dist[\\/]opencv\.js$/,
+    );
   });
 });
