@@ -41,15 +41,59 @@ type CvModule = {
 export async function loadOpenCvJs(): Promise<OpenCvAdapter> {
   markModelLoading("opencv-js");
   try {
-    const module = await import("@techstark/opencv-js");
-    const candidate = (module as unknown as { default?: unknown }).default ?? module;
-    const cv = await waitForOpenCv(candidate);
+    const cv = await loadOpenCvRuntime();
     markModelLoaded("opencv-js");
     return createOpenCvAdapter(createRuntime(cv));
   } catch (error) {
     markModelFailed("opencv-js", error);
     throw error;
   }
+}
+
+let openCvRuntime: Promise<CvModule> | null = null;
+
+async function loadOpenCvRuntime(): Promise<CvModule> {
+  if (typeof window === "undefined") {
+    throw new Error("OpenCV.js can only load in a browser runtime.");
+  }
+
+  const existing = getGlobalOpenCv();
+  if (existing) return waitForOpenCv(existing);
+
+  openCvRuntime ??= new Promise<CvModule>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[data-artshift-opencv="true"]',
+    );
+    const script = existingScript ?? document.createElement("script");
+    const settle = () => {
+      const candidate = getGlobalOpenCv();
+      if (!candidate) {
+        reject(new Error("OpenCV.js did not expose a browser runtime."));
+        return;
+      }
+      void waitForOpenCv(candidate).then(resolve, reject);
+    };
+
+    script.addEventListener("load", settle, { once: true });
+    script.addEventListener("error", () => reject(new Error("OpenCV.js asset failed to load.")), {
+      once: true,
+    });
+    if (!existingScript) {
+      script.async = true;
+      script.dataset.artshiftOpencv = "true";
+      script.src = "/api/raster/opencv";
+      document.head.appendChild(script);
+    }
+  }).catch((error) => {
+    openCvRuntime = null;
+    throw error;
+  });
+
+  return openCvRuntime;
+}
+
+function getGlobalOpenCv(): unknown {
+  return (globalThis as typeof globalThis & { cv?: unknown }).cv;
 }
 
 async function waitForOpenCv(candidate: unknown): Promise<CvModule> {
