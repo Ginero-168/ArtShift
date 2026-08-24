@@ -4,7 +4,7 @@
   "private": true,
   "description": "ArtShift — AI-powered slide and design studio with a Canvas2D editor, local vision AI, and background removal.",
   "engines": {
-    "node": ">=22.23.2 <23"
+    "node": ">=22.18.0 <23"
   },
   "scripts": {
     "dev": "next dev",

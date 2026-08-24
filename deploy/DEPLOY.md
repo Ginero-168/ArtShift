@@ -1,41 +1,45 @@
 # ArtShift — Deploy Guide
 
-## Hostinger Shared Hosting (Node.js)
+## Hostinger Node.js Web App
 
 ### Prerequisites
-- Hostinger Shared Hosting with Node.js support (Premium/Business plan)
+- Hostinger Business or Cloud plan with Node.js Web Apps
+- Node.js 22.x in Hostinger deployment settings
 - Node.js 22.23.2 LTS on your local machine (`nvm use` reads `.nvmrc`)
 
 ### Step 1: Build locally
 
 ```bash
 cd ArtShift
-npm install
+npm ci
 npm run build
 ```
 
 The current application uses Next.js server routes for AI, stock search,
-background removal, catalog ingestion, and PPTX export. A normal build writes
+catalog ingestion, and PPTX export. Remove BG and Extract remain browser-local.
+A normal build writes
 the `.next/` runtime and must be started by a Node.js host with `npm run start`.
 
-### Step 2: Upload to Hostinger
+### Step 2: Connect the GitHub repository
 
-For the Node.js deployment, upload the runtime output and package metadata via
-File Manager or FTP, then install production dependencies on the host:
+Use **Deploy Web App → Import Git Repository** in hPanel and select the branch
+that contains the deployment commit. Use these settings when Hostinger does not
+detect them automatically:
 
-```
-public_html/
-├── .htaccess              ← from deploy/.htaccess
-├── .next/                 ← from the normal `npm run build`
-├── public/                ← static assets and icons
-├── package.json
-├── package-lock.json
-└── server/                ← only if the host requires a custom launcher
-```
+| Setting | Value |
+|---|---|
+| Framework | Next.js |
+| Root directory | `.` |
+| Node.js version | `22.x` |
+| Build command | `npm run build` |
+| Start command | `npm run start` |
+| Output directory, if requested | `.next` |
 
-Run `npm ci --omit=dev` on the host and start the application with
-`npm run start`. Do not upload an `out/` folder for this deployment; the default
-build is a Next.js server build and includes API routes.
+Hostinger installs dependencies and builds the application from the selected
+revision. Do not commit or upload `node_modules`, a local `.next` cache, or an
+`out/` folder. For a ZIP deployment, upload the project source with
+`package.json` and `package-lock.json` at the archive root and let Hostinger run
+the build.
 
 ### Step 3: Set environment variables in hPanel
 
@@ -54,9 +58,11 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `RASTER_API_URL` | Optional paid Fast raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 
-### Step 4: Start the app
+### Step 4: Redeploy and start the app
 
-In hPanel Node.js → click **Run/Start**.
+In **Deployments → Settings and redeploy**, verify the selected Git branch,
+Node.js 22.x, build command, start command, and environment variables. After a
+successful build, start or restart the application from its Node.js dashboard.
 
 ---
 
