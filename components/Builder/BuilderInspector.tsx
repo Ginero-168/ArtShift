@@ -47,6 +47,7 @@ import type {
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
 import { convertElementToVectorPath, smoothVectorPathNodes } from "@/lib/engine/vectorPath";
 import { THAI_FONTS } from "@/lib/fonts";
+import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 import ColorPickerInput from "./ColorPickerInput";
@@ -898,7 +899,13 @@ function FrameMaskOptions({
                     const file = event.target.files?.[0];
                     if (!file) return;
                     const url = await fileToDataURL(file);
-                    await loadDataURL(url);
+                    const entry = await loadDataURL(url);
+                    enqueueAssetAnalysis({
+                      fileId: entry.fileId,
+                      dataURL: entry.dataURL,
+                      width: entry.width,
+                      height: entry.height,
+                    });
                     onSetImage(url);
                   }}
                 />
@@ -1007,7 +1014,13 @@ function FrameMaskOptions({
                 const file = event.target.files?.[0];
                 if (!file) return;
                 const url = await fileToDataURL(file);
-                await loadDataURL(url);
+                const entry = await loadDataURL(url);
+                enqueueAssetAnalysis({
+                  fileId: entry.fileId,
+                  dataURL: entry.dataURL,
+                  width: entry.width,
+                  height: entry.height,
+                });
                 onSetImage(url);
               }}
             />
@@ -1244,6 +1257,12 @@ function MediaOptions({
   async function upload(file: File | undefined) {
     if (!file) return;
     const entry = await loadDataURL(await fileToDataURL(file));
+    enqueueAssetAnalysis({
+      fileId: entry.fileId,
+      dataURL: entry.dataURL,
+      width: entry.width,
+      height: entry.height,
+    });
     apply(
       {
         fileId: entry.fileId,

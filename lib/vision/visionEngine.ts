@@ -4,118 +4,29 @@
  * and phrase grounding. No images leave the browser.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import {
-  AutoProcessor,
-  env,
-  Florence2ForConditionalGeneration,
-  RawImage,
-} from "@huggingface/transformers";
 import type { VisionMask } from "./advancedVision";
-import { alphaBoundsFromRgba, shouldPreserveForegroundPixel } from "./foreground";
+import { alphaBoundsFromRgba } from "./foreground";
+import { composeInstanceAlpha } from "./instanceMask";
 import type { VisionObjectBox } from "./objectBoxes";
-import { getVisionGenerationConfig } from "./visionGeneration";
+import { executeVisionTaskInWorker } from "./visionWorkerClient";
+import type { VisionWorkerProgressStage } from "./visionWorkerProtocol";
 
-env.allowLocalModels = false;
-
-const PRIMARY_MODEL_ID = "onnx-community/Florence-2-base-ft";
-const FALLBACK_MODEL_ID = "onnx-community/Florence-2-base";
-
-// biome-ignore lint/suspicious/noExplicitAny: third-party Florence-2 model types are complex and not imported here
-let model: any = null;
-// biome-ignore lint/suspicious/noExplicitAny: third-party Florence-2 processor types are complex and not imported here
-let processor: any = null;
-let modelLoading = false;
-
-async function ensureModel(onProgress?: (p: number) => void) {
-  if (model && processor) return;
-  if (modelLoading) {
-    while (modelLoading) await new Promise((r) => setTimeout(r, 200));
-    return;
-  }
-
-  modelLoading = true;
-
-  async function tryLoad(id: string) {
-    console.log(
-      `[VisionEngine] Loading Florence-2 from ${id} (~230 MB, cached after first use)...`,
-    );
-    const progressCallback = (progress: { status: string; loaded?: number; total?: number }) => {
-      if (onProgress && progress.status === "progress" && progress.total) {
-        onProgress((progress.loaded! / progress.total) * 0.5);
-      }
-    };
-
-    const [m, p] = await Promise.all([
-      Florence2ForConditionalGeneration.from_pretrained(id, {
-        dtype: "fp32",
-        progress_callback: progressCallback,
-      }),
-      AutoProcessor.from_pretrained(id),
-    ]);
-    return { model: m, processor: p };
-  }
-
-  try {
-    const res = await tryLoad(PRIMARY_MODEL_ID);
-    model = res.model;
-    processor = res.processor;
-    console.log("[VisionEngine] Florence-2 loaded successfully");
-  } catch {
-    console.warn(`[VisionEngine] Primary model failed. Trying fallback...`);
-    try {
-      const res = await tryLoad(FALLBACK_MODEL_ID);
-      model = res.model;
-      processor = res.processor;
-    } catch (fallbackErr) {
-      console.warn(
-        "[VisionEngine] Failed to load Florence-2; local vision is unavailable:",
-        fallbackErr,
-      );
-      model = null;
-      processor = null;
-      throw new Error("VISION_MODEL_LOAD_FAILED: " + (fallbackErr as Error).message);
-    }
-  } finally {
-    modelLoading = false;
-  }
-}
+type VisionProgressCallback = (progress: number, stage?: VisionWorkerProgressStage) => void;
 
 async function runVisionTask(
   imageDataUrl: string,
   taskPrompt: string,
-  onProgress?: (p: number) => void,
+  onProgress?: VisionProgressCallback,
 ) {
-  await ensureModel(onProgress);
-  if (onProgress) onProgress(0.55);
-
-  const image = await RawImage.fromURL(imageDataUrl);
-  if (onProgress) onProgress(0.6);
-
-  const prompts = processor.construct_prompts(taskPrompt);
-  const inputs = await processor(image, prompts);
-  if (onProgress) onProgress(0.75);
-
-  const outputs = await model.generate({ ...inputs, ...getVisionGenerationConfig(taskPrompt) });
-  if (onProgress) onProgress(0.9);
-
-  const generatedText = processor.batch_decode(outputs, {
-    skip_special_tokens: false,
-  })[0];
-  const parsed = processor.post_process_generation(generatedText, taskPrompt, [
-    image.height,
-    image.width,
-  ]);
-  if (onProgress) onProgress(1.0);
-
-  return parsed[taskPrompt];
+  return executeVisionTaskInWorker(imageDataUrl, taskPrompt, {
+    onProgress: (progress, stage) => onProgress?.(progress, stage),
+  });
 }
 
 export async function visionCaption(
   imageDataUrl: string,
   mode: "short" | "normal" | "detailed" = "normal",
-  onProgress?: (p: number) => void,
+  onProgress?: VisionProgressCallback,
 ) {
   const task =
     mode === "short"
@@ -123,52 +34,54 @@ export async function visionCaption(
       : mode === "detailed"
         ? "<MORE_DETAILED_CAPTION>"
         : "<DETAILED_CAPTION>";
-  const result = await runVisionTask(imageDataUrl, task, onProgress);
-  return typeof result === "string" ? result : JSON.stringify(result);
+  const { output } = await runVisionTask(imageDataUrl, task, onProgress);
+  return typeof output === "string" ? output : JSON.stringify(output);
 }
 
-export async function visionDenseCaption(imageDataUrl: string, onProgress?: (p: number) => void) {
-  const result = await runVisionTask(imageDataUrl, "<DENSE_REGION_CAPTION>", onProgress);
+export async function visionDenseCaption(
+  imageDataUrl: string,
+  onProgress?: VisionProgressCallback,
+) {
+  const { output } = await runVisionTask(imageDataUrl, "<DENSE_REGION_CAPTION>", onProgress);
   return (
-    (result as { labels?: string[]; bboxes?: number[][] }) || {
+    (output as { labels?: string[]; bboxes?: number[][] }) || {
       labels: [] as string[],
       bboxes: [] as number[][],
     }
   );
 }
 
-export async function visionDetect(imageDataUrl: string, onProgress?: (p: number) => void) {
+export async function visionDetect(imageDataUrl: string, onProgress?: VisionProgressCallback) {
   const result = await runVisionTask(imageDataUrl, "<OD>", onProgress);
-  return { objects: await normalizeVisionObjects(result, imageDataUrl) };
+  return { objects: normalizeVisionObjects(result.output, result.width, result.height) };
 }
 
 /** Dense-region recall pass used only when foreground geometry outnumbers OD. */
-export async function visionDenseDetect(imageDataUrl: string, onProgress?: (p: number) => void) {
+export async function visionDenseDetect(imageDataUrl: string, onProgress?: VisionProgressCallback) {
   const result = await runVisionTask(imageDataUrl, "<DENSE_REGION_CAPTION>", onProgress);
-  return { objects: await normalizeVisionObjects(result, imageDataUrl) };
+  return { objects: normalizeVisionObjects(result.output, result.width, result.height) };
 }
 
-async function normalizeVisionObjects(
+function normalizeVisionObjects(
   result: unknown,
-  imageDataUrl: string,
+  width: number,
+  height: number,
   fallbackLabel = "object",
-): Promise<VisionObjectBox[]> {
+): VisionObjectBox[] {
   const typed = result as { bboxes?: number[][]; labels?: string[] } | undefined;
   if (!typed?.bboxes) return [];
-
-  const image = await RawImage.fromURL(imageDataUrl);
-  const width = Math.max(1, image.width);
-  const height = Math.max(1, image.height);
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
 
   return typed.bboxes.flatMap((box: number[], index: number) => {
     if (box.length < 4 || !box.slice(0, 4).every(Number.isFinite)) return [];
     return [
       {
         label: typed.labels?.[index] || fallbackLabel,
-        x_min: box[0] / width,
-        y_min: box[1] / height,
-        x_max: box[2] / width,
-        y_max: box[3] / height,
+        x_min: box[0] / safeWidth,
+        y_min: box[1] / safeHeight,
+        x_max: box[2] / safeWidth,
+        y_max: box[3] / safeHeight,
       },
     ];
   });
@@ -177,11 +90,11 @@ async function normalizeVisionObjects(
 export async function visionGroundPhrase(
   imageDataUrl: string,
   phrase: string,
-  onProgress?: (p: number) => void,
+  onProgress?: VisionProgressCallback,
 ) {
   const task = `<CAPTION_TO_PHRASE_GROUNDING>${phrase}`;
   const result = await runVisionTask(imageDataUrl, task, onProgress);
-  const typed = result as { bboxes?: number[][]; labels?: string[] } | undefined;
+  const typed = result.output as { bboxes?: number[][]; labels?: string[] } | undefined;
   if (!typed?.bboxes)
     return {
       objects: [] as {
@@ -194,31 +107,37 @@ export async function visionGroundPhrase(
     };
 
   const { labels, bboxes } = typed;
-  const image = await RawImage.fromURL(imageDataUrl);
-  const width = image.width;
-  const height = image.height;
-
   const objects = bboxes.map((box: number[], i: number) => ({
     label: labels?.[i] || phrase,
-    x_min: box[0] / width,
-    y_min: box[1] / height,
-    x_max: box[2] / width,
-    y_max: box[3] / height,
+    x_min: box[0] / Math.max(1, result.width),
+    y_min: box[1] / Math.max(1, result.height),
+    x_max: box[2] / Math.max(1, result.width),
+    y_max: box[3] / Math.max(1, result.height),
   }));
 
   return { objects };
 }
 
-export async function visionOcr(imageDataUrl: string, onProgress?: (p: number) => void) {
-  const result = await runVisionTask(imageDataUrl, "<OCR>", onProgress);
-  if (typeof result === "string") return result;
-  if (result && (result as { labels?: string[] }).labels)
-    return (result as { labels: string[] }).labels.join(" ");
-  return String(result);
+export async function visionOcr(imageDataUrl: string, onProgress?: VisionProgressCallback) {
+  const { output } = await runVisionTask(imageDataUrl, "<OCR>", onProgress);
+  if (typeof output === "string") return output;
+  if (output && (output as { labels?: string[] }).labels)
+    return (output as { labels: string[] }).labels.join(" ");
+  return String(output);
 }
 
-export async function visionOcrWithRegions(imageDataUrl: string, onProgress?: (p: number) => void) {
-  return await runVisionTask(imageDataUrl, "<OCR_WITH_REGION>", onProgress);
+export async function visionOcrWithRegions(
+  imageDataUrl: string,
+  onProgress?: VisionProgressCallback,
+) {
+  const { output } = await runVisionTask(imageDataUrl, "<OCR_WITH_REGION>", onProgress);
+  return output;
+}
+
+/** Release the cached Florence runtime without deleting downloaded model files. */
+export async function releaseVisionRuntime(): Promise<void> {
+  const { releaseModelRuntime } = await import("@/lib/ai/modelRegistry");
+  await releaseModelRuntime("florence-2");
 }
 
 /**
@@ -362,20 +281,22 @@ export async function cropImageRegionWithMask(
       }
       context.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
       const pixels = context.getImageData(0, 0, sw, sh);
+      const sourceAlpha = new Uint8ClampedArray(sw * sh);
+      const refinementMask = new Uint8ClampedArray(sw * sh);
       for (let y = 0; y < sh; y++) {
         const sourceY = Math.min(mask.height - 1, Math.floor(((sy + y) / naturalH) * mask.height));
         for (let x = 0; x < sw; x++) {
           const sourceX = Math.min(mask.width - 1, Math.floor(((sx + x) / naturalW) * mask.width));
           const pixelOffset = (y * sw + x) * 4;
-          const maskValue = mask.data[sourceY * mask.width + sourceX];
-          const shouldKeep =
-            (options.preserveExistingAlpha ?? true)
-              ? shouldPreserveForegroundPixel(pixels.data[pixelOffset + 3], maskValue)
-              : maskValue > 0;
-          if (!shouldKeep) {
-            pixels.data[pixelOffset + 3] = 0;
-          }
+          sourceAlpha[y * sw + x] = pixels.data[pixelOffset + 3];
+          refinementMask[y * sw + x] = mask.data[sourceY * mask.width + sourceX] > 0 ? 255 : 0;
         }
+      }
+      const composedAlpha = composeInstanceAlpha(sourceAlpha, refinementMask, {
+        preserveSourceAlpha: options.preserveExistingAlpha ?? true,
+      });
+      for (let index = 0; index < composedAlpha.length; index++) {
+        pixels.data[index * 4 + 3] = composedAlpha[index];
       }
       context.putImageData(pixels, 0, 0);
       resolve({ dataUrl: canvas.toDataURL("image/png"), width: sw, height: sh });

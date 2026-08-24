@@ -1,3 +1,11 @@
+import {
+  markModelFailed,
+  markModelLoaded,
+  markModelLoading,
+  markModelProgress,
+  registerModelRuntimeReleaser,
+} from "./modelRegistry";
+
 export type RemoveBgWorkerInput = {
   data: Uint8ClampedArray;
   width: number;
@@ -29,6 +37,16 @@ let worker: Worker | null = null;
 let nextId = 0;
 const pending = new Map<number, PendingJob>();
 
+registerModelRuntimeReleaser("rmbg-1.4", () => {
+  for (const job of pending.values()) {
+    job.signal?.removeEventListener("abort", job.onAbort);
+    job.reject(new Error("RMBG runtime released."));
+  }
+  pending.clear();
+  worker?.terminate();
+  worker = null;
+});
+
 export function canRunRemoveBgWorker(): boolean {
   return typeof Worker !== "undefined";
 }
@@ -41,6 +59,7 @@ export function executeRemoveBgInWorker(
   } = {},
 ): Promise<Uint8ClampedArray> {
   const id = ++nextId;
+  markModelLoading("rmbg-1.4");
   // The caller owns this temporary pixel buffer; transfer it directly so a
   // large image is not copied a second time before entering the worker.
   const source = input.data;
@@ -99,6 +118,7 @@ function getWorker(): Worker {
     if (!job) return;
     if (message.type === "progress") {
       job.onProgress?.({ progress: message.progress, stage: message.stage });
+      markModelProgress("rmbg-1.4", message.progress / 0.7);
       return;
     }
 
@@ -107,13 +127,16 @@ function getWorker(): Worker {
     if (message.type === "error") {
       const error = new Error(message.message);
       error.name = message.name ?? error.name;
+      markModelFailed("rmbg-1.4", error);
       job.reject(error);
       return;
     }
+    markModelLoaded("rmbg-1.4");
     job.resolve(new Uint8ClampedArray(message.alpha));
   };
   worker.onerror = (event) => {
     const error = new Error(event.message || "Remove BG worker failed.");
+    markModelFailed("rmbg-1.4", error);
     for (const job of pending.values()) {
       job.signal?.removeEventListener("abort", job.onAbort);
       job.reject(error);

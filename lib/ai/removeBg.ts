@@ -1,9 +1,16 @@
 /**
  * Background Removal Engine — High-precision AI background removal.
- * Primary mode: 100% In-Browser Local RMBG (briaai/RMBG-1.4 via Transformers.js).
- * Fallback mode: Server API (/api/removebg) if configured.
+ * 100% In-Browser Local RMBG (briaai/RMBG-1.4 via Transformers.js).
+ * Image data never leaves the browser through this module.
  */
 
+import {
+  markModelFailed,
+  markModelLoaded,
+  markModelLoading,
+  markModelProgress,
+  registerModelRuntimeReleaser,
+} from "./modelRegistry";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   applyAlphaToImageData,
@@ -18,6 +25,12 @@ let rmbgModel: any = null;
 let rmbgProcessor: any = null;
 let rmbgLoadPromise: Promise<void> | null = null;
 
+registerModelRuntimeReleaser("rmbg-1.4", () => {
+  rmbgModel = null;
+  rmbgProcessor = null;
+  rmbgLoadPromise = null;
+});
+
 type RmbgImage = {
   data: ArrayLike<number>;
   width: number;
@@ -27,10 +40,6 @@ type RmbgImage = {
 
 export type RemoveBackgroundOptions = {
   onProgress?: (p: number) => void;
-  /** Eco runs locally; Fast sends the job to the configured paid API directly. */
-  mode?: "eco" | "fast";
-  /** Allow Eco to upload only when a caller explicitly opts into a remote fallback. */
-  allowRemoteFallback?: boolean;
   signal?: AbortSignal;
   blackPoint?: number;
   whitePoint?: number;
@@ -45,26 +54,6 @@ function throwIfAborted(signal?: AbortSignal): void {
   throw createAbortError();
 }
 
-function waitFor(milliseconds: number, signal?: AbortSignal): Promise<void> {
-  throwIfAborted(signal);
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const cleanup = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
-    };
-    const finish = (callback: () => void) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      callback();
-    };
-    const onAbort = () => finish(() => reject(createAbortError()));
-    const timer = setTimeout(() => finish(resolve), milliseconds);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
 function normalizeOptions(
   onProgressOrOptions?: ((p: number) => void) | RemoveBackgroundOptions,
 ): RemoveBackgroundOptions {
@@ -76,11 +65,14 @@ async function loadLocalRMBG(onProgress?: (p: number) => void) {
   if (rmbgModel && rmbgProcessor) return;
   if (rmbgLoadPromise) return rmbgLoadPromise;
 
+  markModelLoading("rmbg-1.4");
   rmbgLoadPromise = (async () => {
     const { AutoModel, AutoProcessor } = await import("@huggingface/transformers");
     const progressCallback = (p: { status: string; loaded?: number; total?: number }) => {
       if (onProgress && p.status === "progress" && p.total) {
-        onProgress((p.loaded! / p.total) * 0.7);
+        const value = (p.loaded! / p.total) * 0.7;
+        onProgress(value);
+        markModelProgress("rmbg-1.4", value);
       }
     };
     const processor = await AutoProcessor.from_pretrained("briaai/RMBG-1.4");
@@ -101,11 +93,13 @@ async function loadLocalRMBG(onProgress?: (p: number) => void) {
     }
     rmbgModel = model;
     rmbgProcessor = processor;
+    markModelLoaded("rmbg-1.4");
   })();
 
   try {
     await rmbgLoadPromise;
   } catch (error) {
+    markModelFailed("rmbg-1.4", error);
     rmbgLoadPromise = null;
     throw error;
   }
@@ -206,68 +200,5 @@ export async function removeBackground(
 ): Promise<string> {
   const options = normalizeOptions(onProgressOrOptions);
   const { onProgress, signal } = options;
-  const mode = options.mode ?? "eco";
-  const allowRemoteFallback = options.allowRemoteFallback ?? mode === "fast";
-
-  if (mode === "fast") {
-    return removeBackgroundRemote(imageDataUrl, onProgress, signal);
-  }
-
-  // Try in-browser local AI first
-  try {
-    return await removeBackgroundClient(imageDataUrl, onProgress, signal, options);
-  } catch (localErr) {
-    throwIfAborted(signal);
-    if (!allowRemoteFallback) throw localErr;
-    console.warn("Local RMBG failed, falling back to server API...", localErr);
-  }
-
-  throwIfAborted(signal);
-  return removeBackgroundRemote(imageDataUrl, onProgress, signal);
-}
-
-async function removeBackgroundRemote(
-  imageDataUrl: string,
-  onProgress?: (p: number) => void,
-  signal?: AbortSignal,
-): Promise<string> {
-  onProgress?.(0.05);
-  // Fallback to server API
-  const postRes = await fetch("/api/removebg", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: imageDataUrl }),
-    signal,
-  });
-
-  if (!postRes.ok) {
-    const err = await postRes.json().catch(() => ({ error: "unknown" }));
-    throw new Error(err.error || `BG removal failed: ${postRes.status}`);
-  }
-
-  const postData = await postRes.json();
-  const requestId = postData.id || postData.requestId;
-  if (!requestId) {
-    throw new Error("BG removal: no requestId returned");
-  }
-
-  for (let i = 0; i < 60; i++) {
-    throwIfAborted(signal);
-    await waitFor(500, signal);
-    const statusRes = await fetch(`/api/removebg?requestId=${encodeURIComponent(requestId)}`, {
-      signal,
-    });
-    if (!statusRes.ok) continue;
-    const statusData = await statusRes.json();
-    onProgress?.(0.05 + ((i + 1) / 60) * 0.9);
-    if (statusData.status === "completed" && statusData.output?.image) {
-      onProgress?.(1);
-      return statusData.output.image as string;
-    }
-    if (statusData.status === "failed") {
-      throw new Error("BG removal: job failed on server");
-    }
-  }
-
-  throw new Error("BG removal: timeout waiting for result");
+  return removeBackgroundClient(imageDataUrl, onProgress, signal, options);
 }

@@ -56,7 +56,24 @@ export function mergeVisionWithAlphaComponents(
   const validAlphaComponents = alphaComponents.filter(isValidBox);
   if (validAlphaComponents.length === 0) return sortBoxes([...validVisionObjects]);
 
-  const assignments = validAlphaComponents.map((rawComponent, alphaIndex) => {
+  const splitAlphaIndexes = new Set<number>();
+  const splitVisionIndexes = new Set<number>();
+  const splitProposals: VisionObjectBox[] = [];
+
+  for (const [alphaIndex, rawComponent] of validAlphaComponents.entries()) {
+    const { area: _area, ...component } = rawComponent;
+    const candidates = findDistinctVisionInstances(component, validVisionObjects);
+    if (candidates.length < 2) continue;
+
+    splitAlphaIndexes.add(alphaIndex);
+    for (const candidate of candidates) {
+      splitVisionIndexes.add(candidate.index);
+      splitProposals.push({ ...candidate.object });
+    }
+  }
+
+  const assignments = validAlphaComponents.flatMap((rawComponent, alphaIndex) => {
+    if (splitAlphaIndexes.has(alphaIndex)) return [];
     const { area: _area, ...component } = rawComponent;
     let bestVisionIndex = -1;
     let bestCoverage = 0;
@@ -71,14 +88,16 @@ export function mergeVisionWithAlphaComponents(
       }
     }
 
-    return {
-      alphaIndex,
-      component,
-      visionIndex: bestCoverage >= 0.25 ? bestVisionIndex : -1,
-    };
+    return [
+      {
+        alphaIndex,
+        component,
+        visionIndex: bestCoverage >= 0.25 ? bestVisionIndex : -1,
+      },
+    ];
   });
 
-  const usedVisionIndexes = new Set<number>();
+  const usedVisionIndexes = new Set<number>(splitVisionIndexes);
   const groupedAlphaIndexes = new Set<number>();
   const alphaObjects: VisionObjectBox[] = [];
   const groupedComponents = new Map<number, typeof assignments>();
@@ -141,17 +160,121 @@ export function mergeVisionWithAlphaComponents(
     });
   }
 
+  const acceptedObjects = [...splitProposals, ...alphaObjects];
   const uncoveredVisionObjects = validVisionObjects
     .filter((_object, index) => !usedVisionIndexes.has(index))
     .filter(
       (visionObject) =>
-        !alphaObjects.some((alphaObject) => {
+        !acceptedObjects.some((acceptedObject) => {
           const visionArea = area(visionObject);
-          return visionArea > 0 && intersectionArea(visionObject, alphaObject) / visionArea >= 0.5;
+          return (
+            visionArea > 0 && intersectionArea(visionObject, acceptedObject) / visionArea >= 0.5
+          );
         }),
     );
 
-  return sortBoxes([...alphaObjects, ...uncoveredVisionObjects]);
+  return sortBoxes([...acceptedObjects, ...uncoveredVisionObjects]);
+}
+
+function findDistinctVisionInstances(
+  component: NormalizedBox,
+  visionObjects: readonly VisionObjectBox[],
+): Array<{ index: number; object: VisionObjectBox }> {
+  const componentArea = area(component);
+  if (componentArea <= 0) return [];
+
+  const candidates = visionObjects
+    .map((object, index) => ({ index, object }))
+    .filter(({ object }) => {
+      const objectArea = area(object);
+      if (objectArea < componentArea * 0.06 || objectArea > componentArea * 0.82) return false;
+      return intersectionArea(component, object) / objectArea >= 0.72;
+    })
+    .sort((first, second) => area(second.object) - area(first.object));
+
+  const distinct: Array<{ index: number; object: VisionObjectBox }> = [];
+  for (const candidate of candidates) {
+    const isSeparate = distinct.every(({ object }) => {
+      const smallerArea = Math.min(area(object), area(candidate.object));
+      return smallerArea <= 0 || intersectionArea(object, candidate.object) / smallerArea < 0.55;
+    });
+    if (isSeparate) distinct.push(candidate);
+  }
+
+  return distinct;
+}
+
+/**
+ * Keep Fast extraction geometry intact while using Florence only for labels.
+ *
+ * A detector may return a coarse box for a group of nearby objects. That box
+ * must never replace the tighter alpha component because it would reintroduce
+ * the large merged rectangles that Fast extraction avoids.
+ */
+export function labelAlphaComponents(
+  alphaComponents: readonly AlphaObjectBox[],
+  visionObjects: readonly VisionObjectBox[],
+): VisionObjectBox[] {
+  const validVisionObjects = visionObjects.filter(isValidBox);
+
+  return sortBoxes(
+    alphaComponents.filter(isValidBox).map((rawComponent) => {
+      const { area: _area, ...component } = rawComponent;
+      const componentArea = area(component);
+      const bestMatch = validVisionObjects
+        .map((visionObject) => ({
+          coverage:
+            componentArea > 0 ? intersectionArea(component, visionObject) / componentArea : 0,
+          label: visionObject.label,
+        }))
+        .sort((first, second) => second.coverage - first.coverage)[0];
+
+      return {
+        label: bestMatch && bestMatch.coverage >= 0.15 ? bestMatch.label : "object",
+        ...component,
+      };
+    }),
+  );
+}
+
+/**
+ * Preserve Remove BG alpha only when a proposal still represents the same
+ * foreground component. Vision sub-proposals inside one large touching blob
+ * must use their instance mask as the source of truth or they will retain
+ * pixels from neighboring objects.
+ */
+export function shouldPreserveAlphaForProposal(
+  proposal: VisionObjectBox,
+  alphaComponents: readonly AlphaObjectBox[],
+): boolean {
+  const proposalArea = area(proposal);
+  if (proposalArea <= 0) return false;
+
+  const containedComponents = alphaComponents
+    .filter(isValidBox)
+    .map(({ area: _area, ...component }) => component)
+    .filter((component) => {
+      const componentArea = area(component);
+      return componentArea > 0 && intersectionArea(proposal, component) / componentArea >= 0.85;
+    })
+    .sort((first, second) => area(second) - area(first));
+  if (containedComponents.length === 0) return false;
+
+  const primary = containedComponents[0];
+  const proposalComponents = [
+    primary,
+    ...containedComponents.slice(1).filter((component) => isNearbyAccessory(primary, component)),
+  ];
+  const componentUnion = proposalComponents
+    .slice(1)
+    .reduce((current, component) => unionBoxes(current, component), primary);
+  const componentUnionArea = area(componentUnion);
+  if (componentUnionArea <= 0) return false;
+
+  const relativeArea =
+    Math.min(proposalArea, componentUnionArea) / Math.max(proposalArea, componentUnionArea);
+  const overlapOnProposal = intersectionArea(proposal, componentUnion) / proposalArea;
+  return relativeArea >= 0.65 && overlapOnProposal >= 0.65;
 }
 
 function isNearbyAccessory(primary: NormalizedBox, candidate: NormalizedBox): boolean {

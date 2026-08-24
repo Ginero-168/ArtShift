@@ -8,6 +8,7 @@ import {
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
 import { AI_MODE_CONFIG, type AIMode, loadAIMode, saveAIMode } from "@/lib/ai/modes";
+import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { type ChatMsg, runEngineChat } from "@/lib/engine/chat";
 import { useEngine } from "@/lib/engine/store";
 
@@ -45,6 +46,25 @@ export default function AICoPilotBar() {
 
   useEffect(() => {
     setMode(loadAIMode());
+  }, []);
+
+  useEffect(() => {
+    return subscribeAIProgress((event) => {
+      const isResult = event.presentation === "result";
+      const progressLabel = typeof event.progress === "number" ? ` (${event.progress}%)` : "";
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `progress-${event.taskId}-${event.stage}-${event.timestamp}`,
+          role: isResult ? ("assistant" as const) : ("system" as const),
+          kind: isResult ? ("message" as const) : ("progress" as const),
+          content: isResult
+            ? event.message
+            : `${event.operation} · ${event.message}${progressLabel}`,
+          timestamp: event.timestamp,
+        },
+      ]);
+    });
   }, []);
 
   const selectMode = (nextMode: AIMode) => {
@@ -131,7 +151,8 @@ export default function AICoPilotBar() {
         const history: ChatMsg[] = [
           ...messages
             .flatMap((message): ChatMsg[] =>
-              message.role === "user" || message.role === "assistant"
+              (message.role === "user" || message.role === "assistant") &&
+              message.kind !== "progress"
                 ? [{ role: message.role, content: message.content }]
                 : [],
             )
@@ -311,13 +332,26 @@ export default function AICoPilotBar() {
                   padding: "8px 12px",
                   borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
                   background:
-                    msg.role === "user"
-                      ? "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)"
-                      : "#f8fafc",
-                  color: msg.role === "user" ? "#ffffff" : "#1e293b",
-                  fontSize: 11.5,
+                    msg.kind === "progress"
+                      ? "#f0fdf4"
+                      : msg.role === "user"
+                        ? "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)"
+                        : "#f8fafc",
+                  color:
+                    msg.kind === "progress"
+                      ? "#166534"
+                      : msg.role === "user"
+                        ? "#ffffff"
+                        : "#1e293b",
+                  fontSize: msg.kind === "progress" ? 10.5 : 11.5,
                   lineHeight: 1.45,
-                  border: msg.role === "user" ? "none" : "1px solid rgba(226, 232, 240, 0.8)",
+                  whiteSpace: "pre-wrap",
+                  border:
+                    msg.role === "user"
+                      ? "none"
+                      : msg.kind === "progress"
+                        ? "1px solid #bbf7d0"
+                        : "1px solid rgba(226, 232, 240, 0.8)",
                   boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
                 }}
               >

@@ -19,8 +19,6 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
   const selectedImage = currentSlide?.elements.find(
     (el): el is ImageElement => selectedIds.has(el.id) && el.type === "image",
   );
-  const rasterExecutionMode = useEngine((s) => s.rasterExecutionMode);
-
   const [visionBusy, setVisionBusy] = useState(false);
   const [visionResult, setVisionResult] = useState<string>("");
   const [adjustments, setAdjustments] = useState<Partial<ColorAdjustments>>({});
@@ -75,7 +73,6 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
     setBgProgress(0);
     try {
       const resultUrl = await removeBackground(url, {
-        mode: rasterExecutionMode,
         onProgress: (value) => setBgProgress(Math.round(value * 100)),
       });
       if (selectedImage) {

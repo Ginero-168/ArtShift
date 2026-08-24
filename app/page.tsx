@@ -43,6 +43,7 @@ const CampaignStudioModal = dynamic(() => import("@/components/Campaign/Campaign
   ssr: false,
 });
 const TemplateBrowser = dynamic(() => import("@/components/TemplateBrowser"), { ssr: false });
+const ModelManagerPanel = dynamic(() => import("@/components/ModelManagerPanel"), { ssr: false });
 
 import {
   exportAllPNG,
@@ -400,22 +401,25 @@ export default function HomePage() {
             {settingsOpen && (
               <div
                 className="menu"
-                style={{ position: "absolute", top: 32, right: 0, zIndex: 30, width: 160 }}
+                style={{
+                  position: "absolute",
+                  top: 32,
+                  right: 0,
+                  zIndex: 30,
+                  padding: 0,
+                  overflow: "hidden",
+                }}
               >
-                <button
-                  onClick={async () => {
+                <ModelManagerPanel
+                  onResetProject={async () => {
                     if (
                       confirm("Reset all data? This will clear all slides and cannot be undone.")
                     ) {
                       await clearEngine();
                       window.location.reload();
                     }
-                    setSettingsOpen(false);
                   }}
-                  style={{ color: "#dc2626" }}
-                >
-                  Reset
-                </button>
+                />
               </div>
             )}
           </div>

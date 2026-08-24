@@ -7,6 +7,7 @@ import {
   isForegroundForSource,
   shouldPreserveForegroundPixel,
 } from "@/lib/vision/foreground";
+import { composeInstanceAlpha, resolveInstanceMaskOverlaps } from "@/lib/vision/instanceMask";
 
 describe("Vision AI Object Isolator & Calculations", () => {
   it("calculates correct pixel crop bounds from normalized bounding boxes", () => {
@@ -70,6 +71,41 @@ describe("Vision AI Object Isolator & Calculations", () => {
     expect(shouldPreserveForegroundPixel(255, 0)).toBe(true);
     expect(shouldPreserveForegroundPixel(0, 0)).toBe(false);
     expect(shouldPreserveForegroundPixel(0, 255)).toBe(true);
+  });
+
+  it("keeps thin foreground accessories when an instance mask misses them", () => {
+    const composed = composeInstanceAlpha(
+      new Uint8ClampedArray([255, 220, 0, 0]),
+      new Uint8ClampedArray([255, 0, 0, 255]),
+    );
+
+    expect(Array.from(composed)).toEqual([255, 220, 0, 255]);
+  });
+
+  it("can fall back to a refinement-only mask when source alpha is not trusted", () => {
+    const composed = composeInstanceAlpha(
+      new Uint8ClampedArray([255, 255, 0]),
+      new Uint8ClampedArray([0, 255, 255]),
+      { preserveSourceAlpha: false },
+    );
+
+    expect(Array.from(composed)).toEqual([0, 255, 255]);
+  });
+
+  it("assigns overlapping mask pixels to only one extracted object", () => {
+    const resolved = resolveInstanceMaskOverlaps([
+      {
+        box: { x_min: 0, y_min: 0, x_max: 2 / 3, y_max: 1 },
+        mask: { width: 3, height: 1, data: new Uint8Array([1, 1, 0]), score: 0.8 },
+      },
+      {
+        box: { x_min: 1 / 3, y_min: 0, x_max: 1, y_max: 1 },
+        mask: { width: 3, height: 1, data: new Uint8Array([0, 1, 1]), score: 0.9 },
+      },
+    ]);
+
+    expect(Array.from(resolved[0].data)).toEqual([1, 0, 0]);
+    expect(Array.from(resolved[1].data)).toEqual([0, 1, 1]);
   });
 
   it("reuses a foreground result only for the source image that produced it", () => {

@@ -1,3 +1,4 @@
+import { markModelFailed, markModelLoaded, markModelLoading } from "@/lib/ai/modelRegistry";
 import { createOpenCvAdapter, type OpenCvAdapter, type OpenCvRuntime } from "./opencvAdapter";
 import type { RasterPixelBuffer } from "./processor";
 
@@ -38,10 +39,17 @@ type CvModule = {
 
 /** Load OpenCV.js only when a user actually requests an advanced raster tool. */
 export async function loadOpenCvJs(): Promise<OpenCvAdapter> {
-  const module = await import("@techstark/opencv-js");
-  const candidate = (module as unknown as { default?: unknown }).default ?? module;
-  const cv = await waitForOpenCv(candidate);
-  return createOpenCvAdapter(createRuntime(cv));
+  markModelLoading("opencv-js");
+  try {
+    const module = await import("@techstark/opencv-js");
+    const candidate = (module as unknown as { default?: unknown }).default ?? module;
+    const cv = await waitForOpenCv(candidate);
+    markModelLoaded("opencv-js");
+    return createOpenCvAdapter(createRuntime(cv));
+  } catch (error) {
+    markModelFailed("opencv-js", error);
+    throw error;
+  }
 }
 
 async function waitForOpenCv(candidate: unknown): Promise<CvModule> {

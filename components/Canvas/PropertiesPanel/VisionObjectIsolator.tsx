@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
 import { removeBackground } from "@/lib/ai/removeBg";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
@@ -14,20 +15,29 @@ import {
   type VectorizeProgress,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
-import { createSam2Session, type Sam2Session } from "@/lib/vision/advancedVision";
 import {
-  createAlphaTiles,
-  findAlphaComponents,
-  mapAlphaComponentToImage,
-  mergeAlphaComponents,
-} from "@/lib/vision/alphaComponents";
+  createSam2Session,
+  groundingDinoDetect,
+  type Sam2Session,
+  type VisionMask,
+} from "@/lib/vision/advancedVision";
+import { findAlphaComponents } from "@/lib/vision/alphaComponents";
+import {
+  enqueueAssetAnalysis,
+  getAssetAnalysis,
+  subscribeAssetAnalysis,
+} from "@/lib/vision/assetAnalysisBrowser";
 import { createCachedImageAsset } from "@/lib/vision/extractedImageAsset";
 import {
   alphaCoverageFromRgba,
   hasUsableForeground,
   isForegroundForSource,
 } from "@/lib/vision/foreground";
-import { mergeVisionWithAlphaComponents } from "@/lib/vision/objectBoxes";
+import { resolveInstanceMaskOverlaps } from "@/lib/vision/instanceMask";
+import {
+  mergeVisionWithAlphaComponents,
+  shouldPreserveAlphaForProposal,
+} from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
 import {
   cropImageRegion,
@@ -104,62 +114,19 @@ async function detectAlphaObjectBoxes(
     .map(({ area: _area, ...box }) => ({ label: "object", ...box }));
 }
 
-/** Restore the old precision geometry without exposing a second UI mode. */
-async function detectPrecisionAlphaObjectBoxes(dataUrl: string): Promise<DetectedObject[]> {
-  const image = new Image();
-  image.src = dataUrl;
-  await new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error("Could not inspect the transparent foreground."));
+function createProgressReporter(operation: string) {
+  const taskId = crypto.randomUUID();
+  const report = (
+    stage: string,
+    message: string,
+    status: AIProgressStatus = "step",
+    progress?: number,
+  ) => {
+    reportAIProgress({ taskId, operation, stage, message, status, progress });
+  };
+  return Object.assign(report, {
+    result: (message: string) => reportAIResult({ taskId, operation, message }),
   });
-
-  const naturalWidth = image.naturalWidth || image.width;
-  const naturalHeight = image.naturalHeight || image.height;
-  const maxDimension = 1024;
-  const scale = Math.min(1, maxDimension / Math.max(naturalWidth, naturalHeight));
-  const width = Math.max(1, Math.round(naturalWidth * scale));
-  const height = Math.max(1, Math.round(naturalHeight * scale));
-  const fullCanvas = document.createElement("canvas");
-  fullCanvas.width = width;
-  fullCanvas.height = height;
-  const fullContext = fullCanvas.getContext("2d");
-  if (!fullContext) throw new Error("Could not create the precision analysis canvas.");
-  fullContext.drawImage(image, 0, 0, width, height);
-
-  const components = createAlphaTiles(width, height, 768, 96).flatMap((tile) => {
-    const tileCanvas = document.createElement("canvas");
-    tileCanvas.width = tile.width;
-    tileCanvas.height = tile.height;
-    const tileContext = tileCanvas.getContext("2d");
-    if (!tileContext) return [];
-    tileContext.drawImage(
-      fullCanvas,
-      tile.x,
-      tile.y,
-      tile.width,
-      tile.height,
-      0,
-      0,
-      tile.width,
-      tile.height,
-    );
-    const rgba = tileContext.getImageData(0, 0, tile.width, tile.height).data;
-    return findAlphaComponents(rgba, tile.width, tile.height, {
-      alphaThreshold: 24,
-      minAreaRatio: 0.00025,
-      maxComponents: 64,
-      padding: 3,
-      thinComponentMinArea: 8,
-      thinComponentMaxThickness: 8,
-      thinComponentMinLength: 12,
-    }).map((component) => mapAlphaComponentToImage(component, tile, width, height));
-  });
-
-  return mergeAlphaComponents(components)
-    .sort((first, second) => second.area - first.area)
-    .slice(0, 128)
-    .sort((first, second) => first.y_min - second.y_min || first.x_min - second.x_min)
-    .map(({ area: _area, ...box }) => ({ label: "object", ...box }));
 }
 
 export function VisionObjectIsolator({ element }: { element: ImageElement }) {
@@ -167,7 +134,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const addElements = useEngine((s) => s.addElements);
   const selectOnly = useEngine((s) => s.selectOnly);
   const updateElements = useEngine((s) => s.updateElements);
-  const rasterExecutionMode = useEngine((s) => s.rasterExecutionMode);
 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -187,6 +153,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [minArea, setMinArea] = useState(4);
   const vectorizeAbortRef = useRef<AbortController | null>(null);
   const currentFileId = element.fileId;
+  const assetAnalysis = useSyncExternalStore(
+    subscribeAssetAnalysis,
+    () => getAssetAnalysis(currentFileId) ?? null,
+    () => null,
+  );
 
   useEffect(() => {
     if (!currentFileId) return;
@@ -196,6 +167,36 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setDetectedForegroundFileId(null);
     }
   }, [currentFileId, detectedForegroundFileId]);
+
+  useEffect(() => {
+    if (assetAnalysis || !currentFileId) return;
+    const cached = getCached(currentFileId);
+    if (!cached) return;
+    enqueueAssetAnalysis({
+      fileId: cached.fileId,
+      dataURL: cached.dataURL,
+      width: cached.width,
+      height: cached.height,
+    });
+  }, [assetAnalysis, currentFileId]);
+
+  useEffect(() => {
+    const components =
+      assetAnalysis?.result?.foregroundComponents ??
+      (assetAnalysis?.result?.hasTransparency ? assetAnalysis.result.alphaComponents : undefined);
+    if (
+      assetAnalysis?.fileId !== currentFileId ||
+      assetAnalysis.status !== "ready" ||
+      !components?.length
+    ) {
+      return;
+    }
+    setDetectedObjects((current) =>
+      current.length > 0
+        ? current
+        : components.map((component) => ({ label: "object", ...component })),
+    );
+  }, [assetAnalysis, currentFileId]);
 
   const applyPreset = (p: VectorizePreset) => {
     setPreset(p);
@@ -226,6 +227,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setBusy(true);
     setProgress(0);
     setStatusMessage("Running high-precision Vector Trace...");
+    const report = createProgressReporter("Vectorize");
+    report("start", "เริ่มแปลงภาพเป็น Vector", "started", 0);
 
     try {
       const isMonochrome = preset === "silhouette" || preset === "lineArt";
@@ -266,12 +269,14 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
       if (res.elements.length === 0) {
         setStatusMessage("No distinct vector paths detected");
+        report("complete", "ไม่พบเส้น Vector ที่แยกได้", "fallback", 100);
       } else {
         addElements(res.elements, "vectorize image to paths");
         selectOnly(res.elements.map((el) => el.id));
         setStatusMessage(
           `Traced ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!`,
         );
+        report("complete", `สร้าง Vector สำเร็จ ${res.elements.length} Layers`, "success", 100);
       }
     } catch (err) {
       if (err instanceof VectorizeCancelledError || (err as Error).name === "AbortError") {
@@ -279,6 +284,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       } else {
         console.warn("Vectorize failed:", err);
         setStatusMessage("Vectorize error: " + (err as Error).message);
+        report("error", `แปลง Vector ไม่สำเร็จ: ${(err as Error).message}`, "error");
       }
     } finally {
       if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
@@ -300,24 +306,19 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
-    setStatusMessage(
-      rasterExecutionMode === "eco"
-        ? "Preparing local background removal..."
-        : "Sending background removal to Fast API...",
-    );
+    const report = createProgressReporter("Remove BG");
+    report("start", "เริ่มลบพื้นหลังแบบ Local", "started", 0);
+    setStatusMessage("Preparing local background removal...");
 
     try {
       const resultUrl = await removeBackground(cached.dataURL, {
-        mode: rasterExecutionMode,
         onProgress: (value) => {
           setProgress(Math.round(value * 100));
           setStatusMessage(
             value < 0.1
               ? "Preparing image..."
               : value < 0.75
-                ? rasterExecutionMode === "eco"
-                  ? "Running locally in the background..."
-                  : "Waiting for Fast API..."
+                ? "Running locally in the background..."
                 : "Refining foreground edges...",
           );
         },
@@ -346,9 +347,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setDetectedForegroundFileId(newCached.fileId);
       setDetectedObjects([]);
       setStatusMessage("Background removed successfully!");
+      report("complete", "ลบพื้นหลังและสร้าง Alpha สำเร็จ", "success", 100);
     } catch (err) {
       console.warn("Remove BG failed:", err);
       setStatusMessage("Failed to remove background: " + (err as Error).message);
+      report("error", `ลบพื้นหลังไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
       setBusy(false);
       setProgress(null);
@@ -369,22 +372,55 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     foregroundUrl: string,
     objects: DetectedObject[],
     onProgress?: (progress: number) => void,
-    options: { maskSession?: Sam2Session; maskSourceUrl?: string; trimTransparent?: boolean } = {},
+    options: {
+      trimTransparent?: boolean;
+      sam2Session?: Sam2Session | null;
+      maskSourceUrl?: string;
+      alphaComponents?: DetectedObject[];
+      onMaskProgress?: (objectIndex: number, progress: number) => void;
+    } = {},
   ) => {
     const newElements = [];
+    const masks: Array<VisionMask | null> = objects.map(() => null);
+
+    if (options.sam2Session) {
+      for (const [index, obj] of objects.entries()) {
+        try {
+          masks[index] = await options.sam2Session.segment(obj, (value) =>
+            options.onMaskProgress?.(index, value),
+          );
+        } catch (error) {
+          console.warn("SAM 2 mask failed for one object; using foreground crop.", error);
+        }
+      }
+
+      const validMasks = masks.flatMap((mask, index) =>
+        mask ? [{ index, box: objects[index], mask }] : [],
+      );
+      if (validMasks.length > 1) {
+        const resolved = resolveInstanceMaskOverlaps(validMasks);
+        for (const [resolvedIndex, candidate] of validMasks.entries()) {
+          masks[candidate.index] = resolved[resolvedIndex];
+        }
+      }
+    }
 
     for (const [index, obj] of objects.entries()) {
       let cropped: Awaited<ReturnType<typeof cropImageRegion>>;
-      if (options.maskSession && options.maskSourceUrl) {
+      const mask = masks[index];
+      if (mask) {
         try {
-          const mask = await options.maskSession.segment(obj, (progress) =>
-            onProgress?.((index + progress) / Math.max(1, objects.length)),
+          const preserveExistingAlpha = options.alphaComponents
+            ? shouldPreserveAlphaForProposal(obj, options.alphaComponents)
+            : true;
+          cropped = await cropImageRegionWithMask(
+            preserveExistingAlpha ? foregroundUrl : (options.maskSourceUrl ?? foregroundUrl),
+            obj,
+            mask,
+            { preserveExistingAlpha },
           );
-          cropped = await cropImageRegionWithMask(options.maskSourceUrl, obj, mask, {
-            preserveExistingAlpha: false,
-          });
         } catch (error) {
-          console.warn("SAM 2 mask failed for one object; using the foreground crop.", error);
+          console.warn("SAM 2 mask failed for one object; using foreground crop.", error);
           cropped = await cropImageRegion(foregroundUrl, obj);
         }
       } else {
@@ -440,21 +476,12 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     }
 
     setBusy(true);
-    setProgress(10);
-    setStatusMessage("Detecting objects, then extracting all...");
+    setProgress(0);
+    const report = createProgressReporter("Extract All");
+    report("start", "เริ่มแยก Object ทั้งหมด", "started", 0);
+    setStatusMessage("Preparing fast foreground extraction...");
 
     try {
-      let visionObjects: DetectedObject[] = [];
-      try {
-        const res = await visionDetect(url, (p) => setProgress(Math.round(p * 25)));
-        visionObjects = res.objects;
-      } catch (error) {
-        console.warn("Florence-2 detection failed; continuing with foreground geometry.", error);
-        setStatusMessage("Florence-2 missed or could not detect objects; completing locally...");
-      }
-
-      setDetectedObjects(visionObjects);
-      setProgress(30);
       const reusableForeground = isForegroundForSource(
         element.fileId,
         detectedForegroundFileId,
@@ -465,72 +492,155 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       let foregroundUrl: string;
       if (reusableForeground) {
         foregroundUrl = reusableForeground;
-        setProgress(65);
+        setProgress(70);
         setStatusMessage("Using the existing background-removed foreground...");
+        report("foreground", "ใช้ผลลัพธ์ Remove BG ที่มีอยู่แล้ว", "success", 70);
       } else {
         setStatusMessage("Separating foreground pixels...");
+        report("foreground", "กำลังลบพื้นหลังเพื่อเตรียม Alpha", "step", 5);
         foregroundUrl = await removeBackground(url, {
-          mode: rasterExecutionMode,
-          onProgress: (value) => setProgress(30 + value * 35),
+          onProgress: (value) => setProgress(value * 70),
         });
+        report("foreground", "สร้าง Foreground Alpha สำเร็จ", "success", 70);
       }
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
 
-      setProgress(67);
-      setStatusMessage("Running precision foreground analysis...");
-      const alphaObjects = await detectPrecisionAlphaObjectBoxes(foregroundUrl);
-      let recalledVisionObjects = visionObjects;
-      let usedVisionRecall = false;
+      // Fast extraction is the canonical geometry path. Florence-2 is optional
+      // metadata here: its coarse boxes can label components, but must not
+      // replace them or cause nearby objects to be merged again.
+      setProgress(74);
+      setStatusMessage("Finding high-resolution foreground components...");
+      report("components", "กำลังค้นหา Components ความละเอียดสูง", "step", 74);
+      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl, 1536);
+      let objects = alphaObjects;
+      report("components", `พบ Components เบื้องต้น ${alphaObjects.length} ชิ้น`, "success", 78);
+
+      let visionObjects: DetectedObject[] = [];
+      try {
+        setStatusMessage("Detecting object instances with Florence-2...");
+        report("florence", "กำลังใช้ Florence-2 หา Object และชื่อ", "step", 79);
+        const res = await visionDetect(url, (value) => setProgress(78 + value * 5));
+        visionObjects = res.objects;
+        report("florence", `Florence-2 พบ ${visionObjects.length} Proposal`, "success", 83);
+      } catch (error) {
+        console.warn("Florence-2 labels unavailable; keeping local Fast geometry.", error);
+        report("florence", "Florence-2 ใช้งานไม่ได้ จึงใช้ Geometry เดิมต่อ", "fallback", 83);
+      }
+
       if (shouldRunVisionRecall(visionObjects, alphaObjects)) {
-        setStatusMessage("Improving Florence-2 recall for missed objects...");
         try {
-          const recall = await visionDenseDetect(url, (value) => setProgress(69 + value * 6));
-          recalledVisionObjects = mergeVisionDetections(visionObjects, recall.objects);
-          usedVisionRecall = recall.objects.length > 0;
+          setStatusMessage("Running a dense recall pass for missed objects...");
+          report("florence-recall", "กำลังค้นหา Object ที่ Florence-2 รอบแรกตกหล่น", "step", 84);
+          const recall = await visionDenseDetect(url, (value) => setProgress(83 + value * 3));
+          visionObjects = mergeVisionDetections(visionObjects, recall.objects);
+          report(
+            "florence-recall",
+            `รวม Dense Recall แล้วเป็น ${visionObjects.length} Proposal`,
+            "success",
+            86,
+          );
         } catch (error) {
-          console.warn("Florence-2 dense recall failed; keeping the primary detections.", error);
+          console.warn("Florence-2 dense recall unavailable; keeping primary proposals.", error);
+          report("florence-recall", "Dense Recall ใช้งานไม่ได้ จึงใช้ผลรอบแรก", "fallback", 86);
         }
       }
 
-      const objects = mergeVisionWithAlphaComponents(recalledVisionObjects, alphaObjects);
+      const candidateLabels = [
+        ...new Set(
+          visionObjects
+            .map((object) => object.label.trim())
+            .filter((label) => label && label.toLowerCase() !== "object"),
+        ),
+      ];
+      if (candidateLabels.length > 0) {
+        try {
+          setStatusMessage("Finding repeated instances with Grounding DINO...");
+          report("grounding-dino", "กำลังค้นหา Instance ซ้ำด้วย Grounding DINO", "step", 87);
+          const grounded = await groundingDinoDetect(url, candidateLabels, (value) =>
+            setProgress(86 + value * 3),
+          );
+          visionObjects = mergeVisionDetections(visionObjects, grounded);
+          report(
+            "grounding-dino",
+            `รวม Grounding DINO แล้วเป็น ${visionObjects.length} Proposal`,
+            "success",
+            89,
+          );
+        } catch (error) {
+          console.warn("Grounding DINO unavailable; keeping Florence proposals.", error);
+          report("grounding-dino", "Grounding DINO ใช้งานไม่ได้ จึงใช้ Florence ต่อ", "fallback", 89);
+        }
+      }
+
+      objects = mergeVisionWithAlphaComponents(visionObjects, alphaObjects);
+      report("proposal-fusion", `รวม Proposal สุดท้ายได้ ${objects.length} ชิ้น`, "success", 90);
       setDetectedObjects(objects);
       if (objects.length === 0) {
         setStatusMessage("No visible foreground objects were found");
+        report("complete", "ไม่พบ Object ที่แยกได้จาก Foreground", "fallback", 100);
         return;
       }
 
-      setStatusMessage(`Extracting all ${objects.length} transparent objects...`);
-      let maskSession: Sam2Session | undefined;
-      setProgress(72);
-      setStatusMessage("Loading precision masks locally...");
+      let sam2Session: Sam2Session | null = null;
       try {
-        maskSession = await createSam2Session(url, (value) => setProgress(72 + value * 4));
+        setStatusMessage("Refining object masks with SAM 2 Hiera Tiny...");
+        report("sam2-load", "กำลังโหลดและเตรียม SAM 2 Hiera Tiny", "step", 91);
+        sam2Session = await createSam2Session(url, (value) => setProgress(90 + value * 3));
+        report("sam2-load", "เตรียม SAM 2 และ Image Embedding สำเร็จ", "success", 93);
       } catch (error) {
-        console.warn("SAM 2 precision masks unavailable; using precision crops.", error);
-        setStatusMessage("Precision masks unavailable; continuing with detailed crops...");
+        console.warn("SAM 2 refinement unavailable; keeping alpha geometry.", error);
+        setStatusMessage("SAM 2 unavailable; extracting from foreground geometry...");
+        report("sam2-load", "SAM 2 ใช้งานไม่ได้ จึงใช้ Alpha Geometry แทน", "fallback", 93);
       }
-      const extractionStart = usedVisionRecall ? 77 : 76;
+
+      setStatusMessage(`Extracting all ${objects.length} foreground objects...`);
+      report(
+        "masks",
+        sam2Session
+          ? `กำลังสร้าง Mask จริงให้ ${objects.length} Object ด้วย SAM 2`
+          : `กำลังสร้าง Object จาก Alpha Geometry จำนวน ${objects.length} ชิ้น`,
+        "step",
+        93,
+      );
+      setProgress(92);
       const newElements = await extractObjectBatch(
         foregroundUrl,
         objects,
-        (value) => setProgress(extractionStart + value * (98 - extractionStart)),
-        { maskSession, maskSourceUrl: url, trimTransparent: true },
+        (value) => setProgress(92 + value * 7),
+        {
+          sam2Session,
+          maskSourceUrl: url,
+          alphaComponents: alphaObjects,
+          trimTransparent: true,
+          onMaskProgress: (objectIndex, value) => {
+            if (sam2Session) {
+              setProgress(92 + ((objectIndex + value) / Math.max(1, objects.length)) * 7);
+            }
+          },
+        },
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");
       } else {
-        addElements(newElements, "extract all detected objects");
+        addElements(newElements, "extract all foreground objects");
         selectOnly(newElements.map((el) => el.id));
         setStatusMessage(
           newElements.length === objects.length
             ? `Extracted ${newElements.length} transparent objects!`
             : `Extracted ${newElements.length} objects; skipped empty detections.`,
         );
+        report(
+          "complete",
+          `แยก Object สำเร็จ ${newElements.length}/${objects.length} ชิ้น`,
+          newElements.length === objects.length ? "success" : "fallback",
+          100,
+        );
       }
     } catch (err) {
       console.warn("Extract All failed:", err);
       setStatusMessage("Detection failed: " + (err as Error).message);
+      report("error", `Extract All ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
       setBusy(false);
       setProgress(null);
@@ -546,6 +656,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
+    const report = createProgressReporter("Extract Fast");
+    report("start", "เริ่มแยก Object แบบ Fast", "started", 0);
     setStatusMessage("Removing background for fast extraction...");
 
     try {
@@ -556,19 +668,27 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       )
         ? detectedForegroundUrl
         : null;
+      report(
+        "foreground",
+        reusableForeground ? "กำลังใช้ Foreground ที่มีอยู่แล้ว" : "กำลังลบพื้นหลังสำหรับโหมด Fast",
+        "step",
+        5,
+      );
       const foregroundUrl =
         reusableForeground ??
         (await removeBackground(url, {
-          mode: rasterExecutionMode,
           onProgress: (value) => setProgress(Math.round(value * 70)),
         }));
+      report("foreground", "เตรียม Foreground Alpha สำเร็จ", "success", 70);
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
       setProgress(74);
       const objects = await detectAlphaObjectBoxes(foregroundUrl);
       setDetectedObjects(objects);
+      report("components", `พบ Components จำนวน ${objects.length} ชิ้น`, "success", 74);
       if (objects.length === 0) {
         setStatusMessage("No separate foreground objects found");
+        report("complete", "ไม่พบ Object ที่แยกได้", "fallback", 100);
         return;
       }
 
@@ -583,9 +703,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       addElements(newElements, "fast extract foreground objects");
       selectOnly(newElements.map((el) => el.id));
       setStatusMessage(`Fast-extracted ${newElements.length} transparent objects!`);
+      report("complete", `แยกแบบ Fast สำเร็จ ${newElements.length} ชิ้น`, "success", 100);
     } catch (err) {
       console.warn("Fast extraction failed:", err);
       setStatusMessage("Fast extraction failed: " + (err as Error).message);
+      report("error", `Extract Fast ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
       setBusy(false);
       setProgress(null);
@@ -600,11 +722,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setStatusMessage(`Extracting ${obj.label}...`);
 
     try {
-      const foregroundUrl =
-        detectedForegroundUrl ??
-        (await removeBackground(url, {
-          mode: rasterExecutionMode,
-        }));
+      const foregroundUrl = detectedForegroundUrl ?? (await removeBackground(url));
       const cropped = await cropImageRegion(foregroundUrl, obj);
       const cached = await loadDataURL(cropped.dataUrl);
       const asset = createCachedImageAsset(cached);
@@ -626,6 +744,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setBusy(false);
     }
   };
+
+  const analysisMessage =
+    assetAnalysis?.status === "analyzing"
+      ? `Preparing image intelligence… ${Math.round(assetAnalysis.progress * 100)}%`
+      : assetAnalysis?.status === "queued"
+        ? "Image intelligence queued in the background"
+        : assetAnalysis?.status === "ready" && assetAnalysis.result?.foregroundStatus === "ready"
+          ? `Ready for extraction · ${assetAnalysis.result.foregroundComponents?.length ?? 0} candidates`
+          : assetAnalysis?.status === "ready" && assetAnalysis.result?.hasTransparency
+            ? `Transparent alpha ready · ${assetAnalysis.result.alphaComponents.length} components`
+            : assetAnalysis?.status === "ready"
+              ? "Lightweight image analysis ready"
+              : assetAnalysis?.status === "failed"
+                ? "Background analysis unavailable; tools still work on demand"
+                : null;
 
   return (
     <div
@@ -669,7 +802,22 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         </div>
       </div>
 
-      {/* Row 1: AI Tools (Remove BG & Extract All) */}
+      {analysisMessage && (
+        <div
+          style={{
+            marginBottom: 6,
+            padding: "3px 6px",
+            borderRadius: 4,
+            background: "rgba(16, 185, 129, 0.08)",
+            color: "#047857",
+            fontSize: 9,
+          }}
+        >
+          {analysisMessage}
+        </div>
+      )}
+
+      {/* Row 1: AI Tools (Fast geometry is the recommended extraction path) */}
       <div style={{ display: "flex", gap: 4 }}>
         <button
           type="button"
@@ -700,13 +848,13 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           type="button"
           disabled={busy}
           onClick={handleExtractAll}
-          title="Detect and extract every detected object immediately"
+          title="Extract using Fast alpha geometry and optionally add Florence-2 labels"
           style={{
             flex: 1,
             padding: "5px 8px",
-            background: "var(--accent, #6366f1)",
-            color: "#fff",
-            border: "none",
+            background: "#fff",
+            color: "var(--accent, #6366f1)",
+            border: "1px solid rgba(99, 102, 241, 0.3)",
             borderRadius: 5,
             fontWeight: 600,
             fontSize: 10,
@@ -724,11 +872,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           type="button"
           disabled={busy}
           onClick={handleExtractFast}
-          title="Remove the background and split visible regions without Florence-2"
+          title="Recommended: remove the background and split visible regions locally"
           style={{
             flex: 1,
             padding: "5px 6px",
-            background: "#0f172a",
+            background: "var(--accent, #6366f1)",
             color: "#fff",
             border: "none",
             borderRadius: 5,
@@ -746,7 +894,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         </button>
       </div>
 
-      {/* Row 2: Vectorize Action Button */}
+      {/* Row 2: Vectorize action */}
       <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
         <button
           type="button"

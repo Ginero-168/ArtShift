@@ -1,5 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import {
+  markModelFailed,
+  markModelLoaded,
+  markModelLoading,
+  markModelProgress,
+  registerModelRuntimeReleaser,
+} from "@/lib/ai/modelRegistry";
+
 export const ADVANCED_VISION_MODELS = {
   groundingDino: "onnx-community/grounding-dino-tiny-ONNX",
   sam2: "onnx-community/sam2-hiera-tiny",
@@ -38,6 +46,13 @@ let groundingDinoPromise: Promise<any> | null = null;
 // biome-ignore lint/suspicious/noExplicitAny: Transformers.js model types are runtime-generated.
 let sam2RuntimePromise: Promise<{ model: any; processor: any }> | null = null;
 
+registerModelRuntimeReleaser("grounding-dino-tiny", () => {
+  groundingDinoPromise = null;
+});
+registerModelRuntimeReleaser("sam2-hiera-tiny", () => {
+  sam2RuntimePromise = null;
+});
+
 /** Detect candidate objects with the optional local Grounding DINO model. */
 export async function groundingDinoDetect(
   imageDataUrl: string,
@@ -49,39 +64,48 @@ export async function groundingDinoDetect(
   const { pipeline, RawImage } = await import("@huggingface/transformers");
   let detector = groundingDinoPromise;
   if (!detector) {
+    markModelLoading("grounding-dino-tiny");
     detector = pipeline("zero-shot-object-detection", ADVANCED_VISION_MODELS.groundingDino, {
       progress_callback: (event: { status?: string; loaded?: number; total?: number }) => {
         if (event.status === "progress" && event.total) {
-          onProgress?.((event.loaded ?? 0) / event.total);
+          const value = (event.loaded ?? 0) / event.total;
+          onProgress?.(value);
+          markModelProgress("grounding-dino-tiny", value);
         }
       },
     });
     groundingDinoPromise = detector;
   }
-  const [detectorPipeline, image] = await Promise.all([detector, RawImage.fromURL(imageDataUrl)]);
-  const detections = await detectorPipeline(image, textQuery);
-  const width = Math.max(1, image.width);
-  const height = Math.max(1, image.height);
+  try {
+    const [detectorPipeline, image] = await Promise.all([detector, RawImage.fromURL(imageDataUrl)]);
+    markModelLoaded("grounding-dino-tiny");
+    const detections = await detectorPipeline(image, textQuery);
+    const width = Math.max(1, image.width);
+    const height = Math.max(1, image.height);
 
-  const boxes: VisionBox[] = [];
-  for (const detection of Array.isArray(detections) ? detections : []) {
-    const box = detection?.box;
-    if (!box) continue;
-    const candidate: VisionBox = {
-      label: typeof detection.label === "string" ? detection.label : "object",
-      score: typeof detection.score === "number" ? detection.score : undefined,
-      x_min: Number(box.xmin) / width,
-      y_min: Number(box.ymin) / height,
-      x_max: Number(box.xmax) / width,
-      y_max: Number(box.ymax) / height,
-    };
-    if (
-      [candidate.x_min, candidate.y_min, candidate.x_max, candidate.y_max].every(Number.isFinite)
-    ) {
-      boxes.push(candidate);
+    const boxes: VisionBox[] = [];
+    for (const detection of Array.isArray(detections) ? detections : []) {
+      const box = detection?.box;
+      if (!box) continue;
+      const candidate: VisionBox = {
+        label: typeof detection.label === "string" ? detection.label : "object",
+        score: typeof detection.score === "number" ? detection.score : undefined,
+        x_min: Number(box.xmin) / width,
+        y_min: Number(box.ymin) / height,
+        x_max: Number(box.xmax) / width,
+        y_max: Number(box.ymax) / height,
+      };
+      if (
+        [candidate.x_min, candidate.y_min, candidate.x_max, candidate.y_max].every(Number.isFinite)
+      ) {
+        boxes.push(candidate);
+      }
     }
+    return boxes;
+  } catch (error) {
+    markModelFailed("grounding-dino-tiny", error);
+    throw error;
   }
-  return boxes;
 }
 
 /** Prepare one SAM 2 image session so multiple object boxes reuse image embeddings. */
@@ -129,24 +153,29 @@ export async function createSam2Session(
 
 async function ensureSam2Runtime(onProgress?: (progress: number) => void) {
   if (sam2RuntimePromise) return sam2RuntimePromise;
+  markModelLoading("sam2-hiera-tiny");
   sam2RuntimePromise = (async () => {
     const { Sam2Model, Sam2Processor } = await import("@huggingface/transformers");
     const [model, processor] = await Promise.all([
       Sam2Model.from_pretrained(ADVANCED_VISION_MODELS.sam2, {
         progress_callback: (event: { status?: string; loaded?: number; total?: number }) => {
           if (event.status === "progress" && event.total) {
-            onProgress?.((event.loaded ?? 0) / event.total);
+            const value = (event.loaded ?? 0) / event.total;
+            onProgress?.(value);
+            markModelProgress("sam2-hiera-tiny", value);
           }
         },
       }),
       Sam2Processor.from_pretrained(ADVANCED_VISION_MODELS.sam2),
     ]);
+    markModelLoaded("sam2-hiera-tiny");
     return { model, processor };
   })();
 
   try {
     return await sam2RuntimePromise;
   } catch (error) {
+    markModelFailed("sam2-hiera-tiny", error);
     sam2RuntimePromise = null;
     throw error;
   }

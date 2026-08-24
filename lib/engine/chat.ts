@@ -14,6 +14,7 @@ import {
 } from "@/lib/schemas";
 import { runTemplate } from "@/lib/templates";
 import type { Mutation } from "@/lib/types";
+import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { loadDataURL } from "./imageCache";
 import { useEngine } from "./store";
 import { materializeTemplateAssets } from "./templateAssets";
@@ -299,7 +300,7 @@ async function applyEngineMutation(m: Mutation): Promise<boolean> {
       const i = safeParse(AddImageInputSchema, m.input);
       if (!i) return false;
       const { createImage } = await import("./factory");
-      let entry: { fileId: string; width: number; height: number };
+      let entry: { fileId: string; dataURL: string; width: number; height: number };
       try {
         entry = await loadDataURL(i.src);
       } catch {
@@ -314,6 +315,7 @@ async function applyEngineMutation(m: Mutation): Promise<boolean> {
         naturalWidth: entry.width,
         naturalHeight: entry.height,
       });
+      enqueueAssetAnalysis(entry);
       st.addElement(el, "ai add image");
       return true;
     }

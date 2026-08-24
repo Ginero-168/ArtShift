@@ -13,9 +13,10 @@ describe("Florence generation tuning", () => {
 
   it("keeps caption tasks on deterministic greedy decoding", () => {
     expect(getVisionGenerationConfig("<DETAILED_CAPTION>")).toEqual({
-      max_new_tokens: 1024,
+      max_new_tokens: 100,
       num_beams: 1,
       do_sample: false,
     });
+    expect(getVisionGenerationConfig("<MORE_DETAILED_CAPTION>").max_new_tokens).toBe(100);
   });
 });

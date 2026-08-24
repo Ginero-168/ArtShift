@@ -15,9 +15,11 @@ export function getVisionGenerationConfig(task: string): VisionGenerationConfig 
     task === "<OD>" ||
     task === "<DENSE_REGION_CAPTION>" ||
     task.startsWith("<CAPTION_TO_PHRASE_GROUNDING>");
+  const isCaptionTask =
+    task === "<CAPTION>" || task === "<DETAILED_CAPTION>" || task === "<MORE_DETAILED_CAPTION>";
 
   return {
-    max_new_tokens: 1024,
+    max_new_tokens: isCaptionTask ? 100 : 1024,
     num_beams: isStructuredTask ? 3 : 1,
     do_sample: false,
   };

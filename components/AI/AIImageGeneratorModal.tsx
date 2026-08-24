@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai/pollinations";
 import { createImage } from "@/lib/engine/factory";
 import { useEngine } from "@/lib/engine/store";
+import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 
 interface Props {
   isOpen: boolean;
@@ -149,6 +150,12 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
       naturalHeight: previewImage.height,
     });
 
+    enqueueAssetAnalysis({
+      fileId: previewImage.fileId,
+      dataURL: previewImage.dataUrl,
+      width: previewImage.width,
+      height: previewImage.height,
+    });
     addElement(element, `insert AI image: ${prompt.slice(0, 24)}...`);
     selectOnly([element.id]);
     onClose();
