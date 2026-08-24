@@ -14,10 +14,14 @@ const sharedConfig: NextConfig = {
     ],
   },
   webpack(config, { isServer, webpack }) {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+    };
+
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        fs: false,
         https: false,
         http: false,
         stream: false,

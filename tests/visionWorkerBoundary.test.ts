@@ -33,4 +33,22 @@ describe("Florence browser execution boundary", () => {
     expect(config.serverExternalPackages).not.toContain("transformers-florence-v3");
     expect(config.serverExternalPackages).not.toContain("onnxruntime-node");
   });
+
+  it("stubs fs during server compilation for browser-only raster packages", () => {
+    const config = nextConfig("phase-production-build");
+    const runtimeConfig = {
+      resolve: { fallback: {} as Record<string, false | string> },
+      plugins: [] as unknown[],
+    };
+
+    const resolved = config.webpack?.(
+      runtimeConfig as never,
+      {
+        isServer: true,
+        webpack: { IgnorePlugin: class IgnorePlugin {} },
+      } as never,
+    ) as typeof runtimeConfig;
+
+    expect(resolved.resolve.fallback.fs).toBe(false);
+  });
 });
