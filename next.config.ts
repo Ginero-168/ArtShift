@@ -1,5 +1,12 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
+
+const florenceBrowserEntry = path.join(
+  path.dirname(path.dirname(require.resolve("transformers-florence-v3"))),
+  "dist",
+  "transformers.web.js",
+);
 
 const sharedConfig: NextConfig = {
   reactStrictMode: true,
@@ -15,6 +22,13 @@ const sharedConfig: NextConfig = {
   },
   webpack(config, { isServer, webpack }) {
     if (!isServer) {
+      // The package export condition can resolve its Node entry while Next is
+      // compiling the Web Worker. Force the browser build so webpack never
+      // traverses onnxruntime-node's native .node binaries.
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        "transformers-florence-v3$": florenceBrowserEntry,
+      };
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,

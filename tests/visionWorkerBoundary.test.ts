@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import nextConfig from "../next.config";
 
 describe("Florence browser execution boundary", () => {
   it("keeps Transformers.js model loading and generation off the UI thread", () => {
@@ -16,5 +17,24 @@ describe("Florence browser execution boundary", () => {
     expect(engineSource).toContain("executeVisionTaskInWorker");
     expect(workerSource).toContain("transformers-florence-v3");
     expect(workerSource).toContain("model.generate");
+  });
+
+  it("resolves Florence to the browser runtime during client builds", () => {
+    const config = nextConfig("phase-production-build");
+    const runtimeConfig = {
+      resolve: { alias: {} as Record<string, string> },
+      plugins: [] as unknown[],
+    };
+    class IgnorePlugin {}
+
+    const resolved = config.webpack?.(
+      runtimeConfig as never,
+      {
+        isServer: false,
+        webpack: { IgnorePlugin },
+      } as never,
+    ) as typeof runtimeConfig;
+
+    expect(resolved.resolve.alias["transformers-florence-v3$"]).toMatch(/transformers\.web\.js$/);
   });
 });
