@@ -25,7 +25,9 @@ import {
   useState,
 } from "react";
 import { cellsForPlacement, getAllHexCells, getHexMetrics } from "@/lib/engine/hexLayout";
+import { createPointerGestureRouter } from "@/lib/engine/pointerGestureRouter";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
+import { recordEditorInteraction } from "@/lib/perf/editorTelemetry";
 import { renderElement, renderSlide } from "@/lib/renderer/canvas";
 
 export type WorldPoint = { x: number; y: number };
@@ -120,6 +122,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
   const [rasterMaskVersion, setRasterMaskVersion] = useState(0);
   const [spaceDown, setSpaceDown] = useState(false);
   const panRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  const pointerRouterRef = useRef(createPointerGestureRouter());
   const touchRef = useRef<{
     startDist: number;
     startScale: number;
@@ -417,48 +420,78 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
   // ——— pointer routing: pan vs forward to parent ———
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      const isPan = spaceDown || e.button === 1 || handActive;
-      if (isPan) {
+      const startedAt = performance.now();
+      const action = pointerRouterRef.current.pointerDown(
+        {
+          button: e.button,
+          pointerId: e.pointerId,
+          clientX: e.clientX,
+          clientY: e.clientY,
+          isPan: spaceDown || e.button === 1 || Boolean(handActive),
+        },
+        view,
+      );
+      if (action.kind === "panStart") {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        panRef.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
-        return;
+        panRef.current = action;
+      } else if (action.kind === "forward") {
+        onPointerDownWorld?.(clientToWorld(e.clientX, e.clientY), e);
       }
-      if (e.button !== 0) return;
-      onPointerDownWorld?.(clientToWorld(e.clientX, e.clientY), e);
+      recordEditorInteraction("pointerDown", performance.now() - startedAt);
     },
-    [clientToWorld, handActive, onPointerDownWorld, spaceDown, view.tx, view.ty],
+    [clientToWorld, handActive, onPointerDownWorld, spaceDown, view],
   );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (panRef.current) {
-        const pan = panRef.current;
-        setView((v) => ({
-          ...v,
-          tx: pan.tx + (e.clientX - pan.x),
-          ty: pan.ty + (e.clientY - pan.y),
-        }));
-        return;
+      const startedAt = performance.now();
+      const action = pointerRouterRef.current.pointerMove(e);
+      if (action.kind === "panMove") {
+        setView((v) => ({ ...v, tx: action.tx, ty: action.ty }));
+      } else if (action.kind === "forward") {
+        const rect = e.currentTarget.getBoundingClientRect();
+        onPointerMoveScreen?.({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        onPointerMoveWorld?.(clientToWorld(e.clientX, e.clientY), e);
       }
-      const rect = e.currentTarget.getBoundingClientRect();
-      onPointerMoveScreen?.({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-      onPointerMoveWorld?.(clientToWorld(e.clientX, e.clientY), e);
+      recordEditorInteraction("pointerMove", performance.now() - startedAt);
     },
     [clientToWorld, onPointerMoveScreen, onPointerMoveWorld],
   );
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (panRef.current) {
+      const startedAt = performance.now();
+      const action = pointerRouterRef.current.pointerUp();
+      if (action.kind === "panEnd") {
         panRef.current = null;
         try {
           (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
         } catch {
           /* ignore */
         }
-        return;
+      } else if (action.kind === "forward") {
+        onPointerUpWorld?.(clientToWorld(e.clientX, e.clientY), e);
       }
-      onPointerUpWorld?.(clientToWorld(e.clientX, e.clientY), e);
+      recordEditorInteraction("pointerUp", performance.now() - startedAt);
+    },
+    [clientToWorld, onPointerUpWorld],
+  );
+
+  const onPointerCancel = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const startedAt = performance.now();
+      const action = pointerRouterRef.current.cancel();
+      if (action.kind === "panEnd") {
+        panRef.current = null;
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+      } else if (action.kind === "forward") {
+        onPointerUpWorld?.(clientToWorld(e.clientX, e.clientY), e);
+      }
+      recordEditorInteraction("pointerUp", performance.now() - startedAt);
     },
     [clientToWorld, onPointerUpWorld],
   );
@@ -540,7 +573,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onPointerLeave={onPointerLeaveCanvas}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}

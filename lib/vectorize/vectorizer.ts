@@ -3,6 +3,7 @@
  * so the browser Worker bundle does not form a circular dependency.
  */
 
+import { markModelFailed, markModelLoaded, markModelLoading } from "@/lib/ai/modelRegistry";
 import {
   getVectorizeMaxDimension,
   type VectorizeCallbacks,
@@ -117,9 +118,12 @@ export async function vectorizeImage(
   options?: VectorizeOptions,
   callbacks: VectorizeCallbacks = {},
 ): Promise<VectorizeResult> {
+  markModelLoading("vectorizer");
   if (typeof Worker !== "undefined" && typeof window !== "undefined") {
     try {
-      return await vectorizeImageInWorker(imageDataUrl, targetBounds, options, callbacks);
+      const result = await vectorizeImageInWorker(imageDataUrl, targetBounds, options, callbacks);
+      markModelLoaded("vectorizer");
+      return result;
     } catch (error) {
       if (error instanceof VectorizeCancelledError || error instanceof VectorizeComplexityError) {
         throw error;
@@ -128,5 +132,12 @@ export async function vectorizeImage(
     }
   }
 
-  return vectorizeImageOnMainThread(imageDataUrl, targetBounds, options, callbacks);
+  try {
+    const result = await vectorizeImageOnMainThread(imageDataUrl, targetBounds, options, callbacks);
+    markModelLoaded("vectorizer");
+    return result;
+  } catch (error) {
+    markModelFailed("vectorizer", error);
+    throw error;
+  }
 }

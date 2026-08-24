@@ -30,7 +30,7 @@ describe("PPTX export payload contract", () => {
   it("accepts the editor's bounded PNG payload", () => {
     const parsed = parsePptxExportPayload({
       doc: makeDoc(),
-      rasterizedImages: { "image-1": "data:image/png;base64,AAAA" },
+      rasterizedImages: { "image-1": "data:image/png;base64,iVBORw0KGgo=" },
     });
 
     expect(parsed?.doc.id).toBe("doc-1");
@@ -38,6 +38,9 @@ describe("PPTX export payload contract", () => {
 
   it("rejects unsupported image formats before PptxGenJS sees them", () => {
     expect(isAllowedRasterDataUrl("data:image/svg+xml;base64,AAAA")).toBe(false);
+    expect(isAllowedRasterDataUrl("data:image/png;base64,aWNucw==")).toBe(false);
+    expect(isAllowedRasterDataUrl("data:image/jpeg;base64,anhsbA==")).toBe(false);
+    expect(isAllowedRasterDataUrl("data:image/webp;base64,UklGRgAAAABXRUJQ")).toBe(true);
     expect(
       parsePptxExportPayload({
         doc: makeDoc(),

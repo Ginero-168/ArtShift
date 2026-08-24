@@ -82,7 +82,52 @@ export function parsePptxExportPayload(input: unknown): PptxExportPayload | null
 }
 
 export function isAllowedRasterDataUrl(value: string): boolean {
-  return /^data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/]+={0,2}$/i.test(value);
+  const match = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(value);
+  if (!match) return false;
+
+  const bytes = decodeBase64(match[2]);
+  if (!bytes) return false;
+
+  switch (match[1].toLowerCase()) {
+    case "png":
+      return hasBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case "jpeg":
+    case "jpg":
+      return hasBytes(bytes, [0xff, 0xd8, 0xff]);
+    case "webp":
+      return hasAscii(bytes, 0, "RIFF") && hasAscii(bytes, 8, "WEBP");
+    default:
+      return false;
+  }
+}
+
+/**
+ * Decode only the small header needed for a type/signature check. Keeping this
+ * independent from Buffer makes the payload contract safe to share with the
+ * browser while still working in the Node export route.
+ */
+function decodeBase64(value: string): Uint8Array | null {
+  if (value.length % 4 === 1) return null;
+  try {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function hasBytes(bytes: Uint8Array, expected: readonly number[]): boolean {
+  if (bytes.length < expected.length) return false;
+  return expected.every((byte, index) => bytes[index] === byte);
+}
+
+function hasAscii(bytes: Uint8Array, offset: number, expected: string): boolean {
+  if (bytes.length < offset + expected.length) return false;
+  return [...expected].every(
+    (character, index) => bytes[offset + index] === character.charCodeAt(0),
+  );
 }
 
 function isEngineDocForExport(value: unknown): value is EngineDoc {

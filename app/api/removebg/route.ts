@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const removeBgLimiter = new RateLimiter(10, 60_000);
+const MAX_IMAGE_PAYLOAD_CHARS = 24 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   const limit = removeBgLimiter.check(getClientIp(req));
@@ -20,15 +21,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Server missing WAVESPEED_API_KEY" }, { status: 500 });
   }
 
-  let body: Record<string, unknown>;
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!body.image || typeof body.image !== "string") {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const image = (body as Record<string, unknown>).image;
+  if (typeof image !== "string" || image.length === 0) {
     return NextResponse.json({ error: "Missing image field" }, { status: 400 });
+  }
+
+  if (image.length > MAX_IMAGE_PAYLOAD_CHARS) {
+    return NextResponse.json(
+      { error: "Image payload is too large. Please resize the image before using Fast mode." },
+      { status: 413 },
+    );
+  }
+  if (image.startsWith("data:") && !/^data:image\/(?:png|jpeg|jpg|webp);base64,/i.test(image)) {
+    return NextResponse.json({ error: "Unsupported image data format" }, { status: 400 });
   }
 
   try {
@@ -38,7 +54,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${wavespeedKey}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ image }),
     });
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });

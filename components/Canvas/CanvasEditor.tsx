@@ -216,6 +216,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const previewElements = useEngine((s) => s.previewElements);
   const commitInteraction = useEngine((s) => s.commitInteraction);
   const commitBlockLayout = useEngine((s) => s.commitBlockLayout);
+  const setFrameImage = useEngine((s) => s.setFrameImage);
   const selectOnly = useEngine((s) => s.selectOnly);
   const clearSelection = useEngine((s) => s.clearSelection);
   const deleteElements = useEngine((s) => s.deleteElements);
@@ -223,6 +224,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
   const updateElements = useEngine((s) => s.updateElements);
   const currentSlide = useEngine((s) => s.currentSlide);
+  const currentTool = useEngine((s) => s.currentTool);
+  const currentSelection = useEngine((s) => s.currentSelection);
   const rasterBrushSize = useEngine((s) => s.rasterBrushSize);
   const rasterBrushOpacity = useEngine((s) => s.rasterBrushOpacity);
   const rasterBrushHardness = useEngine((s) => s.rasterBrushHardness);
@@ -241,16 +244,29 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         currentSlide,
         updateElements,
         applyRasterSelection,
+        currentTool,
+        currentSelection,
+        setFrameImage,
+        deleteElements,
+        selectOnly,
+        commitBlockLayout,
       }),
-    [applyRasterSelection, currentSlide, updateElements],
+    [
+      applyRasterSelection,
+      commitBlockLayout,
+      currentSelection,
+      currentSlide,
+      currentTool,
+      deleteElements,
+      selectOnly,
+      setFrameImage,
+      updateElements,
+    ],
   );
 
   const commitQuickSelection = useCallback(
     (drag: QuickSelectionDrag) => {
-      const state = useEngine.getState();
-      const activeSlide = state.doc.slides.find(
-        (candidate) => candidate.id === state.currentSlideId,
-      );
+      const activeSlide = editorController.currentSlide();
       const image = activeSlide?.elements.find(
         (element): element is import("@/lib/engine/types").ImageElement =>
           element.id === drag.elementId && element.type === "image",
@@ -533,9 +549,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           if (hit.type !== "path") {
             const converted = convertElementToVectorPath(hit);
             if (converted) {
-              useEngine
-                .getState()
-                .updateElements([{ id: hit.id, patch: converted }], "convert to editable path");
+              editorController.commitElementPatch(hit.id, converted, "convert to editable path");
             }
           }
           selectOnly([hit.id]);
@@ -670,7 +684,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           if (
             !shape ||
             requestId !== rasterSelectionRequestRef.current ||
-            useEngine.getState().tool !== "rasterMagicWand"
+            !editorController.isToolActive("rasterMagicWand")
           ) {
             return;
           }
@@ -1197,8 +1211,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         }
         commitInteraction();
         const ids = d.ids;
-        const stateNow = useEngine.getState();
-        const slideNow = stateNow.doc.slides.find((sl) => sl.id === stateNow.currentSlideId);
+        const slideNow = editorController.currentSlide();
         if (!slideNow) return;
 
         // Canva-style: If dragging a single Image onto a Frame, snap the image into the frame!
@@ -1217,16 +1230,14 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 p.y <= el.y + el.height,
             );
             if (frameUnder) {
-              stateNow.setFrameImage(frameUnder.id, movedElement.fileId);
-              stateNow.deleteElements([movedId]);
-              stateNow.selectOnly([frameUnder.id]);
+              editorController.commitFrameDrop(frameUnder.id, movedId, movedElement.fileId);
               return;
             }
           }
         }
 
         const movedBlockIds = ids.filter((id) => getLayerForObject(slideNow, id)?.mode === "block");
-        for (const id of movedBlockIds) commitBlockLayout(id);
+        for (const id of movedBlockIds) editorController.commitBlockLayout(id);
         return;
       }
       if (d.kind === "rasterPaint") {
@@ -1329,7 +1340,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           );
           const ids = inside.map((el) => el.id);
           if (d.additive) {
-            selectOnly(resolveMarqueeSelection(useEngine.getState().selectedIds, ids, true));
+            selectOnly(resolveMarqueeSelection(editorController.currentSelection(), ids, true));
           } else {
             selectOnly(ids);
           }
@@ -1389,7 +1400,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     },
     [
       addElement,
-      commitBlockLayout,
       commitInteraction,
       commitQuickSelection,
       lineSubtype,
@@ -1577,12 +1587,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 ) {
                   const converted = convertElementToVectorPath(el);
                   if (converted) {
-                    useEngine
-                      .getState()
-                      .updateElements(
-                        [{ id: el.id, patch: converted }],
-                        "convert to editable path",
-                      );
+                    editorController.commitElementPatch(
+                      el.id,
+                      converted,
+                      "convert to editable path",
+                    );
                     setTool("directSelect");
                     setEditingPathId(el.id);
                   }

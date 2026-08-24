@@ -12,6 +12,7 @@ import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement, TextElement } from "@/lib/engine/types";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
+import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import type { AIMode } from "./modes";
 
 export type CoPilotRole = "user" | "assistant" | "system";
@@ -41,6 +42,7 @@ export interface CoPilotMessage {
   role: CoPilotRole;
   content: string;
   timestamp: number;
+  kind?: "message" | "progress";
   actions?: SubAgentActionLog[];
   suggestions?: string[];
 }
@@ -234,6 +236,15 @@ export async function executeCoPilotInstruction(
         naturalHeight: res.height,
       });
 
+      const generatedAsset = getCached(res.fileId);
+      if (generatedAsset) {
+        enqueueAssetAnalysis({
+          fileId: generatedAsset.fileId,
+          dataURL: generatedAsset.dataURL,
+          width: generatedAsset.width,
+          height: generatedAsset.height,
+        });
+      }
       st.addElement(newElement, `co-pilot generate image: ${cleanPrompt.slice(0, 20)}`);
       st.selectOnly([newElement.id]);
 
@@ -300,7 +311,6 @@ export async function executeCoPilotInstruction(
       if (!cached?.dataURL) throw new Error("Image data not found in cache");
 
       const resultUrl = await removeBackground(cached.dataURL, {
-        allowRemoteFallback: mode === "fast",
         signal: options.signal,
       });
       const newCached = await loadDataURL(resultUrl);

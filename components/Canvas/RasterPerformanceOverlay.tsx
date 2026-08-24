@@ -1,10 +1,13 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { EditorInteractionSnapshot } from "@/lib/perf/editorTelemetry";
+import { getEditorInteractionSnapshot, subscribeEditorTelemetry } from "@/lib/perf/editorTelemetry";
 import type { RasterTelemetrySnapshot } from "@/lib/raster/telemetry";
 import { getRasterTelemetrySnapshot, subscribeRasterTelemetry } from "@/lib/raster/telemetry";
 
 const EMPTY_SNAPSHOT: RasterTelemetrySnapshot = {};
+const EMPTY_EDITOR_SNAPSHOT: EditorInteractionSnapshot = {} as EditorInteractionSnapshot;
 
 /** Opt-in developer HUD: append ?perf=1 to inspect Worker/API raster timings. */
 export default function RasterPerformanceOverlay() {
@@ -13,12 +16,18 @@ export default function RasterPerformanceOverlay() {
     getRasterTelemetrySnapshot,
     () => EMPTY_SNAPSHOT,
   );
+  const editorSnapshot = useSyncExternalStore<EditorInteractionSnapshot>(
+    subscribeEditorTelemetry,
+    getEditorInteractionSnapshot,
+    () => EMPTY_EDITOR_SNAPSHOT,
+  );
   if (process.env.NODE_ENV === "production") return null;
   if (typeof window === "undefined" || !new URLSearchParams(window.location.search).has("perf")) {
     return null;
   }
   const entries = Object.entries(snapshot);
-  if (!entries.length) return null;
+  const editorEntries = Object.entries(editorSnapshot);
+  if (!entries.length && !editorEntries.length) return null;
   return (
     <div
       role="status"
@@ -42,6 +51,11 @@ export default function RasterPerformanceOverlay() {
         <div key={kind}>
           {kind} p95 {stats.p95Ms.toFixed(1)}ms · last {stats.lastMs.toFixed(1)}ms
           {stats.failures ? ` · errors ${stats.failures}` : ""}
+        </div>
+      ))}
+      {editorEntries.map(([kind, stats]) => (
+        <div key={kind}>
+          {kind} dispatch p95 {stats.p95Ms.toFixed(1)}ms · last {stats.lastMs.toFixed(1)}ms
         </div>
       ))}
     </div>

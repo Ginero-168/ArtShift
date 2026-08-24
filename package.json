@@ -37,6 +37,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "roughjs": "^4.6.6",
+    "transformers-florence-v3": "npm:@huggingface/transformers@3.8.1",
     "valibot": "^1.4.2",
     "zustand": "^5.0.1"
   },

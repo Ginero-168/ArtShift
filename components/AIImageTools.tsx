@@ -19,11 +19,11 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
   const selectedImage = currentSlide?.elements.find(
     (el): el is ImageElement => selectedIds.has(el.id) && el.type === "image",
   );
-
   const [visionBusy, setVisionBusy] = useState(false);
   const [visionResult, setVisionResult] = useState<string>("");
   const [adjustments, setAdjustments] = useState<Partial<ColorAdjustments>>({});
   const [bgBusy, setBgBusy] = useState(false);
+  const [bgProgress, setBgProgress] = useState<number | null>(null);
 
   // Re-sync local slider state whenever the selected image changes, so
   // sliders reflect that image's own stored adjustments instead of
@@ -70,8 +70,11 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
     const url = await getImageDataUrl();
     if (!url) return;
     setBgBusy(true);
+    setBgProgress(0);
     try {
-      const resultUrl = await removeBackground(url);
+      const resultUrl = await removeBackground(url, {
+        onProgress: (value) => setBgProgress(Math.round(value * 100)),
+      });
       if (selectedImage) {
         const { loadDataURL } = await import("@/lib/engine/imageCache");
         const cached = await loadDataURL(resultUrl);
@@ -96,6 +99,7 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
       setVisionResult(`BG Remove Error: ${(e as Error).message}`);
     } finally {
       setBgBusy(false);
+      setBgProgress(null);
     }
   }
 
@@ -136,7 +140,7 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
           disabled={bgBusy}
           style={{ ...btnStyle, background: "#7c3aed", color: "#fff" }}
         >
-          {bgBusy ? "..." : "Remove BG"}
+          {bgBusy ? `Remove BG${bgProgress === null ? "..." : ` ${bgProgress}%`}` : "Remove BG"}
         </button>
       </div>
 

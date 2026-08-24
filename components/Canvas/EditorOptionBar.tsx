@@ -14,11 +14,6 @@ const MODE_OPTIONS: Array<{ id: EditorMode; label: string; title: string }> = [
   { id: "vector", label: "Vector", title: "Vector object editing tools" },
 ];
 
-const RASTER_EXECUTION_OPTIONS = [
-  { id: "eco" as const, label: "🍃 Eco", title: "Run raster processing locally" },
-  { id: "fast" as const, label: "∞ Fast", title: "Run raster processing through the API" },
-];
-
 const modeButtonStyle = (active: boolean, mode: EditorMode) => ({
   height: 28,
   padding: "0 8px",
@@ -66,8 +61,6 @@ export default function EditorOptionBar() {
   const setEditorMode = useEngine((state) => state.setEditorMode);
   const tool = useEngine((state) => state.tool);
   const setTool = useEngine((state) => state.setTool);
-  const rasterExecutionMode = useEngine((state) => state.rasterExecutionMode);
-  const setRasterExecutionMode = useEngine((state) => state.setRasterExecutionMode);
   const tools = [
     ...COMMON_TOOL_DEFINITIONS,
     ...(editorMode === "raster" ? RASTER_TOOL_DEFINITIONS : VECTOR_TOOL_DEFINITIONS),
@@ -116,23 +109,6 @@ export default function EditorOptionBar() {
         aria-hidden="true"
         style={{ width: 1, height: 20, margin: "0 3px", background: "var(--stroke, #e5e7eb)" }}
       />
-
-      {editorMode === "raster" ? (
-        <div role="group" aria-label="Raster processing mode" style={{ display: "flex", gap: 1 }}>
-          {RASTER_EXECUTION_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              title={option.title}
-              aria-pressed={rasterExecutionMode === option.id}
-              onClick={() => setRasterExecutionMode(option.id)}
-              style={modeButtonStyle(rasterExecutionMode === option.id, "raster")}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
 
       <span
         aria-hidden="true"

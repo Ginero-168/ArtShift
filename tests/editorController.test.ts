@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createEditorController } from "@/lib/engine/editorController";
-import { createImage } from "@/lib/engine/factory";
+import { createFrame, createImage } from "@/lib/engine/factory";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { createRasterSelectionOperation } from "@/lib/raster/selection";
 import type { RasterRetouchEdit } from "@/lib/raster/types";
@@ -101,5 +101,34 @@ describe("EditorController", () => {
       [{ id: image.id, patch: { rasterEdits: [edit] } }],
       "clone pixels",
     );
+  });
+
+  it("owns image-to-frame drop mutations behind the editor seam", () => {
+    const frame = createFrame({ x: 0, y: 0, width: 240, height: 180 });
+    const image = createImage({
+      x: 20,
+      y: 20,
+      width: 120,
+      height: 120,
+      fileId: "image-1",
+      naturalWidth: 120,
+      naturalHeight: 120,
+    });
+    const setFrameImage = vi.fn();
+    const deleteElements = vi.fn();
+    const selectOnly = vi.fn();
+    const controller = createEditorController({
+      currentSlide: () => ({ elements: [frame, image] }) as never,
+      updateElements: vi.fn(),
+      applyRasterSelection: vi.fn(),
+      setFrameImage,
+      deleteElements,
+      selectOnly,
+    });
+
+    expect(controller.commitFrameDrop(frame.id, image.id, "image-1")).toBe(true);
+    expect(setFrameImage).toHaveBeenCalledWith(frame.id, "image-1");
+    expect(deleteElements).toHaveBeenCalledWith([image.id]);
+    expect(selectOnly).toHaveBeenCalledWith([frame.id]);
   });
 });

@@ -20,6 +20,7 @@ import {
   loadDataURL,
 } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
+import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 
 export function usePasteDrop(
   container: React.RefObject<HTMLElement | null>,
@@ -47,6 +48,12 @@ export function usePasteDrop(
           for (let i = 0; i < images.length; i++) {
             const dataURL = images[i];
             const entry = await loadDataURL(dataURL);
+            enqueueAssetAnalysis({
+              fileId: entry.fileId,
+              dataURL: entry.dataURL,
+              width: entry.width,
+              height: entry.height,
+            });
             const { w: csw, h: csh } = currentSlideSize();
             const maxW = csw * 0.9;
             const maxH = csh * 0.9;
@@ -79,6 +86,12 @@ export function usePasteDrop(
         if (!isSupportedImageFile(file)) continue;
         const dataURL = await fileToDataURL(file);
         const entry = await loadDataURL(dataURL);
+        enqueueAssetAnalysis({
+          fileId: entry.fileId,
+          dataURL: entry.dataURL,
+          width: entry.width,
+          height: entry.height,
+        });
 
         // Check if dropped directly onto an existing Frame on the current slide (both Block & Free layers)
         const st = useEngine.getState();

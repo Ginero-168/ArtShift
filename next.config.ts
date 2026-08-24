@@ -3,7 +3,7 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 const sharedConfig: NextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ["pptxgenjs"],
+  serverExternalPackages: ["pptxgenjs", "transformers-florence-v3"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
@@ -38,10 +38,15 @@ const sharedConfig: NextConfig = {
 };
 
 export default function nextConfig(phase: string): NextConfig {
+  const developmentPort = process.env.PORT?.trim();
+  const developmentDistDir = developmentPort?.match(/^\d{1,5}$/)
+    ? `.next-dev-${developmentPort}`
+    : ".next-dev";
+
   return {
     ...sharedConfig,
-    // `next dev` and `next build` may run concurrently during local QA.
-    // Separate outputs prevent a production build from invalidating dev chunks.
-    distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
+    // Keep dev caches isolated by port so multiple local sessions cannot corrupt
+    // each other's Webpack module tables. Production continues to use `.next`.
+    distDir: phase === PHASE_DEVELOPMENT_SERVER ? developmentDistDir : ".next",
   };
 }
