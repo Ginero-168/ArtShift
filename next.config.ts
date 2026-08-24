@@ -29,6 +29,12 @@ const sharedConfig: NextConfig = {
       ...config.resolve.alias,
       "transformers-florence-v3$": florenceBrowserEntry,
     };
+    if (isServer) {
+      config.externals = [
+        ...(Array.isArray(config.externals) ? config.externals : []),
+        { "onnxruntime-node": "commonjs onnxruntime-node" },
+      ];
+    }
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
