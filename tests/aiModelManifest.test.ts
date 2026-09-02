@@ -20,6 +20,35 @@ describe("AI model manifest", () => {
     });
   });
 
+  it("routes chat economy to 20B and quality to 120B", () => {
+    const routes = createAiRouteTable({});
+
+    expect(routes["assistant.chat"]?.economy?.[0]).toMatchObject({
+      provider: "replicate",
+      model: "openai/gpt-oss-20b",
+      alias: "chat-primary",
+    });
+    expect(routes["assistant.chat"]?.quality?.[0]).toMatchObject({
+      provider: "replicate",
+      model: "openai/gpt-oss-120b",
+      alias: "chat-quality",
+    });
+  });
+
+  it("allows chat model versions to be pinned through environment", () => {
+    const routes = createAiRouteTable({
+      REPLICATE_CHAT_MODEL_VERSION: "c".repeat(64),
+      REPLICATE_CHAT_QUALITY_MODEL_VERSION: "d".repeat(64),
+    });
+
+    expect(routes["assistant.chat"]?.economy?.[0]?.model).toBe(
+      `openai/gpt-oss-20b@${"c".repeat(64)}`,
+    );
+    expect(routes["assistant.chat"]?.quality?.[0]?.model).toBe(
+      `openai/gpt-oss-120b@${"d".repeat(64)}`,
+    );
+  });
+
   it("does not route local Remove BG, Extract or raster selection through cloud providers", () => {
     const serialized = JSON.stringify(createAiRouteTable({}));
     expect(serialized).not.toMatch(/remove.?bg|extract.?objects|pixel.?mask|raster.?selection/i);

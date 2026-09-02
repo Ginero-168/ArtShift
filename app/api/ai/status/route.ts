@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { getAiBudgetStatus, getServerAiRuntime } from "@/lib/server/ai/runtime";
+import { getCredentialStatus, getSessionReplicateToken } from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,11 +13,13 @@ export async function GET(req: NextRequest) {
   if (!limit.ok) {
     return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429 });
   }
-  const ai = getServerAiRuntime();
+  const replicateToken = getSessionReplicateToken(req);
+  const ai = getServerAiRuntime({ replicateToken });
   return NextResponse.json({
     capabilities: await ai.capabilities(),
     budget: getAiBudgetStatus(),
     usage: ai.usageSummary(),
+    credential: getCredentialStatus(req),
   });
 }
 

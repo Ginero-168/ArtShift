@@ -9,7 +9,7 @@ const DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION =
   "e27b7b83f67f5865920667591a2a08a41cdc82906bd29306fe79581ab0646b8b";
 
 export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>> = {
-  "assistant.chat": "quality",
+  "assistant.chat": "economy",
   "vision.describe": "economy",
   "vision.propose": "quality",
   "vision.ocr": "economy",
@@ -18,9 +18,16 @@ export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>
 };
 
 export function createAiRouteTable(environment: Environment = process.env): AiRouteTable {
-  const anthropicModel = environment.ANTHROPIC_MODEL || "claude-sonnet-4-5";
   const googleModel = environment.GEMINI_MODEL || "gemini-2.5-flash";
   const openAiModel = environment.OPENAI_MODEL || "gpt-4o-mini";
+  const replicateChatModel = withVersion(
+    environment.REPLICATE_CHAT_MODEL || "openai/gpt-oss-20b",
+    environment.REPLICATE_CHAT_MODEL_VERSION,
+  );
+  const replicateChatQualityModel = withVersion(
+    environment.REPLICATE_CHAT_QUALITY_MODEL || "openai/gpt-oss-120b",
+    environment.REPLICATE_CHAT_QUALITY_MODEL_VERSION,
+  );
   const replicateGpt = `openai/gpt-4o-mini@${environment.REPLICATE_GPT4O_MINI_VERSION || DEFAULT_REPLICATE_GPT4O_MINI_VERSION}`;
   const replicateGemini = `google/gemini-3-flash@${environment.REPLICATE_GEMINI_3_FLASH_VERSION || DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION}`;
 
@@ -48,32 +55,49 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 
   return {
     "assistant.chat": {
-      economy: [{ provider: "anthropic", model: anthropicModel, alias: "chat-primary" }],
-      quality: [{ provider: "anthropic", model: anthropicModel, alias: "chat-primary" }],
+      economy: [
+        {
+          provider: "replicate",
+          model: replicateChatModel,
+          alias: "chat-primary",
+          expectedMaxUsd: 0.002,
+          pricing: { currency: "USD", inputPerMillionTokens: 0.09, outputPerMillionTokens: 0.36 },
+        },
+      ],
+      quality: [
+        {
+          provider: "replicate",
+          model: replicateChatQualityModel,
+          alias: "chat-quality",
+          expectedMaxUsd: 0.006,
+          pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
+        },
+      ],
+    },
+    "prompt.enhance": {
+      economy: [
+        {
+          provider: "replicate",
+          model: replicateChatModel,
+          alias: "prompt-primary",
+          expectedMaxUsd: 0.001,
+          pricing: { currency: "USD", inputPerMillionTokens: 0.09, outputPerMillionTokens: 0.36 },
+        },
+      ],
+      quality: [
+        {
+          provider: "replicate",
+          model: replicateChatQualityModel,
+          alias: "prompt-quality",
+          expectedMaxUsd: 0.003,
+          pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
+        },
+      ],
     },
     "vision.describe": { economy: visionEconomy, quality: visionQuality },
     "vision.propose": { economy: visionEconomy, quality: visionQuality },
     "vision.ocr": { economy: visionEconomy, quality: visionQuality },
-    "prompt.enhance": {
-      economy: [
-        {
-          provider: "anthropic",
-          model: anthropicModel,
-          alias: "prompt-primary",
-          expectedMaxUsd: 0.02,
-        },
-        { provider: "google", model: googleModel, alias: "google-direct" },
-        { provider: "openai", model: openAiModel, alias: "openai-direct" },
-      ],
-      quality: [
-        {
-          provider: "anthropic",
-          model: anthropicModel,
-          alias: "prompt-primary",
-          expectedMaxUsd: 0.02,
-        },
-      ],
-    },
+
     "image.generate": {
       economy: [
         imageRoute(environment.POLLINATIONS_MODEL_PRIMARY || "flux", "image-primary"),
@@ -89,4 +113,9 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 
 function imageRoute(model: string, alias: string): AiRouteTarget {
   return { provider: "pollinations", model, alias };
+}
+
+function withVersion(model: string, version: string | undefined): string {
+  if (!version || model.includes("@")) return model;
+  return `${model}@${version}`;
 }

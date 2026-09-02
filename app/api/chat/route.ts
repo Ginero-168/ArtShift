@@ -3,6 +3,7 @@ import type { AiChatContent, AiChatMessage, AiToolDefinition } from "@/lib/ai-ru
 import { searchImages } from "@/lib/imageLibrary";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
+import { getSessionReplicateToken } from "@/lib/server/ai/userCredentials";
 import { TEMPLATE_MANIFEST } from "@/lib/templates";
 import type { Mutation } from "@/lib/types";
 
@@ -350,7 +351,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid or oversized chat messages." }, { status: 400 });
   }
   const slideState = body.slideState;
-  const ai = getServerAiRuntime();
+  const replicateToken = getSessionReplicateToken(req);
+  if (!replicateToken) {
+    return NextResponse.json(
+      { error: "Add your Replicate API Key in AI Settings first.", code: "AI_KEY_REQUIRED" },
+      { status: 401 },
+    );
+  }
+  const ai = getServerAiRuntime({ replicateToken });
 
   const system = buildSystem(slideState);
   const messages: AiChatMessage[] = [...userMessages];
@@ -364,7 +372,7 @@ export async function POST(req: NextRequest) {
         const execution = await ai.execute(
           "assistant.chat",
           { messages, system, tools, maxTokens: 8_192 },
-          { profile: "quality", cache: false, signal: req.signal },
+          { profile: "economy", cache: false, signal: req.signal },
         );
         const result = execution.output;
         messages.push(result.assistantMessage);
@@ -435,7 +443,7 @@ export async function POST(req: NextRequest) {
             "assistant.chat",
             { messages, system, tools, maxTokens: 8_192 },
             {
-              profile: "quality",
+              profile: "economy",
               cache: false,
               signal: req.signal,
               onTextDelta: (delta) => {

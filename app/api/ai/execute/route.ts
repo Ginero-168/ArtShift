@@ -3,6 +3,7 @@ import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { type PublicAiExecuteRequest, parsePublicAiExecuteRequest } from "@/lib/ai-runtime/schemas";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
+import { getSessionReplicateToken } from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (!request) return invalidRequest("Invalid AI task payload.");
 
   try {
-    const execution = await executePublicTask(request, req.signal);
+    const execution = await executePublicTask(request, req.signal, getSessionReplicateToken(req));
     return NextResponse.json({ execution });
   } catch (error) {
     const normalized =
@@ -49,8 +50,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function executePublicTask(request: PublicAiExecuteRequest, signal: AbortSignal) {
-  const ai = getServerAiRuntime();
+function executePublicTask(
+  request: PublicAiExecuteRequest,
+  signal: AbortSignal,
+  replicateToken: string | undefined,
+) {
+  const ai = getServerAiRuntime({ replicateToken });
   const options = { ...request.options, signal };
   switch (request.task) {
     case "vision.describe":

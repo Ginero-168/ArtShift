@@ -252,7 +252,11 @@ export class RoutedAiRuntime implements AiRuntime {
           {
             locality: policy.locality,
             providers: providers
-              .filter((provider) => provider.tasks.includes(task as AiTaskKind))
+              .filter(
+                (provider) =>
+                  providerIdsForTask(this.options.routes, task as AiTaskKind).has(provider.id) &&
+                  provider.tasks.includes(task as AiTaskKind),
+              )
               .map((provider) => provider.id),
           },
         ]),
@@ -319,6 +323,14 @@ export class RoutedAiRuntime implements AiRuntime {
     }
     return models.size ? [...models.values()] : fallback;
   }
+}
+
+function providerIdsForTask(routes: AiRouteTable, task: AiTaskKind): Set<AiProviderId> {
+  return new Set(
+    Object.values(routes[task] ?? {}).flatMap((targets) =>
+      (targets ?? []).map((target) => target.provider),
+    ),
+  );
 }
 
 async function createCacheKey<K extends AiTaskKind>(

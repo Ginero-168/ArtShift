@@ -55,7 +55,7 @@ export function parseObjectProposals(text: string): AiObjectProposal[] {
   return deduplicateProposals(objects);
 }
 
-function parseJsonCandidate(text: string): unknown {
+export function parseJsonCandidate(text: string): unknown {
   const trimmed = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")

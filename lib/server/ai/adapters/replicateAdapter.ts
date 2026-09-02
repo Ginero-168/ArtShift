@@ -1,4 +1,7 @@
 import type {
+  AiAssistantChatInput,
+  AiAssistantChatOutput,
+  AiPromptEnhanceInput,
   AiProviderStatus,
   AiTaskKind,
   AiTaskOutput,
@@ -10,11 +13,21 @@ import type {
   AiProviderRequest,
   AiProviderResult,
 } from "@/lib/ai-runtime/runtime";
+import { parseReplicateAssistantOutput, renderHarmonyPrompt } from "./replicateChatProtocol";
 import { assertProviderResponse, parseObjectProposals, textFromUnknownOutput } from "./shared";
 
-const SUPPORTED_TASKS: AiTaskKind[] = ["vision.describe", "vision.propose", "vision.ocr"];
+const SUPPORTED_TASKS: AiTaskKind[] = [
+  "assistant.chat",
+  "vision.describe",
+  "vision.propose",
+  "vision.ocr",
+  "prompt.enhance",
+];
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
+const CHAT_MODEL = "openai/gpt-oss-20b";
+const CHAT_QUALITY_MODEL = "openai/gpt-oss-120b";
+const MAX_CHAT_OUTPUT_TOKENS = 4_096;
 
 type ReplicatePrediction = {
   id?: string;
@@ -30,7 +43,7 @@ type ReplicatePrediction = {
 export class ReplicateAiAdapter implements AiProviderAdapter {
   readonly id = "replicate" as const;
 
-  constructor(private readonly apiToken = process.env.REPLICATE_API_TOKEN) {}
+  constructor(private readonly apiToken?: string) {}
 
   async status(): Promise<AiProviderStatus> {
     return {
@@ -40,6 +53,18 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       state: this.apiToken ? "ready" : "missing-key",
       tasks: SUPPORTED_TASKS,
       models: [
+        {
+          id: CHAT_MODEL,
+          alias: "chat-primary",
+          profile: "economy",
+          pricing: { currency: "USD", inputPerMillionTokens: 0.09, outputPerMillionTokens: 0.36 },
+        },
+        {
+          id: CHAT_QUALITY_MODEL,
+          alias: "chat-quality",
+          profile: "quality",
+          pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
+        },
         {
           id: GPT_MODEL,
           alias: "vision-economy",
@@ -63,7 +88,9 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           },
         },
       ],
-      message: this.apiToken ? undefined : "REPLICATE_API_TOKEN is not configured.",
+      message: this.apiToken
+        ? undefined
+        : "No Replicate credential is configured for this session.",
     };
   }
 
@@ -76,9 +103,23 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       });
     }
     if (!this.apiToken) {
-      throw new AiRuntimeError("PROVIDER_AUTH", "REPLICATE_API_TOKEN is not configured.", {
-        provider: this.id,
-      });
+      throw new AiRuntimeError(
+        "PROVIDER_AUTH",
+        "No Replicate credential is configured for this session.",
+        {
+          provider: this.id,
+        },
+      );
+    }
+    if (request.task === "assistant.chat") {
+      return (await this.executeChat(
+        request as AiProviderRequest<"assistant.chat">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
+    }
+    if (request.task === "prompt.enhance") {
+      return (await this.enhancePrompt(
+        request as AiProviderRequest<"prompt.enhance">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
     }
     const input = request.input as AiVisionInput;
     const model = parseReplicateModel(request.model);
@@ -112,6 +153,99 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         request.task === "vision.propose" && objects?.length === 0
           ? ["The provider returned no valid normalized object boxes."]
           : [],
+    };
+  }
+
+  private async executeChat(
+    request: AiProviderRequest<"assistant.chat">,
+  ): Promise<AiProviderResult<AiAssistantChatOutput>> {
+    const input = request.input as AiAssistantChatInput;
+    const model = parseReplicateModel(request.model);
+    assertSupportedChatModel(model.slug);
+    const prediction = await this.createPrediction(
+      model,
+      {
+        prompt: renderHarmonyPrompt(input),
+        max_tokens: Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 2_048)),
+        temperature: 0.1,
+        top_p: 1,
+      },
+      request.signal,
+    );
+    const completed = await this.waitForPrediction(prediction, request.signal);
+    const raw = textFromUnknownOutput(completed.output).trim();
+    if (!raw) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an empty chat output.", {
+        provider: this.id,
+      });
+    }
+    const parsed = parseReplicateAssistantOutput(raw, input.tools ?? []);
+    request.onTextDelta?.(parsed.output.text);
+    const metrics = completed.metrics ?? {};
+    return {
+      output: parsed.output,
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        inputTokens: numberFromMetrics(metrics, ["input_token_count", "input_tokens"]),
+        outputTokens: numberFromMetrics(metrics, ["output_token_count", "output_tokens"]),
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings: parsed.warnings,
+    };
+  }
+
+  private async enhancePrompt(
+    request: AiProviderRequest<"prompt.enhance">,
+  ): Promise<AiProviderResult<AiTaskOutput<"prompt.enhance">>> {
+    const input = request.input as AiPromptEnhanceInput;
+    const model = parseReplicateModel(request.model);
+    assertSupportedChatModel(model.slug);
+    const prediction = await this.createPrediction(
+      model,
+      {
+        prompt: renderHarmonyPrompt({
+          messages: [{ role: "user", content: input.prompt }],
+          system:
+            input.purpose === "image"
+              ? "Rewrite the user's request as one precise image-generation prompt. Return only the rewritten prompt."
+              : "Rewrite the user's request to be precise and actionable. Return only the rewritten prompt.",
+        }),
+        max_tokens: 512,
+        temperature: 0.1,
+        top_p: 1,
+      },
+      request.signal,
+    );
+    const completed = await this.waitForPrediction(prediction, request.signal);
+    const raw = textFromUnknownOutput(completed.output).trim();
+    if (!raw) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an empty prompt.", {
+        provider: this.id,
+      });
+    }
+    const parsed = parseReplicateAssistantOutput(raw, []);
+    const prompt = parsed.output.text || raw;
+    request.onTextDelta?.(prompt);
+    const metrics = completed.metrics ?? {};
+    return {
+      output: { prompt },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        inputTokens: numberFromMetrics(metrics, ["input_token_count", "input_tokens"]),
+        outputTokens: numberFromMetrics(metrics, ["output_token_count", "output_tokens"]),
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings: parsed.warnings,
     };
   }
 
@@ -199,6 +333,13 @@ function parseReplicateModel(model: string): { slug: string; version?: string } 
     });
   }
   return { slug, ...(version ? { version } : {}) };
+}
+
+function assertSupportedChatModel(model: string): void {
+  if (model === CHAT_MODEL || model === CHAT_QUALITY_MODEL) return;
+  throw new AiRuntimeError("INVALID_INPUT", `Unsupported Replicate chat model ${model}.`, {
+    provider: "replicate",
+  });
 }
 
 function createModelInput(

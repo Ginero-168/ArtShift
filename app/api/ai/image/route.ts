@@ -3,6 +3,7 @@ import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/pollinations";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
+import { getSessionReplicateToken } from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
   const height = boundedDimension(body.height);
   const enhance = body.enhance !== false;
   const modelAlias = imageModelAlias(body.model);
-  const ai = getServerAiRuntime();
+  const ai = getServerAiRuntime({ replicateToken: getSessionReplicateToken(req) });
 
   let prompt = normalizedPrompt;
   let promptWarning: string | undefined;

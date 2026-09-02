@@ -124,6 +124,23 @@ describe("RoutedAiRuntime", () => {
     expect(adapter.requests).toHaveLength(0);
   });
 
+  it("reports only providers that are actually routed for each task", async () => {
+    const adapter = new MockAiProviderAdapter(
+      () => ({ output: { text: "unused" } }),
+      ["assistant.chat"],
+    );
+    const runtime = new RoutedAiRuntime({
+      adapters: [adapter],
+      routes: {
+        "assistant.chat": { economy: [{ provider: "mock", model: "mock-chat" }] },
+      },
+    });
+
+    const capabilities = await runtime.capabilities();
+    expect(capabilities.tasks["assistant.chat"].providers).toEqual(["mock"]);
+    expect(capabilities.tasks["vision.describe"].providers).toEqual([]);
+  });
+
   it("preserves TIMEOUT instead of reporting a timeout as a user cancellation", async () => {
     const adapter = new MockAiProviderAdapter(
       (request) =>

@@ -47,8 +47,7 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 
 | Variable | Description |
 |---|---|
-| `ANTHROPIC_API_KEY` | For AI chat |
-| `REPLICATE_API_TOKEN` | Optional cloud semantic Vision Assist |
+| `ANTHROPIC_API_KEY` | Optional Anthropic provider adapter |
 | `GEMINI_API_KEY` | Optional direct Google provider adapter |
 | `OPENAI_API_KEY` | Optional direct OpenAI provider adapter |
 | `POLLINATIONS_API_KEY` | AI Image Studio generation |
@@ -57,6 +56,8 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `PEXELS_API_KEY` | Stock photos |
 | `RASTER_API_URL` | Optional paid Fast raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
+
+Replicate Chat, Design Agent and Replicate-backed Vision use **BYOK**. Do not add a `REPLICATE_API_TOKEN` environment variable. Each user enters their own Replicate API Key in **AI Provider Settings**; ArtShift verifies it over HTTPS and keeps it only in server memory for the session. The key is cleared when the session expires or the service restarts.
 
 ### Step 4: Redeploy and start the app
 

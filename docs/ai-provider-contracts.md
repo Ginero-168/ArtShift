@@ -7,7 +7,7 @@
 
 - ให้ ArtShift เปิดเผย task-level contract ของตัวเอง และเก็บ request/response ของแต่ละ provider ไว้ภายใน adapter เท่านั้น
 - ถือ output จาก provider เป็น untrusted data เสมอ: ตรวจ HTTP status, parse JSON, validate discriminated unions และตรวจ output ของโมเดลซ้ำด้วย schema ของ task
-- เก็บ API key ทุกตัวไว้ฝั่ง server ยกเว้น key ประเภท public/app key ที่ provider ระบุชัดว่าออกแบบมาสำหรับ browser
+- credential แบบ server-managed ให้อยู่ฝั่ง server; สำหรับ BYOK ให้รับ key ผ่าน HTTPS แล้วเก็บไว้เฉพาะ request/session memory แบบมี TTL ห้าม persist, log, ส่งเข้า prompt หรือเก็บใน browser storage
 - อย่าผูก cost ledger กับฟิลด์ที่ provider ไม่รับประกัน ให้ทุก usage field เป็น optional แล้วบันทึก source ของค่าด้วย
 - Pin model/version ใน config ของ server แต่ทำให้เปลี่ยนได้โดยไม่แก้ UI หรือ domain code
 
@@ -43,7 +43,7 @@ interface ProviderExecution<T> {
 
 ```http
 POST https://api.replicate.com/v1/models/{owner}/{model}/predictions
-Authorization: Bearer $REPLICATE_API_TOKEN
+Authorization: Bearer <session-scoped Replicate token>
 Content-Type: application/json
 Prefer: wait=60
 Cancel-After: 90s

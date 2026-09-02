@@ -19,7 +19,7 @@ Recommended local runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`). Production su
 | **Thai typography** | Shared Thai-aware layout for the editor, templates and renderer with safe padding and automatic text-box growth |
 | **Templates** | Explicit Replace Artwork or Add as Layer application; template assets are materialized before one atomic document update |
 | **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
-| **AI Chat** | Provider-neutral AI Runtime with Anthropic tool-use — mutations apply directly to the canvas |
+| **AI Chat** | Provider-neutral AI Runtime with session-scoped Replicate BYOK; plans stay reviewable before canvas mutations |
 | **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |
 | **Raster execution** | Eco uses bounded local Worker/Canvas processing; Fast can proxy the same job contract to a paid provider via `RASTER_API_URL` |
 | **Background Removal** | Local RMBG Worker; images stay on the device |
@@ -46,9 +46,8 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 
 | Variable | Required | For |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | yes (AI chat) | Claude direct SDK for chat and optional image prompt enhancement |
+| `ANTHROPIC_API_KEY` | no | Optional Anthropic adapter for deployments that explicitly enable its routes |
 | `ANTHROPIC_MODEL` | no | `claude-sonnet-4-5` |
-| `REPLICATE_API_TOKEN` | no | Opt-in cloud semantic Vision Assist; never Remove BG/Extract |
 | `REPLICATE_GPT4O_MINI_VERSION` | no | Pinned economy Vision wrapper version |
 | `REPLICATE_GEMINI_3_FLASH_VERSION` | no | Pinned quality Vision wrapper version |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | no | Optional direct Google adapter |
@@ -61,7 +60,7 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 | `RASTER_API_URL` | no | Paid Fast raster provider endpoint |
 | `RASTER_API_KEY` | no | Bearer token for the Fast raster provider |
 
-Image prompt enhancement is optional: when `ANTHROPIC_API_KEY` is unavailable, image generation continues with local Thai keyword enrichment instead of the LLM prompt engineer.
+Replicate Chat, Design Agent and Replicate-backed Vision use the user's own key from **AI Provider Settings**. The key is verified over HTTPS and held in server memory for the current session only; it is not read from an environment variable, persisted to disk, sent to the model, or stored in browser storage. If no key is configured, local-only features continue to work and cloud AI returns a clear setup message.
 
 Provider integration, consent, fallback and cost rules are documented in [docs/AI_RUNTIME.md](docs/AI_RUNTIME.md).
 
