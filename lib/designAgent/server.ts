@@ -141,6 +141,13 @@ export async function prepareDesignTurn(
     };
   }
 
+  if (!options.replicateToken) {
+    return {
+      type: "text",
+      text: "งานนี้ต้องใช้ Replicate AI เพื่อเตรียมคำตอบหรือแผนแก้ไข กรุณาเพิ่ม Key ที่ AI Provider Settings ก่อนครับ",
+    };
+  }
+
   const ai = getServerAiRuntime({ replicateToken: options.replicateToken });
   const result = await ai.execute(
     "assistant.chat",

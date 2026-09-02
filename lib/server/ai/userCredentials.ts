@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 
-export const AI_SESSION_COOKIE = "artshift_ai_session";
+export const AI_SESSION_COOKIE =
+  process.env.NODE_ENV === "production" ? "__Host-artshift_ai_session" : "artshift_ai_session";
 export const AI_SESSION_TTL_MS = 60 * 60 * 1000;
 
 const sessions = new Map<string, SessionRecord>();
@@ -79,8 +80,9 @@ export function saveSessionReplicateToken(
 ): void {
   pruneExpiredSessions();
   const existing = getAiSessionId(request);
-  const sessionId = existing ?? randomUUID();
-  if (!existing && sessions.size >= MAX_ACTIVE_SESSIONS) evictOldestSession();
+  if (existing) sessions.delete(existing);
+  if (sessions.size >= MAX_ACTIVE_SESSIONS) evictOldestSession();
+  const sessionId = randomUUID();
   const now = Date.now();
   sessions.set(sessionId, {
     replicateToken: token,
@@ -88,7 +90,7 @@ export function saveSessionReplicateToken(
     createdAt: now,
     expiresAt: now + AI_SESSION_TTL_MS,
   });
-  if (!existing) setSessionCookie(response, sessionId);
+  setSessionCookie(response, sessionId);
 }
 
 export function clearSessionReplicateToken(request: NextRequest): boolean {

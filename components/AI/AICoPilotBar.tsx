@@ -10,7 +10,14 @@ import {
 } from "@/lib/ai/coPilot";
 import { AI_MODE_CONFIG, type AIMode, loadAIMode, saveAIMode } from "@/lib/ai/modes";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
-import { type ChatMsg, runEngineChat } from "@/lib/engine/chat";
+import {
+  buildDesignAgentContext,
+  type ClientChatMessage,
+  prepareRemoteDesignTurn,
+} from "@/lib/designAgent/client";
+import type { PlanProposal } from "@/lib/designAgent/contracts";
+import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
+import { applyAiPlan } from "@/lib/engine/applyAiPlan";
 import { useEngine } from "@/lib/engine/store";
 
 export default function AICoPilotBar() {
@@ -42,6 +49,7 @@ export default function AICoPilotBar() {
 
   const [currentActions, setCurrentActions] = useState<SubAgentActionLog[]>([]);
   const [showProviderSettings, setShowProviderSettings] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -117,11 +125,37 @@ export default function AICoPilotBar() {
 
     try {
       const useSpecializedPath = mode === "eco" || isSpecializedCoPilotPrompt(promptToSend);
+      const localPlan = buildLocalEditPlan(promptToSend);
       let reply = "";
       let actions: SubAgentActionLog[] = [];
       let suggestions: string[] = [];
 
-      if (useSpecializedPath) {
+      if (localPlan) {
+        const localAction: SubAgentActionLog = {
+          id: crypto.randomUUID(),
+          agent: "orchestrator",
+          title: "🍃 Local deterministic edit",
+          description: "กำลังตรวจสอบคำสั่งกับ Object ที่เลือก...",
+          status: "running",
+          timestamp: Date.now(),
+          mode,
+        };
+        upsertCurrentAction(localAction);
+        const localResult = applyAiPlan(localPlan, { approved: true });
+        if (localResult.ok) {
+          localAction.status = "success";
+          localAction.description = `ปรับแก้แบบ local สำเร็จ ${localResult.receipts.length} รายการ`;
+          reply = `ปรับแก้ Object ที่เลือกแบบ local เรียบร้อยแล้วครับ (${localResult.receipts.length} รายการ) ไม่มีการส่งข้อมูลออกนอกเครื่อง`;
+          suggestions = ["↶ Undo การแก้ไขครั้งนี้", "🎨 เปลี่ยนสี Object", "∞ ให้ Design Agent ช่วยต่อยอด"];
+        } else {
+          localAction.status = "error";
+          localAction.description = localResult.error;
+          reply = `ยังไม่ได้แก้ Artwork ครับ: ${localResult.error}`;
+          suggestions = ["ตรวจสอบ Object ที่เลือก", "∞ เปิดใช้ Design Agent ด้วย Replicate"];
+        }
+        upsertCurrentAction(localAction);
+        actions = [localAction];
+      } else if (useSpecializedPath) {
         const result = await executeCoPilotInstruction(promptToSend, upsertCurrentAction, {
           mode,
           signal: controller.signal,
@@ -149,10 +183,10 @@ export default function AICoPilotBar() {
           upsertCurrentAction(action);
         };
 
-        addFastAction("∞ Fast API Planner", "กำลังวิเคราะห์คำสั่งและบริบทของ Workspace...");
-        const history: ChatMsg[] = [
+        addFastAction("∞ Design Agent", "กำลังวิเคราะห์คำสั่งและบริบทของ Artwork...");
+        const history: ClientChatMessage[] = [
           ...messages
-            .flatMap((message): ChatMsg[] =>
+            .flatMap((message): ClientChatMessage[] =>
               (message.role === "user" || message.role === "assistant") &&
               message.kind !== "progress"
                 ? [{ role: message.role, content: message.content }]
@@ -161,43 +195,60 @@ export default function AICoPilotBar() {
             .slice(-10),
           { role: "user", content: promptToSend },
         ];
-        const result = await runEngineChat(history, {
-          signal: controller.signal,
-          onTextDelta: (delta) => setStreamingText((previous) => previous + delta),
-          onPlan: () => addFastAction("∞ Workspace Plan", "ได้รับแผนงานจาก API แล้ว"),
-          onProgress: (progress) => {
-            const detail =
-              typeof progress === "object" && progress && "message" in progress
-                ? String((progress as { message?: unknown }).message ?? "กำลังทำงาน...")
-                : "กำลังดำเนินการบน Workspace...";
-            addFastAction("∞ Fast API Progress", detail, "success");
-          },
-          onMutation: (mutation) =>
-            addFastAction(`∞ ${mutation.tool}`, "ปรับแก้ Workspace เรียบร้อย", "success"),
-        });
+        const result = await prepareRemoteDesignTurn(
+          history,
+          buildDesignAgentContext(),
+          controller.signal,
+        );
 
-        if (result.error) {
+        if (result.type === "proposal") {
+          if (result.proposal.requiresApproval) {
+            setPendingPlan(result.proposal);
+            fastActions[0] = {
+              ...fastActions[0],
+              status: "success",
+              description: `เตรียมแผน ${result.proposal.commands.length} รายการ รอการอนุมัติ`,
+            };
+            reply = "ผมเตรียมแผนแก้ไข Artwork ให้แล้วครับ ตรวจสอบสรุปด้านล่างและกด Apply plan เมื่อพร้อม";
+            suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน", "ทิ้งแผนนี้"];
+          } else {
+            const applied = applyAiPlan(result.proposal, { approved: true });
+            if (applied.ok) {
+              fastActions[0] = {
+                ...fastActions[0],
+                status: "success",
+                description: `ดำเนินการแบบ atomic สำเร็จ ${applied.receipts.length} รายการ`,
+              };
+              reply = `ดำเนินการตามแผนเรียบร้อยแล้วครับ (${applied.receipts.length} รายการ) และสร้าง Undo boundary เดียวให้แล้ว`;
+              suggestions = ["↶ Undo แผนล่าสุด", "📐 ตรวจสอบ Layout", "✍️ ปรับรายละเอียดต่อ"];
+            } else {
+              fastActions[0] = {
+                ...fastActions[0],
+                status: "error",
+                description: applied.error,
+              };
+              reply = `ยังไม่ได้แก้ Artwork ครับ: ${applied.error}`;
+              suggestions = ["รีเฟรชบริบทแล้วลองใหม่", "ตรวจสอบ Object ที่เลือก"];
+            }
+          }
+        } else if (result.type === "question") {
           fastActions[0] = {
             ...fastActions[0],
-            status: "error",
-            description: result.error,
+            status: "success",
+            description: "ต้องการรายละเอียดเพิ่มก่อนเริ่มงาน",
           };
-          upsertCurrentAction(fastActions[0]);
-          reply = `โหมด Fast ยังใช้งานไม่ได้: ${result.error}`;
-          suggestions = [
-            "🍃 สลับเป็น Eco เพื่อทำงาน local",
-            "ตรวจสอบ Provider status ที่ปุ่มเฟือง แล้วส่งคำสั่งอีกครั้ง",
-          ];
+          reply = result.text;
+          suggestions = ["ระบุเป้าหมายและขนาดงาน", "เพิ่ม reference หรือ Brand direction"];
         } else {
           fastActions[0] = {
             ...fastActions[0],
             status: "success",
-            description: `ดำเนินการเสร็จ: applied ${result.applied}, skipped ${result.skipped}`,
+            description: "ได้รับคำตอบจาก Design Agent แล้ว",
           };
-          upsertCurrentAction(fastActions[0]);
           reply = result.text;
-          suggestions = ["📐 จัด Layout ต่อ", "✍️ เพิ่มข้อความหรือ CTA", "🍃 สลับเป็น Eco สำหรับงาน local"];
+          suggestions = ["📐 ขอให้จัด Layout ต่อ", "✍️ ขอให้สร้าง direction ใหม่", "🍃 ทำงาน local ต่อ"];
         }
+        upsertCurrentAction(fastActions[0]);
         actions = fastActions;
       }
 
@@ -228,6 +279,37 @@ export default function AICoPilotBar() {
       setCurrentActions([]);
       setStreamingText("");
     }
+  };
+
+  const applyPendingPlan = () => {
+    if (!pendingPlan || busy) return;
+    const plan = pendingPlan;
+    setPendingPlan(null);
+    const result = applyAiPlan(plan, { approved: true });
+    const action: SubAgentActionLog = {
+      id: crypto.randomUUID(),
+      agent: "orchestrator",
+      title: "✅ Apply reviewed plan",
+      description: result.ok
+        ? `ดำเนินการแบบ atomic สำเร็จ ${result.receipts.length} รายการ`
+        : result.error,
+      status: result.ok ? "success" : "error",
+      timestamp: Date.now(),
+      mode: "fast",
+    };
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: result.ok
+          ? `Apply แผนเรียบร้อยแล้วครับ (${result.receipts.length} รายการ) และสร้าง Undo boundary เดียวให้แล้ว`
+          : `ยังไม่ได้แก้ Artwork ครับ: ${result.error}`,
+        timestamp: Date.now(),
+        actions: [action],
+        suggestions: result.ok ? ["↶ Undo แผนล่าสุด", "📐 ตรวจสอบ Layout"] : ["รีเฟรชบริบทแล้วลองใหม่"],
+      },
+    ]);
   };
 
   const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
@@ -469,6 +551,62 @@ export default function AICoPilotBar() {
               )}
             </div>
           ))}
+
+          {pendingPlan ? (
+            <div
+              role="region"
+              aria-label="Pending AI plan review"
+              style={{
+                alignSelf: "stretch",
+                padding: "9px 10px",
+                borderRadius: 8,
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                color: "#78350f",
+                fontSize: 10.5,
+              }}
+            >
+              <strong style={{ display: "block", fontSize: 11 }}>Reviewable plan</strong>
+              <span style={{ display: "block", marginTop: 3, lineHeight: 1.4 }}>
+                {pendingPlan.summary.slice(0, 240)} · {pendingPlan.commands.length} รายการ
+              </span>
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={applyPendingPlan}
+                  disabled={busy}
+                  style={{
+                    border: 0,
+                    borderRadius: 6,
+                    padding: "5px 9px",
+                    background: busy ? "#d6d3d1" : "#d97706",
+                    color: "#ffffff",
+                    cursor: busy ? "default" : "pointer",
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  Apply plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingPlan(null)}
+                  disabled={busy}
+                  style={{
+                    border: "1px solid #fcd34d",
+                    borderRadius: 6,
+                    padding: "5px 9px",
+                    background: "#ffffff",
+                    color: "#92400e",
+                    cursor: busy ? "default" : "pointer",
+                    fontSize: 10,
+                  }}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {busy && streamingText && (
             <div

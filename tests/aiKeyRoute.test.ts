@@ -20,6 +20,7 @@ describe("/api/ai/key", () => {
     const response = await POST(request({ provider: "replicate", apiKey: "invalid" }));
 
     expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await response.json()).toEqual({ error: "Invalid Replicate API Key format." });
   });
@@ -32,6 +33,7 @@ describe("/api/ai/key", () => {
     const setCookie = response.headers.get("set-cookie") ?? "";
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(body.credential).toMatchObject({
       provider: "replicate",
       configured: true,
@@ -48,6 +50,22 @@ describe("/api/ai/key", () => {
     expect(await status.json()).toMatchObject({
       credential: { configured: true, keyHint: "r8_••••bbbb" },
     });
+    expect(status.headers.get("cache-control")).toBe("private, no-store");
+
+    const rotated = await POST(request({ provider: "replicate", apiKey: TOKEN }, sessionId));
+    const rotatedCookie = rotated.headers.get("set-cookie") ?? "";
+    const rotatedSessionId = rotatedCookie.match(new RegExp(`${AI_SESSION_COOKIE}=([^;]+)`))?.[1];
+    expect(rotated.status).toBe(200);
+    expect(rotatedSessionId).toBeTruthy();
+    expect(rotatedSessionId).not.toBe(sessionId);
+    const oldSessionStatus = await GET(request(undefined, sessionId));
+    expect(await oldSessionStatus.json()).toMatchObject({
+      credential: { configured: false },
+    });
+    const rotatedSessionStatus = await GET(request(undefined, rotatedSessionId));
+    expect(await rotatedSessionStatus.json()).toMatchObject({
+      credential: { configured: true, keyHint: "r8_••••bbbb" },
+    });
   });
 
   it("does not expose a stored key after DELETE", async () => {
@@ -58,6 +76,7 @@ describe("/api/ai/key", () => {
 
     const deleted = await DELETE(request(undefined, sessionId));
     expect(deleted.status).toBe(200);
+    expect(deleted.headers.get("cache-control")).toBe("private, no-store");
     expect(await deleted.json()).toMatchObject({
       credential: { configured: false, keyHint: null },
     });

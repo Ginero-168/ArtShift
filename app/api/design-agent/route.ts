@@ -39,16 +39,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const replicateToken = getSessionReplicateToken(req);
-  if (!replicateToken) {
-    return NextResponse.json(
-      { error: "Add your Replicate API Key in AI Settings first.", code: "AI_KEY_REQUIRED" },
-      { status: 401 },
-    );
-  }
-
   try {
-    const result = await prepareDesignTurn(messages, context, { replicateToken });
+    const result = await prepareDesignTurn(messages, context, {
+      replicateToken: getSessionReplicateToken(req),
+    });
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Design agent request failed.";

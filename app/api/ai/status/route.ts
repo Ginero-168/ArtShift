@@ -11,11 +11,11 @@ const statusLimiter = new RateLimiter(60, 60_000);
 export async function GET(req: NextRequest) {
   const limit = statusLimiter.check(getClientIp(req));
   if (!limit.ok) {
-    return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429 });
+    return jsonNoStore({ error: "Rate limit exceeded." }, { status: 429 });
   }
   const replicateToken = getSessionReplicateToken(req);
   const ai = getServerAiRuntime({ replicateToken });
-  return NextResponse.json({
+  return jsonNoStore({
     capabilities: await ai.capabilities(),
     budget: getAiBudgetStatus(),
     usage: ai.usageSummary(),
@@ -26,21 +26,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const limit = statusLimiter.check(getClientIp(req));
   if (!limit.ok) {
-    return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429 });
+    return jsonNoStore({ error: "Rate limit exceeded." }, { status: 429 });
   }
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return jsonNoStore({ error: "Invalid JSON body." }, { status: 400 });
   }
   if (
     !body ||
     typeof body !== "object" ||
     (body as { action?: unknown }).action !== "clear-result-cache"
   ) {
-    return NextResponse.json({ error: "Invalid status action." }, { status: 400 });
+    return jsonNoStore({ error: "Invalid status action." }, { status: 400 });
   }
   getServerAiRuntime().clearCache();
-  return NextResponse.json({ success: true });
+  return jsonNoStore({ success: true });
+}
+
+function jsonNoStore(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("Cache-Control", "private, no-store");
+  return NextResponse.json(body, { ...init, headers });
 }

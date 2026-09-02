@@ -72,6 +72,7 @@ export async function prepareRemoteDesignTurn(
 ): Promise<PreparedDesignResult> {
   const response = await fetch("/api/design-agent", {
     method: "POST",
+    cache: "no-store",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({ messages, context }),
     signal,

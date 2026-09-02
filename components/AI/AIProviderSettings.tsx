@@ -21,7 +21,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/ai/key", { headers: { accept: "application/json" } })
+    fetch("/api/ai/key", { cache: "no-store", headers: { accept: "application/json" } })
       .then(async (response) => {
         const payload = (await response.json()) as CredentialResponse;
         if (!response.ok) throw new Error(payload.error || "Unable to read AI provider status.");
@@ -47,6 +47,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
     try {
       const response = await fetch("/api/ai/key", {
         method: "POST",
+        cache: "no-store",
         headers: { "content-type": "application/json", accept: "application/json" },
         body: JSON.stringify({ provider: "replicate", apiKey }),
       });
@@ -72,6 +73,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
     try {
       const response = await fetch("/api/ai/key", {
         method: "DELETE",
+        cache: "no-store",
         headers: { accept: "application/json" },
       });
       const payload = (await response.json()) as CredentialResponse;
@@ -150,7 +152,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
             if (event.key === "Enter") void connect();
           }}
           placeholder="r8_..."
-          autoComplete="off"
+          autoComplete="new-password"
           spellCheck={false}
           aria-label="Replicate API Key"
           style={{

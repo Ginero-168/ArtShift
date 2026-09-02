@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type PlanProposal, parseAgentEvent, parsePlanProposal } from "@/lib/designAgent/contracts";
 import { classifyDesignIntent, getExecutionPolicy } from "@/lib/designAgent/policy";
+import { prepareDesignTurn } from "@/lib/designAgent/server";
 
 const proposal: PlanProposal = {
   protocolVersion: 1,
@@ -77,6 +78,24 @@ describe("Design Agent contracts", () => {
 });
 
 describe("Design Agent policy", () => {
+  it("classifies a no-key request before attempting remote execution", async () => {
+    const result = await prepareDesignTurn(
+      [{ role: "user", content: "อธิบายความแตกต่างระหว่าง Fill กับ Stroke" }],
+      {
+        docId: "doc-1",
+        baseRevision: 100,
+        artworkId: "artwork-1",
+        artworkWidth: 1080,
+        artworkHeight: 1080,
+        hasSelection: false,
+        selectedObjectIds: [],
+        snapshot: {},
+      },
+    );
+    expect(result).toMatchObject({ type: "text" });
+    expect(result.type === "text" ? result.text : "").toContain("AI Provider Settings");
+  });
+
   it("keeps exact deterministic edits local and does not require analysis", () => {
     expect(classifyDesignIntent("เปลี่ยนข้อความนี้เป็น Summer Sale", true)).toBe("local-edit");
     expect(getExecutionPolicy("เปลี่ยนสีเป็น #ff0000", true)).toMatchObject({

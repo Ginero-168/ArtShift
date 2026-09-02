@@ -19,7 +19,7 @@ const keyLimiter = new RateLimiter(20, 60_000);
 export async function GET(req: NextRequest) {
   const limit = keyLimiter.check(getClientIp(req));
   if (!limit.ok) return rateLimited(limit.retryAfter);
-  return NextResponse.json({ credential: getCredentialStatus(req) });
+  return jsonNoStore({ credential: getCredentialStatus(req) });
 }
 
 export async function POST(req: NextRequest) {
@@ -46,10 +46,10 @@ export async function POST(req: NextRequest) {
 
   const verified = await verifyReplicateApiKey(validation.value, req.signal);
   if (!verified.ok) {
-    return NextResponse.json({ error: verified.reason }, { status: verified.status });
+    return jsonNoStore({ error: verified.reason }, { status: verified.status });
   }
 
-  const response = NextResponse.json({
+  const response = jsonNoStore({
     credential: {
       provider: "replicate",
       configured: true,
@@ -66,7 +66,7 @@ export async function DELETE(req: NextRequest) {
   const limit = keyLimiter.check(getClientIp(req));
   if (!limit.ok) return rateLimited(limit.retryAfter);
   clearSessionReplicateToken(req);
-  const response = NextResponse.json({
+  const response = jsonNoStore({
     credential: {
       provider: "replicate",
       configured: false,
@@ -80,14 +80,20 @@ export async function DELETE(req: NextRequest) {
 }
 
 function rateLimited(retryAfter: number) {
-  return NextResponse.json(
+  return jsonNoStore(
     { error: "Rate limit exceeded. Please slow down." },
     { status: 429, headers: { "Retry-After": String(retryAfter) } },
   );
 }
 
 function invalidRequest(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+  return jsonNoStore({ error: message }, { status });
+}
+
+function jsonNoStore(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("Cache-Control", "private, no-store");
+  return NextResponse.json(body, { ...init, headers });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
