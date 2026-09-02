@@ -12,6 +12,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import ProfileMenu from "@/components/Auth/ProfileMenu";
 import BlockLibrary from "@/components/Builder/BlockLibrary";
 import BuilderInspector from "@/components/Builder/BuilderInspector";
 import LayerPanel from "@/components/Builder/LayerPanel";
@@ -503,6 +504,7 @@ export default function HomePage() {
               </div>
             )}
           </div>
+          <ProfileMenu />
         </div>
       </header>
 

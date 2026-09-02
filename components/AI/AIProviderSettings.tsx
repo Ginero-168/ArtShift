@@ -76,11 +76,6 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
     setCredential(payload.credential ?? null);
   }
 
-  function signInWithGoogle() {
-    if (busy) return;
-    window.location.assign("/api/auth/google/start");
-  }
-
   async function connectReplicate() {
     if (!apiKey || busy || !auth?.authenticated) return;
     setBusy(true);
@@ -210,32 +205,9 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
           >
             Login ด้วย Google เพื่อผูก Replicate Key กับบัญชีของคุณและใช้งานข้าม Session ได้อย่างปลอดภัย
           </div>
-          <button
-            type="button"
-            onClick={signInWithGoogle}
-            disabled={busy}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              width: "100%",
-              marginTop: 12,
-              border: "1px solid #cbd5e1",
-              borderRadius: 7,
-              padding: "9px 10px",
-              background: busy ? "#f1f5f9" : "#ffffff",
-              color: "#1e293b",
-              cursor: busy ? "default" : "pointer",
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            <span aria-hidden="true" style={{ fontSize: 14, fontWeight: 800 }}>
-              G
-            </span>
-            Continue with Google
-          </button>
+          <p style={{ margin: "12px 0 0", fontSize: 10, lineHeight: 1.45, color: "#64748b" }}>
+            กรุณา Login ด้วย Google จากปุ่ม Profile มุมขวาบนก่อนจัดการ Replicate Key
+          </p>
           <p style={{ margin: "10px 0 0", fontSize: 9.5, lineHeight: 1.45, color: "#64748b" }}>
             ArtShift จะได้รับเฉพาะข้อมูลบัญชีพื้นฐานจาก Google เช่น email และชื่อ ไม่ได้รับ Google password
           </p>

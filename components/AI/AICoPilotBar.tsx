@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import AIProviderSettings from "@/components/AI/AIProviderSettings";
 import {
   type CoPilotMessage,
   executeCoPilotInstruction,
@@ -48,7 +47,6 @@ export default function AICoPilotBar() {
   ]);
 
   const [currentActions, setCurrentActions] = useState<SubAgentActionLog[]>([]);
-  const [showProviderSettings, setShowProviderSettings] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -372,23 +370,6 @@ export default function AICoPilotBar() {
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <button
               type="button"
-              onClick={() => setShowProviderSettings((visible) => !visible)}
-              aria-label="AI provider settings"
-              aria-expanded={showProviderSettings}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: 13,
-                color: showProviderSettings ? "#4f46e5" : "#94a3b8",
-                cursor: "pointer",
-                padding: "2px 5px",
-              }}
-              title="Configure your Replicate API Key"
-            >
-              ⚙
-            </button>
-            <button
-              type="button"
               onClick={() => setMessages([])}
               style={{
                 background: "none",
@@ -403,11 +384,6 @@ export default function AICoPilotBar() {
             </button>
           </div>
         </div>
-        {showProviderSettings ? (
-          <div style={{ position: "absolute", top: 42, right: 8, zIndex: 20 }}>
-            <AIProviderSettings onClose={() => setShowProviderSettings(false)} />
-          </div>
-        ) : null}
 
         {/* Messages Container */}
         <div
