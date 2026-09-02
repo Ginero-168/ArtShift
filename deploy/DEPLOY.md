@@ -47,6 +47,11 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 
 | Variable | Description |
 |---|---|
+| `ARTSHIFT_PUBLIC_URL` | Canonical HTTPS URL, e.g. `https://www.artshift.io` |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth web client ID |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth web client secret |
+| `ARTSHIFT_AUTH_SESSION_KEY` | 32-byte base64url key for encrypted auth cookies |
+| `ARTSHIFT_CREDENTIAL_ENCRYPTION_KEY` | 32-byte base64url key for encrypted BYOK credentials |
 | `ANTHROPIC_API_KEY` | Optional Anthropic provider adapter |
 | `GEMINI_API_KEY` | Optional direct Google provider adapter |
 | `OPENAI_API_KEY` | Optional direct OpenAI provider adapter |
@@ -57,7 +62,13 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `RASTER_API_URL` | Optional paid Fast raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 
-Replicate Chat, Design Agent and Replicate-backed Vision use **BYOK**. Do not add a `REPLICATE_API_TOKEN` environment variable. Each user enters their own Replicate API Key in **AI Provider Settings**; ArtShift verifies it over HTTPS and keeps it only in server memory for the session. The key is cleared when the session expires or the service restarts.
+Register this exact Google OAuth redirect URI in Google Cloud Console:
+
+```text
+https://www.artshift.io/api/auth/google/callback
+```
+
+Google Login is the primary account path. Replicate Chat, Design Agent and Replicate-backed Vision use **BYOK**. Do not add a `REPLICATE_API_TOKEN` environment variable. Each user enters their own Replicate API Key in **AI Provider Settings**; ArtShift verifies it over HTTPS and stores it encrypted against the Google account. Google access tokens are discarded after profile verification.
 
 ### Step 4: Redeploy and start the app
 

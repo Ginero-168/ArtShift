@@ -1,90 +1,92 @@
-import type { NextRequest } from "next/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { NextRequest, NextResponse } from "next/server";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DELETE, GET, POST } from "@/app/api/ai/key/route";
-import {
-  AI_SESSION_COOKIE,
-  resetAiCredentialSessionsForTests,
-} from "@/lib/server/ai/userCredentials";
+import { resetAccountStoreForTests, upsertGoogleAccount } from "@/lib/server/auth/accountStore";
+import { AUTH_SESSION_COOKIE, setAuthCookie } from "@/lib/server/auth/session";
 
 const TOKEN = `r8_${"b".repeat(37)}`;
+let storeDir = "";
+let authCookie = "";
 
-afterEach(() => {
-  resetAiCredentialSessionsForTests();
+beforeAll(() => {
+  storeDir = mkdtempSync(join(tmpdir(), "artshift-google-key-route-test-"));
+  process.env.ARTSHIFT_ACCOUNT_STORE_PATH = join(storeDir, "store.json");
+  const account = upsertGoogleAccount({
+    sub: "google-key-route-sub",
+    email: "key-route@example.com",
+    emailVerified: true,
+  });
+  const set = vi.fn();
+  setAuthCookie(fakeResponse(set), account.id);
+  authCookie = (set.mock.calls[0][0] as { value: string }).value;
+});
+
+afterAll(() => {
+  resetAccountStoreForTests();
+  delete process.env.ARTSHIFT_ACCOUNT_STORE_PATH;
   vi.unstubAllGlobals();
+  rmSync(storeDir, { recursive: true, force: true });
 });
 
 describe("/api/ai/key", () => {
-  it("rejects an invalid token without calling Replicate", async () => {
+  it("requires a Google-authenticated account before accepting a key", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const response = await POST(request({ provider: "replicate", apiKey: "invalid" }));
+    const response = await POST(request({ provider: "replicate", apiKey: TOKEN }));
 
-    expect(response.status).toBe(400);
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: "Sign in to save your Replicate API Key securely.",
+      code: "AUTH_REQUIRED",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(await response.json()).toEqual({ error: "Invalid Replicate API Key format." });
   });
 
-  it("verifies and stores a valid token in a session cookie without returning it", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-    const response = await POST(request({ provider: "replicate", apiKey: TOKEN }));
+  it("verifies and persists a valid key for the authenticated account without returning it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
+    const response = await POST(request({ provider: "replicate", apiKey: TOKEN }, authCookie));
     const body = await response.json();
-    const setCookie = response.headers.get("set-cookie") ?? "";
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(body.credential).toMatchObject({
+      authenticated: true,
       provider: "replicate",
       configured: true,
       keyHint: "r8_••••bbbb",
-      storage: "session-memory",
+      storage: "encrypted-account",
     });
     expect(JSON.stringify(body)).not.toContain(TOKEN);
-    expect(setCookie).toContain(`${AI_SESSION_COOKIE}=`);
-    expect(setCookie).toContain("HttpOnly");
-    expect(setCookie).toContain("SameSite=strict");
+    expect(response.headers.get("set-cookie")).toBeNull();
 
-    const sessionId = setCookie.match(new RegExp(`${AI_SESSION_COOKIE}=([^;]+)`))?.[1];
-    const status = await GET(request(undefined, sessionId));
+    const status = await GET(request(undefined, authCookie));
     expect(await status.json()).toMatchObject({
-      credential: { configured: true, keyHint: "r8_••••bbbb" },
-    });
-    expect(status.headers.get("cache-control")).toBe("private, no-store");
-
-    const rotated = await POST(request({ provider: "replicate", apiKey: TOKEN }, sessionId));
-    const rotatedCookie = rotated.headers.get("set-cookie") ?? "";
-    const rotatedSessionId = rotatedCookie.match(new RegExp(`${AI_SESSION_COOKIE}=([^;]+)`))?.[1];
-    expect(rotated.status).toBe(200);
-    expect(rotatedSessionId).toBeTruthy();
-    expect(rotatedSessionId).not.toBe(sessionId);
-    const oldSessionStatus = await GET(request(undefined, sessionId));
-    expect(await oldSessionStatus.json()).toMatchObject({
-      credential: { configured: false },
-    });
-    const rotatedSessionStatus = await GET(request(undefined, rotatedSessionId));
-    expect(await rotatedSessionStatus.json()).toMatchObject({
-      credential: { configured: true, keyHint: "r8_••••bbbb" },
+      credential: { authenticated: true, configured: true, keyHint: "r8_••••bbbb" },
     });
   });
 
-  it("does not expose a stored key after DELETE", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
-    const response = await POST(request({ provider: "replicate", apiKey: TOKEN }));
-    const setCookie = response.headers.get("set-cookie") ?? "";
-    const sessionId = setCookie.match(new RegExp(`${AI_SESSION_COOKIE}=([^;]+)`))?.[1];
-
-    const deleted = await DELETE(request(undefined, sessionId));
+  it("deletes the persisted key while keeping the authenticated account", async () => {
+    const deleted = await DELETE(request(undefined, authCookie));
     expect(deleted.status).toBe(200);
-    expect(deleted.headers.get("cache-control")).toBe("private, no-store");
     expect(await deleted.json()).toMatchObject({
-      credential: { configured: false, keyHint: null },
+      credential: {
+        authenticated: true,
+        configured: false,
+        keyHint: null,
+        storage: "encrypted-account",
+      },
     });
-    expect(deleted.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 });
 
-function request(body?: unknown, sessionId?: string): NextRequest {
+function fakeResponse(set: ReturnType<typeof vi.fn>): NextResponse {
+  return { cookies: { set } } as unknown as NextResponse;
+}
+
+function request(body?: unknown, cookieValue?: string): NextRequest {
   const serialized = body === undefined ? "" : JSON.stringify(body);
   return {
     headers: new Headers({
@@ -93,7 +95,7 @@ function request(body?: unknown, sessionId?: string): NextRequest {
     }),
     cookies: {
       get: (name: string) =>
-        name === AI_SESSION_COOKIE && sessionId ? { name, value: sessionId } : undefined,
+        name === AUTH_SESSION_COOKIE && cookieValue ? { name, value: cookieValue } : undefined,
     },
     arrayBuffer: async () => new TextEncoder().encode(serialized).buffer,
     signal: new AbortController().signal,

@@ -7,7 +7,7 @@
 
 - ให้ ArtShift เปิดเผย task-level contract ของตัวเอง และเก็บ request/response ของแต่ละ provider ไว้ภายใน adapter เท่านั้น
 - ถือ output จาก provider เป็น untrusted data เสมอ: ตรวจ HTTP status, parse JSON, validate discriminated unions และตรวจ output ของโมเดลซ้ำด้วย schema ของ task
-- credential แบบ server-managed ให้อยู่ฝั่ง server; สำหรับ BYOK ให้รับ key ผ่าน HTTPS แล้วเก็บไว้เฉพาะ request/session memory แบบมี TTL ห้าม persist, log, ส่งเข้า prompt หรือเก็บใน browser storage
+- credential แบบ server-managed ให้อยู่ฝั่ง server; สำหรับ BYOK ให้รับ key ผ่าน HTTPS แล้วผูกกับ Google account และเก็บแบบ AES-GCM encrypted-at-rest โดยใช้ master key ของ deployment ห้าม persist plaintext, log, ส่งเข้า prompt หรือเก็บใน browser storage
 - อย่าผูก cost ledger กับฟิลด์ที่ provider ไม่รับประกัน ให้ทุก usage field เป็น optional แล้วบันทึก source ของค่าด้วย
 - Pin model/version ใน config ของ server แต่ทำให้เปลี่ยนได้โดยไม่แก้ UI หรือ domain code
 

@@ -1,28 +1,20 @@
-import { randomUUID } from "node:crypto";
-import type { NextRequest, NextResponse } from "next/server";
-
-export const AI_SESSION_COOKIE =
-  process.env.NODE_ENV === "production" ? "__Host-artshift_ai_session" : "artshift_ai_session";
-export const AI_SESSION_TTL_MS = 60 * 60 * 1000;
-
-const sessions = new Map<string, SessionRecord>();
-const MAX_ACTIVE_SESSIONS = 1_000;
-
-type SessionRecord = {
-  replicateToken: string;
-  keyHint: string;
-  createdAt: number;
-  expiresAt: number;
-};
-
-type AiSessionCookieResponse = Pick<NextResponse, "cookies">;
+import type { NextRequest } from "next/server";
+import {
+  type AccountPublic,
+  deleteReplicateApiKey,
+  getReplicateCredentialStatus,
+  readReplicateApiKey,
+  saveReplicateApiKey,
+} from "@/lib/server/auth/accountStore";
+import { getAuthenticatedAccount } from "@/lib/server/auth/session";
 
 export type CredentialStatus = {
+  authenticated: boolean;
   provider: "replicate";
   configured: boolean;
   keyHint: string | null;
-  storage: "session-memory";
-  expiresAt: number | null;
+  storage: "encrypted-account";
+  updatedAt: number | null;
 };
 
 export function validateReplicateApiKey(
@@ -35,79 +27,43 @@ export function validateReplicateApiKey(
   return { ok: true, value };
 }
 
-export function maskReplicateApiKey(token: string): string {
-  return `${token.slice(0, 3)}••••${token.slice(-4)}`;
-}
-
-export function getAiSessionId(request: NextRequest): string | null {
-  const value = request.cookies?.get(AI_SESSION_COOKIE)?.value;
-  return isSessionId(value) ? value : null;
+export function getUserAccount(request: NextRequest): AccountPublic | null {
+  return getAuthenticatedAccount(request);
 }
 
 export function getSessionReplicateToken(request: NextRequest): string | undefined {
-  const sessionId = getAiSessionId(request);
-  if (!sessionId) return undefined;
-  const record = sessions.get(sessionId);
-  if (!record) return undefined;
-  if (record.expiresAt <= Date.now()) {
-    sessions.delete(sessionId);
+  const account = getAuthenticatedAccount(request);
+  if (!account) return undefined;
+  try {
+    return readReplicateApiKey(account.id);
+  } catch {
     return undefined;
   }
-  return record.replicateToken;
 }
 
 export function getCredentialStatus(request: NextRequest): CredentialStatus {
-  const sessionId = getAiSessionId(request);
-  if (!sessionId) return emptyStatus();
-  const record = sessions.get(sessionId);
-  if (!record || record.expiresAt <= Date.now()) {
-    if (record) sessions.delete(sessionId);
-    return emptyStatus();
+  const account = getAuthenticatedAccount(request);
+  if (!account) return emptyStatus(false);
+  try {
+    return {
+      authenticated: true,
+      provider: "replicate",
+      ...getReplicateCredentialStatus(account.id),
+    };
+  } catch {
+    return emptyStatus(true);
   }
-  return {
-    provider: "replicate",
-    configured: true,
-    keyHint: record.keyHint,
-    storage: "session-memory",
-    expiresAt: record.expiresAt,
-  };
 }
 
-export function saveSessionReplicateToken(
-  request: NextRequest,
-  response: AiSessionCookieResponse,
-  token: string,
-): void {
-  pruneExpiredSessions();
-  const existing = getAiSessionId(request);
-  if (existing) sessions.delete(existing);
-  if (sessions.size >= MAX_ACTIVE_SESSIONS) evictOldestSession();
-  const sessionId = randomUUID();
-  const now = Date.now();
-  sessions.set(sessionId, {
-    replicateToken: token,
-    keyHint: maskReplicateApiKey(token),
-    createdAt: now,
-    expiresAt: now + AI_SESSION_TTL_MS,
-  });
-  setSessionCookie(response, sessionId);
+export function saveSessionReplicateToken(request: NextRequest, token: string): void {
+  const account = getAuthenticatedAccount(request);
+  if (!account) throw new Error("AUTH_REQUIRED");
+  saveReplicateApiKey(account.id, token);
 }
 
 export function clearSessionReplicateToken(request: NextRequest): boolean {
-  const sessionId = getAiSessionId(request);
-  return sessionId ? sessions.delete(sessionId) : false;
-}
-
-export function clearAiSessionCookie(response: AiSessionCookieResponse): void {
-  response.cookies.set({
-    name: AI_SESSION_COOKIE,
-    value: "",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    path: "/",
-    maxAge: 0,
-  });
+  const account = getAuthenticatedAccount(request);
+  return account ? deleteReplicateApiKey(account.id) : false;
 }
 
 export async function verifyReplicateApiKey(
@@ -134,50 +90,13 @@ export async function verifyReplicateApiKey(
   return { ok: false, status: 502, reason: "Replicate could not verify this API Key right now." };
 }
 
-export function resetAiCredentialSessionsForTests(): void {
-  sessions.clear();
-}
-
-function setSessionCookie(response: AiSessionCookieResponse, sessionId: string): void {
-  response.cookies.set({
-    name: AI_SESSION_COOKIE,
-    value: sessionId,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    path: "/",
-  });
-}
-
-function emptyStatus(): CredentialStatus {
+function emptyStatus(authenticated: boolean): CredentialStatus {
   return {
+    authenticated,
     provider: "replicate",
     configured: false,
     keyHint: null,
-    storage: "session-memory",
-    expiresAt: null,
+    storage: "encrypted-account",
+    updatedAt: null,
   };
-}
-
-function pruneExpiredSessions(): void {
-  const now = Date.now();
-  for (const [id, record] of sessions) {
-    if (record.expiresAt <= now) sessions.delete(id);
-  }
-}
-
-function evictOldestSession(): void {
-  let oldestId: string | undefined;
-  let oldestCreatedAt = Number.POSITIVE_INFINITY;
-  for (const [id, record] of sessions) {
-    if (record.createdAt < oldestCreatedAt) {
-      oldestId = id;
-      oldestCreatedAt = record.createdAt;
-    }
-  }
-  if (oldestId) sessions.delete(oldestId);
-}
-
-function isSessionId(value: string | undefined): value is string {
-  return typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
 }

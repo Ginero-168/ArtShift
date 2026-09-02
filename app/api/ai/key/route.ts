@@ -1,14 +1,14 @@
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import {
-  clearAiSessionCookie,
   clearSessionReplicateToken,
   getCredentialStatus,
-  maskReplicateApiKey,
+  getUserAccount,
   saveSessionReplicateToken,
   validateReplicateApiKey,
   verifyReplicateApiKey,
 } from "@/lib/server/ai/userCredentials";
+import { jsonNoStore } from "@/lib/server/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +25,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const limit = keyLimiter.check(getClientIp(req));
   if (!limit.ok) return rateLimited(limit.retryAfter);
+  if (!getUserAccount(req)) {
+    return jsonNoStore(
+      { error: "Sign in to save your Replicate API Key securely.", code: "AUTH_REQUIRED" },
+      { status: 401 },
+    );
+  }
 
   let body: unknown;
   try {
@@ -49,34 +55,21 @@ export async function POST(req: NextRequest) {
     return jsonNoStore({ error: verified.reason }, { status: verified.status });
   }
 
-  const response = jsonNoStore({
-    credential: {
-      provider: "replicate",
-      configured: true,
-      keyHint: maskReplicateApiKey(validation.value),
-      storage: "session-memory",
-      expiresAt: Date.now() + 60 * 60 * 1000,
-    },
-  });
-  saveSessionReplicateToken(req, response, validation.value);
-  return response;
+  saveSessionReplicateToken(req, validation.value);
+  return jsonNoStore({ credential: getCredentialStatus(req) });
 }
 
 export async function DELETE(req: NextRequest) {
   const limit = keyLimiter.check(getClientIp(req));
   if (!limit.ok) return rateLimited(limit.retryAfter);
+  if (!getUserAccount(req)) {
+    return jsonNoStore(
+      { error: "Sign in to manage your Replicate API Key.", code: "AUTH_REQUIRED" },
+      { status: 401 },
+    );
+  }
   clearSessionReplicateToken(req);
-  const response = jsonNoStore({
-    credential: {
-      provider: "replicate",
-      configured: false,
-      keyHint: null,
-      storage: "session-memory",
-      expiresAt: null,
-    },
-  });
-  clearAiSessionCookie(response);
-  return response;
+  return jsonNoStore({ credential: getCredentialStatus(req) });
 }
 
 function rateLimited(retryAfter: number) {
@@ -88,12 +81,6 @@ function rateLimited(retryAfter: number) {
 
 function invalidRequest(message: string, status = 400) {
   return jsonNoStore({ error: message }, { status });
-}
-
-function jsonNoStore(body: unknown, init: ResponseInit = {}) {
-  const headers = new Headers(init.headers);
-  headers.set("Cache-Control", "private, no-store");
-  return NextResponse.json(body, { ...init, headers });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

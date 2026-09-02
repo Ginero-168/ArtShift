@@ -1,7 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { getAiBudgetStatus, getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getCredentialStatus, getSessionReplicateToken } from "@/lib/server/ai/userCredentials";
+import { jsonNoStore } from "@/lib/server/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,10 +44,4 @@ export async function POST(req: NextRequest) {
   }
   getServerAiRuntime().clearCache();
   return jsonNoStore({ success: true });
-}
-
-function jsonNoStore(body: unknown, init: ResponseInit = {}) {
-  const headers = new Headers(init.headers);
-  headers.set("Cache-Control", "private, no-store");
-  return NextResponse.json(body, { ...init, headers });
 }
