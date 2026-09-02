@@ -62,11 +62,11 @@ describe("AI Co-Pilot image commands", () => {
     expect(generateImageMock).toHaveBeenCalledWith(expect.objectContaining({ prompt: "แมว" }));
   });
 
-  it("keeps Eco image requests local and does not call the remote generator", async () => {
-    const result = await executeCoPilotInstruction("ขอภาพแมว", undefined, { mode: "eco" });
+  it("uses one image path without exposing an execution mode", async () => {
+    const result = await executeCoPilotInstruction("ขอภาพแมว");
 
-    expect(result.actions[0]?.status).toBe("error");
-    expect(result.reply).toContain("Eco");
-    expect(generateImageMock).not.toHaveBeenCalled();
+    expect(result.actions[0]).not.toHaveProperty("mode");
+    expect(result.reply).not.toMatch(/Eco|Fast/);
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
   });
 });

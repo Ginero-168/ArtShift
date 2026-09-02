@@ -59,7 +59,7 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `AI_MONTHLY_BUDGET_USD` | Optional monthly AI budget guard |
 | `UNSPLASH_ACCESS_KEY` | Stock photos |
 | `PEXELS_API_KEY` | Stock photos |
-| `RASTER_API_URL` | Optional paid Fast raster provider endpoint |
+| `RASTER_API_URL` | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 
 Register this exact Google OAuth redirect URI in Google Cloud Console:

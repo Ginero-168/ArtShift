@@ -479,7 +479,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setProgress(0);
     const report = createProgressReporter("Extract All");
     report("start", "เริ่มแยก Object ทั้งหมด", "started", 0);
-    setStatusMessage("Preparing fast foreground extraction...");
+    setStatusMessage("Preparing foreground extraction...");
 
     try {
       const reusableForeground = isForegroundForSource(
@@ -506,7 +506,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
 
-      // Fast extraction is the canonical geometry path. Florence-2 is optional
+      // Alpha extraction is the canonical geometry path. Florence-2 is optional
       // metadata here: its coarse boxes can label components, but must not
       // replace them or cause nearby objects to be merged again.
       setProgress(74);
@@ -524,7 +524,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         visionObjects = res.objects;
         report("florence", `Florence-2 พบ ${visionObjects.length} Proposal`, "success", 83);
       } catch (error) {
-        console.warn("Florence-2 labels unavailable; keeping local Fast geometry.", error);
+        console.warn("Florence-2 labels unavailable; keeping local alpha geometry.", error);
         report("florence", "Florence-2 ใช้งานไม่ได้ จึงใช้ Geometry เดิมต่อ", "fallback", 83);
       }
 
@@ -647,7 +647,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     }
   };
 
-  const handleExtractFast = async () => {
+  const handleExtractGeometry = async () => {
     const url = await getImageDataUrl();
     if (!url) {
       setStatusMessage("Image data not found in cache");
@@ -656,9 +656,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
-    const report = createProgressReporter("Extract Fast");
-    report("start", "เริ่มแยก Object แบบ Fast", "started", 0);
-    setStatusMessage("Removing background for fast extraction...");
+    const report = createProgressReporter("Quick Extract");
+    report("start", "เริ่มแยก Object แบบรวดเร็ว", "started", 0);
+    setStatusMessage("Removing background for quick extraction...");
 
     try {
       const reusableForeground = isForegroundForSource(
@@ -670,7 +670,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         : null;
       report(
         "foreground",
-        reusableForeground ? "กำลังใช้ Foreground ที่มีอยู่แล้ว" : "กำลังลบพื้นหลังสำหรับโหมด Fast",
+        reusableForeground ? "กำลังใช้ Foreground ที่มีอยู่แล้ว" : "กำลังลบพื้นหลังเพื่อแยก Object",
         "step",
         5,
       );
@@ -700,14 +700,14 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         setStatusMessage("No visible foreground objects were found");
         return;
       }
-      addElements(newElements, "fast extract foreground objects");
+      addElements(newElements, "quick extract foreground objects");
       selectOnly(newElements.map((el) => el.id));
-      setStatusMessage(`Fast-extracted ${newElements.length} transparent objects!`);
-      report("complete", `แยกแบบ Fast สำเร็จ ${newElements.length} ชิ้น`, "success", 100);
+      setStatusMessage(`Quick-extracted ${newElements.length} transparent objects!`);
+      report("complete", `แยก Object แบบรวดเร็วสำเร็จ ${newElements.length} ชิ้น`, "success", 100);
     } catch (err) {
-      console.warn("Fast extraction failed:", err);
-      setStatusMessage("Fast extraction failed: " + (err as Error).message);
-      report("error", `Extract Fast ไม่สำเร็จ: ${(err as Error).message}`, "error");
+      console.warn("Quick extraction failed:", err);
+      setStatusMessage("Quick extraction failed: " + (err as Error).message);
+      report("error", `Quick Extract ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
       setBusy(false);
       setProgress(null);
@@ -817,7 +817,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         </div>
       )}
 
-      {/* Row 1: AI Tools (Fast geometry is the recommended extraction path) */}
+      {/* Row 1: AI Tools (alpha geometry is the recommended extraction path) */}
       <div style={{ display: "flex", gap: 4 }}>
         <button
           type="button"
@@ -848,7 +848,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           type="button"
           disabled={busy}
           onClick={handleExtractAll}
-          title="Extract using Fast alpha geometry and optionally add Florence-2 labels"
+          title="Extract using alpha geometry and optionally add Florence-2 labels"
           style={{
             flex: 1,
             padding: "5px 8px",
@@ -871,7 +871,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         <button
           type="button"
           disabled={busy}
-          onClick={handleExtractFast}
+          onClick={handleExtractGeometry}
           title="Recommended: remove the background and split visible regions locally"
           style={{
             flex: 1,
@@ -890,7 +890,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             whiteSpace: "nowrap",
           }}
         >
-          {busy ? "Processing..." : "Extract Fast"}
+          {busy ? "Processing..." : "Quick Extract"}
         </button>
       </div>
 

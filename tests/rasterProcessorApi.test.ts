@@ -33,7 +33,7 @@ describe("Raster API boundary", () => {
     expect(decodeRasterResult(encodeRasterResult(result))).toEqual(result);
   });
 
-  it("uses the same processor contract for Fast mode", async () => {
+  it("uses the same processor contract for a remote adapter", async () => {
     const processor = new ApiRasterProcessor("/api/raster/process", async (_input, init) => {
       const body = JSON.parse(String(init?.body)) as { job: Parameters<typeof decodeRasterJob>[0] };
       const job = decodeRasterJob(body.job);

@@ -49,7 +49,7 @@ const STYLE_PRESETS: Array<{
   },
   {
     id: "turbo",
-    label: "Ultra Fast",
+    label: "Turbo",
     badge: "⚡",
     description: "SDXL Turbo, instant sub-second results",
   },

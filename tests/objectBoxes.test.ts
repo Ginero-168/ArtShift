@@ -6,7 +6,7 @@ import {
 } from "@/lib/vision/objectBoxes";
 
 describe("hybrid vision object boxes", () => {
-  it("keeps Fast geometry while adding labels from coarse Florence boxes", () => {
+  it("keeps alpha geometry while adding labels from coarse Florence boxes", () => {
     const objects = labelAlphaComponents(
       [
         { x_min: 0.1, y_min: 0.1, x_max: 0.25, y_max: 0.3, area: 100 },

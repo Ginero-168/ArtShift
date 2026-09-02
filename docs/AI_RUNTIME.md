@@ -1,6 +1,6 @@
 # ArtShift AI Runtime
 
-ArtShift exposes one task-level `AiRuntime` seam to the application. UI and domain code select an ArtShift task/profile/alias; they never send provider URLs, API keys or arbitrary model slugs.
+ArtShift exposes one task-level `AiRuntime` seam to the application and one user-facing **AI Assistance** chat. The chat is local-first and automatically chooses deterministic edits, local tools or a reviewed Design Agent turn; users never select an execution mode. UI and domain code select an ArtShift task/profile/alias; they never send provider URLs, API keys or arbitrary model slugs.
 
 ## Boundaries
 
@@ -10,12 +10,13 @@ ArtShift exposes one task-level `AiRuntime` seam to the application. UI and doma
 - `app/api/ai/execute` validates public task payloads and exposes only Vision, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/chat`.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
 - `RasterProcessor` remains a separate deep module. Remove BG, Extract Objects, selection and pixel masks are browser-local and are intentionally absent from the cloud route table.
+- `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent.
 
 ## Locality and fallback
 
 | Task | Policy |
 |---|---|
-| Assistant chat | Cloud required after an explicit user chat action |
+| Assistant chat | One unified surface: local-first; complex turns use cloud only after the explicit user action and account/provider consent |
 | Vision describe/propose/OCR | Cloud opt-in; `cloudConsent: true` is required |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud required after an explicit Generate action |
@@ -43,4 +44,4 @@ Fallback is off by default. A caller must set `allowFallback: true`; otherwise t
 
 The provider contract research and primary-source links are in [ai-provider-contracts.md](ai-provider-contracts.md).
 
-Use `npm run benchmark:ai` for local runtime overhead. A real provider smoke test is intentionally skipped by default; run it only with `RUN_AI_PROVIDER_INTEGRATION=1 npm test -- tests/aiProvider.integration.test.ts` and a configured Replicate token.
+Use `npm run benchmark:ai` for local runtime overhead. A real provider smoke test is intentionally skipped by default; run it only with `RUN_AI_PROVIDER_INTEGRATION=1 npm test -- tests/aiProvider.integration.test.ts` and an authenticated user/provider test setup. Never add a server-wide Replicate token.

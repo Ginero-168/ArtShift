@@ -7,8 +7,8 @@ import {
   isSpecializedCoPilotPrompt,
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
-import { AI_MODE_CONFIG, type AIMode, loadAIMode, saveAIMode } from "@/lib/ai/modes";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
+import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import {
   buildDesignAgentContext,
   type ClientChatMessage,
@@ -28,7 +28,6 @@ export default function AICoPilotBar() {
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<AIMode>("eco");
   const [streamingText, setStreamingText] = useState("");
   const [messages, setMessages] = useState<CoPilotMessage[]>([
     {
@@ -53,10 +52,6 @@ export default function AICoPilotBar() {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    setMode(loadAIMode());
-  }, []);
-
-  useEffect(() => {
     return subscribeAIProgress((event) => {
       const isResult = event.presentation === "result";
       const progressLabel = typeof event.progress === "number" ? ` (${event.progress}%)` : "";
@@ -74,12 +69,6 @@ export default function AICoPilotBar() {
       ]);
     });
   }, []);
-
-  const selectMode = (nextMode: AIMode) => {
-    if (busy) return;
-    setMode(nextMode);
-    saveAIMode(nextMode);
-  };
 
   const upsertCurrentAction = (action: SubAgentActionLog) => {
     setCurrentActions((prev) => {
@@ -122,8 +111,11 @@ export default function AICoPilotBar() {
     setCurrentActions([]);
 
     try {
-      const useSpecializedPath = mode === "eco" || isSpecializedCoPilotPrompt(promptToSend);
       const localPlan = buildLocalEditPlan(promptToSend);
+      const route = routeUnifiedPrompt({
+        hasLocalPlan: Boolean(localPlan),
+        specialized: isSpecializedCoPilotPrompt(promptToSend),
+      });
       let reply = "";
       let actions: SubAgentActionLog[] = [];
       let suggestions: string[] = [];
@@ -132,11 +124,10 @@ export default function AICoPilotBar() {
         const localAction: SubAgentActionLog = {
           id: crypto.randomUUID(),
           agent: "orchestrator",
-          title: "🍃 Local deterministic edit",
+          title: "⚙️ Deterministic edit",
           description: "กำลังตรวจสอบคำสั่งกับ Object ที่เลือก...",
           status: "running",
           timestamp: Date.now(),
-          mode,
         };
         upsertCurrentAction(localAction);
         const localResult = applyAiPlan(localPlan, { approved: true });
@@ -144,26 +135,25 @@ export default function AICoPilotBar() {
           localAction.status = "success";
           localAction.description = `ปรับแก้แบบ local สำเร็จ ${localResult.receipts.length} รายการ`;
           reply = `ปรับแก้ Object ที่เลือกแบบ local เรียบร้อยแล้วครับ (${localResult.receipts.length} รายการ) ไม่มีการส่งข้อมูลออกนอกเครื่อง`;
-          suggestions = ["↶ Undo การแก้ไขครั้งนี้", "🎨 เปลี่ยนสี Object", "∞ ให้ Design Agent ช่วยต่อยอด"];
+          suggestions = ["↶ Undo การแก้ไขครั้งนี้", "🎨 เปลี่ยนสี Object", "✦ ให้ AI ช่วยต่อยอด"];
         } else {
           localAction.status = "error";
           localAction.description = localResult.error;
           reply = `ยังไม่ได้แก้ Artwork ครับ: ${localResult.error}`;
-          suggestions = ["ตรวจสอบ Object ที่เลือก", "∞ เปิดใช้ Design Agent ด้วย Replicate"];
+          suggestions = ["ตรวจสอบ Object ที่เลือก", "เปิด AI Provider ใน Profile"];
         }
         upsertCurrentAction(localAction);
         actions = [localAction];
-      } else if (useSpecializedPath) {
+      } else if (route === "local-tool") {
         const result = await executeCoPilotInstruction(promptToSend, upsertCurrentAction, {
-          mode,
           signal: controller.signal,
         });
         reply = result.reply;
         actions = result.actions;
         suggestions = result.suggestions;
       } else {
-        const fastActions: SubAgentActionLog[] = [];
-        const addFastAction = (
+        const remoteActions: SubAgentActionLog[] = [];
+        const addRemoteAction = (
           title: string,
           description: string,
           status: SubAgentActionLog["status"] = "running",
@@ -175,13 +165,12 @@ export default function AICoPilotBar() {
             description,
             status,
             timestamp: Date.now(),
-            mode: "fast",
           };
-          fastActions.push(action);
+          remoteActions.push(action);
           upsertCurrentAction(action);
         };
 
-        addFastAction("∞ Design Agent", "กำลังวิเคราะห์คำสั่งและบริบทของ Artwork...");
+        addRemoteAction("✦ Design Agent", "กำลังวิเคราะห์คำสั่งและบริบทของ Artwork...");
         const history: ClientChatMessage[] = [
           ...messages
             .flatMap((message): ClientChatMessage[] =>
@@ -202,8 +191,8 @@ export default function AICoPilotBar() {
         if (result.type === "proposal") {
           if (result.proposal.requiresApproval) {
             setPendingPlan(result.proposal);
-            fastActions[0] = {
-              ...fastActions[0],
+            remoteActions[0] = {
+              ...remoteActions[0],
               status: "success",
               description: `เตรียมแผน ${result.proposal.commands.length} รายการ รอการอนุมัติ`,
             };
@@ -212,16 +201,16 @@ export default function AICoPilotBar() {
           } else {
             const applied = applyAiPlan(result.proposal, { approved: true });
             if (applied.ok) {
-              fastActions[0] = {
-                ...fastActions[0],
+              remoteActions[0] = {
+                ...remoteActions[0],
                 status: "success",
                 description: `ดำเนินการแบบ atomic สำเร็จ ${applied.receipts.length} รายการ`,
               };
               reply = `ดำเนินการตามแผนเรียบร้อยแล้วครับ (${applied.receipts.length} รายการ) และสร้าง Undo boundary เดียวให้แล้ว`;
               suggestions = ["↶ Undo แผนล่าสุด", "📐 ตรวจสอบ Layout", "✍️ ปรับรายละเอียดต่อ"];
             } else {
-              fastActions[0] = {
-                ...fastActions[0],
+              remoteActions[0] = {
+                ...remoteActions[0],
                 status: "error",
                 description: applied.error,
               };
@@ -230,24 +219,28 @@ export default function AICoPilotBar() {
             }
           }
         } else if (result.type === "question") {
-          fastActions[0] = {
-            ...fastActions[0],
+          remoteActions[0] = {
+            ...remoteActions[0],
             status: "success",
             description: "ต้องการรายละเอียดเพิ่มก่อนเริ่มงาน",
           };
           reply = result.text;
           suggestions = ["ระบุเป้าหมายและขนาดงาน", "เพิ่ม reference หรือ Brand direction"];
         } else {
-          fastActions[0] = {
-            ...fastActions[0],
+          remoteActions[0] = {
+            ...remoteActions[0],
             status: "success",
             description: "ได้รับคำตอบจาก Design Agent แล้ว",
           };
           reply = result.text;
-          suggestions = ["📐 ขอให้จัด Layout ต่อ", "✍️ ขอให้สร้าง direction ใหม่", "🍃 ทำงาน local ต่อ"];
+          suggestions = [
+            "📐 ขอให้จัด Layout ต่อ",
+            "✍️ ขอให้สร้าง direction ใหม่",
+            "🧩 ใช้เครื่องมือแก้ไขเฉพาะทาง",
+          ];
         }
-        upsertCurrentAction(fastActions[0]);
-        actions = fastActions;
+        upsertCurrentAction(remoteActions[0]);
+        actions = remoteActions;
       }
 
       const assistantMsg: CoPilotMessage = {
@@ -293,7 +286,6 @@ export default function AICoPilotBar() {
         : result.error,
       status: result.ok ? "success" : "error",
       timestamp: Date.now(),
-      mode: "fast",
     };
     setMessages((previous) => [
       ...previous,
@@ -350,9 +342,12 @@ export default function AICoPilotBar() {
             background: "#ffffff",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div
+            title={UNIFIED_AI_SYSTEM.description}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
             <span style={{ fontSize: 13 }}>🧠</span>
-            <strong style={{ fontSize: 11, color: "#1e1b4b" }}>AI Assistance</strong>
+            <strong style={{ fontSize: 11, color: "#1e1b4b" }}>{UNIFIED_AI_SYSTEM.label}</strong>
             <span
               style={{
                 fontSize: 9.5,
@@ -363,7 +358,7 @@ export default function AICoPilotBar() {
                 fontWeight: 600,
               }}
             >
-              {elementCount} objects
+              {elementCount} objects · auto
             </span>
           </div>
 
@@ -647,53 +642,6 @@ export default function AICoPilotBar() {
           gap: 6,
         }}
       >
-        {/* Local-first / paid API mode selector */}
-        <div
-          role="radiogroup"
-          aria-label="AI execution mode"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 2,
-            padding: 2,
-            borderRadius: 8,
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            width: "100%",
-            boxSizing: "border-box",
-          }}
-        >
-          {(Object.keys(AI_MODE_CONFIG) as AIMode[]).map((candidate) => {
-            const config = AI_MODE_CONFIG[candidate];
-            const active = mode === candidate;
-            return (
-              <button
-                key={candidate}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={busy}
-                onClick={() => selectMode(candidate)}
-                title={config.description}
-                style={{
-                  border: active ? `1px solid ${config.accent}55` : "1px solid transparent",
-                  borderRadius: 6,
-                  background: active ? `${config.accent}12` : "transparent",
-                  color: active ? config.accent : "#64748b",
-                  padding: "3px 5px",
-                  fontSize: 10,
-                  fontWeight: active ? 700 : 500,
-                  cursor: busy ? "default" : "pointer",
-                  whiteSpace: "nowrap",
-                  flex: 1,
-                }}
-              >
-                <span aria-hidden="true">{config.icon}</span> {config.label}
-              </button>
-            );
-          })}
-        </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
           {/* Input Field */}
           <input
@@ -704,15 +652,7 @@ export default function AICoPilotBar() {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSend();
             }}
-            placeholder={
-              mode === "eco"
-                ? hasSelection
-                  ? "Eco: แก้ไขวัตถุที่เลือก..."
-                  : "Eco: สั่งงาน local..."
-                : hasSelection
-                  ? "Fast: ให้ API ช่วยแก้ไข..."
-                  : "Fast: ให้ API ช่วยออกแบบ..."
-            }
+            placeholder={hasSelection ? "แก้ไขวัตถุที่เลือก..." : "บอกสิ่งที่ต้องการออกแบบ..."}
             style={{
               flex: 1,
               minWidth: 0,

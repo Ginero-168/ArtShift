@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Fast mode can be backed by a paid GPU/API provider without changing the
- * browser-facing RasterProcessor interface. The local fallback remains the
- * safe default for self-hosted installations that have no provider key.
+ * The optional server adapter preserves the shared RasterProcessor contract.
+ * The editor does not expose a provider mode switch; local processing remains
+ * the safe default for self-hosted installations without a provider.
  */
 async function executeRemoteRasterJob(
   job: Parameters<typeof executeRasterJobLocally>[0],

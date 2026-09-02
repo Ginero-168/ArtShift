@@ -232,12 +232,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterBrushColor = useEngine((s) => s.rasterBrushColor);
   const rasterMagicWandTolerance = useEngine((s) => s.rasterMagicWandTolerance);
   const rasterQuickSelectionSize = useEngine((s) => s.rasterQuickSelectionSize);
-  const rasterExecutionMode = useEngine((s) => s.rasterExecutionMode);
   const activeRasterSelection = useEngine((s) => s.activeRasterSelection);
-  const rasterProcessor = useMemo(
-    () => getRasterProcessor(rasterExecutionMode),
-    [rasterExecutionMode],
-  );
+  const rasterProcessor = getRasterProcessor();
   const editorController = useMemo(
     () =>
       createEditorController({

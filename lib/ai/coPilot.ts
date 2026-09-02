@@ -13,7 +13,6 @@ import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement, TextElement } from "@/lib/engine/types";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
-import type { AIMode } from "./modes";
 
 export type CoPilotRole = "user" | "assistant" | "system";
 
@@ -34,7 +33,6 @@ export interface SubAgentActionLog {
   description: string;
   status: "running" | "success" | "error";
   timestamp: number;
-  mode?: AIMode;
 }
 
 export interface CoPilotMessage {
@@ -66,8 +64,6 @@ export interface WorkspaceContext {
 }
 
 export type CoPilotOptions = {
-  /** Explicit mode is required by the UI; legacy callers retain the previous API behavior. */
-  mode?: AIMode;
   signal?: AbortSignal;
 };
 
@@ -138,8 +134,6 @@ export async function executeCoPilotInstruction(
 }> {
   const prompt = userPrompt.trim();
   const lower = prompt.toLowerCase();
-  // Preserve the existing behavior for non-UI callers that do not pass a mode.
-  const mode = options.mode ?? "fast";
   const context = getWorkspaceContext();
   const actions: SubAgentActionLog[] = [];
   const st = useEngine.getState();
@@ -157,7 +151,6 @@ export async function executeCoPilotInstruction(
       description,
       status,
       timestamp: Date.now(),
-      mode,
     };
     actions.push(act);
     if (onActionUpdate) onActionUpdate(act);
@@ -181,25 +174,9 @@ export async function executeCoPilotInstruction(
   if (isImageGenerationPrompt(prompt)) {
     const act = logAction(
       "image_gen",
-      mode === "eco" ? "🍃 Local Image Generation" : "🎨 Generating Image with FLUX AI",
-      mode === "eco"
-        ? `Local image generation is not installed for this workspace yet.`
-        : `Creating visual asset for: "${prompt}"...`,
+      "🎨 Generating Image with FLUX AI",
+      `Creating visual asset for: "${prompt}"...`,
     );
-
-    if (mode === "eco") {
-      updateActionStatus(
-        act,
-        "error",
-        "No on-device image model is configured; no remote request was made.",
-      );
-      return {
-        reply:
-          "โหมด Eco ยังไม่มีโมเดลสร้างภาพที่ติดตั้งบนเครื่อง จึงยังไม่ส่งงานออกอินเทอร์เน็ตครับ หากต้องการสร้างภาพตอนนี้ให้สลับเป็นโหมด Fast (∞) หรือเพิ่ม local image model ในภายหลัง",
-        actions,
-        suggestions: ["∞ สลับเป็น Fast แล้วสร้างภาพนี้", "🖼️ นำเข้ารูปภาพจากเครื่อง", "📐 จัด Layout สไลด์นี้"],
-      };
-    }
 
     try {
       // Clean up prompt

@@ -1,14 +1,14 @@
-import { ApiRasterProcessor } from "./apiRasterProcessor";
 import { getLocalRasterProcessor } from "./localRasterProcessor";
 import type { RasterProcessor } from "./processor";
 
-export type RasterExecutionMode = "eco" | "fast";
+let processor: RasterProcessor | null = null;
 
-let apiProcessor: ApiRasterProcessor | null = null;
-
-/** Keep the UI choice behind one seam so a future desktop transport can replace it. */
-export function getRasterProcessor(mode: RasterExecutionMode): RasterProcessor {
-  if (mode === "eco") return getLocalRasterProcessor();
-  apiProcessor ??= new ApiRasterProcessor();
-  return apiProcessor;
+/**
+ * One browser-facing raster entry point. The local Worker/WASM adapter is the
+ * safe default; optional server adapters remain behind this seam for future
+ * capability-based fallback without exposing a mode switch in the editor.
+ */
+export function getRasterProcessor(): RasterProcessor {
+  processor ??= getLocalRasterProcessor();
+  return processor;
 }

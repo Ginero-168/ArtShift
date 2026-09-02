@@ -21,7 +21,7 @@ import {
   clearActiveRasterSelection,
   setActiveRasterSelection,
 } from "../raster/activeSelection";
-import type { RasterExecutionMode } from "../raster/processorFactory";
+
 import {
   featherRasterSelection,
   invertRasterSelection,
@@ -138,7 +138,6 @@ export type EngineState = {
   activeLayerId: string;
   selectedIds: Set<string>;
   editorMode: EditorMode;
-  rasterExecutionMode: RasterExecutionMode;
   tool: Tool;
   lineSubtype: LineSubtype;
   history: HistoryState;
@@ -155,7 +154,6 @@ export type EngineState = {
   // ——— mutators ———
   setTool: (t: Tool) => void;
   setEditorMode: (mode: EditorMode) => void;
-  setRasterExecutionMode: (mode: RasterExecutionMode) => void;
   setLineSubtype: (subtype: LineSubtype) => void;
   setCurrentSlide: (id: string) => void;
   setActiveLayer: (id: string) => void;
@@ -368,7 +366,6 @@ export const useEngine = create<EngineState>((set, get) => {
     activeLayerId: initial.slides[0].layers[0].id,
     selectedIds: new Set<string>(),
     editorMode: "vector" as EditorMode,
-    rasterExecutionMode: "eco" as RasterExecutionMode,
     tool: "select" as Tool,
     clipboard: null as EngineElement[] | null,
     history: createHistory(),
@@ -377,7 +374,6 @@ export const useEngine = create<EngineState>((set, get) => {
     lineSubtype: "solid" as LineSubtype,
     aiImageModalOpen: false,
     setAiImageModalOpen: (open) => set({ aiImageModalOpen: open }),
-    setRasterExecutionMode: (mode) => set({ rasterExecutionMode: mode }),
     rasterBrushSize: 48,
     setRasterBrushSize: (size) => set({ rasterBrushSize: Math.max(1, Math.min(512, size)) }),
     rasterBrushOpacity: 1,

@@ -205,11 +205,11 @@ function findDistinctVisionInstances(
 }
 
 /**
- * Keep Fast extraction geometry intact while using Florence only for labels.
+ * Keep alpha extraction geometry intact while using Florence only for labels.
  *
  * A detector may return a coarse box for a group of nearby objects. That box
  * must never replace the tighter alpha component because it would reintroduce
- * the large merged rectangles that Fast extraction avoids.
+ * the large merged rectangles that alpha extraction avoids.
  */
 export function labelAlphaComponents(
   alphaComponents: readonly AlphaObjectBox[],
