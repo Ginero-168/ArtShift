@@ -16,6 +16,10 @@
 
 import { create } from "zustand";
 import {
+  createCompositionBlock,
+  getCompositionBlockDefinition,
+} from "../builder/compositionBlocks";
+import {
   type ActiveRasterSelection,
   appendActiveRasterSelection,
   clearActiveRasterSelection,
@@ -65,6 +69,7 @@ import {
 } from "./layers";
 import { isMediaElement, normalizeMediaPatch } from "./mediaLayout";
 import { resizeArtworkSlide } from "./resizeArtwork";
+import { type SmartArrangeOptions, type SmartArrangePatch, solveSmartArrange } from "./smartLayout";
 import { applyTemplateToSlide, type TemplateApplyMode } from "./templateApplication";
 import { measureTextElementHeight } from "./textLayout";
 import {
@@ -145,6 +150,11 @@ export type EngineState = {
   showHexGrid: boolean;
   /** Viewport layer filter: show all, block-only, or free-only elements. */
   layerFilter: LayerFilter;
+  /** Current non-persisted Smart Arrange preview patches. */
+  smartArrangePreview: SmartArrangePatch[] | null;
+  previewSmartArrange: (options?: SmartArrangeOptions) => SmartArrangePatch[];
+  applySmartArrange: () => void;
+  cancelSmartArrange: () => void;
 
   // ——— selectors (call as plain functions; they rely on getState) ———
   currentSlide: () => EngineSlide | undefined;
@@ -163,6 +173,7 @@ export type EngineState = {
 
   addElement: (el: EngineElement, label?: string) => void;
   addElements: (elements: EngineElement[], label?: string) => void;
+  insertCompositionBlock: (id: "hero" | "text-image" | "offer-cta") => string[];
   applyTemplate: (result: TemplateResult, mode?: TemplateApplyMode, label?: string) => void;
   /** Snap an Object in a Block layer and move collisions according to Strictness. */
   commitBlockLayout: (id: string) => void;
@@ -371,6 +382,44 @@ export const useEngine = create<EngineState>((set, get) => {
     history: createHistory(),
     showHexGrid: true,
     layerFilter: "all" as LayerFilter,
+    smartArrangePreview: null,
+    previewSmartArrange: (options = {}) => {
+      const existing = get().smartArrangePreview;
+      if (existing) {
+        interactionController.cancel();
+        get().undo();
+        set({ smartArrangePreview: null });
+      }
+
+      const state = get();
+      const slide = state.currentSlide();
+      if (!slide) return [];
+      const patches = solveSmartArrange(slide, {
+        ...options,
+        scope: options.scope ?? "slide",
+        selectedIds: options.selectedIds ?? Array.from(state.selectedIds),
+      });
+      if (!patches.length) return patches;
+
+      get().checkpointInteraction("smart arrange");
+      get().previewElements(patches);
+      set({ smartArrangePreview: patches });
+      return patches;
+    },
+    applySmartArrange: () => {
+      interactionController.flush();
+      if (!get().smartArrangePreview) return;
+      set((state) => ({
+        doc: { ...state.doc, updatedAt: nextRevision(state.doc.updatedAt) },
+        smartArrangePreview: null,
+      }));
+    },
+    cancelSmartArrange: () => {
+      if (!get().smartArrangePreview) return;
+      interactionController.cancel();
+      get().undo();
+      set({ smartArrangePreview: null });
+    },
     lineSubtype: "solid" as LineSubtype,
     aiImageModalOpen: false,
     setAiImageModalOpen: (open) => set({ aiImageModalOpen: open }),
@@ -501,7 +550,11 @@ export const useEngine = create<EngineState>((set, get) => {
     setEditorMode: (editorMode) =>
       set({ editorMode, tool: editorMode === "raster" ? "rasterMove" : "select" }),
     setLineSubtype: (lineSubtype) => set({ lineSubtype }),
-    setCurrentSlide: (id) =>
+    setCurrentSlide: (id) => {
+      if (get().smartArrangePreview) {
+        interactionController.cancel();
+        get().undo();
+      }
       set((state) => {
         const slide = state.doc.slides.find((candidate) => candidate.id === id);
         return {
@@ -509,8 +562,10 @@ export const useEngine = create<EngineState>((set, get) => {
           activeLayerId: slide?.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
           selectedIds: new Set(),
           activeRasterSelection: null,
+          smartArrangePreview: null,
         };
-      }),
+      });
+    },
     setActiveLayer: (id) =>
       set((state) => {
         const slide = state.doc.slides.find((candidate) => candidate.id === state.currentSlideId);
@@ -580,6 +635,16 @@ export const useEngine = create<EngineState>((set, get) => {
         }),
         selectedIds: new Set(elements.map((e) => e.id)),
       }));
+    },
+
+    insertCompositionBlock: (id) => {
+      const state = get();
+      const slide = state.currentSlide();
+      const definition = getCompositionBlockDefinition(id);
+      if (!slide || !definition) return [];
+      const composition = createCompositionBlock(id, slide);
+      state.addElements(composition.elements, `insert ${definition.label}`);
+      return composition.elements.map((element) => element.id);
     },
 
     applyTemplate: (result, mode = "replace", label = "apply template") => {
@@ -1692,6 +1757,7 @@ export const useEngine = create<EngineState>((set, get) => {
         activeLayerId: normalized.slides[0]?.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
         selectedIds: new Set(),
         history: createHistory(),
+        smartArrangePreview: null,
         croppingImageId: null,
         activeRasterSelection: null,
       });
@@ -1909,6 +1975,7 @@ function growBlockTextPlacements(
   const grid = getHexGridDimensions(slide.width, slide.height);
   const byId = new Map(slide.elements.map((element) => [element.id, element]));
   let changed = false;
+  const heightUpdates = new Map<string, number>();
   const layers = slide.layers.map((layer) => {
     if (layer.mode !== "block") return layer;
     const placements = { ...layer.placements };
@@ -1937,9 +2004,17 @@ function growBlockTextPlacements(
         placements[id] = { ...placement, rowSpan };
         layerChanged = true;
         changed = true;
+        heightUpdates.set(id, Math.max(element.height, requiredHeight));
       }
     }
     return layerChanged ? { ...layer, placements } : layer;
   });
-  return changed ? reflowBlockObjects({ ...slide, layers }, strictness) : slide;
+  if (!changed) return slide;
+  const elements = slide.elements.map((element) => {
+    const height = heightUpdates.get(element.id);
+    return height
+      ? ({ ...element, height, version: (element.version ?? 0) + 1 } as EngineElement)
+      : element;
+  });
+  return reflowBlockObjects({ ...slide, layers, elements }, strictness);
 }

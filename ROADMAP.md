@@ -26,7 +26,7 @@ ArtShift is a local-first creative operations and production editor for book adv
 - `lib/campaign/` owns catalog ingestion, smart multi-format templates, batch generation, and QA preflight inspections.
 - `lib/brand/` owns publisher identities, brand kit styling tokens, and compliance validation.
 - `lib/engine/align.ts` and `lib/engine/vectorPath.ts` provide pure mathematical algorithms for layout and geometry.
-- `lib/engine/layers.ts` owns placement semantics and reflow. Block Layers do not collide with objects in other Block Layers.
+- `lib/engine/layers.ts` owns placement semantics and reflow. Block Layers share one collision plane so objects in separate Block Layers do not overlap unexpectedly.
 - `lib/engine/textLayout.ts` is the single text-measurement path used by templates, Inspector edits, Canvas rendering, and QA overflow checks.
 - `lib/renderer/canvas.ts` is the visual source of truth for the editor, thumbnails, and raster exports.
 - `lib/engine/exportSVG.ts` and `lib/engine/exportPNG.ts` provide multi-format raster and vector exports.

@@ -18,6 +18,9 @@ Recommended local runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`). Production su
 | **Image workflow** | Aspect-safe media bounds, crop, shape masks, linked local sources, blur, blend modes, 12 non-destructive color adjustments, shared Selection, Auto Subject, Healing and Clone patches |
 | **Thai typography** | Shared Thai-aware layout for the editor, templates and renderer with safe padding and automatic text-box growth |
 | **Templates** | Explicit Replace Artwork or Add as Layer application; template assets are materialized before one atomic document update |
+| **Smart Arrange** | Local semantic layout preview with hierarchy/fill/overlap goals, protected locked/hidden objects, and Apply/Cancel undo semantics |
+| **Composition Blocks** | Editable slot-backed Hero, Text + Image, and Offer/CTA compositions with grouped Layer-panel hierarchy |
+| **Object Context Bar** | Selection-aware canvas actions for text, image, vector, shape, frame, and multi-object workflows |
 | **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
 | **AI Chat** | One unified AI Assistant: local-first actions and automatic Design Agent routing; remote plans stay reviewable and built-in tool commands commit atomically |
 | **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |

@@ -10,6 +10,10 @@ import {
   type BuilderBlockKind,
   createBuilderBlock,
 } from "@/lib/builder/blocks";
+import {
+  COMPOSITION_BLOCKS,
+  type CompositionBlockDefinition,
+} from "@/lib/builder/compositionBlocks";
 import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
@@ -65,6 +69,7 @@ export default function BlockLibrary() {
   const lineSubtype = useEngine((state) => state.lineSubtype);
   const setLineSubtype = useEngine((state) => state.setLineSubtype);
   const addElement = useEngine((state) => state.addElement);
+  const insertCompositionBlock = useEngine((state) => state.insertCompositionBlock);
   const [query, setQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<LibraryTab>("blocks");
@@ -135,7 +140,7 @@ export default function BlockLibrary() {
           onClick={() => setActiveTab("blocks")}
         >
           <span aria-hidden="true">▦</span>
-          <span>Block</span>
+          <span>Composition Blocks</span>
         </button>
         <button
           type="button"
@@ -160,6 +165,28 @@ export default function BlockLibrary() {
           />
         </label>
         <div className={styles.libraryScroll}>
+          <section className={styles.blockGroup}>
+            <div className={styles.groupTitleButton}>
+              <span>Composition</span>
+            </div>
+            <div className={styles.blockGrid}>
+              {COMPOSITION_BLOCKS.map((block: CompositionBlockDefinition) => (
+                <button
+                  type="button"
+                  className={styles.blockCard}
+                  key={block.id}
+                  onClick={() => insertCompositionBlock(block.id)}
+                  title={block.description}
+                  aria-label={`Insert ${block.label} composition`}
+                >
+                  <span className={styles.glyph} aria-hidden="true">
+                    ▦
+                  </span>
+                  <span className={styles.blockLabel}>{block.label}</span>
+                </button>
+              ))}
+            </div>
+          </section>
           {CATEGORIES.map((category) => {
             const blocks = filtered.filter((block) => block.category === category);
             const includeAiImageStudio = category === "Content" && showAiImageStudio;

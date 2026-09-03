@@ -676,58 +676,64 @@ export function reflowBlockObjects(
 ): EngineSlide {
   const grid = getHexGridDimensions(slide.width, slide.height);
   const nextElements = new Map(slide.elements.map((el) => [el.id, el]));
-
-  const nextLayers = slide.layers.map((layer) => {
-    if (layer.mode !== "block") return layer;
-    const items: Array<{ id: string; placement: BlockPlacement }> = [];
+  const blockItems: Array<{ id: string; placement: BlockPlacement }> = [];
+  for (const layer of slide.layers) {
+    if (layer.mode !== "block") continue;
     for (const id of layer.objectIds) {
       const element = slide.elements.find(
         (candidate) => candidate.id === id && !candidate.isDeleted,
       );
       if (!element) continue;
-      const placement = layer.placements[id]
-        ? normalizeBlockPlacement(layer.placements[id], grid)
-        : normalizeBlockPlacement(
-            blockPlacementForRect(element, slide.width, slide.height, placementSeed(element)),
-            grid,
-          );
-      items.push({ id, placement });
+      blockItems.push({
+        id,
+        placement: layer.placements[id]
+          ? normalizeBlockPlacement(layer.placements[id], grid)
+          : normalizeBlockPlacement(
+              blockPlacementForRect(element, slide.width, slide.height, placementSeed(element)),
+              grid,
+            ),
+      });
     }
-    if (!items.length) return layer;
+  }
 
-    const anchorItem = options.anchorId
-      ? items.find((item) => item.id === options.anchorId)
-      : undefined;
-    const anchorPlacement =
-      options.anchorPlacement ??
-      (anchorItem && options.anchorRect
-        ? blockPlacementForRect(options.anchorRect, slide.width, slide.height, anchorItem.placement)
-        : undefined);
+  const anchorItem = options.anchorId
+    ? blockItems.find((item) => item.id === options.anchorId)
+    : undefined;
+  const anchorPlacement =
+    options.anchorPlacement ??
+    (anchorItem && options.anchorRect
+      ? blockPlacementForRect(options.anchorRect, slide.width, slide.height, anchorItem.placement)
+      : undefined);
+  const result = reflowBlockItems(blockItems, {
+    anchorId: anchorItem?.id,
+    anchorPlacement,
+    strictness,
+    grid,
+  });
 
-    const result = reflowBlockItems(items, {
-      anchorId: anchorItem?.id,
-      anchorPlacement,
-      strictness,
-      grid,
-    });
-
+  const nextLayers = slide.layers.map((layer) => {
+    if (layer.mode !== "block") return layer;
     const nextPlacements = { ...layer.placements };
     for (const id of layer.objectIds) {
       const placement = result.placements.get(id);
-      if (placement) {
-        nextPlacements[id] = placement;
-        const current = nextElements.get(id);
-        if (current) {
-          const placementRect = blockRectForPlacement(placement, slide.width, slide.height);
-          const geometry = isMediaElement(current)
-            ? fitMediaElementToRect(current, placementRect)
-            : placementRect;
-          nextElements.set(id, {
-            ...current,
-            ...geometry,
-            version: (current.version ?? 0) + 1,
-          } as EngineElement);
-        }
+      if (!placement) continue;
+      nextPlacements[id] = placement;
+      const current = nextElements.get(id);
+      if (current) {
+        const placementRect = blockRectForPlacement(placement, slide.width, slide.height);
+        const geometry = isMediaElement(current)
+          ? fitMediaElementToRect(current, placementRect)
+          : {
+              x: placementRect.x + (placementRect.width - current.width) / 2,
+              y: placementRect.y + (placementRect.height - current.height) / 2,
+              width: current.width,
+              height: current.height,
+            };
+        nextElements.set(id, {
+          ...current,
+          ...geometry,
+          version: (current.version ?? 0) + 1,
+        } as EngineElement);
       }
     }
     return { ...layer, placements: nextPlacements };

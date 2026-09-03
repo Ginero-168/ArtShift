@@ -33,6 +33,30 @@ export type GroupId = string;
 export type LayerId = string;
 
 export type LayerMode = "block" | "free";
+export type SemanticRole =
+  | "background"
+  | "headline"
+  | "subheadline"
+  | "body"
+  | "media"
+  | "logo"
+  | "cta"
+  | "decoration"
+  | "unknown";
+export type SemanticImportance = "primary" | "secondary" | "supporting";
+export type SemanticConstraints = {
+  minWidth?: number;
+  minHeight?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  preserveAspectRatio?: boolean;
+  anchor?: "top" | "right" | "bottom" | "left" | "center";
+};
+export type SemanticMetadata = {
+  role: SemanticRole;
+  importance: SemanticImportance;
+  constraints?: SemanticConstraints;
+};
 export type WorkspaceStrictness = number;
 
 /**
@@ -91,6 +115,8 @@ export type BaseElement = {
   visible?: boolean;
   /** Stable builder identity, independent from Layer placement mode. */
   builderKind?: string;
+  /** Optional semantic metadata used by Smart Arrange and Composition UI. */
+  semantic?: SemanticMetadata;
   /** Fill type: solid (default), linear gradient, or radial gradient. */
   fillType?: "solid" | "linear" | "radial";
   /** Gradient colors array (2 or more colors). Only used when fillType is linear or radial. */

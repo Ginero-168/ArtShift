@@ -95,7 +95,7 @@ describe("Layer-owned placement", () => {
     expect(slide.layers.find((layer) => layer.id === target.id)?.objectIds).toEqual([a.id, b.id]);
   });
 
-  it("reflows each Block Layer as an independent layout plane", () => {
+  it("reflows Block objects collectively across separate object layers", () => {
     const lower = createEngineLayer("block", { name: "Lower", z: 1 });
     const upper = createEngineLayer("block", { name: "Upper", z: 2 });
     const lowerObject = createRect({ x: 0, y: 0, width: 200, height: 200 });
@@ -115,8 +115,8 @@ describe("Layer-owned placement", () => {
     );
 
     expect(slide.layers[0].placements[lowerObject.id]).toMatchObject(sharedPlacement);
-    expect(slide.layers[1].placements[upperObject.id]).toMatchObject(sharedPlacement);
-    expect(slide.elements[0]).toMatchObject({
+    expect(slide.layers[1].placements[upperObject.id]).not.toMatchObject(sharedPlacement);
+    expect(slide.elements[0]).not.toMatchObject({
       x: slide.elements[1].x,
       y: slide.elements[1].y,
       width: slide.elements[1].width,

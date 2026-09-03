@@ -1678,3 +1678,53 @@
     max-height: calc(100dvh - 112px);
   }
 }
+
+.compositionLayerGroup {
+  margin-bottom: 7px;
+  overflow: hidden;
+  border: 1px solid #d9e1ef;
+  border-radius: 7px;
+  background: #f8faff;
+}
+
+.compositionGroupHeader {
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: #eef3ff;
+  color: #263b69;
+  text-align: left;
+  cursor: pointer;
+}
+
+.compositionGroupHeader strong {
+  flex: 1;
+  font-size: 10px;
+}
+
+.compositionGroupHeader small {
+  color: #71809b;
+  font-size: 8px;
+}
+
+.compositionLayerChildren {
+  padding: 5px 5px 2px;
+}
+
+.compositionLayerChildren > div {
+  position: relative;
+}
+
+.compositionSlotLabel {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  left: 34px;
+  color: #71809b;
+  font-size: 8px;
+  pointer-events: none;
+}

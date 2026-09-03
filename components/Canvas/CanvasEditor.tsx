@@ -104,6 +104,7 @@ import CropOverlay from "./CropOverlay";
 import FrameEditOverlay from "./FrameEditOverlay";
 import Guides from "./Guides";
 import Marquee from "./Marquee";
+import ObjectContextBar from "./ObjectContextBar";
 import PathNodeOverlay from "./PathNodeOverlay";
 import PenLiveOverlay from "./PenLiveOverlay";
 import RasterPerformanceOverlay from "./RasterPerformanceOverlay";
@@ -322,6 +323,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     height: number;
   } | null>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
+  const [isObjectDragging, setIsObjectDragging] = useState(false);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingFrameId, setEditingFrameId] = useState<string | null>(null);
   const [editingPathId, setEditingPathId] = useState<string | null>(null);
@@ -988,6 +990,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         } else if (!d.checkpointed) {
           checkpointInteraction("move");
           d.checkpointed = true;
+          setIsObjectDragging(true);
         }
         const preview = calculateMovePreview({
           start: d.start,
@@ -1199,6 +1202,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
       dragRef.current = null;
+      setIsObjectDragging(false);
       if (d.kind === "move") {
         setGuides([]);
         if (!d.checkpointed) {
@@ -1518,6 +1522,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         <Guides
           guides={guides}
           worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
+        />
+        <ObjectContextBar
+          worldToScreen={(point) => rootRef.current?.worldToScreen(point) ?? { x: 0, y: 0 }}
+          scale={view.scale}
+          isDragging={isObjectDragging}
         />
         <BindingIndicators
           selectedIds={selectedIds}
