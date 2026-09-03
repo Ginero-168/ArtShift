@@ -96,6 +96,11 @@ export type PlanProposal = {
   requiresApproval: boolean;
 };
 
+/** Remote model output is untrusted; every remote plan must be reviewed. */
+export function requirePlanApproval(plan: PlanProposal): PlanProposal {
+  return plan.requiresApproval ? plan : { ...plan, requiresApproval: true };
+}
+
 export type ExecutionReceipt = {
   commandId: string;
   status: "applied" | "skipped" | "failed";

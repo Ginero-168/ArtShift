@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   type CoPilotMessage,
   executeCoPilotInstruction,
-  isSpecializedCoPilotPrompt,
+  isToolCoPilotPrompt,
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/designAgent/client";
 import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
+import { summarizePlanForReview } from "@/lib/designAgent/planReview";
 import { applyAiPlan } from "@/lib/engine/applyAiPlan";
 import { useEngine } from "@/lib/engine/store";
 
@@ -114,7 +115,7 @@ export default function AICoPilotBar() {
       const localPlan = buildLocalEditPlan(promptToSend);
       const route = routeUnifiedPrompt({
         hasLocalPlan: Boolean(localPlan),
-        specialized: isSpecializedCoPilotPrompt(promptToSend),
+        hasToolCommand: isToolCoPilotPrompt(promptToSend),
       });
       let reply = "";
       let actions: SubAgentActionLog[] = [];
@@ -144,7 +145,7 @@ export default function AICoPilotBar() {
         }
         upsertCurrentAction(localAction);
         actions = [localAction];
-      } else if (route === "local-tool") {
+      } else if (route === "tool-command") {
         const result = await executeCoPilotInstruction(promptToSend, upsertCurrentAction, {
           signal: controller.signal,
         });
@@ -304,6 +305,7 @@ export default function AICoPilotBar() {
 
   const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
   const hasSelection = selectedIds.size > 0;
+  const pendingReview = pendingPlan ? summarizePlanForReview(pendingPlan) : null;
 
   return (
     <div
@@ -523,7 +525,7 @@ export default function AICoPilotBar() {
             </div>
           ))}
 
-          {pendingPlan ? (
+          {pendingReview ? (
             <div
               role="region"
               aria-label="Pending AI plan review"
@@ -539,8 +541,27 @@ export default function AICoPilotBar() {
             >
               <strong style={{ display: "block", fontSize: 11 }}>Reviewable plan</strong>
               <span style={{ display: "block", marginTop: 3, lineHeight: 1.4 }}>
-                {pendingPlan.summary.slice(0, 240)} · {pendingPlan.commands.length} รายการ
+                {pendingReview.summary.slice(0, 240)} · {pendingReview.commandCount} รายการ
               </span>
+              <div style={{ marginTop: 7, lineHeight: 1.45 }}>
+                <div>
+                  <strong>กระทบ:</strong> {pendingReview.targets.join(", ")}
+                </div>
+                <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
+                  {pendingReview.changes.map((change, index) => (
+                    <li key={`${change}-${index}`}>{change}</li>
+                  ))}
+                </ul>
+                <div style={{ marginTop: 5 }}>
+                  <strong>Estimated AI cost:</strong>{" "}
+                  {pendingReview.estimatedRemoteCostUsd > 0
+                    ? `$${pendingReview.estimatedRemoteCostUsd.toFixed(4)}`
+                    : "$0.0000"}
+                </div>
+                <div style={{ marginTop: 3, fontWeight: 600 }}>
+                  ต้องกด Apply plan เพื่อยืนยันก่อนแก้ไข Artwork
+                </div>
+              </div>
               <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                 <button
                   type="button"

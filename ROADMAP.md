@@ -55,7 +55,7 @@ the existing vector, layout, campaign, and export workflows unstable.
 | **Raster Core v1** | One active pixel Selection model, shared by Delete, Brush, Pencil and Eraser | Complete — one Selection seam, undo/redo snapshots for Selection state, and one raster edit transaction per committed stroke/job |
 | **Raster Performance v1** | Worker/OffscreenCanvas jobs, cancellation, progress, pixel/memory budgets, benchmark | Complete foundation — Magic Wand and Quick Selection leave the pointer path; generic jobs cover selection masks, filters and thumbnails; cancellation yields during long jobs and Slide Rail thumbnails use the async processor |
 | **Raster Retouch v1** | Marching ants, feather, invert, transform selection, Auto Subject, Healing and Clone | Complete v1 — Auto Subject is wired into Raster options; Healing and Clone commit bounded non-destructive patches with one undo transaction per job |
-| **Unified raster adapter** | One user-facing raster workflow with local Worker/WASM as the browser default and optional API implementations behind the same job contract | Complete — `RasterProcessor` plus Local/API implementations; routing remains internal and the editor has no execution-mode switch |
+| **Unified raster adapter** | One user-facing raster workflow with local Worker/WASM as the browser default and an optional API adapter for explicit platform injection behind the same job contract | Complete — `RasterProcessor` plus Local/API implementations; the browser has no execution-mode switch and does not silently upload pixel jobs |
 | **Desktop seam** | File System, Persistence and AI Transport ports before Tauri | Complete — browser adapters are isolated; Tauri implementation can be added independently |
 | **Modernization experiment** | Next 16, TypeScript 6, and no custom webpack in a separate branch | Complete experiment — see `codex/artshift-modernization-next16-ts6` |
 
@@ -83,8 +83,8 @@ the existing vector, layout, campaign, and export workflows unstable.
   Worker/API telemetry HUD. The HUD reports p95, last duration and failures
   per raster job without adding production UI weight.
 - Unified raster and Desktop: local and optional API raster adapters share one
-  bounded job contract behind the platform seam. Provider selection stays
-  internal, while platform ports keep file access, persistence and AI transport
-  independent of Next.js.
+  bounded job contract behind the platform seam. The browser defaults to the
+  local processor; a host can explicitly inject the API adapter without adding
+  a user-facing execution-mode switch.
 - Modernization: Next 16.3.2 + TypeScript 6.0.3 + no custom webpack passed
   lint, typecheck, test and build on the dedicated experiment branch.

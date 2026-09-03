@@ -27,6 +27,22 @@ export function buildLocalEditPlan(
     );
   }
 
+  const positionDelta = extractPositionDelta(value);
+  if (positionDelta) {
+    return makePlan(state, slide.id, selected, (element) => ({
+      x: Math.max(0, Math.round(element.x + positionDelta.dx)),
+      y: Math.max(0, Math.round(element.y + positionDelta.dy)),
+    }));
+  }
+
+  const size = extractSize(value);
+  if (size) {
+    return makePlan(state, slide.id, selected, () => ({
+      width: size.width,
+      height: size.height,
+    }));
+  }
+
   return null;
 }
 
@@ -81,6 +97,42 @@ function extractTextReplacement(prompt: string): string | null {
 
 function extractHexColor(prompt: string): string | null {
   return prompt.match(/#[0-9a-f]{3,8}\b/i)?.[0] ?? null;
+}
+
+function extractPositionDelta(prompt: string): { dx: number; dy: number } | null {
+  if (!/(?:ขยับ|เลื่อน|move|shift)/i.test(prompt)) return null;
+
+  let dx = 0;
+  let dy = 0;
+  const horizontal = prompt.match(
+    /(?:ไปทาง|ไปด้าน)?\s*(ซ้าย|ขวา|left|right)\s*(\d+(?:\.\d+)?)\s*(?:px|พิกเซล|pixels?)?/i,
+  );
+  const vertical = prompt.match(
+    /(?:ไปทาง|ไปด้าน)?\s*(ขึ้น|ลง|บน|ล่าง|up|down)\s*(\d+(?:\.\d+)?)\s*(?:px|พิกเซล|pixels?)?/i,
+  );
+  if (horizontal)
+    dx = /ซ้าย|left/i.test(horizontal[1]) ? -Number(horizontal[2]) : Number(horizontal[2]);
+  if (vertical) dy = /ขึ้น|บน|up/i.test(vertical[1]) ? -Number(vertical[2]) : Number(vertical[2]);
+  return dx === 0 && dy === 0 ? null : { dx, dy };
+}
+
+function extractSize(prompt: string): { width: number; height: number } | null {
+  if (!/(?:ปรับขนาด|resize|ขยาย|ย่อ|ขนาด)/i.test(prompt)) return null;
+  const pair = prompt.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+  if (pair) {
+    return {
+      width: Math.max(1, Math.round(Number(pair[1]))),
+      height: Math.max(1, Math.round(Number(pair[2]))),
+    };
+  }
+
+  const width = prompt.match(/(?:width|กว้าง)\s*(?:เป็น|to|=)?\s*(\d+(?:\.\d+)?)/i);
+  const height = prompt.match(/(?:height|สูง)\s*(?:เป็น|to|=)?\s*(\d+(?:\.\d+)?)/i);
+  if (!width || !height) return null;
+  return {
+    width: Math.max(1, Math.round(Number(width[1]))),
+    height: Math.max(1, Math.round(Number(height[1]))),
+  };
 }
 
 export function selectedText(state: EngineState = useEngine.getState()): TextElement[] {

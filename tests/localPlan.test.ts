@@ -67,6 +67,22 @@ describe("local design edit plan", () => {
     expect(command.patch).toEqual({ strokeColor: "#ff0000" });
   });
 
+  it("creates a local position plan for a selected object", () => {
+    const plan = buildLocalEditPlan("ขยับไปทางขวา 40px");
+    expect(plan?.commands[0]).toMatchObject({
+      kind: "update",
+      patch: { x: 60, y: 20 },
+    });
+  });
+
+  it("creates a local resize plan for a selected object", () => {
+    const plan = buildLocalEditPlan("ปรับขนาดเป็น 640 x 120");
+    expect(plan?.commands[0]).toMatchObject({
+      kind: "update",
+      patch: { width: 640, height: 120 },
+    });
+  });
+
   it("does not create a plan for an ambiguous or unselected request", () => {
     expect(buildLocalEditPlan("ออกแบบใหม่")).toBeNull();
     useEngine.setState({ selectedIds: new Set() });

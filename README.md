@@ -19,9 +19,9 @@ Recommended local runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`). Production su
 | **Thai typography** | Shared Thai-aware layout for the editor, templates and renderer with safe padding and automatic text-box growth |
 | **Templates** | Explicit Replace Artwork or Add as Layer application; template assets are materialized before one atomic document update |
 | **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
-| **AI Chat** | One unified AI Assistant: local-first actions and automatic Design Agent routing; plans stay reviewable before canvas mutations |
+| **AI Chat** | One unified AI Assistant: local-first actions and automatic Design Agent routing; remote plans stay reviewable and built-in tool commands commit atomically |
 | **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |
-| **Raster execution** | One shared bounded Worker/Canvas contract; the browser uses the local processor by default and optional server adapters stay behind the seam |
+| **Raster execution** | One shared bounded Worker/Canvas contract; the browser uses the local processor by default and the optional server adapter remains available for explicit platform injection |
 | **Background Removal** | Local RMBG Worker; images stay on the device |
 | **PDF Import** | Import PDF pages as slide images (pdfjs-dist) |
 | **Durable local storage** | IndexedDB document/assets, serial autosave, backup recovery and safe migration from legacy localStorage documents |
@@ -91,7 +91,8 @@ Provider integration, consent, fallback and cost rules are documented in [docs/A
 ```
 app/
   api/
-    chat/route.ts          Tool-use loop over the normalized AI Runtime
+    chat/route.ts            Retired compatibility tombstone for the old chat client
+    design-agent/route.ts    Unified reviewed Design Agent preparation route
     ai/execute/route.ts    Validated task endpoint with consent/budget policy
     ai/status/route.ts     Provider, model, usage and cache status
     generate/route.ts      Retired provider-passthrough tombstone

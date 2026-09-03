@@ -1,6 +1,6 @@
 import type { AiChatMessage, AiToolDefinition } from "@/lib/ai-runtime/contracts";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
-import { type PlanProposal, parsePlanProposal } from "./contracts";
+import { type PlanProposal, parsePlanProposal, requirePlanApproval } from "./contracts";
 import { getExecutionPolicy } from "./policy";
 
 export type DesignAgentContext = {
@@ -179,7 +179,7 @@ export async function prepareDesignTurn(
     const proposal = parsePlanProposal(
       normalizeProposalInput(proposalCall.input, context, policy.requiresApproval),
     );
-    if (proposal.ok) return { type: "proposal", proposal: proposal.value };
+    if (proposal.ok) return { type: "proposal", proposal: requirePlanApproval(proposal.value) };
     return {
       type: "text",
       text: "ผมสร้างแผนที่ตรวจสอบได้ไม่สำเร็จ จึงยังไม่ได้แก้ Artwork ครับ ลองระบุ Object หรือรายละเอียดให้ชัดขึ้นอีกนิดได้เลย",

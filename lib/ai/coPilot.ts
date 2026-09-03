@@ -67,8 +67,8 @@ export type CoPilotOptions = {
   signal?: AbortSignal;
 };
 
-/** Prompts that need a specialized asset/local processor rather than the slide chat API. */
-export function isSpecializedCoPilotPrompt(userPrompt: string): boolean {
+/** Prompts that map to a built-in tool command rather than Design Agent chat. */
+export function isToolCoPilotPrompt(userPrompt: string): boolean {
   const prompt = userPrompt.trim();
   const lower = prompt.toLowerCase();
   return (
@@ -82,7 +82,13 @@ export function isSpecializedCoPilotPrompt(userPrompt: string): boolean {
     lower.includes("แปลงเป็น vector") ||
     lower.includes("แปลงเป็นเวกเตอร์") ||
     lower.includes("auto-trace") ||
-    lower.includes("trace vector")
+    lower.includes("trace vector") ||
+    lower.includes("layout") ||
+    lower.includes("จัดหน้า") ||
+    lower.includes("จัดระเบียบ") ||
+    lower.includes("จัดกึ่งกลาง") ||
+    lower.includes("จัดองค์ประกอบ") ||
+    lower.includes("60-30-10")
   );
 }
 

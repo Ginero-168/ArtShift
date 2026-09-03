@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { isToolCoPilotPrompt } from "@/lib/ai/coPilot";
 import {
   routeUnifiedPrompt,
   UNIFIED_AI_SYSTEM,
@@ -18,22 +17,21 @@ describe("unified AI system", () => {
   });
 
   it.each([
-    [{ hasLocalPlan: true, specialized: true }, "local-plan"],
-    [{ hasLocalPlan: true, specialized: false }, "local-plan"],
-    [{ hasLocalPlan: false, specialized: true }, "local-tool"],
-    [{ hasLocalPlan: false, specialized: false }, "design-agent"],
+    [{ hasLocalPlan: true, hasToolCommand: true }, "local-plan"],
+    [{ hasLocalPlan: true, hasToolCommand: false }, "local-plan"],
+    [{ hasLocalPlan: false, hasToolCommand: true }, "tool-command"],
+    [{ hasLocalPlan: false, hasToolCommand: false }, "design-agent"],
   ] as const)("routes %j to %s", (input, expected: UnifiedPromptRoute) => {
     expect(routeUnifiedPrompt(input)).toBe(expected);
   });
 
-  it("keeps the live chat surface free of legacy execution-mode controls", () => {
-    const chatSource = readFileSync(join(process.cwd(), "components/AI/AICoPilotBar.tsx"), "utf8");
-    const storeSource = readFileSync(join(process.cwd(), "lib/engine/store.ts"), "utf8");
+  it("keeps deterministic layout requests on the built-in tool path", () => {
+    expect(isToolCoPilotPrompt("จัด Layout สไลด์นี้แบบ 60-30-10")).toBe(true);
+    expect(isToolCoPilotPrompt("ออกแบบแคมเปญใหม่จาก reference")).toBe(false);
+  });
 
-    expect(chatSource).toContain("routeUnifiedPrompt");
-    expect(chatSource).not.toContain("AI_MODE_CONFIG");
-    expect(chatSource).not.toContain('role="radiogroup"');
-    expect(chatSource).not.toMatch(/\b(?:Eco|Fast)\b/);
-    expect(storeSource).not.toContain("rasterExecutionMode");
+  it("keeps one local-first policy with no selectable mode", () => {
+    expect(UNIFIED_AI_SYSTEM.localFirst).toBe(true);
+    expect(UNIFIED_AI_SYSTEM.userSelectableModes).toBe(false);
   });
 });

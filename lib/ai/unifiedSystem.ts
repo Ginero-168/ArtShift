@@ -1,4 +1,4 @@
-export type UnifiedPromptRoute = "local-plan" | "local-tool" | "design-agent";
+export type UnifiedPromptRoute = "local-plan" | "tool-command" | "design-agent";
 
 export const UNIFIED_AI_SYSTEM = Object.freeze({
   label: "AI Assistance",
@@ -9,9 +9,9 @@ export const UNIFIED_AI_SYSTEM = Object.freeze({
 
 export function routeUnifiedPrompt(input: {
   hasLocalPlan: boolean;
-  specialized: boolean;
+  hasToolCommand: boolean;
 }): UnifiedPromptRoute {
   if (input.hasLocalPlan) return "local-plan";
-  if (input.specialized) return "local-tool";
+  if (input.hasToolCommand) return "tool-command";
   return "design-agent";
 }

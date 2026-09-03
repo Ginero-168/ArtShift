@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type PlanProposal, parseAgentEvent, parsePlanProposal } from "@/lib/designAgent/contracts";
+import {
+  type PlanProposal,
+  parseAgentEvent,
+  parsePlanProposal,
+  requirePlanApproval,
+} from "@/lib/designAgent/contracts";
 import { classifyDesignIntent, getExecutionPolicy } from "@/lib/designAgent/policy";
 import { prepareDesignTurn } from "@/lib/designAgent/server";
 
@@ -60,6 +65,10 @@ describe("Design Agent contracts", () => {
       ],
     });
     expect(result.ok).toBe(true);
+  });
+
+  it("forces every remote proposal through the review step", () => {
+    expect(requirePlanApproval(proposal).requiresApproval).toBe(true);
   });
 
   it("parses only allowlisted agent event types", () => {

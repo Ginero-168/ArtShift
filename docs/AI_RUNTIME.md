@@ -1,16 +1,17 @@
 # ArtShift AI Runtime
 
-ArtShift exposes one task-level `AiRuntime` seam to the application and one user-facing **AI Assistance** chat. The chat is local-first and automatically chooses deterministic edits, local tools or a reviewed Design Agent turn; users never select an execution mode. UI and domain code select an ArtShift task/profile/alias; they never send provider URLs, API keys or arbitrary model slugs.
+ArtShift exposes one task-level `AiRuntime` seam to the application and one user-facing **AI Assistance** chat. The chat is local-first and automatically chooses deterministic edits, built-in tool commands or a reviewed Design Agent turn; users never select an execution mode. UI and domain code select an ArtShift task/profile/alias; they never send provider URLs, API keys or arbitrary model slugs.
 
 ## Boundaries
 
 - `lib/ai-runtime/` owns public contracts, locality policy, routing behavior, result caching and usage normalization.
 - `lib/server/ai/modelManifest.ts` owns stable aliases, provider/model mapping, pinned Replicate wrapper versions, price estimates and preflight cost ceilings.
 - `lib/server/ai/adapters/` contains one adapter per external provider. Provider-native fields stop at this directory.
-- `app/api/ai/execute` validates public task payloads and exposes only Vision, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/chat`.
+- `app/api/ai/execute` validates public task payloads and exposes only Vision, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
 - `RasterProcessor` remains a separate deep module. Remove BG, Extract Objects, selection and pixel masks are browser-local and are intentionally absent from the cloud route table.
 - `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent.
+- Built-in tool commands are explicit user actions and commit through their existing atomic editor operations; remote Design Agent proposals are always reviewable before Apply.
 
 ## Locality and fallback
 

@@ -6,7 +6,7 @@ hosts it. The shared boundary is `lib/platform/services.ts`:
 - `FileSystemPort` owns open/save bytes.
 - `PersistencePort` owns project/session persistence.
 - `AiTransportPort` owns network AI requests.
-- `RasterProcessor` owns pixel jobs and has local Worker and optional server adapters; provider selection is internal to the seam.
+- `RasterProcessor` owns pixel jobs and has a local Worker adapter plus an optional server adapter for explicit platform injection; the browser defaults to local processing.
 
 The browser currently provides the default implementations. A future Tauri
 shell should provide native implementations at its entry point and inject them
