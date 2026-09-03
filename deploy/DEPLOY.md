@@ -16,7 +16,8 @@ npm run build
 ```
 
 The current application uses Next.js server routes for AI, stock search,
-catalog ingestion, and PPTX export. Remove BG and Extract remain browser-local.
+catalog ingestion, and PPTX export. Remove BG and Extract start browser-local
+and may use the explicit VPS-local RMBG fallback when consented.
 A normal build writes
 the `.next/` runtime and must be started by a Node.js host with `npm run start`.
 

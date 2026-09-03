@@ -1,10 +1,12 @@
 /**
  * Background Removal Engine — High-precision AI background removal.
- * 100% In-Browser Local RMBG (briaai/RMBG-1.4 via Transformers.js).
- * Image data never leaves the browser through this module.
+ * Local-first browser RMBG with an explicit VPS fallback when the local model is not ready.
+ * Image data leaves the browser only when the caller opts into that fallback.
  */
 
+import { runRmbgWithFallback } from "./extractionFallback";
 import {
+  getModelStates,
   markModelFailed,
   markModelLoaded,
   markModelLoading,
@@ -43,6 +45,9 @@ export type RemoveBackgroundOptions = {
   signal?: AbortSignal;
   blackPoint?: number;
   whitePoint?: number;
+  allowServerFallback?: boolean;
+  onRuntime?: (runtime: "local" | "vps-fallback") => void;
+  onServerFallback?: () => void;
 };
 
 function createAbortError(): Error {
@@ -111,11 +116,44 @@ export async function removeBackgroundClient(
   signal?: AbortSignal,
   postprocessOptions: Pick<RemoveBackgroundOptions, "blackPoint" | "whitePoint"> = {},
 ): Promise<string> {
-  throwIfAborted(signal);
-  const { RawImage } = await import("@huggingface/transformers");
-  const image = await RawImage.fromURL(imageDataUrl);
+  const result = await removeBackgroundWithRuntime(imageDataUrl, {
+    onProgress,
+    signal,
+    ...postprocessOptions,
+  });
+  return result.dataUrl;
+}
+
+export async function removeBackgroundWithRuntime(
+  imageDataUrl: string,
+  options: RemoveBackgroundOptions = {},
+): Promise<{ dataUrl: string; runtime: "local" | "vps-fallback" }> {
+  const { onProgress, signal } = options;
   throwIfAborted(signal);
   onProgress?.(0.08);
+
+  const localStatus = getModelStates().find((model) => model.id === "rmbg-1.4")?.status ?? "lazy";
+  return runRmbgWithFallback({
+    localStatus,
+    allowServerFallback: options.allowServerFallback === true,
+    onRuntime: options.onRuntime,
+    onServerFallback: options.onServerFallback,
+    runServer: () => removeBackgroundViaServer(imageDataUrl, options),
+    runLocal: async () => {
+      const { RawImage } = await import("@huggingface/transformers");
+      const image = await RawImage.fromURL(imageDataUrl);
+      throwIfAborted(signal);
+      return removeBackgroundLocal(image, options);
+    },
+  });
+}
+
+async function removeBackgroundLocal(
+  image: RmbgImage,
+  options: RemoveBackgroundOptions,
+): Promise<string> {
+  const { onProgress, signal } = options;
+  const postprocessOptions = options;
 
   if (canRunRemoveBgWorker()) {
     try {
@@ -144,9 +182,9 @@ export async function removeBackgroundClient(
   onProgress?.(0.75);
   onProgress?.(0.85);
 
-  const { pixel_values } = await rmbgProcessor(image);
+  const { pixel_values: pixelValues } = await rmbgProcessor(image);
   throwIfAborted(signal);
-  const { output } = await rmbgModel({ input: pixel_values });
+  const { output } = await rmbgModel({ input: pixelValues });
   throwIfAborted(signal);
   onProgress?.(0.95);
 
@@ -172,6 +210,39 @@ export async function removeBackgroundClient(
   );
 
   return composeImageWithAlpha(image, maskData, signal, onProgress);
+}
+
+async function removeBackgroundViaServer(
+  imageDataUrl: string,
+  options: RemoveBackgroundOptions,
+): Promise<string> {
+  const response = await fetch("/api/local-ai/rmbg", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      image: imageDataUrl,
+      allowServerFallback: true,
+      blackPoint: options.blackPoint,
+      whitePoint: options.whitePoint,
+    }),
+    signal: options.signal,
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    result?: { dataUrl?: unknown };
+    error?: { message?: unknown };
+  };
+  if (!response.ok || typeof payload.result?.dataUrl !== "string") {
+    throw new Error(
+      typeof payload.error?.message === "string"
+        ? payload.error.message
+        : `Server RMBG failed with status ${response.status}.`,
+    );
+  }
+  if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(payload.result.dataUrl)) {
+    throw new Error("Server RMBG returned an invalid image result.");
+  }
+  options.onProgress?.(1);
+  return payload.result.dataUrl;
 }
 
 function composeImageWithAlpha(

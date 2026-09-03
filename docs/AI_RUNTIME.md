@@ -9,7 +9,7 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 - `lib/server/ai/adapters/` contains one adapter per external provider. Provider-native fields stop at this directory.
 - `app/api/ai/execute` validates public task payloads and exposes only Vision, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
-- `RasterProcessor` remains a separate deep module. Remove BG, Extract Objects, selection and pixel masks are browser-local and are intentionally absent from the cloud route table.
+- `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser model is not ready. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
 - `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent.
 - Built-in tool commands are explicit user actions and commit through their existing atomic editor operations; remote Design Agent proposals are always reviewable before Apply.
 
@@ -21,9 +21,23 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 | Vision describe/propose/OCR | Cloud opt-in; `cloudConsent: true` is required |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud required after an explicit Generate action |
-| Remove BG / Extract / pixel mask | Local-only; no server task exists |
+| Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser model is not ready |
+| Pixel mask | Local-only; no server task exists |
 
 Fallback is off by default. A caller must set `allowFallback: true`; otherwise the runtime tries only the selected route target. This prevents a hidden paid fallback when the primary provider is unavailable.
+
+### Extract fallback boundary
+
+`Extract All` uses the browser pipeline by default. When the user explicitly enables
+the VPS fallback for an Extract action and the local RMBG model is `lazy`, `loading`,
+or `failed`, the browser calls `/api/local-ai/rmbg`. The VPS runs its cached
+`briaai/RMBG-1.4` runtime and returns a PNG with the computed alpha; component
+analysis, optional proposals, mask refinement, cropping, and the final document
+mutation remain in the browser. A failed VPS request falls back to the local path.
+
+The fallback is stage-aware rather than a generic cloud AI route: it does not upload
+images for background analysis or silently route paid provider work. The source
+document remains unchanged until the browser receives and validates the result.
 
 ## Cost, cache and telemetry
 
@@ -38,7 +52,7 @@ Fallback is off by default. A caller must set `allowFallback: true`; otherwise t
 1. Add or update an adapter that implements `AiProviderAdapter`.
 2. Keep provider request/response types inside that adapter and validate model output as untrusted data.
 3. Add stable aliases and pinned models to `modelManifest.ts`; do not add provider model fields to UI components.
-4. Declare task locality in `policy.ts`. Never add local-only raster/image extraction tasks to the cloud table.
+4. Declare task locality in `policy.ts`. Keep pixel-mask work local-only; add any future extraction fallback as an explicit server-local stage with consent and bounded resources, never as an implicit paid cloud route.
 5. Add an adapter contract fixture for success, malformed output, timeout/abort, 429 and 5xx behavior.
 6. Run `npm run verify`; provider integration tests that spend money must remain behind explicit environment flags.
 7. Check `/api/ai/status` and the Model Manager before enabling a new alias in UI.

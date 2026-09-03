@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
-import { removeBackground } from "@/lib/ai/removeBg";
+import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
@@ -141,6 +141,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [detectedForegroundUrl, setDetectedForegroundUrl] = useState<string | null>(null);
   const [detectedForegroundFileId, setDetectedForegroundFileId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [allowServerFallback, setAllowServerFallback] = useState(false);
+  const [lastRmbgRuntime, setLastRmbgRuntime] = useState<"local" | "vps-fallback">("local");
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -165,6 +167,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     if (detectedForegroundFileId !== currentFileId) {
       setDetectedForegroundUrl(null);
       setDetectedForegroundFileId(null);
+      setLastRmbgRuntime("local");
     }
   }, [currentFileId, detectedForegroundFileId]);
 
@@ -311,7 +314,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setStatusMessage("Preparing local background removal...");
 
     try {
-      const resultUrl = await removeBackground(cached.dataURL, {
+      const { dataUrl: resultUrl } = await removeBackgroundWithRuntime(cached.dataURL, {
+        allowServerFallback,
         onProgress: (value) => {
           setProgress(Math.round(value * 100));
           setStatusMessage(
@@ -322,6 +326,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                 : "Refining foreground edges...",
           );
         },
+        onServerFallback: () => {
+          setStatusMessage("Local model is still loading; using the VPS fallback...");
+          report("vps-fallback", "Local RMBG ยังไม่พร้อม จึงส่งงานไป VPS", "fallback", 8);
+        },
+        onRuntime: setLastRmbgRuntime,
       });
       const newCached = await loadDataURL(resultUrl);
       updateElements(
@@ -490,6 +499,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         ? detectedForegroundUrl
         : null;
       let foregroundUrl: string;
+      let foregroundRuntime: "local" | "vps-fallback" = lastRmbgRuntime;
       if (reusableForeground) {
         foregroundUrl = reusableForeground;
         setProgress(70);
@@ -498,10 +508,28 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       } else {
         setStatusMessage("Separating foreground pixels...");
         report("foreground", "กำลังลบพื้นหลังเพื่อเตรียม Alpha", "step", 5);
-        foregroundUrl = await removeBackground(url, {
+        const result = await removeBackgroundWithRuntime(url, {
+          allowServerFallback,
           onProgress: (value) => setProgress(value * 70),
+          onServerFallback: () => {
+            setStatusMessage("Local model is still loading; using the VPS fallback...");
+            report("vps-fallback", "Local RMBG ยังไม่พร้อม จึงส่ง Extract ไป VPS", "fallback", 5);
+          },
+          onRuntime: (runtime) => {
+            foregroundRuntime = runtime;
+            setLastRmbgRuntime(runtime);
+          },
         });
-        report("foreground", "สร้าง Foreground Alpha สำเร็จ", "success", 70);
+        foregroundUrl = result.dataUrl;
+        foregroundRuntime = result.runtime;
+        report(
+          "foreground",
+          foregroundRuntime === "vps-fallback"
+            ? "สร้าง Foreground Alpha สำเร็จด้วย VPS fallback"
+            : "สร้าง Foreground Alpha สำเร็จ",
+          "success",
+          70,
+        );
       }
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
@@ -676,9 +704,22 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       );
       const foregroundUrl =
         reusableForeground ??
-        (await removeBackground(url, {
-          onProgress: (value) => setProgress(Math.round(value * 70)),
-        }));
+        (
+          await removeBackgroundWithRuntime(url, {
+            allowServerFallback,
+            onProgress: (value) => setProgress(Math.round(value * 70)),
+            onServerFallback: () => {
+              setStatusMessage("Local model is still loading; using the VPS fallback...");
+              report(
+                "vps-fallback",
+                "Local RMBG ยังไม่พร้อม จึงส่ง Quick Extract ไป VPS",
+                "fallback",
+                5,
+              );
+            },
+            onRuntime: setLastRmbgRuntime,
+          })
+        ).dataUrl;
       report("foreground", "เตรียม Foreground Alpha สำเร็จ", "success", 70);
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
@@ -722,7 +763,16 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setStatusMessage(`Extracting ${obj.label}...`);
 
     try {
-      const foregroundUrl = detectedForegroundUrl ?? (await removeBackground(url));
+      const foregroundUrl =
+        detectedForegroundUrl ??
+        (
+          await removeBackgroundWithRuntime(url, {
+            allowServerFallback,
+            onServerFallback: () =>
+              setStatusMessage("Local model is still loading; using the VPS fallback..."),
+            onRuntime: setLastRmbgRuntime,
+          })
+        ).dataUrl;
       const cropped = await cropImageRegion(foregroundUrl, obj);
       const cached = await loadDataURL(cropped.dataUrl);
       const asset = createCachedImageAsset(cached);
@@ -816,6 +866,33 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           {analysisMessage}
         </div>
       )}
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 5,
+          marginBottom: 6,
+          color: "#475569",
+          fontSize: 9,
+          lineHeight: 1.35,
+          cursor: "pointer",
+        }}
+        title="Only explicit Extract actions may send this image to the ArtShift VPS."
+      >
+        <input
+          type="checkbox"
+          aria-label="Allow VPS fallback for extraction"
+          checked={allowServerFallback}
+          onChange={(event) => setAllowServerFallback(event.currentTarget.checked)}
+          disabled={busy}
+          style={{ margin: "1px 0 0" }}
+        />
+        <span>
+          ถ้าโมเดล Local ยังโหลดไม่เสร็จ ให้ใช้ VPS ชั่วคราว
+          {lastRmbgRuntime === "vps-fallback" ? " · ใช้ VPS ครั้งล่าสุด" : ""}
+        </span>
+      </label>
 
       {/* Row 1: AI Tools (alpha geometry is the recommended extraction path) */}
       <div style={{ display: "flex", gap: 4 }}>
