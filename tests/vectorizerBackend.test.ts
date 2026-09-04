@@ -30,6 +30,8 @@ describe("vectorizer backend contract", () => {
       clustering: "bw",
       mode: "spline",
       hierarchical: "stacked",
+      filterSpeckle: 2,
+      layerDifference: 16,
       binaryThreshold: 140,
       optimize: 2,
     });
@@ -51,10 +53,65 @@ describe("vectorizer backend contract", () => {
       clustering: "color-cluster",
       mode: "spline",
       hierarchical: "stacked",
+      filterSpeckle: 10,
+      layerDifference: 48,
       maxColors: 64,
       optimize: 2,
     });
     expect(mapped.filterSpeckle).toBeGreaterThanOrEqual(1);
-    expect(mapped.simplify).toBeGreaterThan(0);
+    expect(mapped.simplify).toBeUndefined();
+  });
+
+  it("honors native VTracer controls instead of forcing one pipeline", () => {
+    expect(
+      mapArtShiftOptionsToVTracer({
+        preset: "illustration",
+        mode: "color",
+        colors: 12,
+        vtracer: {
+          mode: "polygon",
+          hierarchical: "stacked",
+          clustering: "watershed",
+          filterSpeckle: 6,
+          layerDifference: 32,
+          simplify: null,
+        },
+      }),
+    ).toMatchObject({
+      clustering: "watershed",
+      hierarchical: "stacked",
+      mode: "polygon",
+      filterSpeckle: 6,
+      layerDifference: 32,
+      simplify: undefined,
+    });
+  });
+
+  it("honors the native B&W threshold when the trace is monochrome", () => {
+    expect(
+      mapArtShiftOptionsToVTracer({
+        preset: "lineArt",
+        vtracer: { binaryThreshold: 190 },
+      }),
+    ).toMatchObject({ clustering: "bw", binaryThreshold: 190 });
+  });
+
+  it("does not let a preset hide an explicit ArtShift B&W threshold", () => {
+    expect(mapArtShiftOptionsToVTracer({ mode: "monochrome", blackThreshold: 210 })).toMatchObject({
+      clustering: "bw",
+      binaryThreshold: 210,
+    });
+  });
+
+  it("uses preset values when callers omit generic ArtShift controls", () => {
+    expect(mapArtShiftOptionsToVTracer({ preset: "photoDetailed" })).toMatchObject({
+      preset: "photo",
+      maxColors: 36,
+      colorPrecision: 8,
+      filterSpeckle: 10,
+      layerDifference: 48,
+      mode: "spline",
+      hierarchical: "stacked",
+    });
   });
 });

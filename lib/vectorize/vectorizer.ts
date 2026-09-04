@@ -19,11 +19,15 @@ import { vectorizeRgbaWithVTracer } from "./vtracerRuntime";
 
 export type {
   VectorizeCallbacks,
+  VectorizeClustering,
+  VectorizeComposition,
   VectorizeOptions,
   VectorizePreset,
   VectorizeProgress,
   VectorizeProgressStage,
   VectorizeResult,
+  VectorizeTraceMode,
+  VTracerControls,
 } from "./vectorizer-core";
 export {
   VECTORIZE_LIMITS,

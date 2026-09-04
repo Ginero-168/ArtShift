@@ -64,6 +64,9 @@ the committed JS/WASM magic, exported function, and SHA-256 before Next.js is
 built. The build helper pins `wasm-pack 0.13.1` and stages the new runtime
 before swapping it into `public/wasm/vtracer/`.
 
+`VTracer` quality defaults and control semantics are documented in
+[vtracer-quality-tuning.md](vtracer-quality-tuning.md).
+
 This is a local algorithmic raster-to-vector runtime, not a neural model and not
 an image upload route. VTracer version changes must be benchmarked against the
 existing backend because SVG subpaths, holes, limits, and option mappings can

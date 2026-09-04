@@ -10,13 +10,17 @@ import type { ImageElement } from "@/lib/engine/types";
 import {
   VECTORIZE_PRESET_CONFIGS,
   VectorizeCancelledError,
+  type VectorizeClustering,
+  type VectorizeComposition,
   type VectorizeOptions,
   type VectorizePreset,
   type VectorizeProgress,
+  type VectorizeTraceMode,
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
 import {
   DEFAULT_VECTORIZE_BACKEND,
+  getVTracerPresetDefaults,
   VECTORIZE_BACKEND_OPTIONS,
   type VectorizeBackend,
 } from "@/lib/vectorize/vectorizerBackend";
@@ -159,6 +163,27 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [smoothing, setSmoothing] = useState(0.25);
   const [cornerSharpness, setCornerSharpness] = useState(0.65);
   const [minArea, setMinArea] = useState(4);
+  const [vtracerMode, setVTracerMode] = useState<VectorizeTraceMode>(
+    getVTracerPresetDefaults("highFidelity").mode,
+  );
+  const [vtracerComposition, setVTracerComposition] = useState<VectorizeComposition>(
+    getVTracerPresetDefaults("highFidelity").hierarchical,
+  );
+  const [vtracerClustering, setVTracerClustering] = useState<VectorizeClustering>(
+    getVTracerPresetDefaults("highFidelity").clustering,
+  );
+  const [vtracerLayerDifference, setVTracerLayerDifference] = useState(
+    getVTracerPresetDefaults("highFidelity").layerDifference,
+  );
+  const [vtracerFilterSpeckle, setVTracerFilterSpeckle] = useState(
+    getVTracerPresetDefaults("highFidelity").filterSpeckle,
+  );
+  const [vtracerBinaryThreshold, setVTracerBinaryThreshold] = useState(
+    getVTracerPresetDefaults("highFidelity").binaryThreshold,
+  );
+  const [vtracerSimplifyEnabled, setVTracerSimplifyEnabled] = useState(false);
+  const isMonochromeTrace =
+    preset === "silhouette" || preset === "lineArt" || vtracerClustering === "bw";
   const vectorizeAbortRef = useRef<AbortController | null>(null);
   const currentFileId = element.fileId;
   const assetAnalysis = useSyncExternalStore(
@@ -209,6 +234,14 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
   const applyPreset = (p: VectorizePreset) => {
     setPreset(p);
+    const vtracerDefaults = getVTracerPresetDefaults(p);
+    setVTracerMode(vtracerDefaults.mode);
+    setVTracerComposition(vtracerDefaults.hierarchical);
+    setVTracerClustering(vtracerDefaults.clustering);
+    setVTracerLayerDifference(vtracerDefaults.layerDifference);
+    setVTracerFilterSpeckle(vtracerDefaults.filterSpeckle);
+    setVTracerBinaryThreshold(vtracerDefaults.binaryThreshold);
+    setVTracerSimplifyEnabled(false);
     if (p !== "custom") {
       const cfg = VECTORIZE_PRESET_CONFIGS[p];
       setColors(cfg.colors);
@@ -240,7 +273,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     report("start", "เริ่มแปลงภาพเป็น Vector", "started", 0);
 
     try {
-      const isMonochrome = preset === "silhouette" || preset === "lineArt";
+      const isMonochrome = isMonochromeTrace;
       const res = await vectorizeImage(
         url,
         {
@@ -258,6 +291,20 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           smoothing,
           cornerSharpness,
           minArea,
+          vtracer:
+            backend === "vtracer-wasm"
+              ? {
+                  mode: vtracerMode,
+                  hierarchical: vtracerComposition,
+                  clustering: isMonochrome ? "bw" : vtracerClustering,
+                  filterSpeckle: vtracerFilterSpeckle,
+                  layerDifference: vtracerLayerDifference,
+                  binaryThreshold: vtracerBinaryThreshold,
+                  simplify: vtracerSimplifyEnabled
+                    ? Number(Math.max(0.5, Math.min(2.5, 0.35 + smoothing * 2)).toFixed(2))
+                    : null,
+                }
+              : undefined,
           ...customOpts,
         },
         {
@@ -1200,7 +1247,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           </div>
 
           {/* Quick Color Count Bar */}
-          {preset !== "silhouette" && preset !== "lineArt" && (
+          {!isMonochromeTrace && (
             <div
               style={{
                 display: "flex",
@@ -1209,7 +1256,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                 marginBottom: 6,
               }}
             >
-              <span style={{ fontWeight: 600, color: "#475569" }}>Colors:</span>
+              <span style={{ fontWeight: 600, color: "#475569" }}>
+                {backend === "vtracer-wasm" ? "Palette max:" : "Colors:"}
+              </span>
               <div style={{ display: "flex", gap: 2 }}>
                 {[4, 8, 16, 24, 32, 48].map((num) => (
                   <button
@@ -1262,6 +1311,176 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
             {showAdvanced && (
               <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+                {backend === "vtracer-wasm" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 5,
+                      padding: 6,
+                      border: "1px solid #c7d2fe",
+                      borderRadius: 5,
+                      background: "#eef2ff",
+                    }}
+                  >
+                    <strong style={{ color: "#312e81", fontSize: 9 }}>
+                      VTracer Native Controls
+                    </strong>
+                    <label style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+                      <span style={{ color: "#475569" }}>Geometry:</span>
+                      <select
+                        aria-label="VTracer geometry"
+                        value={vtracerMode}
+                        onChange={(event) =>
+                          (() => {
+                            setVTracerMode(event.currentTarget.value as VectorizeTraceMode);
+                            setPreset("custom");
+                          })()
+                        }
+                        style={{ flex: 1, fontSize: 8.5 }}
+                      >
+                        <option value="spline">Smooth curves</option>
+                        <option value="polygon">Sharp polygon</option>
+                        <option value="pixel">Pixel exact</option>
+                      </select>
+                    </label>
+                    <label style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+                      <span style={{ color: "#475569" }}>Region edges:</span>
+                      <select
+                        aria-label="VTracer composition"
+                        value={vtracerComposition}
+                        onChange={(event) =>
+                          (() => {
+                            setVTracerComposition(
+                              event.currentTarget.value as VectorizeComposition,
+                            );
+                            setPreset("custom");
+                          })()
+                        }
+                        style={{ flex: 1, fontSize: 8.5 }}
+                      >
+                        <option value="cutout">Seam-free (Cutout)</option>
+                        <option value="stacked">Layered (Stacked)</option>
+                      </select>
+                    </label>
+                    <label style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+                      <span style={{ color: "#475569" }}>Color clustering:</span>
+                      <select
+                        aria-label="VTracer clustering"
+                        value={vtracerClustering}
+                        disabled={preset === "lineArt" || preset === "silhouette"}
+                        onChange={(event) =>
+                          (() => {
+                            setVTracerClustering(event.currentTarget.value as VectorizeClustering);
+                            setPreset("custom");
+                          })()
+                        }
+                        style={{ flex: 1, fontSize: 8.5 }}
+                      >
+                        <option value="color-cluster">Color cluster</option>
+                        <option value="watershed">Watershed</option>
+                        <option value="bw">Binary (B&amp;W)</option>
+                      </select>
+                    </label>
+                    <div>
+                      <div
+                        style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}
+                      >
+                        <span style={{ color: "#475569" }}>Color sensitivity:</span>
+                        <strong style={{ color: "#0f172a" }}>{vtracerLayerDifference}</strong>
+                      </div>
+                      <input
+                        type="range"
+                        aria-label="VTracer color sensitivity"
+                        min={0}
+                        max={64}
+                        step={1}
+                        value={vtracerLayerDifference}
+                        disabled={preset === "lineArt" || preset === "silhouette"}
+                        onChange={(event) => {
+                          setVTracerLayerDifference(Number(event.target.value));
+                          setPreset("custom");
+                        }}
+                        style={{ width: "100%", height: 3, cursor: "pointer" }}
+                      />
+                      <span style={{ display: "block", color: "#64748b", fontSize: 7.5 }}>
+                        Lower keeps more color regions; higher merges similar colors.
+                      </span>
+                    </div>
+                    <div>
+                      <div
+                        style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}
+                      >
+                        <span style={{ color: "#475569" }}>Noise filter (side):</span>
+                        <strong style={{ color: "#0f172a" }}>{vtracerFilterSpeckle}px</strong>
+                      </div>
+                      <input
+                        type="range"
+                        aria-label="VTracer noise filter"
+                        min={1}
+                        max={12}
+                        step={1}
+                        value={vtracerFilterSpeckle}
+                        onChange={(event) => {
+                          setVTracerFilterSpeckle(Number(event.target.value));
+                          setPreset("custom");
+                        }}
+                        style={{ width: "100%", height: 3, cursor: "pointer" }}
+                      />
+                    </div>
+                    {isMonochromeTrace && (
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 8.5,
+                          }}
+                        >
+                          <span style={{ color: "#475569" }}>B&amp;W threshold:</span>
+                          <strong style={{ color: "#0f172a" }}>{vtracerBinaryThreshold}</strong>
+                        </div>
+                        <input
+                          type="range"
+                          aria-label="VTracer B&amp;W threshold"
+                          min={0}
+                          max={255}
+                          step={1}
+                          value={vtracerBinaryThreshold}
+                          onChange={(event) => {
+                            setVTracerBinaryThreshold(Number(event.target.value));
+                            setPreset("custom");
+                          }}
+                          style={{ width: "100%", height: 3, cursor: "pointer" }}
+                        />
+                        <span style={{ display: "block", color: "#64748b", fontSize: 7.5 }}>
+                          Higher includes lighter pixels in the foreground.
+                        </span>
+                      </div>
+                    )}
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        color: "#475569",
+                        fontSize: 8.5,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label="VTracer extra curve simplification"
+                        checked={vtracerSimplifyEnabled}
+                        onChange={(event) => {
+                          setVTracerSimplifyEnabled(event.currentTarget.checked);
+                          setPreset("custom");
+                        }}
+                      />
+                      Compact curves (may remove fine detail)
+                    </label>
+                  </div>
+                )}
+
                 {/* Detail Level Slider */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}>
@@ -1324,25 +1543,31 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                   />
                 </div>
 
-                {/* Min Area (Noise Filter) */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}>
-                    <span style={{ color: "#475569" }}>Noise Filter:</span>
-                    <strong style={{ color: "#0f172a" }}>{minArea}px</strong>
-                  </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={30}
-                    step={1}
-                    value={minArea}
-                    onChange={(e) => {
-                      setMinArea(Number(e.target.value));
-                      setPreset("custom");
-                    }}
-                    style={{ width: "100%", height: 3, cursor: "pointer" }}
-                  />
-                </div>
+                {backend !== "vtracer-wasm" && (
+                  <>
+                    {/* Min Area (Noise Filter) */}
+                    <div>
+                      <div
+                        style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}
+                      >
+                        <span style={{ color: "#475569" }}>Noise Filter:</span>
+                        <strong style={{ color: "#0f172a" }}>{minArea}px</strong>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={30}
+                        step={1}
+                        value={minArea}
+                        onChange={(e) => {
+                          setMinArea(Number(e.target.value));
+                          setPreset("custom");
+                        }}
+                        style={{ width: "100%", height: 3, cursor: "pointer" }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

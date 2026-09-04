@@ -8,6 +8,27 @@ import type { VectorPathElement, VectorPathNode } from "../engine/types";
 import { recomputeVectorPathBounds } from "../engine/vectorPath";
 import type { VectorizeBackend } from "./vectorizerBackend";
 
+export type VectorizeTraceMode = "pixel" | "polygon" | "spline";
+export type VectorizeComposition = "stacked" | "cutout";
+export type VectorizeClustering = "color-cluster" | "bw" | "watershed";
+
+export interface VTracerControls {
+  /** Native contour fitting mode. VTracer-only; Custom ignores this field. */
+  mode?: VectorizeTraceMode;
+  /** Native compositing strategy. Cutout prevents gaps between adjacent regions. */
+  hierarchical?: VectorizeComposition;
+  /** Native region segmentation strategy. */
+  clustering?: VectorizeClustering;
+  /** Native color separation threshold; lower values retain more color regions. */
+  layerDifference?: number;
+  /** Native speckle side length, not an area. */
+  filterSpeckle?: number;
+  /** Native binary luminance threshold for B&W clustering. */
+  binaryThreshold?: number;
+  /** Extra curve simplification tolerance; null disables the extra pass. */
+  simplify?: number | null;
+}
+
 export type VectorizePreset =
   | "highFidelity"
   | "photoDetailed"
@@ -29,6 +50,8 @@ export interface VectorizeOptions {
   cornerSharpness?: number; // 0 (all smooth) to 1 (preserve sharp angles)
   minArea?: number; // Minimum speckle area in pixels (1..60)
   blackThreshold?: number; // Luminance threshold for monochrome (0..255)
+  /** Native VTracer controls; ignored by the Custom backend. */
+  vtracer?: VTracerControls;
 }
 
 export interface VectorizeResult {
@@ -87,7 +110,7 @@ export function getVectorizeMaxDimension(options?: VectorizeOptions): number {
 
 export const VECTORIZE_PRESET_CONFIGS: Record<
   Exclude<VectorizePreset, "custom">,
-  Required<Omit<VectorizeOptions, "preset" | "backend">>
+  Required<Omit<VectorizeOptions, "preset" | "backend" | "vtracer">>
 > = {
   highFidelity: {
     mode: "color",
