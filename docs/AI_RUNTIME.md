@@ -41,17 +41,23 @@ document remains unchanged until the browser receives and validates the result.
 
 ### Vectorizer backends
 
-The Vectorize panel exposes two local backends without removing the original:
+The Vectorize panel exposes two separate actions/settings buttons:
 
-- `ArtShift Custom` remains the default compatibility backend. It returns native
-  `VectorPathElement[]` directly from the existing TypeScript Worker.
-- `VTracer WASM` loads the pinned official VisionCortex VTracer core from
-  `public/wasm/vtracer/` inside the same Worker. It receives raw RGBA pixels,
-  returns SVG, and the ArtShift adapter validates/parses the SVG into editable
-  `VectorPathElement[]` before the single `addElements` mutation.
-- If that Worker cannot start or the VTracer runtime fails, the orchestration
-  layer switches the same request to `ArtShift Custom` rather than running the
-  synchronous VTracer call on the main thread; the UI reports that fallback.
+- `Custom Auto-Trace` opens the original ArtShift settings and remains the
+  compatibility path.
+- `VTracer WASM` opens its own native settings (geometry, composition,
+  clustering, sensitivity, noise, and simplification).
+
+The two panels keep independent settings; switching between them does not
+overwrite the other engine's preset or controls.
+
+`Custom Auto-Trace` returns native `VectorPathElement[]` directly from the
+existing TypeScript Worker. `VTracer WASM` loads the pinned official
+VisionCortex core from `public/wasm/vtracer/` in that Worker, returns SVG, and
+the ArtShift adapter validates it before the single `addElements` mutation. If
+the VTracer Worker/runtime fails, the orchestration layer switches to Custom
+instead of running synchronous VTracer on the main thread and reports that
+fallback in the UI.
 
 The VTracer binary is built from `wasm/vtracer-browser/` with:
 

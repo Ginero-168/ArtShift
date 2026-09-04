@@ -5,7 +5,7 @@ const syntheticPng = Buffer.from(
   "base64",
 );
 
-test("uses VTracer WASM from the backend dropdown and creates editable paths", async ({ page }) => {
+test("keeps Custom and VTracer buttons and settings independent", async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as { __vectorizerWorkerMessages?: unknown[] }).__vectorizerWorkerMessages =
       [];
@@ -43,14 +43,19 @@ test("uses VTracer WASM from the backend dropdown and creates editable paths", a
     });
   await expect(page.getByText("Image source", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: /Vectorize \(Auto-Trace\)/ }).click();
-  const backend = page.getByRole("combobox", { name: "Vectorizer backend" });
-  await expect(backend).toBeVisible();
-  await expect(backend.locator("option")).toHaveText(["ArtShift Custom", "VTracer WASM"]);
-  await backend.selectOption("vtracer-wasm");
-  await expect(backend).toHaveValue("vtracer-wasm");
+  const customButton = page.getByRole("button", { name: "Custom Auto-Trace" });
+  const vtracerButton = page.getByRole("button", { name: "VTracer WASM" });
+  await expect(customButton).toBeVisible();
+  await expect(vtracerButton).toBeVisible();
 
-  await page.getByRole("button", { name: "Advanced Detail & Curve Controls" }).click();
+  await customButton.click();
+  await expect(page.getByText("ArtShift Custom Settings", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "VTracer geometry" })).toHaveCount(0);
+  await page.getByRole("button", { name: /Illustration/ }).click();
+
+  await vtracerButton.click();
+  await expect(page.getByText("VTracer WASM Settings", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /High-Fidelity/ })).toHaveCSS("font-weight", "700");
   const geometry = page.getByRole("combobox", { name: "VTracer geometry" });
   const composition = page.getByRole("combobox", { name: "VTracer composition" });
   const clustering = page.getByRole("combobox", { name: "VTracer clustering" });
@@ -72,7 +77,7 @@ test("uses VTracer WASM from the backend dropdown and creates editable paths", a
   await expect(page.getByRole("slider", { name: "VTracer color sensitivity" })).toHaveValue("32");
   await expect(page.getByRole("slider", { name: "VTracer noise filter" })).toHaveValue("6");
 
-  await page.getByRole("button", { name: /Generate Vector Paths/ }).click();
+  await page.getByRole("button", { name: /Generate VTracer Paths/ }).click();
   await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
   await expect(page.getByText(/elements$/)).toBeVisible();
   await expect(page.getByText(/^\d+ nodes$/)).toBeVisible();
@@ -100,6 +105,36 @@ test("uses VTracer WASM from the backend dropdown and creates editable paths", a
   });
 
   expect(wasmResponses).toEqual([200, 200]);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
+test("runs the original Custom Auto-Trace workflow from its own button", async ({ page }) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Photo", exact: true }).click();
+  await page
+    .locator("label")
+    .filter({ hasText: "Choose image" })
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "custom-fixture.png",
+      mimeType: "image/png",
+      buffer: syntheticPng,
+    });
+  await expect(page.getByText("Image source", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Custom Auto-Trace" }).click();
+  await expect(page.getByText("ArtShift Custom Settings", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Generate Custom Paths/ }).click();
+  await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^\d+ nodes$/)).toBeVisible();
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });

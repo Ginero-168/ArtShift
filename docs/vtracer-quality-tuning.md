@@ -26,7 +26,8 @@ Extra curve simplification ปิดเป็นค่าเริ่มต้�
 
 ## Controls ใน UI
 
-เปิด `Advanced Detail & Curve Controls` หลังเลือก `VTracer WASM`:
+เปิด `VTracer WASM` จากปุ่มแยกใน Vectorize panel แล้วเปิด
+`Advanced Detail & Curve Controls` เพื่อปรับค่าของ VTracer โดยตรง:
 
 - **Geometry**: `Smooth curves`, `Sharp polygon`, `Pixel exact`
 - **Region edges**: `Seam-free (Cutout)` หรือ `Layered (Stacked)`

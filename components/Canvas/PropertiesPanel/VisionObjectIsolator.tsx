@@ -21,7 +21,6 @@ import {
 import {
   DEFAULT_VECTORIZE_BACKEND,
   getVTracerPresetDefaults,
-  VECTORIZE_BACKEND_OPTIONS,
   type VectorizeBackend,
 } from "@/lib/vectorize/vectorizerBackend";
 import {
@@ -63,6 +62,43 @@ interface DetectedObject {
   y_min: number;
   x_max: number;
   y_max: number;
+}
+
+type VectorizeEngineSettings = {
+  preset: VectorizePreset;
+  colors: number;
+  detailLevel: 1 | 2 | 3 | 4 | 5;
+  smoothing: number;
+  cornerSharpness: number;
+  minArea: number;
+  vtracerMode: VectorizeTraceMode;
+  vtracerComposition: VectorizeComposition;
+  vtracerClustering: VectorizeClustering;
+  vtracerLayerDifference: number;
+  vtracerFilterSpeckle: number;
+  vtracerBinaryThreshold: number;
+  vtracerSimplifyEnabled: boolean;
+};
+
+function createVectorizeEngineSettings(): VectorizeEngineSettings {
+  const preset = "highFidelity" as const;
+  const generic = VECTORIZE_PRESET_CONFIGS[preset];
+  const native = getVTracerPresetDefaults(preset);
+  return {
+    preset,
+    colors: generic.colors,
+    detailLevel: generic.detailLevel,
+    smoothing: generic.smoothing,
+    cornerSharpness: generic.cornerSharpness,
+    minArea: generic.minArea,
+    vtracerMode: native.mode,
+    vtracerComposition: native.hierarchical,
+    vtracerClustering: native.clustering,
+    vtracerLayerDifference: native.layerDifference,
+    vtracerFilterSpeckle: native.filterSpeckle,
+    vtracerBinaryThreshold: native.binaryThreshold,
+    vtracerSimplifyEnabled: false,
+  };
 }
 
 async function measureAlphaCoverage(dataUrl: string): Promise<number> {
@@ -152,36 +188,55 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [allowServerFallback, setAllowServerFallback] = useState(false);
   const [lastRmbgRuntime, setLastRmbgRuntime] = useState<"local" | "vps-fallback">("local");
+  // Vectorizer State — keep Custom and VTracer settings independent.
+  const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  // Vectorizer State
-  const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
-  const [preset, setPreset] = useState<VectorizePreset>("highFidelity");
-  const [colors, setColors] = useState(24);
-  const [detailLevel, setDetailLevel] = useState<1 | 2 | 3 | 4 | 5>(4);
-  const [smoothing, setSmoothing] = useState(0.25);
-  const [cornerSharpness, setCornerSharpness] = useState(0.65);
-  const [minArea, setMinArea] = useState(4);
-  const [vtracerMode, setVTracerMode] = useState<VectorizeTraceMode>(
-    getVTracerPresetDefaults("highFidelity").mode,
+  const [customSettings, setCustomSettings] = useState<VectorizeEngineSettings>(() =>
+    createVectorizeEngineSettings(),
   );
-  const [vtracerComposition, setVTracerComposition] = useState<VectorizeComposition>(
-    getVTracerPresetDefaults("highFidelity").hierarchical,
+  const [vtracerSettings, setVTracerSettings] = useState<VectorizeEngineSettings>(() =>
+    createVectorizeEngineSettings(),
   );
-  const [vtracerClustering, setVTracerClustering] = useState<VectorizeClustering>(
-    getVTracerPresetDefaults("highFidelity").clustering,
-  );
-  const [vtracerLayerDifference, setVTracerLayerDifference] = useState(
-    getVTracerPresetDefaults("highFidelity").layerDifference,
-  );
-  const [vtracerFilterSpeckle, setVTracerFilterSpeckle] = useState(
-    getVTracerPresetDefaults("highFidelity").filterSpeckle,
-  );
-  const [vtracerBinaryThreshold, setVTracerBinaryThreshold] = useState(
-    getVTracerPresetDefaults("highFidelity").binaryThreshold,
-  );
-  const [vtracerSimplifyEnabled, setVTracerSimplifyEnabled] = useState(false);
+  const activeSettings = backend === "custom" ? customSettings : vtracerSettings;
+  const updateActiveSettings = (patch: Partial<VectorizeEngineSettings>) => {
+    const update = (current: VectorizeEngineSettings) => ({ ...current, ...patch });
+    if (backend === "custom") setCustomSettings(update);
+    else setVTracerSettings(update);
+  };
+  const preset = activeSettings.preset;
+  const colors = activeSettings.colors;
+  const detailLevel = activeSettings.detailLevel;
+  const smoothing = activeSettings.smoothing;
+  const cornerSharpness = activeSettings.cornerSharpness;
+  const minArea = activeSettings.minArea;
+  const vtracerMode = activeSettings.vtracerMode;
+  const vtracerComposition = activeSettings.vtracerComposition;
+  const vtracerClustering = activeSettings.vtracerClustering;
+  const vtracerLayerDifference = activeSettings.vtracerLayerDifference;
+  const vtracerFilterSpeckle = activeSettings.vtracerFilterSpeckle;
+  const vtracerBinaryThreshold = activeSettings.vtracerBinaryThreshold;
+  const vtracerSimplifyEnabled = activeSettings.vtracerSimplifyEnabled;
+  const setPreset = (value: VectorizePreset) => updateActiveSettings({ preset: value });
+  const setColors = (value: number) => updateActiveSettings({ colors: value });
+  const setDetailLevel = (value: 1 | 2 | 3 | 4 | 5) => updateActiveSettings({ detailLevel: value });
+  const setSmoothing = (value: number) => updateActiveSettings({ smoothing: value });
+  const setCornerSharpness = (value: number) => updateActiveSettings({ cornerSharpness: value });
+  const setMinArea = (value: number) => updateActiveSettings({ minArea: value });
+  const setVTracerMode = (value: VectorizeTraceMode) =>
+    updateActiveSettings({ vtracerMode: value });
+  const setVTracerComposition = (value: VectorizeComposition) =>
+    updateActiveSettings({ vtracerComposition: value });
+  const setVTracerClustering = (value: VectorizeClustering) =>
+    updateActiveSettings({ vtracerClustering: value });
+  const setVTracerLayerDifference = (value: number) =>
+    updateActiveSettings({ vtracerLayerDifference: value });
+  const setVTracerFilterSpeckle = (value: number) =>
+    updateActiveSettings({ vtracerFilterSpeckle: value });
+  const setVTracerBinaryThreshold = (value: number) =>
+    updateActiveSettings({ vtracerBinaryThreshold: value });
+  const setVTracerSimplifyEnabled = (value: boolean) =>
+    updateActiveSettings({ vtracerSimplifyEnabled: value });
   const isMonochromeTrace =
     preset === "silhouette" || preset === "lineArt" || vtracerClustering === "bw";
   const vectorizeAbortRef = useRef<AbortController | null>(null);
@@ -250,6 +305,16 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setCornerSharpness(cfg.cornerSharpness);
       setMinArea(cfg.minArea);
     }
+  };
+
+  const toggleVectorizeSettings = (nextBackend: VectorizeBackend) => {
+    if (backend === nextBackend && vectorizeOpen) {
+      setVectorizeOpen(false);
+      return;
+    }
+    setBackend(nextBackend);
+    setVectorizeOpen(true);
+    setShowAdvanced(nextBackend === "vtracer-wasm");
   };
 
   const getImageDataUrl = useCallback(async (): Promise<string | null> => {
@@ -1040,31 +1105,59 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         </button>
       </div>
 
-      {/* Row 2: Vectorize action */}
+      {/* Row 2: Separate vectorizer actions */}
       <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
         <button
           type="button"
           disabled={busy}
-          onClick={() => setVectorizeOpen(!vectorizeOpen)}
-          title="Auto-Trace & Convert this image into editable Vector Paths"
+          aria-pressed={backend === "custom" && vectorizeOpen}
+          onClick={() => toggleVectorizeSettings("custom")}
+          title="Open ArtShift Custom Auto-Trace settings"
           style={{
             flex: 1,
-            padding: "6px 8px",
-            background: vectorizeOpen ? "#0f172a" : "#fff",
-            color: vectorizeOpen ? "#fff" : "var(--accent, #6366f1)",
+            padding: "6px 5px",
+            background: backend === "custom" && vectorizeOpen ? "#0f172a" : "#fff",
+            color: backend === "custom" && vectorizeOpen ? "#fff" : "var(--accent, #6366f1)",
             border: "1px solid rgba(99, 102, 241, 0.3)",
             borderRadius: 5,
             fontWeight: 600,
-            fontSize: 10,
+            fontSize: 9.5,
             cursor: busy ? "wait" : "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 4,
+            gap: 3,
+            whiteSpace: "nowrap",
           }}
         >
-          <span>⚡</span>
-          <span>Vectorize (Auto-Trace)</span>
+          <span>✦</span>
+          <span>Custom Auto-Trace</span>
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          aria-pressed={backend === "vtracer-wasm" && vectorizeOpen}
+          onClick={() => toggleVectorizeSettings("vtracer-wasm")}
+          title="Open VTracer WASM settings"
+          style={{
+            flex: 1,
+            padding: "6px 5px",
+            background: backend === "vtracer-wasm" && vectorizeOpen ? "#0f172a" : "#fff",
+            color: backend === "vtracer-wasm" && vectorizeOpen ? "#fff" : "var(--accent, #6366f1)",
+            border: "1px solid rgba(99, 102, 241, 0.3)",
+            borderRadius: 5,
+            fontWeight: 600,
+            fontSize: 9.5,
+            cursor: busy ? "wait" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 3,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span>◇</span>
+          <span>VTracer WASM</span>
         </button>
       </div>
 
@@ -1080,44 +1173,20 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             fontSize: 9.5,
           }}
         >
-          <div style={{ marginBottom: 7 }}>
-            <label
-              htmlFor="vectorizer-backend"
-              style={{
-                display: "block",
-                fontWeight: 700,
-                color: "#1e1b4b",
-                fontSize: 9.5,
-                marginBottom: 3,
-              }}
-            >
-              Vector Engine:
-            </label>
-            <select
-              id="vectorizer-backend"
-              aria-label="Vectorizer backend"
-              value={backend}
-              disabled={busy}
-              onChange={(event) => setBackend(event.currentTarget.value as VectorizeBackend)}
-              style={{
-                width: "100%",
-                padding: "5px 6px",
-                border: "1px solid #c7d2fe",
-                borderRadius: 4,
-                background: "#f8fafc",
-                color: "#1e1b4b",
-                fontSize: 9,
-                fontWeight: 600,
-              }}
-            >
-              {VECTORIZE_BACKEND_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+          <div
+            style={{
+              marginBottom: 7,
+              paddingBottom: 5,
+              borderBottom: "1px solid #e0e7ff",
+            }}
+          >
+            <strong style={{ display: "block", color: "#1e1b4b", fontSize: 10 }}>
+              {backend === "vtracer-wasm" ? "VTracer WASM Settings" : "ArtShift Custom Settings"}
+            </strong>
             <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
-              {VECTORIZE_BACKEND_OPTIONS.find((option) => option.value === backend)?.description}
+              {backend === "vtracer-wasm"
+                ? "Local Rust/WASM trace with independent native controls"
+                : "Original ArtShift auto-trace with editable path controls"}
             </span>
           </div>
 
@@ -1596,7 +1665,13 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
               }}
             >
               <span>⚡</span>
-              <span>{busy ? "Tracing Vector..." : "Generate Vector Paths"}</span>
+              <span>
+                {busy
+                  ? "Tracing Vector..."
+                  : backend === "vtracer-wasm"
+                    ? "Generate VTracer Paths"
+                    : "Generate Custom Paths"}
+              </span>
             </button>
             {vectorizeAbortRef.current && (
               <button
