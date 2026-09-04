@@ -16,6 +16,11 @@ import {
   vectorizeImage,
 } from "@/lib/vectorize/vectorizer";
 import {
+  DEFAULT_VECTORIZE_BACKEND,
+  VECTORIZE_BACKEND_OPTIONS,
+  type VectorizeBackend,
+} from "@/lib/vectorize/vectorizerBackend";
+import {
   createSam2Session,
   groundingDinoDetect,
   type Sam2Session,
@@ -147,6 +152,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Vectorizer State
+  const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
   const [preset, setPreset] = useState<VectorizePreset>("highFidelity");
   const [colors, setColors] = useState(24);
   const [detailLevel, setDetailLevel] = useState<1 | 2 | 3 | 4 | 5>(4);
@@ -244,6 +250,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           height: element.height,
         },
         {
+          backend,
           preset,
           mode: isMonochrome ? "monochrome" : "color",
           colors: isMonochrome ? 2 : colors,
@@ -259,12 +266,20 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             setProgress(Math.round(progress * 100));
             setStatusMessage(
               stage === "loading"
-                ? "Loading image for vectorization..."
+                ? backend === "vtracer-wasm"
+                  ? "Loading VTracer WASM in the local Worker..."
+                  : "Loading image for vectorization..."
                 : stage === "quantizing"
-                  ? "Quantizing image colors..."
+                  ? backend === "vtracer-wasm"
+                    ? "VTracer clustering image colors..."
+                    : "Quantizing image colors..."
                   : stage === "tracing"
-                    ? "Tracing contours in background..."
-                    : "Building editable vector paths...",
+                    ? backend === "vtracer-wasm"
+                      ? "VTracer fitting vector curves..."
+                      : "Tracing contours in background..."
+                    : backend === "vtracer-wasm"
+                      ? "Converting VTracer SVG into editable paths..."
+                      : "Building editable vector paths...",
             );
           },
         },
@@ -277,9 +292,14 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         addElements(res.elements, "vectorize image to paths");
         selectOnly(res.elements.map((el) => el.id));
         setStatusMessage(
-          `Traced ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!`,
+          `${backend === "vtracer-wasm" ? "VTracer traced" : "Traced"} ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!`,
         );
-        report("complete", `สร้าง Vector สำเร็จ ${res.elements.length} Layers`, "success", 100);
+        report(
+          "complete",
+          `${backend === "vtracer-wasm" ? "VTracer WASM สร้าง" : "สร้าง"} Vector สำเร็จ ${res.elements.length} Layers`,
+          "success",
+          100,
+        );
       }
     } catch (err) {
       if (err instanceof VectorizeCancelledError || (err as Error).name === "AbortError") {
@@ -1011,6 +1031,47 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             fontSize: 9.5,
           }}
         >
+          <div style={{ marginBottom: 7 }}>
+            <label
+              htmlFor="vectorizer-backend"
+              style={{
+                display: "block",
+                fontWeight: 700,
+                color: "#1e1b4b",
+                fontSize: 9.5,
+                marginBottom: 3,
+              }}
+            >
+              Vector Engine:
+            </label>
+            <select
+              id="vectorizer-backend"
+              aria-label="Vectorizer backend"
+              value={backend}
+              disabled={busy}
+              onChange={(event) => setBackend(event.currentTarget.value as VectorizeBackend)}
+              style={{
+                width: "100%",
+                padding: "5px 6px",
+                border: "1px solid #c7d2fe",
+                borderRadius: 4,
+                background: "#f8fafc",
+                color: "#1e1b4b",
+                fontSize: 9,
+                fontWeight: 600,
+              }}
+            >
+              {VECTORIZE_BACKEND_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+              {VECTORIZE_BACKEND_OPTIONS.find((option) => option.value === backend)?.description}
+            </span>
+          </div>
+
           {/* Preset Selection Chips */}
           <div style={{ marginBottom: 6 }}>
             <span

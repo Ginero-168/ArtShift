@@ -229,6 +229,8 @@ export type VectorPathNode = {
 export type VectorPathElement = BaseElement & {
   type: "path";
   nodes: VectorPathNode[];
+  /** Optional flattened compound-path boundaries; each subpath is closed when `closed` is true. */
+  subpathStarts?: number[];
   closed: boolean;
   fillRule: "nonzero" | "evenodd";
   startArrowhead?: ArrowHead;

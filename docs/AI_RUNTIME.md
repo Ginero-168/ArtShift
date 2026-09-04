@@ -39,6 +39,28 @@ The fallback is stage-aware rather than a generic cloud AI route: it does not up
 images for background analysis or silently route paid provider work. The source
 document remains unchanged until the browser receives and validates the result.
 
+### Vectorizer backends
+
+The Vectorize panel exposes two local backends without removing the original:
+
+- `ArtShift Custom` remains the default compatibility backend. It returns native
+  `VectorPathElement[]` directly from the existing TypeScript Worker.
+- `VTracer WASM` loads the pinned official VisionCortex VTracer core from
+  `public/wasm/vtracer/` inside the same Worker. It receives raw RGBA pixels,
+  returns SVG, and the ArtShift adapter validates/parses the SVG into editable
+  `VectorPathElement[]` before the single `addElements` mutation.
+
+The VTracer binary is built from `wasm/vtracer-browser/` with:
+
+```bash
+npm run build:vtracer-wasm
+```
+
+This is a local algorithmic raster-to-vector runtime, not a neural model and not
+an image upload route. VTracer version changes must be benchmarked against the
+existing backend because SVG subpaths, holes, limits, and option mappings can
+differ.
+
 ## Cost, cache and telemetry
 
 - `AI_MONTHLY_BUDGET_USD` blocks new jobs when the in-memory monthly estimate reaches the limit.

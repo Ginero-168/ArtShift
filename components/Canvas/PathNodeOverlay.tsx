@@ -5,6 +5,7 @@ import { localToWorld, worldToLocal } from "@/lib/engine/bounds";
 import { useEngine } from "@/lib/engine/store";
 import type { VectorPathElement } from "@/lib/engine/types";
 import {
+  getVectorPathSubpathRanges,
   insertNodeAt,
   moveVectorPathNode,
   recomputeVectorPathBounds,
@@ -45,6 +46,18 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
   );
   const drag = useRef<DragState | null>(null);
 
+  const segments = useMemo(() => {
+    const result: Array<{ index: number; nextIndex: number }> = [];
+    for (const { start, end } of getVectorPathSubpathRanges(element)) {
+      const segmentCount = end - start - (element.closed ? 0 : 1);
+      for (let offset = 0; offset < segmentCount; offset++) {
+        const index = start + offset;
+        result.push({ index, nextIndex: index + 1 < end ? index + 1 : start });
+      }
+    }
+    return result;
+  }, [element]);
+
   // Keyboard shortcuts: Delete, Escape, Tab, Shift+Tab
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -68,13 +81,18 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
       if ((e.key === "Delete" || e.key === "Backspace") && selectedNodeIndices.length > 0) {
         if (element.nodes.length > 2) {
           let updatedNodes = [...element.nodes];
+          let updatedSubpathStarts = element.subpathStarts;
           const sorted = [...selectedNodeIndices].sort((a, b) => b - a);
           for (const idx of sorted) {
             if (updatedNodes.length > 2) {
               updatedNodes = removeNodeAt(updatedNodes, idx);
+              updatedSubpathStarts = shiftSubpathStartsAfterDelete(updatedSubpathStarts, idx);
             }
           }
-          const updatedElement = recomputeVectorPathBounds({ ...element, nodes: updatedNodes }, 16);
+          const updatedElement = recomputeVectorPathBounds(
+            { ...element, nodes: updatedNodes, subpathStarts: updatedSubpathStarts },
+            16,
+          );
           updateElements([{ id: element.id, patch: updatedElement }], "delete vector node");
           setSelectedNodeIndices([0]);
         }
@@ -98,74 +116,10 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
   );
 
   // Smooth SVG cubic Bezier path representation of the outline
-  const svgPathD = useMemo(() => {
-    if (element.nodes.length < 2) return "";
-    const firstWorld = localToWorld(element, {
-      x: element.nodes[0].x * element.width,
-      y: element.nodes[0].y * element.height,
-    });
-    const firstScreen = worldToScreen(firstWorld);
-    let d = `M ${firstScreen.x} ${firstScreen.y}`;
-
-    for (let i = 1; i < element.nodes.length; i++) {
-      const prev = element.nodes[i - 1];
-      const curr = element.nodes[i];
-      const currWorld = localToWorld(element, {
-        x: curr.x * element.width,
-        y: curr.y * element.height,
-      });
-      const currScreen = worldToScreen(currWorld);
-
-      if (prev.out || curr.in) {
-        const out = prev.out ?? [0, 0];
-        const incoming = curr.in ?? [0, 0];
-        const cp1 = localToWorld(element, {
-          x: (prev.x + out[0]) * element.width,
-          y: (prev.y + out[1]) * element.height,
-        });
-        const cp2 = localToWorld(element, {
-          x: (curr.x + incoming[0]) * element.width,
-          y: (curr.y + incoming[1]) * element.height,
-        });
-        const scp1 = worldToScreen(cp1);
-        const scp2 = worldToScreen(cp2);
-        d += ` C ${scp1.x} ${scp1.y}, ${scp2.x} ${scp2.y}, ${currScreen.x} ${currScreen.y}`;
-      } else {
-        d += ` L ${currScreen.x} ${currScreen.y}`;
-      }
-    }
-
-    if (element.closed && element.nodes.length > 2) {
-      const prev = element.nodes[element.nodes.length - 1];
-      const curr = element.nodes[0];
-      const currWorld = localToWorld(element, {
-        x: curr.x * element.width,
-        y: curr.y * element.height,
-      });
-      const currScreen = worldToScreen(currWorld);
-
-      if (prev.out || curr.in) {
-        const out = prev.out ?? [0, 0];
-        const incoming = curr.in ?? [0, 0];
-        const cp1 = localToWorld(element, {
-          x: (prev.x + out[0]) * element.width,
-          y: (prev.y + out[1]) * element.height,
-        });
-        const cp2 = localToWorld(element, {
-          x: (curr.x + incoming[0]) * element.width,
-          y: (curr.y + incoming[1]) * element.height,
-        });
-        const scp1 = worldToScreen(cp1);
-        const scp2 = worldToScreen(cp2);
-        d += ` C ${scp1.x} ${scp1.y}, ${scp2.x} ${scp2.y}, ${currScreen.x} ${currScreen.y}`;
-      } else {
-        d += ` L ${currScreen.x} ${currScreen.y}`;
-      }
-      d += " Z";
-    }
-
-    return d;
-  }, [element, worldToScreen]);
+  const svgPathD = useMemo(
+    () => buildVectorPathGuide(element, worldToScreen),
+    [element, worldToScreen],
+  );
 
   return (
     <svg
@@ -192,14 +146,14 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
       )}
 
       {/* Clickable Path Segments to Insert Points */}
-      {screenNodes.map((ptA, i) => {
-        const nextIdx = (i + 1) % screenNodes.length;
-        if (!element.closed && i === screenNodes.length - 1) return null;
+      {segments.map(({ index, nextIndex }) => {
+        const ptA = screenNodes[index];
+        const nextIdx = nextIndex;
         const ptB = screenNodes[nextIdx];
 
         return (
           <line
-            key={`seg-${i}`}
+            key={`seg-${index}`}
             x1={ptA.x}
             y1={ptA.y}
             x2={ptB.x}
@@ -212,7 +166,7 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
               const rect = svg?.getBoundingClientRect();
               if (rect) {
                 setHoverSegment({
-                  index: i,
+                  index,
                   x: e.clientX - rect.left,
                   y: e.clientY - rect.top,
                 });
@@ -225,13 +179,18 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
               const local = worldToLocal(element, world);
               const normX = local.x / Math.max(1, element.width);
               const normY = local.y / Math.max(1, element.height);
-              const updatedNodes = insertNodeAt(element.nodes, i + 1, { x: normX, y: normY });
+              const insertAt = index + 1;
+              const updatedNodes = insertNodeAt(element.nodes, insertAt, { x: normX, y: normY });
               const updatedElement = recomputeVectorPathBounds(
-                { ...element, nodes: updatedNodes },
+                {
+                  ...element,
+                  nodes: updatedNodes,
+                  subpathStarts: shiftSubpathStartsAfterInsert(element.subpathStarts, insertAt),
+                },
                 16,
               );
               updateElements([{ id: element.id, patch: updatedElement }], "add vector node");
-              setSelectedNodeIndices([i + 1]);
+              setSelectedNodeIndices([insertAt]);
               setHoverSegment(null);
             }}
           />
@@ -442,7 +401,11 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
               if (event.altKey) {
                 // Alt+Click toggles Corner vs Smooth
                 event.stopPropagation();
-                const updatedNodes = toggleNodeSmoothness(element.nodes, index);
+                const updatedNodes = toggleNodeSmoothness(
+                  element.nodes,
+                  index,
+                  element.subpathStarts,
+                );
                 const updatedElement = recomputeVectorPathBounds(
                   { ...element, nodes: updatedNodes },
                   16,
@@ -455,7 +418,11 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
             }}
             onDoubleClick={(event) => {
               event.stopPropagation();
-              const updatedNodes = toggleNodeSmoothness(element.nodes, index);
+              const updatedNodes = toggleNodeSmoothness(
+                element.nodes,
+                index,
+                element.subpathStarts,
+              );
               const updatedElement = recomputeVectorPathBounds(
                 { ...element, nodes: updatedNodes },
                 16,
@@ -531,4 +498,84 @@ export default function PathNodeOverlay({ element, worldToScreen, clientToWorld,
       })}
     </svg>
   );
+}
+
+function buildVectorPathGuide(
+  element: VectorPathElement,
+  worldToScreen: (point: { x: number; y: number }) => { x: number; y: number },
+): string {
+  if (element.nodes.length < 2) return "";
+  const paths: string[] = [];
+  for (const { start, end } of getVectorPathSubpathRanges(element)) {
+    if (end - start < 2) continue;
+    let path = `M ${formatPoint(screenNodePoint(element, element.nodes[start], worldToScreen))}`;
+    for (let index = start + 1; index < end; index++) {
+      path += appendGuideSegment(element, index - 1, index, worldToScreen);
+    }
+    if (element.closed) {
+      path += appendGuideSegment(element, end - 1, start, worldToScreen);
+      path += " Z";
+    }
+    paths.push(path);
+  }
+  return paths.join(" ");
+}
+
+function screenNodePoint(
+  element: VectorPathElement,
+  node: VectorPathElement["nodes"][number],
+  worldToScreen: (point: { x: number; y: number }) => { x: number; y: number },
+) {
+  return worldToScreen(
+    localToWorld(element, {
+      x: node.x * element.width,
+      y: node.y * element.height,
+    }),
+  );
+}
+
+function appendGuideSegment(
+  element: VectorPathElement,
+  fromIndex: number,
+  toIndex: number,
+  worldToScreen: (point: { x: number; y: number }) => { x: number; y: number },
+): string {
+  const from = element.nodes[fromIndex];
+  const to = element.nodes[toIndex];
+  if (!from || !to) return "";
+  const end = screenNodePoint(element, to, worldToScreen);
+  if (!from.out && !to.in) return ` L ${formatPoint(end)}`;
+  const out = from.out ?? [0, 0];
+  const incoming = to.in ?? [0, 0];
+  const control1 = worldToScreen(
+    localToWorld(element, {
+      x: (from.x + out[0]) * element.width,
+      y: (from.y + out[1]) * element.height,
+    }),
+  );
+  const control2 = worldToScreen(
+    localToWorld(element, {
+      x: (to.x + incoming[0]) * element.width,
+      y: (to.y + incoming[1]) * element.height,
+    }),
+  );
+  return ` C ${formatPoint(control1)}, ${formatPoint(control2)}, ${formatPoint(end)}`;
+}
+
+function formatPoint(point: { x: number; y: number }): string {
+  return `${point.x} ${point.y}`;
+}
+
+function shiftSubpathStartsAfterInsert(
+  starts: number[] | undefined,
+  index: number,
+): number[] | undefined {
+  return starts?.map((start) => (start >= index ? start + 1 : start));
+}
+
+function shiftSubpathStartsAfterDelete(
+  starts: number[] | undefined,
+  index: number,
+): number[] | undefined {
+  return starts?.map((start) => (start > index ? start - 1 : start));
 }

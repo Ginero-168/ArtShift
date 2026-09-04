@@ -721,7 +721,12 @@ function VectorPathOptions({ path, apply }: { path: VectorPathElement; apply: Ve
           className={styles.secondaryButton}
           type="button"
           onClick={() => {
-            const smoothNodes = smoothVectorPathNodes(path.nodes, 0.6, path.closed);
+            const smoothNodes = smoothVectorPathNodes(
+              path.nodes,
+              0.6,
+              path.closed,
+              path.subpathStarts,
+            );
             apply({ nodes: smoothNodes }, "convert all to smooth curves");
           }}
           title="Convert all anchor points to smooth curve tangents"
@@ -741,7 +746,14 @@ function VectorPathOptions({ path, apply }: { path: VectorPathElement; apply: Ve
             const value = Number(event.currentTarget.value);
             setSmoothing(value);
             apply(
-              { nodes: smoothVectorPathNodes(path.nodes, value / 100, path.closed) },
+              {
+                nodes: smoothVectorPathNodes(
+                  path.nodes,
+                  value / 100,
+                  path.closed,
+                  path.subpathStarts,
+                ),
+              },
               "smooth path",
             );
           }}

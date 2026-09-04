@@ -5,6 +5,7 @@ import {
   type VectorizeResult,
   vectorizeImageData,
 } from "./vectorizer-core";
+import { vectorizeRgbaWithVTracer } from "./vtracerRuntime";
 
 type VectorizerRequest = {
   imageDataUrl: string;
@@ -43,14 +44,14 @@ workerScope.onmessage = async (event) => {
     context.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
     const imageData = context.getImageData(0, 0, width, height);
-    const result: VectorizeResult = vectorizeImageData(
-      imageData.data,
-      width,
-      height,
-      targetBounds,
-      options,
-      { onProgress: report },
-    );
+    const result: VectorizeResult =
+      options?.backend === "vtracer-wasm"
+        ? await vectorizeRgbaWithVTracer(imageData.data, width, height, targetBounds, options, {
+            onProgress: report,
+          })
+        : vectorizeImageData(imageData.data, width, height, targetBounds, options, {
+            onProgress: report,
+          });
 
     workerScope.postMessage({ type: "result", result });
   } catch (error) {

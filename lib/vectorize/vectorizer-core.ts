@@ -6,6 +6,7 @@
 
 import type { VectorPathElement, VectorPathNode } from "../engine/types";
 import { recomputeVectorPathBounds } from "../engine/vectorPath";
+import type { VectorizeBackend } from "./vectorizerBackend";
 
 export type VectorizePreset =
   | "highFidelity"
@@ -18,6 +19,8 @@ export type VectorizePreset =
   | "custom";
 
 export interface VectorizeOptions {
+  /** Conversion implementation; custom remains the default for compatibility. */
+  backend?: VectorizeBackend;
   preset?: VectorizePreset;
   mode?: "color" | "monochrome" | "posterize";
   colors?: number; // 2..64 colors
@@ -82,7 +85,7 @@ export function getVectorizeMaxDimension(options?: VectorizeOptions): number {
 
 export const VECTORIZE_PRESET_CONFIGS: Record<
   Exclude<VectorizePreset, "custom">,
-  Required<Omit<VectorizeOptions, "preset">>
+  Required<Omit<VectorizeOptions, "preset" | "backend">>
 > = {
   highFidelity: {
     mode: "color",

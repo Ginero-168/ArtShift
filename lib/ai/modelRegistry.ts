@@ -99,6 +99,16 @@ export const MODEL_DEFINITIONS: readonly ModelDefinition[] = [
     lazy: true,
     cacheIds: [],
   },
+  {
+    id: "vtracer-wasm",
+    label: "VTracer WASM",
+    provider: "VisionCortex",
+    kind: "runtime",
+    mode: "local",
+    description: "Official Rust vectorization core compiled to browser WebAssembly.",
+    lazy: true,
+    cacheIds: [],
+  },
 ];
 
 const definitionsById = new Map(MODEL_DEFINITIONS.map((definition) => [definition.id, definition]));

@@ -17,6 +17,7 @@ import {
 } from "./bounds";
 import { getInteractiveElements } from "./layers";
 import type { EngineElement, EngineSlide } from "./types";
+import { getVectorPathSubpathRanges } from "./vectorPath";
 
 const HIT_TOLERANCE = 6; // px in world space
 
@@ -300,23 +301,62 @@ function hitFreedraw(world: Point, el: EngineElement): boolean {
 
 function hitVectorPath(world: Point, el: Extract<EngineElement, { type: "path" }>): boolean {
   const local = worldToLocal(el, world);
-  const points = el.nodes.map(
-    (node) => [node.x * el.width, node.y * el.height] as [number, number],
-  );
   const tol = Math.max(HIT_TOLERANCE, (el.strokeWidth ?? 1) / 2 + 4);
+  const ranges = getVectorPathSubpathRanges(el);
 
   // If closed shape, allow clicking anywhere in its interior
-  if (el.closed && points.length >= 3) {
-    if (pointInPolygon(local, points)) return true;
+  if (el.closed) {
+    let evenOddInside = false;
+    let winding = 0;
+    for (const { start, end } of ranges) {
+      const points = el.nodes
+        .slice(start, end)
+        .map((node) => [node.x * el.width, node.y * el.height] as [number, number]);
+      if (points.length < 3) continue;
+      if (el.fillRule === "evenodd") {
+        if (pointInPolygon(local, points)) evenOddInside = !evenOddInside;
+      } else {
+        winding += polygonWindingNumber(local, points);
+      }
+    }
+    if (el.fillRule === "evenodd" ? evenOddInside : winding !== 0) return true;
   }
 
   // Edge / segment distance check
-  for (let index = 0; index < points.length - 1; index++) {
-    if (distanceToSegment(local, points[index], points[index + 1]) <= tol) return true;
+  for (const { start, end } of ranges) {
+    const points = el.nodes
+      .slice(start, end)
+      .map((node) => [node.x * el.width, node.y * el.height] as [number, number]);
+    for (let index = 0; index < points.length - 1; index++) {
+      if (distanceToSegment(local, points[index], points[index + 1]) <= tol) return true;
+    }
+    if (
+      el.closed &&
+      points.length > 2 &&
+      distanceToSegment(local, points.at(-1)!, points[0]) <= tol
+    ) {
+      return true;
+    }
   }
-  return (
-    el.closed && points.length > 2 && distanceToSegment(local, points.at(-1)!, points[0]) <= tol
-  );
+  return false;
+}
+
+function polygonWindingNumber(point: Point, polygon: [number, number][]): number {
+  let winding = 0;
+  for (let index = 0; index < polygon.length; index++) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    if (current[1] <= point.y) {
+      if (next[1] > point.y && isLeft(current, next, point) > 0) winding += 1;
+    } else if (next[1] <= point.y && isLeft(current, next, point) < 0) {
+      winding -= 1;
+    }
+  }
+  return winding;
+}
+
+function isLeft(a: [number, number], b: [number, number], point: Point): number {
+  return (b[0] - a[0]) * (point.y - a[1]) - (point.x - a[0]) * (b[1] - a[1]);
 }
 
 function distanceToSegment(p: Point, a: [number, number], b: [number, number]): number {

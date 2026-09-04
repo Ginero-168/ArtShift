@@ -14,6 +14,7 @@ import {
   type VectorizeResult,
   vectorizeImageData,
 } from "./vectorizer-core";
+import { vectorizeRgbaWithVTracer } from "./vtracerRuntime";
 
 export type {
   VectorizeCallbacks,
@@ -59,6 +60,9 @@ async function vectorizeImageOnMainThread(
 
   ctx.drawImage(img, 0, 0, w, h);
   const imgData = ctx.getImageData(0, 0, w, h);
+  if (options?.backend === "vtracer-wasm") {
+    return vectorizeRgbaWithVTracer(imgData.data, w, h, targetBounds, options, callbacks);
+  }
   return vectorizeImageData(imgData.data, w, h, targetBounds, options, callbacks);
 }
 
@@ -118,11 +122,12 @@ export async function vectorizeImage(
   options?: VectorizeOptions,
   callbacks: VectorizeCallbacks = {},
 ): Promise<VectorizeResult> {
-  markModelLoading("vectorizer");
+  const modelId = options?.backend === "vtracer-wasm" ? "vtracer-wasm" : "vectorizer";
+  markModelLoading(modelId);
   if (typeof Worker !== "undefined" && typeof window !== "undefined") {
     try {
       const result = await vectorizeImageInWorker(imageDataUrl, targetBounds, options, callbacks);
-      markModelLoaded("vectorizer");
+      markModelLoaded(modelId);
       return result;
     } catch (error) {
       if (error instanceof VectorizeCancelledError || error instanceof VectorizeComplexityError) {
@@ -134,10 +139,10 @@ export async function vectorizeImage(
 
   try {
     const result = await vectorizeImageOnMainThread(imageDataUrl, targetBounds, options, callbacks);
-    markModelLoaded("vectorizer");
+    markModelLoaded(modelId);
     return result;
   } catch (error) {
-    markModelFailed("vectorizer", error);
+    markModelFailed(modelId, error);
     throw error;
   }
 }

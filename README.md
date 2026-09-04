@@ -15,6 +15,7 @@ Recommended local runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`). Production su
 | **Dual-mode layers** | A Layer owns many objects and can switch freely between precise Free placement and adaptive hexagonal Block layout |
 | **Artwork variants** | Create any custom size while retaining content identity, then synchronize content and appearance without destroying each variant's layout |
 | **Vector workflow** | Pen paths, draggable nodes, smoothing, gradients, clipping frames, shapes, arrows, grouping and layer stacking |
+| **Vectorizer backends** | Dropdown between the original ArtShift Custom trace and official VTracer WASM; both run locally in a Worker and produce editable paths |
 | **Image workflow** | Aspect-safe media bounds, crop, shape masks, linked local sources, blur, blend modes, 12 non-destructive color adjustments, shared Selection, Auto Subject, Healing and Clone patches |
 | **Extraction runtime** | Local-first Remove BG / Extract with an explicit VPS-local RMBG fallback when the browser model is still loading; no image upload occurs without user consent |
 | **Thai typography** | Shared Thai-aware layout for the editor, templates and renderer with safe padding and automatic text-box growth |

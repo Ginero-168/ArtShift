@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:vtracer-wasm": "node scripts/build-vtracer-wasm.mjs",
     "start": "next start",
     "lint": "biome check app components lib tests next.config.ts postcss.config.mjs vitest.config.ts",
     "lint:fix": "biome check --write .",

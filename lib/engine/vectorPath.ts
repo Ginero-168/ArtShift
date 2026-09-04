@@ -1,5 +1,22 @@
 import type { EngineElement, VectorPathElement, VectorPathNode } from "./types";
 
+export type VectorPathSubpathRange = { start: number; end: number };
+
+/** Returns safe flattened-node ranges for single and compound vector paths. */
+export function getVectorPathSubpathRanges(
+  element: Pick<VectorPathElement, "nodes" | "subpathStarts">,
+): VectorPathSubpathRange[] {
+  if (element.nodes.length === 0) return [];
+  const starts = [0, ...(element.subpathStarts ?? [])]
+    .filter((start) => Number.isInteger(start) && start >= 0 && start < element.nodes.length)
+    .sort((a, b) => a - b)
+    .filter((start, index, values) => index === 0 || start !== values[index - 1]);
+  return starts.map((start, index) => ({
+    start,
+    end: starts[index + 1] ?? element.nodes.length,
+  }));
+}
+
 /**
  * Finds all critical t values in (0, 1) where a cubic Bezier curve reaches an extremum.
  */
@@ -47,41 +64,43 @@ export function recomputeVectorPathBounds(
   const h = Math.max(1, element.height);
   const pts: Array<{ x: number; y: number }> = [];
 
-  for (let i = 0; i < element.nodes.length; i++) {
-    const curr = element.nodes[i];
-    const next = element.nodes[(i + 1) % element.nodes.length];
-    const p0 = { x: element.x + curr.x * w, y: element.y + curr.y * h };
-    pts.push(p0);
+  for (const { start, end } of getVectorPathSubpathRanges(element)) {
+    for (let i = start; i < end; i++) {
+      const curr = element.nodes[i];
+      if (!curr) continue;
+      const nextIndex = i + 1 < end ? i + 1 : element.closed ? start : -1;
+      const p0 = { x: element.x + curr.x * w, y: element.y + curr.y * h };
+      pts.push(p0);
 
-    if (!element.closed && i === element.nodes.length - 1) {
-      break;
-    }
+      if (nextIndex < 0) continue;
+      const next = element.nodes[nextIndex];
+      if (!next) continue;
+      const p3 = { x: element.x + next.x * w, y: element.y + next.y * h };
+      pts.push(p3);
 
-    const p3 = { x: element.x + next.x * w, y: element.y + next.y * h };
-    pts.push(p3);
+      if (curr.out || next.in) {
+        const out = curr.out ?? [0, 0];
+        const incoming = next.in ?? [0, 0];
+        const p1 = { x: p0.x + out[0] * w, y: p0.y + out[1] * h };
+        const p2 = { x: p3.x + incoming[0] * w, y: p3.y + incoming[1] * h };
 
-    if (curr.out || next.in) {
-      const out = curr.out ?? [0, 0];
-      const incoming = next.in ?? [0, 0];
-      const p1 = { x: p0.x + out[0] * w, y: p0.y + out[1] * h };
-      const p2 = { x: p3.x + incoming[0] * w, y: p3.y + incoming[1] * h };
+        // Find extrema on X
+        const rootsX = cubicBezierExtremaT(p0.x, p1.x, p2.x, p3.x);
+        for (const t of rootsX) {
+          pts.push({
+            x: evalCubicBezier(p0.x, p1.x, p2.x, p3.x, t),
+            y: evalCubicBezier(p0.y, p1.y, p2.y, p3.y, t),
+          });
+        }
 
-      // Find extrema on X
-      const rootsX = cubicBezierExtremaT(p0.x, p1.x, p2.x, p3.x);
-      for (const t of rootsX) {
-        pts.push({
-          x: evalCubicBezier(p0.x, p1.x, p2.x, p3.x, t),
-          y: evalCubicBezier(p0.y, p1.y, p2.y, p3.y, t),
-        });
-      }
-
-      // Find extrema on Y
-      const rootsY = cubicBezierExtremaT(p0.y, p1.y, p2.y, p3.y);
-      for (const t of rootsY) {
-        pts.push({
-          x: evalCubicBezier(p0.x, p1.x, p2.x, p3.x, t),
-          y: evalCubicBezier(p0.y, p1.y, p2.y, p3.y, t),
-        });
+        // Find extrema on Y
+        const rootsY = cubicBezierExtremaT(p0.y, p1.y, p2.y, p3.y);
+        for (const t of rootsY) {
+          pts.push({
+            x: evalCubicBezier(p0.x, p1.x, p2.x, p3.x, t),
+            y: evalCubicBezier(p0.y, p1.y, p2.y, p3.y, t),
+          });
+        }
       }
     }
   }
@@ -134,22 +153,38 @@ export function smoothVectorPathNodes(
   nodes: VectorPathNode[],
   amount: number,
   closed: boolean,
+  subpathStarts?: number[],
 ): VectorPathNode[] {
   const strength = Math.max(0, Math.min(1, amount)) / 6;
   if (nodes.length < 3 || strength === 0) {
     return nodes.map(({ in: _in, out: _out, ...node }) => node);
   }
+  const ranges = getVectorPathSubpathRanges({ nodes, subpathStarts });
   return nodes.map((node, index) => {
-    const previous = nodes[index - 1] ?? (closed ? nodes.at(-1)! : node);
-    const next = nodes[index + 1] ?? (closed ? nodes[0] : node);
+    const range = ranges.find(({ start, end }) => index >= start && index < end) ?? {
+      start: 0,
+      end: nodes.length,
+    };
+    const previous =
+      nodes[index - 1] && index > range.start
+        ? nodes[index - 1]
+        : closed
+          ? nodes[range.end - 1]!
+          : node;
+    const next =
+      nodes[index + 1] && index + 1 < range.end
+        ? nodes[index + 1]
+        : closed
+          ? nodes[range.start]!
+          : node;
     const handle: [number, number] = [
       (next.x - previous.x) * strength,
       (next.y - previous.y) * strength,
     ];
     return {
       ...node,
-      in: !closed && index === 0 ? undefined : [-handle[0], -handle[1]],
-      out: !closed && index === nodes.length - 1 ? undefined : handle,
+      in: !closed && index === range.start ? undefined : [-handle[0], -handle[1]],
+      out: !closed && index === range.end - 1 ? undefined : handle,
     };
   });
 }
@@ -202,15 +237,29 @@ export function setNodeType(
   nodes: VectorPathNode[],
   index: number,
   type: "smooth" | "corner",
+  subpathStarts?: number[],
 ): VectorPathNode[] {
+  const range = getVectorPathSubpathRanges({ nodes, subpathStarts }).find(
+    ({ start, end }) => index >= start && index < end,
+  );
   return nodes.map((node, idx) => {
     if (idx !== index) return node;
     if (type === "corner") {
       const { in: _in, out: _out, ...rest } = node;
       return rest;
     }
-    const prev = nodes[idx - 1] ?? nodes[nodes.length - 1] ?? node;
-    const next = nodes[idx + 1] ?? nodes[0] ?? node;
+    const prev =
+      nodes[idx - 1] && (!range || idx > range.start)
+        ? nodes[idx - 1]
+        : range
+          ? nodes[range.end - 1]!
+          : (nodes[nodes.length - 1] ?? node);
+    const next =
+      nodes[idx + 1] && (!range || idx + 1 < range.end)
+        ? nodes[idx + 1]
+        : range
+          ? nodes[range.start]!
+          : (nodes[0] ?? node);
     const strength = 0.15;
     const hx = (next.x - prev.x) * strength;
     const hy = (next.y - prev.y) * strength;
@@ -225,11 +274,15 @@ export function setNodeType(
 /**
  * Toggles a node between sharp corner and smooth curve.
  */
-export function toggleNodeSmoothness(nodes: VectorPathNode[], index: number): VectorPathNode[] {
+export function toggleNodeSmoothness(
+  nodes: VectorPathNode[],
+  index: number,
+  subpathStarts?: number[],
+): VectorPathNode[] {
   const target = nodes[index];
   if (!target) return nodes;
   const isSmooth = Boolean(target.in || target.out);
-  return setNodeType(nodes, index, isSmooth ? "corner" : "smooth");
+  return setNodeType(nodes, index, isSmooth ? "corner" : "smooth", subpathStarts);
 }
 
 /**

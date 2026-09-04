@@ -31,6 +31,7 @@ import type {
   ImageElement,
   TextElement,
 } from "../engine/types";
+import { getVectorPathSubpathRanges } from "../engine/vectorPath";
 import { getRasterRetouchSource } from "../raster/retouchSource";
 import { createRasterSelectionMaskDataUrl } from "../raster/selection";
 import { getRasterSelectionMaskSource } from "../raster/selectionMask";
@@ -252,14 +253,17 @@ function drawVectorPath(
 ) {
   if (el.nodes.length < 2) return;
   const path = new Path2D();
-  const first = pathNodePoint(el, el.nodes[0]);
-  path.moveTo(first.x, first.y);
-  for (let index = 1; index < el.nodes.length; index++) {
-    appendPathSegment(path, el, el.nodes[index - 1], el.nodes[index]);
-  }
-  if (el.closed) {
-    appendPathSegment(path, el, el.nodes.at(-1)!, el.nodes[0]);
-    path.closePath();
+  for (const { start, end } of getVectorPathSubpathRanges(el)) {
+    if (end - start < 2) continue;
+    const first = pathNodePoint(el, el.nodes[start]);
+    path.moveTo(first.x, first.y);
+    for (let index = start + 1; index < end; index++) {
+      appendPathSegment(path, el, el.nodes[index - 1], el.nodes[index]);
+    }
+    if (el.closed) {
+      appendPathSegment(path, el, el.nodes[end - 1], el.nodes[start]);
+      path.closePath();
+    }
   }
   if (el.closed && el.backgroundColor !== "transparent") {
     ctx.fillStyle = vectorFillStyle(ctx, el);

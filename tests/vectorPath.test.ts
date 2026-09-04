@@ -17,6 +17,7 @@ import {
   setNodeType,
   smoothVectorPathNodes,
 } from "@/lib/engine/vectorPath";
+import { parseVTracerSvgToElements } from "@/lib/vectorize/vtracerAdapter";
 
 describe("precision vector paths", () => {
   it("creates normalized anchors and hit-tests a closed fill", () => {
@@ -146,5 +147,21 @@ describe("precision vector paths", () => {
     // The bounding box must match the circle's actual geometry (200x100), not expanded by tangent arms
     expect(Math.round(pathEllipse.width)).toBe(200);
     expect(Math.round(pathEllipse.height)).toBe(100);
+  });
+
+  it("hit-tests compound even-odd paths without selecting their holes", () => {
+    const [ring] = parseVTracerSvgToElements(
+      '<svg><path fill="#111827" fill-rule="evenodd" d="M0 0 H100 V100 H0 Z M25 25 H75 V75 H25 Z"/></svg>',
+      {
+        targetBounds: { x: 0, y: 0, width: 200, height: 200 },
+        sourceWidth: 100,
+        sourceHeight: 100,
+      },
+    );
+
+    expect(ring).toBeDefined();
+    if (!ring) return;
+    expect(hitTestElement({ x: 10, y: 10 }, ring)).toBe(true);
+    expect(hitTestElement({ x: 100, y: 100 }, ring)).toBe(false);
   });
 });
