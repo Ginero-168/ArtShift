@@ -32,6 +32,8 @@ export interface VectorizeOptions {
 }
 
 export interface VectorizeResult {
+  /** Backend that produced the result; set by the public orchestration layer. */
+  backend?: VectorizeBackend;
   elements: VectorPathElement[];
   svgString: string;
   palette: string[];

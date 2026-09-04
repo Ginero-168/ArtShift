@@ -14,6 +14,7 @@ import {
   type VectorizeResult,
   vectorizeImageData,
 } from "./vectorizer-core";
+import { getVectorizeFallbackOptions } from "./vectorizerBackend";
 import { vectorizeRgbaWithVTracer } from "./vtracerRuntime";
 
 export type {
@@ -31,6 +32,7 @@ export {
   VectorizeComplexityError,
   vectorizeImageData,
 } from "./vectorizer-core";
+export { getVectorizeFallbackOptions } from "./vectorizerBackend";
 
 async function vectorizeImageOnMainThread(
   imageDataUrl: string,
@@ -128,21 +130,34 @@ export async function vectorizeImage(
     try {
       const result = await vectorizeImageInWorker(imageDataUrl, targetBounds, options, callbacks);
       markModelLoaded(modelId);
-      return result;
+      return { ...result, backend: options?.backend ?? "custom" };
     } catch (error) {
       if (error instanceof VectorizeCancelledError || error instanceof VectorizeComplexityError) {
         throw error;
+      }
+      if (modelId === "vtracer-wasm") {
+        markModelFailed(modelId, error);
       }
       console.warn("Vectorizer worker unavailable; falling back to main thread.", error);
     }
   }
 
+  const fallbackOptions = getVectorizeFallbackOptions(options);
+  const fallbackBackend = fallbackOptions?.backend ?? "custom";
+  if (modelId === "vtracer-wasm") {
+    markModelLoading("vectorizer");
+  }
   try {
-    const result = await vectorizeImageOnMainThread(imageDataUrl, targetBounds, options, callbacks);
-    markModelLoaded(modelId);
-    return result;
+    const result = await vectorizeImageOnMainThread(
+      imageDataUrl,
+      targetBounds,
+      fallbackOptions,
+      callbacks,
+    );
+    markModelLoaded(fallbackBackend === "vtracer-wasm" ? "vtracer-wasm" : "vectorizer");
+    return { ...result, backend: fallbackBackend };
   } catch (error) {
-    markModelFailed(modelId, error);
+    markModelFailed(fallbackBackend === "vtracer-wasm" ? "vtracer-wasm" : "vectorizer", error);
     throw error;
   }
 }

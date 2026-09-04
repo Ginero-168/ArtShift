@@ -8,6 +8,9 @@ export type VTracerAdapterBounds = {
   sourceHeight: number;
   maxElements?: number;
   maxTotalNodes?: number;
+  maxSvgChars?: number;
+  maxPathDataChars?: number;
+  maxPathTokens?: number;
 };
 
 type Point = { x: number; y: number };
@@ -22,6 +25,11 @@ type PaintedPath = {
 
 const DEFAULT_MAX_ELEMENTS = 512;
 const DEFAULT_MAX_TOTAL_NODES = 50_000;
+export const VTRACER_SVG_LIMITS = {
+  maxSvgChars: 4_000_000,
+  maxPathDataChars: 3_500_000,
+  maxPathTokens: 500_000,
+} as const;
 const SVG_TOKEN_PATTERN = /([a-zA-Z])|([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)/g;
 const COMMAND_PATTERN = /^[a-zA-Z]$/;
 
@@ -42,11 +50,22 @@ export function parseVTracerSvgToElements(
 
   const maxElements = bounds.maxElements ?? DEFAULT_MAX_ELEMENTS;
   const maxTotalNodes = bounds.maxTotalNodes ?? DEFAULT_MAX_TOTAL_NODES;
+  const maxSvgChars = bounds.maxSvgChars ?? VTRACER_SVG_LIMITS.maxSvgChars;
+  const maxPathDataChars = bounds.maxPathDataChars ?? VTRACER_SVG_LIMITS.maxPathDataChars;
+  const maxPathTokens = bounds.maxPathTokens ?? VTRACER_SVG_LIMITS.maxPathTokens;
+  if (svg.length > maxSvgChars) {
+    throw new Error("VTracer SVG output is too large.");
+  }
   const elements: VectorPathElement[] = [];
   let totalNodes = 0;
 
-  for (const paintedPath of extractPaintedPaths(svg)) {
-    const subpaths = parsePathData(paintedPath.d).filter((subpath) => subpath.nodes.length >= 2);
+  for (const paintedPath of extractPaintedPaths(svg, {
+    maxPaintedPaths: maxElements,
+    maxPathDataChars,
+  })) {
+    const subpaths = parsePathData(paintedPath.d, maxPathTokens).filter(
+      (subpath) => subpath.nodes.length >= 2,
+    );
     if (subpaths.length === 0) continue;
     if (elements.length >= maxElements) {
       throw new Error("VTracer returned too many vector paths.");
@@ -123,11 +142,15 @@ export function parseVTracerSvgResult(svg: string, bounds: VTracerAdapterBounds)
   };
 }
 
-function extractPaintedPaths(svg: string): PaintedPath[] {
+function extractPaintedPaths(
+  svg: string,
+  budget: { maxPaintedPaths: number; maxPathDataChars: number },
+): PaintedPath[] {
   const paths: PaintedPath[] = [];
   const fillStack: Array<string | null> = ["#000000"];
   const fillRuleStack: Array<"nonzero" | "evenodd"> = ["nonzero"];
   const opacityStack: number[] = [1];
+  let pathDataChars = 0;
   const tagPattern = /<\/?([a-zA-Z][\w:-]*)([^>]*?)>/g;
 
   for (const match of svg.matchAll(tagPattern)) {
@@ -173,8 +196,16 @@ function extractPaintedPaths(svg: string): PaintedPath[] {
       normalizeOpacity(attributes.opacity) *
       normalizeOpacity(attributes["fill-opacity"]);
     if (opacity <= 0) continue;
+    if (paths.length >= budget.maxPaintedPaths) {
+      throw new Error("VTracer returned too many vector paths.");
+    }
+    const d = attributes.d ?? "";
+    pathDataChars += d.length;
+    if (pathDataChars > budget.maxPathDataChars) {
+      throw new Error("VTracer path data is too large.");
+    }
     paths.push({
-      d: attributes.d ?? "",
+      d,
       fill,
       fillRule: normalizeFillRule(attributes["fill-rule"]) ?? fillRuleStack.at(-1) ?? "nonzero",
       opacity,
@@ -225,9 +256,12 @@ function normalizeFillRule(value: string | undefined): "nonzero" | "evenodd" | n
   return null;
 }
 
-function parsePathData(d: string): ParsedSubpath[] {
+function parsePathData(d: string, maxTokens: number): ParsedSubpath[] {
   const tokens: string[] = [];
-  for (const match of d.matchAll(SVG_TOKEN_PATTERN)) tokens.push(match[1] ?? match[2]);
+  for (const match of d.matchAll(SVG_TOKEN_PATTERN)) {
+    if (tokens.length >= maxTokens) throw new Error("VTracer SVG path has too many tokens.");
+    tokens.push(match[1] ?? match[2]);
+  }
   if (tokens.length === 0) throw new Error("VTracer returned an empty SVG path.");
 
   const subpaths: ParsedSubpath[] = [];

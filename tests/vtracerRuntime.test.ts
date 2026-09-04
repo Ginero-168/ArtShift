@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { hasVisibleAlpha } from "@/lib/vectorize/vtracerRuntime";
+import {
+  assertVTracerRasterWithinLimits,
+  assertVTracerSvgWithinLimits,
+  hasVisibleAlpha,
+} from "@/lib/vectorize/vtracerRuntime";
 
 describe("VTracer backend wiring", () => {
   it("keeps the VTracer runtime as a browser-only public asset", () => {
@@ -36,5 +40,16 @@ describe("VTracer backend wiring", () => {
     const pixels = new Uint8ClampedArray([255, 0, 0, 0, 0, 0, 0, 0]);
     expect(hasVisibleAlpha(pixels)).toBe(false);
     expect(hasVisibleAlpha(new Uint8ClampedArray([255, 0, 0, 1]))).toBe(true);
+  });
+
+  it("rejects malformed or oversized RGBA input before entering WASM", () => {
+    expect(() => assertVTracerRasterWithinLimits(new Uint8Array(4), 1, 1)).not.toThrow();
+    expect(() => assertVTracerRasterWithinLimits(new Uint8Array(3), 1, 1)).toThrow(/RGBA length/i);
+    expect(() => assertVTracerRasterWithinLimits(new Uint8Array(4), 0, 1)).toThrow(/dimensions/i);
+  });
+
+  it("rejects oversized SVG output before the adapter tokenizes it", () => {
+    expect(() => assertVTracerSvgWithinLimits("x".repeat(4_000_001))).toThrow(/size limit/i);
+    expect(() => assertVTracerSvgWithinLimits("<svg/>")).not.toThrow();
   });
 });

@@ -49,12 +49,20 @@ The Vectorize panel exposes two local backends without removing the original:
   `public/wasm/vtracer/` inside the same Worker. It receives raw RGBA pixels,
   returns SVG, and the ArtShift adapter validates/parses the SVG into editable
   `VectorPathElement[]` before the single `addElements` mutation.
+- If that Worker cannot start or the VTracer runtime fails, the orchestration
+  layer switches the same request to `ArtShift Custom` rather than running the
+  synchronous VTracer call on the main thread; the UI reports that fallback.
 
 The VTracer binary is built from `wasm/vtracer-browser/` with:
 
 ```bash
 npm run build:vtracer-wasm
 ```
+
+`npm run build` and `npm run verify` also run `verify:vtracer-wasm`, which checks
+the committed JS/WASM magic, exported function, and SHA-256 before Next.js is
+built. The build helper pins `wasm-pack 0.13.1` and stages the new runtime
+before swapping it into `public/wasm/vtracer/`.
 
 This is a local algorithmic raster-to-vector runtime, not a neural model and not
 an image upload route. VTracer version changes must be benchmarked against the

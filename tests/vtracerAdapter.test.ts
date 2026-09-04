@@ -100,4 +100,27 @@ describe("VTracer SVG adapter", () => {
     expect(elements).toHaveLength(1);
     expect(elements[0].opacity).toBeCloseTo(0.5);
   });
+
+  it("rejects an SVG before parsing when it exceeds the configured budget", () => {
+    expect(() =>
+      parseVTracerSvgToElements("<svg>0123456789</svg>", {
+        targetBounds: { x: 0, y: 0, width: 10, height: 10 },
+        sourceWidth: 10,
+        sourceHeight: 10,
+        maxSvgChars: 10,
+      }),
+    ).toThrow(/too large/i);
+  });
+
+  it("rejects excessive SVG path data before building editor elements", () => {
+    const pathData = `M0 0 ${"L1 1 ".repeat(20)}Z`;
+    expect(() =>
+      parseVTracerSvgToElements(`<svg><path fill="#000" d="${pathData}"/></svg>`, {
+        targetBounds: { x: 0, y: 0, width: 10, height: 10 },
+        sourceWidth: 10,
+        sourceHeight: 10,
+        maxPathDataChars: 20,
+      }),
+    ).toThrow(/path data/i);
+  });
 });

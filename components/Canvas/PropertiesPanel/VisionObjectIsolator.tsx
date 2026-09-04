@@ -289,14 +289,16 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         setStatusMessage("No distinct vector paths detected");
         report("complete", "ไม่พบเส้น Vector ที่แยกได้", "fallback", 100);
       } else {
+        const usedBackend = res.backend ?? backend;
+        const usedFallback = backend === "vtracer-wasm" && usedBackend === "custom";
         addElements(res.elements, "vectorize image to paths");
         selectOnly(res.elements.map((el) => el.id));
         setStatusMessage(
-          `${backend === "vtracer-wasm" ? "VTracer traced" : "Traced"} ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!`,
+          `${usedBackend === "vtracer-wasm" ? "VTracer traced" : "Traced"} ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!${usedFallback ? " VTracer unavailable; Custom fallback used." : ""}`,
         );
         report(
           "complete",
-          `${backend === "vtracer-wasm" ? "VTracer WASM สร้าง" : "สร้าง"} Vector สำเร็จ ${res.elements.length} Layers`,
+          `${usedBackend === "vtracer-wasm" ? "VTracer WASM สร้าง" : "สร้าง"} Vector สำเร็จ ${res.elements.length} Layers${usedFallback ? " (ใช้ Custom fallback)" : ""}`,
           "success",
           100,
         );

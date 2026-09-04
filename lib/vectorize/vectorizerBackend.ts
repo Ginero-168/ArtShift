@@ -48,6 +48,14 @@ export function isVectorizeBackend(value: unknown): value is VectorizeBackend {
   return value === "custom" || value === "vtracer-wasm";
 }
 
+/** Keep the user's tracing settings while switching a failed VTracer job to Custom. */
+export function getVectorizeFallbackOptions(
+  options?: VectorizeOptions,
+): VectorizeOptions | undefined {
+  if (options?.backend !== "vtracer-wasm") return options;
+  return { ...options, backend: "custom" };
+}
+
 export function getVectorizeBackendLabel(backend: VectorizeBackend): string {
   return (
     VECTORIZE_BACKEND_OPTIONS.find((option) => option.value === backend)?.label ?? "ArtShift Custom"

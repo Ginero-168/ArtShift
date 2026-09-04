@@ -4,9 +4,15 @@ import {
   markModelLoading,
   markModelProgress,
 } from "@/lib/ai/modelRegistry";
-import type { VectorizeCallbacks, VectorizeOptions, VectorizeResult } from "./vectorizer-core";
+import {
+  VECTORIZE_LIMITS,
+  type VectorizeCallbacks,
+  VectorizeComplexityError,
+  type VectorizeOptions,
+  type VectorizeResult,
+} from "./vectorizer-core";
 import { mapArtShiftOptionsToVTracer, type VTracerOptions } from "./vectorizerBackend";
-import { parseVTracerSvgResult } from "./vtracerAdapter";
+import { parseVTracerSvgResult, VTRACER_SVG_LIMITS } from "./vtracerAdapter";
 
 export const VTRACER_WASM_JS_URL = "/wasm/vtracer/vtracer_browser.js";
 export const VTRACER_WASM_BINARY_URL = "/wasm/vtracer/vtracer_browser_bg.wasm";
@@ -17,6 +23,33 @@ export function hasVisibleAlpha(pixels: ArrayLike<number>): boolean {
     if ((pixels[index] ?? 0) > 0) return true;
   }
   return false;
+}
+
+export function assertVTracerRasterWithinLimits(
+  pixels: ArrayLike<number>,
+  width: number,
+  height: number,
+): void {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error("VTracer image dimensions must be positive integers.");
+  }
+  const expectedLength = width * height * 4;
+  if (pixels.length !== expectedLength) {
+    throw new Error(`VTracer RGBA length ${pixels.length} does not equal ${expectedLength}.`);
+  }
+  if (
+    width > VECTORIZE_LIMITS.maxDimension ||
+    height > VECTORIZE_LIMITS.maxDimension ||
+    width * height > VECTORIZE_LIMITS.maxDimension ** 2
+  ) {
+    throw new VectorizeComplexityError("VTracer image exceeds the safe pixel dimensions.");
+  }
+}
+
+export function assertVTracerSvgWithinLimits(svg: string): void {
+  if (svg.length > VTRACER_SVG_LIMITS.maxSvgChars) {
+    throw new VectorizeComplexityError("VTracer SVG output exceeds the safe size limit.");
+  }
 }
 
 type VTracerWasmModule = {
@@ -64,6 +97,7 @@ export async function vectorizeRgbaWithVTracer(
   callbacks: VectorizeCallbacks = {},
 ): Promise<VectorizeResult> {
   if (callbacks.signal?.aborted) throw createAbortError();
+  assertVTracerRasterWithinLimits(pixels, width, height);
   callbacks.onProgress?.({ progress: 0.02, stage: "loading" });
   if (!hasVisibleAlpha(pixels)) {
     callbacks.onProgress?.({ progress: 1, stage: "building" });
@@ -83,6 +117,7 @@ export async function vectorizeRgbaWithVTracer(
   const vtracerOptions = mapArtShiftOptionsToVTracer(options);
   const svg = runtime.vectorize_rgba(new Uint8Array(pixels), width, height, vtracerOptions);
   if (callbacks.signal?.aborted) throw createAbortError();
+  assertVTracerSvgWithinLimits(svg);
   callbacks.onProgress?.({ progress: 0.9, stage: "building" });
 
   const result = parseVTracerSvgResult(svg, {

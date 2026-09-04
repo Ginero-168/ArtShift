@@ -8,8 +8,9 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run verify:vtracer-wasm && next build",
     "build:vtracer-wasm": "node scripts/build-vtracer-wasm.mjs",
+    "verify:vtracer-wasm": "node scripts/verify-vtracer-wasm.mjs",
     "start": "next start",
     "lint": "biome check app components lib tests next.config.ts postcss.config.mjs vitest.config.ts",
     "lint:fix": "biome check --write .",
@@ -20,7 +21,7 @@
     "benchmark:ai": "vitest bench tests/aiRuntime.bench.ts --run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run build",
+    "verify": "npm run verify:vtracer-wasm && npm run lint && npm run typecheck && npm test && npm run build",
     "audit:prod": "npm audit --omit=dev",
     "check:deps": "npm outdated"
   },
