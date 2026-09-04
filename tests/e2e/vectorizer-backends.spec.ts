@@ -55,15 +55,39 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
 
   await vtracerButton.click();
   await expect(page.getByText("VTracer WASM Settings", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /High-Fidelity/ })).toHaveCSS("font-weight", "700");
+  await expect(page.getByRole("button", { name: "Poster (Official)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Photo (Official)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "B&W (Official)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Poster (Official)", exact: true })).toHaveCSS(
+    "font-weight",
+    "700",
+  );
+  await expect(page.getByRole("button", { name: "8", exact: true })).toHaveCSS(
+    "font-weight",
+    "700",
+  );
   const geometry = page.getByRole("combobox", { name: "VTracer geometry" });
   const composition = page.getByRole("combobox", { name: "VTracer composition" });
   const clustering = page.getByRole("combobox", { name: "VTracer clustering" });
-  await expect(geometry).toHaveValue("spline");
+  await expect(geometry).toHaveValue("polygon");
   await expect(composition).toHaveValue("cutout");
   await expect(clustering).toHaveValue("color-cluster");
   await expect(page.getByRole("slider", { name: "VTracer color sensitivity" })).toHaveValue("16");
-  await expect(page.getByRole("slider", { name: "VTracer noise filter" })).toHaveValue("2");
+  await expect(page.getByRole("slider", { name: "VTracer noise filter" })).toHaveValue("4");
+
+  await page.getByRole("button", { name: "Photo (Official)", exact: true }).click();
+  await expect(geometry).toHaveValue("spline");
+  await expect(composition).toHaveValue("stacked");
+  await expect(page.getByRole("slider", { name: "VTracer noise filter" })).toHaveValue("10");
+  await expect(page.getByRole("button", { name: "VTracer no palette limit" })).toHaveCSS(
+    "font-weight",
+    "700",
+  );
+
+  await page.getByRole("button", { name: "Poster (Official)", exact: true }).click();
+  await expect(geometry).toHaveValue("polygon");
+  await expect(composition).toHaveValue("cutout");
+  await expect(page.getByRole("slider", { name: "VTracer noise filter" })).toHaveValue("4");
 
   await geometry.selectOption("polygon");
   await composition.selectOption("stacked");
@@ -99,6 +123,8 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
         clustering: "color-cluster",
         filterSpeckle: 6,
         layerDifference: 32,
+        maxColors: 8,
+        usePresetDefaults: false,
         simplify: 0.85,
       },
     },

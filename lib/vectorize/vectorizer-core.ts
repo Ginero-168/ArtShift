@@ -13,6 +13,8 @@ export type VectorizeComposition = "stacked" | "cutout";
 export type VectorizeClustering = "color-cluster" | "bw" | "watershed";
 
 export interface VTracerControls {
+  /** Keep the selected ArtShift preset's complete native defaults. */
+  usePresetDefaults?: boolean;
   /** Native contour fitting mode. VTracer-only; Custom ignores this field. */
   mode?: VectorizeTraceMode;
   /** Native compositing strategy. Cutout prevents gaps between adjacent regions. */
@@ -25,6 +27,8 @@ export interface VTracerControls {
   filterSpeckle?: number;
   /** Native binary luminance threshold for B&W clustering. */
   binaryThreshold?: number;
+  /** Native palette cap; null keeps the palette uncapped. */
+  maxColors?: number | null;
   /** Extra curve simplification tolerance; null disables the extra pass. */
   simplify?: number | null;
 }

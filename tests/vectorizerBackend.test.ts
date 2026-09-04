@@ -14,16 +14,39 @@ describe("vectorizer backend contract", () => {
     ]);
   });
 
-  it("maps a monochrome ArtShift trace to VTracer binary spline settings", () => {
+  it("maps the official B&W recipe without ArtShift overrides", () => {
+    expect(
+      mapArtShiftOptionsToVTracer({
+        preset: "lineArt",
+        vtracer: { usePresetDefaults: true },
+      }),
+    ).toMatchObject({
+      preset: "bw",
+      clustering: "bw",
+      mode: "spline",
+      hierarchical: "stacked",
+      filterSpeckle: 4,
+      colorPrecision: 6,
+      layerDifference: 16,
+      cornerThreshold: 60,
+      lengthThreshold: 4,
+      maxIterations: 10,
+      spliceThreshold: 45,
+      binaryThreshold: 128,
+      optimize: 1,
+      simplify: undefined,
+    });
+  });
+
+  it("maps explicitly tuned monochrome settings without using the preset defaults", () => {
     expect(
       mapArtShiftOptionsToVTracer({
         preset: "lineArt",
         mode: "monochrome",
-        colors: 2,
         detailLevel: 4,
         smoothing: 0.2,
         cornerSharpness: 0.85,
-        minArea: 3,
+        vtracer: { usePresetDefaults: false, filterSpeckle: 2, binaryThreshold: 190 },
       }),
     ).toMatchObject({
       preset: "bw",
@@ -31,35 +54,52 @@ describe("vectorizer backend contract", () => {
       mode: "spline",
       hierarchical: "stacked",
       filterSpeckle: 2,
-      layerDifference: 16,
-      binaryThreshold: 140,
+      binaryThreshold: 190,
       optimize: 2,
     });
   });
 
-  it("maps a photo trace to a color VTracer pipeline with bounded colors", () => {
-    const mapped = mapArtShiftOptionsToVTracer({
-      preset: "photoDetailed",
-      mode: "color",
-      colors: 64,
-      detailLevel: 5,
-      smoothing: 0.2,
-      cornerSharpness: 0.5,
-      minArea: 2,
+  it("maps an official poster recipe to polygon cutout with a compact palette", () => {
+    expect(
+      mapArtShiftOptionsToVTracer({
+        preset: "highFidelity",
+        vtracer: { usePresetDefaults: true },
+      }),
+    ).toMatchObject({
+      preset: "poster",
+      mode: "polygon",
+      hierarchical: "cutout",
+      clustering: "color-cluster",
+      filterSpeckle: 4,
+      colorPrecision: 8,
+      layerDifference: 16,
+      cornerThreshold: 60,
+      lengthThreshold: 4,
+      maxIterations: 10,
+      spliceThreshold: 45,
+      maxColors: 8,
+      optimize: 1,
+      simplify: undefined,
     });
+  });
 
-    expect(mapped).toMatchObject({
+  it("maps the official photo recipe without forcing a palette cap", () => {
+    expect(mapArtShiftOptionsToVTracer({ preset: "photoDetailed" })).toMatchObject({
       preset: "photo",
       clustering: "color-cluster",
       mode: "spline",
       hierarchical: "stacked",
       filterSpeckle: 10,
+      colorPrecision: 8,
       layerDifference: 48,
-      maxColors: 64,
-      optimize: 2,
+      cornerThreshold: 180,
+      lengthThreshold: 4,
+      maxIterations: 10,
+      spliceThreshold: 45,
+      maxColors: undefined,
+      optimize: 1,
+      simplify: undefined,
     });
-    expect(mapped.filterSpeckle).toBeGreaterThanOrEqual(1);
-    expect(mapped.simplify).toBeUndefined();
   });
 
   it("honors native VTracer controls instead of forcing one pipeline", () => {
@@ -69,6 +109,7 @@ describe("vectorizer backend contract", () => {
         mode: "color",
         colors: 12,
         vtracer: {
+          usePresetDefaults: false,
           mode: "polygon",
           hierarchical: "stacked",
           clustering: "watershed",
@@ -87,15 +128,6 @@ describe("vectorizer backend contract", () => {
     });
   });
 
-  it("honors the native B&W threshold when the trace is monochrome", () => {
-    expect(
-      mapArtShiftOptionsToVTracer({
-        preset: "lineArt",
-        vtracer: { binaryThreshold: 190 },
-      }),
-    ).toMatchObject({ clustering: "bw", binaryThreshold: 190 });
-  });
-
   it("does not let a preset hide an explicit ArtShift B&W threshold", () => {
     expect(mapArtShiftOptionsToVTracer({ mode: "monochrome", blackThreshold: 210 })).toMatchObject({
       clustering: "bw",
@@ -103,15 +135,13 @@ describe("vectorizer backend contract", () => {
     });
   });
 
-  it("uses preset values when callers omit generic ArtShift controls", () => {
-    expect(mapArtShiftOptionsToVTracer({ preset: "photoDetailed" })).toMatchObject({
-      preset: "photo",
-      maxColors: 36,
-      colorPrecision: 8,
-      filterSpeckle: 10,
-      layerDifference: 48,
-      mode: "spline",
-      hierarchical: "stacked",
-    });
+  it("keeps custom detail mapping inside VTracer's supported length range", () => {
+    expect(
+      mapArtShiftOptionsToVTracer({
+        preset: "custom",
+        detailLevel: 5,
+        vtracer: { usePresetDefaults: false },
+      }).lengthThreshold,
+    ).toBe(3.5);
   });
 });

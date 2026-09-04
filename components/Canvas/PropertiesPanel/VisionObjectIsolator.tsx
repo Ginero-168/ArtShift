@@ -77,16 +77,18 @@ type VectorizeEngineSettings = {
   vtracerLayerDifference: number;
   vtracerFilterSpeckle: number;
   vtracerBinaryThreshold: number;
+  vtracerMaxColors: number | null;
+  vtracerUsePresetDefaults: boolean;
   vtracerSimplifyEnabled: boolean;
 };
 
-function createVectorizeEngineSettings(): VectorizeEngineSettings {
+function createVectorizeEngineSettings(isVTracer = false): VectorizeEngineSettings {
   const preset = "highFidelity" as const;
   const generic = VECTORIZE_PRESET_CONFIGS[preset];
   const native = getVTracerPresetDefaults(preset);
   return {
     preset,
-    colors: generic.colors,
+    colors: isVTracer ? (native.maxColors ?? generic.colors) : generic.colors,
     detailLevel: generic.detailLevel,
     smoothing: generic.smoothing,
     cornerSharpness: generic.cornerSharpness,
@@ -97,9 +99,20 @@ function createVectorizeEngineSettings(): VectorizeEngineSettings {
     vtracerLayerDifference: native.layerDifference,
     vtracerFilterSpeckle: native.filterSpeckle,
     vtracerBinaryThreshold: native.binaryThreshold,
+    vtracerMaxColors: isVTracer ? native.maxColors : null,
+    vtracerUsePresetDefaults: isVTracer,
     vtracerSimplifyEnabled: false,
   };
 }
+
+const VTRACER_PRESET_BUTTONS: readonly {
+  value: Exclude<VectorizePreset, "custom">;
+  label: string;
+}[] = [
+  { value: "highFidelity", label: "Poster (Official)" },
+  { value: "photoDetailed", label: "Photo (Official)" },
+  { value: "lineArt", label: "B&W (Official)" },
+];
 
 async function measureAlphaCoverage(dataUrl: string): Promise<number> {
   const image = new Image();
@@ -196,7 +209,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     createVectorizeEngineSettings(),
   );
   const [vtracerSettings, setVTracerSettings] = useState<VectorizeEngineSettings>(() =>
-    createVectorizeEngineSettings(),
+    createVectorizeEngineSettings(true),
   );
   const activeSettings = backend === "custom" ? customSettings : vtracerSettings;
   const updateActiveSettings = (patch: Partial<VectorizeEngineSettings>) => {
@@ -216,6 +229,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const vtracerLayerDifference = activeSettings.vtracerLayerDifference;
   const vtracerFilterSpeckle = activeSettings.vtracerFilterSpeckle;
   const vtracerBinaryThreshold = activeSettings.vtracerBinaryThreshold;
+  const vtracerMaxColors = activeSettings.vtracerMaxColors;
+  const vtracerUsePresetDefaults = activeSettings.vtracerUsePresetDefaults;
   const vtracerSimplifyEnabled = activeSettings.vtracerSimplifyEnabled;
   const setPreset = (value: VectorizePreset) => updateActiveSettings({ preset: value });
   const setColors = (value: number) => updateActiveSettings({ colors: value });
@@ -235,6 +250,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     updateActiveSettings({ vtracerFilterSpeckle: value });
   const setVTracerBinaryThreshold = (value: number) =>
     updateActiveSettings({ vtracerBinaryThreshold: value });
+  const setVTracerMaxColors = (value: number | null) =>
+    updateActiveSettings({ vtracerMaxColors: value });
+  const setVTracerUsePresetDefaults = (value: boolean) =>
+    updateActiveSettings({ vtracerUsePresetDefaults: value });
   const setVTracerSimplifyEnabled = (value: boolean) =>
     updateActiveSettings({ vtracerSimplifyEnabled: value });
   const isMonochromeTrace =
@@ -296,10 +315,14 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     setVTracerLayerDifference(vtracerDefaults.layerDifference);
     setVTracerFilterSpeckle(vtracerDefaults.filterSpeckle);
     setVTracerBinaryThreshold(vtracerDefaults.binaryThreshold);
+    setVTracerMaxColors(backend === "vtracer-wasm" ? vtracerDefaults.maxColors : null);
+    setVTracerUsePresetDefaults(backend === "vtracer-wasm" && p !== "custom");
     setVTracerSimplifyEnabled(false);
     if (p !== "custom") {
       const cfg = VECTORIZE_PRESET_CONFIGS[p];
-      setColors(cfg.colors);
+      setColors(
+        backend === "vtracer-wasm" ? (vtracerDefaults.maxColors ?? cfg.colors) : cfg.colors,
+      );
       setDetailLevel(cfg.detailLevel);
       setSmoothing(cfg.smoothing);
       setCornerSharpness(cfg.cornerSharpness);
@@ -351,7 +374,12 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           backend,
           preset,
           mode: isMonochrome ? "monochrome" : "color",
-          colors: isMonochrome ? 2 : colors,
+          colors:
+            isMonochrome || backend === "custom"
+              ? isMonochrome
+                ? 2
+                : colors
+              : (vtracerMaxColors ?? colors),
           detailLevel,
           smoothing,
           cornerSharpness,
@@ -365,6 +393,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                   filterSpeckle: vtracerFilterSpeckle,
                   layerDifference: vtracerLayerDifference,
                   binaryThreshold: vtracerBinaryThreshold,
+                  maxColors: vtracerMaxColors,
+                  usePresetDefaults: vtracerUsePresetDefaults && preset !== "custom",
                   simplify: vtracerSimplifyEnabled
                     ? Number(Math.max(0.5, Math.min(2.5, 0.35 + smoothing * 2)).toFixed(2))
                     : null,
@@ -1201,9 +1231,17 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                 marginBottom: 3,
               }}
             >
-              Select Trace Quality / Style:
+              {backend === "vtracer-wasm"
+                ? "Official VTracer Presets:"
+                : "Select Trace Quality / Style:"}
             </span>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
+            <div
+              style={{
+                display: backend === "vtracer-wasm" ? "none" : "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 3,
+              }}
+            >
               <button
                 type="button"
                 onClick={() => applyPreset("highFidelity")}
@@ -1313,6 +1351,35 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                 🖤 Silhouette (B&W)
               </button>
             </div>
+            <div
+              style={{
+                display: backend === "vtracer-wasm" ? "grid" : "none",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 3,
+              }}
+            >
+              {VTRACER_PRESET_BUTTONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => applyPreset(option.value)}
+                  style={{
+                    padding: "5px 4px",
+                    fontSize: 8.5,
+                    fontWeight: preset === option.value ? 700 : 500,
+                    borderRadius: 4,
+                    border: "1px solid",
+                    borderColor: preset === option.value ? "#6366f1" : "#e2e8f0",
+                    background: preset === option.value ? "#e0e7ff" : "#f8fafc",
+                    color: preset === option.value ? "#4338ca" : "#334155",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Quick Color Count Bar */}
@@ -1328,30 +1395,84 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
               <span style={{ fontWeight: 600, color: "#475569" }}>
                 {backend === "vtracer-wasm" ? "Palette max:" : "Colors:"}
               </span>
-              <div style={{ display: "flex", gap: 2 }}>
-                {[4, 8, 16, 24, 32, 48].map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => {
-                      setColors(num);
-                      setPreset("custom");
-                    }}
-                    style={{
-                      padding: "2px 5px",
-                      fontSize: 8,
-                      fontWeight: colors === num ? 700 : 500,
-                      borderRadius: 3,
-                      border: "1px solid",
-                      borderColor: colors === num ? "var(--accent, #6366f1)" : "#e2e8f0",
-                      background: colors === num ? "var(--accent, #6366f1)" : "#fff",
-                      color: colors === num ? "#fff" : "#475569",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {num}
-                  </button>
-                ))}
+              <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                {backend === "vtracer-wasm" ? (
+                  <>
+                    {[4, 8, 12, 16, 24, 32, 48].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => {
+                          setVTracerMaxColors(num);
+                          setColors(num);
+                          setVTracerUsePresetDefaults(false);
+                          setPreset("custom");
+                        }}
+                        style={{
+                          padding: "2px 5px",
+                          fontSize: 8,
+                          fontWeight: vtracerMaxColors === num ? 700 : 500,
+                          borderRadius: 3,
+                          border: "1px solid",
+                          borderColor:
+                            vtracerMaxColors === num ? "var(--accent, #6366f1)" : "#e2e8f0",
+                          background: vtracerMaxColors === num ? "var(--accent, #6366f1)" : "#fff",
+                          color: vtracerMaxColors === num ? "#fff" : "#475569",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      aria-label="VTracer no palette limit"
+                      onClick={() => {
+                        setVTracerMaxColors(null);
+                        setVTracerUsePresetDefaults(false);
+                        setPreset("custom");
+                      }}
+                      style={{
+                        padding: "2px 5px",
+                        fontSize: 8,
+                        fontWeight: vtracerMaxColors === null ? 700 : 500,
+                        borderRadius: 3,
+                        border: "1px solid",
+                        borderColor:
+                          vtracerMaxColors === null ? "var(--accent, #6366f1)" : "#e2e8f0",
+                        background: vtracerMaxColors === null ? "var(--accent, #6366f1)" : "#fff",
+                        color: vtracerMaxColors === null ? "#fff" : "#475569",
+                        cursor: "pointer",
+                      }}
+                    >
+                      No limit
+                    </button>
+                  </>
+                ) : (
+                  [4, 8, 16, 24, 32, 48].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        setColors(num);
+                        setPreset("custom");
+                      }}
+                      style={{
+                        padding: "2px 5px",
+                        fontSize: 8,
+                        fontWeight: colors === num ? 700 : 500,
+                        borderRadius: 3,
+                        border: "1px solid",
+                        borderColor: colors === num ? "var(--accent, #6366f1)" : "#e2e8f0",
+                        background: colors === num ? "var(--accent, #6366f1)" : "#fff",
+                        color: colors === num ? "#fff" : "#475569",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {num}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           )}

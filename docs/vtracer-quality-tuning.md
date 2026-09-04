@@ -13,12 +13,10 @@ quantization ที่ทำงานกับ layer colors ขณะที่�
 
 ## ค่าเริ่มต้นใหม่
 
-| ประเภทภาพ | Geometry | Region edges | Clustering | Filter side | Layer difference |
-|---|---|---|---|---:|---:|
-| High-Fidelity / Illustration | Spline | Cutout | Color cluster | 2–3 | 16 |
-| Clipart / Posterize / Silhouette | Polygon | Cutout | Color/Binary | 4 | 16 |
-| Photo Ultra | Spline | Stacked | Color cluster | 10 | 48 |
-| Line Art | Spline | Stacked | Binary | 2 | 16 |
+| VTracer Poster (Official) | Polygon | Cutout | Color cluster | 4 | 16 |
+| VTracer Photo (Official) | Spline | Stacked | Color cluster | 10 | 48 |
+| VTracer B&amp;W (Official) | Spline | Stacked | Binary | 4 | 16 |
+| Custom backend profiles | ตาม preset เดิม | ตาม preset เดิม | ArtShift Custom | ตาม preset เดิม | ไม่ใช้ |
 
 Extra curve simplification ปิดเป็นค่าเริ่มต้น เพราะ VTracer fit curve อยู่แล้ว
 และการ simplify ซ้ำอาจลบรายละเอียดเล็ก ๆ; ผู้ใช้เปิด `Compact curves` ได้เมื่อ
@@ -52,7 +50,29 @@ Extra curve simplification ปิดเป็นค่าเริ่มต้�
 โดยเฉพาะภาพจริง/ภาพถ่ายควรเริ่มจาก `Photo Ultra` หรือปรับ `Color sensitivity`
 และ `Noise filter` ตามรายละเอียดในรูป
 
-## Official references
+## Official preset research
+
+VTracer upstream มี preset เริ่มต้นจริงเพียงสามตัว: `bw`, `poster` และ `photo`.
+ชื่อ `High-Fidelity`, `Illustration`, `Clipart`, `Photo Ultra` ใน UI เดิมของ
+ArtShift เป็น wrapper profile ไม่ใช่ชื่อ preset ของ VTracer upstream.
+
+Official recipes ที่ source แนะนำ:
+
+- **Flat color / logo / poster**: เริ่มจาก `preset=poster`, ใช้
+  `mode=polygon`, `hierarchical=cutout` และตัวอย่าง upstream จำกัด palette ด้วย
+  `max_colors=8`.
+- **Photo / gradient**: เริ่มจาก `preset=photo`; ค่าหลักของ preset คือ
+  `filterSpeckle=10`, `colorPrecision=8`, `layerDifference=48`,
+  `cornerThreshold=180`, `lengthThreshold=4`, `maxIterations=10` และ
+  `spliceThreshold=45`. ใช้ `spline + stacked` และไม่เปิด `simplify` โดยไม่จำเป็น.
+- **Clean line art**: ใช้ `preset=bw` หรือ `clustering=bw` กับ fixed threshold;
+  งานสแกน/แสงไม่สม่ำเสมอใช้ Bradley–Roth `adaptive` threshold.
+- **Edge-aware regions**: `clustering=watershed` เป็น alternative region-forming
+  algorithm และ upstream ระบุว่าใช้คู่กับ `cutout` ได้ดี.
+
+จุดที่ wrapper เดิมเคยผิดจาก upstream คือบังคับ `spline + stacked`, เปิด
+`simplify` ทุกครั้ง, ไม่ส่ง `layerDifference`, และสำหรับ detail ระดับ 5 สร้าง
+`lengthThreshold=3.25` ซึ่งต่ำกว่าช่วงที่ upstream ระบุไว้ `3.5–10`.
 
 - [VTracer configuration](https://github.com/visioncortex/vtracer/blob/master/crates/vtracer/src/config.rs)
 - [VTracer Node API](https://github.com/visioncortex/vtracer/blob/master/nodejs/README.md)
