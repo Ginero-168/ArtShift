@@ -1,7 +1,4 @@
-/**
- * Public vectorizer entrypoint. Heavy pixel processing lives in vectorizer-core.ts
- * so the browser Worker bundle does not form a circular dependency.
- */
+/** Public VTracer WASM entrypoint for browser and Worker runtimes. */
 
 import { markModelFailed, markModelLoaded, markModelLoading } from "@/lib/ai/modelRegistry";
 import {
@@ -12,9 +9,7 @@ import {
   type VectorizeOptions,
   type VectorizeProgress,
   type VectorizeResult,
-  vectorizeImageData,
-} from "./vectorizer-core";
-import { getVectorizeFallbackOptions } from "./vectorizerBackend";
+} from "./vectorizerTypes";
 import { vectorizeRgbaWithVTracer } from "./vtracerRuntime";
 
 export type {
@@ -28,15 +23,13 @@ export type {
   VectorizeResult,
   VectorizeTraceMode,
   VTracerControls,
-} from "./vectorizer-core";
+} from "./vectorizerTypes";
 export {
   VECTORIZE_LIMITS,
   VECTORIZE_PRESET_CONFIGS,
   VectorizeCancelledError,
   VectorizeComplexityError,
-  vectorizeImageData,
-} from "./vectorizer-core";
-export { getVectorizeFallbackOptions } from "./vectorizerBackend";
+} from "./vectorizerTypes";
 
 async function vectorizeImageOnMainThread(
   imageDataUrl: string,
@@ -49,27 +42,24 @@ async function vectorizeImageOnMainThread(
   img.crossOrigin = "anonymous";
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve();
-    img.onerror = (e) => reject(new Error("Failed to load image for vectorization: " + e));
+    img.onerror = (error) => reject(new Error("Failed to load image for vectorization: " + error));
     img.src = imageDataUrl;
   });
   if (callbacks.signal?.aborted) throw new VectorizeCancelledError();
 
   const maxDimension = getVectorizeMaxDimension(options);
   const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.max(10, Math.round(img.naturalWidth * scale));
-  const h = Math.max(10, Math.round(img.naturalHeight * scale));
+  const width = Math.max(10, Math.round(img.naturalWidth * scale));
+  const height = Math.max(10, Math.round(img.naturalHeight * scale));
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("Could not create canvas context for vectorization");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Could not create canvas context for vectorization");
 
-  ctx.drawImage(img, 0, 0, w, h);
-  const imgData = ctx.getImageData(0, 0, w, h);
-  if (options?.backend === "vtracer-wasm") {
-    return vectorizeRgbaWithVTracer(imgData.data, w, h, targetBounds, options, callbacks);
-  }
-  return vectorizeImageData(imgData.data, w, h, targetBounds, options, callbacks);
+  context.drawImage(img, 0, 0, width, height);
+  const imageData = context.getImageData(0, 0, width, height);
+  return vectorizeRgbaWithVTracer(imageData.data, width, height, targetBounds, options, callbacks);
 }
 
 type WorkerMessage =
@@ -116,52 +106,39 @@ async function vectorizeImageInWorker(
       }
     };
     worker.onerror = (event) =>
-      finish(() => reject(new Error(event.message || "Vectorizer worker failed.")));
+      finish(() => reject(new Error(event.message || "VTracer worker failed.")));
     worker.postMessage({ imageDataUrl, targetBounds, options });
   });
 }
 
-/** Vectorizes a raster image without blocking the browser UI when Workers are available. */
+/** Vectorizes a raster image with VTracer WASM without mutating the source image. */
 export async function vectorizeImage(
   imageDataUrl: string,
   targetBounds: { x: number; y: number; width: number; height: number },
   options?: VectorizeOptions,
   callbacks: VectorizeCallbacks = {},
 ): Promise<VectorizeResult> {
-  const modelId = options?.backend === "vtracer-wasm" ? "vtracer-wasm" : "vectorizer";
+  const modelId = "vtracer-wasm";
   markModelLoading(modelId);
   if (typeof Worker !== "undefined" && typeof window !== "undefined") {
     try {
       const result = await vectorizeImageInWorker(imageDataUrl, targetBounds, options, callbacks);
       markModelLoaded(modelId);
-      return { ...result, backend: options?.backend ?? "custom" };
+      return { ...result, backend: "vtracer-wasm" };
     } catch (error) {
       if (error instanceof VectorizeCancelledError || error instanceof VectorizeComplexityError) {
         throw error;
       }
-      if (modelId === "vtracer-wasm") {
-        markModelFailed(modelId, error);
-      }
-      console.warn("Vectorizer worker unavailable; falling back to main thread.", error);
+      markModelFailed(modelId, error);
     }
   }
 
-  const fallbackOptions = getVectorizeFallbackOptions(options);
-  const fallbackBackend = fallbackOptions?.backend ?? "custom";
-  if (modelId === "vtracer-wasm") {
-    markModelLoading("vectorizer");
-  }
   try {
-    const result = await vectorizeImageOnMainThread(
-      imageDataUrl,
-      targetBounds,
-      fallbackOptions,
-      callbacks,
-    );
-    markModelLoaded(fallbackBackend === "vtracer-wasm" ? "vtracer-wasm" : "vectorizer");
-    return { ...result, backend: fallbackBackend };
+    const result = await vectorizeImageOnMainThread(imageDataUrl, targetBounds, options, callbacks);
+    markModelLoaded(modelId);
+    return { ...result, backend: "vtracer-wasm" };
   } catch (error) {
-    markModelFailed(fallbackBackend === "vtracer-wasm" ? "vtracer-wasm" : "vectorizer", error);
+    markModelFailed(modelId, error);
     throw error;
   }
 }

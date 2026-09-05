@@ -4,14 +4,14 @@ import {
   markModelLoading,
   markModelProgress,
 } from "@/lib/ai/modelRegistry";
+import { mapArtShiftOptionsToVTracer, type VTracerOptions } from "./vectorizerBackend";
 import {
   VECTORIZE_LIMITS,
   type VectorizeCallbacks,
   VectorizeComplexityError,
   type VectorizeOptions,
   type VectorizeResult,
-} from "./vectorizer-core";
-import { mapArtShiftOptionsToVTracer, type VTracerOptions } from "./vectorizerBackend";
+} from "./vectorizerTypes";
 import { parseVTracerSvgResult, VTRACER_SVG_LIMITS } from "./vtracerAdapter";
 
 export const VTRACER_WASM_JS_URL = "/wasm/vtracer/vtracer_browser.js";

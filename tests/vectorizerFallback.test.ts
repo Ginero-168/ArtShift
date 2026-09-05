@@ -1,26 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { getVectorizeFallbackOptions } from "@/lib/vectorize/vectorizer";
+import {
+  DEFAULT_VECTORIZE_BACKEND,
+  VECTORIZE_BACKEND_OPTIONS,
+} from "@/lib/vectorize/vectorizerBackend";
 
 describe("vectorizer backend fallback", () => {
-  it("falls back from VTracer to Custom while preserving user settings", () => {
-    const fallback = getVectorizeFallbackOptions({
-      backend: "vtracer-wasm",
-      preset: "illustration",
-      colors: 12,
-      detailLevel: 3,
-    });
-
-    expect(fallback).toMatchObject({
-      backend: "custom",
-      preset: "illustration",
-      colors: 12,
-      detailLevel: 3,
-    });
-  });
-
-  it("leaves the existing Custom options unchanged", () => {
-    const options = { backend: "custom" as const, preset: "clipart" as const };
-    expect(getVectorizeFallbackOptions(options)).toBe(options);
-    expect(getVectorizeFallbackOptions()).toBeUndefined();
+  it("does not expose a removed Custom fallback backend", () => {
+    expect(DEFAULT_VECTORIZE_BACKEND).toBe("vtracer-wasm");
+    expect(VECTORIZE_BACKEND_OPTIONS).toEqual([
+      {
+        value: "vtracer-wasm",
+        label: "VTracer WASM",
+        description: expect.any(String),
+      },
+    ]);
   });
 });

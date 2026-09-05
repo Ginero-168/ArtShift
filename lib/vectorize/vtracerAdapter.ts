@@ -1,6 +1,6 @@
 import type { VectorPathElement, VectorPathNode } from "@/lib/engine/types";
 import { recomputeVectorPathBounds } from "@/lib/engine/vectorPath";
-import type { VectorizeResult } from "./vectorizer-core";
+import type { VectorizeResult } from "./vectorizerTypes";
 
 export type VTracerAdapterBounds = {
   targetBounds: { x: number; y: number; width: number; height: number };

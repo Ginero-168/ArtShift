@@ -6,12 +6,10 @@ import {
 } from "@/lib/vectorize/vectorizerBackend";
 
 describe("vectorizer backend contract", () => {
-  it("keeps the existing custom engine as the default", () => {
-    expect(DEFAULT_VECTORIZE_BACKEND).toBe("custom");
-    expect(VECTORIZE_BACKEND_OPTIONS.map((option) => option.value)).toEqual([
-      "custom",
-      "vtracer-wasm",
-    ]);
+  it("exposes only the VTracer engine as the default", () => {
+    expect(DEFAULT_VECTORIZE_BACKEND).toBe("vtracer-wasm");
+    expect(VECTORIZE_BACKEND_OPTIONS.map((option) => option.value)).toEqual(["vtracer-wasm"]);
+    expect(VECTORIZE_BACKEND_OPTIONS.map((option) => option.label)).toEqual(["VTracer WASM"]);
   });
 
   it("maps the official B&W recipe without ArtShift overrides", () => {

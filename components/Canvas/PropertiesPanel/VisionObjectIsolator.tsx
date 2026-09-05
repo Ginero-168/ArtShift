@@ -86,13 +86,13 @@ type VectorizeEngineSettings = {
   vtracerSimplifyEnabled: boolean;
 };
 
-function createVectorizeEngineSettings(isVTracer = false): VectorizeEngineSettings {
+function createVectorizeEngineSettings(): VectorizeEngineSettings {
   const preset = "highFidelity" as const;
   const generic = VECTORIZE_PRESET_CONFIGS[preset];
   const native = getVTracerPresetDefaults(preset);
   return {
     preset,
-    colors: isVTracer ? (native.maxColors ?? generic.colors) : generic.colors,
+    colors: native.maxColors ?? generic.colors,
     detailLevel: generic.detailLevel,
     smoothing: generic.smoothing,
     cornerSharpness: generic.cornerSharpness,
@@ -103,8 +103,8 @@ function createVectorizeEngineSettings(isVTracer = false): VectorizeEngineSettin
     vtracerLayerDifference: native.layerDifference,
     vtracerFilterSpeckle: native.filterSpeckle,
     vtracerBinaryThreshold: native.binaryThreshold,
-    vtracerMaxColors: isVTracer ? native.maxColors : null,
-    vtracerUsePresetDefaults: isVTracer,
+    vtracerMaxColors: native.maxColors,
+    vtracerUsePresetDefaults: true,
     vtracerSimplifyEnabled: false,
   };
 }
@@ -239,23 +239,16 @@ export function VisionObjectIsolator({
   const autoRunKeyRef = useRef<string | null>(null);
   const removeBgHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const extractHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
-  // Vectorizer State — keep Custom and VTracer settings independent.
+  // VTracer settings are the single local vectorization configuration.
   const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
   const controlledToolMode = activeTool !== undefined;
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [customSettings, setCustomSettings] = useState<VectorizeEngineSettings>(() =>
+  const [vtracerSettings, setVTracerSettings] = useState<VectorizeEngineSettings>(() =>
     createVectorizeEngineSettings(),
   );
-  const [vtracerSettings, setVTracerSettings] = useState<VectorizeEngineSettings>(() =>
-    createVectorizeEngineSettings(true),
-  );
   useEffect(() => {
-    if (activeTool === "vectorize1") {
-      setBackend("custom");
-      setVectorizeOpen(true);
-      setShowAdvanced(false);
-    } else if (activeTool === "vectorize2") {
+    if (activeTool === "vectorize2") {
       setBackend("vtracer-wasm");
       setVectorizeOpen(true);
       setShowAdvanced(true);
@@ -264,11 +257,9 @@ export function VisionObjectIsolator({
       setShowAdvanced(false);
     }
   }, [activeTool, controlledToolMode]);
-  const activeSettings = backend === "custom" ? customSettings : vtracerSettings;
+  const activeSettings = vtracerSettings;
   const updateActiveSettings = (patch: Partial<VectorizeEngineSettings>) => {
-    const update = (current: VectorizeEngineSettings) => ({ ...current, ...patch });
-    if (backend === "custom") setCustomSettings(update);
-    else setVTracerSettings(update);
+    setVTracerSettings((current) => ({ ...current, ...patch }));
   };
   const preset = activeSettings.preset;
   const colors = activeSettings.colors;
@@ -374,14 +365,12 @@ export function VisionObjectIsolator({
     setVTracerLayerDifference(vtracerDefaults.layerDifference);
     setVTracerFilterSpeckle(vtracerDefaults.filterSpeckle);
     setVTracerBinaryThreshold(vtracerDefaults.binaryThreshold);
-    setVTracerMaxColors(backend === "vtracer-wasm" ? vtracerDefaults.maxColors : null);
-    setVTracerUsePresetDefaults(backend === "vtracer-wasm" && p !== "custom");
+    setVTracerMaxColors(vtracerDefaults.maxColors);
+    setVTracerUsePresetDefaults(p !== "custom");
     setVTracerSimplifyEnabled(false);
     if (p !== "custom") {
       const cfg = VECTORIZE_PRESET_CONFIGS[p];
-      setColors(
-        backend === "vtracer-wasm" ? (vtracerDefaults.maxColors ?? cfg.colors) : cfg.colors,
-      );
+      setColors(vtracerDefaults.maxColors ?? cfg.colors);
       setDetailLevel(cfg.detailLevel);
       setSmoothing(cfg.smoothing);
       setCornerSharpness(cfg.cornerSharpness);
@@ -405,7 +394,7 @@ export function VisionObjectIsolator({
   }, [element.fileId]);
 
   const handleVectorize = async (
-    customOpts?: Partial<VectorizeOptions>,
+    optionOverrides?: Partial<VectorizeOptions>,
     queuedContext?: ProcessingJobContext,
   ) => {
     const url = await getImageDataUrl();
@@ -416,13 +405,8 @@ export function VisionObjectIsolator({
 
     if (!queuedContext) {
       const job = enqueueProcessingJob({
-        preview: processingPreviewInput(
-          element,
-          "vectorize",
-          backend === "vtracer-wasm" ? "Vectorize2" : "Vectorize1",
-          url,
-        ),
-        run: (context) => handleVectorize(customOpts, context),
+        preview: processingPreviewInput(element, "vectorize", "Vectorize", url),
+        run: (context) => handleVectorize(optionOverrides, context),
       });
       processingJobIdRef.current = job.id;
       setBusy(true);
@@ -452,33 +436,25 @@ export function VisionObjectIsolator({
           backend,
           preset,
           mode: isMonochrome ? "monochrome" : "color",
-          colors:
-            isMonochrome || backend === "custom"
-              ? isMonochrome
-                ? 2
-                : colors
-              : (vtracerMaxColors ?? colors),
+          colors: isMonochrome ? 2 : (vtracerMaxColors ?? colors),
           detailLevel,
           smoothing,
           cornerSharpness,
           minArea,
-          vtracer:
-            backend === "vtracer-wasm"
-              ? {
-                  mode: vtracerMode,
-                  hierarchical: vtracerComposition,
-                  clustering: isMonochrome ? "bw" : vtracerClustering,
-                  filterSpeckle: vtracerFilterSpeckle,
-                  layerDifference: vtracerLayerDifference,
-                  binaryThreshold: vtracerBinaryThreshold,
-                  maxColors: vtracerMaxColors,
-                  usePresetDefaults: vtracerUsePresetDefaults && preset !== "custom",
-                  simplify: vtracerSimplifyEnabled
-                    ? Number(Math.max(0.5, Math.min(2.5, 0.35 + smoothing * 2)).toFixed(2))
-                    : null,
-                }
-              : undefined,
-          ...customOpts,
+          vtracer: {
+            mode: vtracerMode,
+            hierarchical: vtracerComposition,
+            clustering: isMonochrome ? "bw" : vtracerClustering,
+            filterSpeckle: vtracerFilterSpeckle,
+            layerDifference: vtracerLayerDifference,
+            binaryThreshold: vtracerBinaryThreshold,
+            maxColors: vtracerMaxColors,
+            usePresetDefaults: vtracerUsePresetDefaults && preset !== "custom",
+            simplify: vtracerSimplifyEnabled
+              ? Number(Math.max(0.5, Math.min(2.5, 0.35 + smoothing * 2)).toFixed(2))
+              : null,
+          },
+          ...optionOverrides,
         },
         {
           signal,
@@ -510,16 +486,14 @@ export function VisionObjectIsolator({
         setStatusMessage("No distinct vector paths detected");
         report("complete", "ไม่พบเส้น Vector ที่แยกได้", "fallback", 100);
       } else {
-        const usedBackend = res.backend ?? backend;
-        const usedFallback = backend === "vtracer-wasm" && usedBackend === "custom";
         addElements(res.elements, "vectorize image to paths");
         selectOnly(res.elements.map((el) => el.id));
         setStatusMessage(
-          `${usedBackend === "vtracer-wasm" ? "VTracer traced" : "Traced"} ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!${usedFallback ? " VTracer unavailable; Custom fallback used." : ""}`,
+          `VTracer traced ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!`,
         );
         report(
           "complete",
-          `${usedBackend === "vtracer-wasm" ? "VTracer WASM สร้าง" : "สร้าง"} Vector สำเร็จ ${res.elements.length} Layers${usedFallback ? " (ใช้ Custom fallback)" : ""}`,
+          `VTracer WASM สร้าง Vector สำเร็จ ${res.elements.length} Layers`,
           "success",
           100,
         );
@@ -1198,43 +1172,14 @@ export function VisionObjectIsolator({
         </button>
       </div>
 
-      {/* Row 2: Separate vectorizer actions */}
       <div style={{ display: controlledToolMode ? "none" : "flex", gap: 4, marginTop: 4 }}>
         <button
           type="button"
           disabled={busy}
-          aria-pressed={backend === "custom" && vectorizeOpen}
-          aria-label="Vectorize1"
-          onClick={() => toggleVectorizeSettings("custom")}
-          title="Open Vectorize1 settings · ArtShift Custom Auto-Trace"
-          data-vectorizer="vectorize1"
-          style={{
-            flex: 1,
-            padding: "6px 5px",
-            background: backend === "custom" && vectorizeOpen ? "#0f172a" : "#fff",
-            color: backend === "custom" && vectorizeOpen ? "#fff" : "var(--accent, #6366f1)",
-            border: "1px solid rgba(99, 102, 241, 0.3)",
-            borderRadius: 5,
-            fontWeight: 600,
-            fontSize: 9.5,
-            cursor: busy ? "wait" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 3,
-            whiteSpace: "nowrap",
-          }}
-        >
-          <span>✦</span>
-          <span>Vectorize1</span>
-        </button>
-        <button
-          type="button"
-          disabled={busy}
           aria-pressed={backend === "vtracer-wasm" && vectorizeOpen}
-          aria-label="Vectorize2"
+          aria-label="Vectorize"
           onClick={() => toggleVectorizeSettings("vtracer-wasm")}
-          title="Open Vectorize2 settings · VTracer WASM"
+          title="Open Vectorize settings · VTracer WASM"
           data-vectorizer="vectorize2"
           style={{
             flex: 1,
@@ -1254,7 +1199,7 @@ export function VisionObjectIsolator({
           }}
         >
           <span>◇</span>
-          <span>Vectorize2</span>
+          <span>Vectorize</span>
         </button>
       </div>
       <div style={{ display: controlledToolMode ? "none" : "flex", gap: 4, marginTop: 4 }}>
@@ -1384,20 +1329,15 @@ export function VisionObjectIsolator({
       {vectorizeOpen && (
         <div
           data-testid={
-            !controlledToolMode || activeTool === "vectorize1" || activeTool === "vectorize2"
-              ? "image-tool-settings"
-              : undefined
+            !controlledToolMode || activeTool === "vectorize2" ? "image-tool-settings" : undefined
           }
           data-tool={
-            !controlledToolMode || activeTool === "vectorize1" || activeTool === "vectorize2"
-              ? (activeTool ?? (backend === "custom" ? "vectorize1" : "vectorize2"))
+            !controlledToolMode || activeTool === "vectorize2"
+              ? (activeTool ?? "vectorize2")
               : undefined
           }
           style={{
-            display:
-              controlledToolMode && activeTool !== "vectorize1" && activeTool !== "vectorize2"
-                ? "none"
-                : undefined,
+            display: controlledToolMode && activeTool !== "vectorize2" ? "none" : undefined,
             marginTop: 6,
             padding: 8,
             background: "#fff",
@@ -1414,12 +1354,10 @@ export function VisionObjectIsolator({
             }}
           >
             <strong style={{ display: "block", color: "#1e1b4b", fontSize: 10 }}>
-              {backend === "vtracer-wasm" ? "VTracer WASM Settings" : "ArtShift Custom Settings"}
+              VTracer WASM Settings
             </strong>
             <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
-              {backend === "vtracer-wasm"
-                ? "Local Rust/WASM trace with independent native controls"
-                : "Original ArtShift auto-trace with editable path controls"}
+              Local Rust/WASM trace with independent native controls
             </span>
           </div>
 
@@ -1989,13 +1927,7 @@ export function VisionObjectIsolator({
               }}
             >
               <span>⚡</span>
-              <span>
-                {busy
-                  ? "Tracing Vector..."
-                  : backend === "vtracer-wasm"
-                    ? "Generate VTracer Paths"
-                    : "Generate Custom Paths"}
-              </span>
+              <span>{busy ? "Tracing Vector..." : "Generate VTracer Paths"}</span>
             </button>
             {processingJobIdRef.current && (
               <button

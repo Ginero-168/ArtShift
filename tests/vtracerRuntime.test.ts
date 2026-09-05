@@ -19,7 +19,8 @@ describe("VTracer backend wiring", () => {
     expect(runtimeSource).toContain('"/wasm/vtracer/vtracer_browser.js"');
     expect(runtimeSource).toContain('"/wasm/vtracer/vtracer_browser_bg.wasm"');
     expect(runtimeSource).toContain("webpackIgnore");
-    expect(workerSource).toContain('options?.backend === "vtracer-wasm"');
+    expect(workerSource).toContain("vectorizeRgbaWithVTracer");
+    expect(workerSource).not.toContain("vectorizeImageData");
     expect(runtimeSource).not.toContain("@visioncortex/vtracer");
   });
 

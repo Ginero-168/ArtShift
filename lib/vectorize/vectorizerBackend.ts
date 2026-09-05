@@ -5,9 +5,9 @@ import {
   type VectorizeOptions,
   type VectorizePreset,
   type VectorizeTraceMode,
-} from "./vectorizer-core";
+} from "./vectorizerTypes";
 
-export type VectorizeBackend = "custom" | "vtracer-wasm";
+export type VectorizeBackend = "vtracer-wasm";
 
 export type VTracerOptions = {
   preset?: "bw" | "poster" | "photo";
@@ -193,18 +193,13 @@ const VTRACER_GENERIC_DEFAULTS: VTracerPresetDefaults = {
   optimize: 1,
 };
 
-export const DEFAULT_VECTORIZE_BACKEND: VectorizeBackend = "custom";
+export const DEFAULT_VECTORIZE_BACKEND: VectorizeBackend = "vtracer-wasm";
 
 export const VECTORIZE_BACKEND_OPTIONS: readonly {
   value: VectorizeBackend;
   label: string;
   description: string;
 }[] = [
-  {
-    value: "custom",
-    label: "ArtShift Custom",
-    description: "ตัวเดิมของ ArtShift — editable paths โดยตรง",
-  },
   {
     value: "vtracer-wasm",
     label: "VTracer WASM",
@@ -213,20 +208,12 @@ export const VECTORIZE_BACKEND_OPTIONS: readonly {
 ];
 
 export function isVectorizeBackend(value: unknown): value is VectorizeBackend {
-  return value === "custom" || value === "vtracer-wasm";
-}
-
-/** Keep the user's tracing settings while switching a failed VTracer job to Custom. */
-export function getVectorizeFallbackOptions(
-  options?: VectorizeOptions,
-): VectorizeOptions | undefined {
-  if (options?.backend !== "vtracer-wasm") return options;
-  return { ...options, backend: "custom" };
+  return value === "vtracer-wasm";
 }
 
 export function getVectorizeBackendLabel(backend: VectorizeBackend): string {
   return (
-    VECTORIZE_BACKEND_OPTIONS.find((option) => option.value === backend)?.label ?? "ArtShift Custom"
+    VECTORIZE_BACKEND_OPTIONS.find((option) => option.value === backend)?.label ?? "VTracer WASM"
   );
 }
 
