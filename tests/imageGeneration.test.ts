@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ASPECT_RATIOS, cleanImagePrompt, generateAIImage } from "@/lib/ai/pollinations";
+import { ASPECT_RATIOS, cleanImagePrompt, generateAIImage } from "@/lib/ai/imageGeneration";
 
-describe("Pollinations.ai Text-to-Image Service", () => {
+describe("GPT Image 2 generation client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -53,14 +53,14 @@ describe("Pollinations.ai Text-to-Image Service", () => {
 
     const result = await generateAIImage({
       prompt: "test prompt",
-      model: "flux",
+      aspectRatio: "1:1",
       seed: 999,
     });
 
     expect(result).toBeDefined();
     expect(result.dataUrl).toBe(mockDataUrl);
     expect(result.seed).toBe(999);
-    expect(result.model).toBe("flux");
+    expect(result.model).toBe("openai/gpt-image-2");
     expect(result.fileId).toBeDefined();
     expect(fetch).toHaveBeenCalledWith(
       "/api/ai/image",
@@ -84,7 +84,7 @@ describe("Pollinations.ai Text-to-Image Service", () => {
   });
 
   it("enriches Thai prompts into detailed English visual prompts", async () => {
-    const { enrichPrompt } = await import("@/lib/ai/pollinations");
+    const { enrichPrompt } = await import("@/lib/ai/imageGeneration");
     const result = enrichPrompt("สร้างรูปแมวให้หน่อย");
     expect(result).toContain("cat");
     expect(result.length).toBeGreaterThan("แมว".length);

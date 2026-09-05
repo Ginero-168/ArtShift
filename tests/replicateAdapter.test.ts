@@ -136,6 +136,153 @@ describe("Replicate AI adapter", () => {
     expect(result.output).toEqual({ prompt: "A refined design prompt" });
   });
 
+  it("generates a low-quality GPT Image 2 file through Replicate", async () => {
+    const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-image-1",
+            model: "openai/gpt-image-2",
+            status: "succeeded",
+            output: ["https://replicate.delivery/image.webp"],
+            metrics: { predict_time: 12.4, image_output_count: 1 },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(imageBytes, { status: 200, headers: { "Content-Type": "image/webp" } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "image.generate",
+      input: {
+        prompt: "A warm editorial portrait of a cat",
+        width: 1024,
+        height: 1024,
+        aspectRatio: "1:1",
+      },
+      model: "openai/gpt-image-2",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toMatchObject({
+      dataUrl: `data:image/webp;base64,${Buffer.from(imageBytes).toString("base64")}`,
+      prompt: "A warm editorial portrait of a cat",
+      width: 1024,
+      height: 1024,
+    });
+    expect(result).toMatchObject({
+      model: "openai/gpt-image-2",
+      requestId: "prediction-image-1",
+      usage: { providerSeconds: 12.4 },
+    });
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.input).toEqual({
+      prompt: "A warm editorial portrait of a cat",
+      quality: "low",
+      aspect_ratio: "1:1",
+      number_of_images: 1,
+      output_format: "webp",
+      output_compression: 90,
+      background: "opaque",
+      moderation: "auto",
+    });
+    expect(body.input).not.toHaveProperty("openai_api_key");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://replicate.delivery/image.webp",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("rejects an image output URL outside Replicate delivery storage", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "prediction-image-unsafe",
+            status: "succeeded",
+            output: ["https://example.com/unsafe.webp"],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "image.generate",
+        input: { prompt: "a cat", width: 1024, height: 1024 },
+        model: "openai/gpt-image-2",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "PROVIDER_SCHEMA" });
+  });
+
+  it("rejects an oversized generated image before importing it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-image-large",
+            status: "succeeded",
+            output: ["https://replicate.delivery/large.webp"],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response("not-read", {
+          status: 200,
+          headers: {
+            "Content-Type": "image/webp",
+            "Content-Length": String(20 * 1024 * 1024 + 1),
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "image.generate",
+        input: { prompt: "a cat", width: 1024, height: 1024 },
+        model: "openai/gpt-image-2",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "PROVIDER_SCHEMA" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("redacts raw Replicate error bodies for image generation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("provider-internal-detail", { status: 401 })),
+    );
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "image.generate",
+        input: { prompt: "a cat", width: 1024, height: 1024 },
+        model: "openai/gpt-image-2",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
+      code: "PROVIDER_AUTH",
+      message: "Replicate rejected this request.",
+    });
+  });
+
   it("vectorizes a raster input with Recraft and validates the returned SVG file", async () => {
     const svg = '<svg viewBox="0 0 256 256"><path fill="#ff0000" d="M0 0h256v256H0z"/></svg>';
     const fetchMock = vi

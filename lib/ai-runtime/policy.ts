@@ -21,7 +21,7 @@ export const AI_TASK_POLICIES: Record<AiTaskKind, AiTaskPolicy> = {
   "vision.ocr": { locality: "cloud-opt-in", cacheable: true, recordsContent: false },
   "vectorize.recraft": { locality: "cloud-opt-in", cacheable: false, recordsContent: false },
   "prompt.enhance": { locality: "cloud-opt-in", cacheable: true, recordsContent: false },
-  "image.generate": { locality: "cloud-required", cacheable: false, recordsContent: false },
+  "image.generate": { locality: "cloud-opt-in", cacheable: false, recordsContent: false },
 };
 
 export function assertAiTaskPolicy(task: AiTaskKind, options: AiExecutionOptions): void {

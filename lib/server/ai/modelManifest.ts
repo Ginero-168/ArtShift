@@ -7,6 +7,7 @@ const DEFAULT_REPLICATE_GPT4O_MINI_VERSION =
   "7a6099b47d623cc4a5c75037ab4616059a7066dec31fdbe409d671bddf7681d";
 const DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION =
   "e27b7b83f67f5865920667591a2a08a41cdc82906bd29306fe79581ab0646b8b";
+const REPLICATE_GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 
 export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>> = {
   "assistant.chat": "economy",
@@ -34,6 +35,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
   const replicateRecraft = withVersion(
     environment.REPLICATE_RECRAFT_VECTORIZE_MODEL || "recraft-ai/recraft-vectorize",
     environment.REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION,
+  );
+  const replicateGptImage2 = withVersion(
+    REPLICATE_GPT_IMAGE_2_MODEL,
+    environment.REPLICATE_GPT_IMAGE_2_VERSION,
   );
 
   const visionEconomy: AiRouteTarget[] = [
@@ -113,20 +118,20 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     },
 
     "image.generate": {
-      economy: [
-        imageRoute(environment.POLLINATIONS_MODEL_PRIMARY || "flux", "image-primary"),
-        imageRoute(environment.POLLINATIONS_MODEL_REALISM || "flux", "image-realism"),
-        imageRoute(environment.POLLINATIONS_MODEL_ANIME || "flux", "image-anime"),
-        imageRoute(environment.POLLINATIONS_MODEL_3D || "flux", "image-3d"),
-        imageRoute(environment.POLLINATIONS_MODEL_FAST || "turbo", "image-fast"),
-      ],
-      quality: [imageRoute(environment.POLLINATIONS_MODEL_PRIMARY || "flux", "image-primary")],
+      economy: [imageGptRoute(replicateGptImage2)],
+      quality: [imageGptRoute(replicateGptImage2)],
     },
   };
 }
 
-function imageRoute(model: string, alias: string): AiRouteTarget {
-  return { provider: "pollinations", model, alias };
+function imageGptRoute(model: string): AiRouteTarget {
+  return {
+    provider: "replicate",
+    model,
+    alias: "image-gpt-2-low",
+    expectedMaxUsd: 0.012,
+    pricing: { currency: "USD", perRunUsd: 0.012 },
+  };
 }
 
 function withVersion(model: string, version: string | undefined): string {

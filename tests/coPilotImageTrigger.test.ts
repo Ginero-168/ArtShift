@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateImageMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/ai/pollinations", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/ai/pollinations")>();
+vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/imageGeneration")>();
   return { ...actual, generateAIImage: generateImageMock };
 });
 
@@ -21,7 +21,7 @@ describe("AI Co-Pilot image commands", () => {
       width: 1024,
       height: 1024,
       seed: 1,
-      model: "flux",
+      model: "openai/gpt-image-2",
       prompt: "แมว",
     });
 

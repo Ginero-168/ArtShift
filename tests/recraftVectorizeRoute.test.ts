@@ -30,7 +30,7 @@ describe("Recraft vectorize API", () => {
     const body = {
       task: "vectorize.recraft",
       input: { image: { dataUrl: "data:image/png;base64,AAAA" }, width: 256, height: 256 },
-      options: { cloudConsent: true, provider: "pollinations", allowFallback: true },
+      options: { cloudConsent: true, provider: "openai", allowFallback: true },
     };
     const response = await POST(request(body));
 

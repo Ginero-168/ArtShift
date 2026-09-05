@@ -35,7 +35,7 @@ export default function AICoPilotBar() {
       id: "initial-msg",
       role: "assistant",
       content:
-        "สวัสดีครับ! ผมคือ AI Assistance ของคุณ พร้อมช่วยสร้างรูป (FLUX), ลบพื้นหลัง, แปลง Vector, คิดพาดหัว และจัด Layout 60-30-10 สั่งการได้เลยครับ ✨",
+        "สวัสดีครับ! ผมคือ AI Assistance ของคุณ พร้อมช่วยสร้างรูปด้วย GPT Image 2 ผ่าน Replicate (คุณภาพ low), ลบพื้นหลัง, แปลง Vector, คิดพาดหัว และจัด Layout 60-30-10 สั่งการได้เลยครับ ✨",
       timestamp: Date.now(),
       suggestions: [
         "🎨 สร้างรูปแก้วกาแฟมินิมอล",

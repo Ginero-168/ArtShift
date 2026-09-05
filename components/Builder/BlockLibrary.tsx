@@ -85,7 +85,10 @@ export default function BlockLibrary() {
     );
   }, [query]);
   const showAiImageStudio =
-    !query.trim() || "ai image studio prompt to image flux".includes(query.trim().toLowerCase());
+    !query.trim() ||
+    "ai image studio prompt to image gpt image 2 replicate low".includes(
+      query.trim().toLowerCase(),
+    );
 
   function toggleCategory(category: string) {
     setCollapsedCategories((prev) => ({
@@ -217,7 +220,7 @@ export default function BlockLibrary() {
                         type="button"
                         className={`${styles.blockCard} ${styles.aiImageBlock}`}
                         onClick={() => useEngine.getState().setAiImageModalOpen(true)}
-                        title="AI Image Studio · Prompt to Image (FLUX)"
+                        title="AI Image Studio · Replicate GPT Image 2 (low)"
                         aria-label="AI Image Studio"
                       >
                         <span className={styles.glyph} aria-hidden="true">

@@ -75,16 +75,28 @@ describe("AI model manifest", () => {
     expect(serialized).not.toContain("https://");
   });
 
-  it("maps UI image presets to allowlisted server aliases", () => {
-    const aliases = createAiRouteTable({})["image.generate"]?.economy?.map(
-      (target) => target.alias,
-    );
-    expect(aliases).toEqual([
-      "image-primary",
-      "image-realism",
-      "image-anime",
-      "image-3d",
-      "image-fast",
-    ]);
+  it("routes every image generation request to Replicate GPT Image 2 low", () => {
+    const routes = createAiRouteTable({});
+    const expected = {
+      provider: "replicate",
+      model: "openai/gpt-image-2",
+      alias: "image-gpt-2-low",
+      expectedMaxUsd: 0.012,
+      pricing: { currency: "USD", perRunUsd: 0.012 },
+    };
+
+    expect(routes["image.generate"]?.economy).toEqual([expected]);
+    expect(routes["image.generate"]?.quality).toEqual([expected]);
+  });
+
+  it("allows only a server-side GPT Image 2 version pin", () => {
+    const version = "f".repeat(64);
+    const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_2_VERSION: version });
+
+    expect(routes["image.generate"]?.economy?.[0]).toMatchObject({
+      provider: "replicate",
+      model: `openai/gpt-image-2@${version}`,
+      alias: "image-gpt-2-low",
+    });
   });
 });

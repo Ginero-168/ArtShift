@@ -1,6 +1,7 @@
 import type {
   AiAssistantChatInput,
   AiAssistantChatOutput,
+  AiImageGenerateInput,
   AiPromptEnhanceInput,
   AiProviderStatus,
   AiTaskKind,
@@ -24,16 +25,20 @@ const SUPPORTED_TASKS: AiTaskKind[] = [
   "vision.ocr",
   "vectorize.recraft",
   "prompt.enhance",
+  "image.generate",
 ];
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
 const CHAT_MODEL = "openai/gpt-oss-20b";
 const CHAT_QUALITY_MODEL = "openai/gpt-oss-120b";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
+const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 const MAX_CHAT_OUTPUT_TOKENS = 4_096;
 const MAX_RECRAFT_INPUT_BYTES = 5 * 1024 * 1024;
 const MAX_RECRAFT_PIXELS = 16_000_000;
 const MAX_RECRAFT_SVG_CHARS = 4_000_000;
+const MAX_GENERATED_IMAGE_BYTES = 20 * 1024 * 1024;
+const GENERATED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 type ReplicatePrediction = {
   id?: string;
@@ -98,6 +103,12 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           alias: "recraft-vectorize",
           profile: "quality",
         },
+        {
+          id: GPT_IMAGE_2_MODEL,
+          alias: "image-gpt-2-low",
+          profile: "economy",
+          pricing: { currency: "USD", perRunUsd: 0.012 },
+        },
       ],
       message: this.apiToken
         ? undefined
@@ -135,6 +146,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (request.task === "prompt.enhance") {
       return (await this.enhancePrompt(
         request as AiProviderRequest<"prompt.enhance">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
+    }
+    if (request.task === "image.generate") {
+      return (await this.generateImage(
+        request as AiProviderRequest<"image.generate">,
       )) as AiProviderResult<AiTaskOutput<K>>;
     }
     const input = request.input as AiVisionInput;
@@ -265,6 +281,67 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     };
   }
 
+  private async generateImage(
+    request: AiProviderRequest<"image.generate">,
+  ): Promise<AiProviderResult<AiTaskOutput<"image.generate">>> {
+    const input = request.input as AiImageGenerateInput;
+    const model = parseReplicateModel(request.model);
+    if (model.slug !== GPT_IMAGE_2_MODEL) {
+      throw new AiRuntimeError("INVALID_INPUT", "Unsupported Replicate image generation model.", {
+        provider: this.id,
+      });
+    }
+
+    const prediction = await this.createPrediction(
+      model,
+      {
+        prompt: input.prompt,
+        quality: "low",
+        aspect_ratio: input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
+        number_of_images: 1,
+        output_format: "webp",
+        output_compression: 90,
+        background: "opaque",
+        moderation: "auto",
+      },
+      request.signal,
+      true,
+    );
+    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    const outputUrl = extractFileUrl(completed.output);
+    if (!outputUrl) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no generated image file.", {
+        provider: this.id,
+      });
+    }
+    const dataUrl = await fetchGeneratedImage(outputUrl, request.signal);
+    const metrics = completed.metrics ?? {};
+    return {
+      output: {
+        dataUrl,
+        prompt: input.prompt,
+        width: input.width,
+        height: input.height,
+        seed: input.seed ?? 0,
+      },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings:
+        input.seed === undefined
+          ? []
+          : [
+              "GPT Image 2 does not expose deterministic seed control; the seed was not sent upstream.",
+            ],
+    };
+  }
+
   private async vectorizeWithRecraft(
     request: AiProviderRequest<"vectorize.recraft">,
   ): Promise<AiProviderResult<AiTaskOutput<"vectorize.recraft">>> {
@@ -386,8 +463,135 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
 
 function extractFileUrl(output: unknown): string | undefined {
   if (typeof output === "string") return output;
-  if (Array.isArray(output) && typeof output[0] === "string") return output[0];
+  if (Array.isArray(output)) {
+    const first = output[0];
+    if (typeof first === "string") return first;
+    if (
+      first &&
+      typeof first === "object" &&
+      typeof (first as { url?: unknown }).url === "string"
+    ) {
+      return (first as { url: string }).url;
+    }
+  }
+  if (
+    output &&
+    typeof output === "object" &&
+    typeof (output as { url?: unknown }).url === "string"
+  ) {
+    return (output as { url: string }).url;
+  }
   return undefined;
+}
+
+function aspectRatioFromDimensions(width: number, height: number): "1:1" | "3:2" | "2:3" {
+  const ratio = width / height;
+  if (Math.abs(ratio - 1) < 0.08) return "1:1";
+  return ratio > 1 ? "3:2" : "2:3";
+}
+
+async function fetchGeneratedImage(outputUrl: string, signal: AbortSignal): Promise<string> {
+  let parsed: URL;
+  try {
+    parsed = new URL(outputUrl);
+  } catch {
+    throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an invalid image URL.", {
+      provider: "replicate",
+    });
+  }
+  const isReplicateDelivery =
+    parsed.protocol === "https:" &&
+    (parsed.hostname === "replicate.delivery" || parsed.hostname.endsWith(".replicate.delivery"));
+  if (!isReplicateDelivery) {
+    throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an unsupported image URL.", {
+      provider: "replicate",
+    });
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(parsed.toString(), {
+      headers: { Accept: "image/webp, image/png, image/jpeg" },
+      redirect: "manual",
+      signal,
+    });
+  } catch (error) {
+    if (signal.aborted) throw signal.reason;
+    throw new AiRuntimeError("PROVIDER_UNAVAILABLE", "Replicate image output is unavailable.", {
+      provider: "replicate",
+      cause: error,
+    });
+  }
+  if (!response.ok || response.status >= 300) {
+    throw new AiRuntimeError("PROVIDER_UNAVAILABLE", "Replicate image output is unavailable.", {
+      provider: "replicate",
+    });
+  }
+
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_GENERATED_IMAGE_BYTES) {
+    throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an oversized image.", {
+      provider: "replicate",
+    });
+  }
+  const rawContentType = response.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  const mimeType = rawContentType || "image/webp";
+  if (!GENERATED_IMAGE_MIME_TYPES.has(mimeType)) {
+    throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned a non-image output.", {
+      provider: "replicate",
+    });
+  }
+  const bytes = await readBoundedBytes(response, MAX_GENERATED_IMAGE_BYTES);
+  if (bytes.byteLength === 0) {
+    throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an invalid image output.", {
+      provider: "replicate",
+    });
+  }
+  return `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`;
+}
+
+async function readBoundedBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an oversized image.", {
+        provider: "replicate",
+      });
+    }
+    return bytes;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      total += result.value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an oversized image.", {
+          provider: "replicate",
+        });
+      }
+      chunks.push(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 function assertRecraftImageDataUrl(dataUrl: string): void {

@@ -56,7 +56,7 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `ANTHROPIC_API_KEY` | Optional Anthropic provider adapter |
 | `GEMINI_API_KEY` | Optional direct Google provider adapter |
 | `OPENAI_API_KEY` | Optional direct OpenAI provider adapter |
-| `POLLINATIONS_API_KEY` | AI Image Studio generation |
+| `REPLICATE_GPT_IMAGE_2_VERSION` | Optional pinned version for the fixed GPT Image 2 model |
 | `AI_MONTHLY_BUDGET_USD` | Optional monthly AI budget guard |
 | `UNSPLASH_ACCESS_KEY` | Stock photos |
 | `PEXELS_API_KEY` | Stock photos |

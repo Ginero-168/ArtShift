@@ -26,8 +26,8 @@ const imageExecution = {
     seed: 42,
   },
   metadata: {
-    provider: "pollinations",
-    model: "flux",
+    provider: "replicate",
+    model: "openai/gpt-image-2",
     usage: {},
     warnings: [],
   },
@@ -41,7 +41,13 @@ describe("AI image generation API", () => {
 
   it("honors enhance=false without calling the prompt task", async () => {
     const response = await POST(
-      request({ prompt: "แมวสีส้ม", enhance: false, width: 512, height: 512 }),
+      request({
+        prompt: "แมวสีส้ม",
+        model: "flux-realism",
+        enhance: false,
+        width: 512,
+        height: 512,
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -49,8 +55,14 @@ describe("AI image generation API", () => {
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "image.generate",
       expect.objectContaining({ prompt: "แมวสีส้ม", width: 512, height: 512 }),
-      expect.objectContaining({ allowFallback: false }),
+      expect.objectContaining({
+        provider: "replicate",
+        modelAlias: "image-gpt-2-low",
+        cloudConsent: true,
+        allowFallback: false,
+      }),
     );
+    expect(runtimeMock.execute.mock.calls[0]?.[1]).not.toHaveProperty("model");
   });
 
   it("routes prompt enhancement and image generation through the AI Runtime", async () => {

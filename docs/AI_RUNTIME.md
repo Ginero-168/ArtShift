@@ -21,7 +21,7 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 | Vision describe/propose/OCR | Cloud opt-in; `cloudConsent: true` is required |
 | Recraft Vectorize | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
-| Image generation | Cloud required after an explicit Generate action |
+| Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with fixed `quality: "low"` |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
 | Pixel mask | Local-only; no server task exists |
 
@@ -84,6 +84,18 @@ the ArtShift adapter validates it before the single `addElements` mutation. If
 the VTracer Worker/runtime fails, the orchestration layer switches to Custom
 instead of running synchronous VTracer on the main thread and reports that
 fallback in the UI.
+
+`Image generation` is a cloud-opt-in task. The server ignores browser model/provider
+choices and routes the request through the authenticated user's Replicate BYOK
+credential to the fixed official model `openai/gpt-image-2`. The adapter always sends
+`quality: "low"`, `number_of_images: 1`, `output_format: "webp"`, `background: "opaque"`,
+and `moderation: "auto"`; the low-quality price shown on the official model page is
+$0.012 per output image. GPT Image 2 does not expose a deterministic seed control, so
+ArtShift accepts the legacy field for compatibility but never forwards it upstream.
+The prediction output is fetched server-side only from an HTTPS `replicate.delivery`
+host, bounded, validated as an image, and converted to a data URL before it reaches
+the browser. No Replicate token or provider URL is sent to client code, and there is
+no Pollinations or paid fallback route for image generation.
 
 The VTracer binary is built from `wasm/vtracer-browser/` with:
 

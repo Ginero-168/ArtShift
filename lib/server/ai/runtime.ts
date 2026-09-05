@@ -3,7 +3,6 @@ import { InMemoryAiUsageLedger } from "@/lib/ai-runtime/usage";
 import { AnthropicAiAdapter } from "./adapters/anthropicAdapter";
 import { GoogleAiAdapter } from "./adapters/googleAdapter";
 import { OpenAiAdapter } from "./adapters/openaiAdapter";
-import { PollinationsAiAdapter } from "./adapters/pollinationsAdapter";
 import { ReplicateAiAdapter } from "./adapters/replicateAdapter";
 import { AI_DEFAULT_PROFILES, createAiRouteTable } from "./modelManifest";
 
@@ -22,7 +21,6 @@ export function createServerAiRuntime(credentials: ServerAiCredentials = {}): Ro
       new ReplicateAiAdapter(credentials.replicateToken),
       new GoogleAiAdapter(),
       new OpenAiAdapter(),
-      new PollinationsAiAdapter(),
     ],
     routes: createAiRouteTable(),
     defaultProfiles: AI_DEFAULT_PROFILES,

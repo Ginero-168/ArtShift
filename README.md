@@ -60,17 +60,16 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 | `ANTHROPIC_MODEL` | no | `claude-sonnet-4-5` |
 | `REPLICATE_GPT4O_MINI_VERSION` | no | Pinned economy Vision wrapper version |
 | `REPLICATE_GEMINI_3_FLASH_VERSION` | no | Pinned quality Vision wrapper version |
+| `REPLICATE_GPT_IMAGE_2_VERSION` | no | Optional pinned version for GPT Image 2; model is fixed to `openai/gpt-image-2` |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | no | Optional direct Google adapter |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | no | Optional direct OpenAI adapter |
-| `POLLINATIONS_API_KEY` | no | AI Image Studio generation adapter |
-| `POLLINATIONS_MODEL_*` | no | Server-owned mapping from stable image presets to provider models |
 | `AI_MONTHLY_BUDGET_USD` | no | Server-side estimated monthly budget guard |
 | `UNSPLASH_ACCESS_KEY` | no | Stock photos |
 | `PEXELS_API_KEY` | no | Stock photos |
 | `RASTER_API_URL` | no | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | no | Bearer token for the optional raster provider |
 
-Google Login is the primary account path. ArtShift exposes one **AI Assistance** chat: deterministic edits run locally first, specialized tools use the local asset path, and complex design requests are routed automatically to Design Agent. Replicate Chat, Design Agent and Replicate-backed Vision use the user's own key from **AI Provider Settings**. The key is verified over HTTPS, encrypted at rest with `ARTSHIFT_CREDENTIAL_ENCRYPTION_KEY`, and decrypted only for a request. Google access tokens are not stored. If no key is configured, local features continue to work and cloud AI returns a clear setup message.
+Google Login is the primary account path. ArtShift exposes one **AI Assistance** chat: deterministic edits run locally first, specialized tools use the local asset path, and complex design requests are routed automatically to Design Agent. Replicate Chat, Design Agent, Replicate-backed Vision และ GPT Image 2 generation use the user's own key from **AI Provider Settings**. The key is verified over HTTPS, encrypted at rest with `ARTSHIFT_CREDENTIAL_ENCRYPTION_KEY`, and decrypted only for a request. Google access tokens are not stored. If no key is configured, local features continue to work and cloud AI returns a clear setup message.
 
 Provider integration, consent, fallback and cost rules are documented in [docs/AI_RUNTIME.md](docs/AI_RUNTIME.md).
 

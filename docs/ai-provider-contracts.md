@@ -1,7 +1,7 @@
-# AI Provider Contracts for ArtShift
+# ArtShift AI Provider Contracts
 
-ตรวจสอบเมื่อ: 24 สิงหาคม 2026
-ขอบเขต: ใช้เฉพาะเอกสารทางการของ Replicate, Anthropic, Google และ Pollinations เพื่อกำหนด contract สำหรับ provider adapters ของ ArtShift
+ตรวจสอบเมื่อ: 5 กันยายน 2026
+ขอบเขต: ใช้เฉพาะเอกสารทางการของ Replicate, Anthropic และ Google เพื่อกำหนด contract สำหรับ provider adapters ของ ArtShift
 
 ## ข้อสรุปสำหรับการออกแบบ
 
@@ -16,7 +16,7 @@
 ```ts
 interface ProviderExecution<T> {
   output: T;
-  provider: "replicate" | "anthropic" | "google" | "pollinations";
+  provider: "replicate" | "anthropic" | "google";
   model: string;
   requestId?: string;
   finishReason?: string;
@@ -284,77 +284,48 @@ interface GeminiUsageMetadata {
 
 Google ระบุปัจจุบันว่า Interactions API เป็น primitive ที่แนะนำสำหรับงาน agentic ขณะที่ `generateContent` ยังเป็น standard endpoint สำหรับงาน non-interactive ดังนั้น endpoint นี้ยังใช้งานได้ แต่ทิศทางของ platform, model IDs, preview models, `modelStatus` และรายละเอียด generation/tool fields เป็น **evolving/unstable** ควรถูกกักไว้ใน Google adapter [Gemini API reference](https://ai.google.dev/api), [Migrate to Interactions](https://ai.google.dev/gemini-api/docs/migrate-to-interactions)
 
-## Pollinations Image API
+## Replicate GPT Image 2
 
-มีเอกสารทางการปัจจุบัน โดย base URL ใหม่คือ `https://gen.pollinations.ai` และใช้ Bearer API key สำหรับ server calls [Official API docs](https://github.com/pollinations/pollinations/blob/main/APIDOCS.md), [Official repository](https://github.com/pollinations/pollinations)
-
-### Contract ที่แนะนำสำหรับ ArtShift
-
-ควรใช้ JSON endpoint แทนการประกอบ URL ของ endpoint รุ่นเก่า:
+ArtShift's `image.generate` task uses the official Replicate model
+`openai/gpt-image-2`. The model page documents text-to-image and image-editing
+workflows and the following generation inputs:
 
 ```http
-POST https://gen.pollinations.ai/v1/images/generations
-Authorization: Bearer $POLLINATIONS_API_KEY
+POST https://api.replicate.com/v1/models/openai/gpt-image-2/predictions
+Authorization: Bearer [REDACTED]
 Content-Type: application/json
+Prefer: wait=60
+Cancel-After: 90s
 
 {
-  "prompt": "...",
-  "model": "flux",
-  "n": 1,
-  "size": "1024x1024",
-  "quality": "medium",
-  "response_format": "b64_json",
-  "safe": true
+  "input": {
+    "prompt": "...",
+    "quality": "low",
+    "aspect_ratio": "1:1",
+    "number_of_images": 1,
+    "output_format": "webp",
+    "output_compression": 90,
+    "background": "opaque",
+    "moderation": "auto"
+  }
 }
 ```
 
-Request schema ระบุ `prompt` 1–32,000 ตัวอักษร, `n` ปัจจุบันรองรับสูงสุด 1, `size` รูปแบบ `WIDTHxHEIGHT`, `quality`, `response_format` (`url` หรือ `b64_json`), optional `user`, `image`, `resolution` และ `safe` Response เป็น:
+`quality` is fixed to `low` server-side and cannot be changed from the browser.
+The official model page lists the low variant at `$0.012` per output image.
+`aspect_ratio` is allowlisted against the published schema. GPT Image 2 does not
+expose a deterministic seed input, and it does not support transparent backgrounds.
+The adapter requests one WEBP image, validates the prediction as succeeded, and
+fetches the returned file only from an HTTPS `replicate.delivery` host. The file is
+bounded to 20 MB, must have an image content type, and is converted to a data URL
+before the browser receives it.
 
-```ts
-interface PollinationsImageResponse {
-  created: number;
-  data: Array<{
-    url?: string;
-    b64_json?: string;
-    media_type?: string;
-    revised_prompt?: string;
-  }>;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-    total_tokens: number;
-    input_tokens_details: Record<string, unknown>;
-  };
-}
-```
-
-อีกทางคือ `GET /image/{encodedPrompt}` ซึ่งคืน raw `image/jpeg`, `image/png` หรือ `image/svg+xml` และมี query เช่น `model`, `width`, `height`, `seed`, `safe`, `quality`, `image`, `transparent` และ `resolution` แต่การรองรับแต่ละ field ขึ้นกับโมเดล [Pollinations image endpoints](https://github.com/pollinations/pollinations/blob/main/APIDOCS.md)
-
-Error envelope ทางการ:
-
-```ts
-interface PollinationsError {
-  status: number;
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    timestamp: string;
-    details?: unknown;
-    requestId?: string;
-  };
-}
-```
-
-ควร map อย่างน้อย 400/401/402/403/422/429/500/502/503 และ retry เฉพาะ 429/502/503 ด้วย bounded exponential backoff; ห้าม retry policy violation หรือ budget exhausted อัตโนมัติ [Pollinations error responses](https://github.com/pollinations/pollinations/blob/main/APIDOCS.md#%EF%B8%8F-error-responses)
-
-ข้อควรระวัง:
-
-- รายชื่อโมเดล, default model และความสามารถเฉพาะโมเดลเปลี่ยนเร็ว ให้ตรวจ `/image/models` และ pin model alias ของ ArtShift เอง
-- `quality`, `seed`, `transparent`, reference `image` และ `resolution` เป็น **model-specific**; บางโมเดลอาจ ignore parameter
-- `pk_` เป็น app key สำหรับ browser ที่มี budget/permissions; `sk_` เป็น secret สำหรับ server เท่านั้น สำหรับ ArtShift server adapter ให้ใช้ `sk_` และห้ามส่งลง client bundle
-- เอกสารทางการปัจจุบันชี้ไปที่ `gen.pollinations.ai`; จึงควรถือ `image.pollinations.ai/prompt/...` ที่ ArtShift เคยใช้เป็น legacy integration และย้ายออกจาก adapter ใหม่
-- `b64_json` ลดความเสี่ยงจากการต้องตาม URL ภายนอกแต่เพิ่ม payload มาก; `url` ลด response size แต่ adapter ต้อง validate HTTPS URL และตัดสินใจเรื่อง persistence แยกต่างหาก
+The browser calls only ArtShift's `/api/ai/image` route. The server obtains the
+authenticated user's encrypted Replicate BYOK credential for one request; it never
+accepts a provider URL, arbitrary model slug, `openai_api_key`, or server-wide
+`REPLICATE_API_TOKEN` from the client. Image generation is cloud-opt-in and the
+route sets `allowFallback: false`, so it never silently falls back to another
+provider.
 
 ## Stability matrix
 
@@ -363,7 +334,6 @@ interface PollinationsError {
 | Replicate | official-model endpoint, Bearer auth, prediction ID/status, `urls.get/cancel`, `output`, `error`, generic timing metrics | model input/output schema, token metrics, stream URL, version alias, media limits |
 | Anthropic | Messages request, typed content blocks, tool-use ID lifecycle, core SSE flow, core token totals | model IDs, beta headers/blocks, unknown SSE events, extended usage/detail fields |
 | Google | `contents/parts`, candidates, prompt feedback, usage totals, API-key header | preview model IDs, finish reasons, thinking/tool fields, modality details, platform shift toward Interactions |
-| Pollinations | unified base URL, Bearer auth, image-generation JSON envelope, documented error envelope | model catalog/defaults, per-model parameters, pricing/capabilities, heterogeneous upstream behavior |
 
 ## Implementation recommendations
 
@@ -376,7 +346,7 @@ interface PollinationsError {
 7. Log เฉพาะ provider, model/version, request ID, task, latency, usage, status และ normalized error โดยไม่ log raw prompt/image เป็นค่าเริ่มต้น
 8. Test fixture ต้องครอบคลุม success, blocked/refusal, malformed structured output, timeout, abort, 429, 5xx, empty candidate/output, unknown event/block และ provider schema ที่เพิ่ม field ใหม่
 9. Fallback ข้าม provider ต้องเป็น policy ที่ผู้ใช้ยินยอมและมี budget ชัดเจน ห้ามเกิด paid fallback แบบเงียบ
-10. ทบทวนลิงก์และ schema นี้เมื่อเปลี่ยน model version หรืออย่างน้อยก่อน release ใหญ่ เพราะ Replicate model wrappers, Google model lifecycle และ Pollinations catalog เปลี่ยนได้เร็วกว่าสัญญากลางของ ArtShift
+10. ทบทวนลิงก์และ schema เมื่อเปลี่ยน model version หรืออย่างน้อยก่อน release ใหญ่ เพราะ model input/output และ pricing ของ provider เปลี่ยนได้เร็ว
 
 ## Primary sources
 
@@ -384,6 +354,8 @@ interface PollinationsError {
 - [Replicate create prediction](https://replicate.com/docs/topics/predictions/create-a-prediction/)
 - [Replicate prediction lifecycle](https://replicate.com/docs/topics/predictions/lifecycle/)
 - [Replicate GPT-4o mini schema](https://replicate.com/openai/gpt-4o-mini/api/schema)
+- [Replicate GPT Image 2 model page](https://replicate.com/openai/gpt-image-2)
+- [Replicate GPT Image 2 schema](https://replicate.com/openai/gpt-image-2/api/schema)
 - [Replicate Gemini 3 Flash schema](https://replicate.com/google/gemini-3-flash/api/schema)
 - [Anthropic Create a Message](https://platform.claude.com/docs/en/api/messages/create)
 - [Anthropic Messages types and usage](https://platform.claude.com/docs/en/api/typescript/messages)
@@ -392,5 +364,3 @@ interface PollinationsError {
 - [Google Gemini API reference](https://ai.google.dev/api)
 - [Google generateContent](https://ai.google.dev/api/generate-content)
 - [Google migration to Interactions](https://ai.google.dev/gemini-api/docs/migrate-to-interactions)
-- [Pollinations official API docs](https://github.com/pollinations/pollinations/blob/main/APIDOCS.md)
-- [Pollinations official repository](https://github.com/pollinations/pollinations)

@@ -674,7 +674,7 @@ export default function HomePage() {
                     />
                     {/* AI Image Studio */}
                     <HamburgerItem
-                      label="✨ AI Image Studio (Prompt)"
+                      label="✨ AI Image Studio (GPT Image 2 · low)"
                       onClick={() => {
                         useEngine.getState().setAiImageModalOpen(true);
                         setMenuOpen(false);

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/pollinations";
+import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/imageGeneration";
+import type { AiImageGenerateInput } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
@@ -33,8 +34,8 @@ export async function POST(req: NextRequest) {
   }
   const width = boundedDimension(body.width);
   const height = boundedDimension(body.height);
+  const aspectRatio = boundedAspectRatio(body.aspectRatio);
   const enhance = body.enhance !== false;
-  const modelAlias = imageModelAlias(body.model);
   const ai = getServerAiRuntime({ replicateToken: getSessionReplicateToken(req) });
 
   let prompt = normalizedPrompt;
@@ -63,12 +64,15 @@ export async function POST(req: NextRequest) {
   try {
     const execution = await ai.execute(
       "image.generate",
-      { prompt, width, height, enhance: false },
+      { prompt, width, height, aspectRatio, enhance: false },
       {
         profile: "economy",
-        modelAlias,
+        provider: "replicate",
+        modelAlias: "image-gpt-2-low",
+        cloudConsent: true,
         allowFallback: false,
         timeoutMs: 90_000,
+        maxCostUsd: 0.02,
         signal: req.signal,
       },
     );
@@ -87,23 +91,34 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function boundedAspectRatio(value: unknown): AiImageGenerateInput["aspectRatio"] {
+  const allowed: AiImageGenerateInput["aspectRatio"][] = [
+    "1:1",
+    "3:2",
+    "2:3",
+    "4:3",
+    "3:4",
+    "16:9",
+    "9:16",
+    "auto",
+    "1024x1024",
+    "1536x1024",
+    "1024x1536",
+    "1536x1152",
+    "1152x1536",
+    "2048x2048",
+    "2048x1152",
+    "1152x2048",
+    "3840x2160",
+    "2160x3840",
+  ];
+  return typeof value === "string" && allowed.includes(value as AiImageGenerateInput["aspectRatio"])
+    ? (value as AiImageGenerateInput["aspectRatio"])
+    : undefined;
+}
+
 function boundedDimension(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(2_048, Math.max(256, Math.round(value)))
     : 1_024;
-}
-
-function imageModelAlias(value: unknown): string {
-  switch (value) {
-    case "flux-realism":
-      return "image-realism";
-    case "flux-anime":
-      return "image-anime";
-    case "flux-3d":
-      return "image-3d";
-    case "turbo":
-      return "image-fast";
-    default:
-      return "image-primary";
-  }
 }

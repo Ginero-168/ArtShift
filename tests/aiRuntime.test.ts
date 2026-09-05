@@ -38,6 +38,21 @@ describe("RoutedAiRuntime", () => {
     ).rejects.toMatchObject({ code: "POLICY_DENIED" });
   });
 
+  it("requires explicit cloud consent for image generation", async () => {
+    const runtime = new RoutedAiRuntime({
+      adapters: [new MockAiProviderAdapter(() => ({ output: { text: "unused" } }))],
+      routes: { "image.generate": { economy: [{ provider: "mock", model: "mock-image" }] } },
+    });
+
+    await expect(
+      runtime.execute("image.generate", {
+        prompt: "a cat",
+        width: 1024,
+        height: 1024,
+      }),
+    ).rejects.toMatchObject({ code: "POLICY_DENIED" });
+  });
+
   it("normalizes metadata, usage and cached executions at the interface", async () => {
     const adapter = new MockAiProviderAdapter(() => ({
       output: { text: "A precise description" },

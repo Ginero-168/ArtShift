@@ -21,6 +21,27 @@ describe("public AI execution schemas", () => {
     ).toBeNull();
   });
 
+  it("accepts GPT Image 2 aspect ratios but does not accept the retired provider", () => {
+    expect(
+      parsePublicAiExecuteRequest({
+        task: "image.generate",
+        input: { prompt: "a cat", width: 1024, height: 1024, aspectRatio: "1:1" },
+        options: { cloudConsent: true, provider: "replicate" },
+      }),
+    ).toMatchObject({
+      task: "image.generate",
+      input: { aspectRatio: "1:1" },
+    });
+
+    expect(
+      parsePublicAiExecuteRequest({
+        task: "image.generate",
+        input: { prompt: "a cat", width: 1024, height: 1024 },
+        options: { cloudConsent: true, provider: "pollinations" },
+      }),
+    ).toBeNull();
+  });
+
   it("rejects provider URLs, raw model slugs and unsupported image types", () => {
     expect(
       parsePublicAiExecuteRequest({

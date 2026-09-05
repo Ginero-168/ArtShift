@@ -4,56 +4,58 @@ import { useEffect, useState } from "react";
 import {
   ASPECT_RATIOS,
   type AspectRatioOption,
+  GPT_IMAGE_2_MODEL,
+  GPT_IMAGE_2_QUALITY,
   generateAIImage,
   INSPIRATION_PROMPTS,
-  type PollinationsModel,
-} from "@/lib/ai/pollinations";
+} from "@/lib/ai/imageGeneration";
 import { createImage } from "@/lib/engine/factory";
 import { useEngine } from "@/lib/engine/store";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
+
+type ImageStyleId = "photorealistic" | "digital-art" | "3d-render" | "anime";
+
+const STYLE_PRESETS: Array<{
+  id: ImageStyleId;
+  label: string;
+  badge: string;
+  description: string;
+  promptSuffix: string;
+}> = [
+  {
+    id: "photorealistic",
+    label: "Photorealistic",
+    badge: "📸",
+    description: "Studio lighting, lifelike textures & faces",
+    promptSuffix: "photorealistic, natural lens rendering, lifelike textures, studio lighting",
+  },
+  {
+    id: "digital-art",
+    label: "Digital Art",
+    badge: "🎨",
+    description: "Creative concepts, balanced & versatile",
+    promptSuffix: "polished digital art, expressive composition, rich color design",
+  },
+  {
+    id: "3d-render",
+    label: "3D Render",
+    badge: "🧊",
+    description: "Isometric, cinematic 3D scene",
+    promptSuffix: "high-quality 3D render, cinematic lighting, clean materials and depth",
+  },
+  {
+    id: "anime",
+    label: "Anime & Manga",
+    badge: "🌸",
+    description: "Vibrant 2D illustration",
+    promptSuffix: "vibrant 2D anime illustration, expressive linework, polished cel shading",
+  },
+];
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const STYLE_PRESETS: Array<{
-  id: PollinationsModel;
-  label: string;
-  badge: string;
-  description: string;
-}> = [
-  {
-    id: "flux-realism",
-    label: "Photorealistic",
-    badge: "📸",
-    description: "Studio lighting, lifelike textures & faces",
-  },
-  {
-    id: "flux",
-    label: "Digital Art",
-    badge: "🎨",
-    description: "Creative concepts, balanced & versatile",
-  },
-  {
-    id: "flux-3d",
-    label: "3D Render",
-    badge: "🧊",
-    description: "Isometric, Pixar / Unreal Engine style",
-  },
-  {
-    id: "flux-anime",
-    label: "Anime & Manga",
-    badge: "🌸",
-    description: "Japanese animation, vibrant 2D illustration",
-  },
-  {
-    id: "turbo",
-    label: "Turbo",
-    badge: "⚡",
-    description: "SDXL Turbo, instant sub-second results",
-  },
-];
 
 export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
   const addElement = useEngine((s) => s.addElement);
@@ -62,7 +64,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
   const slides = useEngine((s) => s.doc.slides);
 
   const [prompt, setPrompt] = useState("");
-  const [selectedModel, setSelectedModel] = useState<PollinationsModel>("flux-realism");
+  const [selectedStyle, setSelectedStyle] = useState<ImageStyleId>("photorealistic");
   const [selectedRatio, setSelectedRatio] = useState<AspectRatioOption>(ASPECT_RATIOS[0]);
   const [enhance, setEnhance] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -101,9 +103,13 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
     setError(null);
 
     try {
+      const style = STYLE_PRESETS.find((preset) => preset.id === selectedStyle);
+      const generationPrompt = [prompt.trim(), style?.promptSuffix]
+        .filter(Boolean)
+        .join("\n\nVisual direction: ");
       const res = await generateAIImage({
-        prompt,
-        model: selectedModel,
+        prompt: generationPrompt,
+        aspectRatio: selectedRatio.id,
         width: selectedRatio.width,
         height: selectedRatio.height,
         enhance,
@@ -179,6 +185,9 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
       }}
     >
       <div
+        role="dialog"
+        aria-label="AI Image Studio"
+        aria-modal="true"
         style={{
           width: "100%",
           maxWidth: 880,
@@ -225,7 +234,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 AI Image Studio (Text-to-Image)
               </h2>
               <p style={{ fontSize: 11, color: "#64748b", margin: 0, marginTop: 2 }}>
-                100% Free & Unlimited • Powered by FLUX.1 & Open-Source AI
+                Replicate · {GPT_IMAGE_2_MODEL} · quality: {GPT_IMAGE_2_QUALITY} · ~$0.012/image
               </p>
             </div>
           </div>
@@ -326,16 +335,16 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                   marginBottom: 6,
                 }}
               >
-                Art Style
+                Visual Style (prompt guidance)
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {STYLE_PRESETS.map((style) => {
-                  const active = selectedModel === style.id;
+                  const active = selectedStyle === style.id;
                   return (
                     <button
                       key={style.id}
                       type="button"
-                      onClick={() => setSelectedModel(style.id)}
+                      onClick={() => setSelectedStyle(style.id)}
                       style={{
                         padding: "8px 10px",
                         borderRadius: 8,
@@ -479,7 +488,8 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
               {loading ? (
                 <>
                   <span style={{ animation: "spin 1s linear infinite" }}>⏳</span>
-                  <span>Generating with FLUX AI (1-3s)...</span>
+                  <span>🎨</span>
+                  <span>Creating with GPT Image 2 (low)...</span>
                 </>
               ) : (
                 <>
@@ -513,7 +523,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                   Creating your masterpiece...
                 </div>
                 <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                  Rendering with FLUX.1 neural network
+                  Rendering with GPT Image 2 (low quality) via Replicate
                 </div>
               </div>
             ) : previewImage ? (
@@ -571,7 +581,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                       cursor: "pointer",
                     }}
                   >
-                    🎲 New Seed
+                    🎲 Generate Again
                   </button>
 
                   <button

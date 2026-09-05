@@ -74,7 +74,7 @@ export async function verifyReplicateApiKey(
   const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   let response: Response;
   try {
-    response = await fetch("https://api.replicate.com/v1/models/openai/gpt-oss-20b", {
+    response = await fetch("https://api.replicate.com/v1/models/openai/gpt-image-2", {
       method: "GET",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       signal: requestSignal,

@@ -13,9 +13,9 @@ describe("chat provider boundary", () => {
   });
 
   it("keeps direct image-provider URLs out of browser code", () => {
-    const source = readFileSync("lib/ai/pollinations.ts", "utf8");
-    expect(source).not.toContain("image.pollinations.ai");
-    expect(source).not.toContain("gen.pollinations.ai");
+    const source = readFileSync("lib/ai/imageGeneration.ts", "utf8");
+    expect(source).not.toContain("api.replicate.com");
+    expect(source).not.toContain("replicate.delivery");
     expect(source).toContain('fetch("/api/ai/image"');
   });
 });

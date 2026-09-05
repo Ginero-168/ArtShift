@@ -1,10 +1,14 @@
 /**
  * AI Design Co-Pilot Orchestrator for ArtShift
- * Workspace-aware multi-agent system that plans, writes copy, generates images (FLUX),
+ * Workspace-aware multi-agent system that plans, writes copy, generates images (GPT Image 2),
  * edits visuals (RemoveBG, Vectorize), and arranges layouts (60-30-10).
  */
 
-import { cleanImagePrompt, generateAIImage, isImageGenerationPrompt } from "@/lib/ai/pollinations";
+import {
+  cleanImagePrompt,
+  generateAIImage,
+  isImageGenerationPrompt,
+} from "@/lib/ai/imageGeneration";
 import { removeBackground } from "@/lib/ai/removeBg";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createImage, createRect, createText } from "@/lib/engine/factory";
@@ -174,13 +178,13 @@ export async function executeCoPilotInstruction(
   };
 
   // -------------------------------------------------------------
-  // 1. SUB-AGENT: IMAGE GENERATOR (FLUX)
+  // 1. SUB-AGENT: IMAGE GENERATOR (REPLICATE GPT IMAGE 2 LOW)
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
   // -------------------------------------------------------------
   if (isImageGenerationPrompt(prompt)) {
     const act = logAction(
       "image_gen",
-      "🎨 Generating Image with FLUX AI",
+      "🎨 Generating Image with GPT Image 2",
       `Creating visual asset for: "${prompt}"...`,
     );
 
@@ -192,7 +196,7 @@ export async function executeCoPilotInstruction(
 
       const imageRequest = {
         prompt: cleanPrompt,
-        model: "flux-realism" as const,
+        aspectRatio: "1:1" as const,
         width: 1024,
         height: 1024,
         enhance: true,
@@ -234,11 +238,11 @@ export async function executeCoPilotInstruction(
       updateActionStatus(
         act,
         "success",
-        `Created and placed high-res FLUX image (${w}×${h}px) on canvas.`,
+        `Created and placed GPT Image 2 low-quality image (${w}×${h}px) on canvas.`,
       );
 
       return {
-        reply: `สร้างรูปภาพ "${cleanPrompt}" ด้วยโมเดล FLUX ให้เรียบร้อยและวางลงกึ่งกลางแคนวาสแล้วครับ!`,
+        reply: `สร้างรูปภาพ "${cleanPrompt}" ด้วย Replicate GPT Image 2 (คุณภาพ low) ให้เรียบร้อยและวางลงกึ่งกลางแคนวาสแล้วครับ!`,
         actions,
         suggestions: [
           "🪄 ลบพื้นหลังของรูปนี้",

@@ -1,14 +1,16 @@
 /**
  * Provider-neutral AI Image Studio client.
- * Provider credentials and concrete model routing stay on the ArtShift server.
+ * The server routes every generation request to Replicate GPT Image 2 low.
  */
 
+import type { AiImageAspectRatio } from "@/lib/ai-runtime/contracts";
 import { loadDataURL } from "@/lib/engine/imageCache";
 
-export type PollinationsModel = "flux" | "flux-realism" | "flux-anime" | "flux-3d" | "turbo";
+export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
+export const GPT_IMAGE_2_QUALITY = "low" as const;
 
 export interface AspectRatioOption {
-  id: string;
+  id: AiImageAspectRatio;
   label: string;
   ratio: string;
   width: number;
@@ -24,9 +26,9 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
   { id: "3:4", label: "Portrait", ratio: "3:4", width: 768, height: 1024, icon: "▯" },
 ];
 
-export interface PollinationsOptions {
+export interface ImageGenerationOptions {
   prompt: string;
-  model?: PollinationsModel;
+  aspectRatio?: AiImageAspectRatio;
   width?: number;
   height?: number;
   seed?: number;
@@ -121,10 +123,10 @@ export function enrichPrompt(rawPrompt: string): string {
 
 /**
  * Generates an image through the server-owned AI Runtime and loads it into
- * the ArtShift image cache.
+ * the ArtShift image cache. Model/provider selection is server-owned.
  */
 export async function generateAIImage(
-  options: PollinationsOptions,
+  options: ImageGenerationOptions,
   signal?: AbortSignal,
 ): Promise<GeneratedImageResult> {
   const prompt = options.prompt.trim();
@@ -165,7 +167,7 @@ export async function generateAIImage(
     width: cached.width,
     height: cached.height,
     seed: data.seed ?? options.seed ?? 0,
-    model: options.model ?? "flux",
+    model: GPT_IMAGE_2_MODEL,
     prompt,
   };
 }
