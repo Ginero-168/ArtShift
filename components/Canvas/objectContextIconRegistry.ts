@@ -11,6 +11,7 @@ export type ObjectContextIconName =
   | "download"
   | "image"
   | "vector"
+  | "vectorize"
   | "book"
   | "frame"
   | "text"
@@ -53,6 +54,7 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   Download: "download",
   Image: "image",
   Vector: "vector",
+  Vectorize: "vectorize",
   "3D Book": "book",
   Frame: "frame",
   Text: "text",

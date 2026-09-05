@@ -7,6 +7,10 @@ const fixturePng = Buffer.from(
 
 const tools = [
   { label: "RemoveBG", key: "remove-bg" },
+  { label: "Vectorize", key: "vectorize" },
+] as const;
+
+const vectorizeTabs = [
   { label: "Vectorize1", key: "vectorize1" },
   { label: "Vectorize2", key: "vectorize2" },
   { label: "Vectorize3", key: "vectorize3" },
@@ -30,16 +34,25 @@ test("keeps each image tool as its own Option Bar settings entry", async ({ page
 
   for (const tool of tools) {
     await expect(optionBar.getByRole("button", { name: tool.label, exact: true })).toBeVisible();
-    if (tool.key === "remove-bg") continue;
-    await optionBar.getByRole("button", { name: tool.label, exact: true }).click();
-    await expect(optionBar.getByRole("button", { name: tool.label, exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await expect(page.getByTestId("image-tool-settings")).toHaveAttribute("data-tool", tool.key);
-    await expect(
-      page.getByRole("dialog", { name: `${tool.label} settings`, exact: true }),
-    ).toBeVisible();
+  }
+  for (const tab of vectorizeTabs) {
+    await expect(optionBar.getByRole("button", { name: tab.label, exact: true })).toHaveCount(0);
+  }
+  await expect(
+    optionBar.getByRole("button", { name: "Image Intelligence", exact: true }),
+  ).toHaveCount(0);
+
+  const vectorizeButton = optionBar.getByRole("button", { name: "Vectorize", exact: true });
+  await vectorizeButton.click();
+  const vectorizeDialog = page.getByRole("dialog", { name: "Vectorize settings", exact: true });
+  await expect(vectorizeDialog).toBeVisible();
+  await expect(vectorizeDialog.getByRole("tab")).toHaveCount(3);
+  for (const tab of vectorizeTabs) {
+    const tabButton = vectorizeDialog.getByRole("tab", { name: tab.label, exact: true });
+    await expect(tabButton).toBeVisible();
+    await tabButton.click();
+    await expect(tabButton).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("image-tool-settings")).toHaveAttribute("data-tool", tab.key);
   }
 });
 

@@ -54,9 +54,7 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
     "Rotate 90°",
     "Crop",
     "RemoveBG",
-    "Vectorize1",
-    "Vectorize2",
-    "Vectorize3",
+    "Vectorize",
     "Download",
   ]) {
     await expect(imageToolbar.getByRole("button", { name: label, exact: true })).toBeVisible();
@@ -65,33 +63,35 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
   await expect(imageToolbar.getByText("Image", { exact: true })).toHaveCount(0);
   await expect(imageToolbar.locator(".object-context-category")).toBeVisible();
   await expect(imageToolbar.locator(".object-context-category svg")).toHaveCount(1);
-  await expect(imageToolbar.locator("button svg")).toHaveCount(9);
+  await expect(imageToolbar.locator("button svg")).toHaveCount(7);
   await expect(imageToolbar.locator("button svg").first()).toHaveAttribute("aria-hidden", "true");
   await expect(imageToolbar.locator("button svg").first()).toHaveAttribute("focusable", "false");
   await expect(imageToolbar.locator(".object-context-divider")).toHaveCount(3);
   await expect(
     imageToolbar.getByRole("button", { name: "Image Intelligence", exact: true }),
   ).toHaveCount(0);
+  for (const label of ["Vectorize1", "Vectorize2", "Vectorize3"]) {
+    await expect(imageToolbar.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+  }
   await expect(page.getByTestId("image-tool-settings")).toHaveCount(0);
 
-  const customButton = imageToolbar.getByRole("button", { name: "Vectorize1", exact: true });
-  const vtracerButton = imageToolbar.getByRole("button", { name: "Vectorize2", exact: true });
-  await customButton.click();
-  await expect(customButton).toHaveAttribute("aria-pressed", "true");
+  const vectorizeButton = imageToolbar.getByRole("button", { name: "Vectorize", exact: true });
+  await vectorizeButton.click();
+  const vectorizeDialog = page.getByRole("dialog", { name: "Vectorize settings", exact: true });
+  await expect(vectorizeDialog).toBeVisible();
+  await expect(vectorizeDialog.getByRole("tab")).toHaveCount(3);
+  const customButton = vectorizeDialog.getByRole("tab", { name: "Vectorize1", exact: true });
+  const vtracerButton = vectorizeDialog.getByRole("tab", { name: "Vectorize2", exact: true });
+  await expect(customButton).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("image-tool-settings")).toHaveAttribute("data-tool", "vectorize1");
-  await expect(
-    page.getByRole("dialog", { name: "Vectorize1 settings", exact: true }),
-  ).toBeVisible();
   await expect(page.getByText("ArtShift Custom Settings", { exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "VTracer geometry" })).toHaveCount(0);
   await page.getByRole("button", { name: /Illustration/ }).click();
 
   await vtracerButton.click();
-  await expect(vtracerButton).toHaveAttribute("aria-pressed", "true");
+  await expect(vtracerButton).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("image-tool-settings")).toHaveAttribute("data-tool", "vectorize2");
-  await expect(
-    page.getByRole("dialog", { name: "Vectorize2 settings", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Vectorize settings", exact: true })).toBeVisible();
   await expect(page.getByText("VTracer WASM Settings", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Poster (Official)", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Photo (Official)", exact: true })).toBeVisible();
@@ -196,10 +196,14 @@ test("runs the original Custom Auto-Trace workflow from its own button", async (
     });
   await expect(page.getByText("Image source", { exact: true })).toBeVisible();
   const customImageToolbar = page.getByRole("toolbar", { name: "Image options", exact: true });
-  await customImageToolbar.getByRole("button", { name: "Vectorize1", exact: true }).click();
-  await expect(
-    page.getByRole("dialog", { name: "Vectorize1 settings", exact: true }),
-  ).toBeVisible();
+  await customImageToolbar.getByRole("button", { name: "Vectorize", exact: true }).click();
+  const customDialog = page.getByRole("dialog", { name: "Vectorize settings", exact: true });
+  await customDialog.getByRole("tab", { name: "Vectorize1", exact: true }).click();
+  await expect(customDialog.getByRole("tab", { name: "Vectorize1", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByTestId("image-tool-settings")).toHaveAttribute("data-tool", "vectorize1");
   await expect(page.getByText("ArtShift Custom Settings", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Generate Custom Paths/ }).click();
   await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
@@ -258,10 +262,14 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
     .setInputFiles({ name: "recraft-fixture.png", mimeType: "image/png", buffer: syntheticPng });
   await expect(page.getByText("Image source", { exact: true })).toBeVisible();
   const recraftImageToolbar = page.getByRole("toolbar", { name: "Image options", exact: true });
-  await recraftImageToolbar.getByRole("button", { name: "Vectorize3", exact: true }).click();
-  await expect(
-    page.getByRole("dialog", { name: "Vectorize3 settings", exact: true }),
-  ).toBeVisible();
+  await recraftImageToolbar.getByRole("button", { name: "Vectorize", exact: true }).click();
+  const recraftDialog = page.getByRole("dialog", { name: "Vectorize settings", exact: true });
+  await recraftDialog.getByRole("tab", { name: "Vectorize3", exact: true }).click();
+  await expect(recraftDialog.getByRole("tab", { name: "Vectorize3", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByTestId("image-tool-settings")).toHaveAttribute("data-tool", "vectorize3");
 
   const recraftButton = page.getByRole("button", {
     name: "Run Vectorize3",

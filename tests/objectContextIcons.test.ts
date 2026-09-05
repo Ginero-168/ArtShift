@@ -10,6 +10,7 @@ const toolbarLabels = [
   "Rotate 90°",
   "Crop",
   "Image Intelligence",
+  "Vectorize",
   "RemoveBG",
   "Vectorize1",
   "Vectorize2",

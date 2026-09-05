@@ -51,7 +51,13 @@ import {
 } from "@/lib/vision/foreground";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, trimTransparentRegion } from "@/lib/vision/visionEngine";
-import { IMAGE_TOOL_LABELS, type ImageToolId } from "./imageToolTypes";
+import {
+  IMAGE_TOOL_LABELS,
+  type ImageToolId,
+  isVectorizeTool,
+  VECTORIZE_TOOL_IDS,
+  type VectorizeToolId,
+} from "./imageToolTypes";
 
 interface DetectedObject {
   label: string;
@@ -207,6 +213,7 @@ export type VisionObjectIsolatorProps = {
   /** Run an immediate tool action without showing its settings panel. */
   autoRun?: boolean;
   onToolComplete?: () => void;
+  onToolChange?: (tool: VectorizeToolId) => void;
 };
 
 export function VisionObjectIsolator({
@@ -214,6 +221,7 @@ export function VisionObjectIsolator({
   activeTool,
   autoRun = false,
   onToolComplete,
+  onToolChange,
 }: VisionObjectIsolatorProps) {
   const addElement = useEngine((s) => s.addElement);
   const addElements = useEngine((s) => s.addElements);
@@ -1091,6 +1099,42 @@ export function VisionObjectIsolator({
           }}
         >
           {analysisMessage}
+        </div>
+      )}
+
+      {controlledToolMode && isVectorizeTool(activeTool) && (
+        <div
+          role="tablist"
+          aria-label="Vectorize modes"
+          data-testid="vectorize-tabs"
+          style={{ display: "flex", gap: 4, marginBottom: 6 }}
+        >
+          {VECTORIZE_TOOL_IDS.map((tool) => {
+            const selected = activeTool === tool;
+            return (
+              <button
+                key={tool}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                data-vectorizer-tab={tool}
+                onClick={() => onToolChange?.(tool)}
+                style={{
+                  flex: 1,
+                  padding: "5px 6px",
+                  border: selected ? "1px solid #6366f1" : "1px solid #cbd5e1",
+                  borderRadius: 5,
+                  background: selected ? "#eef2ff" : "#fff",
+                  color: selected ? "#3730a3" : "#475569",
+                  fontSize: 9.5,
+                  fontWeight: selected ? 700 : 600,
+                  cursor: "pointer",
+                }}
+              >
+                {IMAGE_TOOL_LABELS[tool]}
+              </button>
+            );
+          })}
         </div>
       )}
 
