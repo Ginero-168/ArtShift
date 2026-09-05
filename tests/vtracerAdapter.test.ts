@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseVTracerSvgToElements } from "@/lib/vectorize/vtracerAdapter";
+import { getSvgViewport, parseVTracerSvgToElements } from "@/lib/vectorize/vtracerAdapter";
 
 describe("VTracer SVG adapter", () => {
   it("turns grouped SVG paths and cubic commands into editable ArtShift paths", () => {
@@ -122,5 +122,44 @@ describe("VTracer SVG adapter", () => {
         maxPathDataChars: 20,
       }),
     ).toThrow(/path data/i);
+  });
+
+  it("reads a Recraft SVG viewBox before normalizing its paths", () => {
+    expect(getSvgViewport('<svg width="512px" height="256px" viewBox="0 0 1024 512">')).toEqual({
+      width: 1024,
+      height: 512,
+    });
+  });
+
+  it("rejects a vector SVG without a usable viewport", () => {
+    expect(() => getSvgViewport('<svg><path d="M0 0"/></svg>')).toThrow(/viewport/i);
+  });
+
+  it("preserves a Recraft linear gradient as an editable ArtShift gradient", () => {
+    const svg = `
+      <svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="Gradient1" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="100">
+            <stop offset="0" stop-color="rgb(10,20,30)" />
+            <stop offset="1" stop-color="rgb(200,210,220)" />
+          </linearGradient>
+        </defs>
+        <path fill="url(#Gradient1)" d="M0 0 H100 V100 H0 Z" />
+      </svg>
+    `;
+
+    const elements = parseVTracerSvgToElements(svg, {
+      targetBounds: { x: 0, y: 0, width: 200, height: 200 },
+      sourceWidth: 100,
+      sourceHeight: 100,
+    });
+
+    expect(elements).toHaveLength(1);
+    expect(elements[0]).toMatchObject({
+      fillType: "linear",
+      gradientColors: ["rgb(10,20,30)", "rgb(200,210,220)"],
+      gradientStops: [0, 1],
+      backgroundColor: "rgb(10,20,30)",
+    });
   });
 });

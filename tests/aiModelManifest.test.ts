@@ -49,6 +49,26 @@ describe("AI model manifest", () => {
     );
   });
 
+  it("routes Recraft vectorization to the requested Replicate model", () => {
+    const routes = createAiRouteTable({});
+
+    expect(routes["vectorize.recraft"]?.quality?.[0]).toEqual({
+      provider: "replicate",
+      model: "recraft-ai/recraft-vectorize",
+      alias: "recraft-vectorize",
+    });
+  });
+
+  it("allows the Recraft model version to be pinned without changing the UI alias", () => {
+    const version = "e".repeat(64);
+    const routes = createAiRouteTable({ REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION: version });
+
+    expect(routes["vectorize.recraft"]?.quality?.[0]).toMatchObject({
+      model: `recraft-ai/recraft-vectorize@${version}`,
+      alias: "recraft-vectorize",
+    });
+  });
+
   it("does not route local Remove BG, Extract or raster selection through cloud providers", () => {
     const serialized = JSON.stringify(createAiRouteTable({}));
     expect(serialized).not.toMatch(/remove.?bg|extract.?objects|pixel.?mask|raster.?selection/i);

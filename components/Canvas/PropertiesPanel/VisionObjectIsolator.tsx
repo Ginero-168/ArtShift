@@ -24,6 +24,11 @@ import {
   type VectorizeBackend,
 } from "@/lib/vectorize/vectorizerBackend";
 import {
+  getSvgViewport,
+  parseVTracerSvgResult,
+  RECRAFT_SVG_LIMITS,
+} from "@/lib/vectorize/vtracerAdapter";
+import {
   createSam2Session,
   groundingDinoDetect,
   type Sam2Session,
@@ -452,6 +457,111 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         console.warn("Vectorize failed:", err);
         setStatusMessage("Vectorize error: " + (err as Error).message);
         report("error", `แปลง Vector ไม่สำเร็จ: ${(err as Error).message}`, "error");
+      }
+    } finally {
+      if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  const handleRecraftVectorize = async () => {
+    const cached = getCached(element.fileId);
+    if (!cached?.dataURL) {
+      setStatusMessage("Image data not found in cache");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Recraft Vectorize จะส่งภาพนี้ไปยัง Replicate เพื่อสร้าง SVG และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?",
+      )
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    vectorizeAbortRef.current = controller;
+    setBusy(true);
+    setProgress(8);
+    setStatusMessage("Sending image to Recraft via Replicate...");
+    const report = createProgressReporter("Recraft Vectorize");
+    report("consent", "ผู้ใช้ยืนยันการส่งภาพไป Replicate", "started", 0.08);
+
+    try {
+      const response = await fetch("/api/vectorize/recraft", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          task: "vectorize.recraft",
+          input: {
+            image: { dataUrl: cached.dataURL, mimeType: "image/png" },
+            width: cached.width,
+            height: cached.height,
+          },
+          options: {
+            profile: "quality",
+            provider: "replicate",
+            modelAlias: "recraft-vectorize",
+            cloudConsent: true,
+            allowFallback: false,
+            timeoutMs: 120_000,
+            cache: false,
+          },
+        }),
+        signal: controller.signal,
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        execution?: { output?: { svg?: unknown } };
+        error?: { message?: unknown } | string;
+      } | null;
+      if (!response.ok) {
+        const providerError =
+          typeof payload?.error === "string"
+            ? payload.error
+            : typeof payload?.error?.message === "string"
+              ? payload.error.message
+              : "Recraft Vectorize request failed.";
+        throw new Error(providerError);
+      }
+      const svg = payload?.execution?.output?.svg;
+      if (typeof svg !== "string") throw new Error("Recraft returned no SVG output.");
+
+      setProgress(82);
+      setStatusMessage("Validating Recraft SVG and building editable paths...");
+      const viewport = getSvgViewport(svg);
+      const result = parseVTracerSvgResult(svg, {
+        targetBounds: {
+          x: element.x + 24,
+          y: element.y + 24,
+          width: element.width,
+          height: element.height,
+        },
+        sourceWidth: viewport.width,
+        sourceHeight: viewport.height,
+        ...RECRAFT_SVG_LIMITS,
+      });
+      if (result.elements.length === 0) {
+        throw new Error("Recraft returned no editable vector paths.");
+      }
+      addElements(result.elements, "Recraft Vectorize image");
+      selectOnly(result.elements.map((item) => item.id));
+      setStatusMessage(
+        `Recraft Vectorize สร้าง ${result.elements.length} vector layers (${result.totalNodes} anchor nodes, ${result.palette.length} colors)!`,
+      );
+      report(
+        "complete",
+        `Recraft Vectorize สร้าง Vector สำเร็จ ${result.elements.length} Layers`,
+        "success",
+        1,
+      );
+    } catch (error) {
+      if (error instanceof VectorizeCancelledError || (error as Error).name === "AbortError") {
+        setStatusMessage("Recraft Vectorization cancelled.");
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown Recraft error.";
+        console.warn("Recraft Vectorize failed:", error);
+        setStatusMessage(`Recraft Vectorize error: ${message}`);
+        report("error", `Recraft Vectorize ไม่สำเร็จ: ${message}`, "error");
       }
     } finally {
       if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
@@ -1189,6 +1299,55 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           <span>◇</span>
           <span>VTracer WASM</span>
         </button>
+      </div>
+      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void handleRecraftVectorize()}
+          aria-label="Recraft Vectorize (Cloud)"
+          title="Send this image to Recraft Vectorize through your Replicate account"
+          style={{
+            flex: 1,
+            padding: "6px 5px",
+            background: "#fff",
+            color: "#0f766e",
+            border: "1px solid rgba(13, 148, 136, 0.35)",
+            borderRadius: 5,
+            fontWeight: 700,
+            fontSize: 9.5,
+            cursor: busy ? "wait" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 3,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span>☁</span>
+          <span>Recraft Vectorize (Cloud)</span>
+        </button>
+        {vectorizeAbortRef.current && !vectorizeOpen && (
+          <button
+            type="button"
+            onClick={cancelVectorize}
+            style={{
+              padding: "6px 8px",
+              fontSize: 9.5,
+              fontWeight: 700,
+              borderRadius: 5,
+              border: "1px solid #fecaca",
+              background: "#fff1f2",
+              color: "#be123c",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+      <div style={{ marginTop: 3, color: "#64748b", fontSize: 8 }}>
+        Cloud vectorizer · sends the image to Replicate · requires your Replicate Key
       </div>
 
       {/* Ultra-High-Fidelity Vectorizer Options Panel */}

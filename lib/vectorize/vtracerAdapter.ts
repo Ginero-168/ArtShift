@@ -16,9 +16,16 @@ export type VTracerAdapterBounds = {
 type Point = { x: number; y: number };
 type RawNode = Point & { in?: Point; out?: Point };
 type ParsedSubpath = { nodes: RawNode[]; closed: boolean };
+type ParsedGradient = {
+  type: "linear" | "radial";
+  colors: string[];
+  stops: number[];
+  angle: number;
+};
 type PaintedPath = {
   d: string;
   fill: string;
+  gradient?: ParsedGradient;
   fillRule: "nonzero" | "evenodd";
   opacity: number;
 };
@@ -30,8 +37,39 @@ export const VTRACER_SVG_LIMITS = {
   maxPathDataChars: 3_500_000,
   maxPathTokens: 500_000,
 } as const;
+/** Recraft can legitimately return more paths than the local VTracer editor budget. */
+export const RECRAFT_SVG_LIMITS = {
+  maxElements: 6_000,
+  maxTotalNodes: 120_000,
+  maxSvgChars: 4_000_000,
+  maxPathDataChars: 3_500_000,
+  maxPathTokens: 600_000,
+} as const;
 const SVG_TOKEN_PATTERN = /([a-zA-Z])|([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)/g;
 const COMMAND_PATTERN = /^[a-zA-Z]$/;
+
+export type SvgViewport = {
+  width: number;
+  height: number;
+};
+
+export function getSvgViewport(svg: string): SvgViewport {
+  const root = /<svg\b([^>]*)>/i.exec(svg);
+  if (!root) throw new Error("SVG output is missing a root viewport.");
+  const attributes = parseAttributes(root[1]);
+  const viewBoxValues = (attributes.viewbox ?? "")
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number)
+    .filter((value) => Number.isFinite(value));
+  if (viewBoxValues.length === 4 && viewBoxValues[2] > 0 && viewBoxValues[3] > 0) {
+    return { width: viewBoxValues[2], height: viewBoxValues[3] };
+  }
+  const width = parseSvgLength(attributes.width);
+  const height = parseSvgLength(attributes.height);
+  if (width && height) return { width, height };
+  throw new Error("SVG output is missing a usable viewport.");
+}
 
 /** Convert VTracer's SVG document into ArtShift's editable path objects. */
 export function parseVTracerSvgToElements(
@@ -106,6 +144,14 @@ export function parseVTracerSvgToElements(
       opacity: paintedPath.opacity,
       strokeColor: "transparent",
       backgroundColor: paintedPath.fill,
+      ...(paintedPath.gradient
+        ? {
+            fillType: paintedPath.gradient.type,
+            gradientColors: paintedPath.gradient.colors,
+            gradientStops: paintedPath.gradient.stops,
+            gradientAngle: paintedPath.gradient.angle,
+          }
+        : {}),
       strokeWidth: 0,
       strokeStyle: "solid",
       fillStyle: "solid",
@@ -147,6 +193,7 @@ function extractPaintedPaths(
   budget: { maxPaintedPaths: number; maxPathDataChars: number },
 ): PaintedPath[] {
   const paths: PaintedPath[] = [];
+  const gradients = parseGradients(svg);
   const fillStack: Array<string | null> = ["#000000"];
   const fillRuleStack: Array<"nonzero" | "evenodd"> = ["nonzero"];
   const opacityStack: number[] = [1];
@@ -168,7 +215,7 @@ function extractPaintedPaths(
       } else {
         const inheritedFill = fillStack.at(-1) ?? null;
         fillStack.push(
-          Object.hasOwn(attributes, "fill") ? normalizeFill(attributes.fill) : inheritedFill,
+          Object.hasOwn(attributes, "fill") ? normalizePaint(attributes.fill) : inheritedFill,
         );
         fillRuleStack.push(normalizeFillRule(attributes["fill-rule"]) ?? fillRuleStack.at(-1)!);
         const inheritedOpacity = opacityStack.at(-1) ?? 1;
@@ -187,9 +234,11 @@ function extractPaintedPaths(
     }
 
     if (tagName !== "path" || closing) continue;
-    const fill = Object.hasOwn(attributes, "fill")
-      ? normalizeFill(attributes.fill)
+    const rawFill = Object.hasOwn(attributes, "fill")
+      ? normalizePaint(attributes.fill)
       : (fillStack.at(-1) ?? null);
+    const gradient = resolveGradient(rawFill, gradients);
+    const fill = gradient?.colors[0] ?? normalizeFill(rawFill ?? undefined);
     if (fill === null) continue;
     const opacity =
       (opacityStack.at(-1) ?? 1) *
@@ -207,12 +256,101 @@ function extractPaintedPaths(
     paths.push({
       d,
       fill,
+      ...(gradient ? { gradient } : {}),
       fillRule: normalizeFillRule(attributes["fill-rule"]) ?? fillRuleStack.at(-1) ?? "nonzero",
       opacity,
     });
   }
 
   return paths.filter((path) => path.d.length > 0);
+}
+
+function parseGradients(svg: string): Map<string, ParsedGradient> {
+  const gradients = new Map<string, ParsedGradient>();
+  const gradientPattern = /<(linearGradient|radialGradient)\b([^>]*)>([\s\S]*?)<\/\1\s*>/gi;
+  for (const match of svg.matchAll(gradientPattern)) {
+    const attributes = parseAttributes(match[2]);
+    const id = attributes.id?.trim();
+    if (!id) continue;
+    const stops: Array<{ color: string; offset: number }> = [];
+    const stopPattern = /<stop\b([^>]*)>/gi;
+    for (const stopMatch of match[3].matchAll(stopPattern)) {
+      const stopAttributes = parseAttributes(stopMatch[1]);
+      const color = normalizeGradientStopColor(
+        stopAttributes["stop-color"],
+        stopAttributes["stop-opacity"],
+      );
+      const offset = parseStopOffset(stopAttributes.offset);
+      if (color && offset !== null) stops.push({ color, offset });
+    }
+    if (stops.length < 2) continue;
+    stops.sort((first, second) => first.offset - second.offset);
+    gradients.set(id, {
+      type: match[1].toLowerCase() === "radialgradient" ? "radial" : "linear",
+      colors: stops.map((stop) => stop.color),
+      stops: stops.map((stop) => stop.offset),
+      angle: gradientAngle(attributes, match[1].toLowerCase() === "radialgradient"),
+    });
+  }
+  return gradients;
+}
+
+function resolveGradient(
+  paint: string | null,
+  gradients: Map<string, ParsedGradient>,
+): ParsedGradient | undefined {
+  const reference = /^url\(\s*#([^\s)]+)\s*\)$/i.exec(paint ?? "");
+  return reference ? gradients.get(reference[1]) : undefined;
+}
+
+function normalizePaint(value: string | undefined): string | null {
+  if (!value) return null;
+  const paint = value.trim();
+  if (/^url\(\s*#[^\s)]+\s*\)$/i.test(paint)) return paint;
+  return normalizeFill(paint);
+}
+
+function normalizeGradientStopColor(
+  value: string | undefined,
+  opacityValue: string | undefined,
+): string | null {
+  const color = normalizeFill(value);
+  if (!color) return null;
+  const opacity = normalizeOpacity(opacityValue);
+  if (opacity >= 0.999 || color.startsWith("rgba(")) return color;
+  const rgb = color.match(/^rgb\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/i);
+  if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${opacity})`;
+  const hex = color.slice(1);
+  const expanded =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((part) => part + part)
+          .join("")
+      : hex;
+  if (/^[0-9a-f]{6}$/i.test(expanded)) {
+    return `rgba(${Number.parseInt(expanded.slice(0, 2), 16)}, ${Number.parseInt(expanded.slice(2, 4), 16)}, ${Number.parseInt(expanded.slice(4, 6), 16)}, ${opacity})`;
+  }
+  return color;
+}
+
+function parseStopOffset(value: string | undefined): number | null {
+  if (!value) return null;
+  const raw = value.trim();
+  const numeric = Number.parseFloat(raw);
+  if (!Number.isFinite(numeric)) return null;
+  const offset = raw.endsWith("%") ? numeric / 100 : numeric;
+  return Math.min(1, Math.max(0, offset));
+}
+
+function gradientAngle(attributes: Record<string, string>, radial: boolean): number {
+  if (radial) return 90;
+  const x1 = Number.parseFloat(attributes.x1 ?? "");
+  const y1 = Number.parseFloat(attributes.y1 ?? "");
+  const x2 = Number.parseFloat(attributes.x2 ?? "");
+  const y2 = Number.parseFloat(attributes.y2 ?? "");
+  if (![x1, y1, x2, y2].every(Number.isFinite) || (x1 === x2 && y1 === y2)) return 90;
+  return (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
 }
 
 function parseAttributes(source: string): Record<string, string> {
@@ -232,6 +370,14 @@ function parseAttributes(source: string): Record<string, string> {
     }
   }
   return attributes;
+}
+
+function parseSvgLength(value: string | undefined): number | null {
+  if (!value) return null;
+  const match = /^\s*((?:\d+(?:\.\d*)?|\.\d+))(?:px)?\s*$/i.exec(value);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeFill(value: string | undefined): string | null {

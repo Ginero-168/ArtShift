@@ -27,6 +27,17 @@ describe("RoutedAiRuntime", () => {
     });
   });
 
+  it("requires explicit cloud consent for Recraft vectorization", async () => {
+    const runtime = createRuntime();
+    await expect(
+      runtime.execute("vectorize.recraft", {
+        image: { dataUrl: "data:image/png;base64,AAAA" },
+        width: 256,
+        height: 256,
+      }),
+    ).rejects.toMatchObject({ code: "POLICY_DENIED" });
+  });
+
   it("normalizes metadata, usage and cached executions at the interface", async () => {
     const adapter = new MockAiProviderAdapter(() => ({
       output: { text: "A precise description" },

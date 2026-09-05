@@ -3,6 +3,7 @@ export const AI_TASK_KINDS = [
   "vision.describe",
   "vision.propose",
   "vision.ocr",
+  "vectorize.recraft",
   "prompt.enhance",
   "image.generate",
 ] as const;
@@ -68,6 +69,16 @@ export type AiVisionInput = {
   language?: string;
 };
 
+export type AiVectorizeInput = {
+  image: AiImageInput;
+  width: number;
+  height: number;
+};
+
+export type AiVectorizeOutput = {
+  svg: string;
+};
+
 export type AiObjectProposal = {
   label: string;
   confidence?: number;
@@ -114,6 +125,7 @@ export type AiTaskInputMap = {
   "vision.describe": AiVisionInput;
   "vision.propose": AiVisionInput;
   "vision.ocr": AiVisionInput;
+  "vectorize.recraft": AiVectorizeInput;
   "prompt.enhance": AiPromptEnhanceInput;
   "image.generate": AiImageGenerateInput;
 };
@@ -123,6 +135,7 @@ export type AiTaskOutputMap = {
   "vision.describe": AiVisionTextOutput;
   "vision.propose": AiVisionProposalOutput;
   "vision.ocr": AiVisionTextOutput;
+  "vectorize.recraft": AiVectorizeOutput;
   "prompt.enhance": AiPromptEnhanceOutput;
   "image.generate": AiImageGenerateOutput;
 };

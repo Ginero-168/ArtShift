@@ -7,7 +7,7 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 - `lib/ai-runtime/` owns public contracts, locality policy, routing behavior, result caching and usage normalization.
 - `lib/server/ai/modelManifest.ts` owns stable aliases, provider/model mapping, pinned Replicate wrapper versions, price estimates and preflight cost ceilings.
 - `lib/server/ai/adapters/` contains one adapter per external provider. Provider-native fields stop at this directory.
-- `app/api/ai/execute` validates public task payloads and exposes only Vision, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
+- `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
 - `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser model is not ready. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
 - `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent.
@@ -19,6 +19,7 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 |---|---|
 | Assistant chat | One unified surface: local-first; complex turns use cloud only after the explicit user action and account/provider consent |
 | Vision describe/propose/OCR | Cloud opt-in; `cloudConsent: true` is required |
+| Recraft Vectorize | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud required after an explicit Generate action |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser model is not ready |
@@ -50,6 +51,17 @@ The Vectorize panel exposes two separate actions/settings buttons:
 
 The two panels keep independent settings; switching between them does not
 overwrite the other engine's preset or controls.
+
+`Recraft Vectorize (Cloud)` is a separate action with no shared local preset
+state. It uses the authenticated user's Replicate BYOK credential through the
+`vectorize.recraft` task and the stable `recraft-vectorize` alias. The button
+shows a cloud-cost consent dialog; it does not silently fall back to Custom or
+VTracer. The server sends only the allowlisted raster input to
+`recraft-ai/recraft-vectorize`, rejects non-Replicate output URLs and unsafe
+SVG content, downloads the returned SVG, and only then sends it to the browser
+adapter. The browser reads the SVG viewport and commits all valid editable
+paths in one editor mutation. Recraft's documented limits are PNG/JPG/WEBP,
+5 MB, 16 MP, 4096 px maximum dimension and 256 px minimum dimension.
 
 `Custom Auto-Trace` returns native `VectorPathElement[]` directly from the
 existing TypeScript Worker. `VTracer WASM` loads the pinned official

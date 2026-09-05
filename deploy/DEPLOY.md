@@ -62,6 +62,7 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `PEXELS_API_KEY` | Stock photos |
 | `RASTER_API_URL` | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
+| `REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION` | Optional pinned version for the Recraft Vectorize alias |
 
 Register this exact Google OAuth redirect URI in Google Cloud Console:
 
@@ -69,7 +70,7 @@ Register this exact Google OAuth redirect URI in Google Cloud Console:
 https://www.artshift.io/api/auth/google/callback
 ```
 
-Google Login is the primary account path. Replicate Chat, Design Agent and Replicate-backed Vision use **BYOK**. Do not add a `REPLICATE_API_TOKEN` environment variable. Each user enters their own Replicate API Key in **AI Provider Settings**; ArtShift verifies it over HTTPS and stores it encrypted against the Google account. Google access tokens are discarded after profile verification.
+Google Login is the primary account path. Replicate Chat, Design Agent, Replicate-backed Vision and `Recraft Vectorize (Cloud)` use **BYOK**. Do not add a `REPLICATE_API_TOKEN` environment variable. Each user enters their own Replicate API Key in **AI Provider Settings**; ArtShift verifies it over HTTPS and stores it encrypted against the Google account. Google access tokens are discarded after profile verification.
 
 ### Step 4: Redeploy and start the app
 

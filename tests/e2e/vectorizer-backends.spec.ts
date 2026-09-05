@@ -164,3 +164,77 @@ test("runs the original Custom Auto-Trace workflow from its own button", async (
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
+
+test("runs Recraft Vectorize through the Replicate task route and imports editable paths", async ({
+  page,
+}) => {
+  let recraftRequest: Record<string, unknown> | null = null;
+  await page.route("**/api/vectorize/recraft", async (route) => {
+    const request = route.request();
+    const body = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
+    if (body.task !== "vectorize.recraft") {
+      await route.continue();
+      return;
+    }
+    recraftRequest = body;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        execution: {
+          output: {
+            svg: '<svg viewBox="0 0 32 32"><path fill="#ef4444" d="M2 2 H30 V30 H2 Z"/></svg>',
+          },
+          metadata: {
+            provider: "replicate",
+            model: "recraft-ai/recraft-vectorize",
+          },
+        },
+      }),
+    });
+  });
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("dialog", (dialog) => void dialog.accept());
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Photo", exact: true }).click();
+  await page
+    .locator("label")
+    .filter({ hasText: "Choose image" })
+    .locator('input[type="file"]')
+    .setInputFiles({ name: "recraft-fixture.png", mimeType: "image/png", buffer: syntheticPng });
+  await expect(page.getByText("Image source", { exact: true })).toBeVisible();
+
+  const recraftButton = page.getByRole("button", {
+    name: "Recraft Vectorize (Cloud)",
+    exact: true,
+  });
+  await expect(recraftButton).toBeVisible();
+  await recraftButton.click();
+  await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^\d+ nodes$/)).toBeVisible();
+
+  expect(recraftRequest).toMatchObject({
+    task: "vectorize.recraft",
+    options: {
+      profile: "quality",
+      provider: "replicate",
+      modelAlias: "recraft-vectorize",
+      cloudConsent: true,
+      allowFallback: false,
+      cache: false,
+    },
+    input: { width: 32, height: 32 },
+  });
+  const capturedRequest = recraftRequest as Record<string, unknown> | null;
+  const input = (capturedRequest?.input ?? {}) as { image?: { dataUrl?: unknown } };
+  expect(input.image?.dataUrl).toEqual(expect.stringMatching(/^data:image\/png;base64,/));
+  expect(JSON.stringify(recraftRequest)).not.toContain("apiKey");
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});

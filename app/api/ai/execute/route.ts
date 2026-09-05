@@ -64,6 +64,8 @@ function executePublicTask(
       return ai.execute(request.task, request.input, options);
     case "vision.ocr":
       return ai.execute(request.task, request.input, options);
+    case "vectorize.recraft":
+      return ai.execute(request.task, request.input, options);
     case "prompt.enhance":
       return ai.execute(request.task, request.input, options);
     case "image.generate":

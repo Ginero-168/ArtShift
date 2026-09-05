@@ -135,4 +135,147 @@ describe("Replicate AI adapter", () => {
 
     expect(result.output).toEqual({ prompt: "A refined design prompt" });
   });
+
+  it("vectorizes a raster input with Recraft and validates the returned SVG file", async () => {
+    const svg = '<svg viewBox="0 0 256 256"><path fill="#ff0000" d="M0 0h256v256H0z"/></svg>';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-vectorize-1",
+            model: "recraft-ai/recraft-vectorize",
+            version: "abcdef0123456789abcdef0123456789",
+            status: "succeeded",
+            output: "https://replicate.delivery/example.svg",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(svg, { status: 200, headers: { "Content-Type": "image/svg+xml" } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "vectorize.recraft",
+      input: {
+        image: { dataUrl: "data:image/png;base64,AAAA" },
+        width: 256,
+        height: 256,
+      },
+      model: "recraft-ai/recraft-vectorize",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toEqual({ svg });
+    expect(result).toMatchObject({
+      model: "recraft-ai/recraft-vectorize@abcdef0123456789abcdef0123456789",
+      requestId: "prediction-vectorize-1",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.replicate.com/v1/models/recraft-ai/recraft-vectorize/predictions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Prefer: "wait=60", "Cancel-After": "90s" }),
+        body: JSON.stringify({ input: { image: "data:image/png;base64,AAAA" } }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://replicate.delivery/example.svg",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("rejects a Recraft output URL outside Replicate delivery storage", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "prediction-vectorize-unsafe",
+            status: "succeeded",
+            output: "https://example.com/unsafe.svg",
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "vectorize.recraft",
+        input: {
+          image: { dataUrl: "data:image/png;base64,AAAA" },
+          width: 256,
+          height: 256,
+        },
+        model: "recraft-ai/recraft-vectorize",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "PROVIDER_SCHEMA" });
+  });
+
+  it("rejects active content in a Recraft SVG before it reaches the editor", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-vectorize-unsafe-svg",
+            status: "succeeded",
+            output: "https://replicate.delivery/unsafe.svg",
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response('<svg viewBox="0 0 10 10"><script>alert(1)</script></svg>', {
+          status: 200,
+          headers: { "Content-Type": "image/svg+xml" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "vectorize.recraft",
+        input: {
+          image: { dataUrl: "data:image/png;base64,AAAA" },
+          width: 256,
+          height: 256,
+        },
+        model: "recraft-ai/recraft-vectorize",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "PROVIDER_SCHEMA" });
+  });
+
+  it("redacts raw Replicate error bodies for Recraft requests", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("provider-internal-detail", { status: 401 })),
+    );
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "vectorize.recraft",
+        input: {
+          image: { dataUrl: "data:image/png;base64,AAAA" },
+          width: 256,
+          height: 256,
+        },
+        model: "recraft-ai/recraft-vectorize",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
+      code: "PROVIDER_AUTH",
+      message: "Replicate rejected this request.",
+    });
+  });
 });

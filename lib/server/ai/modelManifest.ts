@@ -13,6 +13,7 @@ export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>
   "vision.describe": "economy",
   "vision.propose": "quality",
   "vision.ocr": "economy",
+  "vectorize.recraft": "quality",
   "prompt.enhance": "economy",
   "image.generate": "economy",
 };
@@ -30,6 +31,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
   );
   const replicateGpt = `openai/gpt-4o-mini@${environment.REPLICATE_GPT4O_MINI_VERSION || DEFAULT_REPLICATE_GPT4O_MINI_VERSION}`;
   const replicateGemini = `google/gemini-3-flash@${environment.REPLICATE_GEMINI_3_FLASH_VERSION || DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION}`;
+  const replicateRecraft = withVersion(
+    environment.REPLICATE_RECRAFT_VECTORIZE_MODEL || "recraft-ai/recraft-vectorize",
+    environment.REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION,
+  );
 
   const visionEconomy: AiRouteTarget[] = [
     {
@@ -97,6 +102,15 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     "vision.describe": { economy: visionEconomy, quality: visionQuality },
     "vision.propose": { economy: visionEconomy, quality: visionQuality },
     "vision.ocr": { economy: visionEconomy, quality: visionQuality },
+    "vectorize.recraft": {
+      quality: [
+        {
+          provider: "replicate",
+          model: replicateRecraft,
+          alias: "recraft-vectorize",
+        },
+      ],
+    },
 
     "image.generate": {
       economy: [

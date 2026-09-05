@@ -120,6 +120,30 @@ interface ReplicatePrediction {
 - ต่อ `AbortSignal` ของ ArtShift เข้ากับ `POST {urls.cancel}` และตั้ง `Cancel-After` เพื่อจำกัดค่าใช้จ่าย
 - Parser ต้องยอมรับ unknown response fields แต่ไม่ควรยอมรับ unknown status เป็น success
 
+## Recraft Vectorize ผ่าน Replicate
+
+ArtShift ใช้ `recraft-ai/recraft-vectorize` เป็น task แยกชื่อ `vectorize.recraft`
+สำหรับปุ่ม `Recraft Vectorize (Cloud)` โดยไม่ปะปนกับ VTracer WASM ที่ทำงาน
+local ใน browser ผู้ใช้ต้องยืนยัน cloud-cost consent และมี Replicate BYOK ที่ผูก
+กับ Google account ก่อนจึงจะเรียก provider ได้
+
+ตาม schema ทางการ โมเดลรับ field `image` เป็น PNG, JPG หรือ WEBP ขนาดไม่เกิน
+5 MB, 16 MP, ด้านยาวไม่เกิน 4096 px และด้านสั้นไม่น้อยกว่า 256 px ผลลัพธ์
+เป็น URI ของไฟล์ SVG ไม่ใช่ข้อความ SVG ใน prediction response โดยตรง
+[Recraft Vectorize API](https://replicate.com/recraft-ai/recraft-vectorize/api)
+
+Adapter ต้องทำตามลำดับนี้:
+
+1. ส่งเฉพาะ `{ input: { image } }` ไปยัง model-specific Predictions endpoint
+2. รอ terminal prediction status และยกเลิก remote prediction เมื่อ request ถูก abort
+3. รับเฉพาะ HTTPS output URL จาก `replicate.delivery` และไม่ตาม redirect ไป host อื่น
+4. จำกัดขนาด ตรวจ content type และปฏิเสธ `<script>`, `<foreignObject>`, event handler และ external references
+5. ส่ง SVG ที่ผ่านการตรวจสอบกลับ browser เพื่ออ่าน `viewBox`, parse path/gradient และ commit editor objects แบบ atomic
+
+ห้ามส่ง Replicate key จาก browser; route จะอ่าน credential ของ authenticated
+account ฝั่ง server แบบ request-scoped และไม่คืนค่า raw key หรือเก็บ SVG เป็น
+provider cache โดยอัตโนมัติ
+
 ## Anthropic Messages API
 
 ### Request/response แกนหลัก

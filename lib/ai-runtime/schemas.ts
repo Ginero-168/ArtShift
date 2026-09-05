@@ -3,6 +3,7 @@ import type {
   AiExecutionOptions,
   AiImageGenerateInput,
   AiPromptEnhanceInput,
+  AiVectorizeInput,
   AiVisionInput,
 } from "./contracts";
 
@@ -21,6 +22,21 @@ const VisionInputSchema = v.strictObject({
   }),
   prompt: v.optional(PromptSchema),
   language: v.optional(v.pipe(v.string(), v.maxLength(32))),
+});
+
+const RecraftImageDataUrlSchema = v.pipe(
+  v.string(),
+  v.maxLength(7_000_000),
+  v.regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/),
+);
+
+const RecraftVectorizeInputSchema = v.strictObject({
+  image: v.strictObject({
+    dataUrl: RecraftImageDataUrlSchema,
+    mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
+  }),
+  width: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(4_096)),
+  height: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(4_096)),
 });
 
 const PromptEnhanceInputSchema = v.strictObject({
@@ -53,6 +69,7 @@ export type PublicAiExecuteRequest =
       input: AiVisionInput;
       options: AiExecutionOptions;
     }
+  | { task: "vectorize.recraft"; input: AiVectorizeInput; options: AiExecutionOptions }
   | { task: "prompt.enhance"; input: AiPromptEnhanceInput; options: AiExecutionOptions }
   | { task: "image.generate"; input: AiImageGenerateInput; options: AiExecutionOptions };
 
@@ -70,6 +87,11 @@ export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequ
     return parsed.success
       ? { task: record.task, input: parsed.output, options: options.output }
       : null;
+  }
+  if (record.task === "vectorize.recraft") {
+    const parsed = v.safeParse(RecraftVectorizeInputSchema, record.input);
+    if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
+    return { task: record.task, input: parsed.output, options: options.output };
   }
   if (record.task === "prompt.enhance") {
     const parsed = v.safeParse(PromptEnhanceInputSchema, record.input);
