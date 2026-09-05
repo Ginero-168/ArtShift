@@ -14,7 +14,7 @@ The best direct replacement to test first is **Grounding DINO Tiny**. It is a de
 
 ## Candidate comparison
 
-| Candidate | What it does | Browser fit in ArtShift | Fit for Extract All | Recommendation |
+| Candidate | What it does | Browser fit in ArtShift | Fit for Extract | Recommendation |
 |---|---|---:|---:|---|
 | **Grounding DINO Tiny** | Text-conditioned open-set object detection; returns boxes and labels for text queries | **High** — existing `onnx-community/grounding-dino-tiny-ONNX` path is already present | Good for recall and labels; not a final mask generator | **Test first** |
 | **OWLv2** | Zero-shot text-conditioned object detection with an objectness score independent of text queries | **High** — Transformers.js has OWLv2 support and ONNX checkpoints exist | Useful as a second detector or reranker; still needs a label vocabulary | Test as A/B |
@@ -102,14 +102,13 @@ Only promote a detector when it improves object recall and mask quality without 
 ## Decision
 
 Shipped state (2026-09): both detectors were removed from the Extract path. The
-measured cost of Florence-2 `<OD>`, its dense-region recall pass, and Grounding
-DINO Tiny was several hundred megabytes of model download per Extract, while
-alpha components already produced the extraction geometry and the detectors only
-supplied coarse labels. `Extract All` now runs RMBG-1.4 → alpha components →
-SAM 2 Hiera Tiny, and `Quick Extract` runs RMBG-1.4 → alpha components. Extracted
-objects are labelled `object`.
+measured cost of Florence-2 `<OD>`, its dense-region recall pass, Grounding
+DINO Tiny, and the unused SAM 2 refinement was unnecessary for the single
+geometry-based action, while alpha components already produced the extraction
+geometry. `Extract` now runs RMBG-1.4 → alpha components. Extracted objects are
+labelled `object`.
 
-Remaining direction if semantic labels are wanted again:
+Remaining direction if semantic labels or mask refinement are wanted again:
 
 - Keep Florence-2 only for optional captions/OCR outside extraction.
 - Reintroduce a detector only behind a separate explicit action, never inside the

@@ -9,66 +9,48 @@ function isolatorSource(): string {
   );
 }
 
-function extractAllBody(source: string): string {
-  const start = source.indexOf("const handleExtractAll = async");
-  const end = source.indexOf("const handleExtractGeometry = async");
+function extractBody(source: string): string {
+  const start = source.indexOf("const handleExtract = async");
+  const end = source.indexOf("const isolateSingleObject");
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   return source.slice(start, end);
 }
 
-describe("Extract All local pipeline", () => {
-  it("keeps alpha geometry and SAM 2 refinement as the extraction path", () => {
-    const body = extractAllBody(isolatorSource());
+describe("Extract action surface", () => {
+  it("exposes one action named Extract", () => {
+    const source = isolatorSource();
+
+    expect(source).toContain("const handleExtract = async");
+    expect(source).toContain('processingPreviewInput(element, "extract", "Extract", url)');
+    expect(source).not.toContain("Extract All");
+    expect(source).not.toContain("Quick Extract");
+  });
+
+  it("keeps the remaining Extract action local and geometry-based", () => {
+    const body = extractBody(isolatorSource());
 
     expect(body).toContain("removeBackgroundWithRuntime");
     expect(body).toContain("detectAlphaObjectBoxes");
-    expect(body).toContain("labelAlphaComponents");
-    expect(body).toContain("createSam2Session");
     expect(body).toContain("extractObjectBatch");
+    expect(body).not.toContain("createSam2Session");
+    expect(body).not.toContain("sam2Session");
+    expect(body).not.toContain("visionDetect");
+    expect(body).not.toContain("groundingDinoDetect");
   });
 
-  it("does not run Florence-2 or Grounding DINO detectors while extracting", () => {
-    const body = extractAllBody(isolatorSource());
+  it("documents the single Extract action without legacy names", () => {
+    const runtimeDocs = readFileSync(path.join(process.cwd(), "docs/AI_RUNTIME.md"), "utf8");
+    const comparisonDocs = readFileSync(
+      path.join(process.cwd(), "docs/vision-model-comparison.md"),
+      "utf8",
+    );
 
-    for (const detector of [
-      "visionDetect",
-      "visionDenseDetect",
-      "groundingDinoDetect",
-      "shouldRunVisionRecall",
-      "mergeVisionDetections",
-      "mergeVisionWithAlphaComponents",
-    ]) {
-      expect(body).not.toContain(detector);
-    }
-  });
-
-  it("does not import the removed Extract detectors into the isolator", () => {
-    const source = isolatorSource();
-
-    for (const detector of [
-      "groundingDinoDetect",
-      "visionDenseDetect",
-      "shouldRunVisionRecall",
-      "mergeVisionDetections",
-      "mergeVisionWithAlphaComponents",
-    ]) {
-      expect(source).not.toContain(detector);
-    }
-  });
-
-  it("offers the VPS fallback only for background removal", () => {
-    const source = isolatorSource();
-    const label = source.slice(source.indexOf("Allow VPS fallback"));
-
-    expect(label).toContain("Remove BG");
-    expect(source).not.toContain("Florence-2 ใช้งานไม่ได้");
-  });
-
-  it("documents that Extract has no detector fallback", () => {
-    const docs = readFileSync(path.join(process.cwd(), "docs/AI_RUNTIME.md"), "utf8");
-
-    expect(docs).toContain("There is no server\nfallback for Florence-2 or any detector.");
-    expect(docs).toContain("No vision-language\ndetector runs during extraction.");
+    expect(runtimeDocs).toContain("`Extract` is a local-only pipeline");
+    expect(runtimeDocs).not.toContain("Extract All");
+    expect(runtimeDocs).not.toContain("Quick Extract");
+    expect(comparisonDocs).toContain("`Extract` now runs RMBG-1.4 → alpha components");
+    expect(comparisonDocs).not.toContain("Extract All");
+    expect(comparisonDocs).not.toContain("Quick Extract");
   });
 });

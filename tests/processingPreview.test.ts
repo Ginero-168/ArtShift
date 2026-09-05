@@ -79,7 +79,7 @@ describe("transient processing preview", () => {
   it("updates progress without creating a second preview", () => {
     const id = beginProcessingPreview({
       kind: "extract",
-      label: "Extract All",
+      label: "Extract",
       x: 500,
       y: 100,
       width: 220,

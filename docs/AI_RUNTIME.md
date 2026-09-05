@@ -29,13 +29,12 @@ Fallback is off by default. A caller must set `allowFallback: true`; otherwise t
 
 ### Extract pipeline and fallback boundary
 
-`Extract All` and `Quick Extract` are local-only pipelines: RMBG-1.4 computes the
-foreground alpha, alpha component analysis produces the extraction geometry, and
-SAM 2 Hiera Tiny refines each object's mask in `Extract All`. No vision-language
-detector runs during extraction. Florence-2 stays available for captions, OCR and
-phrase grounding in other surfaces, and Grounding DINO is no longer part of any
-Extract path — both were removed from extraction because they only contributed
-coarse labels while loading hundreds of megabytes per action.
+`Extract` is a local-only pipeline: RMBG-1.4 computes the foreground alpha and
+alpha component analysis produces the extraction geometry. No vision-language
+detector or mask-refinement model runs during extraction. Florence-2 stays available
+for captions, OCR and phrase grounding in other surfaces, and Grounding DINO is not
+part of the Extract path because it only contributed coarse labels while loading
+hundreds of megabytes per action.
 
 The only server fallback in this pipeline is background removal. When the user
 explicitly enables the VPS fallback and the local RMBG model is `lazy`, `loading`,

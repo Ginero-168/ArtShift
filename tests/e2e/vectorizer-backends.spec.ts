@@ -43,6 +43,10 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
     });
   await expect(page.getByText("Image source", { exact: true })).toBeVisible();
 
+  await expect(page.getByRole("button", { name: "Extract", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Extract All", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Quick Extract", exact: true })).toHaveCount(0);
+
   const customButton = page.getByRole("button", { name: "Custom Auto-Trace" });
   const vtracerButton = page.getByRole("button", { name: "VTracer WASM" });
   await expect(customButton).toBeVisible();

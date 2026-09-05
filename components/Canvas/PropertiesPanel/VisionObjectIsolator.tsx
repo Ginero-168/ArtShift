@@ -37,7 +37,6 @@ import {
   parseVTracerSvgResult,
   RECRAFT_SVG_LIMITS,
 } from "@/lib/vectorize/vtracerAdapter";
-import { createSam2Session, type Sam2Session, type VisionMask } from "@/lib/vision/advancedVision";
 import { findAlphaComponents } from "@/lib/vision/alphaComponents";
 import {
   enqueueAssetAnalysis,
@@ -50,14 +49,8 @@ import {
   hasUsableForeground,
   isForegroundForSource,
 } from "@/lib/vision/foreground";
-import { resolveInstanceMaskOverlaps } from "@/lib/vision/instanceMask";
-import { labelAlphaComponents, shouldPreserveAlphaForProposal } from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
-import {
-  cropImageRegion,
-  cropImageRegionWithMask,
-  trimTransparentRegion,
-} from "@/lib/vision/visionEngine";
+import { cropImageRegion, trimTransparentRegion } from "@/lib/vision/visionEngine";
 
 interface DetectedObject {
   label: string;
@@ -732,11 +725,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     onProgress?: (progress: number) => void,
     options: {
       trimTransparent?: boolean;
-      sam2Session?: Sam2Session | null;
-      maskSourceUrl?: string;
-      alphaComponents?: DetectedObject[];
       targetBounds?: { x: number; y: number; width: number; height: number };
-      onMaskProgress?: (objectIndex: number, progress: number) => void;
     } = {},
   ) => {
     const newElements = [];
@@ -746,51 +735,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       width: element.width,
       height: element.height,
     };
-    const masks: Array<VisionMask | null> = objects.map(() => null);
-
-    if (options.sam2Session) {
-      for (const [index, obj] of objects.entries()) {
-        try {
-          masks[index] = await options.sam2Session.segment(obj, (value) =>
-            options.onMaskProgress?.(index, value),
-          );
-        } catch (error) {
-          console.warn("SAM 2 mask failed for one object; using foreground crop.", error);
-        }
-      }
-
-      const validMasks = masks.flatMap((mask, index) =>
-        mask ? [{ index, box: objects[index], mask }] : [],
-      );
-      if (validMasks.length > 1) {
-        const resolved = resolveInstanceMaskOverlaps(validMasks);
-        for (const [resolvedIndex, candidate] of validMasks.entries()) {
-          masks[candidate.index] = resolved[resolvedIndex];
-        }
-      }
-    }
 
     for (const [index, obj] of objects.entries()) {
-      let cropped: Awaited<ReturnType<typeof cropImageRegion>>;
-      const mask = masks[index];
-      if (mask) {
-        try {
-          const preserveExistingAlpha = options.alphaComponents
-            ? shouldPreserveAlphaForProposal(obj, options.alphaComponents)
-            : true;
-          cropped = await cropImageRegionWithMask(
-            preserveExistingAlpha ? foregroundUrl : (options.maskSourceUrl ?? foregroundUrl),
-            obj,
-            mask,
-            { preserveExistingAlpha },
-          );
-        } catch (error) {
-          console.warn("SAM 2 mask failed for one object; using foreground crop.", error);
-          cropped = await cropImageRegion(foregroundUrl, obj);
-        }
-      } else {
-        cropped = await cropImageRegion(foregroundUrl, obj);
-      }
+      const cropped = await cropImageRegion(foregroundUrl, obj);
       const trimmed = options.trimTransparent
         ? await trimTransparentRegion(cropped.dataUrl, 2)
         : {
@@ -835,7 +782,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     return newElements;
   };
 
-  const handleExtractAll = async (queuedContext?: ProcessingJobContext) => {
+  const handleExtract = async (queuedContext?: ProcessingJobContext) => {
     const url = await getImageDataUrl();
     if (!url) {
       setStatusMessage("Image data not found in cache");
@@ -844,8 +791,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     if (!queuedContext) {
       const job = enqueueProcessingJob({
-        preview: processingPreviewInput(element, "extract", "Extract All", url),
-        run: (context) => handleExtractAll(context),
+        preview: processingPreviewInput(element, "extract", "Extract", url),
+        run: (context) => handleExtract(context),
       });
       processingJobIdRef.current = job.id;
       setBusy(true);
@@ -866,7 +813,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       progress: 0,
       message: "กำลังเตรียม Foreground…",
     });
-    const report = createProgressReporter("Extract All");
+    const report = createProgressReporter("Extract");
     const setExtractProgress = (value: number, message?: string) => {
       setProgress(value);
       updateCanvasProcessingPreview(previewId, {
@@ -874,186 +821,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         ...(message ? { message } : {}),
       });
     };
-    report("start", "เริ่มแยก Object ทั้งหมด", "started", 0);
-    setStatusMessage("Preparing foreground extraction...");
-
-    try {
-      const reusableForeground = isForegroundForSource(
-        element.fileId,
-        detectedForegroundFileId,
-        detectedForegroundUrl,
-      )
-        ? detectedForegroundUrl
-        : null;
-      let foregroundUrl: string;
-      let foregroundRuntime: "local" | "vps-fallback" = lastRmbgRuntime;
-      if (reusableForeground) {
-        foregroundUrl = reusableForeground;
-        setExtractProgress(70, "ใช้ผลลัพธ์ Remove BG ที่มีอยู่แล้ว…");
-        setStatusMessage("Using the existing background-removed foreground...");
-        report("foreground", "ใช้ผลลัพธ์ Remove BG ที่มีอยู่แล้ว", "success", 70);
-      } else {
-        setStatusMessage("Separating foreground pixels...");
-        report("foreground", "กำลังลบพื้นหลังเพื่อเตรียม Alpha", "step", 5);
-        const result = await removeBackgroundWithRuntime(url, {
-          allowServerFallback,
-          signal,
-          onProgress: (value) => setExtractProgress(value * 70, "กำลังแยก Foreground pixels…"),
-          onServerFallback: () => {
-            setStatusMessage("Local model is still loading; using the VPS fallback...");
-            updateCanvasProcessingPreview(previewId, {
-              message: "โมเดล Local ยังโหลดอยู่ กำลังใช้ VPS fallback…",
-            });
-            report("vps-fallback", "Local RMBG ยังไม่พร้อม จึงส่ง Extract ไป VPS", "fallback", 5);
-          },
-          onRuntime: (runtime) => {
-            foregroundRuntime = runtime;
-            setLastRmbgRuntime(runtime);
-          },
-        });
-        foregroundUrl = result.dataUrl;
-        foregroundRuntime = result.runtime;
-        report(
-          "foreground",
-          foregroundRuntime === "vps-fallback"
-            ? "สร้าง Foreground Alpha สำเร็จด้วย VPS fallback"
-            : "สร้าง Foreground Alpha สำเร็จ",
-          "success",
-          70,
-        );
-      }
-      setDetectedForegroundUrl(foregroundUrl);
-      setDetectedForegroundFileId(element.fileId);
-
-      // Alpha extraction is the canonical geometry path for visible foreground.
-      // Vision-language detectors only added coarse labels while loading
-      // hundreds of megabytes per Extract, so Extract now stays on the local
-      // alpha + SAM 2 pipeline.
-      setExtractProgress(74, "กำลังค้นหา Components ความละเอียดสูง…");
-      setStatusMessage("Finding high-resolution foreground components...");
-      report("components", "กำลังค้นหา Components ความละเอียดสูง", "step", 74);
-      const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl, 1536);
-      const objects = labelAlphaComponents(alphaObjects, []);
-      report("components", `พบ Components ${objects.length} ชิ้น`, "success", 82);
-      setDetectedObjects(objects);
-      if (objects.length === 0) {
-        setStatusMessage("No visible foreground objects were found");
-        report("complete", "ไม่พบ Object ที่แยกได้จาก Foreground", "fallback", 100);
-        return;
-      }
-
-      let sam2Session: Sam2Session | null = null;
-      try {
-        setStatusMessage("Refining object masks with SAM 2 Hiera Tiny...");
-        report("sam2-load", "กำลังโหลดและเตรียม SAM 2 Hiera Tiny", "step", 84);
-        sam2Session = await createSam2Session(url, (value) =>
-          setExtractProgress(82 + value * 10, "กำลังปรับ Mask ของแต่ละ Object…"),
-        );
-        report("sam2-load", "เตรียม SAM 2 และ Image Embedding สำเร็จ", "success", 92);
-      } catch (error) {
-        console.warn("SAM 2 refinement unavailable; keeping alpha geometry.", error);
-        setStatusMessage("SAM 2 unavailable; extracting from foreground geometry...");
-        report("sam2-load", "SAM 2 ใช้งานไม่ได้ จึงใช้ Alpha Geometry แทน", "fallback", 92);
-      }
-
-      setStatusMessage(`Extracting all ${objects.length} foreground objects...`);
-      report(
-        "masks",
-        sam2Session
-          ? `กำลังสร้าง Mask จริงให้ ${objects.length} Object ด้วย SAM 2`
-          : `กำลังสร้าง Object จาก Alpha Geometry จำนวน ${objects.length} ชิ้น`,
-        "step",
-        93,
-      );
-      setExtractProgress(92, "กำลังสร้างภาพจำลองของ Object ที่แยกได้…");
-      const newElements = await extractObjectBatch(
-        foregroundUrl,
-        objects,
-        (value) => setExtractProgress(92 + value * 7, "กำลังสร้าง Object ที่แก้ไขได้…"),
-        {
-          sam2Session,
-          maskSourceUrl: url,
-          alphaComponents: alphaObjects,
-          targetBounds: getProcessingPreviewBounds(element),
-          trimTransparent: true,
-          onMaskProgress: (objectIndex, value) => {
-            if (sam2Session) {
-              setExtractProgress(
-                92 + ((objectIndex + value) / Math.max(1, objects.length)) * 7,
-                "กำลังปรับ Mask ของแต่ละ Object…",
-              );
-            }
-          },
-        },
-      );
-      if (newElements.length === 0) {
-        setStatusMessage("No visible foreground objects were found");
-      } else {
-        addElements(newElements, "extract all foreground objects");
-        selectOnly(newElements.map((el) => el.id));
-        setStatusMessage(
-          newElements.length === objects.length
-            ? `Extracted ${newElements.length} transparent objects!`
-            : `Extracted ${newElements.length} objects; skipped empty detections.`,
-        );
-        report(
-          "complete",
-          `แยก Object สำเร็จ ${newElements.length}/${objects.length} ชิ้น`,
-          newElements.length === objects.length ? "success" : "fallback",
-          100,
-        );
-      }
-    } catch (err) {
-      console.warn("Extract All failed:", err);
-      setStatusMessage("Detection failed: " + (err as Error).message);
-      report("error", `Extract All ไม่สำเร็จ: ${(err as Error).message}`, "error");
-    } finally {
-      setBusy(false);
-      setProgress(null);
-    }
-  };
-
-  const handleExtractGeometry = async (queuedContext?: ProcessingJobContext) => {
-    const url = await getImageDataUrl();
-    if (!url) {
-      setStatusMessage("Image data not found in cache");
-      return;
-    }
-
-    if (!queuedContext) {
-      const job = enqueueProcessingJob({
-        preview: processingPreviewInput(element, "extract", "Quick Extract", url),
-        run: (context) => handleExtractGeometry(context),
-      });
-      processingJobIdRef.current = job.id;
-      setBusy(true);
-      try {
-        await job.promise;
-      } finally {
-        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
-        setBusy(false);
-        setProgress(null);
-      }
-      return;
-    }
-
-    const { id: previewId, signal } = queuedContext;
-    setBusy(true);
-    setProgress(0);
-    updateCanvasProcessingPreview(previewId, {
-      progress: 0,
-      message: "กำลังเตรียม Foreground…",
-    });
-    const report = createProgressReporter("Quick Extract");
-    const setQuickExtractProgress = (value: number, message?: string) => {
-      setProgress(value);
-      updateCanvasProcessingPreview(previewId, {
-        progress: value / 100,
-        ...(message ? { message } : {}),
-      });
-    };
     report("start", "เริ่มแยก Object แบบรวดเร็ว", "started", 0);
-    setStatusMessage("Removing background for quick extraction...");
+    setStatusMessage("Removing background for extraction...");
 
     try {
       const reusableForeground = isForegroundForSource(
@@ -1063,7 +832,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       )
         ? detectedForegroundUrl
         : null;
-      setQuickExtractProgress(
+      setExtractProgress(
         reusableForeground ? 70 : 5,
         reusableForeground ? "ใช้ Foreground ที่มีอยู่แล้ว…" : "กำลังลบพื้นหลังเพื่อแยก Object…",
       );
@@ -1079,19 +848,13 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           await removeBackgroundWithRuntime(url, {
             allowServerFallback,
             signal,
-            onProgress: (value) =>
-              setQuickExtractProgress(value * 70, "กำลังแยก Foreground pixels…"),
+            onProgress: (value) => setExtractProgress(value * 70, "กำลังแยก Foreground pixels…"),
             onServerFallback: () => {
               setStatusMessage("Local model is still loading; using the VPS fallback...");
               updateCanvasProcessingPreview(previewId, {
                 message: "โมเดล Local ยังโหลดอยู่ กำลังใช้ VPS fallback…",
               });
-              report(
-                "vps-fallback",
-                "Local RMBG ยังไม่พร้อม จึงส่ง Quick Extract ไป VPS",
-                "fallback",
-                5,
-              );
+              report("vps-fallback", "Local RMBG ยังไม่พร้อม จึงส่ง Extract ไป VPS", "fallback", 5);
             },
             onRuntime: setLastRmbgRuntime,
           })
@@ -1099,7 +862,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       report("foreground", "เตรียม Foreground Alpha สำเร็จ", "success", 70);
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
-      setQuickExtractProgress(74, "กำลังค้นหา Components…");
+      setExtractProgress(74, "กำลังค้นหา Components…");
       const objects = await detectAlphaObjectBoxes(foregroundUrl);
       setDetectedObjects(objects);
       report("components", `พบ Components จำนวน ${objects.length} ชิ้น`, "success", 74);
@@ -1113,21 +876,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       const newElements = await extractObjectBatch(
         foregroundUrl,
         objects,
-        (value) => setQuickExtractProgress(74 + value * 25, "กำลังสร้าง Object ที่แก้ไขได้…"),
+        (value) => setExtractProgress(74 + value * 25, "กำลังสร้าง Object ที่แก้ไขได้…"),
         { targetBounds: getProcessingPreviewBounds(element) },
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");
         return;
       }
-      addElements(newElements, "quick extract foreground objects");
+      addElements(newElements, "extract foreground objects");
       selectOnly(newElements.map((el) => el.id));
-      setStatusMessage(`Quick-extracted ${newElements.length} transparent objects!`);
-      report("complete", `แยก Object แบบรวดเร็วสำเร็จ ${newElements.length} ชิ้น`, "success", 100);
+      setStatusMessage(`Extracted ${newElements.length} transparent objects!`);
+      report("complete", `แยก Object สำเร็จ ${newElements.length} ชิ้น`, "success", 100);
     } catch (err) {
-      console.warn("Quick extraction failed:", err);
-      setStatusMessage("Quick extraction failed: " + (err as Error).message);
-      report("error", `Quick Extract ไม่สำเร็จ: ${(err as Error).message}`, "error");
+      console.warn("Extract failed:", err);
+      setStatusMessage("Extract failed: " + (err as Error).message);
+      report("error", `Extract ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
       setBusy(false);
       setProgress(null);
@@ -1344,32 +1107,8 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         <button
           type="button"
           disabled={busy}
-          onClick={() => void handleExtractAll()}
-          title="Extract every foreground object locally with alpha geometry and SAM 2 mask refinement"
-          style={{
-            flex: 1,
-            padding: "5px 8px",
-            background: "#fff",
-            color: "var(--accent, #6366f1)",
-            border: "1px solid rgba(99, 102, 241, 0.3)",
-            borderRadius: 5,
-            fontWeight: 600,
-            fontSize: 10,
-            cursor: busy ? "wait" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 3,
-          }}
-        >
-          {busy ? "Extracting..." : "Extract All"}
-        </button>
-
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void handleExtractGeometry()}
-          title="Recommended: remove the background and split visible regions locally"
+          onClick={() => void handleExtract()}
+          title="Extract foreground objects locally with alpha geometry"
           style={{
             flex: 1,
             padding: "5px 6px",
@@ -1387,7 +1126,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             whiteSpace: "nowrap",
           }}
         >
-          {busy ? "Processing..." : "Quick Extract"}
+          {busy ? "Processing..." : "Extract"}
         </button>
       </div>
 
