@@ -122,7 +122,6 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
         height: res.height,
       });
     } catch (err) {
-      console.error(err);
       setError((err as Error).message || "Failed to generate image.");
     } finally {
       setLoading(false);
