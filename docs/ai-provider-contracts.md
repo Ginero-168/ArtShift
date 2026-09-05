@@ -144,6 +144,46 @@ Adapter ต้องทำตามลำดับนี้:
 account ฝั่ง server แบบ request-scoped และไม่คืนค่า raw key หรือเก็บ SVG เป็น
 provider cache โดยอัตโนมัติ
 
+## P-Image-Upscale ผ่าน Replicate
+
+ArtShift ใช้ `prunaai/p-image-upscale` สำหรับ task `image.upscale` ผ่าน
+endpoint `/api/upscale/recraft` เดิมเพื่อรักษา compatibility กับ client รุ่นก่อน
+ชื่อ endpoint เป็น legacy path เท่านั้น ไม่ได้หมายความว่ายังใช้ Recraft Upscale
+
+ArtShift pin official model version ที่ผ่านการตรวจ schema แล้ว และส่งเฉพาะ
+allowlisted fields ต่อไปนี้:
+
+```json
+{
+  "image": "data:image/...",
+  "upscale_mode": "target",
+  "target": 8,
+  "enhance_details": true,
+  "enhance_realism": false,
+  "output_format": "png",
+  "output_quality": 100,
+  "disable_safety_checker": false
+}
+```
+
+UI mapping:
+
+| UI | Range label | Provider `target` |
+|---|---:|---:|
+| 2K | 4–8 MP | 8 |
+| 4K | 8–16 MP | 16 |
+| 8K | 16–32 MP | 32 |
+
+Provider output เป็น URI ของภาพ; adapter ต้องรับเฉพาะ HTTPS `replicate.delivery`,
+ตรวจ content type/ขนาด, ดาวน์โหลดและแปลงเป็น data URL ก่อนส่งกลับ browser
+เหมือน image-generation output ห้ามส่ง provider URL หรือ credential ไปยัง client
+
+Official sources:
+
+- [Replicate model page](https://replicate.com/prunaai/p-image-upscale)
+- [Replicate version schema](https://replicate.com/prunaai/p-image-upscale/versions/391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf/api)
+- [Pruna model documentation](https://docs.pruna.ai/en/stable/docs_pruna_endpoints/performance_models/p-image-upscale.html)
+
 ## Anthropic Messages API
 
 ### Request/response แกนหลัก

@@ -8,7 +8,9 @@ const DEFAULT_REPLICATE_GPT4O_MINI_VERSION =
 const DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION =
   "e27b7b83f67f5865920667591a2a08a41cdc82906bd29306fe79581ab0646b8b";
 const REPLICATE_GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
-const REPLICATE_RECRAFT_UPSCALE_MODEL = "recraft-ai/recraft-crisp-upscale";
+const REPLICATE_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
+const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
+  "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf";
 
 export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>> = {
   "assistant.chat": "economy",
@@ -42,9 +44,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     REPLICATE_GPT_IMAGE_2_MODEL,
     environment.REPLICATE_GPT_IMAGE_2_VERSION,
   );
-  const replicateRecraftUpscale = withVersion(
-    REPLICATE_RECRAFT_UPSCALE_MODEL,
-    environment.REPLICATE_RECRAFT_UPSCALE_MODEL_VERSION,
+  const replicatePImageUpscale = withVersion(
+    REPLICATE_P_IMAGE_UPSCALE_MODEL,
+    environment.REPLICATE_P_IMAGE_UPSCALE_MODEL_VERSION ||
+      DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION,
   );
 
   const visionEconomy: AiRouteTarget[] = [
@@ -126,8 +129,8 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
       quality: [
         {
           provider: "replicate",
-          model: replicateRecraftUpscale,
-          alias: "recraft-crisp-upscale",
+          model: replicatePImageUpscale,
+          alias: "p-image-upscale",
           expectedMaxUsd: 0.04,
           pricing: { currency: "USD", perRunUsd: 0.04 },
         },

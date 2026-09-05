@@ -33,7 +33,8 @@ The unified chat preserves local-first precedence: a deterministic local plan wi
 |---|---|
 | Assistant chat | One unified surface: local-first; complex turns use cloud only after the explicit user action and account/provider consent |
 | Vision describe/propose/OCR | Cloud opt-in; `cloudConsent: true` is required |
-| Recraft Vectorize | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
+| Recraft Vectorize (Cloud) | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
+| P-Image-Upscale | Cloud opt-in; the explicit Upscale settings panel sends the raster to Replicate with a selected 8/16/32 MP target |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with fixed `quality: "low"` |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |

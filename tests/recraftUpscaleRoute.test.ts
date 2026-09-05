@@ -16,23 +16,24 @@ const imageInput = {
   image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
   width: 1024,
   height: 768,
+  targetMegapixels: 16,
 };
 
-describe("Recraft Crisp Upscale API", () => {
+describe("P-Image Upscale API", () => {
   beforeEach(() => {
     runtimeMock.execute.mockReset();
     runtimeMock.execute.mockResolvedValue({
       output: { dataUrl: "data:image/png;base64,BBBB" },
       metadata: {
         provider: "replicate",
-        model: "recraft-ai/recraft-crisp-upscale",
+        model: "prunaai/p-image-upscale",
         usage: {},
         warnings: [],
       },
     });
   });
 
-  it("executes only the fixed Upscale task and returns the normalized image output", async () => {
+  it("executes only the fixed P-Image Upscale task and returns the normalized image output", async () => {
     const body = {
       task: "image.upscale",
       input: imageInput,
@@ -50,7 +51,7 @@ describe("Recraft Crisp Upscale API", () => {
       body.input,
       expect.objectContaining({
         provider: "replicate",
-        modelAlias: "recraft-crisp-upscale",
+        modelAlias: "p-image-upscale",
         profile: "quality",
         allowFallback: false,
         cloudConsent: true,

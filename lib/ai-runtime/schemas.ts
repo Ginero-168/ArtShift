@@ -40,13 +40,14 @@ const RecraftVectorizeInputSchema = v.strictObject({
   height: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(4_096)),
 });
 
-const RecraftUpscaleInputSchema = v.strictObject({
+const PImageUpscaleInputSchema = v.strictObject({
   image: v.strictObject({
     dataUrl: RecraftImageDataUrlSchema,
     mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
   }),
   width: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
   height: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  targetMegapixels: v.picklist([8, 16, 32]),
 });
 
 const PromptEnhanceInputSchema = v.strictObject({
@@ -139,7 +140,7 @@ export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequ
       : null;
   }
   if (record.task === "image.upscale") {
-    const parsed = v.safeParse(RecraftUpscaleInputSchema, record.input);
+    const parsed = v.safeParse(PImageUpscaleInputSchema, record.input);
     if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
     return { task: "image.upscale", input: parsed.output, options: options.output };
   }

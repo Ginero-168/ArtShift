@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
 import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
+import {
+  getUpscaleTargetMegapixels,
+  UPSCALE_RESOLUTION_PRESETS,
+  type UpscaleResolutionPreset,
+} from "@/lib/ai-runtime/contracts";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL, preloadDataURL } from "@/lib/engine/imageCache";
 import {
@@ -245,6 +250,7 @@ export function VisionObjectIsolator({
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
   const controlledToolMode = activeTool !== undefined;
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [upscaleResolution, setUpscaleResolution] = useState<UpscaleResolutionPreset>("2k");
   const [vtracerSettings, setVTracerSettings] = useState<VectorizeEngineSettings>(() =>
     createVectorizeEngineSettings(),
   );
@@ -259,6 +265,10 @@ export function VisionObjectIsolator({
     }
   }, [activeTool, controlledToolMode]);
   const activeSettings = vtracerSettings;
+  const selectedUpscaleResolution =
+    UPSCALE_RESOLUTION_PRESETS.find((option) => option.value === upscaleResolution) ??
+    UPSCALE_RESOLUTION_PRESETS[0];
+  const upscaleTargetMegapixels = getUpscaleTargetMegapixels(upscaleResolution);
   const updateActiveSettings = (patch: Partial<VectorizeEngineSettings>) => {
     setVTracerSettings((current) => ({ ...current, ...patch }));
   };
@@ -627,7 +637,7 @@ export function VisionObjectIsolator({
       const preloaded = await preloadDataURL(cached.dataURL);
       if (
         !window.confirm(
-          "Upscale จะส่งภาพนี้ไปยัง Replicate เพื่อเพิ่มความคมชัด และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?",
+          `P-Image-Upscale จะส่งภาพนี้ไปยัง Replicate เพื่อเพิ่มความคมชัดเป็น ${selectedUpscaleResolution.label} (${selectedUpscaleResolution.rangeLabel}) และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?`,
         )
       ) {
         return;
@@ -655,14 +665,14 @@ export function VisionObjectIsolator({
       progress: 0.05,
       message: "กำลังเตรียมภาพต้นฉบับสำหรับ Upscale…",
     });
-    const report = createProgressReporter("Upscale");
+    const report = createProgressReporter("P-Image-Upscale");
     report("preload", "เตรียมภาพต้นฉบับแล้ว", "started", 0.05);
 
     try {
-      setStatusMessage("Sending image to Recraft Crisp Upscale...");
+      setStatusMessage("Sending image to P-Image-Upscale...");
       updateCanvasProcessingPreview(previewId, {
         progress: 0.12,
-        message: "กำลังส่งภาพไปยัง Recraft Crisp Upscale…",
+        message: "กำลังส่งภาพไปยัง P-Image-Upscale…",
       });
       const response = await fetch("/api/upscale/recraft", {
         method: "POST",
@@ -678,11 +688,12 @@ export function VisionObjectIsolator({
             },
             width: cached.width,
             height: cached.height,
+            targetMegapixels: upscaleTargetMegapixels,
           },
           options: {
             profile: "quality",
             provider: "replicate",
-            modelAlias: "recraft-crisp-upscale",
+            modelAlias: "p-image-upscale",
             cloudConsent: true,
             allowFallback: false,
             timeoutMs: 120_000,
@@ -701,7 +712,7 @@ export function VisionObjectIsolator({
             ? payload.error
             : typeof payload?.error?.message === "string"
               ? payload.error.message
-              : "Recraft Crisp Upscale request failed.";
+              : "P-Image-Upscale request failed.";
         throw new Error(providerError);
       }
       const resultDataUrl = payload?.execution?.output?.dataUrl;
@@ -709,7 +720,7 @@ export function VisionObjectIsolator({
         typeof resultDataUrl !== "string" ||
         !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(resultDataUrl)
       ) {
-        throw new Error("Recraft Crisp Upscale returned no valid image output.");
+        throw new Error("P-Image-Upscale returned no valid image output.");
       }
       if (signal.aborted) return;
 
@@ -739,14 +750,14 @@ export function VisionObjectIsolator({
       addElement(resultImage, "upscale image duplicate");
       selectOnly([resultImage.id]);
       setStatusMessage("Upscale completed as a duplicate image.");
-      report("complete", "Upscale สำเร็จและสร้าง Duplicate โดยคงต้นฉบับไว้", "success", 100);
+      report("complete", "P-Image-Upscale สำเร็จและสร้าง Duplicate โดยคงต้นฉบับไว้", "success", 100);
     } catch (error) {
       if (signal.aborted || (error as Error).name === "AbortError") {
-        setStatusMessage("Upscale cancelled.");
+        setStatusMessage("P-Image-Upscale cancelled.");
       } else {
-        const message = error instanceof Error ? error.message : "Unknown Upscale error.";
-        setStatusMessage(`Upscale error: ${message}`);
-        report("error", `Upscale ไม่สำเร็จ: ${message}`, "error");
+        const message = error instanceof Error ? error.message : "Unknown P-Image-Upscale error.";
+        setStatusMessage(`P-Image-Upscale error: ${message}`);
+        report("error", `P-Image-Upscale ไม่สำเร็จ: ${message}`, "error");
       }
     } finally {
       setBusy(false);
@@ -1353,6 +1364,89 @@ export function VisionObjectIsolator({
             }}
           >
             {busy ? "Processing..." : "Run Vectorize(Cloud)"}
+          </button>
+        </div>
+      )}
+
+      {controlledToolMode && activeTool === "upscale" && (
+        <div
+          data-testid="image-tool-settings"
+          data-tool="upscale"
+          style={{
+            marginTop: 6,
+            padding: 8,
+            background: "#fff",
+            border: "1px solid #c7d2fe",
+            borderRadius: 6,
+          }}
+        >
+          <strong style={{ display: "block", color: "#3730a3", fontSize: 10 }}>
+            P-Image-Upscale Settings
+          </strong>
+          <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+            Pruna AI · Cloud opt-in · output target in megapixels
+          </span>
+          <label
+            htmlFor="upscale-resolution-select"
+            style={{
+              display: "block",
+              marginTop: 8,
+              color: "#334155",
+              fontSize: 9,
+              fontWeight: 700,
+            }}
+          >
+            Output resolution
+          </label>
+          <select
+            id="upscale-resolution-select"
+            aria-label="Output resolution"
+            value={upscaleResolution}
+            onChange={(event) =>
+              setUpscaleResolution(event.target.value as UpscaleResolutionPreset)
+            }
+            style={{
+              width: "100%",
+              marginTop: 4,
+              padding: "6px 7px",
+              border: "1px solid #cbd5e1",
+              borderRadius: 5,
+              background: "#fff",
+              color: "#0f172a",
+              fontSize: 10,
+            }}
+          >
+            {UPSCALE_RESOLUTION_PRESETS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label} ({option.rangeLabel})
+              </option>
+            ))}
+          </select>
+          <span
+            aria-live="polite"
+            style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 8.5 }}
+          >
+            Target output: {selectedUpscaleResolution.targetMegapixels} MP
+          </span>
+          <button
+            type="button"
+            disabled={busy}
+            aria-label="Run Upscale"
+            onClick={() => void handleUpscale()}
+            style={{
+              width: "100%",
+              marginTop: 7,
+              padding: "6px 8px",
+              border: "none",
+              borderRadius: 5,
+              background: "#4f46e5",
+              color: "#fff",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: busy ? "wait" : "pointer",
+            }}
+          >
+            {busy ? "Processing..." : "Run Upscale"}
           </button>
         </div>
       )}

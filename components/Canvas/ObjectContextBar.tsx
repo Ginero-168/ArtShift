@@ -394,9 +394,7 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        activeImageTool === "remove-bg" ||
-        activeImageTool === "extract" ||
-        activeImageTool === "upscale" ? (
+        activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
           <div
             data-testid={
               activeImageTool === "remove-bg"
@@ -419,7 +417,11 @@ export default function ObjectContextBar({
         ) : (
           <div
             role="dialog"
-            aria-label="Vectorize settings"
+            aria-label={
+              isVectorizeTool(activeImageTool)
+                ? "Vectorize settings"
+                : `${IMAGE_ACTION_LABELS[activeImageTool]} settings`
+            }
             onPointerDown={(event) => event.stopPropagation()}
             style={{
               position: "absolute",

@@ -168,7 +168,9 @@ test("runs Extract from the middle Option Bar action", async ({ page }) => {
   ).toHaveCount(1);
 });
 
-test("preloads and upscales a duplicate through Recraft Crisp Upscale", async ({ page }) => {
+test("selects a P-Image-Upscale output size before running and creates a duplicate", async ({
+  page,
+}) => {
   let upscaleRequest: Record<string, unknown> | null = null;
   let releaseUpscale: () => void = () => {};
   const upscalePending = new Promise<void>((resolve) => {
@@ -200,6 +202,19 @@ test("preloads and upscales a duplicate through Recraft Crisp Upscale", async ({
 
   const optionBar = page.getByRole("toolbar", { name: "Image options", exact: true });
   await optionBar.getByRole("button", { name: "Upscale", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Upscale settings", exact: true });
+  await expect(settings).toBeVisible();
+  const resolution = settings.getByRole("combobox", { name: "Output resolution", exact: true });
+  await expect(resolution).toHaveValue("2k");
+  await expect(resolution.locator("option")).toHaveText([
+    "2K (4–8 MP)",
+    "4K (8–16 MP)",
+    "8K (16–32 MP)",
+  ]);
+  await resolution.selectOption("4k");
+  expect(upscaleRequest).toBeNull();
+  await settings.getByRole("button", { name: "Run Upscale", exact: true }).click();
+
   const preview = page.getByTestId("processing-preview");
   await expect(preview).toBeVisible();
   await expect(preview).toHaveAttribute("data-preview-kind", "upscale");
@@ -209,17 +224,14 @@ test("preloads and upscales a duplicate through Recraft Crisp Upscale", async ({
     "animation-name",
     "model-manager-shimmer",
   );
-  const previewWidth = await preview.getAttribute("data-preview-width");
-  const previewHeight = await preview.getAttribute("data-preview-height");
-  expect(Number(previewWidth)).toBeGreaterThan(0);
-  expect(previewWidth).toBe(previewHeight);
   await expect
     .poll(() => upscaleRequest)
     .toMatchObject({
       task: "image.upscale",
+      input: { targetMegapixels: 16 },
       options: {
         provider: "replicate",
-        modelAlias: "recraft-crisp-upscale",
+        modelAlias: "p-image-upscale",
         cloudConsent: true,
         allowFallback: false,
       },

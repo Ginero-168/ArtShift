@@ -61,6 +61,7 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 | `REPLICATE_GPT4O_MINI_VERSION` | no | Pinned economy Vision wrapper version |
 | `REPLICATE_GEMINI_3_FLASH_VERSION` | no | Pinned quality Vision wrapper version |
 | `REPLICATE_GPT_IMAGE_2_VERSION` | no | Optional pinned version for GPT Image 2; model is fixed to `openai/gpt-image-2` |
+| `REPLICATE_P_IMAGE_UPSCALE_MODEL_VERSION` | no | Optional pinned version for `prunaai/p-image-upscale`; defaults to the tested official version |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | no | Optional direct Google adapter |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | no | Optional direct OpenAI adapter |
 | `AI_MONTHLY_BUDGET_USD` | no | Server-side estimated monthly budget guard |

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!isRecord(body) || body.task !== "image.upscale") {
-    return invalidRequest("This endpoint only supports Recraft Crisp Upscale.");
+    return invalidRequest("This endpoint only supports P-Image-Upscale.");
   }
   const request = parsePublicAiExecuteRequest(body);
   if (request?.task !== "image.upscale") {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       ...request.options,
       profile: "quality",
       provider: "replicate",
-      modelAlias: "recraft-crisp-upscale",
+      modelAlias: "p-image-upscale",
       cloudConsent: true,
       allowFallback: false,
       signal: req.signal,
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     const normalized =
       error instanceof AiRuntimeError
         ? error
-        : new AiRuntimeError("PROVIDER_UNAVAILABLE", "Recraft Crisp Upscale failed.", {
+        : new AiRuntimeError("PROVIDER_UNAVAILABLE", "P-Image-Upscale failed.", {
             cause: error,
           });
     return jsonNoStore(

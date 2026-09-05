@@ -63,6 +63,7 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `RASTER_API_URL` | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 | `REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION` | Optional pinned version for the Recraft Vectorize alias |
+| `REPLICATE_P_IMAGE_UPSCALE_MODEL_VERSION` | Optional pinned version for `prunaai/p-image-upscale`; defaults to the tested official version |
 
 Register this exact Google OAuth redirect URI in Google Cloud Console:
 

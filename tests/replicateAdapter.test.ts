@@ -426,7 +426,7 @@ describe("Replicate AI adapter", () => {
     });
   });
 
-  it("upscales a raster input with Recraft Crisp Upscale and returns a safe data URL", async () => {
+  it("upscales a raster input with P-Image-Upscale and returns a safe data URL", async () => {
     const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi
       .fn()
@@ -434,7 +434,8 @@ describe("Replicate AI adapter", () => {
         new Response(
           JSON.stringify({
             id: "prediction-upscale-1",
-            model: "recraft-ai/recraft-crisp-upscale",
+            model: "prunaai/p-image-upscale",
+            version: "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf",
             status: "succeeded",
             output: "https://replicate.delivery/upscaled.png",
             metrics: { predict_time: 2.4 },
@@ -454,8 +455,10 @@ describe("Replicate AI adapter", () => {
         image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
         width: 1024,
         height: 768,
+        targetMegapixels: 16,
       } as never,
-      model: "recraft-ai/recraft-crisp-upscale",
+      model:
+        "prunaai/p-image-upscale@391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf",
       signal: new AbortController().signal,
     });
 
@@ -463,16 +466,27 @@ describe("Replicate AI adapter", () => {
       dataUrl: `data:image/png;base64,${Buffer.from(imageBytes).toString("base64")}`,
     });
     expect(result).toMatchObject({
-      model: "recraft-ai/recraft-crisp-upscale",
+      model:
+        "prunaai/p-image-upscale@391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf",
       requestId: "prediction-upscale-1",
       usage: { providerSeconds: 2.4 },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "https://api.replicate.com/v1/models/recraft-ai/recraft-crisp-upscale/predictions",
+      "https://api.replicate.com/v1/predictions",
       expect.objectContaining({
         body: JSON.stringify({
-          input: { image: "data:image/png;base64,AAAA" },
+          version: "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf",
+          input: {
+            image: "data:image/png;base64,AAAA",
+            upscale_mode: "target",
+            target: 16,
+            enhance_details: true,
+            enhance_realism: false,
+            output_format: "png",
+            output_quality: 100,
+            disable_safety_checker: false,
+          },
         }),
       }),
     );

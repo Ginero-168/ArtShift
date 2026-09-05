@@ -136,10 +136,27 @@ export type AiImageGenerateOutput = {
   seed: number;
 };
 
+export const UPSCALE_RESOLUTION_PRESETS = [
+  { value: "2k", label: "2K", rangeLabel: "4–8 MP", targetMegapixels: 8 },
+  { value: "4k", label: "4K", rangeLabel: "8–16 MP", targetMegapixels: 16 },
+  { value: "8k", label: "8K", rangeLabel: "16–32 MP", targetMegapixels: 32 },
+] as const;
+
+export type UpscaleResolutionPreset = (typeof UPSCALE_RESOLUTION_PRESETS)[number]["value"];
+export type UpscaleTargetMegapixels =
+  (typeof UPSCALE_RESOLUTION_PRESETS)[number]["targetMegapixels"];
+
+export function getUpscaleTargetMegapixels(
+  preset: UpscaleResolutionPreset,
+): UpscaleTargetMegapixels {
+  return UPSCALE_RESOLUTION_PRESETS.find((option) => option.value === preset)!.targetMegapixels;
+}
+
 export type AiImageUpscaleInput = {
   image: AiImageInput;
   width: number;
   height: number;
+  targetMegapixels: UpscaleTargetMegapixels;
 };
 
 export type AiImageUpscaleOutput = {
