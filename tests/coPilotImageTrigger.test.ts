@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateImageMock = vi.hoisted(() => vi.fn());
+const preloadDataURLMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/ai/imageGeneration")>();
   return { ...actual, generateAIImage: generateImageMock };
+});
+
+vi.mock("@/lib/engine/imageCache", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/engine/imageCache")>();
+  return { ...actual, preloadDataURL: preloadDataURLMock };
 });
 
 import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
@@ -23,6 +29,13 @@ describe("AI Co-Pilot image commands", () => {
       seed: 1,
       model: "openai/gpt-image-2",
       prompt: "แมว",
+    });
+    preloadDataURLMock.mockResolvedValue({
+      fileId: "generated-image",
+      dataURL: "data:image/png;base64,AA==",
+      img: {} as HTMLImageElement,
+      width: 1024,
+      height: 1024,
     });
 
     const layer = createEngineLayer("free", { name: "Test Layer" });
@@ -68,5 +81,63 @@ describe("AI Co-Pilot image commands", () => {
     expect(result.actions[0]).not.toHaveProperty("mode");
     expect(result.reply).not.toMatch(/Eco|Fast/);
     expect(generateImageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("preloads the generated image before committing it to the canvas", async () => {
+    let releasePreload: (value: {
+      fileId: string;
+      dataURL: string;
+      img: HTMLImageElement;
+      width: number;
+      height: number;
+    }) => void = () => {};
+    preloadDataURLMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releasePreload = resolve;
+        }),
+    );
+
+    const execution = executeCoPilotInstruction("ขอภาพแมว");
+    await vi.waitFor(() =>
+      expect(preloadDataURLMock).toHaveBeenCalledWith("data:image/png;base64,AA=="),
+    );
+
+    expect(
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.some((element) => element.type === "image"),
+    ).toBe(false);
+
+    releasePreload({
+      fileId: "generated-image",
+      dataURL: "data:image/png;base64,AA==",
+      img: {} as HTMLImageElement,
+      width: 1024,
+      height: 1024,
+    });
+    await execution;
+
+    expect(
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.some((element) => element.type === "image"),
+    ).toBe(true);
+  });
+
+  it("does not commit an image when generated image preload fails", async () => {
+    preloadDataURLMock.mockRejectedValue(new Error("generated image decode failed"));
+
+    const result = await executeCoPilotInstruction("ขอภาพแมว");
+
+    expect(result.reply).toContain("generated image decode failed");
+    expect(
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.some((element) => element.type === "image"),
+    ).toBe(false);
   });
 });

@@ -13,7 +13,7 @@ import { removeBackground } from "@/lib/ai/removeBg";
 import { planVisualRequest, type VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createImage, createRect, createText } from "@/lib/engine/factory";
-import { getCached, loadDataURL } from "@/lib/engine/imageCache";
+import { getCached, loadDataURL, preloadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement, TextElement } from "@/lib/engine/types";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
@@ -231,12 +231,18 @@ export async function executeCoPilotInstruction(
       const res = options.signal
         ? await generateAIImage(imageRequest, options.signal)
         : await generateAIImage(imageRequest);
+      const preloaded = await preloadDataURL(res.dataUrl);
+      if (options.signal?.aborted) {
+        const abortError = new Error("The operation was aborted.");
+        abortError.name = "AbortError";
+        throw abortError;
+      }
 
       const maxW = context.width * 0.5;
       const maxH = context.height * 0.5;
-      const scale = Math.min(maxW / res.width, maxH / res.height, 1);
-      const w = Math.round(res.width * scale);
-      const h = Math.round(res.height * scale);
+      const scale = Math.min(maxW / preloaded.width, maxH / preloaded.height, 1);
+      const w = Math.round(preloaded.width * scale);
+      const h = Math.round(preloaded.height * scale);
       const x = Math.round((context.width - w) / 2);
       const y = Math.round((context.height - h) / 2);
 
@@ -245,20 +251,18 @@ export async function executeCoPilotInstruction(
         y,
         width: w,
         height: h,
-        fileId: res.fileId,
-        naturalWidth: res.width,
-        naturalHeight: res.height,
+        fileId: preloaded.fileId,
+        naturalWidth: preloaded.width,
+        naturalHeight: preloaded.height,
       });
 
-      const generatedAsset = getCached(res.fileId);
-      if (generatedAsset) {
-        enqueueAssetAnalysis({
-          fileId: generatedAsset.fileId,
-          dataURL: generatedAsset.dataURL,
-          width: generatedAsset.width,
-          height: generatedAsset.height,
-        });
-      }
+      const generatedAsset = preloaded;
+      enqueueAssetAnalysis({
+        fileId: generatedAsset.fileId,
+        dataURL: generatedAsset.dataURL,
+        width: generatedAsset.width,
+        height: generatedAsset.height,
+      });
       st.addElement(newElement, `co-pilot generate image: ${cleanPrompt.slice(0, 20)}`);
       st.selectOnly([newElement.id]);
 
