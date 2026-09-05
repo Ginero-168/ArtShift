@@ -62,8 +62,16 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
   await expect(imageToolbar.locator(".object-context-label")).toHaveCount(0);
   await expect(imageToolbar.getByText("Image", { exact: true })).toHaveCount(0);
   await expect(imageToolbar.locator(".object-context-category")).toBeVisible();
+  await expect(imageToolbar.locator(".object-context-category svg")).toHaveCount(1);
+  await expect(imageToolbar.locator("button svg")).toHaveCount(7);
+  await expect(imageToolbar.locator("button svg").first()).toHaveAttribute("aria-hidden", "true");
+  await expect(imageToolbar.locator("button svg").first()).toHaveAttribute("focusable", "false");
+  await expect(imageToolbar.locator(".object-context-divider")).toHaveCount(3);
   await expect(page.getByText("✨ Image Intelligence", { exact: true })).toHaveCount(0);
   await imageToolbar.getByRole("button", { name: "Image Intelligence", exact: true }).click();
+  await expect(
+    imageToolbar.getByRole("button", { name: "Image Intelligence", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("✨ Image Intelligence", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Extract", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Extract All", exact: true })).toHaveCount(0);

@@ -47,7 +47,166 @@ export const IconDownload = (p: Props) =>
     <>
       <path d="M12 3v12" />
       <path d="m7 10 5 5 5-5" />
-      <path d="M5 21h14" />
+      <path d="M5 19v2h14v-2" />
+    </>,
+    p,
+  );
+
+export const IconFlipHorizontal = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M12 3v18" strokeWidth="1.5" />
+      <path d="m8 7-4 5 4 5" />
+      <path d="m16 7 4 5-4 5" />
+    </>,
+    p,
+  );
+
+export const IconFlipVertical = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M3 12h18" strokeWidth="1.5" />
+      <path d="m7 8 5-4 5 4" />
+      <path d="m7 16 5 4 5-4" />
+    </>,
+    p,
+  );
+
+export const IconRotate = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M20 11a8 8 0 1 0 1 4" />
+      <path d="M20 4v7h-7" />
+    </>,
+    p,
+  );
+
+export const IconCrop = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M6 3v14a4 4 0 0 0 4 4h11" />
+      <path d="M3 6h14a4 4 0 0 1 4 4v11" />
+    </>,
+    p,
+  );
+
+export const IconVectorNodes = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="m5 6 7 6 7-6M5 18l7-6 7 6" />
+      <circle cx="5" cy="6" r="2" fill="var(--surface-solid, #fff)" />
+      <circle cx="12" cy="12" r="2" fill="var(--surface-solid, #fff)" />
+      <circle cx="19" cy="6" r="2" fill="var(--surface-solid, #fff)" />
+      <circle cx="5" cy="18" r="2" fill="var(--surface-solid, #fff)" />
+      <circle cx="19" cy="18" r="2" fill="var(--surface-solid, #fff)" />
+    </>,
+    p,
+  );
+
+export const IconBook = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v17H7.5A2.5 2.5 0 0 0 5 22Z" />
+      <path d="M5 5.5V20" />
+      <path d="M9 7h6" />
+    </>,
+    p,
+  );
+
+export const IconFrame = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M8 20H5a1 1 0 0 1-1-1v-3M16 20h3a1 1 0 0 0 1-1v-3" />
+      <rect x="8" y="8" width="8" height="8" rx="1.5" />
+    </>,
+    p,
+  );
+
+export const IconShape = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect x="3" y="4" width="10" height="10" rx="2" fill="currentColor" fillOpacity="0.18" />
+      <circle cx="16.5" cy="16.5" r="4.5" fill="currentColor" fillOpacity="0.18" />
+    </>,
+    p,
+  );
+
+export const IconMultiple = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect x="3" y="3" width="11" height="11" rx="2" />
+      <rect x="10" y="10" width="11" height="11" rx="2" fill="currentColor" fillOpacity="0.16" />
+    </>,
+    p,
+  );
+
+export const IconFitCanvas = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+      <path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" />
+    </>,
+    p,
+  );
+
+export const IconCornerRadius = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M5 20V9a4 4 0 0 1 4-4h11" />
+      <path d="M5 15v5h5" />
+      <path d="M14 20h6v-6" />
+    </>,
+    p,
+  );
+
+export const IconDetach = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M14 5h5v5" />
+      <path d="m19 5-8 8" />
+      <path d="M19 14v5H5V5h5" />
+    </>,
+    p,
+  );
+
+export const IconTextMeasure = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M6 5h8M10 5v14M7 19h6" />
+      <path d="M17 10v8M14.5 15.5 17 18l2.5-2.5" />
+    </>,
+    p,
+  );
+
+export const IconParagraph = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M5 6h14M5 10h14M5 14h9M5 18h9" />
+      <path d="M17 14v4M17 18l-2-2M17 18l2-2" />
+    </>,
+    p,
+  );
+
+export const IconSpacing = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <path d="M5 5h14M5 19h14" />
+      <path d="M12 5v14M9.5 8 12 5l2.5 3M9.5 16 12 19l2.5-3" />
     </>,
     p,
   );

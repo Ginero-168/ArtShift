@@ -38,7 +38,7 @@ type Props = {
   onDoubleClick?: (e: React.MouseEvent) => void;
 };
 
-const HANDLE = 10;
+const HANDLE = 8;
 const ROTATE_OFFSET = 28;
 
 type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rot" | "start" | "end" | "mid";
@@ -747,8 +747,8 @@ export default function Transformer({
           y1={nHandle.pt.y}
           x2={rotHandle.pt.x}
           y2={rotHandle.pt.y}
-          stroke="#6366f1"
-          strokeWidth={1.5}
+          stroke="var(--accent, #4f46e5)"
+          strokeWidth={1.25}
         />
       )}
       {lineScreenPts ? (
@@ -756,7 +756,7 @@ export default function Transformer({
         <polyline
           points={lineScreenPts.map((p) => `${p.x},${p.y}`).join(" ")}
           fill="none"
-          stroke="#6366f1"
+          stroke="var(--accent, #4f46e5)"
           strokeWidth={1}
           strokeDasharray="4 3"
           strokeOpacity={0.5}
@@ -765,8 +765,8 @@ export default function Transformer({
         <polygon
           points={outlineCorners.map((p) => `${p.x},${p.y}`).join(" ")}
           fill="rgba(99, 102, 241, 0.001)"
-          stroke="#6366f1"
-          strokeWidth={1.5}
+          stroke="var(--accent, #4f46e5)"
+          strokeWidth={1.25}
           strokeDasharray="6 4"
           style={{
             pointerEvents: onDoubleClick ? "auto" : "none",
@@ -790,7 +790,7 @@ export default function Transformer({
             height={28}
             rx={6}
             fill="#0f172a"
-            stroke="#6366f1"
+            stroke="var(--accent, #4f46e5)"
             strokeWidth={1.5}
             filter="drop-shadow(0 4px 10px rgba(0,0,0,0.4))"
           />
@@ -813,7 +813,7 @@ export default function Transformer({
         const isMidHandle = h.id === "mid";
         const isRotateHandle = h.id === "rot";
         const isCircle = isLineHandle || isMidHandle || isRotateHandle || h.bound;
-        const r = isRotateHandle ? 6.5 : isLineHandle ? 7 : isMidHandle ? 5 : HANDLE / 2;
+        const r = isRotateHandle ? 6 : isLineHandle ? 6 : isMidHandle ? 4.5 : HANDLE / 2;
         return (
           <g
             key={h.id}
@@ -829,10 +829,10 @@ export default function Transformer({
                 <circle
                   cx={0}
                   cy={0}
-                  r={6.5}
-                  fill={active === "rot" ? "#4f46e5" : "#ffffff"}
-                  stroke="#6366f1"
-                  strokeWidth={2}
+                  r={6}
+                  fill={active === "rot" ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
+                  stroke="var(--accent, #4f46e5)"
+                  strokeWidth={1.5}
                   filter="drop-shadow(0 2px 5px rgba(0,0,0,0.22))"
                   onPointerDown={onPointerDown(h.id)}
                   onPointerMove={onPointerMove}
@@ -842,8 +842,8 @@ export default function Transformer({
                 <circle
                   cx={0}
                   cy={0}
-                  r={2}
-                  fill={active === "rot" ? "#ffffff" : "#6366f1"}
+                  r={1.75}
+                  fill={active === "rot" ? "var(--surface-solid, #fff)" : "var(--accent, #4f46e5)"}
                   pointerEvents="none"
                 />
               </g>
@@ -852,9 +852,15 @@ export default function Transformer({
                 cx={0}
                 cy={0}
                 r={r}
-                fill={active === h.id ? "#4338ca" : isMidHandle ? "#c7d2fe" : "#fff"}
-                stroke={h.bound ? "#22c55e" : "#6366f1"}
-                strokeWidth={isLineHandle ? 2 : 1.5}
+                fill={
+                  active === h.id
+                    ? "var(--accent, #4f46e5)"
+                    : isMidHandle
+                      ? "var(--accent-soft, #c7d2fe)"
+                      : "var(--surface-solid, #fff)"
+                }
+                stroke={h.bound ? "#16a34a" : "var(--accent, #4f46e5)"}
+                strokeWidth={isLineHandle ? 1.6 : 1.25}
                 onPointerDown={onPointerDown(h.id)}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -867,9 +873,9 @@ export default function Transformer({
                 width={HANDLE}
                 height={HANDLE}
                 rx={2}
-                fill={active === h.id ? "#4338ca" : "#fff"}
-                stroke="#6366f1"
-                strokeWidth={1.5}
+                fill={active === h.id ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
+                stroke="var(--accent, #4f46e5)"
+                strokeWidth={1.25}
                 onPointerDown={onPointerDown(h.id)}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}

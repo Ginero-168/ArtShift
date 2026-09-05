@@ -9,6 +9,7 @@ import { getCached } from "@/lib/engine/imageCache";
 import { getObjectContextCategory } from "@/lib/engine/objectContext";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
+import { getObjectContextIcon } from "./objectContextIcons";
 
 const VisionObjectIsolator = dynamic(() => import("./PropertiesPanel/VisionObjectIsolator"), {
   ssr: false,
@@ -33,79 +34,47 @@ const buttonStyle = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  border: "1px solid var(--stroke, #e5e7eb)",
-  borderRadius: 5,
-  background: "var(--surface-solid, #fff)",
-  color: "var(--ink, #111827)",
+  border: "1px solid transparent",
+  borderRadius: 7,
+  background: "transparent",
+  color: "var(--ink-muted, #475569)",
   cursor: "pointer",
-  fontSize: 15,
-  fontWeight: 650,
   whiteSpace: "nowrap" as const,
+  transition: "background-color 120ms ease, border-color 120ms ease, color 120ms ease",
 };
-
-const iconFor = (label: string) =>
-  ({
-    "Flip Horizontal": "↔",
-    "Flip Vertical": "↕",
-    "Rotate 90°": "↻",
-    Crop: "⌗",
-    "Image Intelligence": "✨",
-    Download: "↓",
-    Image: "▣",
-    Vector: "✒",
-    "3D Book": "▤",
-    Frame: "▱",
-    Text: "T",
-    Shape: "◇",
-    Multiple: "✣",
-    Align: "≡",
-    Distribute: "⋮",
-    Group: "□",
-    Color: "●",
-    Fill: "●",
-    Stroke: "╱",
-    "Fit canvas": "□",
-    "Corner radius": "◰",
-    "Edit nodes": "⌘",
-    Edit: "✎",
-    Detach: "↗",
-    Font: "A",
-    Size: "T",
-    Weight: "B",
-    Paragraph: "¶",
-    Spacing: "↕",
-    Unite: "∪",
-    "Minus Front": "−",
-    Intersect: "∩",
-    Exclude: "⊗",
-    "Minus Back": "−",
-    Divide: "÷",
-    "Convert to frame": "▧",
-  })[label] ?? "•";
 
 function action(label: string, onClick: () => void, disabled = false, active = false) {
   return (
     <button
       type="button"
       key={label}
+      className="object-context-button"
+      data-context-label={label}
       title={label}
       aria-label={label}
+      aria-pressed={active ? true : undefined}
       disabled={disabled}
       onClick={onClick}
       style={{
         ...buttonStyle,
-        background: active ? "var(--accent, #4f46e5)" : buttonStyle.background,
-        color: active ? "#fff" : buttonStyle.color,
-        borderColor: active ? "var(--accent, #4f46e5)" : undefined,
-        opacity: disabled ? 0.45 : 1,
+        background: active ? "var(--accent-soft, rgba(79, 70, 229, 0.12))" : buttonStyle.background,
+        color: active ? "var(--accent, #4f46e5)" : buttonStyle.color,
+        borderColor: active
+          ? "color-mix(in srgb, var(--accent, #4f46e5) 28%, transparent)"
+          : undefined,
+        opacity: disabled ? 0.42 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
     >
       <span aria-hidden="true" className="object-context-icon">
-        {iconFor(label)}
+        {getObjectContextIcon(label, { size: 15, className: "object-context-svg" })}
       </span>
     </button>
   );
+}
+
+function divider(key: string) {
+  return <span key={key} className="object-context-divider" aria-hidden="true" />;
 }
 
 function focusElementInspector() {
@@ -227,8 +196,14 @@ export default function ObjectContextBar({
       action("Rotate 90°", () => apply({ angle: first.angle + Math.PI / 2 }, "rotate image")),
     );
     controls.push(
-      action("Crop", () => setCroppingImageId(croppingImageId === first.id ? null : first.id)),
+      action(
+        "Crop",
+        () => setCroppingImageId(croppingImageId === first.id ? null : first.id),
+        false,
+        croppingImageId === first.id,
+      ),
     );
+    controls.push(divider("image-ai"));
     controls.push(action("Vector", () => setIntelligenceOpen(true)));
     controls.push(
       action(
@@ -238,6 +213,7 @@ export default function ObjectContextBar({
         intelligenceOpen,
       ),
     );
+    controls.push(divider("image-export"));
     controls.push(
       action("Download", () => downloadCached(first.fileId, first.sourceName || "image")),
     );
@@ -359,17 +335,17 @@ export default function ObjectContextBar({
         zIndex: 60,
         display: "inline-flex",
         alignItems: "center",
-        gap: 4,
-        height: 32,
-        minHeight: 32,
+        gap: 3,
+        minHeight: 38,
+        height: "auto",
         width: "max-content",
         maxWidth: "calc(100% - 12px)",
-        padding: "3px 5px",
+        padding: "4px 6px",
         overflow: "visible",
-        border: "1px solid var(--stroke, #e5e7eb)",
-        borderRadius: 7,
+        border: "1px solid color-mix(in srgb, var(--stroke-strong, #cbd5e1) 72%, transparent)",
+        borderRadius: 10,
         background: "var(--surface-solid, #fff)",
-        boxShadow: "0 3px 10px rgba(15, 23, 42, 0.16)",
+        boxShadow: "0 8px 24px -12px rgba(15, 23, 42, 0.42), 0 2px 6px rgba(15, 23, 42, 0.08)",
         boxSizing: "border-box",
       }}
     >
@@ -389,8 +365,12 @@ export default function ObjectContextBar({
           color: "var(--accent, #4f46e5)",
         }}
       >
-        {iconFor(category ?? "Object")}
+        {getObjectContextIcon(category ?? "Object", {
+          size: 16,
+          className: "object-context-svg",
+        })}
       </span>
+      {divider("category")}
       {controls}
       {intelligenceOpen && first.type === "image" ? (
         <div
@@ -416,11 +396,53 @@ export default function ObjectContextBar({
         </div>
       ) : null}
       <style jsx global>{`
-        .object-context-icon { display: inline-flex; line-height: 1; font-size: 15px; }
+        .object-context-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 15px;
+          height: 15px;
+          line-height: 0;
+        }
+        .object-context-svg {
+          display: block;
+          width: 15px;
+          height: 15px;
+          overflow: visible;
+        }
+        .object-context-button {
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .object-context-button:hover:not(:disabled) {
+          background: var(--accent-soft, rgba(79, 70, 229, 0.1)) !important;
+          border-color: var(--stroke-strong, rgba(15, 20, 35, 0.18)) !important;
+          color: var(--accent, #4f46e5) !important;
+        }
+        .object-context-button:active:not(:disabled) {
+          transform: scale(0.96);
+        }
+        .object-context-button:focus-visible {
+          outline: 2px solid color-mix(in srgb, var(--accent, #4f46e5) 52%, transparent);
+          outline-offset: 2px;
+        }
+        .object-context-divider {
+          flex: 0 0 1px;
+          width: 1px;
+          height: 18px;
+          margin: 0 2px;
+          background: var(--stroke-strong, rgba(15, 20, 35, 0.16));
+          opacity: 0.72;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .object-context-button { transition: none !important; }
+        }
         @media (max-width: 720px) {
           .object-context-bar { gap: 2px !important; }
-          .object-context-bar button { min-width: 25px; width: 25px; height: 28px; }
-          .object-context-icon { font-size: 14px; }
+          .object-context-bar button { min-width: 28px; width: 28px; height: 28px; }
+          .object-context-icon,
+          .object-context-svg { width: 14px; height: 14px; }
+          .object-context-divider { height: 16px; margin-inline: 1px; }
         }
       `}</style>
     </div>
