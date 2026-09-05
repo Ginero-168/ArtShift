@@ -73,12 +73,15 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
     imageToolbar.getByRole("button", { name: "Image Intelligence", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("✨ Image Intelligence", { exact: true })).toBeVisible();
+  for (const label of ["RemoveBG", "Vectorize1", "Vectorize2", "Vectorize3"]) {
+    await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
+  }
   await expect(page.getByRole("button", { name: "Extract", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Extract All", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Quick Extract", exact: true })).toHaveCount(0);
 
-  const customButton = page.getByRole("button", { name: "Custom Auto-Trace" });
-  const vtracerButton = page.getByRole("button", { name: "VTracer WASM" });
+  const customButton = page.getByRole("button", { name: "Vectorize1", exact: true });
+  const vtracerButton = page.getByRole("button", { name: "Vectorize2", exact: true });
   await expect(customButton).toBeVisible();
   await expect(vtracerButton).toBeVisible();
 
@@ -193,7 +196,7 @@ test("runs the original Custom Auto-Trace workflow from its own button", async (
   await customImageToolbar.getByRole("button", { name: "Image Intelligence", exact: true }).click();
   await expect(page.getByText("✨ Image Intelligence", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Custom Auto-Trace" }).click();
+  await page.getByRole("button", { name: "Vectorize1", exact: true }).click();
   await expect(page.getByText("ArtShift Custom Settings", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Generate Custom Paths/ }).click();
   await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
@@ -258,7 +261,7 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
   await expect(page.getByText("✨ Image Intelligence", { exact: true })).toBeVisible();
 
   const recraftButton = page.getByRole("button", {
-    name: "Recraft Vectorize (Cloud)",
+    name: "Vectorize3",
     exact: true,
   });
   await expect(recraftButton).toBeVisible();
@@ -266,7 +269,7 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
   const processingPreview = page.getByTestId("processing-preview");
   await expect(processingPreview).toBeVisible();
   await expect(processingPreview).toHaveAttribute("data-preview-kind", "vectorize");
-  await expect(processingPreview).toHaveAttribute("aria-label", "Recraft Vectorize loading");
+  await expect(processingPreview).toHaveAttribute("aria-label", "Vectorize3 loading");
   const previewWidth = await processingPreview.getAttribute("data-preview-width");
   const previewHeight = await processingPreview.getAttribute("data-preview-height");
   expect(Number(previewWidth)).toBeGreaterThan(0);

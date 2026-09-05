@@ -377,7 +377,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         preview: processingPreviewInput(
           element,
           "vectorize",
-          backend === "vtracer-wasm" ? "VTracer WASM" : "Custom Auto-Trace",
+          backend === "vtracer-wasm" ? "Vectorize2" : "Vectorize1",
           url,
         ),
         run: (context) => handleVectorize(customOpts, context),
@@ -511,7 +511,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         return;
       }
       const job = enqueueProcessingJob({
-        preview: processingPreviewInput(element, "vectorize", "Recraft Vectorize", cached.dataURL),
+        preview: processingPreviewInput(element, "vectorize", "Vectorize3", cached.dataURL),
         run: (context) => handleRecraftVectorize(context),
       });
       processingJobIdRef.current = job.id;
@@ -1082,6 +1082,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         <button
           type="button"
           disabled={busy}
+          aria-label="RemoveBG"
           onClick={() => void handleRemoveBg()}
           title="Remove background from image with AI"
           style={{
@@ -1101,7 +1102,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           }}
         >
           <span>🪄</span>
-          <span>{busy ? "Processing..." : "Remove BG"}</span>
+          <span>{busy ? "Processing..." : "RemoveBG"}</span>
         </button>
 
         <button
@@ -1136,8 +1137,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           type="button"
           disabled={busy}
           aria-pressed={backend === "custom" && vectorizeOpen}
+          aria-label="Vectorize1"
           onClick={() => toggleVectorizeSettings("custom")}
-          title="Open ArtShift Custom Auto-Trace settings"
+          title="Open Vectorize1 settings · ArtShift Custom Auto-Trace"
+          data-vectorizer="vectorize1"
           style={{
             flex: 1,
             padding: "6px 5px",
@@ -1156,14 +1159,16 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           }}
         >
           <span>✦</span>
-          <span>Custom Auto-Trace</span>
+          <span>Vectorize1</span>
         </button>
         <button
           type="button"
           disabled={busy}
           aria-pressed={backend === "vtracer-wasm" && vectorizeOpen}
+          aria-label="Vectorize2"
           onClick={() => toggleVectorizeSettings("vtracer-wasm")}
-          title="Open VTracer WASM settings"
+          title="Open Vectorize2 settings · VTracer WASM"
+          data-vectorizer="vectorize2"
           style={{
             flex: 1,
             padding: "6px 5px",
@@ -1182,7 +1187,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           }}
         >
           <span>◇</span>
-          <span>VTracer WASM</span>
+          <span>Vectorize2</span>
         </button>
       </div>
       <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
@@ -1190,8 +1195,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           type="button"
           disabled={busy}
           onClick={() => void handleRecraftVectorize()}
-          aria-label="Recraft Vectorize (Cloud)"
-          title="Send this image to Recraft Vectorize through your Replicate account"
+          aria-label="Vectorize3"
+          data-vectorizer="vectorize3"
+          title="Run Vectorize3 · Recraft Vectorize through your Replicate account"
           style={{
             flex: 1,
             padding: "6px 5px",
@@ -1210,7 +1216,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           }}
         >
           <span>☁</span>
-          <span>Recraft Vectorize (Cloud)</span>
+          <span>Vectorize3</span>
         </button>
         {processingJobIdRef.current && !vectorizeOpen && (
           <button

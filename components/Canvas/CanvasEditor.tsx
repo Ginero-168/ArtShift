@@ -9,6 +9,7 @@
  */
 
 import {
+  type ChangeEvent,
   forwardRef,
   useCallback,
   useEffect,
@@ -41,7 +42,7 @@ import {
   resolveObjectPointerSelection,
 } from "@/lib/engine/gestureController";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
-import { getImageCache } from "@/lib/engine/imageCache";
+import { fileToDataURL, getImageCache, loadDataURL } from "@/lib/engine/imageCache";
 import {
   getInteractiveElements,
   getLayerForObject,
@@ -95,6 +96,7 @@ import {
   selectionShapeFromPoints,
   worldToImageLocal,
 } from "@/lib/raster/selectionInteraction";
+import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import BindingIndicators from "./BindingIndicators";
 import CanvasRoot, {
   type CanvasRootHandle,
@@ -344,6 +346,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterSelectionRequestRef = useRef(0);
   const rasterBrushCursorRef = useRef<HTMLDivElement | null>(null);
   const magicWandCursorRef = useRef<HTMLDivElement | null>(null);
+  const replaceImageInputRef = useRef<HTMLInputElement | null>(null);
+  const replaceImageTargetIdRef = useRef<string | null>(null);
   const rasterCloneSourcesRef = useRef(new Map<string, [number, number]>());
   const processingPreviews = useSyncExternalStore(
     subscribeProcessingPreview,
@@ -351,6 +355,70 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     () => EMPTY_PROCESSING_PREVIEWS,
   );
   const images = getImageCache();
+
+  const openImageBrowser = useCallback(
+    (elementId: string) => {
+      replaceImageTargetIdRef.current = elementId;
+      setCroppingImageId(null);
+      const input = replaceImageInputRef.current;
+      if (!input) return;
+      input.value = "";
+      input.click();
+    },
+    [setCroppingImageId],
+  );
+
+  const handleImageReplace = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0];
+      const targetId = replaceImageTargetIdRef.current;
+      event.currentTarget.value = "";
+      replaceImageTargetIdRef.current = null;
+      if (!file || !targetId) return;
+
+      try {
+        const entry = await loadDataURL(await fileToDataURL(file));
+        enqueueAssetAnalysis({
+          fileId: entry.fileId,
+          dataURL: entry.dataURL,
+          width: entry.width,
+          height: entry.height,
+        });
+        const target = useEngine
+          .getState()
+          .currentSlide()
+          ?.elements.find(
+            (element): element is import("@/lib/engine/types").ImageElement =>
+              element.id === targetId && element.type === "image",
+          );
+        if (!target) return;
+        updateElements(
+          [
+            {
+              id: targetId,
+              patch: {
+                fileId: entry.fileId,
+                naturalWidth: entry.width,
+                naturalHeight: entry.height,
+                linkedAssetId: undefined,
+                sourceName: file.name,
+                sourceLastModified: file.lastModified,
+                sourceSize: file.size,
+                status: "loaded",
+                crop: null,
+              },
+            },
+          ],
+          "replace image",
+        );
+        selectOnly([targetId]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not replace image.";
+        window.alert(message);
+      }
+    },
+    [selectOnly, updateElements],
+  );
 
   const moveRasterBrushCursor = useCallback((point: { x: number; y: number }) => {
     const cursor = rasterBrushCursorRef.current;
@@ -925,7 +993,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
       if (hit.type === "image") {
-        setCroppingImageId(hit.id);
+        openImageBrowser(hit.id);
         return;
       }
       if (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond") {
@@ -947,7 +1015,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         }
       }
     },
-    [editorController, slide, addElement, selectOnly, setTool, setCroppingImageId, tool],
+    [editorController, slide, addElement, selectOnly, setTool, openImageBrowser, tool],
   );
 
   const onPointerMove = useCallback(
@@ -1493,6 +1561,16 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         setCtxMenu({ x: e.clientX, y: e.clientY });
       }}
     >
+      <input
+        ref={replaceImageInputRef}
+        data-testid="replace-image-input"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        aria-label="Browse/Replace Image"
+        tabIndex={-1}
+        style={{ display: "none" }}
+        onChange={handleImageReplace}
+      />
       <CanvasRoot
         ref={rootRef}
         slide={slideForRender}
@@ -1589,7 +1667,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 } else if (el?.type === "text") {
                   setEditingTextId(el.id);
                 } else if (el?.type === "image") {
-                  setCroppingImageId(el.id);
+                  openImageBrowser(el.id);
                 } else if (el?.type === "path") {
                   setTool("directSelect");
                   setEditingPathId(el.id);
