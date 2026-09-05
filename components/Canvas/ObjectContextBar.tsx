@@ -399,27 +399,40 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        <div
-          role="dialog"
-          aria-label={`${IMAGE_TOOL_LABELS[activeImageTool]} settings`}
-          onPointerDown={(event) => event.stopPropagation()}
-          style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "min(380px, calc(100vw - 24px))",
-            maxHeight: "min(640px, calc(100vh - 24px))",
-            overflowY: "auto",
-            padding: 6,
-            border: "1px solid var(--stroke, #e5e7eb)",
-            borderRadius: 9,
-            background: "var(--surface-solid, #fff)",
-            boxShadow: "0 12px 32px rgba(15, 23, 42, 0.2)",
-          }}
-        >
-          <VisionObjectIsolator element={first as ImageElement} activeTool={activeImageTool} />
-        </div>
+        activeImageTool === "remove-bg" ? (
+          <div data-testid="remove-bg-runner" style={{ display: "none" }}>
+            <VisionObjectIsolator
+              element={first as ImageElement}
+              activeTool={activeImageTool}
+              autoRun
+              onToolComplete={() =>
+                setActiveImageTool((current) => (current === "remove-bg" ? null : current))
+              }
+            />
+          </div>
+        ) : (
+          <div
+            role="dialog"
+            aria-label={`${IMAGE_TOOL_LABELS[activeImageTool]} settings`}
+            onPointerDown={(event) => event.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: "calc(100% + 8px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "min(380px, calc(100vw - 24px))",
+              maxHeight: "min(640px, calc(100vh - 24px))",
+              overflowY: "auto",
+              padding: 6,
+              border: "1px solid var(--stroke, #e5e7eb)",
+              borderRadius: 9,
+              background: "var(--surface-solid, #fff)",
+              boxShadow: "0 12px 32px rgba(15, 23, 42, 0.2)",
+            }}
+          >
+            <VisionObjectIsolator element={first as ImageElement} activeTool={activeImageTool} />
+          </div>
+        )
       ) : null}
       <style jsx global>{`
         .object-context-icon {

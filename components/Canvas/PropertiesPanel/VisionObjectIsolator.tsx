@@ -204,9 +204,17 @@ export type VisionObjectIsolatorProps = {
   element: ImageElement;
   /** When provided, render the selected Option Bar tool's settings. */
   activeTool?: ImageToolId | null;
+  /** Run an immediate tool action without showing its settings panel. */
+  autoRun?: boolean;
+  onToolComplete?: () => void;
 };
 
-export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolatorProps) {
+export function VisionObjectIsolator({
+  element,
+  activeTool,
+  autoRun = false,
+  onToolComplete,
+}: VisionObjectIsolatorProps) {
   const addElement = useEngine((s) => s.addElement);
   const addElements = useEngine((s) => s.addElements);
   const selectOnly = useEngine((s) => s.selectOnly);
@@ -217,8 +225,10 @@ export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolat
   const [detectedForegroundUrl, setDetectedForegroundUrl] = useState<string | null>(null);
   const [detectedForegroundFileId, setDetectedForegroundFileId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [allowServerFallback, setAllowServerFallback] = useState(false);
-  const [lastRmbgRuntime, setLastRmbgRuntime] = useState<"local" | "vps-fallback">("local");
+  const allowServerFallback = true;
+  const [, setLastRmbgRuntime] = useState<"local" | "vps-fallback">("local");
+  const autoRunKeyRef = useRef<string | null>(null);
+  const removeBgHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   // Vectorizer State — keep Custom and VTracer settings independent.
   const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
@@ -655,7 +665,7 @@ export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolat
 
     if (!queuedContext) {
       const job = enqueueProcessingJob({
-        preview: processingPreviewInput(element, "remove-bg", "Remove Background", cached.dataURL),
+        preview: processingPreviewInput(element, "remove-bg", "RemoveBG", cached.dataURL),
         run: (context) => handleRemoveBg(context),
       });
       processingJobIdRef.current = job.id;
@@ -730,6 +740,8 @@ export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolat
       setProgress(null);
     }
   };
+
+  removeBgHandlerRef.current = handleRemoveBg;
 
   const handleResetCache = async () => {
     if (confirm("Reset and purge all cached AI models from browser storage?")) {
@@ -1015,6 +1027,16 @@ export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolat
                 ? "Background analysis unavailable; tools still work on demand"
                 : null;
 
+  useEffect(() => {
+    if (!autoRun || activeTool !== "remove-bg") return;
+    const runKey = `${element.id}:${element.fileId}`;
+    if (autoRunKeyRef.current === runKey) return;
+    autoRunKeyRef.current = runKey;
+    void removeBgHandlerRef.current().finally(() => onToolComplete?.());
+  }, [activeTool, autoRun, element.fileId, element.id, onToolComplete]);
+
+  if (autoRun && activeTool === "remove-bg") return null;
+
   return (
     <div
       style={{
@@ -1071,33 +1093,6 @@ export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolat
           {analysisMessage}
         </div>
       )}
-
-      <label
-        style={{
-          display: controlledToolMode ? "none" : "flex",
-          alignItems: "flex-start",
-          gap: 5,
-          marginBottom: 6,
-          color: "#475569",
-          fontSize: 9,
-          lineHeight: 1.35,
-          cursor: "pointer",
-        }}
-        title="Only explicit Remove BG or Extract actions may send this image to the ArtShift VPS."
-      >
-        <input
-          type="checkbox"
-          aria-label="Allow VPS fallback for background removal"
-          checked={allowServerFallback}
-          onChange={(event) => setAllowServerFallback(event.currentTarget.checked)}
-          disabled={busy}
-          style={{ margin: "1px 0 0" }}
-        />
-        <span>
-          ถ้าโมเดลลบพื้นหลัง (Remove BG) ยังโหลดไม่เสร็จ ให้ใช้ VPS ชั่วคราว
-          {lastRmbgRuntime === "vps-fallback" ? " · ใช้ VPS ครั้งล่าสุด" : ""}
-        </span>
-      </label>
 
       {/* Row 1: AI Tools (alpha geometry is the recommended extraction path) */}
       <div style={{ display: controlledToolMode ? "none" : "flex", gap: 4 }}>
@@ -1269,69 +1264,6 @@ export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolat
       >
         Cloud vectorizer · sends the image to Replicate · requires your Replicate Key
       </div>
-
-      {controlledToolMode && activeTool === "remove-bg" && (
-        <div
-          data-testid="image-tool-settings"
-          data-tool="remove-bg"
-          style={{
-            marginTop: 6,
-            padding: 8,
-            background: "#fff",
-            border: "1px solid #c7d2fe",
-            borderRadius: 6,
-          }}
-        >
-          <strong style={{ display: "block", color: "#1e1b4b", fontSize: 10 }}>
-            RemoveBG Settings
-          </strong>
-          <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
-            Local-first background removal. VPS fallback is opt-in.
-          </span>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 5,
-              marginTop: 7,
-              color: "#475569",
-              fontSize: 9,
-              lineHeight: 1.35,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              aria-label="Allow VPS fallback for background removal"
-              checked={allowServerFallback}
-              onChange={(event) => setAllowServerFallback(event.currentTarget.checked)}
-              disabled={busy}
-              style={{ margin: "1px 0 0" }}
-            />
-            <span>Allow VPS fallback when the local model is not ready</span>
-          </label>
-          <button
-            type="button"
-            disabled={busy}
-            aria-label="Run RemoveBG"
-            onClick={() => void handleRemoveBg()}
-            style={{
-              width: "100%",
-              marginTop: 7,
-              padding: "6px 8px",
-              border: "none",
-              borderRadius: 5,
-              background: "#6366f1",
-              color: "#fff",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            {busy ? "Processing..." : "Run RemoveBG"}
-          </button>
-        </div>
-      )}
 
       {controlledToolMode && activeTool === "vectorize3" && (
         <div
