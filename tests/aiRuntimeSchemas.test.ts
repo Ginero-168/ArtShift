@@ -37,7 +37,7 @@ describe("public AI execution schemas", () => {
       parsePublicAiExecuteRequest({
         task: "image.generate",
         input: { prompt: "a cat", width: 1024, height: 1024 },
-        options: { cloudConsent: true, provider: "pollinations" },
+        options: { cloudConsent: true, provider: "retired-provider" },
       }),
     ).toBeNull();
   });

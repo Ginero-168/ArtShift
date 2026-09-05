@@ -43,7 +43,7 @@ describe("AI image generation API", () => {
     const response = await POST(
       request({
         prompt: "แมวสีส้ม",
-        model: "flux-realism",
+        model: "client-selected-model",
         enhance: false,
         width: 512,
         height: 512,
