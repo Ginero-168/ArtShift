@@ -49,9 +49,15 @@ const iconFor = (label: string) =>
     "Flip Vertical": "↕",
     "Rotate 90°": "↻",
     Crop: "⌗",
-    Vector: "✒",
     "Image Intelligence": "✨",
     Download: "↓",
+    Image: "▣",
+    Vector: "✒",
+    "3D Book": "▤",
+    Frame: "▱",
+    Text: "T",
+    Shape: "◇",
+    Multiple: "✣",
     Align: "≡",
     Distribute: "⋮",
     Group: "□",
@@ -368,14 +374,22 @@ export default function ObjectContextBar({
       }}
     >
       <span
+        className="object-context-category"
+        role="img"
+        title={category ?? "Object"}
+        aria-label={category ?? "Object"}
         style={{
-          fontSize: 10,
-          fontWeight: 750,
+          width: 22,
+          minWidth: 22,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 15,
+          lineHeight: 1,
           color: "var(--accent, #4f46e5)",
-          padding: "0 4px",
         }}
       >
-        {category}
+        {iconFor(category ?? "Object")}
       </span>
       {controls}
       {intelligenceOpen && first.type === "image" ? (

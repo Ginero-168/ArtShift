@@ -60,6 +60,8 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
     await expect(imageToolbar.getByRole("button", { name: label, exact: true })).toBeVisible();
   }
   await expect(imageToolbar.locator(".object-context-label")).toHaveCount(0);
+  await expect(imageToolbar.getByText("Image", { exact: true })).toHaveCount(0);
+  await expect(imageToolbar.locator(".object-context-category")).toBeVisible();
   await expect(page.getByText("✨ Image Intelligence", { exact: true })).toHaveCount(0);
   await imageToolbar.getByRole("button", { name: "Image Intelligence", exact: true }).click();
   await expect(page.getByText("✨ Image Intelligence", { exact: true })).toBeVisible();
