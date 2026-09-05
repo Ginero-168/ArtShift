@@ -101,11 +101,20 @@ Only promote a detector when it improves object recall and mask quality without 
 
 ## Decision
 
-For ArtShift now:
+Shipped state (2026-09): both detectors were removed from the Extract path. The
+measured cost of Florence-2 `<OD>`, its dense-region recall pass, and Grounding
+DINO Tiny was several hundred megabytes of model download per Extract, while
+alpha components already produced the extraction geometry and the detectors only
+supplied coarse labels. `Extract All` now runs RMBG-1.4 → alpha components →
+SAM 2 Hiera Tiny, and `Quick Extract` runs RMBG-1.4 → alpha components. Extracted
+objects are labelled `object`.
 
-- Keep Florence-2 only for optional captions/OCR or label fallback.
-- Make Grounding DINO Tiny the first detector A/B candidate because it is already available locally and browser-compatible.
-- Add OWLv2 as the second browser A/B candidate.
+Remaining direction if semantic labels are wanted again:
+
+- Keep Florence-2 only for optional captions/OCR outside extraction.
+- Reintroduce a detector only behind a separate explicit action, never inside the
+  default Extract path, and only after measuring recall gain against its load cost.
+- Add OWLv2 as a second browser A/B candidate if that action is built.
 - Do not put YOLOE, YOLO-World, OmDet-Turbo, or SAM 3 into the main browser bundle yet; evaluate them in the API/Desktop processor.
-- Keep Extract Fast's alpha geometry as the completeness baseline.
+- Keep alpha geometry as the completeness baseline.
 - Treat SAM 2/SAM 3 as mask refinement, not a replacement for foreground discovery unless the model is explicitly run in concept/prompt-free mode.

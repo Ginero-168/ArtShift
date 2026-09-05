@@ -9,7 +9,7 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 - `lib/server/ai/adapters/` contains one adapter per external provider. Provider-native fields stop at this directory.
 - `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
-- `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser model is not ready. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
+- `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser RMBG model is not ready. Extraction geometry comes from alpha components with SAM 2 mask refinement, not from a vision-language detector. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
 - `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent.
 - Built-in tool commands are explicit user actions and commit through their existing atomic editor operations; remote Design Agent proposals are always reviewable before Apply.
 
@@ -22,23 +22,32 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 | Recraft Vectorize | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud required after an explicit Generate action |
-| Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser model is not ready |
+| Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
 | Pixel mask | Local-only; no server task exists |
 
 Fallback is off by default. A caller must set `allowFallback: true`; otherwise the runtime tries only the selected route target. This prevents a hidden paid fallback when the primary provider is unavailable.
 
-### Extract fallback boundary
+### Extract pipeline and fallback boundary
 
-`Extract All` uses the browser pipeline by default. When the user explicitly enables
-the VPS fallback for an Extract action and the local RMBG model is `lazy`, `loading`,
+`Extract All` and `Quick Extract` are local-only pipelines: RMBG-1.4 computes the
+foreground alpha, alpha component analysis produces the extraction geometry, and
+SAM 2 Hiera Tiny refines each object's mask in `Extract All`. No vision-language
+detector runs during extraction. Florence-2 stays available for captions, OCR and
+phrase grounding in other surfaces, and Grounding DINO is no longer part of any
+Extract path — both were removed from extraction because they only contributed
+coarse labels while loading hundreds of megabytes per action.
+
+The only server fallback in this pipeline is background removal. When the user
+explicitly enables the VPS fallback and the local RMBG model is `lazy`, `loading`,
 or `failed`, the browser calls `/api/local-ai/rmbg`. The VPS runs its cached
 `briaai/RMBG-1.4` runtime and returns a PNG with the computed alpha; component
-analysis, optional proposals, mask refinement, cropping, and the final document
-mutation remain in the browser. A failed VPS request falls back to the local path.
+analysis, mask refinement, cropping, and the final document mutation remain in the
+browser. A failed VPS request falls back to the local path. There is no server
+fallback for Florence-2 or any detector.
 
 The fallback is stage-aware rather than a generic cloud AI route: it does not upload
 images for background analysis or silently route paid provider work. The source
-The source document remains unchanged until the browser receives and validates the result.
+document remains unchanged until the browser receives and validates the result.
 
 During Remove BG, Extract, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading

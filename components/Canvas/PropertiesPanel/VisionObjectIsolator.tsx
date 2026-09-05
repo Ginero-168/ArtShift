@@ -37,12 +37,7 @@ import {
   parseVTracerSvgResult,
   RECRAFT_SVG_LIMITS,
 } from "@/lib/vectorize/vtracerAdapter";
-import {
-  createSam2Session,
-  groundingDinoDetect,
-  type Sam2Session,
-  type VisionMask,
-} from "@/lib/vision/advancedVision";
+import { createSam2Session, type Sam2Session, type VisionMask } from "@/lib/vision/advancedVision";
 import { findAlphaComponents } from "@/lib/vision/alphaComponents";
 import {
   enqueueAssetAnalysis,
@@ -56,19 +51,13 @@ import {
   isForegroundForSource,
 } from "@/lib/vision/foreground";
 import { resolveInstanceMaskOverlaps } from "@/lib/vision/instanceMask";
-import {
-  mergeVisionWithAlphaComponents,
-  shouldPreserveAlphaForProposal,
-} from "@/lib/vision/objectBoxes";
+import { labelAlphaComponents, shouldPreserveAlphaForProposal } from "@/lib/vision/objectBoxes";
 import { resetAICache } from "@/lib/vision/resetCache";
 import {
   cropImageRegion,
   cropImageRegionWithMask,
   trimTransparentRegion,
-  visionDenseDetect,
-  visionDetect,
 } from "@/lib/vision/visionEngine";
-import { mergeVisionDetections, shouldRunVisionRecall } from "@/lib/vision/visionRecall";
 
 interface DetectedObject {
   label: string;
@@ -936,79 +925,16 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
 
-      // Alpha extraction is the canonical geometry path. Florence-2 is optional
-      // metadata here: its coarse boxes can label components, but must not
-      // replace them or cause nearby objects to be merged again.
+      // Alpha extraction is the canonical geometry path for visible foreground.
+      // Vision-language detectors only added coarse labels while loading
+      // hundreds of megabytes per Extract, so Extract now stays on the local
+      // alpha + SAM 2 pipeline.
       setExtractProgress(74, "กำลังค้นหา Components ความละเอียดสูง…");
       setStatusMessage("Finding high-resolution foreground components...");
       report("components", "กำลังค้นหา Components ความละเอียดสูง", "step", 74);
       const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl, 1536);
-      let objects = alphaObjects;
-      report("components", `พบ Components เบื้องต้น ${alphaObjects.length} ชิ้น`, "success", 78);
-
-      let visionObjects: DetectedObject[] = [];
-      try {
-        setStatusMessage("Detecting object instances with Florence-2...");
-        report("florence", "กำลังใช้ Florence-2 หา Object และชื่อ", "step", 79);
-        const res = await visionDetect(url, (value) =>
-          setExtractProgress(78 + value * 5, "กำลังตรวจจับ Object ด้วย Florence-2…"),
-        );
-        visionObjects = res.objects;
-        report("florence", `Florence-2 พบ ${visionObjects.length} Proposal`, "success", 83);
-      } catch (error) {
-        console.warn("Florence-2 labels unavailable; keeping local alpha geometry.", error);
-        report("florence", "Florence-2 ใช้งานไม่ได้ จึงใช้ Geometry เดิมต่อ", "fallback", 83);
-      }
-
-      if (shouldRunVisionRecall(visionObjects, alphaObjects)) {
-        try {
-          setStatusMessage("Running a dense recall pass for missed objects...");
-          report("florence-recall", "กำลังค้นหา Object ที่ Florence-2 รอบแรกตกหล่น", "step", 84);
-          const recall = await visionDenseDetect(url, (value) =>
-            setExtractProgress(83 + value * 3, "กำลังค้นหา Object ที่อาจตกหล่น…"),
-          );
-          visionObjects = mergeVisionDetections(visionObjects, recall.objects);
-          report(
-            "florence-recall",
-            `รวม Dense Recall แล้วเป็น ${visionObjects.length} Proposal`,
-            "success",
-            86,
-          );
-        } catch (error) {
-          console.warn("Florence-2 dense recall unavailable; keeping primary proposals.", error);
-          report("florence-recall", "Dense Recall ใช้งานไม่ได้ จึงใช้ผลรอบแรก", "fallback", 86);
-        }
-      }
-
-      const candidateLabels = [
-        ...new Set(
-          visionObjects
-            .map((object) => object.label.trim())
-            .filter((label) => label && label.toLowerCase() !== "object"),
-        ),
-      ];
-      if (candidateLabels.length > 0) {
-        try {
-          setStatusMessage("Finding repeated instances with Grounding DINO...");
-          report("grounding-dino", "กำลังค้นหา Instance ซ้ำด้วย Grounding DINO", "step", 87);
-          const grounded = await groundingDinoDetect(url, candidateLabels, (value) =>
-            setExtractProgress(86 + value * 3, "กำลังตรวจจับ Instance ที่ซ้ำกัน…"),
-          );
-          visionObjects = mergeVisionDetections(visionObjects, grounded);
-          report(
-            "grounding-dino",
-            `รวม Grounding DINO แล้วเป็น ${visionObjects.length} Proposal`,
-            "success",
-            89,
-          );
-        } catch (error) {
-          console.warn("Grounding DINO unavailable; keeping Florence proposals.", error);
-          report("grounding-dino", "Grounding DINO ใช้งานไม่ได้ จึงใช้ Florence ต่อ", "fallback", 89);
-        }
-      }
-
-      objects = mergeVisionWithAlphaComponents(visionObjects, alphaObjects);
-      report("proposal-fusion", `รวม Proposal สุดท้ายได้ ${objects.length} ชิ้น`, "success", 90);
+      const objects = labelAlphaComponents(alphaObjects, []);
+      report("components", `พบ Components ${objects.length} ชิ้น`, "success", 82);
       setDetectedObjects(objects);
       if (objects.length === 0) {
         setStatusMessage("No visible foreground objects were found");
@@ -1019,15 +945,15 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       let sam2Session: Sam2Session | null = null;
       try {
         setStatusMessage("Refining object masks with SAM 2 Hiera Tiny...");
-        report("sam2-load", "กำลังโหลดและเตรียม SAM 2 Hiera Tiny", "step", 91);
+        report("sam2-load", "กำลังโหลดและเตรียม SAM 2 Hiera Tiny", "step", 84);
         sam2Session = await createSam2Session(url, (value) =>
-          setExtractProgress(90 + value * 3, "กำลังปรับ Mask ของแต่ละ Object…"),
+          setExtractProgress(82 + value * 10, "กำลังปรับ Mask ของแต่ละ Object…"),
         );
-        report("sam2-load", "เตรียม SAM 2 และ Image Embedding สำเร็จ", "success", 93);
+        report("sam2-load", "เตรียม SAM 2 และ Image Embedding สำเร็จ", "success", 92);
       } catch (error) {
         console.warn("SAM 2 refinement unavailable; keeping alpha geometry.", error);
         setStatusMessage("SAM 2 unavailable; extracting from foreground geometry...");
-        report("sam2-load", "SAM 2 ใช้งานไม่ได้ จึงใช้ Alpha Geometry แทน", "fallback", 93);
+        report("sam2-load", "SAM 2 ใช้งานไม่ได้ จึงใช้ Alpha Geometry แทน", "fallback", 92);
       }
 
       setStatusMessage(`Extracting all ${objects.length} foreground objects...`);
@@ -1372,18 +1298,18 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           lineHeight: 1.35,
           cursor: "pointer",
         }}
-        title="Only explicit Extract actions may send this image to the ArtShift VPS."
+        title="Only explicit Remove BG or Extract actions may send this image to the ArtShift VPS."
       >
         <input
           type="checkbox"
-          aria-label="Allow VPS fallback for extraction"
+          aria-label="Allow VPS fallback for background removal"
           checked={allowServerFallback}
           onChange={(event) => setAllowServerFallback(event.currentTarget.checked)}
           disabled={busy}
           style={{ margin: "1px 0 0" }}
         />
         <span>
-          ถ้าโมเดล Local ยังโหลดไม่เสร็จ ให้ใช้ VPS ชั่วคราว
+          ถ้าโมเดลลบพื้นหลัง (Remove BG) ยังโหลดไม่เสร็จ ให้ใช้ VPS ชั่วคราว
           {lastRmbgRuntime === "vps-fallback" ? " · ใช้ VPS ครั้งล่าสุด" : ""}
         </span>
       </label>
@@ -1419,7 +1345,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           type="button"
           disabled={busy}
           onClick={() => void handleExtractAll()}
-          title="Extract using alpha geometry and optionally add Florence-2 labels"
+          title="Extract every foreground object locally with alpha geometry and SAM 2 mask refinement"
           style={{
             flex: 1,
             padding: "5px 8px",
