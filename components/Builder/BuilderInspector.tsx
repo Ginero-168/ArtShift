@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { BookMockupSection } from "@/components/Canvas/PropertiesPanel/BookMockupSection";
 import {
@@ -51,13 +50,6 @@ import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 import ColorPickerInput from "./ColorPickerInput";
-
-// Vectorizer + Florence/RMBG dependencies are large and only needed for an
-// image selection. Keep them out of the editor's initial client bundle.
-const VisionObjectIsolator = dynamic(
-  () => import("@/components/Canvas/PropertiesPanel/VisionObjectIsolator"),
-  { ssr: false },
-);
 
 const DEFAULT_GRADIENT_COLORS: string[] = ["#6366f1", "#a855f7"];
 const DEFAULT_GRADIENT_STOPS: number[] = [0, 1];
@@ -1321,12 +1313,7 @@ function MediaOptions({
         </div>
       ) : null}
 
-      {element.type === "image" ? (
-        <>
-          <VisionObjectIsolator element={element} />
-          <ImageAdjustments element={element} apply={apply} />
-        </>
-      ) : null}
+      {element.type === "image" ? <ImageAdjustments element={element} apply={apply} /> : null}
     </div>
   );
 }
