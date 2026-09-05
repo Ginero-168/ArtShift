@@ -2,6 +2,7 @@ import * as v from "valibot";
 import type {
   AiExecutionOptions,
   AiImageGenerateInput,
+  AiImageUpscaleInput,
   AiPromptEnhanceInput,
   AiVectorizeInput,
   AiVisionInput,
@@ -37,6 +38,15 @@ const RecraftVectorizeInputSchema = v.strictObject({
   }),
   width: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(4_096)),
   height: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(4_096)),
+});
+
+const RecraftUpscaleInputSchema = v.strictObject({
+  image: v.strictObject({
+    dataUrl: RecraftImageDataUrlSchema,
+    mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
+  }),
+  width: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  height: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
 });
 
 const PromptEnhanceInputSchema = v.strictObject({
@@ -93,7 +103,8 @@ export type PublicAiExecuteRequest =
     }
   | { task: "vectorize.recraft"; input: AiVectorizeInput; options: AiExecutionOptions }
   | { task: "prompt.enhance"; input: AiPromptEnhanceInput; options: AiExecutionOptions }
-  | { task: "image.generate"; input: AiImageGenerateInput; options: AiExecutionOptions };
+  | { task: "image.generate"; input: AiImageGenerateInput; options: AiExecutionOptions }
+  | { task: "image.upscale"; input: AiImageUpscaleInput; options: AiExecutionOptions };
 
 export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequest | null {
   if (!input || typeof input !== "object") return null;
@@ -124,8 +135,13 @@ export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequ
   if (record.task === "image.generate") {
     const parsed = v.safeParse(ImageGenerateInputSchema, record.input);
     return parsed.success
-      ? { task: record.task, input: parsed.output, options: options.output }
+      ? { task: "image.generate", input: parsed.output, options: options.output }
       : null;
+  }
+  if (record.task === "image.upscale") {
+    const parsed = v.safeParse(RecraftUpscaleInputSchema, record.input);
+    if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
+    return { task: "image.upscale", input: parsed.output, options: options.output };
   }
   return null;
 }

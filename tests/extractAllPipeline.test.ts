@@ -11,7 +11,7 @@ function isolatorSource(): string {
 
 function extractBody(source: string): string {
   const start = source.indexOf("const handleExtract = async");
-  const end = source.indexOf("const isolateSingleObject");
+  const end = source.indexOf("const analysisMessage");
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   return source.slice(start, end);

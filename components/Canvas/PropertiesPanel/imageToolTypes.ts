@@ -1,4 +1,5 @@
 export const IMAGE_TOOL_LABELS = {
+  upscale: "Upscale",
   "remove-bg": "RemoveBG",
   vectorize2: "Vectorize",
   vectorize3: "Vectorize(Cloud)",
@@ -8,7 +9,7 @@ export const EXTRACT_LABEL = "Extract" as const;
 export const VECTORIZE_GROUP_LABEL = "Vectorize" as const;
 
 export type ImageToolId = keyof typeof IMAGE_TOOL_LABELS;
-export type VectorizeToolId = Exclude<ImageToolId, "remove-bg">;
+export type VectorizeToolId = Exclude<ImageToolId, "remove-bg" | "upscale">;
 export type ImageActionId = ImageToolId | "extract";
 
 export const IMAGE_ACTION_LABELS = {

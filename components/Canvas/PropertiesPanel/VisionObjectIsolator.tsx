@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
 import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import { createImage } from "@/lib/engine/factory";
-import { getCached, loadDataURL } from "@/lib/engine/imageCache";
+import { getCached, loadDataURL, preloadDataURL } from "@/lib/engine/imageCache";
 import {
   getProcessingPreviewBounds,
   updateProcessingPreview,
@@ -49,6 +49,7 @@ import {
   hasUsableForeground,
   isForegroundForSource,
 } from "@/lib/vision/foreground";
+import { claimImageActionRun, releaseImageActionRun } from "@/lib/vision/imageActionRunGuard";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, trimTransparentRegion } from "@/lib/vision/visionEngine";
 import {
@@ -193,7 +194,7 @@ function createProgressReporter(operation: string) {
 
 function processingPreviewInput(
   element: ImageElement,
-  kind: "extract" | "remove-bg" | "vectorize",
+  kind: "extract" | "remove-bg" | "vectorize" | "upscale",
   label: string,
   sourceDataUrl?: string,
 ) {
@@ -230,7 +231,6 @@ export function VisionObjectIsolator({
 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
-  const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [detectedForegroundUrl, setDetectedForegroundUrl] = useState<string | null>(null);
   const [detectedForegroundFileId, setDetectedForegroundFileId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -239,6 +239,7 @@ export function VisionObjectIsolator({
   const autoRunKeyRef = useRef<string | null>(null);
   const removeBgHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const extractHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const upscaleHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   // VTracer settings are the single local vectorization configuration.
   const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
@@ -318,7 +319,6 @@ export function VisionObjectIsolator({
 
   useEffect(() => {
     if (!currentFileId) return;
-    setDetectedObjects([]);
     if (detectedForegroundFileId !== currentFileId) {
       setDetectedForegroundUrl(null);
       setDetectedForegroundFileId(null);
@@ -336,24 +336,6 @@ export function VisionObjectIsolator({
       width: cached.width,
       height: cached.height,
     });
-  }, [assetAnalysis, currentFileId]);
-
-  useEffect(() => {
-    const components =
-      assetAnalysis?.result?.foregroundComponents ??
-      (assetAnalysis?.result?.hasTransparency ? assetAnalysis.result.alphaComponents : undefined);
-    if (
-      assetAnalysis?.fileId !== currentFileId ||
-      assetAnalysis.status !== "ready" ||
-      !components?.length
-    ) {
-      return;
-    }
-    setDetectedObjects((current) =>
-      current.length > 0
-        ? current
-        : components.map((component) => ({ label: "object", ...component })),
-    );
   }, [assetAnalysis, currentFileId]);
 
   const applyPreset = (p: VectorizePreset) => {
@@ -634,6 +616,146 @@ export function VisionObjectIsolator({
     }
   };
 
+  const handleUpscale = async (queuedContext?: ProcessingJobContext) => {
+    const cached = getCached(element.fileId);
+    if (!cached?.dataURL) {
+      setStatusMessage("Image data not found in cache");
+      return;
+    }
+
+    if (!queuedContext) {
+      const preloaded = await preloadDataURL(cached.dataURL);
+      if (
+        !window.confirm(
+          "Upscale จะส่งภาพนี้ไปยัง Replicate เพื่อเพิ่มความคมชัด และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?",
+        )
+      ) {
+        return;
+      }
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(element, "upscale", "Upscale", preloaded.dataURL),
+        run: (context) => handleUpscale(context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    const { id: previewId, signal } = queuedContext;
+    setBusy(true);
+    setProgress(5);
+    updateCanvasProcessingPreview(previewId, {
+      progress: 0.05,
+      message: "กำลังเตรียมภาพต้นฉบับสำหรับ Upscale…",
+    });
+    const report = createProgressReporter("Upscale");
+    report("preload", "เตรียมภาพต้นฉบับแล้ว", "started", 0.05);
+
+    try {
+      setStatusMessage("Sending image to Recraft Crisp Upscale...");
+      updateCanvasProcessingPreview(previewId, {
+        progress: 0.12,
+        message: "กำลังส่งภาพไปยัง Recraft Crisp Upscale…",
+      });
+      const response = await fetch("/api/upscale/recraft", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          task: "image.upscale",
+          input: {
+            image: {
+              dataUrl: cached.dataURL,
+              mimeType: cached.dataURL
+                .match(/^data:(image\/(?:jpeg|png|webp));/i)?.[1]
+                ?.toLowerCase(),
+            },
+            width: cached.width,
+            height: cached.height,
+          },
+          options: {
+            profile: "quality",
+            provider: "replicate",
+            modelAlias: "recraft-crisp-upscale",
+            cloudConsent: true,
+            allowFallback: false,
+            timeoutMs: 120_000,
+            cache: false,
+          },
+        }),
+        signal,
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        execution?: { output?: { dataUrl?: unknown } };
+        error?: { message?: unknown } | string;
+      } | null;
+      if (!response.ok) {
+        const providerError =
+          typeof payload?.error === "string"
+            ? payload.error
+            : typeof payload?.error?.message === "string"
+              ? payload.error.message
+              : "Recraft Crisp Upscale request failed.";
+        throw new Error(providerError);
+      }
+      const resultDataUrl = payload?.execution?.output?.dataUrl;
+      if (
+        typeof resultDataUrl !== "string" ||
+        !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(resultDataUrl)
+      ) {
+        throw new Error("Recraft Crisp Upscale returned no valid image output.");
+      }
+      if (signal.aborted) return;
+
+      setProgress(82);
+      setStatusMessage("Loading the upscaled image and preparing a duplicate...");
+      updateCanvasProcessingPreview(previewId, {
+        progress: 0.82,
+        message: "กำลังโหลดผลลัพธ์และเตรียม Duplicate…",
+      });
+      const resultCached = await loadDataURL(resultDataUrl);
+      if (signal.aborted) return;
+      const duplicateBounds = getProcessingPreviewBounds(element);
+      const resultImage = {
+        ...createImage({
+          ...duplicateBounds,
+          ...createCachedImageAsset(resultCached),
+        }),
+        angle: element.angle,
+        flipX: element.flipX,
+        flipY: element.flipY,
+        sourceName: element.sourceName ? `${element.sourceName} · Upscaled` : "Upscaled image",
+      };
+      updateProcessingPreview(previewId, {
+        progress: 0.95,
+        message: "กำลังวาง Duplicate ผลลัพธ์ลงบน Canvas…",
+      });
+      addElement(resultImage, "upscale image duplicate");
+      selectOnly([resultImage.id]);
+      setStatusMessage("Upscale completed as a duplicate image.");
+      report("complete", "Upscale สำเร็จและสร้าง Duplicate โดยคงต้นฉบับไว้", "success", 100);
+    } catch (error) {
+      if (signal.aborted || (error as Error).name === "AbortError") {
+        setStatusMessage("Upscale cancelled.");
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown Upscale error.";
+        setStatusMessage(`Upscale error: ${message}`);
+        report("error", `Upscale ไม่สำเร็จ: ${message}`, "error");
+      }
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  upscaleHandlerRef.current = handleUpscale;
+
   const cancelVectorize = () => {
     if (processingJobIdRef.current) {
       cancelProcessingJob(processingJobIdRef.current);
@@ -712,7 +834,6 @@ export function VisionObjectIsolator({
       selectOnly([resultImage.id]);
       setDetectedForegroundUrl(resultUrl);
       setDetectedForegroundFileId(element.fileId);
-      setDetectedObjects([]);
       setStatusMessage("Background removed successfully!");
       report("complete", "ลบพื้นหลังและสร้าง Alpha สำเร็จ", "success", 100);
     } catch (err) {
@@ -882,7 +1003,6 @@ export function VisionObjectIsolator({
       setDetectedForegroundFileId(element.fileId);
       setExtractProgress(74, "กำลังค้นหา Components…");
       const objects = await detectAlphaObjectBoxes(foregroundUrl);
-      setDetectedObjects(objects);
       report("components", `พบ Components จำนวน ${objects.length} ชิ้น`, "success", 74);
       if (objects.length === 0) {
         setStatusMessage("No separate foreground objects found");
@@ -917,87 +1037,6 @@ export function VisionObjectIsolator({
 
   extractHandlerRef.current = handleExtract;
 
-  const isolateSingleObject = async (obj: DetectedObject, queuedContext?: ProcessingJobContext) => {
-    const url = await getImageDataUrl();
-    if (!url) return;
-
-    if (!queuedContext) {
-      const job = enqueueProcessingJob({
-        preview: processingPreviewInput(element, "extract", `Extract ${obj.label}`, url),
-        run: (context) => isolateSingleObject(obj, context),
-      });
-      processingJobIdRef.current = job.id;
-      setBusy(true);
-      try {
-        await job.promise;
-      } finally {
-        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
-        setBusy(false);
-        setProgress(null);
-      }
-      return;
-    }
-
-    const { id: previewId, signal } = queuedContext;
-    setBusy(true);
-    setProgress(0);
-    updateCanvasProcessingPreview(previewId, {
-      progress: 0,
-      message: "กำลังเตรียม Object…",
-    });
-    setStatusMessage(`Extracting ${obj.label}...`);
-
-    try {
-      const foregroundUrl =
-        detectedForegroundUrl ??
-        (
-          await removeBackgroundWithRuntime(url, {
-            allowServerFallback,
-            signal,
-            onServerFallback: () => {
-              setStatusMessage("Local model is still loading; using the VPS fallback...");
-              updateCanvasProcessingPreview(previewId, {
-                progress: 0.2,
-                message: "โมเดล Local ยังโหลดอยู่ กำลังใช้ VPS fallback…",
-              });
-            },
-            onRuntime: setLastRmbgRuntime,
-          })
-        ).dataUrl;
-      setProgress(78);
-      updateCanvasProcessingPreview(previewId, {
-        progress: 0.78,
-        message: "กำลังตัดภาพ Object ที่เลือก…",
-      });
-      const cropped = await cropImageRegion(foregroundUrl, obj);
-      const cached = await loadDataURL(cropped.dataUrl);
-      const asset = createCachedImageAsset(cached);
-      const targetBounds = getProcessingPreviewBounds(element);
-      const newImg = createImage({
-        x: Math.round(targetBounds.x + targetBounds.width * obj.x_min),
-        y: Math.round(targetBounds.y + targetBounds.height * obj.y_min),
-        width: Math.max(20, Math.round(targetBounds.width * (obj.x_max - obj.x_min))),
-        height: Math.max(20, Math.round(targetBounds.height * (obj.y_max - obj.y_min))),
-        ...asset,
-      });
-
-      setProgress(95);
-      updateProcessingPreview(previewId, {
-        progress: 0.95,
-        message: "กำลังวางผลลัพธ์ลงบน Canvas…",
-      });
-      addElement(newImg, `isolate ${obj.label}`);
-      selectOnly([newImg.id]);
-      setStatusMessage(`Extracted ${obj.label} to canvas!`);
-    } catch (err) {
-      console.warn("Object extraction failed:", err);
-      setStatusMessage("Extraction failed: " + (err as Error).message);
-    } finally {
-      setBusy(false);
-      setProgress(null);
-    }
-  };
-
   const analysisMessage =
     assetAnalysis?.status === "analyzing"
       ? `Preparing image intelligence… ${Math.round(assetAnalysis.progress * 100)}%`
@@ -1012,18 +1051,35 @@ export function VisionObjectIsolator({
               : assetAnalysis?.status === "failed"
                 ? "Background analysis unavailable; tools still work on demand"
                 : null;
+  const showAnalysisMessage = !controlledToolMode || activeTool === "extract";
 
   useEffect(() => {
-    if (!autoRun || (activeTool !== "remove-bg" && activeTool !== "extract")) return;
-    const runKey = `${activeTool}:${element.id}:${element.fileId}`;
-    if (autoRunKeyRef.current === runKey) return;
+    if (
+      !autoRun ||
+      (activeTool !== "remove-bg" && activeTool !== "extract" && activeTool !== "upscale")
+    ) {
+      return;
+    }
+    const runKey = activeTool;
+    if (autoRunKeyRef.current === runKey || !claimImageActionRun(runKey)) return;
     autoRunKeyRef.current = runKey;
     const handler =
-      activeTool === "remove-bg" ? removeBgHandlerRef.current : extractHandlerRef.current;
-    void handler().finally(() => onToolComplete?.());
-  }, [activeTool, autoRun, element.fileId, element.id, onToolComplete]);
+      activeTool === "remove-bg"
+        ? removeBgHandlerRef.current
+        : activeTool === "extract"
+          ? extractHandlerRef.current
+          : upscaleHandlerRef.current;
+    void handler().finally(() => {
+      releaseImageActionRun(runKey);
+      onToolComplete?.();
+    });
+  }, [activeTool, autoRun, onToolComplete]);
 
-  if (autoRun && (activeTool === "remove-bg" || activeTool === "extract")) return null;
+  if (
+    autoRun &&
+    (activeTool === "remove-bg" || activeTool === "extract" || activeTool === "upscale")
+  )
+    return null;
 
   return (
     <div
@@ -1067,7 +1123,7 @@ export function VisionObjectIsolator({
         </div>
       </div>
 
-      {analysisMessage && (
+      {showAnalysisMessage && analysisMessage && (
         <div
           style={{
             marginBottom: 6,
@@ -1297,30 +1353,6 @@ export function VisionObjectIsolator({
             }}
           >
             {busy ? "Processing..." : "Run Vectorize(Cloud)"}
-          </button>
-        </div>
-      )}
-
-      {controlledToolMode && (
-        <div style={{ display: "flex", marginTop: 6 }}>
-          <button
-            type="button"
-            disabled={busy}
-            aria-label="Extract"
-            onClick={() => void handleExtract()}
-            style={{
-              width: "100%",
-              padding: "5px 8px",
-              border: "1px solid #c7d2fe",
-              borderRadius: 5,
-              background: "#eef2ff",
-              color: "#3730a3",
-              fontSize: 9.5,
-              fontWeight: 700,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            {busy ? "Processing..." : "Extract (separate pipeline)"}
           </button>
         </div>
       )}
@@ -1948,37 +1980,6 @@ export function VisionObjectIsolator({
               </button>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Detected objects chips */}
-      {detectedObjects.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-          {detectedObjects.map((obj, idx) => (
-            <button
-              key={`${obj.label}-${idx}`}
-              type="button"
-              disabled={busy}
-              onClick={() => isolateSingleObject(obj)}
-              title={`Click to isolate ${obj.label} onto Canvas`}
-              style={{
-                padding: "3px 6px",
-                borderRadius: 4,
-                border: "1px solid rgba(99, 102, 241, 0.3)",
-                background: "#fff",
-                color: "#1e1b4b",
-                fontSize: 9.5,
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-              }}
-            >
-              <span>✂</span>
-              <span>{obj.label}</span>
-            </button>
-          ))}
         </div>
       )}
 

@@ -425,4 +425,61 @@ describe("Replicate AI adapter", () => {
       message: "Replicate rejected this request.",
     });
   });
+
+  it("upscales a raster input with Recraft Crisp Upscale and returns a safe data URL", async () => {
+    const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-upscale-1",
+            model: "recraft-ai/recraft-crisp-upscale",
+            status: "succeeded",
+            output: "https://replicate.delivery/upscaled.png",
+            metrics: { predict_time: 2.4 },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(imageBytes, { status: 200, headers: { "Content-Type": "image/png" } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "image.upscale" as never,
+      input: {
+        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        width: 1024,
+        height: 768,
+      } as never,
+      model: "recraft-ai/recraft-crisp-upscale",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toEqual({
+      dataUrl: `data:image/png;base64,${Buffer.from(imageBytes).toString("base64")}`,
+    });
+    expect(result).toMatchObject({
+      model: "recraft-ai/recraft-crisp-upscale",
+      requestId: "prediction-upscale-1",
+      usage: { providerSeconds: 2.4 },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.replicate.com/v1/models/recraft-ai/recraft-crisp-upscale/predictions",
+      expect.objectContaining({
+        body: JSON.stringify({
+          input: { image: "data:image/png;base64,AAAA" },
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://replicate.delivery/upscaled.png",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
 });

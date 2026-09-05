@@ -34,6 +34,7 @@ import {
   IconText,
   IconTextMeasure,
   IconVectorNodes,
+  IconZoomIn,
 } from "@/components/icons";
 import { getObjectContextIconName, type ObjectContextIconName } from "./objectContextIconRegistry";
 
@@ -52,6 +53,7 @@ const ICON_BY_NAME: Readonly<Record<ObjectContextIconName, ObjectContextIcon>> =
   crop: IconCrop,
   intelligence: IconSparkles,
   "remove-bg": IconImage,
+  upscale: IconZoomIn,
   extract: IconPathfinderDivide,
   download: IconDownload,
   image: IconImage,

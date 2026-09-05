@@ -58,18 +58,31 @@ export default function AICoPilotBar() {
     return subscribeAIProgress((event) => {
       const isResult = event.presentation === "result";
       const progressLabel = typeof event.progress === "number" ? ` (${event.progress}%)` : "";
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `progress-${event.taskId}-${event.stage}-${event.timestamp}`,
-          role: isResult ? ("assistant" as const) : ("system" as const),
-          kind: isResult ? ("message" as const) : ("progress" as const),
+      setMessages((previous) => {
+        const messageId = `progress-${event.taskId}-${event.stage}`;
+        const nextMessage: CoPilotMessage = {
+          id: messageId,
+          role: isResult ? "assistant" : "system",
+          kind: isResult ? "message" : "progress",
           content: isResult
             ? event.message
             : `${event.operation} · ${event.message}${progressLabel}`,
           timestamp: event.timestamp,
-        },
-      ]);
+        };
+        const existingIndex = previous.findIndex((message) => message.id === messageId);
+        if (existingIndex < 0) return [...previous, nextMessage];
+        const existing = previous[existingIndex];
+        if (
+          existing.content === nextMessage.content &&
+          existing.role === nextMessage.role &&
+          existing.kind === nextMessage.kind
+        ) {
+          return previous;
+        }
+        const next = [...previous];
+        next[existingIndex] = nextMessage;
+        return next;
+      });
     });
   }, []);
 

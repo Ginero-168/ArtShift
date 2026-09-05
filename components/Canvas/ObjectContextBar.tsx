@@ -185,6 +185,8 @@ export default function ObjectContextBar({
   const controls: ReactNode[] = [];
   const toggleImageTool = (tool: ImageActionId) =>
     setActiveImageTool((current) => (current === tool ? null : tool));
+  const toggleUpscale = () =>
+    setActiveImageTool((current) => (current === "upscale" ? null : "upscale"));
   const toggleExtract = () =>
     setActiveImageTool((current) => (current === "extract" ? null : "extract"));
   const toggleVectorize = () =>
@@ -217,6 +219,9 @@ export default function ObjectContextBar({
       ),
     );
     controls.push(divider("image-tools"));
+    controls.push(
+      action(IMAGE_ACTION_LABELS.upscale, toggleUpscale, false, activeImageTool === "upscale"),
+    );
     controls.push(
       action(
         IMAGE_ACTION_LABELS["remove-bg"],
@@ -389,9 +394,17 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
+        activeImageTool === "remove-bg" ||
+        activeImageTool === "extract" ||
+        activeImageTool === "upscale" ? (
           <div
-            data-testid={activeImageTool === "remove-bg" ? "remove-bg-runner" : "extract-runner"}
+            data-testid={
+              activeImageTool === "remove-bg"
+                ? "remove-bg-runner"
+                : activeImageTool === "extract"
+                  ? "extract-runner"
+                  : "upscale-runner"
+            }
             style={{ display: "none" }}
           >
             <VisionObjectIsolator

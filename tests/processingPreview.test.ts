@@ -48,6 +48,27 @@ describe("transient processing preview", () => {
     });
   });
 
+  it("starts an upscale preview at the duplicate position", () => {
+    const id = beginProcessingPreview({
+      kind: "upscale",
+      label: "Upscale",
+      ...getProcessingPreviewBounds({ x: 100, y: 80, width: 320, height: 220 }),
+      progress: 0,
+      sourceDataUrl: "data:image/png;base64,preview",
+    });
+
+    expect(getProcessingPreview()).toMatchObject({
+      id,
+      kind: "upscale",
+      label: "Upscale",
+      x: 452,
+      y: 80,
+      width: 320,
+      height: 220,
+      sourceDataUrl: "data:image/png;base64,preview",
+    });
+  });
+
   it("keeps queued previews visible alongside the active preview", () => {
     const firstId = beginProcessingPreview({
       kind: "vectorize",

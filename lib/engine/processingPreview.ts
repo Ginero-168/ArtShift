@@ -1,4 +1,4 @@
-export type ProcessingPreviewKind = "extract" | "remove-bg" | "vectorize";
+export type ProcessingPreviewKind = "extract" | "remove-bg" | "vectorize" | "upscale";
 export type ProcessingPreviewPhase = "queued" | "running";
 
 export const PROCESSING_PREVIEW_GAP = 32;

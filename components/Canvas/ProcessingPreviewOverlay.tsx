@@ -13,12 +13,14 @@ const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   extract: "#d97706",
   "remove-bg": "#0f766e",
   vectorize: "#4f46e5",
+  upscale: "#7c3aed",
 };
 
 const PREVIEW_ICON: Record<ProcessingPreviewKind, string> = {
   extract: "✂",
   "remove-bg": "✦",
   vectorize: "◇",
+  upscale: "↗",
 };
 
 export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen }: Props) {

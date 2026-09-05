@@ -6,6 +6,7 @@ export const AI_TASK_KINDS = [
   "vectorize.recraft",
   "prompt.enhance",
   "image.generate",
+  "image.upscale",
 ] as const;
 
 export type AiTaskKind = (typeof AI_TASK_KINDS)[number];
@@ -135,6 +136,16 @@ export type AiImageGenerateOutput = {
   seed: number;
 };
 
+export type AiImageUpscaleInput = {
+  image: AiImageInput;
+  width: number;
+  height: number;
+};
+
+export type AiImageUpscaleOutput = {
+  dataUrl: string;
+};
+
 export type AiTaskInputMap = {
   "assistant.chat": AiAssistantChatInput;
   "vision.describe": AiVisionInput;
@@ -143,6 +154,7 @@ export type AiTaskInputMap = {
   "vectorize.recraft": AiVectorizeInput;
   "prompt.enhance": AiPromptEnhanceInput;
   "image.generate": AiImageGenerateInput;
+  "image.upscale": AiImageUpscaleInput;
 };
 
 export type AiTaskOutputMap = {
@@ -153,6 +165,7 @@ export type AiTaskOutputMap = {
   "vectorize.recraft": AiVectorizeOutput;
   "prompt.enhance": AiPromptEnhanceOutput;
   "image.generate": AiImageGenerateOutput;
+  "image.upscale": AiImageUpscaleOutput;
 };
 
 export type AiTaskInput<K extends AiTaskKind> = AiTaskInputMap[K];

@@ -5,6 +5,7 @@ export type ObjectContextIconName =
   | "crop"
   | "intelligence"
   | "remove-bg"
+  | "upscale"
   | "extract"
   | "download"
   | "image"
@@ -46,6 +47,7 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   Crop: "crop",
   "Image Intelligence": "intelligence",
   RemoveBG: "remove-bg",
+  Upscale: "upscale",
   Extract: "extract",
   Download: "download",
   Image: "image",

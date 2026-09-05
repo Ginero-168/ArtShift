@@ -5,7 +5,7 @@ const syntheticPng = Buffer.from(
   "base64",
 );
 
-test("keeps Custom and VTracer buttons and settings independent", async ({ page }) => {
+test("keeps image tools and VTracer settings independent", async ({ page }) => {
   await page.addInitScript(() => {
     (window as unknown as { __vectorizerWorkerMessages?: unknown[] }).__vectorizerWorkerMessages =
       [];
@@ -53,6 +53,7 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
     "Flip Vertical",
     "Rotate 90°",
     "Crop",
+    "Upscale",
     "RemoveBG",
     "Extract",
     "Vectorize",
@@ -64,7 +65,7 @@ test("keeps Custom and VTracer buttons and settings independent", async ({ page 
   await expect(imageToolbar.getByText("Image", { exact: true })).toHaveCount(0);
   await expect(imageToolbar.locator(".object-context-category")).toBeVisible();
   await expect(imageToolbar.locator(".object-context-category svg")).toHaveCount(1);
-  await expect(imageToolbar.locator("button svg")).toHaveCount(8);
+  await expect(imageToolbar.locator("button svg")).toHaveCount(9);
   await expect(imageToolbar.locator("button svg").first()).toHaveAttribute("aria-hidden", "true");
   await expect(imageToolbar.locator("button svg").first()).toHaveAttribute("focusable", "false");
   await expect(imageToolbar.locator(".object-context-divider")).toHaveCount(3);

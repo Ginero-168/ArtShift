@@ -2,6 +2,7 @@ import type {
   AiAssistantChatInput,
   AiAssistantChatOutput,
   AiImageGenerateInput,
+  AiImageUpscaleInput,
   AiPromptEnhanceInput,
   AiProviderStatus,
   AiTaskKind,
@@ -26,12 +27,14 @@ const SUPPORTED_TASKS: AiTaskKind[] = [
   "vectorize.recraft",
   "prompt.enhance",
   "image.generate",
+  "image.upscale",
 ];
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
 const CHAT_MODEL = "openai/gpt-oss-20b";
 const CHAT_QUALITY_MODEL = "openai/gpt-oss-120b";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
+const RECRAFT_UPSCALE_MODEL = "recraft-ai/recraft-crisp-upscale";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 const MAX_CHAT_OUTPUT_TOKENS = 4_096;
 const MAX_RECRAFT_INPUT_BYTES = 5 * 1024 * 1024;
@@ -104,6 +107,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           profile: "quality",
         },
         {
+          id: RECRAFT_UPSCALE_MODEL,
+          alias: "recraft-crisp-upscale",
+          profile: "quality",
+        },
+        {
           id: GPT_IMAGE_2_MODEL,
           alias: "image-gpt-2-low",
           profile: "economy",
@@ -151,6 +159,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (request.task === "image.generate") {
       return (await this.generateImage(
         request as AiProviderRequest<"image.generate">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
+    }
+    if (request.task === "image.upscale") {
+      return (await this.upscaleWithRecraft(
+        request as AiProviderRequest<"image.upscale">,
       )) as AiProviderResult<AiTaskOutput<K>>;
     }
     const input = request.input as AiVisionInput;
@@ -380,6 +393,49 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       usage: {
         inputTokens: numberFromMetrics(metrics, ["input_token_count", "input_tokens"]),
         outputTokens: numberFromMetrics(metrics, ["output_token_count", "output_tokens"]),
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings: [],
+    };
+  }
+
+  private async upscaleWithRecraft(
+    request: AiProviderRequest<"image.upscale">,
+  ): Promise<AiProviderResult<AiTaskOutput<"image.upscale">>> {
+    const input = request.input as AiImageUpscaleInput;
+    assertRecraftImageDataUrl(input.image.dataUrl);
+    assertRecraftUpscaleDimensions(input.width, input.height);
+    const model = parseReplicateModel(request.model);
+    if (model.slug !== RECRAFT_UPSCALE_MODEL) {
+      throw new AiRuntimeError("INVALID_INPUT", "Unsupported Replicate upscaler model.", {
+        provider: this.id,
+      });
+    }
+
+    const prediction = await this.createPrediction(
+      model,
+      { image: input.image.dataUrl },
+      request.signal,
+      true,
+    );
+    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    const outputUrl = extractFileUrl(completed.output);
+    if (!outputUrl) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no upscaled image file.", {
+        provider: this.id,
+      });
+    }
+    const dataUrl = await fetchGeneratedImage(outputUrl, request.signal);
+    const metrics = completed.metrics ?? {};
+    return {
+      output: { dataUrl },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
         providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
       },
       warnings: [],
@@ -623,6 +679,24 @@ function assertRecraftDimensions(width: number, height: number): void {
     throw new AiRuntimeError(
       "INVALID_INPUT",
       "Recraft accepts images from 256px up to 4096px and 16 megapixels.",
+      { provider: "replicate" },
+    );
+  }
+}
+
+function assertRecraftUpscaleDimensions(width: number, height: number): void {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width < 1 ||
+    height < 1 ||
+    width > 4_096 ||
+    height > 4_096 ||
+    width * height > MAX_RECRAFT_PIXELS
+  ) {
+    throw new AiRuntimeError(
+      "INVALID_INPUT",
+      "Recraft Crisp Upscale accepts images up to 4096px and 16 megapixels.",
       { provider: "replicate" },
     );
   }

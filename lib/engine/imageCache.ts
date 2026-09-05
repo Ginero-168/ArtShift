@@ -91,6 +91,10 @@ async function hashString(s: string): Promise<string> {
   return h.toString(16);
 }
 
+export async function preloadDataURL(dataURL: string): Promise<CachedImage> {
+  return loadDataURL(dataURL);
+}
+
 export function fileToDataURL(file: File): Promise<string> {
   if (!isSupportedImageFile(file)) {
     return Promise.reject(new Error("Use PNG, JPEG or WebP images."));
