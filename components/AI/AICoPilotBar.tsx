@@ -7,8 +7,10 @@ import {
   isToolCoPilotPrompt,
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
+import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
+import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import {
   buildDesignAgentContext,
   type ClientChatMessage,
@@ -113,9 +115,20 @@ export default function AICoPilotBar() {
 
     try {
       const localPlan = buildLocalEditPlan(promptToSend);
+      const visualPlan = isImageGenerationPrompt(promptToSend)
+        ? planVisualRequest(promptToSend, {
+            hasSelection: selectedIds.size > 0,
+            selectedObjectCount: selectedIds.size,
+            elementCount,
+            hasImageAsset: (slide?.elements ?? []).some(
+              (element) => !element.isDeleted && element.type === "image",
+            ),
+          })
+        : undefined;
       const route = routeUnifiedPrompt({
         hasLocalPlan: Boolean(localPlan),
         hasToolCommand: isToolCoPilotPrompt(promptToSend),
+        visualPlan,
       });
       let reply = "";
       let actions: SubAgentActionLog[] = [];
@@ -148,6 +161,7 @@ export default function AICoPilotBar() {
       } else if (route === "tool-command") {
         const result = await executeCoPilotInstruction(promptToSend, upsertCurrentAction, {
           signal: controller.signal,
+          visualPlan,
         });
         reply = result.reply;
         actions = result.actions;

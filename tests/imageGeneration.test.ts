@@ -34,8 +34,8 @@ describe("GPT Image 2 generation client", () => {
 
     // Mock Image for imageCache
     class MockImage {
-      naturalWidth = 100;
-      naturalHeight = 100;
+      naturalWidth = 1024;
+      naturalHeight = 1024;
       crossOrigin = "";
       private _src = "";
       onload: (() => void) | null = null;
@@ -65,6 +65,33 @@ describe("GPT Image 2 generation client", () => {
     expect(fetch).toHaveBeenCalledWith(
       "/api/ai/image",
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("rejects a generated image that fails the technical quality gate", async () => {
+    const mockDataUrl = "data:image/png;base64,BBBB";
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ dataUrl: mockDataUrl, seed: 0 }),
+      }),
+    );
+    class TinyImage {
+      naturalWidth = 100;
+      naturalHeight = 100;
+      crossOrigin = "";
+      onload: (() => void) | null = null;
+      set src(_value: string) {
+        setTimeout(() => this.onload?.(), 0);
+      }
+    }
+    vi.stubGlobal("Image", TinyImage);
+
+    await expect(generateAIImage({ prompt: "a cat", aspectRatio: "1:1" })).rejects.toThrow(
+      "Generated image failed the visual quality gate",
     );
   });
 

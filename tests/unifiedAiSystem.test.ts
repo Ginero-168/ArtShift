@@ -5,6 +5,7 @@ import {
   UNIFIED_AI_SYSTEM,
   type UnifiedPromptRoute,
 } from "@/lib/ai/unifiedSystem";
+import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 
 describe("unified AI system", () => {
   it("exposes one user-facing assistant without selectable execution modes", () => {
@@ -23,6 +24,21 @@ describe("unified AI system", () => {
     [{ hasLocalPlan: false, hasToolCommand: false }, "design-agent"],
   ] as const)("routes %j to %s", (input, expected: UnifiedPromptRoute) => {
     expect(routeUnifiedPrompt(input)).toBe(expected);
+  });
+
+  it("routes a complex visual plan to the Design Agent before tool execution", () => {
+    const visualPlan = planVisualRequest("สร้างโปสเตอร์หนังสือ 3 แบบ พร้อมข้อความภาษาไทย", {
+      hasSelection: false,
+      elementCount: 0,
+    });
+
+    expect(
+      routeUnifiedPrompt({
+        hasLocalPlan: false,
+        hasToolCommand: true,
+        visualPlan,
+      }),
+    ).toBe("design-agent");
   });
 
   it("keeps deterministic layout requests on the built-in tool path", () => {

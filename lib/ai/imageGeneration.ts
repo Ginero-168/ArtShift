@@ -5,6 +5,7 @@
 
 import type { AiImageAspectRatio } from "@/lib/ai-runtime/contracts";
 import { loadDataURL } from "@/lib/engine/imageCache";
+import { runVisualQualityGate } from "./visualQualityGate";
 
 export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
 export const GPT_IMAGE_2_QUALITY = "low" as const;
@@ -160,6 +161,18 @@ export async function generateAIImage(
 
   // Cache in local engine image cache
   const cached = await loadDataURL(data.dataUrl);
+  const qualityGate = runVisualQualityGate({
+    dataUrl: cached.dataURL,
+    prompt,
+    width: cached.width,
+    height: cached.height,
+    outputCount: 1,
+  });
+  if (!qualityGate.passed) {
+    throw new Error(
+      `Generated image failed the visual quality gate: ${qualityGate.blockers.join(" ")}`,
+    );
+  }
 
   return {
     dataUrl: cached.dataURL,

@@ -10,6 +10,7 @@ import {
   isImageGenerationPrompt,
 } from "@/lib/ai/imageGeneration";
 import { removeBackground } from "@/lib/ai/removeBg";
+import { planVisualRequest, type VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createImage, createRect, createText } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
@@ -69,6 +70,7 @@ export interface WorkspaceContext {
 
 export type CoPilotOptions = {
   signal?: AbortSignal;
+  visualPlan?: VisualRoutePlan;
 };
 
 /** Prompts that map to a built-in tool command rather than Design Agent chat. */
@@ -182,10 +184,35 @@ export async function executeCoPilotInstruction(
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
   // -------------------------------------------------------------
   if (isImageGenerationPrompt(prompt)) {
+    const visualPlan =
+      options.visualPlan ??
+      planVisualRequest(prompt, {
+        hasSelection: context.selectedIds.length > 0,
+        selectedObjectCount: context.selectedIds.length,
+        elementCount: context.elementCount,
+        hasImageAsset: context.elementsSummary.some((element) => element.type === "image"),
+      });
+
+    if (visualPlan.route !== "direct" || !visualPlan.capabilityAvailable) {
+      const act = logAction("orchestrator", "🧭 Visual Orchestrator", visualPlan.reason);
+      const message =
+        visualPlan.clarification ?? `คำขอนี้ต้องผ่านการวางแผนก่อนครับ (${visualPlan.capabilityAlias})`;
+      updateActionStatus(act, "error", message);
+      return {
+        reply: message,
+        actions,
+        suggestions: [
+          "เพิ่มรายละเอียดของ brief",
+          "เพิ่ม reference หรือข้อความที่ต้องการ",
+          "เปิด AI Provider Settings",
+        ],
+      };
+    }
+
     const act = logAction(
       "image_gen",
       "🎨 Generating Image with GPT Image 2",
-      `Creating visual asset for: "${prompt}"...`,
+      `Creating ${visualPlan.capabilityAlias} visual asset for: "${prompt}"...`,
     );
 
     try {

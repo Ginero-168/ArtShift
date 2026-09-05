@@ -10,8 +10,22 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 - `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
 - `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser RMBG model is not ready. Extraction geometry comes from alpha components with SAM 2 mask refinement, not from a vision-language detector. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
-- `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent.
+- `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent. Image prompts additionally pass through `lib/ai/visualOrchestrator.ts`, which owns capability-alias planning without exposing provider selection to the UI.
 - Built-in tool commands are explicit user actions and commit through their existing atomic editor operations; remote Design Agent proposals are always reviewable before Apply.
+
+## Visual Orchestrator Kernel
+
+`planVisualRequest(prompt, context)` is the narrow planning seam for image requests. It derives a user intent and task class, selects a capability alias, records whether visual analysis is required, and returns a route plan. It never accepts a provider URL, API key, or arbitrary model id.
+
+The current registry deliberately exposes availability:
+
+- `IMAGE_DEFAULT` → direct `image.generate` through the server-owned `image-gpt-2-low` alias.
+- `IMAGE_TEXT`, `IMAGE_VECTOR`, `IMAGE_CREATIVE`, `IMAGE_FAST`, `IMAGE_PRO`, and `IMAGE_EDIT` → explicit unavailable states until their adapters/input contracts are wired. They route to Design Agent instead of silently using the default image route.
+- `VISION_DEFAULT` → reserved for a dedicated visual-analysis transport; the plan records it as not wired rather than pretending that a text heuristic performed vision analysis.
+
+`lib/ai/visualQualityGate.ts` runs after the generated data URL is decoded and before the result is returned to the editor. It requires a non-empty prompt, an allowlisted image data URL, integer dimensions from 256px to 16,384px, and exactly one output. This is a technical gate, not a semantic vision review; generated artwork still needs visual review against the brief before final presentation.
+
+The unified chat preserves local-first precedence: a deterministic local plan wins first, then an available simple image route may execute, while a complex or unavailable visual capability goes to the reviewable Design Agent path. The direct executor repeats the guard so callers cannot bypass the route plan.
 
 ## Locality and fallback
 

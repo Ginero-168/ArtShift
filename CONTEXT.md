@@ -35,3 +35,23 @@ _Avoid_: Layer, cell
 **Workspace Strictness**:
 The shared placement tolerance that determines how many hexagonal cells Block-layer Objects may overlap.
 _Avoid_: Grid strength, snap level
+
+## Visual Orchestration Vocabulary
+
+**Visual Intent**:
+The user's requested visual outcome or change, before a model or tool is selected.
+
+**Task Class**:
+The scope of a Visual Intent: **simple** for one clear reversible outcome, or **complex** for coordinated outputs, references, typography, or multi-part design work.
+
+**Capability Alias**:
+A stable semantic ability such as `IMAGE_DEFAULT`, `IMAGE_EDIT`, `IMAGE_TEXT`, or `VISION_DEFAULT`; it is not a provider name or raw model id.
+
+**Canonical Artifact**:
+The most recent version of an Artwork that the user accepted as the basis for the next revision.
+
+**Immutable Element**:
+An identity, logo, brand color, required copy, or other approved property that a revision must preserve.
+
+**Mutable Element**:
+A property that the current Visual Intent explicitly permits changing, such as crop, pose, background, lighting, or decoration.

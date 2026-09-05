@@ -69,6 +69,14 @@ describe("AI Co-Pilot Workspace Orchestrator", () => {
     expect(ctx.elementsSummary[0].text).toBe("Summer Collection");
   });
 
+  it("does not execute an unavailable visual capability directly", async () => {
+    const result = await executeCoPilotInstruction("สร้างภาพโปสเตอร์ 3 แบบ พร้อมข้อความภาษาไทย");
+
+    expect(result.actions[0]?.agent).toBe("orchestrator");
+    expect(result.actions[0]?.status).toBe("error");
+    expect(result.reply).toContain("วางแผน");
+  });
+
   it("handles composed layout instruction with sub-agent execution", async () => {
     const result = await executeCoPilotInstruction("จัด Layout สไลด์นี้แบบ 60-30-10");
     expect(result).toBeDefined();

@@ -1,0 +1,95 @@
+import { describe, expect, it } from "vitest";
+import {
+  planVisualRequest,
+  resolveVisualCapability,
+  VISUAL_CAPABILITY_REGISTRY,
+} from "@/lib/ai/visualOrchestrator";
+
+describe("Visual Orchestrator Kernel", () => {
+  it("routes a simple image request to the available IMAGE_DEFAULT alias", () => {
+    const plan = planVisualRequest("ขอภาพแมว", {
+      hasSelection: false,
+      elementCount: 0,
+    });
+
+    expect(plan).toMatchObject({
+      intent: "generation",
+      taskClass: "simple",
+      capabilityAlias: "IMAGE_DEFAULT",
+      route: "direct",
+      capabilityAvailable: true,
+      modelAlias: "image-gpt-2-low",
+      requiresApproval: false,
+      needsVisualAnalysis: false,
+    });
+  });
+
+  it("keeps a vague generation request in clarification instead of generating a default image", () => {
+    const plan = planVisualRequest("สร้างรูป", { hasSelection: false, elementCount: 0 });
+
+    expect(plan).toMatchObject({
+      intent: "clarification",
+      route: "clarify",
+      requiresApproval: false,
+    });
+    expect(plan.clarification).toBeTruthy();
+  });
+
+  it("routes complex typography work to IMAGE_TEXT orchestration instead of silently using the default image route", () => {
+    const plan = planVisualRequest("สร้างโปสเตอร์หนังสือ 3 แบบ พร้อมข้อความภาษาไทย", {
+      hasSelection: false,
+      elementCount: 0,
+      hasReference: true,
+    });
+
+    expect(plan).toMatchObject({
+      taskClass: "complex",
+      capabilityAlias: "IMAGE_TEXT",
+      route: "orchestrator",
+      capabilityAvailable: false,
+      requiresApproval: true,
+      needsVisualAnalysis: true,
+    });
+    expect(plan.reason).toContain("IMAGE_TEXT");
+  });
+
+  it("requires visual analysis before a selected reference-sensitive edit", () => {
+    const plan = planVisualRequest("เปลี่ยนพื้นหลังของรูปนี้จาก reference", {
+      hasSelection: true,
+      selectedObjectCount: 1,
+      elementCount: 4,
+      hasImageAsset: true,
+      hasReference: true,
+    });
+
+    expect(plan).toMatchObject({
+      capabilityAlias: "IMAGE_EDIT",
+      route: "orchestrator",
+      needsVisualAnalysis: true,
+      requiresApproval: true,
+    });
+  });
+
+  it("keeps the registry capability-based and exposes only the current wired alias as available", () => {
+    expect(resolveVisualCapability("IMAGE_DEFAULT")).toMatchObject({
+      alias: "IMAGE_DEFAULT",
+      execution: "image.generate",
+      modelAlias: "image-gpt-2-low",
+      available: true,
+    });
+    expect(resolveVisualCapability("IMAGE_PRO").available).toBe(false);
+    expect(Object.keys(VISUAL_CAPABILITY_REGISTRY)).toEqual(
+      expect.arrayContaining([
+        "ORCHESTRATOR_DEFAULT",
+        "VISION_DEFAULT",
+        "IMAGE_DEFAULT",
+        "IMAGE_FAST",
+        "IMAGE_PRO",
+        "IMAGE_EDIT",
+        "IMAGE_TEXT",
+        "IMAGE_VECTOR",
+        "IMAGE_CREATIVE",
+      ]),
+    );
+  });
+});
