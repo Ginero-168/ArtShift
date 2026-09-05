@@ -4,13 +4,15 @@ import {
   clearProcessingPreview,
   getProcessingPreview,
   getProcessingPreviewBounds,
+  getProcessingPreviews,
   updateProcessingPreview,
 } from "@/lib/engine/processingPreview";
 
 describe("transient processing preview", () => {
   afterEach(() => {
-    const preview = getProcessingPreview();
-    if (preview) clearProcessingPreview(preview.id);
+    for (const preview of [...getProcessingPreviews()]) {
+      clearProcessingPreview(preview.id);
+    }
   });
 
   it("creates a transient preview with its canvas placement and loading state", () => {
@@ -44,6 +46,34 @@ describe("transient processing preview", () => {
       width: 640,
       height: 360,
     });
+  });
+
+  it("keeps queued previews visible alongside the active preview", () => {
+    const firstId = beginProcessingPreview({
+      kind: "vectorize",
+      label: "Vectorize 1",
+      x: 100,
+      y: 80,
+      width: 640,
+      height: 360,
+      progress: 0.4,
+      phase: "running",
+    });
+    const secondId = beginProcessingPreview({
+      kind: "extract",
+      label: "Extract 2",
+      x: 900,
+      y: 80,
+      width: 640,
+      height: 360,
+      progress: 0,
+      phase: "queued",
+      queuePosition: 1,
+    });
+
+    expect(getProcessingPreviews().map((item) => item.id)).toEqual([firstId, secondId]);
+    clearProcessingPreview(firstId);
+    expect(getProcessingPreviews().map((item) => item.id)).toEqual([secondId]);
   });
 
   it("updates progress without creating a second preview", () => {

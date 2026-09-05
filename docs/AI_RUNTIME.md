@@ -38,7 +38,13 @@ mutation remain in the browser. A failed VPS request falls back to the local pat
 
 The fallback is stage-aware rather than a generic cloud AI route: it does not upload
 images for background analysis or silently route paid provider work. The source
-document remains unchanged until the browser receives and validates the result.
+The source document remains unchanged until the browser receives and validates the result.
+
+During Remove BG, Extract, and Vectorize, the browser renders a transient duplicate
+preview at the source size to the right of the source. The preview owns the loading
+indicator and swipe animation but is not an editor element or undo entry. Processing
+requests use one FIFO queue, so moving/deselecting the source does not cancel or hide
+the active preview; later requests remain visible as queued previews and run in order.
 
 ### Vectorizer backends
 

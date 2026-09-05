@@ -234,6 +234,8 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
     "animation-name",
     "model-manager-shimmer",
   );
+  await page.mouse.click(850, 480);
+  await expect(processingPreview).toBeVisible();
   releaseRecraft();
   await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
   await expect(processingPreview).toHaveCount(0);

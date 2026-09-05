@@ -25,6 +25,8 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
   const screen = worldToScreen({ x: preview.x, y: preview.y });
   const accent = PREVIEW_ACCENT[preview.kind];
   const progress = Math.round(preview.progress * 100);
+  const isQueued = preview.phase === "queued";
+  const phaseMessage = preview.message ?? (isQueued ? "รอคิวประมวลผล…" : "กำลังประมวลผล…");
 
   return (
     <div
@@ -34,9 +36,11 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
       data-preview-y={preview.y}
       data-preview-width={preview.width}
       data-preview-height={preview.height}
+      data-preview-phase={preview.phase}
+      data-preview-queue-position={preview.queuePosition}
       role="status"
       aria-live="polite"
-      aria-label={`${preview.label} loading`}
+      aria-label={`${preview.label} ${isQueued ? "queued" : "loading"}`}
       style={{
         position: "absolute",
         left: screen.x,
@@ -59,6 +63,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
         flexDirection: "column",
         justifyContent: "space-between",
         fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+        opacity: isQueued ? 0.8 : 1,
       }}
     >
       {preview.sourceDataUrl ? (
@@ -115,7 +120,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
             {preview.label}
           </strong>
           <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "#6b7280" }}>
-            {preview.message ?? "กำลังประมวลผล…"}
+            {phaseMessage}
           </span>
         </div>
       </div>

@@ -48,7 +48,7 @@ import {
   isObjectBlock,
   isObjectLocked,
 } from "@/lib/engine/layers";
-import { getProcessingPreview, subscribeProcessingPreview } from "@/lib/engine/processingPreview";
+import { getProcessingPreviews, subscribeProcessingPreview } from "@/lib/engine/processingPreview";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { constrainShapeDrag } from "@/lib/engine/shapeDrag";
 import type { Guide } from "@/lib/engine/snap";
@@ -118,6 +118,7 @@ import Transformer from "./Transformer";
 import { usePasteDrop } from "./usePasteDrop";
 
 const POINTER_MOVE_THRESHOLD_PX = 3;
+const EMPTY_PROCESSING_PREVIEWS = [] as const;
 
 type DragState =
   | { kind: "draw"; start: WorldPoint }
@@ -344,10 +345,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterBrushCursorRef = useRef<HTMLDivElement | null>(null);
   const magicWandCursorRef = useRef<HTMLDivElement | null>(null);
   const rasterCloneSourcesRef = useRef(new Map<string, [number, number]>());
-  const processingPreview = useSyncExternalStore(
+  const processingPreviews = useSyncExternalStore(
     subscribeProcessingPreview,
-    getProcessingPreview,
-    () => null,
+    getProcessingPreviews,
+    () => EMPTY_PROCESSING_PREVIEWS,
   );
   const images = getImageCache();
 
@@ -1511,13 +1512,14 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         onDoubleClickWorld={onDoubleClickWorld}
         onViewChange={handleViewChange}
       >
-        {processingPreview ? (
+        {processingPreviews.map((preview) => (
           <ProcessingPreviewOverlay
-            preview={processingPreview}
+            key={preview.id}
+            preview={preview}
             scale={view.scale}
             worldToScreen={(point) => rootRef.current?.worldToScreen(point) ?? { x: 0, y: 0 }}
           />
-        ) : null}
+        ))}
         <Marquee rect={marqueeRect} />
         {rasterSelectionImage ? (
           <RasterSelectionOverlay

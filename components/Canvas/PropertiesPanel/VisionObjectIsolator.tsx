@@ -6,11 +6,14 @@ import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import {
-  beginProcessingPreview,
-  clearProcessingPreview,
   getProcessingPreviewBounds,
   updateProcessingPreview,
 } from "@/lib/engine/processingPreview";
+import {
+  cancelProcessingJob,
+  enqueueProcessingJob,
+  type ProcessingJobContext,
+} from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement } from "@/lib/engine/types";
 import {
@@ -284,35 +287,13 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     updateActiveSettings({ vtracerSimplifyEnabled: value });
   const isMonochromeTrace =
     preset === "silhouette" || preset === "lineArt" || vtracerClustering === "bw";
-  const vectorizeAbortRef = useRef<AbortController | null>(null);
-  const processingPreviewIdRef = useRef<string | null>(null);
-  const startCanvasProcessingPreview = (
-    kind: "extract" | "remove-bg" | "vectorize",
-    label: string,
-    sourceDataUrl?: string,
-  ) => {
-    const id = beginProcessingPreview(processingPreviewInput(element, kind, label, sourceDataUrl));
-    processingPreviewIdRef.current = id;
-    return id;
-  };
+  const processingJobIdRef = useRef<string | null>(null);
   const updateCanvasProcessingPreview = (
     id: string,
     patch: { progress?: number; message?: string },
   ) => {
     updateProcessingPreview(id, patch);
   };
-  const clearCanvasProcessingPreview = (expectedId?: string) => {
-    const id = processingPreviewIdRef.current;
-    if (!id || (expectedId && id !== expectedId)) return;
-    clearProcessingPreview(id);
-    processingPreviewIdRef.current = null;
-  };
-  useEffect(() => {
-    return () => {
-      const id = processingPreviewIdRef.current;
-      if (id) clearProcessingPreview(id);
-    };
-  }, []);
   const currentFileId = element.fileId;
   const assetAnalysis = useSyncExternalStore(
     subscribeAssetAnalysis,
@@ -399,22 +380,41 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     return cached?.dataURL ?? null;
   }, [element.fileId]);
 
-  const handleVectorize = async (customOpts?: Partial<VectorizeOptions>) => {
+  const handleVectorize = async (
+    customOpts?: Partial<VectorizeOptions>,
+    queuedContext?: ProcessingJobContext,
+  ) => {
     const url = await getImageDataUrl();
     if (!url) {
       setStatusMessage("Image data not found in cache");
       return;
     }
 
-    const controller = new AbortController();
-    vectorizeAbortRef.current = controller;
+    if (!queuedContext) {
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(
+          element,
+          "vectorize",
+          backend === "vtracer-wasm" ? "VTracer WASM" : "Custom Auto-Trace",
+          url,
+        ),
+        run: (context) => handleVectorize(customOpts, context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    const { id: previewId, signal } = queuedContext;
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview(
-      "vectorize",
-      backend === "vtracer-wasm" ? "VTracer WASM" : "Custom Auto-Trace",
-      url,
-    );
     setStatusMessage("Running high-precision Vector Trace...");
     const report = createProgressReporter("Vectorize");
     report("start", "เริ่มแปลงภาพเป็น Vector", "started", 0);
@@ -457,7 +457,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           ...customOpts,
         },
         {
-          signal: controller.signal,
+          signal,
           onProgress: ({ progress, stage }: VectorizeProgress) => {
             const message =
               stage === "loading"
@@ -509,36 +509,44 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         report("error", `แปลง Vector ไม่สำเร็จ: ${(err as Error).message}`, "error");
       }
     } finally {
-      if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
-      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
   };
 
-  const handleRecraftVectorize = async () => {
+  const handleRecraftVectorize = async (queuedContext?: ProcessingJobContext) => {
     const cached = getCached(element.fileId);
     if (!cached?.dataURL) {
       setStatusMessage("Image data not found in cache");
       return;
     }
-    if (
-      !window.confirm(
-        "Recraft Vectorize จะส่งภาพนี้ไปยัง Replicate เพื่อสร้าง SVG และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?",
-      )
-    ) {
+    if (!queuedContext) {
+      if (
+        !window.confirm(
+          "Recraft Vectorize จะส่งภาพนี้ไปยัง Replicate เพื่อสร้าง SVG และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?",
+        )
+      ) {
+        return;
+      }
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(element, "vectorize", "Recraft Vectorize", cached.dataURL),
+        run: (context) => handleRecraftVectorize(context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
       return;
     }
 
-    const controller = new AbortController();
-    vectorizeAbortRef.current = controller;
+    const { id: previewId, signal } = queuedContext;
     setBusy(true);
     setProgress(8);
-    const previewId = startCanvasProcessingPreview(
-      "vectorize",
-      "Recraft Vectorize",
-      cached.dataURL,
-    );
     updateCanvasProcessingPreview(previewId, {
       progress: 0.08,
       message: "กำลังส่งภาพไปยัง Replicate…",
@@ -568,7 +576,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
             cache: false,
           },
         }),
-        signal: controller.signal,
+        signal,
       });
       const payload = (await response.json().catch(() => null)) as {
         execution?: { output?: { svg?: unknown } };
@@ -623,31 +631,44 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         report("error", `Recraft Vectorize ไม่สำเร็จ: ${message}`, "error");
       }
     } finally {
-      if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
-      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
   };
 
   const cancelVectorize = () => {
-    vectorizeAbortRef.current?.abort();
+    if (processingJobIdRef.current) {
+      cancelProcessingJob(processingJobIdRef.current);
+    }
   };
 
-  const handleRemoveBg = async () => {
+  const handleRemoveBg = async (queuedContext?: ProcessingJobContext) => {
     const cached = getCached(element.fileId);
     if (!cached?.dataURL) {
       setStatusMessage("Image data not found in cache");
       return;
     }
 
+    if (!queuedContext) {
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(element, "remove-bg", "Remove Background", cached.dataURL),
+        run: (context) => handleRemoveBg(context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    const { id: previewId, signal } = queuedContext;
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview(
-      "remove-bg",
-      "Remove Background",
-      cached.dataURL,
-    );
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียมภาพสำหรับลบพื้นหลัง…",
@@ -659,6 +680,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     try {
       const { dataUrl: resultUrl } = await removeBackgroundWithRuntime(cached.dataURL, {
         allowServerFallback,
+        signal,
         onProgress: (value) => {
           const message =
             value < 0.1
@@ -700,7 +722,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Failed to remove background: " + (err as Error).message);
       report("error", `ลบพื้นหลังไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
-      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
@@ -825,16 +846,33 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     return newElements;
   };
 
-  const handleExtractAll = async () => {
+  const handleExtractAll = async (queuedContext?: ProcessingJobContext) => {
     const url = await getImageDataUrl();
     if (!url) {
       setStatusMessage("Image data not found in cache");
       return;
     }
 
+    if (!queuedContext) {
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(element, "extract", "Extract All", url),
+        run: (context) => handleExtractAll(context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    const { id: previewId, signal } = queuedContext;
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview("extract", "Extract All", url);
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียม Foreground…",
@@ -870,6 +908,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         report("foreground", "กำลังลบพื้นหลังเพื่อเตรียม Alpha", "step", 5);
         const result = await removeBackgroundWithRuntime(url, {
           allowServerFallback,
+          signal,
           onProgress: (value) => setExtractProgress(value * 70, "กำลังแยก Foreground pixels…"),
           onServerFallback: () => {
             setStatusMessage("Local model is still loading; using the VPS fallback...");
@@ -1043,22 +1082,38 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Detection failed: " + (err as Error).message);
       report("error", `Extract All ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
-      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
   };
 
-  const handleExtractGeometry = async () => {
+  const handleExtractGeometry = async (queuedContext?: ProcessingJobContext) => {
     const url = await getImageDataUrl();
     if (!url) {
       setStatusMessage("Image data not found in cache");
       return;
     }
 
+    if (!queuedContext) {
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(element, "extract", "Quick Extract", url),
+        run: (context) => handleExtractGeometry(context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    const { id: previewId, signal } = queuedContext;
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview("extract", "Quick Extract", url);
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียม Foreground…",
@@ -1097,6 +1152,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         (
           await removeBackgroundWithRuntime(url, {
             allowServerFallback,
+            signal,
             onProgress: (value) =>
               setQuickExtractProgress(value * 70, "กำลังแยก Foreground pixels…"),
             onServerFallback: () => {
@@ -1147,19 +1203,35 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Quick extraction failed: " + (err as Error).message);
       report("error", `Quick Extract ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
-      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
   };
 
-  const isolateSingleObject = async (obj: DetectedObject) => {
+  const isolateSingleObject = async (obj: DetectedObject, queuedContext?: ProcessingJobContext) => {
     const url = await getImageDataUrl();
     if (!url) return;
 
+    if (!queuedContext) {
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(element, "extract", `Extract ${obj.label}`, url),
+        run: (context) => isolateSingleObject(obj, context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    const { id: previewId, signal } = queuedContext;
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview("extract", `Extract ${obj.label}`, url);
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียม Object…",
@@ -1172,6 +1244,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         (
           await removeBackgroundWithRuntime(url, {
             allowServerFallback,
+            signal,
             onServerFallback: () => {
               setStatusMessage("Local model is still loading; using the VPS fallback...");
               updateCanvasProcessingPreview(previewId, {
@@ -1211,7 +1284,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       console.warn("Object extraction failed:", err);
       setStatusMessage("Extraction failed: " + (err as Error).message);
     } finally {
-      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
@@ -1321,7 +1393,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         <button
           type="button"
           disabled={busy}
-          onClick={handleRemoveBg}
+          onClick={() => void handleRemoveBg()}
           title="Remove background from image with AI"
           style={{
             flex: 1,
@@ -1346,7 +1418,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         <button
           type="button"
           disabled={busy}
-          onClick={handleExtractAll}
+          onClick={() => void handleExtractAll()}
           title="Extract using alpha geometry and optionally add Florence-2 labels"
           style={{
             flex: 1,
@@ -1370,7 +1442,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         <button
           type="button"
           disabled={busy}
-          onClick={handleExtractGeometry}
+          onClick={() => void handleExtractGeometry()}
           title="Recommended: remove the background and split visible regions locally"
           style={{
             flex: 1,
@@ -1475,7 +1547,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           <span>☁</span>
           <span>Recraft Vectorize (Cloud)</span>
         </button>
-        {vectorizeAbortRef.current && !vectorizeOpen && (
+        {processingJobIdRef.current && !vectorizeOpen && (
           <button
             type="button"
             onClick={cancelVectorize}
@@ -2101,7 +2173,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                     : "Generate Custom Paths"}
               </span>
             </button>
-            {vectorizeAbortRef.current && (
+            {processingJobIdRef.current && (
               <button
                 type="button"
                 onClick={cancelVectorize}
