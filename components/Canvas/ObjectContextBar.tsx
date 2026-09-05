@@ -10,6 +10,7 @@ import { getObjectContextCategory } from "@/lib/engine/objectContext";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { getObjectContextIcon } from "./objectContextIcons";
+import { IMAGE_TOOL_LABELS, type ImageToolId } from "./PropertiesPanel/imageToolTypes";
 
 const VisionObjectIsolator = dynamic(() => import("./PropertiesPanel/VisionObjectIsolator"), {
   ssr: false,
@@ -155,13 +156,13 @@ export default function ObjectContextBar({
 
   const first = selected[0];
   const firstId = first?.id;
-  const [intelligenceOpen, setIntelligenceOpen] = useState(false);
+  const [activeImageTool, setActiveImageTool] = useState<ImageToolId | null>(null);
   useEffect(() => {
     if (!firstId) {
-      setIntelligenceOpen(false);
+      setActiveImageTool(null);
       return;
     }
-    setIntelligenceOpen(false);
+    setActiveImageTool(null);
   }, [firstId]);
 
   if (isDragging || !first) return null;
@@ -176,6 +177,8 @@ export default function ObjectContextBar({
   const allShapes =
     selected.length >= 2 && selected.every((element) => shapeTypes.has(element.type));
   const controls: ReactNode[] = [];
+  const toggleImageTool = (tool: ImageToolId) =>
+    setActiveImageTool((current) => (current === tool ? null : tool));
 
   if (selected.length > 1) {
     controls.push(action("Align", () => alignSelectedElements("center")));
@@ -203,14 +206,37 @@ export default function ObjectContextBar({
         croppingImageId === first.id,
       ),
     );
-    controls.push(divider("image-ai"));
-    controls.push(action("Vector", () => setIntelligenceOpen(true)));
+    controls.push(divider("image-tools"));
     controls.push(
       action(
-        "Image Intelligence",
-        () => setIntelligenceOpen((open) => !open),
+        IMAGE_TOOL_LABELS["remove-bg"],
+        () => toggleImageTool("remove-bg"),
         false,
-        intelligenceOpen,
+        activeImageTool === "remove-bg",
+      ),
+    );
+    controls.push(
+      action(
+        IMAGE_TOOL_LABELS.vectorize1,
+        () => toggleImageTool("vectorize1"),
+        false,
+        activeImageTool === "vectorize1",
+      ),
+    );
+    controls.push(
+      action(
+        IMAGE_TOOL_LABELS.vectorize2,
+        () => toggleImageTool("vectorize2"),
+        false,
+        activeImageTool === "vectorize2",
+      ),
+    );
+    controls.push(
+      action(
+        IMAGE_TOOL_LABELS.vectorize3,
+        () => toggleImageTool("vectorize3"),
+        false,
+        activeImageTool === "vectorize3",
       ),
     );
     controls.push(divider("image-export"));
@@ -372,10 +398,10 @@ export default function ObjectContextBar({
       </span>
       {divider("category")}
       {controls}
-      {intelligenceOpen && first.type === "image" ? (
+      {activeImageTool && first.type === "image" ? (
         <div
           role="dialog"
-          aria-label="Image Intelligence"
+          aria-label={`${IMAGE_TOOL_LABELS[activeImageTool]} settings`}
           onPointerDown={(event) => event.stopPropagation()}
           style={{
             position: "absolute",
@@ -392,7 +418,7 @@ export default function ObjectContextBar({
             boxShadow: "0 12px 32px rgba(15, 23, 42, 0.2)",
           }}
         >
-          <VisionObjectIsolator element={first as ImageElement} />
+          <VisionObjectIsolator element={first as ImageElement} activeTool={activeImageTool} />
         </div>
       ) : null}
       <style jsx global>{`

@@ -336,6 +336,13 @@ export const IconSparkles = (p: Props) =>
     p,
   );
 
+export const IconCloud = (p: Props) =>
+  svg(
+    p.size,
+    <path d="M7.5 18h9.25a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 8.5 4.75 4.75 0 0 0 7.5 18Z" />,
+    p,
+  );
+
 export const IconWand = (p: Props) =>
   svg(
     p.size,

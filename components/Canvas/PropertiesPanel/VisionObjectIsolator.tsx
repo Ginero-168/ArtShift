@@ -51,6 +51,7 @@ import {
 } from "@/lib/vision/foreground";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, trimTransparentRegion } from "@/lib/vision/visionEngine";
+import { IMAGE_TOOL_LABELS, type ImageToolId } from "./imageToolTypes";
 
 interface DetectedObject {
   label: string;
@@ -199,7 +200,13 @@ function processingPreviewInput(
   } as const;
 }
 
-export function VisionObjectIsolator({ element }: { element: ImageElement }) {
+export type VisionObjectIsolatorProps = {
+  element: ImageElement;
+  /** When provided, render the selected Option Bar tool's settings. */
+  activeTool?: ImageToolId | null;
+};
+
+export function VisionObjectIsolator({ element, activeTool }: VisionObjectIsolatorProps) {
   const addElement = useEngine((s) => s.addElement);
   const addElements = useEngine((s) => s.addElements);
   const selectOnly = useEngine((s) => s.selectOnly);
@@ -215,6 +222,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   // Vectorizer State — keep Custom and VTracer settings independent.
   const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
+  const controlledToolMode = activeTool !== undefined;
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customSettings, setCustomSettings] = useState<VectorizeEngineSettings>(() =>
     createVectorizeEngineSettings(),
@@ -222,6 +230,20 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const [vtracerSettings, setVTracerSettings] = useState<VectorizeEngineSettings>(() =>
     createVectorizeEngineSettings(true),
   );
+  useEffect(() => {
+    if (activeTool === "vectorize1") {
+      setBackend("custom");
+      setVectorizeOpen(true);
+      setShowAdvanced(false);
+    } else if (activeTool === "vectorize2") {
+      setBackend("vtracer-wasm");
+      setVectorizeOpen(true);
+      setShowAdvanced(true);
+    } else if (controlledToolMode) {
+      setVectorizeOpen(false);
+      setShowAdvanced(false);
+    }
+  }, [activeTool, controlledToolMode]);
   const activeSettings = backend === "custom" ? customSettings : vtracerSettings;
   const updateActiveSettings = (patch: Partial<VectorizeEngineSettings>) => {
     const update = (current: VectorizeEngineSettings) => ({ ...current, ...patch });
@@ -1012,7 +1034,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         }}
       >
         <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent, #6366f1)" }}>
-          ✨ Image Intelligence
+          {activeTool ? `${IMAGE_TOOL_LABELS[activeTool]} Settings` : "✨ Image Intelligence"}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {progress !== null && <span style={{ fontSize: 9, color: "#6b7280" }}>{progress}%</span>}
@@ -1052,7 +1074,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
       <label
         style={{
-          display: "flex",
+          display: controlledToolMode ? "none" : "flex",
           alignItems: "flex-start",
           gap: 5,
           marginBottom: 6,
@@ -1078,7 +1100,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       </label>
 
       {/* Row 1: AI Tools (alpha geometry is the recommended extraction path) */}
-      <div style={{ display: "flex", gap: 4 }}>
+      <div style={{ display: controlledToolMode ? "none" : "flex", gap: 4 }}>
         <button
           type="button"
           disabled={busy}
@@ -1132,7 +1154,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       </div>
 
       {/* Row 2: Separate vectorizer actions */}
-      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+      <div style={{ display: controlledToolMode ? "none" : "flex", gap: 4, marginTop: 4 }}>
         <button
           type="button"
           disabled={busy}
@@ -1190,7 +1212,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           <span>Vectorize2</span>
         </button>
       </div>
-      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+      <div style={{ display: controlledToolMode ? "none" : "flex", gap: 4, marginTop: 4 }}>
         <button
           type="button"
           disabled={busy}
@@ -1237,14 +1259,163 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           </button>
         )}
       </div>
-      <div style={{ marginTop: 3, color: "#64748b", fontSize: 8 }}>
+      <div
+        style={{
+          display: controlledToolMode ? "none" : "block",
+          marginTop: 3,
+          color: "#64748b",
+          fontSize: 8,
+        }}
+      >
         Cloud vectorizer · sends the image to Replicate · requires your Replicate Key
       </div>
+
+      {controlledToolMode && activeTool === "remove-bg" && (
+        <div
+          data-testid="image-tool-settings"
+          data-tool="remove-bg"
+          style={{
+            marginTop: 6,
+            padding: 8,
+            background: "#fff",
+            border: "1px solid #c7d2fe",
+            borderRadius: 6,
+          }}
+        >
+          <strong style={{ display: "block", color: "#1e1b4b", fontSize: 10 }}>
+            RemoveBG Settings
+          </strong>
+          <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+            Local-first background removal. VPS fallback is opt-in.
+          </span>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 5,
+              marginTop: 7,
+              color: "#475569",
+              fontSize: 9,
+              lineHeight: 1.35,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              aria-label="Allow VPS fallback for background removal"
+              checked={allowServerFallback}
+              onChange={(event) => setAllowServerFallback(event.currentTarget.checked)}
+              disabled={busy}
+              style={{ margin: "1px 0 0" }}
+            />
+            <span>Allow VPS fallback when the local model is not ready</span>
+          </label>
+          <button
+            type="button"
+            disabled={busy}
+            aria-label="Run RemoveBG"
+            onClick={() => void handleRemoveBg()}
+            style={{
+              width: "100%",
+              marginTop: 7,
+              padding: "6px 8px",
+              border: "none",
+              borderRadius: 5,
+              background: "#6366f1",
+              color: "#fff",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: busy ? "wait" : "pointer",
+            }}
+          >
+            {busy ? "Processing..." : "Run RemoveBG"}
+          </button>
+        </div>
+      )}
+
+      {controlledToolMode && activeTool === "vectorize3" && (
+        <div
+          data-testid="image-tool-settings"
+          data-tool="vectorize3"
+          style={{
+            marginTop: 6,
+            padding: 8,
+            background: "#fff",
+            border: "1px solid #99f6e4",
+            borderRadius: 6,
+          }}
+        >
+          <strong style={{ display: "block", color: "#134e4a", fontSize: 10 }}>
+            Vectorize3 Settings
+          </strong>
+          <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+            Recraft Vectorize · Cloud opt-in · Replicate account required
+          </span>
+          <button
+            type="button"
+            disabled={busy}
+            aria-label="Run Vectorize3"
+            onClick={() => void handleRecraftVectorize()}
+            style={{
+              width: "100%",
+              marginTop: 7,
+              padding: "6px 8px",
+              border: "none",
+              borderRadius: 5,
+              background: "#0f766e",
+              color: "#fff",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: busy ? "wait" : "pointer",
+            }}
+          >
+            {busy ? "Processing..." : "Run Vectorize3"}
+          </button>
+        </div>
+      )}
+
+      {controlledToolMode && (
+        <div style={{ display: "flex", marginTop: 6 }}>
+          <button
+            type="button"
+            disabled={busy}
+            aria-label="Extract"
+            onClick={() => void handleExtract()}
+            style={{
+              width: "100%",
+              padding: "5px 8px",
+              border: "1px solid #c7d2fe",
+              borderRadius: 5,
+              background: "#eef2ff",
+              color: "#3730a3",
+              fontSize: 9.5,
+              fontWeight: 700,
+              cursor: busy ? "wait" : "pointer",
+            }}
+          >
+            {busy ? "Processing..." : "Extract (separate pipeline)"}
+          </button>
+        </div>
+      )}
 
       {/* Ultra-High-Fidelity Vectorizer Options Panel */}
       {vectorizeOpen && (
         <div
+          data-testid={
+            !controlledToolMode || activeTool === "vectorize1" || activeTool === "vectorize2"
+              ? "image-tool-settings"
+              : undefined
+          }
+          data-tool={
+            !controlledToolMode || activeTool === "vectorize1" || activeTool === "vectorize2"
+              ? (activeTool ?? (backend === "custom" ? "vectorize1" : "vectorize2"))
+              : undefined
+          }
           style={{
+            display:
+              controlledToolMode && activeTool !== "vectorize1" && activeTool !== "vectorize2"
+                ? "none"
+                : undefined,
             marginTop: 6,
             padding: 8,
             background: "#fff",
