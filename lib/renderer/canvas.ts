@@ -139,6 +139,7 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   const cy = el.y + el.height / 2;
   ctx.translate(cx, cy);
   ctx.rotate(el.angle);
+  ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
   ctx.translate(-el.width / 2 - cached.pad, -el.height / 2 - cached.pad);
   ctx.drawImage(cached.canvas, 0, 0);
   ctx.restore();

@@ -44,6 +44,37 @@ describe("editable SVG export", () => {
     expect(svg).toContain('viewBox="0 0 600 400"');
   });
 
+  it("serializes non-destructive horizontal and vertical mirrors", () => {
+    const image = createImage({
+      x: 100,
+      y: 80,
+      width: 200,
+      height: 120,
+      fileId: "mirror-image",
+      naturalWidth: 200,
+      naturalHeight: 120,
+    });
+    image.flipX = true;
+    image.flipY = true;
+    const layer = createEngineLayer("free");
+    layer.objectIds = [image.id];
+    const slide: EngineSlide = {
+      id: "slide-mirror",
+      name: "Mirror",
+      background: "#ffffff",
+      width: 600,
+      height: 400,
+      elements: [image],
+      layers: [layer],
+    };
+
+    const svg = serializeSlideToSVG(slide);
+
+    expect(svg).toContain("scale(-1 -1)");
+    expect(svg).toContain("translate(100 60)");
+    expect(svg).toContain("translate(-100 -60)");
+  });
+
   it("preserves image masks, adjustments, blur and editable arrowheads", () => {
     const image = createImage({
       x: 20,

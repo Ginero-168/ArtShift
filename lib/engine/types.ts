@@ -89,6 +89,9 @@ export type BaseElement = {
   height: number;
   /** Rotation in radians around bbox center. */
   angle: number;
+  /** Non-destructive mirror state around the element's local center. */
+  flipX?: boolean;
+  flipY?: boolean;
   /** 0..1 */
   opacity: number;
   /** CSS color or "transparent". */

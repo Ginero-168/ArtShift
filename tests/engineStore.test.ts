@@ -49,6 +49,76 @@ describe("engine store", () => {
     });
   });
 
+  it("creates a selected horizontal-flipped duplicate without mutating the source", () => {
+    const st = useEngine.getState();
+    st.setLayerMode(st.activeLayerId, "free");
+    const source = createImage({
+      x: 140,
+      y: 180,
+      width: 320,
+      height: 220,
+      fileId: "asymmetric-image",
+      naturalWidth: 320,
+      naturalHeight: 220,
+    });
+    st.addElement(source);
+    const original = structuredClone(useEngine.getState().currentSlide()!.elements[0]);
+    const historyBeforeFlip = useEngine.getState().history.past.length;
+
+    st.flipHorizontal([source.id]);
+
+    const elements = useEngine.getState().currentSlide()!.elements;
+    const result = elements.find((element) => element.id !== source.id);
+    expect(elements).toHaveLength(2);
+    expect(result).toMatchObject({
+      type: "image",
+      x: source.x,
+      y: source.y,
+      width: source.width,
+      height: source.height,
+      angle: source.angle,
+      flipX: true,
+    });
+    expect(result?.id).not.toBe(source.id);
+    expect(elements.find((element) => element.id === source.id)).toEqual(original);
+    expect(useEngine.getState().history.past).toHaveLength(historyBeforeFlip + 1);
+    expect(useEngine.getState().selectedIds).toEqual(new Set([result!.id]));
+  });
+
+  it("creates a selected vertical-flipped duplicate without mutating the source", () => {
+    const st = useEngine.getState();
+    st.setLayerMode(st.activeLayerId, "free");
+    const source = createImage({
+      x: 240,
+      y: 260,
+      width: 280,
+      height: 360,
+      fileId: "asymmetric-image-vertical",
+      naturalWidth: 280,
+      naturalHeight: 360,
+    });
+    st.addElement(source);
+    const original = structuredClone(useEngine.getState().currentSlide()!.elements[0]);
+
+    st.flipVertical([source.id]);
+
+    const elements = useEngine.getState().currentSlide()!.elements;
+    const result = elements.find((element) => element.id !== source.id);
+    expect(elements).toHaveLength(2);
+    expect(result).toMatchObject({
+      type: "image",
+      x: source.x,
+      y: source.y,
+      width: source.width,
+      height: source.height,
+      angle: source.angle,
+      flipY: true,
+    });
+    expect(result?.id).not.toBe(source.id);
+    expect(elements.find((element) => element.id === source.id)).toEqual(original);
+    expect(useEngine.getState().selectedIds).toEqual(new Set([result!.id]));
+  });
+
   it("assigns unique z-order to pasted elements", () => {
     const st = useEngine.getState();
     const a = createRect({ x: 10, y: 10, width: 20, height: 20 });

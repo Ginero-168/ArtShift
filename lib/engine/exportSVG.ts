@@ -73,7 +73,15 @@ function downloadSVG(slide: EngineSlide, filename: string) {
 function serializeElement(element: EngineElement): string {
   const transform = `translate(${n(element.x)} ${n(element.y)}) rotate(${n((element.angle * 180) / Math.PI)} ${n(element.width / 2)} ${n(element.height / 2)})`;
   const style = `opacity:${n(element.opacity)};mix-blend-mode:${element.blendMode ?? "normal"}`;
-  return `<g id="object-${escapeId(element.id)}" transform="${transform}" style="${style}">${serializeLocalElement(element)}</g>`;
+  const local = serializeLocalElement(element);
+  const mirrorX = element.flipX ? -1 : 1;
+  const mirrorY = element.flipY ? -1 : 1;
+  const mirrorTransform =
+    element.flipX || element.flipY
+      ? `translate(${n(element.width / 2)} ${n(element.height / 2)}) scale(${mirrorX} ${mirrorY}) translate(${n(-element.width / 2)} ${n(-element.height / 2)})`
+      : "";
+  const content = mirrorTransform ? `<g transform="${mirrorTransform}">${local}</g>` : local;
+  return `<g id="object-${escapeId(element.id)}" transform="${transform}" style="${style}">${content}</g>`;
 }
 
 function serializeLocalElement(element: EngineElement): string {
