@@ -54,6 +54,7 @@ const ICON_BY_NAME: Readonly<Record<ObjectContextIconName, ObjectContextIcon>> =
   crop: IconCrop,
   intelligence: IconSparkles,
   "remove-bg": IconImage,
+  extract: IconPathfinderDivide,
   vectorize1: IconPen,
   vectorize2: IconVectorNodes,
   vectorize3: IconCloud,

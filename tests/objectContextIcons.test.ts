@@ -11,6 +11,7 @@ const toolbarLabels = [
   "Crop",
   "Image Intelligence",
   "Vectorize",
+  "Extract",
   "RemoveBG",
   "Vectorize1",
   "Vectorize2",

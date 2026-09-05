@@ -52,8 +52,9 @@ import {
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, trimTransparentRegion } from "@/lib/vision/visionEngine";
 import {
+  IMAGE_ACTION_LABELS,
   IMAGE_TOOL_LABELS,
-  type ImageToolId,
+  type ImageActionId,
   isVectorizeTool,
   VECTORIZE_TOOL_IDS,
   type VectorizeToolId,
@@ -209,7 +210,7 @@ function processingPreviewInput(
 export type VisionObjectIsolatorProps = {
   element: ImageElement;
   /** When provided, render the selected Option Bar tool's settings. */
-  activeTool?: ImageToolId | null;
+  activeTool?: ImageActionId | null;
   /** Run an immediate tool action without showing its settings panel. */
   autoRun?: boolean;
   onToolComplete?: () => void;
@@ -237,6 +238,7 @@ export function VisionObjectIsolator({
   const [, setLastRmbgRuntime] = useState<"local" | "vps-fallback">("local");
   const autoRunKeyRef = useRef<string | null>(null);
   const removeBgHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const extractHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   // Vectorizer State — keep Custom and VTracer settings independent.
   const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
   const [vectorizeOpen, setVectorizeOpen] = useState(false);
@@ -551,7 +553,7 @@ export function VisionObjectIsolator({
         return;
       }
       const job = enqueueProcessingJob({
-        preview: processingPreviewInput(element, "vectorize", "Vectorize3", cached.dataURL),
+        preview: processingPreviewInput(element, "vectorize", "Vectorize(Cloud)", cached.dataURL),
         run: (context) => handleRecraftVectorize(context),
       });
       processingJobIdRef.current = job.id;
@@ -939,6 +941,8 @@ export function VisionObjectIsolator({
     }
   };
 
+  extractHandlerRef.current = handleExtract;
+
   const isolateSingleObject = async (obj: DetectedObject, queuedContext?: ProcessingJobContext) => {
     const url = await getImageDataUrl();
     if (!url) return;
@@ -1036,14 +1040,16 @@ export function VisionObjectIsolator({
                 : null;
 
   useEffect(() => {
-    if (!autoRun || activeTool !== "remove-bg") return;
-    const runKey = `${element.id}:${element.fileId}`;
+    if (!autoRun || (activeTool !== "remove-bg" && activeTool !== "extract")) return;
+    const runKey = `${activeTool}:${element.id}:${element.fileId}`;
     if (autoRunKeyRef.current === runKey) return;
     autoRunKeyRef.current = runKey;
-    void removeBgHandlerRef.current().finally(() => onToolComplete?.());
+    const handler =
+      activeTool === "remove-bg" ? removeBgHandlerRef.current : extractHandlerRef.current;
+    void handler().finally(() => onToolComplete?.());
   }, [activeTool, autoRun, element.fileId, element.id, onToolComplete]);
 
-  if (autoRun && activeTool === "remove-bg") return null;
+  if (autoRun && (activeTool === "remove-bg" || activeTool === "extract")) return null;
 
   return (
     <div
@@ -1064,7 +1070,7 @@ export function VisionObjectIsolator({
         }}
       >
         <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent, #6366f1)" }}>
-          {activeTool ? `${IMAGE_TOOL_LABELS[activeTool]} Settings` : "✨ Image Intelligence"}
+          {activeTool ? `${IMAGE_ACTION_LABELS[activeTool]} Settings` : "✨ Image Intelligence"}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {progress !== null && <span style={{ fontSize: 9, color: "#6b7280" }}>{progress}%</span>}
@@ -1256,9 +1262,9 @@ export function VisionObjectIsolator({
           type="button"
           disabled={busy}
           onClick={() => void handleRecraftVectorize()}
-          aria-label="Vectorize3"
+          aria-label="Vectorize(Cloud)"
           data-vectorizer="vectorize3"
-          title="Run Vectorize3 · Recraft Vectorize through your Replicate account"
+          title="Run Vectorize(Cloud) · Recraft Vectorize through your Replicate account"
           style={{
             flex: 1,
             padding: "6px 5px",
@@ -1277,7 +1283,7 @@ export function VisionObjectIsolator({
           }}
         >
           <span>☁</span>
-          <span>Vectorize3</span>
+          <span>Vectorize(Cloud)</span>
         </button>
         {processingJobIdRef.current && !vectorizeOpen && (
           <button
@@ -1322,7 +1328,7 @@ export function VisionObjectIsolator({
           }}
         >
           <strong style={{ display: "block", color: "#134e4a", fontSize: 10 }}>
-            Vectorize3 Settings
+            Vectorize(Cloud) Settings
           </strong>
           <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
             Recraft Vectorize · Cloud opt-in · Replicate account required
@@ -1330,7 +1336,7 @@ export function VisionObjectIsolator({
           <button
             type="button"
             disabled={busy}
-            aria-label="Run Vectorize3"
+            aria-label="Run Vectorize(Cloud)"
             onClick={() => void handleRecraftVectorize()}
             style={{
               width: "100%",
@@ -1345,7 +1351,7 @@ export function VisionObjectIsolator({
               cursor: busy ? "wait" : "pointer",
             }}
           >
-            {busy ? "Processing..." : "Run Vectorize3"}
+            {busy ? "Processing..." : "Run Vectorize(Cloud)"}
           </button>
         </div>
       )}

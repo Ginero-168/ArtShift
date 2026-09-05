@@ -11,8 +11,9 @@ import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
-  IMAGE_TOOL_LABELS,
-  type ImageToolId,
+  EXTRACT_LABEL,
+  IMAGE_ACTION_LABELS,
+  type ImageActionId,
   isVectorizeTool,
   VECTORIZE_GROUP_LABEL,
 } from "./PropertiesPanel/imageToolTypes";
@@ -161,7 +162,7 @@ export default function ObjectContextBar({
 
   const first = selected[0];
   const firstId = first?.id;
-  const [activeImageTool, setActiveImageTool] = useState<ImageToolId | null>(null);
+  const [activeImageTool, setActiveImageTool] = useState<ImageActionId | null>(null);
   useEffect(() => {
     if (!firstId) {
       setActiveImageTool(null);
@@ -182,10 +183,12 @@ export default function ObjectContextBar({
   const allShapes =
     selected.length >= 2 && selected.every((element) => shapeTypes.has(element.type));
   const controls: ReactNode[] = [];
-  const toggleImageTool = (tool: ImageToolId) =>
+  const toggleImageTool = (tool: ImageActionId) =>
     setActiveImageTool((current) => (current === tool ? null : tool));
+  const toggleExtract = () =>
+    setActiveImageTool((current) => (current === "extract" ? null : "extract"));
   const toggleVectorize = () =>
-    setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize1"));
+    setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
   if (selected.length > 1) {
     controls.push(action("Align", () => alignSelectedElements("center")));
@@ -216,12 +219,13 @@ export default function ObjectContextBar({
     controls.push(divider("image-tools"));
     controls.push(
       action(
-        IMAGE_TOOL_LABELS["remove-bg"],
+        IMAGE_ACTION_LABELS["remove-bg"],
         () => toggleImageTool("remove-bg"),
         false,
         activeImageTool === "remove-bg",
       ),
     );
+    controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === "extract"));
     controls.push(
       action(VECTORIZE_GROUP_LABEL, toggleVectorize, false, isVectorizeTool(activeImageTool)),
     );
@@ -385,14 +389,17 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        activeImageTool === "remove-bg" ? (
-          <div data-testid="remove-bg-runner" style={{ display: "none" }}>
+        activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
+          <div
+            data-testid={activeImageTool === "remove-bg" ? "remove-bg-runner" : "extract-runner"}
+            style={{ display: "none" }}
+          >
             <VisionObjectIsolator
               element={first as ImageElement}
               activeTool={activeImageTool}
               autoRun
               onToolComplete={() =>
-                setActiveImageTool((current) => (current === "remove-bg" ? null : current))
+                setActiveImageTool((current) => (current === activeImageTool ? null : current))
               }
             />
           </div>
