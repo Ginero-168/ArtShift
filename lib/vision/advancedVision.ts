@@ -10,7 +10,9 @@ import {
 
 export const ADVANCED_VISION_MODELS = {
   groundingDino: "onnx-community/grounding-dino-tiny-ONNX",
-  sam2: "onnx-community/sam2-hiera-tiny",
+  // The non-ONNX-suffixed repository has no config.json (404), which made every
+  // SAM 2 session fail and silently fall back to unrefined alpha geometry.
+  sam2: "onnx-community/sam2-hiera-tiny-ONNX",
 } as const;
 
 export type VisionBox = {

@@ -77,7 +77,7 @@ export const MODEL_DEFINITIONS: readonly ModelDefinition[] = [
     mode: "local",
     description: "Promptable mask refinement from boxes and points.",
     lazy: true,
-    cacheIds: ["onnx-community/sam2-hiera-tiny"],
+    cacheIds: ["onnx-community/sam2-hiera-tiny-ONNX"],
   },
   {
     id: "opencv-js",
