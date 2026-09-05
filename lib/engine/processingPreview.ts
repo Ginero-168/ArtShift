@@ -1,5 +1,26 @@
 export type ProcessingPreviewKind = "extract" | "remove-bg" | "vectorize";
 
+export const PROCESSING_PREVIEW_GAP = 32;
+
+export type ProcessingPreviewSourceBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/** Place a processing duplicate to the right without changing source geometry. */
+export function getProcessingPreviewBounds(
+  source: ProcessingPreviewSourceBounds,
+): ProcessingPreviewSourceBounds {
+  return {
+    x: source.x + source.width + PROCESSING_PREVIEW_GAP,
+    y: source.y,
+    width: source.width,
+    height: source.height,
+  };
+}
+
 export type ProcessingPreview = {
   id: string;
   kind: ProcessingPreviewKind;
@@ -10,6 +31,7 @@ export type ProcessingPreview = {
   width: number;
   height: number;
   progress: number;
+  sourceDataUrl?: string;
 };
 
 type ProcessingPreviewInput = Omit<ProcessingPreview, "id">;

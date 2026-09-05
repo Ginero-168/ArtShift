@@ -225,6 +225,15 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
   await expect(processingPreview).toBeVisible();
   await expect(processingPreview).toHaveAttribute("data-preview-kind", "vectorize");
   await expect(processingPreview).toHaveAttribute("aria-label", "Recraft Vectorize loading");
+  const previewWidth = await processingPreview.getAttribute("data-preview-width");
+  const previewHeight = await processingPreview.getAttribute("data-preview-height");
+  expect(Number(previewWidth)).toBeGreaterThan(0);
+  expect(previewWidth).toBe(previewHeight);
+  await expect(processingPreview.locator("img")).toHaveCount(1);
+  await expect(processingPreview.getByTestId("processing-preview-swipe")).toHaveCSS(
+    "animation-name",
+    "model-manager-shimmer",
+  );
   releaseRecraft();
   await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
   await expect(processingPreview).toHaveCount(0);

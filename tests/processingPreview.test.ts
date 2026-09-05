@@ -3,6 +3,7 @@ import {
   beginProcessingPreview,
   clearProcessingPreview,
   getProcessingPreview,
+  getProcessingPreviewBounds,
   updateProcessingPreview,
 } from "@/lib/engine/processingPreview";
 
@@ -21,6 +22,7 @@ describe("transient processing preview", () => {
       width: 240,
       height: 180,
       progress: 0,
+      sourceDataUrl: "data:image/png;base64,preview",
     });
 
     expect(getProcessingPreview()).toMatchObject({
@@ -31,6 +33,16 @@ describe("transient processing preview", () => {
       width: 240,
       height: 180,
       progress: 0,
+      sourceDataUrl: "data:image/png;base64,preview",
+    });
+  });
+
+  it("places the duplicate to the right while preserving the source size", () => {
+    expect(getProcessingPreviewBounds({ x: 120, y: 80, width: 640, height: 360 })).toEqual({
+      x: 792,
+      y: 80,
+      width: 640,
+      height: 360,
     });
   });
 

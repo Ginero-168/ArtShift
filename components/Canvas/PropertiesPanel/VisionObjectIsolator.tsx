@@ -8,6 +8,7 @@ import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import {
   beginProcessingPreview,
   clearProcessingPreview,
+  getProcessingPreviewBounds,
   updateProcessingPreview,
 } from "@/lib/engine/processingPreview";
 import { useEngine } from "@/lib/engine/store";
@@ -201,18 +202,15 @@ function processingPreviewInput(
   element: ImageElement,
   kind: "extract" | "remove-bg" | "vectorize",
   label: string,
+  sourceDataUrl?: string,
 ) {
-  const width = Math.max(180, Math.min(320, Math.round(element.width * 0.42) || 240));
-  const height = Math.max(140, Math.min(230, Math.round(width * 0.78)));
   return {
+    ...getProcessingPreviewBounds(element),
     kind,
     label,
-    x: element.x + element.width + 32,
-    y: element.y,
-    width,
-    height,
     progress: 0,
     message: "กำลังเตรียมผลลัพธ์…",
+    sourceDataUrl,
   } as const;
 }
 
@@ -220,7 +218,6 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const addElement = useEngine((s) => s.addElement);
   const addElements = useEngine((s) => s.addElements);
   const selectOnly = useEngine((s) => s.selectOnly);
-  const updateElements = useEngine((s) => s.updateElements);
 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -292,8 +289,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const startCanvasProcessingPreview = (
     kind: "extract" | "remove-bg" | "vectorize",
     label: string,
+    sourceDataUrl?: string,
   ) => {
-    const id = beginProcessingPreview(processingPreviewInput(element, kind, label));
+    const id = beginProcessingPreview(processingPreviewInput(element, kind, label, sourceDataUrl));
     processingPreviewIdRef.current = id;
     return id;
   };
@@ -415,6 +413,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     const previewId = startCanvasProcessingPreview(
       "vectorize",
       backend === "vtracer-wasm" ? "VTracer WASM" : "Custom Auto-Trace",
+      url,
     );
     setStatusMessage("Running high-precision Vector Trace...");
     const report = createProgressReporter("Vectorize");
@@ -424,12 +423,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       const isMonochrome = isMonochromeTrace;
       const res = await vectorizeImage(
         url,
-        {
-          x: element.x + 24,
-          y: element.y + 24,
-          width: element.width,
-          height: element.height,
-        },
+        getProcessingPreviewBounds(element),
         {
           backend,
           preset,
@@ -540,7 +534,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     vectorizeAbortRef.current = controller;
     setBusy(true);
     setProgress(8);
-    const previewId = startCanvasProcessingPreview("vectorize", "Recraft Vectorize");
+    const previewId = startCanvasProcessingPreview(
+      "vectorize",
+      "Recraft Vectorize",
+      cached.dataURL,
+    );
     updateCanvasProcessingPreview(previewId, {
       progress: 0.08,
       message: "กำลังส่งภาพไปยัง Replicate…",
@@ -596,12 +594,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       });
       const viewport = getSvgViewport(svg);
       const result = parseVTracerSvgResult(svg, {
-        targetBounds: {
-          x: element.x + 24,
-          y: element.y + 24,
-          width: element.width,
-          height: element.height,
-        },
+        targetBounds: getProcessingPreviewBounds(element),
         sourceWidth: viewport.width,
         sourceHeight: viewport.height,
         ...RECRAFT_SVG_LIMITS,
@@ -650,7 +643,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview("remove-bg", "Remove Background");
+    const previewId = startCanvasProcessingPreview(
+      "remove-bg",
+      "Remove Background",
+      cached.dataURL,
+    );
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียมภาพสำหรับลบพื้นหลัง…",
@@ -683,27 +680,18 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         onRuntime: setLastRmbgRuntime,
       });
       const newCached = await loadDataURL(resultUrl);
-      updateElements(
-        [
-          {
-            id: element.id,
-            patch: {
-              fileId: newCached.fileId,
-              naturalWidth: newCached.width,
-              naturalHeight: newCached.height,
-              crop: null,
-              status: "loaded" as const,
-              linkedAssetId: undefined,
-              sourceName: undefined,
-              sourceLastModified: undefined,
-              sourceSize: undefined,
-            },
-          },
-        ],
-        "remove background",
-      );
+      const resultImage = createImage({
+        ...getProcessingPreviewBounds(element),
+        ...createCachedImageAsset(newCached),
+      });
+      updateProcessingPreview(previewId, {
+        progress: 0.95,
+        message: "กำลังวาง Duplicate ผลลัพธ์ลงบน Canvas…",
+      });
+      addElement(resultImage, "remove background duplicate");
+      selectOnly([resultImage.id]);
       setDetectedForegroundUrl(resultUrl);
-      setDetectedForegroundFileId(newCached.fileId);
+      setDetectedForegroundFileId(element.fileId);
       setDetectedObjects([]);
       setStatusMessage("Background removed successfully!");
       report("complete", "ลบพื้นหลังและสร้าง Alpha สำเร็จ", "success", 100);
@@ -737,10 +725,17 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       sam2Session?: Sam2Session | null;
       maskSourceUrl?: string;
       alphaComponents?: DetectedObject[];
+      targetBounds?: { x: number; y: number; width: number; height: number };
       onMaskProgress?: (objectIndex: number, progress: number) => void;
     } = {},
   ) => {
     const newElements = [];
+    const targetBounds = options.targetBounds ?? {
+      x: element.x,
+      y: element.y,
+      width: element.width,
+      height: element.height,
+    };
     const masks: Array<VisionMask | null> = objects.map(() => null);
 
     if (options.sam2Session) {
@@ -807,16 +802,18 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       const x = obj.x_min + objectWidth * (trimmed.offsetX / Math.max(1, cropped.width));
       const y = obj.y_min + objectHeight * (trimmed.offsetY / Math.max(1, cropped.height));
       const newImg = createImage({
-        x: Math.round(element.x + element.width * x),
-        y: Math.round(element.y + element.height * y),
+        x: Math.round(targetBounds.x + targetBounds.width * x),
+        y: Math.round(targetBounds.y + targetBounds.height * y),
         width: Math.max(
           20,
-          Math.round(element.width * objectWidth * (trimmed.width / Math.max(1, cropped.width))),
+          Math.round(
+            targetBounds.width * objectWidth * (trimmed.width / Math.max(1, cropped.width)),
+          ),
         ),
         height: Math.max(
           20,
           Math.round(
-            element.height * objectHeight * (trimmed.height / Math.max(1, cropped.height)),
+            targetBounds.height * objectHeight * (trimmed.height / Math.max(1, cropped.height)),
           ),
         ),
         ...asset,
@@ -837,7 +834,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview("extract", "Extract All");
+    const previewId = startCanvasProcessingPreview("extract", "Extract All", url);
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียม Foreground…",
@@ -1012,6 +1009,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           sam2Session,
           maskSourceUrl: url,
           alphaComponents: alphaObjects,
+          targetBounds: getProcessingPreviewBounds(element),
           trimTransparent: true,
           onMaskProgress: (objectIndex, value) => {
             if (sam2Session) {
@@ -1060,7 +1058,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview("extract", "Quick Extract");
+    const previewId = startCanvasProcessingPreview("extract", "Quick Extract", url);
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียม Foreground…",
@@ -1130,8 +1128,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       }
 
       setStatusMessage(`Extracting ${objects.length} objects without Vision AI...`);
-      const newElements = await extractObjectBatch(foregroundUrl, objects, (value) =>
-        setQuickExtractProgress(74 + value * 25, "กำลังสร้าง Object ที่แก้ไขได้…"),
+      const newElements = await extractObjectBatch(
+        foregroundUrl,
+        objects,
+        (value) => setQuickExtractProgress(74 + value * 25, "กำลังสร้าง Object ที่แก้ไขได้…"),
+        { targetBounds: getProcessingPreviewBounds(element) },
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");
@@ -1158,7 +1159,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
-    const previewId = startCanvasProcessingPreview("extract", `Extract ${obj.label}`);
+    const previewId = startCanvasProcessingPreview("extract", `Extract ${obj.label}`, url);
     updateCanvasProcessingPreview(previewId, {
       progress: 0,
       message: "กำลังเตรียม Object…",
@@ -1189,11 +1190,12 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       const cropped = await cropImageRegion(foregroundUrl, obj);
       const cached = await loadDataURL(cropped.dataUrl);
       const asset = createCachedImageAsset(cached);
+      const targetBounds = getProcessingPreviewBounds(element);
       const newImg = createImage({
-        x: Math.round(element.x + element.width * obj.x_min),
-        y: Math.round(element.y + element.height * obj.y_min),
-        width: Math.max(20, Math.round(element.width * (obj.x_max - obj.x_min))),
-        height: Math.max(20, Math.round(element.height * (obj.y_max - obj.y_min))),
+        x: Math.round(targetBounds.x + targetBounds.width * obj.x_min),
+        y: Math.round(targetBounds.y + targetBounds.height * obj.y_min),
+        width: Math.max(20, Math.round(targetBounds.width * (obj.x_max - obj.x_min))),
+        height: Math.max(20, Math.round(targetBounds.height * (obj.y_max - obj.y_min))),
         ...asset,
       });
 

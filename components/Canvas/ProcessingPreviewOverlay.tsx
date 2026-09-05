@@ -30,6 +30,10 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
     <div
       data-testid="processing-preview"
       data-preview-kind={preview.kind}
+      data-preview-x={preview.x}
+      data-preview-y={preview.y}
+      data-preview-width={preview.width}
+      data-preview-height={preview.height}
       role="status"
       aria-live="polite"
       aria-label={`${preview.label} loading`}
@@ -47,7 +51,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
         boxSizing: "border-box",
         border: `1px solid ${accent}`,
         borderRadius: 12,
-        background: "rgba(255, 255, 255, 0.94)",
+        background: "rgba(255, 255, 255, 0.62)",
         boxShadow: "0 10px 28px rgba(15, 23, 42, 0.2)",
         color: "#111827",
         padding: 14,
@@ -57,11 +61,30 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
         fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
       }}
     >
+      {preview.sourceDataUrl ? (
+        // biome-ignore lint/performance/noImgElement: transient local image preview
+        <img
+          src={preview.sourceDataUrl}
+          alt=""
+          draggable={false}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "fill",
+            opacity: 0.24,
+            filter: "blur(1px) saturate(0.7)",
+            userSelect: "none",
+          }}
+        />
+      ) : null}
       <div
+        data-testid="processing-preview-swipe"
         style={{
           position: "absolute",
           inset: 0,
-          opacity: 0.5,
+          opacity: 0.72,
           background:
             "linear-gradient(110deg, transparent 20%, rgba(255,255,255,0.8) 45%, transparent 70%), repeating-linear-gradient(0deg, rgba(99,102,241,0.06) 0 12px, transparent 12px 24px)",
           backgroundSize: "220% 100%, 100% 100%",
