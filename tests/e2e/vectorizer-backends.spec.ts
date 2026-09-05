@@ -169,6 +169,10 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
   page,
 }) => {
   let recraftRequest: Record<string, unknown> | null = null;
+  let releaseRecraft: () => void = () => {};
+  const recraftPending = new Promise<void>((resolve) => {
+    releaseRecraft = resolve;
+  });
   await page.route("**/api/vectorize/recraft", async (route) => {
     const request = route.request();
     const body = JSON.parse(request.postData() ?? "{}") as Record<string, unknown>;
@@ -177,6 +181,7 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
       return;
     }
     recraftRequest = body;
+    await recraftPending;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -216,7 +221,13 @@ test("runs Recraft Vectorize through the Replicate task route and imports editab
   });
   await expect(recraftButton).toBeVisible();
   await recraftButton.click();
+  const processingPreview = page.getByTestId("processing-preview");
+  await expect(processingPreview).toBeVisible();
+  await expect(processingPreview).toHaveAttribute("data-preview-kind", "vectorize");
+  await expect(processingPreview).toHaveAttribute("aria-label", "Recraft Vectorize loading");
+  releaseRecraft();
   await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
+  await expect(processingPreview).toHaveCount(0);
   await expect(page.getByText(/^\d+ nodes$/)).toBeVisible();
 
   expect(recraftRequest).toMatchObject({

@@ -431,6 +431,7 @@ button {
 .model-manager-icon-button:disabled { opacity: 0.5; cursor: wait; }
 .model-manager-spin { display: inline-block; animation: model-manager-spin 0.8s linear infinite; }
 @keyframes model-manager-spin { to { transform: rotate(360deg); } }
+@keyframes model-manager-shimmer { from { background-position: 220% 0, 0 0; } to { background-position: -80% 0, 0 0; } }
 .model-manager-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

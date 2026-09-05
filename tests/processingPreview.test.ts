@@ -1,0 +1,82 @@
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  beginProcessingPreview,
+  clearProcessingPreview,
+  getProcessingPreview,
+  updateProcessingPreview,
+} from "@/lib/engine/processingPreview";
+
+describe("transient processing preview", () => {
+  afterEach(() => {
+    const preview = getProcessingPreview();
+    if (preview) clearProcessingPreview(preview.id);
+  });
+
+  it("creates a transient preview with its canvas placement and loading state", () => {
+    const id = beginProcessingPreview({
+      kind: "vectorize",
+      label: "Vectorize",
+      x: 900,
+      y: 120,
+      width: 240,
+      height: 180,
+      progress: 0,
+    });
+
+    expect(getProcessingPreview()).toMatchObject({
+      id,
+      kind: "vectorize",
+      x: 900,
+      y: 120,
+      width: 240,
+      height: 180,
+      progress: 0,
+    });
+  });
+
+  it("updates progress without creating a second preview", () => {
+    const id = beginProcessingPreview({
+      kind: "extract",
+      label: "Extract All",
+      x: 500,
+      y: 100,
+      width: 220,
+      height: 160,
+      progress: 0.1,
+    });
+
+    updateProcessingPreview(id, { progress: 0.72, message: "Finding objects…" });
+
+    expect(getProcessingPreview()).toMatchObject({
+      id,
+      progress: 0.72,
+      message: "Finding objects…",
+    });
+  });
+
+  it("clears only the matching request so cancellation cannot leave a stale preview", () => {
+    const firstId = beginProcessingPreview({
+      kind: "remove-bg",
+      label: "Remove BG",
+      x: 300,
+      y: 80,
+      width: 200,
+      height: 150,
+      progress: 0,
+    });
+    const secondId = beginProcessingPreview({
+      kind: "vectorize",
+      label: "Vectorize",
+      x: 600,
+      y: 80,
+      width: 200,
+      height: 150,
+      progress: 0,
+    });
+
+    clearProcessingPreview(firstId);
+    expect(getProcessingPreview()?.id).toBe(secondId);
+    clearProcessingPreview(secondId);
+    expect(getProcessingPreview()).toBeNull();
+  });
+});

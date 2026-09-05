@@ -16,6 +16,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { IconWand } from "@/components/icons";
 import { createEditorController } from "@/lib/engine/editorController";
@@ -47,6 +48,7 @@ import {
   isObjectBlock,
   isObjectLocked,
 } from "@/lib/engine/layers";
+import { getProcessingPreview, subscribeProcessingPreview } from "@/lib/engine/processingPreview";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { constrainShapeDrag } from "@/lib/engine/shapeDrag";
 import type { Guide } from "@/lib/engine/snap";
@@ -107,6 +109,7 @@ import Marquee from "./Marquee";
 import ObjectContextBar from "./ObjectContextBar";
 import PathNodeOverlay from "./PathNodeOverlay";
 import PenLiveOverlay from "./PenLiveOverlay";
+import ProcessingPreviewOverlay from "./ProcessingPreviewOverlay";
 import RasterPerformanceOverlay from "./RasterPerformanceOverlay";
 import RasterSelectionOverlay from "./RasterSelectionOverlay";
 import SafeAreaOverlay, { type SafeAreaMode } from "./SafeAreaOverlay";
@@ -341,6 +344,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const rasterBrushCursorRef = useRef<HTMLDivElement | null>(null);
   const magicWandCursorRef = useRef<HTMLDivElement | null>(null);
   const rasterCloneSourcesRef = useRef(new Map<string, [number, number]>());
+  const processingPreview = useSyncExternalStore(
+    subscribeProcessingPreview,
+    getProcessingPreview,
+    () => null,
+  );
   const images = getImageCache();
 
   const moveRasterBrushCursor = useCallback((point: { x: number; y: number }) => {
@@ -1503,6 +1511,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         onDoubleClickWorld={onDoubleClickWorld}
         onViewChange={handleViewChange}
       >
+        {processingPreview ? (
+          <ProcessingPreviewOverlay
+            preview={processingPreview}
+            scale={view.scale}
+            worldToScreen={(point) => rootRef.current?.worldToScreen(point) ?? { x: 0, y: 0 }}
+          />
+        ) : null}
         <Marquee rect={marqueeRect} />
         {rasterSelectionImage ? (
           <RasterSelectionOverlay

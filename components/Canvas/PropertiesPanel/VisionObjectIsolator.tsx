@@ -5,6 +5,11 @@ import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/a
 import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
+import {
+  beginProcessingPreview,
+  clearProcessingPreview,
+  updateProcessingPreview,
+} from "@/lib/engine/processingPreview";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement } from "@/lib/engine/types";
 import {
@@ -192,6 +197,25 @@ function createProgressReporter(operation: string) {
   });
 }
 
+function processingPreviewInput(
+  element: ImageElement,
+  kind: "extract" | "remove-bg" | "vectorize",
+  label: string,
+) {
+  const width = Math.max(180, Math.min(320, Math.round(element.width * 0.42) || 240));
+  const height = Math.max(140, Math.min(230, Math.round(width * 0.78)));
+  return {
+    kind,
+    label,
+    x: element.x + element.width + 32,
+    y: element.y,
+    width,
+    height,
+    progress: 0,
+    message: "กำลังเตรียมผลลัพธ์…",
+  } as const;
+}
+
 export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const addElement = useEngine((s) => s.addElement);
   const addElements = useEngine((s) => s.addElements);
@@ -264,6 +288,33 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
   const isMonochromeTrace =
     preset === "silhouette" || preset === "lineArt" || vtracerClustering === "bw";
   const vectorizeAbortRef = useRef<AbortController | null>(null);
+  const processingPreviewIdRef = useRef<string | null>(null);
+  const startCanvasProcessingPreview = (
+    kind: "extract" | "remove-bg" | "vectorize",
+    label: string,
+  ) => {
+    const id = beginProcessingPreview(processingPreviewInput(element, kind, label));
+    processingPreviewIdRef.current = id;
+    return id;
+  };
+  const updateCanvasProcessingPreview = (
+    id: string,
+    patch: { progress?: number; message?: string },
+  ) => {
+    updateProcessingPreview(id, patch);
+  };
+  const clearCanvasProcessingPreview = (expectedId?: string) => {
+    const id = processingPreviewIdRef.current;
+    if (!id || (expectedId && id !== expectedId)) return;
+    clearProcessingPreview(id);
+    processingPreviewIdRef.current = null;
+  };
+  useEffect(() => {
+    return () => {
+      const id = processingPreviewIdRef.current;
+      if (id) clearProcessingPreview(id);
+    };
+  }, []);
   const currentFileId = element.fileId;
   const assetAnalysis = useSyncExternalStore(
     subscribeAssetAnalysis,
@@ -361,6 +412,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     vectorizeAbortRef.current = controller;
     setBusy(true);
     setProgress(0);
+    const previewId = startCanvasProcessingPreview(
+      "vectorize",
+      backend === "vtracer-wasm" ? "VTracer WASM" : "Custom Auto-Trace",
+    );
     setStatusMessage("Running high-precision Vector Trace...");
     const report = createProgressReporter("Vectorize");
     report("start", "เริ่มแปลงภาพเป็น Vector", "started", 0);
@@ -410,8 +465,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         {
           signal: controller.signal,
           onProgress: ({ progress, stage }: VectorizeProgress) => {
-            setProgress(Math.round(progress * 100));
-            setStatusMessage(
+            const message =
               stage === "loading"
                 ? backend === "vtracer-wasm"
                   ? "Loading VTracer WASM in the local Worker..."
@@ -426,8 +480,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
                       : "Tracing contours in background..."
                     : backend === "vtracer-wasm"
                       ? "Converting VTracer SVG into editable paths..."
-                      : "Building editable vector paths...",
-            );
+                      : "Building editable vector paths...";
+            setProgress(Math.round(progress * 100));
+            setStatusMessage(message);
+            updateCanvasProcessingPreview(previewId, { progress, message });
           },
         },
       );
@@ -460,6 +516,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       }
     } finally {
       if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
+      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
@@ -483,6 +540,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     vectorizeAbortRef.current = controller;
     setBusy(true);
     setProgress(8);
+    const previewId = startCanvasProcessingPreview("vectorize", "Recraft Vectorize");
+    updateCanvasProcessingPreview(previewId, {
+      progress: 0.08,
+      message: "กำลังส่งภาพไปยัง Replicate…",
+    });
     setStatusMessage("Sending image to Recraft via Replicate...");
     const report = createProgressReporter("Recraft Vectorize");
     report("consent", "ผู้ใช้ยืนยันการส่งภาพไป Replicate", "started", 0.08);
@@ -528,6 +590,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
       setProgress(82);
       setStatusMessage("Validating Recraft SVG and building editable paths...");
+      updateCanvasProcessingPreview(previewId, {
+        progress: 0.82,
+        message: "กำลังตรวจสอบ SVG และสร้าง Vector ที่แก้ไขได้…",
+      });
       const viewport = getSvgViewport(svg);
       const result = parseVTracerSvgResult(svg, {
         targetBounds: {
@@ -565,6 +631,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       }
     } finally {
       if (vectorizeAbortRef.current === controller) vectorizeAbortRef.current = null;
+      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
@@ -583,6 +650,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
+    const previewId = startCanvasProcessingPreview("remove-bg", "Remove Background");
+    updateCanvasProcessingPreview(previewId, {
+      progress: 0,
+      message: "กำลังเตรียมภาพสำหรับลบพื้นหลัง…",
+    });
     const report = createProgressReporter("Remove BG");
     report("start", "เริ่มลบพื้นหลังแบบ Local", "started", 0);
     setStatusMessage("Preparing local background removal...");
@@ -591,17 +663,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       const { dataUrl: resultUrl } = await removeBackgroundWithRuntime(cached.dataURL, {
         allowServerFallback,
         onProgress: (value) => {
-          setProgress(Math.round(value * 100));
-          setStatusMessage(
+          const message =
             value < 0.1
               ? "Preparing image..."
               : value < 0.75
                 ? "Running locally in the background..."
-                : "Refining foreground edges...",
-          );
+                : "Refining foreground edges...";
+          setProgress(Math.round(value * 100));
+          setStatusMessage(message);
+          updateCanvasProcessingPreview(previewId, { progress: value, message });
         },
         onServerFallback: () => {
           setStatusMessage("Local model is still loading; using the VPS fallback...");
+          updateCanvasProcessingPreview(previewId, {
+            message: "โมเดล Local ยังโหลดอยู่ กำลังใช้ VPS fallback…",
+          });
           report("vps-fallback", "Local RMBG ยังไม่พร้อม จึงส่งงานไป VPS", "fallback", 8);
         },
         onRuntime: setLastRmbgRuntime,
@@ -636,6 +712,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Failed to remove background: " + (err as Error).message);
       report("error", `ลบพื้นหลังไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
+      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
@@ -760,7 +837,19 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
+    const previewId = startCanvasProcessingPreview("extract", "Extract All");
+    updateCanvasProcessingPreview(previewId, {
+      progress: 0,
+      message: "กำลังเตรียม Foreground…",
+    });
     const report = createProgressReporter("Extract All");
+    const setExtractProgress = (value: number, message?: string) => {
+      setProgress(value);
+      updateCanvasProcessingPreview(previewId, {
+        progress: value / 100,
+        ...(message ? { message } : {}),
+      });
+    };
     report("start", "เริ่มแยก Object ทั้งหมด", "started", 0);
     setStatusMessage("Preparing foreground extraction...");
 
@@ -776,7 +865,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       let foregroundRuntime: "local" | "vps-fallback" = lastRmbgRuntime;
       if (reusableForeground) {
         foregroundUrl = reusableForeground;
-        setProgress(70);
+        setExtractProgress(70, "ใช้ผลลัพธ์ Remove BG ที่มีอยู่แล้ว…");
         setStatusMessage("Using the existing background-removed foreground...");
         report("foreground", "ใช้ผลลัพธ์ Remove BG ที่มีอยู่แล้ว", "success", 70);
       } else {
@@ -784,9 +873,12 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         report("foreground", "กำลังลบพื้นหลังเพื่อเตรียม Alpha", "step", 5);
         const result = await removeBackgroundWithRuntime(url, {
           allowServerFallback,
-          onProgress: (value) => setProgress(value * 70),
+          onProgress: (value) => setExtractProgress(value * 70, "กำลังแยก Foreground pixels…"),
           onServerFallback: () => {
             setStatusMessage("Local model is still loading; using the VPS fallback...");
+            updateCanvasProcessingPreview(previewId, {
+              message: "โมเดล Local ยังโหลดอยู่ กำลังใช้ VPS fallback…",
+            });
             report("vps-fallback", "Local RMBG ยังไม่พร้อม จึงส่ง Extract ไป VPS", "fallback", 5);
           },
           onRuntime: (runtime) => {
@@ -811,7 +903,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       // Alpha extraction is the canonical geometry path. Florence-2 is optional
       // metadata here: its coarse boxes can label components, but must not
       // replace them or cause nearby objects to be merged again.
-      setProgress(74);
+      setExtractProgress(74, "กำลังค้นหา Components ความละเอียดสูง…");
       setStatusMessage("Finding high-resolution foreground components...");
       report("components", "กำลังค้นหา Components ความละเอียดสูง", "step", 74);
       const alphaObjects = await detectAlphaObjectBoxes(foregroundUrl, 1536);
@@ -822,7 +914,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       try {
         setStatusMessage("Detecting object instances with Florence-2...");
         report("florence", "กำลังใช้ Florence-2 หา Object และชื่อ", "step", 79);
-        const res = await visionDetect(url, (value) => setProgress(78 + value * 5));
+        const res = await visionDetect(url, (value) =>
+          setExtractProgress(78 + value * 5, "กำลังตรวจจับ Object ด้วย Florence-2…"),
+        );
         visionObjects = res.objects;
         report("florence", `Florence-2 พบ ${visionObjects.length} Proposal`, "success", 83);
       } catch (error) {
@@ -834,7 +928,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         try {
           setStatusMessage("Running a dense recall pass for missed objects...");
           report("florence-recall", "กำลังค้นหา Object ที่ Florence-2 รอบแรกตกหล่น", "step", 84);
-          const recall = await visionDenseDetect(url, (value) => setProgress(83 + value * 3));
+          const recall = await visionDenseDetect(url, (value) =>
+            setExtractProgress(83 + value * 3, "กำลังค้นหา Object ที่อาจตกหล่น…"),
+          );
           visionObjects = mergeVisionDetections(visionObjects, recall.objects);
           report(
             "florence-recall",
@@ -860,7 +956,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           setStatusMessage("Finding repeated instances with Grounding DINO...");
           report("grounding-dino", "กำลังค้นหา Instance ซ้ำด้วย Grounding DINO", "step", 87);
           const grounded = await groundingDinoDetect(url, candidateLabels, (value) =>
-            setProgress(86 + value * 3),
+            setExtractProgress(86 + value * 3, "กำลังตรวจจับ Instance ที่ซ้ำกัน…"),
           );
           visionObjects = mergeVisionDetections(visionObjects, grounded);
           report(
@@ -888,7 +984,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       try {
         setStatusMessage("Refining object masks with SAM 2 Hiera Tiny...");
         report("sam2-load", "กำลังโหลดและเตรียม SAM 2 Hiera Tiny", "step", 91);
-        sam2Session = await createSam2Session(url, (value) => setProgress(90 + value * 3));
+        sam2Session = await createSam2Session(url, (value) =>
+          setExtractProgress(90 + value * 3, "กำลังปรับ Mask ของแต่ละ Object…"),
+        );
         report("sam2-load", "เตรียม SAM 2 และ Image Embedding สำเร็จ", "success", 93);
       } catch (error) {
         console.warn("SAM 2 refinement unavailable; keeping alpha geometry.", error);
@@ -905,11 +1003,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         "step",
         93,
       );
-      setProgress(92);
+      setExtractProgress(92, "กำลังสร้างภาพจำลองของ Object ที่แยกได้…");
       const newElements = await extractObjectBatch(
         foregroundUrl,
         objects,
-        (value) => setProgress(92 + value * 7),
+        (value) => setExtractProgress(92 + value * 7, "กำลังสร้าง Object ที่แก้ไขได้…"),
         {
           sam2Session,
           maskSourceUrl: url,
@@ -917,7 +1015,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
           trimTransparent: true,
           onMaskProgress: (objectIndex, value) => {
             if (sam2Session) {
-              setProgress(92 + ((objectIndex + value) / Math.max(1, objects.length)) * 7);
+              setExtractProgress(
+                92 + ((objectIndex + value) / Math.max(1, objects.length)) * 7,
+                "กำลังปรับ Mask ของแต่ละ Object…",
+              );
             }
           },
         },
@@ -944,6 +1045,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Detection failed: " + (err as Error).message);
       report("error", `Extract All ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
+      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
@@ -958,7 +1060,19 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
     setBusy(true);
     setProgress(0);
+    const previewId = startCanvasProcessingPreview("extract", "Quick Extract");
+    updateCanvasProcessingPreview(previewId, {
+      progress: 0,
+      message: "กำลังเตรียม Foreground…",
+    });
     const report = createProgressReporter("Quick Extract");
+    const setQuickExtractProgress = (value: number, message?: string) => {
+      setProgress(value);
+      updateCanvasProcessingPreview(previewId, {
+        progress: value / 100,
+        ...(message ? { message } : {}),
+      });
+    };
     report("start", "เริ่มแยก Object แบบรวดเร็ว", "started", 0);
     setStatusMessage("Removing background for quick extraction...");
 
@@ -970,6 +1084,10 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       )
         ? detectedForegroundUrl
         : null;
+      setQuickExtractProgress(
+        reusableForeground ? 70 : 5,
+        reusableForeground ? "ใช้ Foreground ที่มีอยู่แล้ว…" : "กำลังลบพื้นหลังเพื่อแยก Object…",
+      );
       report(
         "foreground",
         reusableForeground ? "กำลังใช้ Foreground ที่มีอยู่แล้ว" : "กำลังลบพื้นหลังเพื่อแยก Object",
@@ -981,9 +1099,13 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         (
           await removeBackgroundWithRuntime(url, {
             allowServerFallback,
-            onProgress: (value) => setProgress(Math.round(value * 70)),
+            onProgress: (value) =>
+              setQuickExtractProgress(value * 70, "กำลังแยก Foreground pixels…"),
             onServerFallback: () => {
               setStatusMessage("Local model is still loading; using the VPS fallback...");
+              updateCanvasProcessingPreview(previewId, {
+                message: "โมเดล Local ยังโหลดอยู่ กำลังใช้ VPS fallback…",
+              });
               report(
                 "vps-fallback",
                 "Local RMBG ยังไม่พร้อม จึงส่ง Quick Extract ไป VPS",
@@ -997,7 +1119,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       report("foreground", "เตรียม Foreground Alpha สำเร็จ", "success", 70);
       setDetectedForegroundUrl(foregroundUrl);
       setDetectedForegroundFileId(element.fileId);
-      setProgress(74);
+      setQuickExtractProgress(74, "กำลังค้นหา Components…");
       const objects = await detectAlphaObjectBoxes(foregroundUrl);
       setDetectedObjects(objects);
       report("components", `พบ Components จำนวน ${objects.length} ชิ้น`, "success", 74);
@@ -1009,7 +1131,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
 
       setStatusMessage(`Extracting ${objects.length} objects without Vision AI...`);
       const newElements = await extractObjectBatch(foregroundUrl, objects, (value) =>
-        setProgress(74 + value * 25),
+        setQuickExtractProgress(74 + value * 25, "กำลังสร้าง Object ที่แก้ไขได้…"),
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");
@@ -1024,6 +1146,7 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       setStatusMessage("Quick extraction failed: " + (err as Error).message);
       report("error", `Quick Extract ไม่สำเร็จ: ${(err as Error).message}`, "error");
     } finally {
+      clearCanvasProcessingPreview(previewId);
       setBusy(false);
       setProgress(null);
     }
@@ -1034,6 +1157,12 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
     if (!url) return;
 
     setBusy(true);
+    setProgress(0);
+    const previewId = startCanvasProcessingPreview("extract", `Extract ${obj.label}`);
+    updateCanvasProcessingPreview(previewId, {
+      progress: 0,
+      message: "กำลังเตรียม Object…",
+    });
     setStatusMessage(`Extracting ${obj.label}...`);
 
     try {
@@ -1042,11 +1171,21 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         (
           await removeBackgroundWithRuntime(url, {
             allowServerFallback,
-            onServerFallback: () =>
-              setStatusMessage("Local model is still loading; using the VPS fallback..."),
+            onServerFallback: () => {
+              setStatusMessage("Local model is still loading; using the VPS fallback...");
+              updateCanvasProcessingPreview(previewId, {
+                progress: 0.2,
+                message: "โมเดล Local ยังโหลดอยู่ กำลังใช้ VPS fallback…",
+              });
+            },
             onRuntime: setLastRmbgRuntime,
           })
         ).dataUrl;
+      setProgress(78);
+      updateCanvasProcessingPreview(previewId, {
+        progress: 0.78,
+        message: "กำลังตัดภาพ Object ที่เลือก…",
+      });
       const cropped = await cropImageRegion(foregroundUrl, obj);
       const cached = await loadDataURL(cropped.dataUrl);
       const asset = createCachedImageAsset(cached);
@@ -1058,6 +1197,11 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
         ...asset,
       });
 
+      setProgress(95);
+      updateProcessingPreview(previewId, {
+        progress: 0.95,
+        message: "กำลังวางผลลัพธ์ลงบน Canvas…",
+      });
       addElement(newImg, `isolate ${obj.label}`);
       selectOnly([newImg.id]);
       setStatusMessage(`Extracted ${obj.label} to canvas!`);
@@ -1065,7 +1209,9 @@ export function VisionObjectIsolator({ element }: { element: ImageElement }) {
       console.warn("Object extraction failed:", err);
       setStatusMessage("Extraction failed: " + (err as Error).message);
     } finally {
+      clearCanvasProcessingPreview(previewId);
       setBusy(false);
+      setProgress(null);
     }
   };
 
