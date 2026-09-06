@@ -32,9 +32,7 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
     expect(requestBody).toBeUndefined();
   });
 
-  test("clarifies complex typography work before calling any execution route", async ({
-    page,
-  }) => {
+  test("clarifies complex typography work before calling any execution route", async ({ page }) => {
     let imageRequestCount = 0;
     let designAgentRequestCount = 0;
     await page.route("**/api/ai/image", async (route) => {
