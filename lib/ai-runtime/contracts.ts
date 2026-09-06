@@ -124,6 +124,8 @@ export type AiImageGenerateInput = {
   width: number;
   height: number;
   aspectRatio?: AiImageAspectRatio;
+  quality?: "low" | "medium" | "high";
+  inputImages?: AiImageInput[];
   enhance?: boolean;
   seed?: number;
 };

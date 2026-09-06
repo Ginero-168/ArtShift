@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
   const width = boundedDimension(body.width);
   const height = boundedDimension(body.height);
   const aspectRatio = boundedAspectRatio(body.aspectRatio);
+  const quality = boundedQuality(body.quality);
+  const inputImages = boundedInputImages(body.inputImages);
   const enhance = body.enhance !== false;
   const ai = getServerAiRuntime({ replicateToken: getSessionReplicateToken(req) });
 
@@ -64,15 +66,15 @@ export async function POST(req: NextRequest) {
   try {
     const execution = await ai.execute(
       "image.generate",
-      { prompt, width, height, aspectRatio, enhance: false },
+      { prompt, width, height, aspectRatio, quality, inputImages, enhance: false },
       {
-        profile: "economy",
+        profile: "quality",
         provider: "replicate",
-        modelAlias: "image-gpt-2-low",
+        modelAlias: "image-gpt-2",
         cloudConsent: true,
         allowFallback: false,
         timeoutMs: 90_000,
-        maxCostUsd: 0.02,
+        maxCostUsd: 0.05,
         signal: req.signal,
       },
     );
@@ -121,4 +123,33 @@ function boundedDimension(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(2_048, Math.max(256, Math.round(value)))
     : 1_024;
+}
+
+function boundedQuality(value: unknown): "low" | "medium" | "high" {
+  return value === "low" || value === "high" ? value : "medium";
+}
+
+function boundedInputImages(
+  value: unknown,
+): Array<{ dataUrl: string; mimeType?: "image/jpeg" | "image/png" | "image/webp" }> {
+  if (!Array.isArray(value) || value.length > 4) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    if (
+      typeof record.dataUrl !== "string" ||
+      !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/u.test(record.dataUrl)
+    ) {
+      return [];
+    }
+    const mimeType = record.mimeType;
+    return [
+      {
+        dataUrl: record.dataUrl,
+        ...(mimeType === "image/jpeg" || mimeType === "image/png" || mimeType === "image/webp"
+          ? { mimeType }
+          : {}),
+      },
+    ];
+  });
 }

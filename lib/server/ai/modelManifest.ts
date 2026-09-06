@@ -148,9 +148,9 @@ function imageGptRoute(model: string): AiRouteTarget {
   return {
     provider: "replicate",
     model,
-    alias: "image-gpt-2-low",
-    expectedMaxUsd: 0.012,
-    pricing: { currency: "USD", perRunUsd: 0.012 },
+    alias: "image-gpt-2",
+    expectedMaxUsd: 0.05,
+    pricing: { currency: "USD", perRunUsd: 0.05 },
   };
 }
 

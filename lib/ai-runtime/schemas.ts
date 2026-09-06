@@ -59,6 +59,18 @@ const ImageGenerateInputSchema = v.strictObject({
   prompt: PromptSchema,
   width: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(2_048)),
   height: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(2_048)),
+  quality: v.optional(v.picklist(["low", "medium", "high"])),
+  inputImages: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          dataUrl: DataUrlSchema,
+          mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
+        }),
+      ),
+      v.maxLength(4),
+    ),
+  ),
   aspectRatio: v.optional(
     v.picklist([
       "1:1",

@@ -113,9 +113,9 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         },
         {
           id: GPT_IMAGE_2_MODEL,
-          alias: "image-gpt-2-low",
-          profile: "economy",
-          pricing: { currency: "USD", perRunUsd: 0.012 },
+          alias: "image-gpt-2",
+          profile: "quality",
+          pricing: { currency: "USD", perRunUsd: 0.05 },
         },
       ],
       message: this.apiToken
@@ -309,8 +309,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       model,
       {
         prompt: input.prompt,
-        quality: "low",
+        quality: input.quality ?? "medium",
         aspect_ratio: input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
+        ...(input.inputImages?.length
+          ? { input_images: input.inputImages.map((image) => image.dataUrl) }
+          : {}),
         number_of_images: 1,
         output_format: "webp",
         output_compression: 90,

@@ -136,7 +136,7 @@ describe("Replicate AI adapter", () => {
     expect(result.output).toEqual({ prompt: "A refined design prompt" });
   });
 
-  it("generates a low-quality GPT Image 2 file through Replicate", async () => {
+  it("forwards automatic quality and reference images to GPT Image 2", async () => {
     const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi
       .fn()
@@ -165,6 +165,8 @@ describe("Replicate AI adapter", () => {
         width: 1024,
         height: 1024,
         aspectRatio: "1:1",
+        quality: "high",
+        inputImages: [{ dataUrl: "data:image/png;base64,REF" }],
       },
       model: "openai/gpt-image-2",
       signal: new AbortController().signal,
@@ -185,8 +187,9 @@ describe("Replicate AI adapter", () => {
     const body = JSON.parse(String(request.body));
     expect(body.input).toEqual({
       prompt: "A warm editorial portrait of a cat",
-      quality: "low",
+      quality: "high",
       aspect_ratio: "1:1",
+      input_images: ["data:image/png;base64,REF"],
       number_of_images: 1,
       output_format: "webp",
       output_compression: 90,

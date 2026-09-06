@@ -1,6 +1,6 @@
 /**
  * Provider-neutral AI Image Studio client.
- * The server routes every generation request to Replicate GPT Image 2 low.
+ * The server routes every generation request to the server-owned GPT Image 2 route.
  */
 
 import type { AiImageAspectRatio } from "@/lib/ai-runtime/contracts";
@@ -8,7 +8,8 @@ import { loadDataURL } from "@/lib/engine/imageCache";
 import { runVisualQualityGate } from "./visualQualityGate";
 
 export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
-export const GPT_IMAGE_2_QUALITY = "low" as const;
+export const GPT_IMAGE_2_QUALITY = "medium" as const;
+export type GptImageQuality = "low" | "medium" | "high";
 
 export interface AspectRatioOption {
   id: AiImageAspectRatio;
@@ -32,6 +33,11 @@ export interface ImageGenerationOptions {
   aspectRatio?: AiImageAspectRatio;
   width?: number;
   height?: number;
+  quality?: GptImageQuality;
+  inputImages?: Array<{
+    dataUrl: string;
+    mimeType?: "image/jpeg" | "image/png" | "image/webp";
+  }>;
   seed?: number;
   enhance?: boolean;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ComposerImageTags from "@/components/AI/ComposerImageTags";
 import {
   type CoPilotMessage,
   executeCoPilotInstruction,
@@ -8,6 +9,10 @@ import {
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import {
+  buildComposerImageRefs,
+  snapshotComposerImageRefs,
+} from "@/lib/ai/orchestration/imageReferences";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
@@ -28,6 +33,7 @@ export default function AICoPilotBar() {
     s.doc.slides.find((candidate) => candidate.id === s.currentSlideId),
   );
   const selectedIds = useEngine((s) => s.selectedIds);
+  const selectedImageRefs = buildComposerImageRefs(slide?.elements ?? [], selectedIds);
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,7 +43,7 @@ export default function AICoPilotBar() {
       id: "initial-msg",
       role: "assistant",
       content:
-        "สวัสดีครับ! ผมคือ AI Assistance ของคุณ พร้อมช่วยสร้างรูปด้วย GPT Image 2 ผ่าน Replicate (คุณภาพ low), ลบพื้นหลัง, แปลง Vector, คิดพาดหัว และจัด Layout 60-30-10 สั่งการได้เลยครับ ✨",
+        "สวัสดีครับ! ผมคือ AI Assistance ของคุณ จะอ่านบริบทและช่วยวางแผนก่อนสร้างภาพ เพื่อให้ได้ผลลัพธ์ที่ตรงความต้องการมากขึ้นครับ ✨",
       timestamp: Date.now(),
       suggestions: [
         "🎨 สร้างรูปแก้วกาแฟมินิมอล",
@@ -51,7 +57,7 @@ export default function AICoPilotBar() {
   const [currentActions, setCurrentActions] = useState<SubAgentActionLog[]>([]);
   const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -690,31 +696,53 @@ export default function AICoPilotBar() {
           gap: 6,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: 6, width: "100%" }}>
           {/* Input Field */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSend();
-            }}
-            placeholder={hasSelection ? "แก้ไขวัตถุที่เลือก..." : "บอกสิ่งที่ต้องการออกแบบ..."}
+          <div
             style={{
               flex: 1,
               minWidth: 0,
+              minHeight: 104,
               border: "1px solid #d8dde7",
-              borderRadius: 7,
+              borderRadius: 9,
               background: "#ffffff",
-              outline: "none",
-              fontSize: 11,
-              color: "#0f172a",
-              padding: "8px 8px",
-              fontFamily: "inherit",
+              display: "flex",
+              flexDirection: "column",
+              gap: 5,
+              padding: 6,
               boxSizing: "border-box",
             }}
-          />
+          >
+            <ComposerImageTags refs={snapshotComposerImageRefs(selectedImageRefs)} />
+            <textarea
+              ref={inputRef}
+              rows={3}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder={hasSelection ? "แก้ไขภาพหรือวัตถุที่เลือก..." : "บอกสิ่งที่ต้องการออกแบบ..."}
+              aria-label="AI Assistance prompt"
+              style={{
+                flex: 1,
+                width: "100%",
+                minHeight: 72,
+                resize: "vertical",
+                border: 0,
+                outline: "none",
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: "#0f172a",
+                padding: "4px 2px",
+                fontFamily: "inherit",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
 
           {/* Send / cancel action */}
           <button
