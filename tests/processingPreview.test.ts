@@ -117,6 +117,26 @@ describe("transient processing preview", () => {
     });
   });
 
+  it("supports an honest indeterminate provider phase", () => {
+    const id = beginProcessingPreview({
+      kind: "generate",
+      label: "Generate",
+      x: 100,
+      y: 80,
+      width: 320,
+      height: 220,
+      progress: 0,
+    });
+
+    updateProcessingPreview(id, { progress: null, message: "กำลังสร้างภาพ…" });
+
+    expect(getProcessingPreview()).toMatchObject({
+      id,
+      progress: null,
+      message: "กำลังสร้างภาพ…",
+    });
+  });
+
   it("clears only the matching request so cancellation cannot leave a stale preview", () => {
     const firstId = beginProcessingPreview({
       kind: "remove-bg",

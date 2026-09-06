@@ -9,7 +9,7 @@ vi.mock("@/lib/server/ai/runtime", () => ({
 
 import { POST } from "../app/api/ai/image/route";
 
-function request(body: Record<string, unknown>): NextRequest {
+function request(body: unknown): NextRequest {
   return {
     headers: new Headers(),
     json: async () => body,
@@ -45,6 +45,7 @@ describe("AI image generation API", () => {
         prompt: "แมวสีส้ม",
         model: "client-selected-model",
         enhance: false,
+        cloudConsent: true,
         width: 512,
         height: 512,
       }),
@@ -57,7 +58,7 @@ describe("AI image generation API", () => {
       expect.objectContaining({ prompt: "แมวสีส้ม", width: 512, height: 512 }),
       expect.objectContaining({
         provider: "replicate",
-        modelAlias: "image-gpt-2-low",
+        modelAlias: "image-gpt-2",
         cloudConsent: true,
         allowFallback: false,
       }),
@@ -70,7 +71,7 @@ describe("AI image generation API", () => {
       .mockResolvedValueOnce({ output: { prompt: "A highly detailed orange cat" } })
       .mockResolvedValueOnce(imageExecution);
 
-    const response = await POST(request({ prompt: "แมวสีส้ม", enhance: true }));
+    const response = await POST(request({ prompt: "แมวสีส้ม", enhance: true, cloudConsent: true }));
 
     expect(response.status).toBe(200);
     expect(runtimeMock.execute).toHaveBeenNthCalledWith(
@@ -92,7 +93,7 @@ describe("AI image generation API", () => {
       .mockRejectedValueOnce(new Error("prompt provider unavailable"))
       .mockResolvedValueOnce(imageExecution);
 
-    const response = await POST(request({ prompt: "แมวสีส้ม", enhance: true }));
+    const response = await POST(request({ prompt: "แมวสีส้ม", enhance: true, cloudConsent: true }));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -105,5 +106,75 @@ describe("AI image generation API", () => {
     expect(data.warnings).toContain(
       "Cloud prompt enhancement was unavailable; local enrichment was used.",
     );
+  });
+
+  it("rejects an empty prompt before any provider task", async () => {
+    const response = await POST(request({ prompt: "   ", cloudConsent: true }));
+
+    expect(response.status).toBe(400);
+    expect(runtimeMock.execute).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit cloud consent", async () => {
+    const response = await POST(request({ prompt: "แมวสีส้ม", enhance: false }));
+
+    expect(response.status).toBe(403);
+    expect(runtimeMock.execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-object JSON body without throwing", async () => {
+    const response = await POST(request(null));
+
+    expect(response.status).toBe(400);
+    expect(runtimeMock.execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed or oversized reference image payloads", async () => {
+    const response = await POST(
+      request({
+        prompt: "แก้ภาพสินค้าในสตูดิโอ",
+        enhance: false,
+        cloudConsent: true,
+        inputImages: [{ dataUrl: "data:image/png;base64,not valid!" }],
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(runtimeMock.execute).not.toHaveBeenCalled();
+  });
+
+  it("forwards a consented reference image and automatic quality to the runtime", async () => {
+    const response = await POST(
+      request({
+        prompt: "สร้างภาพ product photo แบบสตูดิโอ",
+        enhance: false,
+        cloudConsent: true,
+        quality: "high",
+        inputImages: [{ dataUrl: "data:image/png;base64,REF", mimeType: "image/png" }],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(runtimeMock.execute).toHaveBeenCalledWith(
+      "image.generate",
+      expect.objectContaining({
+        quality: "high",
+        inputImages: [{ dataUrl: "data:image/png;base64,REF", mimeType: "image/png" }],
+      }),
+      expect.objectContaining({ cloudConsent: true, modelAlias: "image-gpt-2" }),
+    );
+  });
+
+  it("returns a generic provider failure without leaking provider details", async () => {
+    runtimeMock.execute.mockRejectedValue(new Error("provider secret api_key=DO_NOT_LEAK"));
+
+    const response = await POST(
+      request({ prompt: "สร้างภาพแมวในสตูดิโอ", enhance: false, cloudConsent: true }),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(data.error).toBe("Image generation failed. Please try again.");
+    expect(JSON.stringify(data)).not.toContain("DO_NOT_LEAK");
   });
 });

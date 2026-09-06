@@ -6,7 +6,7 @@ import {
   requirePlanApproval,
 } from "@/lib/designAgent/contracts";
 import { classifyDesignIntent, getExecutionPolicy } from "@/lib/designAgent/policy";
-import { prepareDesignTurn } from "@/lib/designAgent/server";
+import { DESIGN_AGENT_SYSTEM, prepareDesignTurn } from "@/lib/designAgent/server";
 
 const proposal: PlanProposal = {
   protocolVersion: 1,
@@ -33,6 +33,12 @@ const proposal: PlanProposal = {
 };
 
 describe("Design Agent contracts", () => {
+  it("loads the canonical ArtShift Harness into the remote preparation prompt", () => {
+    expect(DESIGN_AGENT_SYSTEM).toContain("ArtShift Harness v2.2");
+    expect(DESIGN_AGENT_SYSTEM).toContain("CLARIFY_A_B_C_OTHER");
+    expect(DESIGN_AGENT_SYSTEM).toContain("quality gate");
+  });
+
   it("parses a valid proposal without changing exact user content", () => {
     const result = parsePlanProposal(proposal);
     expect(result.ok).toBe(true);

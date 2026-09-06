@@ -71,6 +71,7 @@ const ImageGenerateInputSchema = v.strictObject({
       v.maxLength(4),
     ),
   ),
+  cloudConsent: v.optional(v.boolean()),
   aspectRatio: v.optional(
     v.picklist([
       "1:1",

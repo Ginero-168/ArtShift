@@ -19,6 +19,14 @@ describe("GPT Image 2 generation client", () => {
     );
   });
 
+  it("fails closed without cloud consent and does not start a request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(generateAIImage({ prompt: "a cat" })).rejects.toThrow("Cloud consent is required");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("fetches and caches generated image data", async () => {
     const mockDataUrl =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -55,6 +63,7 @@ describe("GPT Image 2 generation client", () => {
       prompt: "test prompt",
       aspectRatio: "1:1",
       seed: 999,
+      cloudConsent: true,
     });
 
     expect(result).toBeDefined();
@@ -90,9 +99,9 @@ describe("GPT Image 2 generation client", () => {
     }
     vi.stubGlobal("Image", TinyImage);
 
-    await expect(generateAIImage({ prompt: "a cat", aspectRatio: "1:1" })).rejects.toThrow(
-      "Generated image failed the visual quality gate",
-    );
+    await expect(
+      generateAIImage({ prompt: "a cat", aspectRatio: "1:1", cloudConsent: true }),
+    ).rejects.toThrow("Generated image failed the visual quality gate");
   });
 
   it("fails closed instead of bypassing the server with a direct provider request", async () => {
@@ -103,7 +112,7 @@ describe("GPT Image 2 generation client", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(generateAIImage({ prompt: "test prompt" })).rejects.toThrow(
+    await expect(generateAIImage({ prompt: "test prompt", cloudConsent: true })).rejects.toThrow(
       "Provider is not configured.",
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);

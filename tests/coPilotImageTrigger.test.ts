@@ -68,15 +68,20 @@ describe("AI Co-Pilot image commands", () => {
     });
   });
 
-  it("dispatches common Thai request phrasing to image generation", async () => {
+  it("clarifies a short Thai image request before generation", async () => {
     const result = await executeCoPilotInstruction("ขอภาพแมว");
 
-    expect(result.actions[0]?.agent).toBe("image_gen");
-    expect(generateImageMock).toHaveBeenCalledWith(expect.objectContaining({ prompt: "แมว" }));
+    expect(result.actions[0]?.agent).toBe("orchestrator");
+    expect(result.reply).toContain("direction");
+    expect(generateImageMock).not.toHaveBeenCalled();
   });
 
-  it("uses one image path without exposing an execution mode", async () => {
-    const result = await executeCoPilotInstruction("ขอภาพแมว");
+  it("uses one validated image path without exposing an execution mode", async () => {
+    const result = await executeCoPilotInstruction(
+      "ขอภาพแมวในสตูดิโอสำหรับโปรไฟล์ อัตราส่วน 1:1",
+      undefined,
+      { contextAwareValidated: true, imageQuality: "medium" },
+    );
 
     expect(result.actions[0]).not.toHaveProperty("mode");
     expect(result.reply).not.toMatch(/Eco|Fast/);
@@ -98,7 +103,11 @@ describe("AI Co-Pilot image commands", () => {
         }),
     );
 
-    const execution = executeCoPilotInstruction("ขอภาพแมว");
+    const execution = executeCoPilotInstruction(
+      "ขอภาพแมวในสตูดิโอสำหรับโปรไฟล์ อัตราส่วน 1:1",
+      undefined,
+      { contextAwareValidated: true, imageQuality: "medium" },
+    );
     await vi.waitFor(() =>
       expect(preloadDataURLMock).toHaveBeenCalledWith("data:image/png;base64,AA=="),
     );
@@ -130,7 +139,11 @@ describe("AI Co-Pilot image commands", () => {
   it("does not commit an image when generated image preload fails", async () => {
     preloadDataURLMock.mockRejectedValue(new Error("generated image decode failed"));
 
-    const result = await executeCoPilotInstruction("ขอภาพแมว");
+    const result = await executeCoPilotInstruction(
+      "ขอภาพแมวในสตูดิโอสำหรับโปรไฟล์ อัตราส่วน 1:1",
+      undefined,
+      { contextAwareValidated: true, imageQuality: "medium" },
+    );
 
     expect(result.reply).toContain("generated image decode failed");
     expect(

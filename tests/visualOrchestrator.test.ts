@@ -6,22 +6,18 @@ import {
 } from "@/lib/ai/visualOrchestrator";
 
 describe("Visual Orchestrator Kernel", () => {
-  it("routes a simple image request to the available IMAGE_DEFAULT alias", () => {
+  it("clarifies a short image request before the IMAGE_DEFAULT alias", () => {
     const plan = planVisualRequest("ขอภาพแมว", {
       hasSelection: false,
       elementCount: 0,
     });
 
     expect(plan).toMatchObject({
-      intent: "generation",
-      taskClass: "simple",
-      capabilityAlias: "IMAGE_DEFAULT",
-      route: "direct",
-      capabilityAvailable: true,
-      modelAlias: "image-gpt-2-low",
+      intent: "clarification",
+      route: "clarify",
       requiresApproval: false,
-      needsVisualAnalysis: false,
     });
+    expect(plan.clarification).toContain("direction");
   });
 
   it("keeps a vague generation request in clarification instead of generating a default image", () => {
@@ -74,7 +70,7 @@ describe("Visual Orchestrator Kernel", () => {
     expect(resolveVisualCapability("IMAGE_DEFAULT")).toMatchObject({
       alias: "IMAGE_DEFAULT",
       execution: "image.generate",
-      modelAlias: "image-gpt-2-low",
+      modelAlias: "image-gpt-2",
       available: true,
     });
     expect(resolveVisualCapability("IMAGE_PRO").available).toBe(false);

@@ -1,6 +1,7 @@
 import type { DesignIntentKind } from "@/lib/designAgent/policy";
 import { classifyDesignIntent } from "@/lib/designAgent/policy";
 import { cleanImagePrompt, isImageGenerationPrompt } from "./imageGeneration";
+import { assessImageIntent } from "./orchestration/intentCompleteness";
 
 export type VisualTaskClass = "simple" | "complex";
 export type VisualRoute = "direct" | "orchestrator" | "clarify";
@@ -76,7 +77,7 @@ export const VISUAL_CAPABILITY_REGISTRY: Readonly<
   IMAGE_DEFAULT: {
     alias: "IMAGE_DEFAULT",
     execution: "image.generate",
-    modelAlias: "image-gpt-2-low",
+    modelAlias: "image-gpt-2",
     available: true,
     reason: "Current general image generation route is available through the server alias.",
   },
@@ -140,7 +141,18 @@ export function planVisualRequest(
     context.hasImageAsset === true ||
     (context.hasSelection && intent !== "generation");
 
-  if (intent === "clarification" || (imageRequest && !cleanImagePrompt(normalizedPrompt))) {
+  const imageAssessment = imageRequest
+    ? assessImageIntent({
+        prompt: normalizedPrompt,
+        analyses: [],
+        hasSelection: context.hasSelection,
+      })
+    : undefined;
+  if (
+    intent === "clarification" ||
+    (imageRequest &&
+      (!cleanImagePrompt(normalizedPrompt) || imageAssessment?.kind === "clarification"))
+  ) {
     return {
       prompt: normalizedPrompt,
       intent: "clarification",
@@ -151,9 +163,12 @@ export function planVisualRequest(
       requiresApproval: false,
       needsVisualAnalysis: false,
       reason: "The request does not identify a concrete visual subject or change.",
-      clarification: context.hasSelection
-        ? "ต้องการให้สร้างหรือปรับอะไรจาก Object ที่เลือกครับ?"
-        : "ต้องการสร้างภาพอะไรครับ? ระบุ subject, style หรือการใช้งานเพิ่มอีกนิดได้เลยครับ",
+      clarification:
+        imageAssessment?.kind === "clarification"
+          ? imageAssessment.question
+          : context.hasSelection
+            ? "ต้องการให้สร้างหรือปรับอะไรจาก Object ที่เลือกครับ?"
+            : "ต้องการสร้างภาพอะไรครับ? ระบุ subject, style หรือการใช้งานเพิ่มอีกนิดได้เลยครับ",
     };
   }
 

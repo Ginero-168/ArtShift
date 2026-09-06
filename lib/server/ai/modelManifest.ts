@@ -19,7 +19,7 @@ export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>
   "vision.ocr": "economy",
   "vectorize.recraft": "quality",
   "prompt.enhance": "economy",
-  "image.generate": "economy",
+  "image.generate": "quality",
   "image.upscale": "quality",
 };
 

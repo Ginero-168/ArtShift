@@ -10,7 +10,7 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 - `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
 - `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser RMBG model is not ready. Extraction geometry comes from alpha components with SAM 2 mask refinement, not from a vision-language detector. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
-- `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent. Image prompts additionally pass through `lib/ai/visualOrchestrator.ts`, which owns capability-alias planning without exposing provider selection to the UI.
+- `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent. Image prompts additionally pass through `lib/ai/visualOrchestrator.ts` and the context-aware orchestration modules, which own capability-alias planning without exposing provider selection to the UI.
 - Built-in tool commands are explicit user actions and commit through their existing atomic editor operations; remote Design Agent proposals are always reviewable before Apply.
 
 ## Visual Orchestrator Kernel
@@ -19,11 +19,11 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 
 The current registry deliberately exposes availability:
 
-- `IMAGE_DEFAULT` → direct `image.generate` through the server-owned `image-gpt-2-low` alias.
+- `IMAGE_DEFAULT` → `image.generate` through the server-owned `image-gpt-2` alias after the intent gate. A short subject-only request remains in clarification.
 - `IMAGE_TEXT`, `IMAGE_VECTOR`, `IMAGE_CREATIVE`, `IMAGE_FAST`, `IMAGE_PRO`, and `IMAGE_EDIT` → explicit unavailable states until their adapters/input contracts are wired. They route to Design Agent instead of silently using the default image route.
 - `VISION_DEFAULT` → reserved for a dedicated visual-analysis transport; the plan records it as not wired rather than pretending that a text heuristic performed vision analysis.
 
-`lib/ai/visualQualityGate.ts` runs after the generated data URL is decoded and before the result is returned to the editor. It requires a non-empty prompt, an allowlisted image data URL, integer dimensions from 256px to 16,384px, and exactly one output. This is a technical gate, not a semantic vision review; generated artwork still needs visual review against the brief before final presentation.
+`lib/ai/visualQualityGate.ts` runs after the generated data URL is decoded and before the result is returned to the editor. `lib/ai/orchestration/briefQualityGate.ts` then checks the hard brief constraints (prompt safety, one output, dimensions, aspect ratio and reference handoff). The local asset-analysis queue remains the semantic review stage; the UI must not claim pixel-level brief compliance when that review is unavailable.
 
 The unified chat preserves local-first precedence: a deterministic local plan wins first, then an available simple image route may execute, while a complex or unavailable visual capability goes to the reviewable Design Agent path. The direct executor repeats the guard so callers cannot bypass the route plan.
 
@@ -36,7 +36,7 @@ The unified chat preserves local-first precedence: a deterministic local plan wi
 | Recraft Vectorize (Cloud) | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | P-Image-Upscale | Cloud opt-in; the explicit Upscale settings panel sends the raster to Replicate with a selected 8/16/32 MP target |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
-| Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with fixed `quality: "low"` |
+| Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with orchestration-selected `quality: low|medium|high`; the product does not expose quality-tier modes |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
 | Pixel mask | Local-only; no server task exists |
 
@@ -100,17 +100,21 @@ the VTracer Worker/runtime fails, the orchestration layer switches to Custom
 instead of running synchronous VTracer on the main thread and reports that
 fallback in the UI.
 
-`Image generation` is a cloud-opt-in task. The server ignores browser model/provider
-choices and routes the request through the authenticated user's Replicate BYOK
-credential to the fixed official model `openai/gpt-image-2`. The adapter always sends
-`quality: "low"`, `number_of_images: 1`, `output_format: "webp"`, `background: "opaque"`,
-and `moderation: "auto"`; the low-quality price shown on the official model page is
-$0.012 per output image. GPT Image 2 does not expose a deterministic seed control, so
-ArtShift accepts the legacy field for compatibility but never forwards it upstream.
-The prediction output is fetched server-side only from an HTTPS `replicate.delivery`
-host, bounded, validated as an image, and converted to a data URL before it reaches
-the browser. No Replicate token or provider URL is sent to client code, and there is
-no Pollinations or paid fallback route for image generation.
+`Image generation` is a cloud-opt-in task. The browser must set `cloudConsent: true`
+only after an explicit user action/confirmation; the server rejects missing consent.
+The server ignores browser model/provider choices and routes the request through the
+authenticated user's Replicate BYOK credential to the fixed official model
+`openai/gpt-image-2`. The adapter sends the orchestrator-selected quality, one output,
+the requested aspect ratio, `output_format: "webp"`, `background: "opaque"`, and
+`moderation: "auto"`. When a selected-image tag is part of the task, the verified
+local reference is sent as `input_images` only after consent. Input count, data URL
+format and encoded size are bounded before the provider call. GPT Image 2 does not
+expose deterministic seed control, so ArtShift accepts the legacy field for
+compatibility but never forwards it upstream. The prediction output is fetched
+server-side only from an HTTPS `replicate.delivery` host, bounded, validated as an
+image, and converted to a data URL before it reaches the browser. No Replicate token,
+raw image payload or provider delivery URL is logged or sent to client prose, and
+there is no hidden paid fallback route for image generation.
 
 The VTracer binary is built from `wasm/vtracer-browser/` with:
 

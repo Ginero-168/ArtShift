@@ -14,6 +14,7 @@ const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   "remove-bg": "#0f766e",
   vectorize: "#4f46e5",
   upscale: "#7c3aed",
+  generate: "#2563eb",
 };
 
 const PREVIEW_ICON: Record<ProcessingPreviewKind, string> = {
@@ -21,12 +22,13 @@ const PREVIEW_ICON: Record<ProcessingPreviewKind, string> = {
   "remove-bg": "✦",
   vectorize: "◇",
   upscale: "↗",
+  generate: "✦",
 };
 
 export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen }: Props) {
   const screen = worldToScreen({ x: preview.x, y: preview.y });
   const accent = PREVIEW_ACCENT[preview.kind];
-  const progress = Math.round(preview.progress * 100);
+  const progress = preview.progress === null ? null : Math.round(preview.progress * 100);
   const isQueued = preview.phase === "queued";
   const phaseMessage = preview.message ?? (isQueued ? "รอคิวประมวลผล…" : "กำลังประมวลผล…");
 
@@ -138,7 +140,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
         >
           <div
             style={{
-              width: `${progress}%`,
+              width: progress === null ? "38%" : `${progress}%`,
               height: "100%",
               borderRadius: 999,
               background: accent,
@@ -157,7 +159,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
           }}
         >
           <span>Preview</span>
-          <span>{progress}%</span>
+          <span>{progress === null ? "กำลังทำงาน" : `${progress}%`}</span>
         </div>
       </div>
     </div>

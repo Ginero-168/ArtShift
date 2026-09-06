@@ -9,6 +9,7 @@ import {
   generateAIImage,
   isImageGenerationPrompt,
 } from "@/lib/ai/imageGeneration";
+import { assessImageIntent } from "@/lib/ai/orchestration/intentCompleteness";
 import { removeBackground } from "@/lib/ai/removeBg";
 import { planVisualRequest, type VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
@@ -38,6 +39,10 @@ export interface SubAgentActionLog {
   description: string;
   status: "running" | "success" | "error";
   timestamp: number;
+  taskId?: string;
+  stage?: string;
+  attempt?: number;
+  quality?: "low" | "medium" | "high";
 }
 
 export interface CoPilotMessage {
@@ -71,6 +76,8 @@ export interface WorkspaceContext {
 export type CoPilotOptions = {
   signal?: AbortSignal;
   visualPlan?: VisualRoutePlan;
+  contextAwareValidated?: boolean;
+  imageQuality?: "low" | "medium" | "high";
 };
 
 /** Prompts that map to a built-in tool command rather than Design Agent chat. */
@@ -179,6 +186,29 @@ export async function executeCoPilotInstruction(
     if (onActionUpdate) onActionUpdate({ ...act });
   };
 
+  if (isImageGenerationPrompt(prompt) && !options.contextAwareValidated) {
+    const assessment = assessImageIntent({
+      prompt,
+      analyses: [],
+      hasSelection: context.selectedIds.length > 0,
+    });
+    if (assessment.kind === "clarification") {
+      const act = logAction(
+        "orchestrator",
+        "🧭 Intent Clarification",
+        "ยังไม่ส่งคำสั่งสร้างภาพ เพราะ brief ยังไม่ครบ",
+        "success",
+      );
+      return {
+        reply: assessment.question,
+        actions: [act],
+        suggestions: assessment.options.map(
+          (option) => `${option.id === "OTHER" ? "Other" : `${option.id}.`} ${option.label}`,
+        ),
+      };
+    }
+  }
+
   // -------------------------------------------------------------
   // 1. SUB-AGENT: IMAGE GENERATOR (REPLICATE GPT IMAGE 2 LOW)
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
@@ -226,6 +256,8 @@ export async function executeCoPilotInstruction(
         aspectRatio: "1:1" as const,
         width: 1024,
         height: 1024,
+        quality: options.imageQuality ?? "medium",
+        cloudConsent: true,
         enhance: true,
       };
       const res = options.signal
@@ -269,11 +301,11 @@ export async function executeCoPilotInstruction(
       updateActionStatus(
         act,
         "success",
-        `Created and placed GPT Image 2 low-quality image (${w}×${h}px) on canvas.`,
+        `Created and placed GPT Image 2 ${options.imageQuality ?? "medium"}-quality image (${w}×${h}px) on canvas.`,
       );
 
       return {
-        reply: `สร้างรูปภาพ "${cleanPrompt}" ด้วย Replicate GPT Image 2 (คุณภาพ low) ให้เรียบร้อยและวางลงกึ่งกลางแคนวาสแล้วครับ!`,
+        reply: `สร้างรูปภาพ "${cleanPrompt}" ด้วย Replicate GPT Image 2 (คุณภาพอัตโนมัติ: ${options.imageQuality ?? "medium"}) ให้เรียบร้อยและวางลงกึ่งกลางแคนวาสแล้วครับ!`,
         actions,
         suggestions: [
           "🪄 ลบพื้นหลังของรูปนี้",

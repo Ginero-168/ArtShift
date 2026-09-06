@@ -13,6 +13,17 @@ import {
   buildComposerImageRefs,
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
+import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
+import {
+  analyzeImageReferences,
+  type ImageReferenceAnalysis,
+} from "@/lib/ai/orchestration/referenceAnalysis";
+import {
+  type ContextAwareTurnResult,
+  isCanvasInventoryPrompt,
+  type PendingClarification,
+  prepareContextAwareTurn,
+} from "@/lib/ai/orchestration/turnOrchestrator";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
@@ -56,6 +67,9 @@ export default function AICoPilotBar() {
 
   const [currentActions, setCurrentActions] = useState<SubAgentActionLog[]>([]);
   const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
+  const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(
+    null,
+  );
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -113,8 +127,22 @@ export default function AICoPilotBar() {
   }, [messages, currentActions, streamingText]);
 
   const handleSend = async (customPrompt?: string) => {
-    const promptToSend = (customPrompt ?? input).trim();
-    if (!promptToSend || busy) return;
+    const rawPrompt = (customPrompt ?? input).trim();
+    if (!rawPrompt || busy) return;
+
+    const pending = pendingClarification;
+    const selectedOption =
+      pending && customPrompt ? findClarificationOption(pending, customPrompt) : undefined;
+    if (selectedOption?.id === "OTHER") {
+      inputRef.current?.focus();
+      return;
+    }
+    const promptToSend = pending
+      ? `${pending.originalPrompt}\n\nDirection ที่เลือก: ${selectedOption?.label ?? `Other: ${rawPrompt}`}`
+      : rawPrompt;
+    const refsForTurn = snapshotComposerImageRefs(
+      pending ? pending.selectedImages : selectedImageRefs,
+    );
 
     setInput("");
     setBusy(true);
@@ -125,7 +153,7 @@ export default function AICoPilotBar() {
     const userMsg: CoPilotMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      content: promptToSend,
+      content: selectedOption ? `${selectedOption.id}. ${selectedOption.label}` : rawPrompt,
       timestamp: Date.now(),
     };
 
@@ -133,6 +161,193 @@ export default function AICoPilotBar() {
     setCurrentActions([]);
 
     try {
+      let analysesForTurn: ImageReferenceAnalysis[] = pending
+        ? pending.analyses.map((analysis) => ({ ...analysis, ref: { ...analysis.ref } }))
+        : [];
+      let contextDecision: ContextAwareTurnResult | null = null;
+      const analysisActions: SubAgentActionLog[] = [];
+      const hasImageContext = refsForTurn.length > 0;
+      const isBuiltInImageAction =
+        /(?:ลบพื้นหลัง|remove\s*bg|remove\s*background|vectorize|แปลงเป็น(?:\s+)?vector|แปลงเป็นเวกเตอร์)/iu.test(
+          promptToSend,
+        );
+      const isImageContextRequest =
+        /(?:ภาพ|รูป|image|photo|สร้าง|วาด|generate|create|พื้นหลัง|background|อธิบาย|describe|แก้ภาพ|edit\s+image)/iu.test(
+          promptToSend,
+        );
+
+      if (isCanvasInventoryPrompt(promptToSend) && slide) {
+        contextDecision = prepareContextAwareTurn({
+          prompt: promptToSend,
+          refs: [],
+          analyses: [],
+          canvas: { slide, selectedIds },
+        });
+      } else if (isImageGenerationPrompt(promptToSend) || hasImageContext) {
+        if (hasImageContext && analysesForTurn.length === 0) {
+          const analysisAction: SubAgentActionLog = {
+            id: crypto.randomUUID(),
+            agent: "orchestrator",
+            title: "🔎 Image Analysis",
+            description: "กำลังวิเคราะห์ภาพที่เลือกก่อนวางแผนงาน…",
+            status: "running",
+            timestamp: Date.now(),
+          };
+          analysisActions.push(analysisAction);
+          upsertCurrentAction(analysisAction);
+          try {
+            analysesForTurn = await analyzeImageReferences(
+              refsForTurn,
+              controller.signal,
+              (completed, total, stage) => {
+                analysisAction.description = `${stage} · ${Math.round((completed / Math.max(1, total)) * 100)}%`;
+                upsertCurrentAction({ ...analysisAction });
+              },
+            );
+            analysisAction.status = "success";
+            analysisAction.description = `วิเคราะห์ภาพเสร็จแล้ว ${analysesForTurn.length} รายการ`;
+            upsertCurrentAction({ ...analysisAction });
+          } catch (error) {
+            analysisAction.status = "error";
+            analysisAction.description = `วิเคราะห์ภาพไม่สำเร็จ: ${(error as Error).message}`;
+            upsertCurrentAction({ ...analysisAction });
+            setMessages((previous) => [
+              ...previous,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content:
+                  "ยังไม่ได้สร้าง Task ครับ เพราะวิเคราะห์ภาพที่เลือกไม่สำเร็จ ลองโหลดภาพใหม่แล้วส่งอีกครั้งได้เลย",
+                timestamp: Date.now(),
+                actions: analysisActions,
+              },
+            ]);
+            return;
+          }
+        }
+
+        if (
+          hasImageContext &&
+          analysesForTurn.length > 0 &&
+          /(?:อธิบาย|describe|what\s+is|ภาพนี้คือ|รูปนี้คือ)/iu.test(promptToSend)
+        ) {
+          const first = analysesForTurn[0];
+          contextDecision = {
+            kind: "answer",
+            source: "canvas-local",
+            reply: `ภาพที่เลือกน่าจะเป็น ${first.caption || first.objects.join(", ") || "ภาพที่ระบบยังระบุรายละเอียดไม่ได้"}ครับ${first.visibleText ? `\nข้อความที่อ่านได้: ${first.visibleText}` : ""}`,
+          };
+        } else if (
+          isImageGenerationPrompt(promptToSend) ||
+          (hasImageContext && isImageContextRequest && !isBuiltInImageAction)
+        ) {
+          contextDecision = prepareContextAwareTurn({
+            prompt: promptToSend,
+            refs: refsForTurn,
+            analyses: analysesForTurn,
+            selectedIds,
+            clarificationRound: pending?.round ?? 0,
+          });
+        }
+      }
+
+      if (contextDecision && contextDecision.kind !== "continue") {
+        let reply = "";
+        let actions = [...analysisActions];
+        let suggestions: string[] = [];
+        if (contextDecision.kind === "answer") {
+          reply = contextDecision.reply;
+          suggestions = ["ถามเกี่ยวกับ Object บน Canvas", "วิเคราะห์ภาพนี้ละเอียดขึ้น"];
+        } else if (contextDecision.kind === "clarification") {
+          setPendingClarification(contextDecision.pending);
+          reply = contextDecision.pending.question;
+          suggestions = contextDecision.pending.options.map(
+            (option) => `${option.id === "OTHER" ? "Other" : `${option.id}.`} ${option.label}`,
+          );
+          actions = [
+            ...actions,
+            {
+              id: crypto.randomUUID(),
+              agent: "orchestrator",
+              title: "🧭 Intent Clarification",
+              description: `ต้องการคำตอบเพิ่มก่อนสร้าง Task (รอบ ${contextDecision.pending.round}/2)`,
+              status: "success",
+              timestamp: Date.now(),
+            },
+          ];
+        } else {
+          setPendingClarification(null);
+          const taskAction: SubAgentActionLog = {
+            id: crypto.randomUUID(),
+            agent: contextDecision.task.subAgent === "image_editor" ? "image_edit" : "image_gen",
+            title: `🧩 Task · ${contextDecision.task.subAgent}`,
+            description: `พร้อมทำงานด้วยคุณภาพอัตโนมัติ: ${contextDecision.task.quality}`,
+            status: "running",
+            timestamp: Date.now(),
+            taskId: contextDecision.task.id,
+            stage: "planned",
+            attempt: 0,
+            quality: contextDecision.task.quality,
+          };
+          actions = [...actions, taskAction];
+          const consent =
+            typeof window === "undefined" ||
+            window.confirm(
+              `งานนี้จะส่ง ${refsForTurn.length ? "ภาพที่เลือกและ" : "คำสั่งไปยัง"} AI provider เพื่อสร้างผลลัพธ์ (คุณภาพอัตโนมัติ: ${contextDecision.task.quality}, สูงสุด ${contextDecision.task.maxAttempts} ครั้ง) ดำเนินการต่อหรือไม่?`,
+            );
+          if (!consent) {
+            taskAction.status = "error";
+            taskAction.description = "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง AI provider";
+            reply = "ยกเลิก Task แล้วครับ ยังไม่มีการส่งภาพหรือเรียก AI provider";
+          } else {
+            try {
+              const result = await runContextAwareImageTask(contextDecision.task, refsForTurn, {
+                signal: controller.signal,
+                onUpdate: (update) => {
+                  taskAction.description = `${update.message} · ครั้งที่ ${update.attempt}/${contextDecision.task.maxAttempts}`;
+                  taskAction.stage = update.stage;
+                  taskAction.attempt = update.attempt;
+                  taskAction.quality = update.quality;
+                  taskAction.status =
+                    update.stage === "failed" || update.stage === "cancelled"
+                      ? "error"
+                      : update.stage === "succeeded"
+                        ? "success"
+                        : "running";
+                  upsertCurrentAction({ ...taskAction });
+                },
+              });
+              taskAction.status = "success";
+              taskAction.description = `สำเร็จและวางผลลัพธ์บน Canvas (${result.width} × ${result.height}px)`;
+              reply = `สร้างภาพตาม brief และวางบน Canvas เรียบร้อยแล้วครับ ใช้คุณภาพอัตโนมัติ: ${result.task.quality} โดยคงต้นฉบับไว้`;
+              suggestions = [
+                "🪄 ลบพื้นหลังของรูปนี้",
+                "⚡ แปลงรูปนี้เป็น Vector Paths",
+                "📐 จัดวาง Layout ให้สวยงาม",
+              ];
+            } catch (error) {
+              taskAction.status = "error";
+              taskAction.description = `Task ไม่สำเร็จ: ${(error as Error).message}`;
+              reply = `Task ไม่สำเร็จครับ: ${(error as Error).message}`;
+              suggestions = ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก", "ยกเลิก Task นี้"];
+            }
+          }
+          upsertCurrentAction({ ...taskAction });
+        }
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: reply,
+            timestamp: Date.now(),
+            actions,
+            suggestions,
+          },
+        ]);
+        return;
+      }
+
       const localPlan = buildLocalEditPlan(promptToSend);
       const visualPlan = isImageGenerationPrompt(promptToSend)
         ? planVisualRequest(promptToSend, {
@@ -518,6 +733,13 @@ export default function AICoPilotBar() {
                         {act.status === "success" ? "✓" : act.status === "error" ? "✕" : "⏳"}
                       </span>
                       <strong>{act.title}</strong>
+                      {act.taskId && (
+                        <span style={{ fontSize: 9, fontWeight: 600, opacity: 0.8 }}>
+                          {act.stage ?? "planned"}
+                          {typeof act.attempt === "number" ? ` · attempt ${act.attempt}` : ""}
+                          {act.quality ? ` · auto/${act.quality}` : ""}
+                        </span>
+                      )}
                       <span>— {act.description}</span>
                     </div>
                   ))}
@@ -820,4 +1042,19 @@ export default function AICoPilotBar() {
       </div>
     </div>
   );
+}
+
+function findClarificationOption(
+  pending: PendingClarification,
+  value: string,
+): PendingClarification["options"][number] | undefined {
+  const normalized = value.trim().toLocaleLowerCase();
+  return pending.options.find((option) => {
+    const id = option.id.toLocaleLowerCase();
+    return (
+      normalized === option.label.toLocaleLowerCase() ||
+      normalized.startsWith(`${id}.`) ||
+      (id === "other" && normalized.startsWith("other"))
+    );
+  });
 }

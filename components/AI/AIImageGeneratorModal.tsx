@@ -112,6 +112,8 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
         aspectRatio: selectedRatio.id,
         width: selectedRatio.width,
         height: selectedRatio.height,
+        quality: GPT_IMAGE_2_QUALITY,
+        cloudConsent: true,
         enhance,
       });
 
@@ -233,7 +235,8 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 AI Image Studio (Text-to-Image)
               </h2>
               <p style={{ fontSize: 11, color: "#64748b", margin: 0, marginTop: 2 }}>
-                Replicate · {GPT_IMAGE_2_MODEL} · quality: {GPT_IMAGE_2_QUALITY} · ~$0.012/image
+                Replicate · {GPT_IMAGE_2_MODEL} · quality: auto (default {GPT_IMAGE_2_QUALITY}) ·
+                cost varies by quality
               </p>
             </div>
           </div>
@@ -488,7 +491,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 <>
                   <span style={{ animation: "spin 1s linear infinite" }}>⏳</span>
                   <span>🎨</span>
-                  <span>Creating with GPT Image 2 (low)...</span>
+                  <span>Creating with GPT Image 2...</span>
                 </>
               ) : (
                 <>
@@ -522,7 +525,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                   Creating your masterpiece...
                 </div>
                 <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                  Rendering with GPT Image 2 (low quality) via Replicate
+                  Rendering with GPT Image 2 via Replicate
                 </div>
               </div>
             ) : previewImage ? (

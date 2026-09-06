@@ -1,4 +1,4 @@
-export type ProcessingPreviewKind = "extract" | "remove-bg" | "vectorize" | "upscale";
+export type ProcessingPreviewKind = "extract" | "remove-bg" | "vectorize" | "upscale" | "generate";
 export type ProcessingPreviewPhase = "queued" | "running";
 
 export const PROCESSING_PREVIEW_GAP = 32;
@@ -31,7 +31,8 @@ export type ProcessingPreview = {
   y: number;
   width: number;
   height: number;
-  progress: number;
+  /** null means the provider is running and no honest percentage is available. */
+  progress: number | null;
   phase: ProcessingPreviewPhase;
   queuePosition?: number;
   sourceDataUrl?: string;
@@ -77,7 +78,7 @@ export function updateProcessingPreview(
     return {
       ...item,
       ...patch,
-      progress: clampProgress(patch.progress ?? item.progress),
+      progress: clampProgress(patch.progress === undefined ? item.progress : patch.progress),
     };
   });
   if (changed) notify();
@@ -104,6 +105,7 @@ export function subscribeProcessingPreview(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-function clampProgress(value: number): number {
+function clampProgress(value: number | null): number | null {
+  if (value === null) return null;
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 }

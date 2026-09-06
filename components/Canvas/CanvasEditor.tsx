@@ -20,6 +20,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { IconWand } from "@/components/icons";
+import { clearCanvasViewport, publishCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createEditorController } from "@/lib/engine/editorController";
 import {
   createDiamond,
@@ -462,6 +463,28 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     },
     [onViewChange],
   );
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || !slide) return;
+    const report = () =>
+      publishCanvasViewport({
+        width: element.clientWidth,
+        height: element.clientHeight,
+        scale: view.scale,
+        tx: view.tx,
+        ty: view.ty,
+        slideWidth: slide.width,
+        slideHeight: slide.height,
+      });
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      clearCanvasViewport();
+    };
+  }, [slide, view]);
 
   useEffect(() => {
     if (tool !== "rasterQuickSelection") {

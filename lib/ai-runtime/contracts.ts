@@ -126,6 +126,7 @@ export type AiImageGenerateInput = {
   aspectRatio?: AiImageAspectRatio;
   quality?: "low" | "medium" | "high";
   inputImages?: AiImageInput[];
+  cloudConsent?: boolean;
   enhance?: boolean;
   seed?: number;
 };

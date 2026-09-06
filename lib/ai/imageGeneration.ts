@@ -38,6 +38,7 @@ export interface ImageGenerationOptions {
     dataUrl: string;
     mimeType?: "image/jpeg" | "image/png" | "image/webp";
   }>;
+  cloudConsent?: boolean;
   seed?: number;
   enhance?: boolean;
 }
@@ -79,7 +80,7 @@ export const THAI_KEYWORD_MAP: Record<string, string> = {
 };
 
 const IMAGE_COMMAND_PREFIX =
-  /^(?:(?:ช่วย|ขอ)\s*)?(?:สร้างรูปภาพ|สร้างรูป|วาดรูปภาพ|วาดรูป|สร้างภาพ|วาดภาพ|generate image|create image|picture of|image of|รูปภาพ|รูป|ภาพ|draw)\s*/iu;
+  /^(?:(?:ช่วย|ขอ)\s*)?(?:สร้างรูปภาพ|สร้างรูป|ทำรูปภาพ|ทำรูป|ทำภาพ|วาดรูปภาพ|วาดรูป|สร้างภาพ|วาดภาพ|generate image|create image|picture of|image of|รูปภาพ|รูป|ภาพ|draw)\s*/iu;
 const IMAGE_COMMAND_SUFFIX = /\s*(?:ให้หน่อย|หน่อย|นะ|ครับ|ค่ะ|จ้า)\s*$/iu;
 const IMAGE_PROMPT_CONTEXT_PREFIX = /^(?:of|about|เกี่ยวกับ)\s*/iu;
 
@@ -100,6 +101,8 @@ export function isImageGenerationPrompt(userPrompt: string): boolean {
     prompt.includes("สร้างรูป") ||
     prompt.includes("วาดรูป") ||
     prompt.includes("สร้างภาพ") ||
+    prompt.includes("ทำภาพ") ||
+    prompt.includes("ทำรูป") ||
     prompt.includes("วาดภาพ") ||
     prompt.includes("ขอรูป") ||
     prompt.includes("ขอภาพ") ||
@@ -140,13 +143,16 @@ export async function generateAIImage(
   if (!prompt) {
     throw new Error("Please enter a prompt to generate an image.");
   }
+  if (options.cloudConsent !== true) {
+    throw new Error("Cloud consent is required before sending an image-generation request.");
+  }
 
   let apiRes: Response;
   try {
     apiRes = await fetch("/api/ai/image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(options),
+      body: JSON.stringify({ ...options, prompt }),
       signal,
     });
   } catch (error) {

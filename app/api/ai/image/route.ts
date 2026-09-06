@@ -22,13 +22,27 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    const parsed = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    body = parsed as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const rawPrompt = typeof body.prompt === "string" ? body.prompt : "beautiful artwork";
-  const normalizedPrompt = cleanImagePrompt(rawPrompt) || rawPrompt.trim() || "beautiful artwork";
+  if (body.cloudConsent !== true) {
+    return NextResponse.json(
+      { error: "Explicit cloud consent is required before AI image generation." },
+      { status: 403 },
+    );
+  }
+  if (typeof body.prompt !== "string" || !body.prompt.trim()) {
+    return NextResponse.json({ error: "Image prompt is required." }, { status: 400 });
+  }
+
+  const rawPrompt = body.prompt;
+  const normalizedPrompt = cleanImagePrompt(rawPrompt) || rawPrompt.trim();
   if (normalizedPrompt.length > 32_000) {
     return NextResponse.json({ error: "Image prompt is too long." }, { status: 400 });
   }
@@ -36,7 +50,11 @@ export async function POST(req: NextRequest) {
   const height = boundedDimension(body.height);
   const aspectRatio = boundedAspectRatio(body.aspectRatio);
   const quality = boundedQuality(body.quality);
-  const inputImages = boundedInputImages(body.inputImages);
+  const parsedInputImages = parseInputImages(body.inputImages);
+  if (!parsedInputImages.ok) {
+    return NextResponse.json({ error: "Invalid reference image payload." }, { status: 400 });
+  }
+  const inputImages = parsedInputImages.value;
   const enhance = body.enhance !== false;
   const ai = getServerAiRuntime({ replicateToken: getSessionReplicateToken(req) });
 
@@ -87,9 +105,16 @@ export async function POST(req: NextRequest) {
       warnings: [promptWarning, ...execution.metadata.warnings].filter(Boolean),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Image generation failed.";
     const status = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH" ? 503 : 502;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      {
+        error:
+          status === 503
+            ? "AI provider is not configured for this session."
+            : "Image generation failed. Please try again.",
+      },
+      { status },
+    );
   }
 }
 
@@ -129,27 +154,47 @@ function boundedQuality(value: unknown): "low" | "medium" | "high" {
   return value === "low" || value === "high" ? value : "medium";
 }
 
-function boundedInputImages(
-  value: unknown,
-): Array<{ dataUrl: string; mimeType?: "image/jpeg" | "image/png" | "image/webp" }> {
-  if (!Array.isArray(value) || value.length > 4) return [];
-  return value.flatMap((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-    const record = item as Record<string, unknown>;
-    if (
-      typeof record.dataUrl !== "string" ||
-      !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/u.test(record.dataUrl)
-    ) {
-      return [];
+const MAX_INPUT_IMAGE_BYTES = 5 * 1024 * 1024;
+const INPUT_IMAGE_DATA_URL = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/u;
+
+type ParsedInputImages =
+  | {
+      ok: true;
+      value: Array<{ dataUrl: string; mimeType?: "image/jpeg" | "image/png" | "image/webp" }>;
     }
+  | { ok: false };
+
+function parseInputImages(value: unknown): ParsedInputImages {
+  if (value === undefined) return { ok: true, value: [] };
+  if (!Array.isArray(value) || value.length > 4) return { ok: false };
+  const parsed: Array<{
+    dataUrl: string;
+    mimeType?: "image/jpeg" | "image/png" | "image/webp";
+  }> = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return { ok: false };
+    const record = item as Record<string, unknown>;
+    if (typeof record.dataUrl !== "string" || record.dataUrl.length > 7_000_000) {
+      return { ok: false };
+    }
+    const match = INPUT_IMAGE_DATA_URL.exec(record.dataUrl);
+    if (!match) return { ok: false };
+    const encodedBytes = Math.floor((match[2].length * 3) / 4);
+    if (encodedBytes > MAX_INPUT_IMAGE_BYTES) return { ok: false };
     const mimeType = record.mimeType;
-    return [
-      {
-        dataUrl: record.dataUrl,
-        ...(mimeType === "image/jpeg" || mimeType === "image/png" || mimeType === "image/webp"
-          ? { mimeType }
-          : {}),
-      },
-    ];
-  });
+    if (
+      mimeType !== undefined &&
+      mimeType !== "image/jpeg" &&
+      mimeType !== "image/png" &&
+      mimeType !== "image/webp"
+    ) {
+      return { ok: false };
+    }
+    if (mimeType !== undefined && mimeType !== match[1]) return { ok: false };
+    parsed.push({
+      dataUrl: record.dataUrl,
+      ...(mimeType ? { mimeType } : {}),
+    });
+  }
+  return { ok: true, value: parsed };
 }

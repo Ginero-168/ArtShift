@@ -220,7 +220,7 @@ export default function BlockLibrary() {
                         type="button"
                         className={`${styles.blockCard} ${styles.aiImageBlock}`}
                         onClick={() => useEngine.getState().setAiImageModalOpen(true)}
-                        title="AI Image Studio · Replicate GPT Image 2 (low)"
+                        title="AI Image Studio · Replicate GPT Image 2 (automatic quality)"
                         aria-label="AI Image Studio"
                       >
                         <span className={styles.glyph} aria-hidden="true">

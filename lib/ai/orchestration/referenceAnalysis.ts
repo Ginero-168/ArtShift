@@ -43,9 +43,9 @@ export async function analyzeImageReference(
   onProgress?: (stage: string, progress: number) => void,
   analyzers: ImageReferenceAnalyzers = defaultAnalyzers,
 ): Promise<ImageReferenceAnalysis> {
+  throwIfAborted(signal);
   const cached = getCached(ref.fileId);
   if (!cached?.dataURL) throw new Error(`ไม่พบข้อมูลภาพ ${ref.displayName} ในเครื่อง`);
-  throwIfAborted(signal);
   onProgress?.("กำลังอ่านภาพที่เลือก", 0.05);
 
   const [caption, detection, visibleText] = await Promise.all([
