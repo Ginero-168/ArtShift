@@ -10,7 +10,7 @@ type AssessImageIntentInput = {
   hasSelection: boolean;
 };
 
-type ClarificationOption = {
+export type ClarificationOption = {
   id: "A" | "B" | "C" | "OTHER";
   label: string;
 };
