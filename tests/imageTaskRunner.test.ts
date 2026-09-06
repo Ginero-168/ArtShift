@@ -3,17 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const generateImageMock = vi.hoisted(() => vi.fn());
 const preloadDataURLMock = vi.hoisted(() => vi.fn());
 const getCachedMock = vi.hoisted(() => vi.fn());
+const visionCaptionMock = vi.hoisted(() => vi.fn());
+const visionDetectMock = vi.hoisted(() => vi.fn());
+const visionOcrMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ai/imageGeneration", () => ({ generateAIImage: generateImageMock }));
 vi.mock("@/lib/engine/imageCache", () => ({
   getCached: getCachedMock,
   preloadDataURL: preloadDataURLMock,
 }));
+vi.mock("@/lib/vision/visionEngine", () => ({
+  visionCaption: visionCaptionMock,
+  visionDetect: visionDetectMock,
+  visionOcr: visionOcrMock,
+}));
 
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import type { AiTaskPlan } from "@/lib/ai/orchestration/taskMachine";
 import { createAiTask } from "@/lib/ai/orchestration/taskMachine";
 import { createImage } from "@/lib/engine/factory";
+import { createHistory } from "@/lib/engine/history";
 import { createEngineLayer } from "@/lib/engine/layers";
 import { getProcessingPreviews } from "@/lib/engine/processingPreview";
 import { useEngine } from "@/lib/engine/store";
@@ -59,6 +68,7 @@ function resetEngine() {
       schemaVersion: 2,
     },
     currentSlideId: "slide-runner",
+    history: createHistory(),
     selectedIds: new Set(),
   });
 }
@@ -70,6 +80,12 @@ describe("context-aware image task runner", () => {
     preloadDataURLMock.mockReset();
     getCachedMock.mockReset();
     getCachedMock.mockReturnValue(undefined);
+    visionCaptionMock.mockReset();
+    visionDetectMock.mockReset();
+    visionOcrMock.mockReset();
+    visionCaptionMock.mockResolvedValue("a usable generated image");
+    visionDetectMock.mockResolvedValue({ objects: [] });
+    visionOcrMock.mockResolvedValue("");
     generateImageMock.mockResolvedValue({
       dataUrl: "data:image/png;base64,AA==",
       fileId: "generated-file",
@@ -95,6 +111,7 @@ describe("context-aware image task runner", () => {
   it("keeps the document unchanged until preload, then commits once", async () => {
     const events: string[] = [];
     const result = await runContextAwareImageTask(createAiTask(plan), [], {
+      cloudConsent: true,
       onUpdate: (update) => events.push(update.stage),
     });
 
@@ -136,6 +153,7 @@ describe("context-aware image task runner", () => {
 
     const events: string[] = [];
     await runContextAwareImageTask(createAiTask(plan), [], {
+      cloudConsent: true,
       onUpdate: (update) => events.push(update.stage),
     });
 
@@ -189,7 +207,9 @@ describe("context-aware image task runner", () => {
       selectedImages: [selectedRef],
     };
 
-    await runContextAwareImageTask(createAiTask(selectedPlan), [selectedRef]);
+    await runContextAwareImageTask(createAiTask(selectedPlan), [selectedRef], {
+      cloudConsent: true,
+    });
 
     expect(generateImageMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -239,9 +259,57 @@ describe("context-aware image task runner", () => {
       runContextAwareImageTask(
         createAiTask({ ...plan, id: "stale-reference", selectedImages: [staleRef] }),
         [staleRef],
+        { cloudConsent: true },
       ),
     ).rejects.toThrow("selected image changed");
     expect(generateImageMock).not.toHaveBeenCalled();
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+  });
+
+  it("requires explicit consent before queueing a cloud task", async () => {
+    await expect(runContextAwareImageTask(createAiTask(plan), [])).rejects.toThrow("consent");
+
+    expect(generateImageMock).not.toHaveBeenCalled();
+    expect(getProcessingPreviews()).toHaveLength(0);
+  });
+
+  it("does not commit when local semantic output evidence fails the brief", async () => {
+    visionCaptionMock.mockResolvedValue("a landscape photograph");
+    visionDetectMock.mockResolvedValue({ objects: [{ label: "tree" }] });
+    visionOcrMock.mockResolvedValue("");
+
+    await expect(
+      runContextAwareImageTask(
+        createAiTask({ ...plan, id: "semantic-failure", requiredSubjects: ["mug"] }),
+        [],
+        { cloudConsent: true },
+      ),
+    ).rejects.toThrow("quality gate");
+
+    expect(generateImageMock).toHaveBeenCalledTimes(2);
+    expect(preloadDataURLMock).not.toHaveBeenCalled();
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
+    expect(useEngine.getState().history.past).toHaveLength(0);
+  });
+
+  it("clears the transient preview and document when the provider is cancelled", async () => {
+    const controller = new AbortController();
+    generateImageMock.mockImplementation(async () => {
+      controller.abort();
+      const error = new Error("cancelled by user");
+      error.name = "AbortError";
+      throw error;
+    });
+
+    await expect(
+      runContextAwareImageTask(createAiTask(plan), [], {
+        cloudConsent: true,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(getProcessingPreviews()).toHaveLength(0);
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
+    expect(useEngine.getState().history.past).toHaveLength(0);
   });
 });

@@ -33,6 +33,8 @@ export type AiTaskPlan = {
   analysisComplete: boolean;
   cloudConsentRequired: boolean;
   estimatedMaxCostUsd: number;
+  requiredSubjects?: readonly string[];
+  requiredText?: string;
 };
 
 export type AiTask = AiTaskPlan & {
@@ -76,7 +78,12 @@ export function createAiTask(plan: AiTaskPlan): AiTask {
   if (!Number.isInteger(plan.maxAttempts) || plan.maxAttempts < 1 || plan.maxAttempts > 2) {
     throw new Error("task attempt limit is invalid");
   }
-  return { ...plan, status: "planned", attempt: 0, history: [] };
+  return {
+    ...plan,
+    status: plan.cloudConsentRequired ? "awaiting-consent" : "planned",
+    attempt: 0,
+    history: [],
+  };
 }
 
 export function reduceAiTask(task: AiTask, event: AiTaskEvent): AiTaskTransition {

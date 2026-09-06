@@ -1,14 +1,16 @@
 import { generateAIImage } from "@/lib/ai/imageGeneration";
+import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
 import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
 import { getCached, preloadDataURL } from "@/lib/engine/imageCache";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
-import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
+import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 import { runBriefQualityGate } from "./briefQualityGate";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
+import { type GeneratedOutputAnalysis, runGeneratedImageQualityGate } from "./resultQualityGate";
 import { type AiTask, type AiTaskEvent, reduceAiTask } from "./taskMachine";
 
 export type ContextAwareTaskStage =
@@ -42,11 +44,22 @@ export async function runContextAwareImageTask(
   refs: readonly ComposerImageRef[],
   options: {
     signal?: AbortSignal;
+    cloudConsent?: boolean;
+    analyzeOutput?: (
+      dataURL: string,
+      fileId: string,
+      width: number,
+      height: number,
+      signal: AbortSignal,
+    ) => Promise<GeneratedOutputAnalysis | undefined>;
     onUpdate?: (update: ContextAwareTaskUpdate) => void;
   } = {},
 ): Promise<ContextAwareTaskResult> {
-  let task = initialTask;
   const signal = options.signal ?? new AbortController().signal;
+  if (initialTask.cloudConsentRequired && options.cloudConsent !== true) {
+    throw new Error("Explicit cloud consent is required before starting this task");
+  }
+  let task = initialTask;
   const inputImages = resolveReferenceImages(refs);
   const dimensions = resolveOutputDimensions(task.prompt);
   const viewport =
@@ -112,12 +125,24 @@ export async function runContextAwareImageTask(
               aspectRatio: dimensions.aspectRatio,
               quality: task.quality,
               inputImages,
-              cloudConsent: true,
+              cloudConsent: options.cloudConsent === true,
               enhance: false,
             },
             signal,
           );
           throwIfAborted(signal);
+          const technicalGate = runVisualQualityGate({
+            dataUrl: generated.dataUrl,
+            prompt: task.prompt,
+            width: generated.width,
+            height: generated.height,
+            outputCount: 1,
+          });
+          if (!technicalGate.passed) {
+            throw new Error(
+              `Generated image failed the visual quality gate: ${technicalGate.blockers.join(" ")}`,
+            );
+          }
           const briefGate = runBriefQualityGate({
             prompt: task.prompt,
             outputWidth: generated.width,
@@ -138,7 +163,52 @@ export async function runContextAwareImageTask(
             attempt,
             quality: task.quality,
           });
-          context.update({ progress: 0.78, message: "กำลังตรวจผลลัพธ์เทียบกับ brief…" });
+          let outputAnalysis: GeneratedOutputAnalysis | undefined;
+          const requiresLocalOutputReview =
+            Boolean(task.requiredSubjects?.length) ||
+            Boolean(task.requiredText?.trim()) ||
+            task.selectedImages.length > 0;
+          if (requiresLocalOutputReview) {
+            try {
+              outputAnalysis = await (options.analyzeOutput ?? analyzeGeneratedOutput)(
+                generated.dataUrl,
+                generated.fileId,
+                generated.width,
+                generated.height,
+                signal,
+              );
+            } catch (error) {
+              if (isAbortError(error)) throw error;
+              if (task.requiredSubjects?.length || task.requiredText?.trim()) {
+                throw new Error(
+                  "Generated image failed the quality gate: local output review unavailable",
+                );
+              }
+              context.update({
+                progress: 0.7,
+                message: "ตรวจภาพเชิงความหมายไม่ได้ จึงใช้การตรวจทางเทคนิคต่อ",
+              });
+            }
+          } else {
+            context.update({
+              progress: 0.7,
+              message: "ไม่มี hard semantic constraint จึงใช้การตรวจทางเทคนิคต่อ",
+            });
+          }
+          const semanticGate = runGeneratedImageQualityGate({
+            outputWidth: generated.width,
+            outputHeight: generated.height,
+            requestedAspectRatio: dimensions.aspectRatio,
+            requiredSubjects: task.requiredSubjects,
+            requiredText: task.requiredText,
+            outputAnalysis,
+          });
+          if (!semanticGate.passed) {
+            throw new Error(
+              `Generated image failed the semantic quality gate: ${semanticGate.blockers.join(" ")}`,
+            );
+          }
+          context.update({ progress: 0.78, message: "ตรวจผลลัพธ์เทียบกับ brief แล้ว" });
           const preloaded = await preloadDataURL(generated.dataUrl);
           throwIfAborted(signal);
           task = transition(task, { type: "preloading" }, options, {
@@ -173,12 +243,6 @@ export async function runContextAwareImageTask(
           });
           state.addElement(element, `AI task ${task.id} generate image`);
           state.selectOnly([element.id]);
-          enqueueAssetAnalysis({
-            fileId: preloaded.fileId,
-            dataURL: preloaded.dataURL,
-            width: preloaded.width,
-            height: preloaded.height,
-          });
           task = transition(task, { type: "succeeded" }, options, {
             stage: "succeeded",
             message: `สร้างและวางภาพสำเร็จ (${preloaded.width} × ${preloaded.height}px) โดยคงต้นฉบับไว้`,
@@ -313,6 +377,28 @@ function classifyFailure(error: unknown): RecoveryFailureKind {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
+}
+
+async function analyzeGeneratedOutput(
+  dataURL: string,
+  _fileId: string,
+  _width: number,
+  _height: number,
+  signal: AbortSignal,
+): Promise<GeneratedOutputAnalysis> {
+  throwIfAborted(signal);
+  const [caption, detection, visibleText] = await Promise.all([
+    visionCaption(dataURL, "detailed"),
+    visionDetect(dataURL),
+    visionOcr(dataURL),
+  ]);
+  throwIfAborted(signal);
+  return {
+    caption: caption.trim(),
+    objects: detection.objects.map((object) => object.label.trim()).filter(Boolean),
+    visibleText: visibleText.trim(),
+    limitations: [],
+  };
 }
 
 function throwIfAborted(signal: AbortSignal): void {

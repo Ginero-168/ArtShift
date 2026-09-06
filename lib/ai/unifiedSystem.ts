@@ -1,3 +1,5 @@
+import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./orchestration/harnessPolicy";
+
 export type UnifiedPromptRoute = "local-plan" | "tool-command" | "design-agent";
 
 type VisualRouteHint = {
@@ -10,6 +12,8 @@ export const UNIFIED_AI_SYSTEM = Object.freeze({
   description: "Local-first assistance that automatically chooses the right tool or model.",
   localFirst: true,
   userSelectableModes: false,
+  harnessVersion: ARTSHIFT_HARNESS_VERSION,
+  harnessRuleIds: ARTSHIFT_HARNESS_RULE_IDS,
 });
 
 export function routeUnifiedPrompt(input: {

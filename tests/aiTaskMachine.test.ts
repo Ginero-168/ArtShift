@@ -25,7 +25,7 @@ describe("AI task state machine", () => {
     expect(() => createAiTask({ ...plan, analysisComplete: false })).toThrow(
       "analysis must complete before task creation",
     );
-    expect(createAiTask(plan)).toMatchObject({ status: "planned", attempt: 0 });
+    expect(createAiTask(plan)).toMatchObject({ status: "awaiting-consent", attempt: 0 });
   });
 
   it("accepts the execution lifecycle and records attempt events", () => {

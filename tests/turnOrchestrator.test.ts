@@ -82,7 +82,12 @@ describe("context-aware turn orchestrator", () => {
     });
     expect(result).toMatchObject({
       kind: "task",
-      task: { subAgent: "image_editor", quality: "high", analysisComplete: true },
+      task: {
+        subAgent: "image_editor",
+        quality: "high",
+        analysisComplete: true,
+        requiredSubjects: ["bottle"],
+      },
     });
   });
 });

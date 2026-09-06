@@ -156,6 +156,11 @@ export async function generateAIImage(
       signal,
     });
   } catch (error) {
+    if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+      const abortError = new Error("การสร้างภาพถูกยกเลิกแล้วครับ");
+      abortError.name = "AbortError";
+      throw abortError;
+    }
     throw new Error("AI Image Studio could not reach the ArtShift server.", { cause: error });
   }
 

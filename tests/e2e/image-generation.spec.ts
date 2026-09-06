@@ -141,6 +141,44 @@ test("runs a complete image task only after consent and shows the Canvas preload
   await expect(page.getByText(/Task · image_generator/)).toBeVisible();
 });
 
+test("cancels a running image task without leaving a preview", async ({ page }) => {
+  let releaseResponse: (() => void) | undefined;
+  const responseReady = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/ai/image", async (route) => {
+    await responseReady;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        dataUrl: TEST_IMAGE_PNG_256,
+        width: 1024,
+        height: 1024,
+        provider: "replicate",
+        model: "openai/gpt-image-2",
+        warnings: [],
+      }),
+    });
+  });
+
+  page.on("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.goto("/");
+  await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
+  const chatInput = page.getByPlaceholder("บอกสิ่งที่ต้องการออกแบบ...");
+  await chatInput.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
+  await chatInput.press("Enter");
+
+  await expect(page.getByTestId("processing-preview")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "ยกเลิก Task", exact: true }).click();
+  releaseResponse?.();
+
+  await expect(page.getByText(/ยกเลิกงานที่กำลังประมวลผลแล้ว/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("processing-preview")).toHaveCount(0);
+});
 test("answers a Canvas inventory question locally without calling a provider", async ({ page }) => {
   let requestCount = 0;
   await page.route("**/api/**", async (route) => {

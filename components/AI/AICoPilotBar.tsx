@@ -303,6 +303,7 @@ export default function AICoPilotBar() {
             try {
               const result = await runContextAwareImageTask(contextDecision.task, refsForTurn, {
                 signal: controller.signal,
+                cloudConsent: true,
                 onUpdate: (update) => {
                   taskAction.description = `${update.message} · ครั้งที่ ${update.attempt}/${contextDecision.task.maxAttempts}`;
                   taskAction.stage = update.stage;
@@ -326,10 +327,18 @@ export default function AICoPilotBar() {
                 "📐 จัดวาง Layout ให้สวยงาม",
               ];
             } catch (error) {
+              const wasCancelled =
+                (error as Error).name === "AbortError" || controller.signal.aborted;
               taskAction.status = "error";
-              taskAction.description = `Task ไม่สำเร็จ: ${(error as Error).message}`;
-              reply = `Task ไม่สำเร็จครับ: ${(error as Error).message}`;
-              suggestions = ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก", "ยกเลิก Task นี้"];
+              taskAction.description = wasCancelled
+                ? "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas"
+                : `Task ไม่สำเร็จ: ${(error as Error).message}`;
+              reply = wasCancelled
+                ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
+                : `Task ไม่สำเร็จครับ: ${(error as Error).message}`;
+              suggestions = wasCancelled
+                ? ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"]
+                : ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก", "ยกเลิก Task นี้"];
             }
           }
           upsertCurrentAction({ ...taskAction });
@@ -899,6 +908,25 @@ export default function AICoPilotBar() {
                   <span>{act.description}</span>
                 </div>
               ))}
+              <button
+                type="button"
+                data-testid="cancel-ai-task"
+                aria-label="ยกเลิก Task"
+                onClick={() => abortRef.current?.abort()}
+                style={{
+                  alignSelf: "flex-start",
+                  border: "1px solid #fecaca",
+                  borderRadius: 5,
+                  padding: "4px 8px",
+                  background: "#fff1f2",
+                  color: "#be123c",
+                  cursor: "pointer",
+                  fontSize: 10,
+                  fontWeight: 700,
+                }}
+              >
+                ยกเลิก Task
+              </button>
             </div>
           )}
         </div>

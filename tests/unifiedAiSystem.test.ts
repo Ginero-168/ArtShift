@@ -13,6 +13,8 @@ describe("unified AI system", () => {
       label: "AI Assistance",
       userSelectableModes: false,
       localFirst: true,
+      harnessVersion: "2.2",
+      harnessRuleIds: expect.arrayContaining(["REFERENCE_ANALYSIS", "QUALITY_GATE"]),
     });
     expect(UNIFIED_AI_SYSTEM.description).toContain("automatically");
   });

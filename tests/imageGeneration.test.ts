@@ -27,6 +27,19 @@ describe("GPT Image 2 generation client", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("preserves AbortError so cancellation stays a terminal cancellation", async () => {
+    const controller = new AbortController();
+    const abortError = new Error("The operation was aborted");
+    abortError.name = "AbortError";
+    const fetchMock = vi.fn().mockRejectedValue(abortError);
+    vi.stubGlobal("fetch", fetchMock);
+    controller.abort();
+
+    await expect(
+      generateAIImage({ prompt: "a cat", cloudConsent: true }, controller.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("fetches and caches generated image data", async () => {
     const mockDataUrl =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";

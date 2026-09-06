@@ -110,6 +110,13 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     analysisComplete: input.refs.length === 0 || input.analyses.length === input.refs.length,
     cloudConsentRequired: true,
     estimatedMaxCostUsd: quality.quality === "high" ? 0.05 : 0.02,
+    ...(input.analyses.length > 0
+      ? {
+          requiredSubjects: [
+            ...new Set(input.analyses.flatMap((analysis) => analysis.objects)),
+          ].slice(0, 3),
+        }
+      : {}),
   };
   return { kind: "task", task: createAiTask(plan) };
 }
