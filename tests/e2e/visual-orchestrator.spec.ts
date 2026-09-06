@@ -4,7 +4,7 @@ const TEST_IMAGE_PNG_256 =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAACYUlEQVR42u3UMQEAAAQAQXFEFFYXCmjghivww0dWD/BTiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABCAEGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAGAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQCXBWNwJTbzQ1x7AAAAAElFTkSuQmCC";
 
 test.describe("Visual Orchestrator Kernel UI routing", () => {
-  test("routes a simple image request through the image API", async ({ page }) => {
+  test("keeps a simple image request in clarification before the image API", async ({ page }) => {
     let imageRequestCount = 0;
     let requestBody: Record<string, unknown> | undefined;
     await page.route("**/api/ai/image", async (route) => {
@@ -27,17 +27,12 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
     await input.fill("ขอภาพแมว");
     await input.press("Enter");
 
-    await expect(page.getByText(/สร้างรูปภาพ.*GPT Image 2/)).toBeVisible();
-    expect(imageRequestCount).toBe(1);
-    expect(requestBody).toMatchObject({
-      prompt: "แมว",
-      aspectRatio: "1:1",
-      width: 1024,
-      height: 1024,
-    });
+    await expect(page.getByText(/direction/i)).toBeVisible();
+    expect(imageRequestCount).toBe(0);
+    expect(requestBody).toBeUndefined();
   });
 
-  test("routes complex typography work to Design Agent without calling image generation", async ({
+  test("clarifies complex typography work before calling any execution route", async ({
     page,
   }) => {
     let imageRequestCount = 0;
@@ -67,8 +62,8 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
     await input.fill("สร้างภาพโปสเตอร์ 3 แบบ พร้อมข้อความภาษาไทย");
     await input.press("Enter");
 
-    await expect(page.getByText("ระบุข้อความและขนาดโปสเตอร์ก่อนเริ่มงานครับ")).toBeVisible();
-    expect(designAgentRequestCount).toBe(1);
+    await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
+    expect(designAgentRequestCount).toBe(0);
     expect(imageRequestCount).toBe(0);
   });
 });
