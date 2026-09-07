@@ -12,6 +12,7 @@ vi.mock("@/lib/server/ai/userCredentials", () => ({
   getSessionReplicateToken: () => undefined,
 }));
 
+import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { POST } from "../app/api/ai/image/route";
 
 function request(body: unknown, contentLength?: number): NextRequest {
@@ -90,6 +91,25 @@ describe("AI image generation API", () => {
       }),
     );
     expect(runtimeMock.execute.mock.calls[0]?.[1]).not.toHaveProperty("model");
+  });
+
+  it("ignores a client-supplied cost ceiling and uses the server policy", async () => {
+    const response = await POST(
+      request({
+        prompt: "แมวสีส้ม",
+        enhance: false,
+        cloudConsent: true,
+        quality: "medium",
+        maxCostUsd: 0,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(runtimeMock.execute).toHaveBeenCalledWith(
+      "image.generate",
+      expect.any(Object),
+      expect.objectContaining({ maxCostUsd: 0.05 }),
+    );
   });
 
   it("routes prompt enhancement and image generation through the AI Runtime", async () => {
@@ -220,5 +240,27 @@ describe("AI image generation API", () => {
     expect(response.status).toBe(502);
     expect(data.error).toBe("Image generation failed. Please try again.");
     expect(JSON.stringify(data)).not.toContain("DO_NOT_LEAK");
+  });
+
+  it("preserves an opaque prediction handle for an uncertain provider result", async () => {
+    runtimeMock.execute.mockRejectedValue(
+      new AiRuntimeError("PROVIDER_UNAVAILABLE", "status transport lost", {
+        provider: "replicate",
+        outcomeUnknown: true,
+        predictionId: "prediction-opaque-1",
+      }),
+    );
+
+    const response = await POST(
+      request({ prompt: "แมวสีส้ม", enhance: false, cloudConsent: true, quality: "medium" }),
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(data).toMatchObject({
+      code: "OUTCOME_UNKNOWN",
+      predictionId: "prediction-opaque-1",
+    });
+    expect(JSON.stringify(data)).not.toContain("status transport lost");
   });
 });

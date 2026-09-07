@@ -1,4 +1,8 @@
-import { GPT_IMAGE_2_ESTIMATED_COST_USD, generateAIImage } from "@/lib/ai/imageGeneration";
+import {
+  GPT_IMAGE_2_ESTIMATED_COST_USD,
+  generateAIImage,
+  resolveImageGenerationDimensions,
+} from "@/lib/ai/imageGeneration";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport, subscribeCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
@@ -74,14 +78,32 @@ export async function runContextAwareImageTask(
   if (!task.history.some((event) => event.type === "intent.assessed")) {
     task = appendAiTaskEvent(task, { type: "intent.assessed", complete: true });
   }
-  const inputImages = resolveReferenceImages(refs);
+  let inputImages: Array<{
+    dataUrl: string;
+    mimeType?: "image/png" | "image/jpeg" | "image/webp";
+  }>;
+  try {
+    inputImages = resolveReferenceImages(refs);
+  } catch (error) {
+    task = appendAiTaskEvent(task, {
+      type: "task.failed",
+      reason: "Selected reference was stale before execution",
+    });
+    task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
+      stage: "failed",
+      message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
+      attempt: task.attempt,
+      quality: task.quality,
+    });
+    throw attachTaskSnapshot(error, task);
+  }
   const initialState = useEngine.getState();
   const targetSnapshot = {
     docId: initialState.doc.id,
     slideId: initialState.currentSlideId,
     revision: initialState.doc.updatedAt,
   };
-  const dimensions = resolveOutputDimensions(task.prompt);
+  const dimensions = task.requestedDimensions ?? resolveImageGenerationDimensions(task.prompt);
   const viewport =
     getCanvasViewport() ??
     ({
@@ -187,7 +209,6 @@ export async function runContextAwareImageTask(
                 inputImages,
                 cloudConsent: options.cloudConsent === true,
                 enhance: false,
-                maxCostUsd: GPT_IMAGE_2_ESTIMATED_COST_USD,
               },
               executionSignal,
             );
@@ -375,10 +396,15 @@ export async function runContextAwareImageTask(
               action: recovery.action,
               reason: recovery.reason,
             });
-            if (recovery.action === "outcome-unknown") {
+            if (recovery.action === "outcome-unknown" || recovery.action === "resume") {
+              const predictionId = predictionIdFromError(error);
               task = appendAiTaskEvent(task, {
                 type: "task.outcome-unknown",
-                reason: "Provider outcome could not be confirmed",
+                reason:
+                  recovery.action === "resume"
+                    ? "Prediction handle retained; resume is unavailable in this client path"
+                    : "Provider outcome could not be confirmed",
+                ...(predictionId ? { predictionId } : {}),
               });
               task = transition(
                 task,
@@ -395,7 +421,10 @@ export async function runContextAwareImageTask(
                 progress: null,
                 message: "ผลลัพธ์ยังยืนยันไม่ได้ — ไม่มีการสร้างงานซ้ำอัตโนมัติ",
               });
-              throw createOutcomeUnknownError(task);
+              const outcomeError = isOutcomeUnknownError(error)
+                ? attachTaskSnapshot(error, task)
+                : createOutcomeUnknownError(task, predictionId);
+              throw outcomeError;
             }
             if (recovery.action === "retry") {
               task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
@@ -491,21 +520,6 @@ function resolveReferenceImages(
   });
 }
 
-function resolveOutputDimensions(prompt: string): {
-  width: number;
-  height: number;
-  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
-} {
-  const value = prompt.toLocaleLowerCase();
-  if (/(?:9:16|แนวตั้ง|story|reel)/iu.test(value))
-    return { width: 720, height: 1280, aspectRatio: "9:16" };
-  if (/(?:16:9|แนวนอน|banner|cover)/iu.test(value))
-    return { width: 1280, height: 720, aspectRatio: "16:9" };
-  if (/(?:4:3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" };
-  if (/(?:3:4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" };
-  return { width: 1024, height: 1024, aspectRatio: "1:1" };
-}
-
 function transition(
   task: AiTask,
   event: AiTaskEvent,
@@ -545,6 +559,7 @@ function assertCommitTarget(
 }
 
 function classifyFailure(error: unknown): RecoveryFailureKind {
+  if (isOutcomeUnknownError(error)) return "polling";
   const message = errorMessage(error).toLocaleLowerCase();
   if (
     message.includes("provider") &&
@@ -612,9 +627,10 @@ function attachTaskSnapshot(error: unknown, task: AiTask): Error {
   return target;
 }
 
-function createOutcomeUnknownError(task: AiTask): Error {
+function createOutcomeUnknownError(task: AiTask, predictionId?: string): Error {
   const error = new Error("AI provider result is uncertain; no duplicate request was created.");
   error.name = "OutcomeUnknownError";
+  if (predictionId) Object.defineProperty(error, "predictionId", { value: predictionId });
   return attachTaskSnapshot(error, task);
 }
 
@@ -622,6 +638,17 @@ function createAbortError(): Error {
   const error = new Error("การสร้างภาพถูกยกเลิกแล้วครับ");
   error.name = "AbortError";
   return error;
+}
+
+function isOutcomeUnknownError(error: unknown): error is Error & { predictionId?: string } {
+  return error instanceof Error && error.name === "OutcomeUnknownError";
+}
+
+function predictionIdFromError(error: unknown): string | undefined {
+  if (!isOutcomeUnknownError(error)) return undefined;
+  return typeof error.predictionId === "string" && error.predictionId.length <= 256
+    ? error.predictionId
+    : undefined;
 }
 
 function isAbortError(error: unknown): boolean {

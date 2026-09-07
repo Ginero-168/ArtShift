@@ -10,6 +10,11 @@ const visionOcrMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ai/imageGeneration", () => ({
   generateAIImage: generateImageMock,
   GPT_IMAGE_2_ESTIMATED_COST_USD: 0.05,
+  resolveImageGenerationDimensions: () => ({
+    width: 1024,
+    height: 1024,
+    aspectRatio: "1:1",
+  }),
 }));
 vi.mock("@/lib/engine/imageCache", () => ({
   getCached: getCachedMock,
@@ -235,8 +240,8 @@ describe("context-aware image task runner", () => {
     const retryPrompt = generateImageMock.mock.calls[1]?.[0]?.prompt;
     expect(retryPrompt).toBeTypeOf("string");
     expect(retryPrompt).not.toBe(firstPrompt);
-    expect(generateImageMock.mock.calls[0]?.[0]?.maxCostUsd).toBe(0.05);
-    expect(generateImageMock.mock.calls[1]?.[0]?.maxCostUsd).toBe(0.05);
+    expect(generateImageMock.mock.calls[0]?.[0]).not.toHaveProperty("maxCostUsd");
+    expect(generateImageMock.mock.calls[1]?.[0]).not.toHaveProperty("maxCostUsd");
     expect(events).toContain("retrying");
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
   });
@@ -408,8 +413,46 @@ describe("context-aware image task runner", () => {
     expect(useEngine.getState().history.past).toHaveLength(0);
   });
 
-  it("marks an ambiguous provider failure as outcome-unknown without retrying", async () => {
-    generateImageMock.mockRejectedValueOnce(new Error("network timeout"));
+  it("publishes a terminal task when a reference is stale before queueing", async () => {
+    const staleRef = {
+      objectId: "stale-image",
+      elementVersion: 1,
+      fileId: "stale-file",
+      displayName: "stale-image.png",
+      sourceWidth: 256,
+      sourceHeight: 256,
+      width: 256,
+      height: 256,
+      angle: 0,
+    };
+    const staleTask = createAiTask({
+      ...plan,
+      id: "stale-reference-task",
+      selectedImages: [
+        {
+          objectId: staleRef.objectId,
+          elementVersion: staleRef.elementVersion,
+          fileId: staleRef.fileId,
+          displayName: staleRef.displayName,
+        },
+      ],
+    });
+
+    await expect(
+      runContextAwareImageTask(staleTask, [staleRef], { cloudConsent: true }),
+    ).rejects.toMatchObject({ task: { status: "failed" } });
+    expect(getAiTask(staleTask.id)?.status).toBe("failed");
+    expect(getAiTask(staleTask.id)?.history.some((event) => event.type === "task.failed")).toBe(
+      true,
+    );
+  });
+
+  it("preserves a typed provider outcome-unknown without retrying", async () => {
+    const outcomeUnknown = new Error(
+      "AI provider result is uncertain; no duplicate request was created.",
+    );
+    outcomeUnknown.name = "OutcomeUnknownError";
+    generateImageMock.mockRejectedValueOnce(outcomeUnknown);
 
     await expect(
       runContextAwareImageTask(createAiTask(plan), [], { cloudConsent: true }),

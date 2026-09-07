@@ -2,6 +2,12 @@ import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPo
 
 export type AiImageQuality = "low" | "medium" | "high";
 
+export type AiTaskDimensions = {
+  width: number;
+  height: number;
+  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+};
+
 export type AiTaskStatus =
   | "planned"
   | "analyzing"
@@ -35,6 +41,7 @@ export type AiTaskPlan = {
   analysisComplete: boolean;
   cloudConsentRequired: boolean;
   estimatedMaxCostUsd: number;
+  requestedDimensions?: AiTaskDimensions;
   requiredSubjects?: readonly string[];
   requiredText?: string;
   harnessVersion: typeof ARTSHIFT_HARNESS_VERSION;
@@ -70,7 +77,7 @@ export type AiTaskTracePayload =
   | { type: "task.succeeded"; summary: string }
   | { type: "task.failed"; reason: string }
   | { type: "task.cancelled"; reason?: string }
-  | { type: "task.outcome-unknown"; reason: string }
+  | { type: "task.outcome-unknown"; reason: string; predictionId?: string }
   | {
       type: "recovery.decided";
       action: "retry" | "resume" | "stop" | "outcome-unknown";
@@ -106,7 +113,9 @@ export type AiTaskTransition = {
   events: AiTaskEvent[];
 };
 
-const UNSAFE_TEXT = /data:image\/|replicate\.delivery|api[_-]?key|bearer\s+[a-z0-9._-]+/iu;
+const UNSAFE_TEXT =
+  /data:image\/|https?:\/\/|replicate\.delivery|api[_-]?key|bearer\s+\S+|(?:secret|token|credential)\s*[:=]/iu;
+const LONG_BASE64 = /^[A-Za-z0-9+/]+={0,2}$/u;
 const TRACE_EVENT_TYPES = new Set<AiTaskTracePayload["type"]>([
   "context.inspected",
   "reference.analysis.started",
@@ -158,10 +167,7 @@ export function createAiTask(plan: AiTaskPlan): AiTask {
   assertAiTaskHarness(plan);
   if (
     plan.preTaskTrace?.some((event) => event.type === "task.created") ||
-    plan.preTaskTrace?.some(
-      (event) =>
-        "reason" in event && typeof event.reason === "string" && UNSAFE_TEXT.test(event.reason),
-    )
+    plan.preTaskTrace?.some((event) => containsUnsafeTraceText(event))
   ) {
     throw new Error("task pre-trace is invalid");
   }
@@ -207,6 +213,7 @@ function normalizeTraceEvent(
   task: AiTask,
   event: AiTaskTracePayload | AiTaskTraceEvent,
 ): AiTaskTraceEvent {
+  if (containsUnsafeTraceText(event)) throw new Error("unsafe task text");
   if (
     ("taskId" in event && event.taskId !== task.id) ||
     ("subAgent" in event && event.subAgent !== task.subAgent) ||
@@ -347,6 +354,17 @@ export function appendAiTaskEvent(
   const next = { ...task, history: [...task.history, canonical] };
   registerAiTask(next);
   return next;
+}
+
+function containsUnsafeTraceText(value: unknown, seen = new Set<object>()): boolean {
+  if (typeof value === "string") {
+    return UNSAFE_TEXT.test(value) || (value.length >= 128 && LONG_BASE64.test(value));
+  }
+  if (!value || typeof value !== "object") return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) return value.some((item) => containsUnsafeTraceText(item, seen));
+  return Object.values(value).some((item) => containsUnsafeTraceText(item, seen));
 }
 
 function isTraceEvent(event: { type: string }): event is AiTaskTracePayload {

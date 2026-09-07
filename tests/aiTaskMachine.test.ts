@@ -150,6 +150,22 @@ describe("AI task state machine", () => {
     ).toThrow("unsafe task text");
   });
 
+  it("rejects unsafe free-text fields in typed trace events", () => {
+    expect(() =>
+      appendAiTaskEvent(createAiTask(plan), {
+        type: "clarification.requested",
+        question: "https://replicate.delivery/p/provider-secret",
+        optionIds: ["A", "B", "C", "OTHER"],
+      }),
+    ).toThrow("unsafe task text");
+    expect(() =>
+      appendAiTaskEvent(createAiTask(plan), {
+        type: "task.succeeded",
+        summary: "data:image/png;base64,raw-image-bytes",
+      }),
+    ).toThrow("unsafe task text");
+  });
+
   it("rejects a task whose Harness trace is forged", () => {
     const task = createAiTask(plan);
     expect(() =>

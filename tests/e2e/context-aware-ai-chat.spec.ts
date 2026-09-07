@@ -172,7 +172,38 @@ test("a known quality failure gets one corrected retry within the task budget", 
   await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 30_000 });
 });
 
-test("Canvas inventory is answered locally with zero non-GET provider work", async ({ page }) => {
+test("keeps an uncertain provider result terminal without creating a second request", async ({
+  page,
+}) => {
+  let providerCalls = 0;
+  await page.route("**/api/ai/image", async (route) => {
+    providerCalls += 1;
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "OUTCOME_UNKNOWN",
+        error: "AI provider result is uncertain; no duplicate request was created.",
+        predictionId: "prediction-browser-1",
+      }),
+    });
+  });
+  page.on("dialog", async (dialog) => dialog.accept());
+
+  const chat = await openAssistant(page);
+  await chat.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
+  await chat.press("Enter");
+
+  await expect(page.getByText(/ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้/)).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("processing-preview")).toHaveCount(0);
+  expect(providerCalls).toBe(1);
+});
+
+test("answers a Canvas inventory question locally with zero non-GET provider work", async ({
+  page,
+}) => {
   let nonGetCalls = 0;
   await page.route("**/api/**", async (route) => {
     if (route.request().method() !== "GET") nonGetCalls += 1;

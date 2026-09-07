@@ -1,4 +1,8 @@
-import { GPT_IMAGE_2_ESTIMATED_COST_USD, isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import {
+  GPT_IMAGE_2_ESTIMATED_COST_USD,
+  isImageGenerationPrompt,
+  resolveImageGenerationDimensions,
+} from "@/lib/ai/imageGeneration";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
@@ -117,6 +121,7 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     finalUse: /(?:final|production|print|พิมพ์|ใช้งานจริง)/iu.test(input.prompt),
   });
   const requiredText = extractRequiredText(input.prompt);
+  const requestedDimensions = resolveImageGenerationDimensions(input.prompt);
   const requiredSubjects = [
     ...new Set(input.analyses.flatMap((analysis) => analysis.objects)),
   ].slice(0, 3);
@@ -137,6 +142,7 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     analysisComplete: input.refs.length === 0 || input.analyses.length === input.refs.length,
     cloudConsentRequired: true,
     estimatedMaxCostUsd: GPT_IMAGE_2_ESTIMATED_COST_USD * quality.maxAttempts,
+    requestedDimensions,
     harnessVersion: ARTSHIFT_HARNESS_VERSION,
     harnessRuleIds: ARTSHIFT_HARNESS_RULE_IDS,
     ...(requiredSubjects.length > 0 ? { requiredSubjects } : {}),

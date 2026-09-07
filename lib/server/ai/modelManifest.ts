@@ -1,3 +1,4 @@
+import { GPT_IMAGE_2_MAX_COST_USD } from "@/lib/ai/pricing";
 import type { AiExecutionProfile, AiTaskKind } from "@/lib/ai-runtime/contracts";
 import type { AiRouteTable, AiRouteTarget } from "@/lib/ai-runtime/runtime";
 
@@ -151,8 +152,8 @@ function imageGptRoute(model: string): AiRouteTarget {
     provider: "replicate",
     model,
     alias: "image-gpt-2",
-    expectedMaxUsd: 0.05,
-    pricing: { currency: "USD", perRunUsd: 0.05 },
+    expectedMaxUsd: GPT_IMAGE_2_MAX_COST_USD,
+    pricing: { currency: "USD", perRunUsd: GPT_IMAGE_2_MAX_COST_USD },
   };
 }
 

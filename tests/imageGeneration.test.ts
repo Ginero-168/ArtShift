@@ -141,12 +141,14 @@ describe("GPT Image 2 generation client", () => {
         json: vi.fn().mockResolvedValue({
           code: "OUTCOME_UNKNOWN",
           error: "AI provider result is uncertain; no duplicate request was created.",
+          predictionId: "prediction-test",
         }),
       }),
     );
 
     await expect(generateAIImage({ prompt: "a cat", cloudConsent: true })).rejects.toMatchObject({
       name: "OutcomeUnknownError",
+      predictionId: "prediction-test",
     });
   });
 

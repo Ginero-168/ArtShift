@@ -132,6 +132,11 @@ describe("context-aware turn orchestrator", () => {
     expect(result.kind).toBe("task");
     if (result.kind !== "task") return;
     expect(result.task.requiredText).toBe("SALE 50%");
+    expect(result.task.requestedDimensions).toEqual({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    });
   });
 
   it("does not create a task for unavailable vector output", () => {

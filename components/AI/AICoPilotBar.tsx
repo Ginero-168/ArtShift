@@ -212,7 +212,10 @@ export default function AICoPilotBar() {
           analyses: [],
           canvas: { slide, selectedIds },
         });
-      } else if (isImageGenerationPrompt(promptToSend) || hasImageContext) {
+      } else if (
+        isImageGenerationPrompt(promptToSend) ||
+        (hasImageContext && isImageContextRequest && !isBuiltInImageAction)
+      ) {
         if (hasImageContext && analysesForTurn.length === 0) {
           const analysisAction: SubAgentActionLog = {
             id: crypto.randomUUID(),

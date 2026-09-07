@@ -5,11 +5,12 @@
 
 import type { AiImageAspectRatio } from "@/lib/ai-runtime/contracts";
 import { loadDataURL } from "@/lib/engine/imageCache";
+import { GPT_IMAGE_2_MAX_COST_USD } from "./pricing";
 import { runVisualQualityGate } from "./visualQualityGate";
 
 export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
 export const GPT_IMAGE_2_QUALITY = "medium" as const;
-export const GPT_IMAGE_2_ESTIMATED_COST_USD = 0.05 as const;
+export const GPT_IMAGE_2_ESTIMATED_COST_USD = GPT_IMAGE_2_MAX_COST_USD;
 export type GptImageQuality = "low" | "medium" | "high";
 
 export interface AspectRatioOption {
@@ -29,6 +30,19 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
   { id: "3:4", label: "Portrait", ratio: "3:4", width: 768, height: 1024, icon: "▯" },
 ];
 
+export function resolveImageGenerationDimensions(prompt: string) {
+  const value = prompt.toLocaleLowerCase();
+  if (/(?:9:16|แนวตั้ง|story|reel)/iu.test(value)) {
+    return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+  }
+  if (/(?:16:9|แนวนอน|banner|cover)/iu.test(value)) {
+    return { width: 1280, height: 720, aspectRatio: "16:9" as const };
+  }
+  if (/(?:4:3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" as const };
+  if (/(?:3:4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+  return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
+}
+
 export interface ImageGenerationOptions {
   prompt: string;
   aspectRatio?: AiImageAspectRatio;
@@ -42,8 +56,6 @@ export interface ImageGenerationOptions {
   cloudConsent?: boolean;
   seed?: number;
   enhance?: boolean;
-  /** Server-clamped per-attempt cost ceiling supplied by the task runner. */
-  maxCostUsd?: number;
 }
 
 export interface GeneratedImageResult {
@@ -54,6 +66,16 @@ export interface GeneratedImageResult {
   seed: number;
   model: string;
   prompt: string;
+}
+
+export class OutcomeUnknownError extends Error {
+  readonly predictionId?: string;
+
+  constructor(message: string, predictionId?: string) {
+    super(message);
+    this.name = "OutcomeUnknownError";
+    this.predictionId = predictionId;
+  }
 }
 
 export const INSPIRATION_PROMPTS = [
@@ -172,14 +194,14 @@ export async function generateAIImage(
     seed?: number;
     error?: string;
     code?: string;
+    predictionId?: string;
   };
   if (!apiRes.ok) {
     if (data.code === "OUTCOME_UNKNOWN") {
-      const outcomeError = new Error(
+      throw new OutcomeUnknownError(
         data.error || "AI provider result is uncertain; no duplicate request was created.",
+        typeof data.predictionId === "string" ? data.predictionId : undefined,
       );
-      outcomeError.name = "OutcomeUnknownError";
-      throw outcomeError;
     }
     throw new Error(data.error || `AI Image Studio failed with status ${apiRes.status}.`);
   }

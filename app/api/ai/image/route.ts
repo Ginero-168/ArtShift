@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/imageGeneration";
+import { GPT_IMAGE_2_MAX_COST_USD } from "@/lib/ai/pricing";
 import type { AiImageGenerateInput } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
@@ -75,7 +76,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid reference image payload." }, { status: 400 });
   }
   const inputImages = parsedInputImages.value;
-  const perAttemptMaxCostUsd = boundedMaxCost(body.maxCostUsd);
   const enhance = body.enhance !== false;
   const ai = getServerAiRuntime({
     replicateToken: getSessionReplicateToken(req),
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
         cloudConsent: true,
         allowFallback: false,
         timeoutMs: 90_000,
-        maxCostUsd: perAttemptMaxCostUsd,
+        maxCostUsd: GPT_IMAGE_2_MAX_COST_USD,
         accountId: account.id,
         signal: req.signal,
       },
@@ -133,6 +133,8 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const outcomeUnknown = error instanceof AiRuntimeError && error.outcomeUnknown;
     const status = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH" ? 503 : 502;
+    const predictionId =
+      outcomeUnknown && error instanceof AiRuntimeError ? error.predictionId : undefined;
     return NextResponse.json(
       {
         code: outcomeUnknown ? "OUTCOME_UNKNOWN" : "PROVIDER_UNAVAILABLE",
@@ -141,6 +143,7 @@ export async function POST(req: NextRequest) {
           : status === 503
             ? "AI provider is not configured for this session."
             : "Image generation failed. Please try again.",
+        ...(predictionId ? { predictionId } : {}),
       },
       { status },
     );
@@ -197,11 +200,6 @@ type ParsedInputImages =
       value: Array<{ dataUrl: string; mimeType?: "image/jpeg" | "image/png" | "image/webp" }>;
     }
   | { ok: false };
-
-function boundedMaxCost(value: unknown): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return 0.05;
-  return Math.min(0.05, Math.max(0, value));
-}
 
 function parseInputImages(value: unknown): ParsedInputImages {
   if (value === undefined) return { ok: true, value: [] };
