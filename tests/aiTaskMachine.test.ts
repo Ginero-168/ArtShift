@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARTSHIFT_HARNESS_RULE_IDS,
+  ARTSHIFT_HARNESS_VERSION,
+} from "@/lib/ai/orchestration/harnessPolicy";
+import {
   type AiTaskEvent,
   type AiTaskPlan,
   appendAiTaskEvent,
   assertAiTaskHarness,
   createAiTask,
+  getAiTask,
   reduceAiTask,
 } from "@/lib/ai/orchestration/taskMachine";
 
@@ -20,9 +25,43 @@ const plan: AiTaskPlan = {
   analysisComplete: true,
   cloudConsentRequired: true,
   estimatedMaxCostUsd: 0.02,
+  harnessVersion: ARTSHIFT_HARNESS_VERSION,
+  harnessRuleIds: ARTSHIFT_HARNESS_RULE_IDS,
 };
 
 describe("AI task state machine", () => {
+  it("requires explicit Harness metadata instead of silently defaulting it", () => {
+    expect(() =>
+      createAiTask({
+        ...plan,
+        harnessVersion: undefined as unknown as typeof ARTSHIFT_HARNESS_VERSION,
+        harnessRuleIds: undefined as unknown as readonly string[],
+      }),
+    ).toThrow("task Harness contract is invalid");
+  });
+
+  it("creates a canonical trace and publishes the task snapshot", () => {
+    const task = createAiTask(plan);
+    expect(task.history[0]).toMatchObject({
+      taskId: task.id,
+      stage: "awaiting-consent",
+      attempt: 0,
+      harnessVersion: ARTSHIFT_HARNESS_VERSION,
+      ruleIds: ARTSHIFT_HARNESS_RULE_IDS,
+    });
+    expect(getAiTask(task.id)).toMatchObject({ id: task.id, status: "awaiting-consent" });
+
+    const next = appendAiTaskEvent(task, { type: "intent.assessed", complete: true });
+    expect(next.history.at(-1)).toMatchObject({
+      taskId: task.id,
+      stage: "analyzing",
+      attempt: 0,
+      harnessVersion: ARTSHIFT_HARNESS_VERSION,
+      ruleIds: ARTSHIFT_HARNESS_RULE_IDS,
+    });
+    expect(getAiTask(task.id)?.history.at(-1)).toEqual(next.history.at(-1));
+  });
+
   it("creates a task only after analysis is complete", () => {
     expect(() => createAiTask({ ...plan, analysisComplete: false })).toThrow(
       "analysis must complete before task creation",

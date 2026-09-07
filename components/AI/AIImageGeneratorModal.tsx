@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
 import {
   ASPECT_RATIOS,
   type AspectRatioOption,
+  enrichPrompt,
   GPT_IMAGE_2_MODEL,
   GPT_IMAGE_2_QUALITY,
-  generateAIImage,
   INSPIRATION_PROMPTS,
 } from "@/lib/ai/imageGeneration";
-import { createImage } from "@/lib/engine/factory";
-import { useEngine } from "@/lib/engine/store";
-import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 
 type ImageStyleId = "photorealistic" | "digital-art" | "3d-render" | "anime";
 
@@ -58,10 +56,7 @@ interface Props {
 }
 
 export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
-  const addElement = useEngine((s) => s.addElement);
-  const selectOnly = useEngine((s) => s.selectOnly);
-  const currentSlideId = useEngine((s) => s.currentSlideId);
-  const slides = useEngine((s) => s.doc.slides);
+  const generationAbortRef = useRef<AbortController | null>(null);
 
   const [prompt, setPrompt] = useState("");
   const [selectedStyle, setSelectedStyle] = useState<ImageStyleId>("photorealistic");
@@ -69,12 +64,6 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
   const [enhance, setEnhance] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewImage, setPreviewImage] = useState<{
-    dataUrl: string;
-    fileId: string;
-    width: number;
-    height: number;
-  } | null>(null);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -85,6 +74,10 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    return () => generationAbortRef.current?.abort();
+  }, []);
 
   if (!isOpen) return null;
 
@@ -99,73 +92,41 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
       return;
     }
 
+    generationAbortRef.current?.abort();
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
     setLoading(true);
     setError(null);
 
     try {
       const style = STYLE_PRESETS.find((preset) => preset.id === selectedStyle);
-      const generationPrompt = [prompt.trim(), style?.promptSuffix]
+      const basePrompt = enhance ? enrichPrompt(prompt.trim()) : prompt.trim();
+      const generationPrompt = [
+        basePrompt,
+        style?.promptSuffix,
+        `สำหรับอัตราส่วน ${selectedRatio.ratio}`,
+      ]
         .filter(Boolean)
         .join("\n\nVisual direction: ");
-      const res = await generateAIImage({
-        prompt: generationPrompt,
-        aspectRatio: selectedRatio.id,
-        width: selectedRatio.width,
-        height: selectedRatio.height,
-        quality: GPT_IMAGE_2_QUALITY,
+      const result = await executeCoPilotInstruction(`สร้างภาพ ${generationPrompt}`, undefined, {
+        contextAwareValidated: true,
         cloudConsent: true,
-        enhance,
+        signal: controller.signal,
       });
-
-      setPreviewImage({
-        dataUrl: res.dataUrl,
-        fileId: res.fileId,
-        width: res.width,
-        height: res.height,
-      });
+      if (result.actions.some((action) => action.status === "error")) {
+        setError(result.reply);
+        return;
+      }
+      onClose();
     } catch (err) {
+      if (controller.signal.aborted || (err as Error).name === "AbortError") return;
       setError((err as Error).message || "Failed to generate image.");
     } finally {
-      setLoading(false);
+      if (generationAbortRef.current === controller) {
+        generationAbortRef.current = null;
+        setLoading(false);
+      }
     }
-  }
-
-  function handleInsertToCanvas() {
-    if (!previewImage) return;
-
-    const currentSlide = slides.find((s) => s.id === currentSlideId) || slides[0];
-    const sw = currentSlide?.width ?? 1920;
-    const sh = currentSlide?.height ?? 1080;
-
-    // Fit within 60% of canvas
-    const maxW = sw * 0.55;
-    const maxH = sh * 0.55;
-    const scale = Math.min(maxW / previewImage.width, maxH / previewImage.height, 1);
-
-    const w = Math.round(previewImage.width * scale);
-    const h = Math.round(previewImage.height * scale);
-    const x = Math.round((sw - w) / 2);
-    const y = Math.round((sh - h) / 2);
-
-    const element = createImage({
-      x,
-      y,
-      width: w,
-      height: h,
-      fileId: previewImage.fileId,
-      naturalWidth: previewImage.width,
-      naturalHeight: previewImage.height,
-    });
-
-    enqueueAssetAnalysis({
-      fileId: previewImage.fileId,
-      dataURL: previewImage.dataUrl,
-      width: previewImage.width,
-      height: previewImage.height,
-    });
-    addElement(element, `insert AI image: ${prompt.slice(0, 24)}...`);
-    selectOnly([element.id]);
-    onClose();
   }
 
   return (
@@ -525,90 +486,15 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                   Creating your masterpiece...
                 </div>
                 <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                  Rendering with GPT Image 2 via Replicate
+                  The context-aware task is analyzing, generating, and placing the result safely.
                 </div>
               </div>
-            ) : previewImage ? (
-              <div
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                }}
-              >
-                {/* Image Container */}
-                <div
-                  style={{
-                    flex: 1,
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    borderRadius: 8,
-                    background: "#000",
-                  }}
-                >
-                  {/* biome-ignore lint/performance/noImgElement: Data URL preview */}
-                  <img
-                    src={previewImage.dataUrl}
-                    alt="AI Generated Artwork"
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: 280,
-                      objectFit: "contain",
-                      borderRadius: 6,
-                    }}
-                  />
-                </div>
-
-                {/* Bottom Placement Controls */}
-                <div style={{ width: "100%", display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={handleGenerate}
-                    style={{
-                      flex: 1,
-                      padding: "8px 12px",
-                      borderRadius: 6,
-                      border: "1px solid #334155",
-                      background: "#1e293b",
-                      color: "#e2e8f0",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    🎲 Generate Again
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleInsertToCanvas}
-                    style={{
-                      flex: 2,
-                      padding: "8px 16px",
-                      borderRadius: 6,
-                      border: "none",
-                      background: "var(--accent, #6366f1)",
-                      color: "#fff",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 4,
-                      boxShadow: "0 2px 8px rgba(99, 102, 241, 0.4)",
-                    }}
-                  >
-                    <span>🖼️</span>
-                    <span>Insert to Canvas</span>
-                  </button>
+            ) : error ? (
+              <div style={{ textAlign: "center", color: "#fecaca", padding: 20 }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Task was not committed</div>
+                <div style={{ fontSize: 10, color: "#fda4af", marginTop: 5 }}>
+                  The original Canvas remains unchanged.
                 </div>
               </div>
             ) : (
@@ -617,8 +503,9 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
                   Ready to Create
                 </div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4, maxWidth: 220 }}>
-                  Enter a prompt on the left and click Generate to see the result here.
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4, maxWidth: 240 }}>
+                  The verified task will analyze the brief, preload the output, and place a
+                  duplicate on the Canvas.
                 </div>
               </div>
             )}

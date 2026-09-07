@@ -11,12 +11,12 @@ describe("client IP extraction", () => {
     ).toBe("10.0.0.4");
   });
 
-  it("uses the reverse proxy's overwritten real-ip header", () => {
-    expect(
-      getClientIp({
-        ip: "10.0.0.4",
-        headers: new Headers({ "x-real-ip": "203.0.113.9" }),
-      }),
-    ).toBe("203.0.113.9");
+  it("ignores x-real-ip unless the trusted proxy is explicitly configured", () => {
+    const request = {
+      ip: "10.0.0.4",
+      headers: new Headers({ "x-real-ip": "203.0.113.9" }),
+    };
+    expect(getClientIp(request)).toBe("10.0.0.4");
+    expect(getClientIp(request, { trustedProxy: "nginx" })).toBe("203.0.113.9");
   });
 });

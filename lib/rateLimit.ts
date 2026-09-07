@@ -33,8 +33,19 @@ export class RateLimiter {
   }
 }
 
-export function getClientIp(req: { headers: Headers; ip?: string | null }): string {
-  const realIp = req.headers.get("x-real-ip")?.trim();
-  if (realIp && !/[\s,]/u.test(realIp) && realIp.length <= 64) return realIp;
-  return req.ip ?? "unknown";
+export type ClientIpOptions = {
+  trustedProxy?: "nginx";
+};
+
+export function getClientIp(
+  req: { headers: Headers; ip?: string | null },
+  options: ClientIpOptions = {},
+): string {
+  const trustedProxy =
+    options.trustedProxy ?? (process.env.ARTSHIFT_TRUSTED_PROXY === "nginx" ? "nginx" : undefined);
+  if (trustedProxy === "nginx") {
+    const realIp = req.headers.get("x-real-ip")?.trim();
+    if (realIp && !/[\s,]/u.test(realIp) && realIp.length <= 64) return realIp;
+  }
+  return req.ip?.trim() || "unknown";
 }

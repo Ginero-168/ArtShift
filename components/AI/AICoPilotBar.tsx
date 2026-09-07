@@ -275,6 +275,13 @@ export default function AICoPilotBar() {
             refs: refsForTurn,
             analyses: analysesForTurn,
             selectedIds,
+            canvas: slide ? { slide, selectedIds } : undefined,
+            clarification: pending
+              ? {
+                  question: pending.question,
+                  optionIds: pending.options.map((option) => option.id),
+                }
+              : undefined,
             clarificationRound: pending?.round ?? 0,
           });
         }

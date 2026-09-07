@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARTSHIFT_HARNESS_RULE_IDS,
+  ARTSHIFT_HARNESS_VERSION,
+} from "@/lib/ai/orchestration/harnessPolicy";
+import {
   isCanvasInventoryPrompt,
   prepareContextAwareTurn,
 } from "@/lib/ai/orchestration/turnOrchestrator";
@@ -29,6 +33,61 @@ describe("context-aware turn orchestrator", () => {
 
   it("does not classify a generation request as Canvas inventory", () => {
     expect(isCanvasInventoryPrompt("สร้างภาพแมวบน Canvas สำหรับโพสต์")).toBe(false);
+  });
+
+  it("creates an ordered canonical trace for context-aware planning", () => {
+    const ref = {
+      objectId: "image-trace",
+      elementVersion: 1,
+      fileId: "file-trace",
+      displayName: "Reference",
+      sourceWidth: 100,
+      sourceHeight: 100,
+      width: 100,
+      height: 100,
+      angle: 0,
+    };
+    const result = prepareContextAwareTurn({
+      prompt: "สร้างภาพโฆษณา product photo แบบสตูดิโอ สำหรับ Instagram อัตราส่วน 1:1",
+      refs: [ref],
+      analyses: [
+        {
+          ref: {
+            objectId: ref.objectId,
+            elementVersion: ref.elementVersion,
+            displayName: ref.displayName,
+          },
+          caption: "a product",
+          objects: ["product"],
+          visibleText: "",
+          dimensions: { width: 100, height: 100, aspectRatio: 1 },
+          transparency: "none",
+          appearanceNotes: [],
+          limitations: [],
+        },
+      ],
+      canvas: { slide, selectedIds: new Set([ref.objectId]) },
+      clarification: { question: "เลือกทิศทางภาพ", optionIds: ["A", "B", "C", "OTHER"] },
+    });
+    expect(result.kind).toBe("task");
+    if (result.kind !== "task") return;
+    expect(result.task.history.map((event) => event.type)).toEqual([
+      "context.inspected",
+      "reference.analysis.started",
+      "reference.analysis.completed",
+      "clarification.requested",
+      "intent.assessed",
+      "task.created",
+    ]);
+    for (const event of result.task.history) {
+      expect(event).toMatchObject({
+        taskId: result.task.id,
+        subAgent: result.task.subAgent,
+        attempt: 0,
+        harnessVersion: ARTSHIFT_HARNESS_VERSION,
+        ruleIds: ARTSHIFT_HARNESS_RULE_IDS,
+      });
+    }
   });
 
   it("returns clarification for an ambiguous image request", async () => {

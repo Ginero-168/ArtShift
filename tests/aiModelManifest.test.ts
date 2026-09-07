@@ -75,11 +75,17 @@ describe("AI model manifest", () => {
     expect(serialized).not.toContain("https://");
   });
 
-  it("routes every image generation request to Replicate GPT Image 2 with automatic quality", () => {
+  it("fails closed when GPT Image 2 has no pinned production version", () => {
     const routes = createAiRouteTable({});
+
+    expect(routes["image.generate"]).toEqual({ economy: [], quality: [] });
+  });
+
+  it("routes every image generation request to Replicate GPT Image 2 with automatic quality", () => {
+    const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_2_VERSION: "1".repeat(64) });
     const expected = {
       provider: "replicate",
-      model: "openai/gpt-image-2",
+      model: `openai/gpt-image-2@${"1".repeat(64)}`,
       alias: "image-gpt-2",
       expectedMaxUsd: 0.05,
       pricing: { currency: "USD", perRunUsd: 0.05 },

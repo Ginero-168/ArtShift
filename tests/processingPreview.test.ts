@@ -148,7 +148,13 @@ describe("transient processing preview", () => {
       progress: null,
     });
 
-    for (const phase of ["quality-check", "preloading", "committing"] as const) {
+    for (const phase of [
+      "analyzing",
+      "generating",
+      "quality-check",
+      "preloading",
+      "committing",
+    ] as const) {
       updateProcessingPreview(id, { phase });
       expect(getProcessingPreview()).toMatchObject({ id, phase });
     }

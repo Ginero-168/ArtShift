@@ -9,6 +9,7 @@ import { runVisualQualityGate } from "./visualQualityGate";
 
 export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
 export const GPT_IMAGE_2_QUALITY = "medium" as const;
+export const GPT_IMAGE_2_ESTIMATED_COST_USD = 0.05 as const;
 export type GptImageQuality = "low" | "medium" | "high";
 
 export interface AspectRatioOption {
@@ -41,6 +42,8 @@ export interface ImageGenerationOptions {
   cloudConsent?: boolean;
   seed?: number;
   enhance?: boolean;
+  /** Server-clamped per-attempt cost ceiling supplied by the task runner. */
+  maxCostUsd?: number;
 }
 
 export interface GeneratedImageResult {

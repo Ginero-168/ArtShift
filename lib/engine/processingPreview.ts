@@ -1,6 +1,8 @@
 export type ProcessingPreviewKind = "extract" | "remove-bg" | "vectorize" | "upscale" | "generate";
 export type ProcessingPreviewPhase =
   | "queued"
+  | "analyzing"
+  | "generating"
   | "running"
   | "quality-check"
   | "preloading"

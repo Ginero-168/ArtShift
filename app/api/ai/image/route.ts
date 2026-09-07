@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid reference image payload." }, { status: 400 });
   }
   const inputImages = parsedInputImages.value;
+  const perAttemptMaxCostUsd = boundedMaxCost(body.maxCostUsd);
   const enhance = body.enhance !== false;
   const ai = getServerAiRuntime({
     replicateToken: getSessionReplicateToken(req),
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
         cloudConsent: true,
         allowFallback: false,
         timeoutMs: 90_000,
-        maxCostUsd: 0.05,
+        maxCostUsd: perAttemptMaxCostUsd,
         accountId: account.id,
         signal: req.signal,
       },
@@ -196,6 +197,11 @@ type ParsedInputImages =
       value: Array<{ dataUrl: string; mimeType?: "image/jpeg" | "image/png" | "image/webp" }>;
     }
   | { ok: false };
+
+function boundedMaxCost(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0.05;
+  return Math.min(0.05, Math.max(0, value));
+}
 
 function parseInputImages(value: unknown): ParsedInputImages {
   if (value === undefined) return { ok: true, value: [] };

@@ -7,7 +7,10 @@ const visionCaptionMock = vi.hoisted(() => vi.fn());
 const visionDetectMock = vi.hoisted(() => vi.fn());
 const visionOcrMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/ai/imageGeneration", () => ({ generateAIImage: generateImageMock }));
+vi.mock("@/lib/ai/imageGeneration", () => ({
+  generateAIImage: generateImageMock,
+  GPT_IMAGE_2_ESTIMATED_COST_USD: 0.05,
+}));
 vi.mock("@/lib/engine/imageCache", () => ({
   getCached: getCachedMock,
   preloadDataURL: preloadDataURLMock,
@@ -18,9 +21,13 @@ vi.mock("@/lib/vision/visionEngine", () => ({
   visionOcr: visionOcrMock,
 }));
 
+import {
+  ARTSHIFT_HARNESS_RULE_IDS,
+  ARTSHIFT_HARNESS_VERSION,
+} from "@/lib/ai/orchestration/harnessPolicy";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import type { AiTaskPlan } from "@/lib/ai/orchestration/taskMachine";
-import { createAiTask } from "@/lib/ai/orchestration/taskMachine";
+import { createAiTask, getAiTask } from "@/lib/ai/orchestration/taskMachine";
 import {
   clearCanvasViewport,
   getCanvasViewport,
@@ -44,7 +51,9 @@ const plan: AiTaskPlan = {
   selectedImages: [],
   analysisComplete: true,
   cloudConsentRequired: true,
-  estimatedMaxCostUsd: 0.05,
+  estimatedMaxCostUsd: 0.1,
+  harnessVersion: ARTSHIFT_HARNESS_VERSION,
+  harnessRuleIds: ARTSHIFT_HARNESS_RULE_IDS,
 };
 
 function resetEngine() {
@@ -146,8 +155,10 @@ describe("context-aware image task runner", () => {
         "preload.completed",
         "commit.started",
         "commit.completed",
+        "task.succeeded",
       ]),
     );
+    expect(getAiTask(result.task.id)).toMatchObject({ status: "succeeded" });
   });
 
   it("commits at the latest viewport after a pan or zoom during generation", async () => {
@@ -220,8 +231,36 @@ describe("context-aware image task runner", () => {
     });
 
     expect(generateImageMock).toHaveBeenCalledTimes(2);
+    const firstPrompt = generateImageMock.mock.calls[0]?.[0]?.prompt;
+    const retryPrompt = generateImageMock.mock.calls[1]?.[0]?.prompt;
+    expect(retryPrompt).toBeTypeOf("string");
+    expect(retryPrompt).not.toBe(firstPrompt);
+    expect(generateImageMock.mock.calls[0]?.[0]?.maxCostUsd).toBe(0.05);
+    expect(generateImageMock.mock.calls[1]?.[0]?.maxCostUsd).toBe(0.05);
     expect(events).toContain("retrying");
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+  });
+
+  it("stops before a quality retry when the task budget cannot cover it", async () => {
+    generateImageMock.mockRejectedValueOnce(
+      new Error("Generated image failed the visual quality gate"),
+    );
+
+    let failure: unknown;
+    try {
+      await runContextAwareImageTask(
+        createAiTask({ ...plan, id: "budget-limited", estimatedMaxCostUsd: 0.05 }),
+        [],
+        { cloudConsent: true },
+      );
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain("Task budget");
+    expect((failure as Error & { task?: { status: string } }).task?.status).toBe("failed");
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
   });
 
   it("passes a verified selected-image reference to the provider and preserves the source", async () => {
@@ -380,6 +419,10 @@ describe("context-aware image task runner", () => {
     });
 
     expect(generateImageMock).toHaveBeenCalledTimes(1);
+    expect(getAiTask(plan.id)?.status).toBe("outcome-unknown");
+    expect(getAiTask(plan.id)?.history.some((event) => event.type === "task.outcome-unknown")).toBe(
+      true,
+    );
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
     expect(useEngine.getState().history.past).toHaveLength(0);
   });
@@ -426,6 +469,8 @@ describe("context-aware image task runner", () => {
       }),
     ).rejects.toMatchObject({ name: "AbortError" });
 
+    expect(getAiTask(plan.id)?.status).toBe("cancelled");
+    expect(getAiTask(plan.id)?.history.some((event) => event.type === "task.cancelled")).toBe(true);
     expect(getProcessingPreviews()).toHaveLength(0);
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
     expect(useEngine.getState().history.past).toHaveLength(0);

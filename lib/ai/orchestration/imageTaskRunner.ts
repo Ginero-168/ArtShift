@@ -1,4 +1,4 @@
-import { generateAIImage } from "@/lib/ai/imageGeneration";
+import { GPT_IMAGE_2_ESTIMATED_COST_USD, generateAIImage } from "@/lib/ai/imageGeneration";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport, subscribeCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
@@ -17,6 +17,7 @@ import {
   appendAiTaskEvent,
   assertAiTaskHarness,
   reduceAiTask,
+  registerAiTask,
 } from "./taskMachine";
 import { renderVisibleReference } from "./visibleReferenceRenderer";
 
@@ -65,6 +66,7 @@ export async function runContextAwareImageTask(
 ): Promise<ContextAwareTaskResult> {
   const signal = options.signal ?? new AbortController().signal;
   assertAiTaskHarness(initialTask);
+  registerAiTask(initialTask);
   if (initialTask.cloudConsentRequired && options.cloudConsent !== true) {
     throw new Error("Explicit cloud consent is required before starting this task");
   }
@@ -94,6 +96,7 @@ export async function runContextAwareImageTask(
   const previewBounds = getGenerationPreviewBounds(viewport, dimensions);
   let committed: ContextAwareTaskResult | null = null;
   let lastError: unknown;
+  let qualityRepairInstruction: string | undefined;
 
   task = transition(task, { type: "consent-granted" }, options, {
     stage: "queued",
@@ -130,8 +133,33 @@ export async function runContextAwareImageTask(
         context.update({ ...nextBounds });
       });
       try {
+        context.update({
+          phase: "analyzing",
+          progress: null,
+          message: "กำลังวิเคราะห์บริบทของ Task ก่อนส่ง provider…",
+        });
         for (let attempt = 1; attempt <= task.maxAttempts; attempt++) {
           throwIfAborted(executionSignal);
+          const reservedCostUsd = attempt * GPT_IMAGE_2_ESTIMATED_COST_USD;
+          if (reservedCostUsd > task.estimatedMaxCostUsd + Number.EPSILON) {
+            const budgetError = new Error(
+              `Task budget cannot cover attempt ${attempt}; no provider request was created.`,
+            );
+            task = appendAiTaskEvent(task, {
+              type: "task.failed",
+              reason: "Task budget cannot cover the next attempt",
+            });
+            task = transition(task, { type: "failed", reason: budgetError.message }, options, {
+              stage: "failed",
+              message: "งบประมาณของ Task ไม่พอสำหรับการลองครั้งถัดไป จึงหยุดก่อนส่ง provider",
+              attempt: task.attempt,
+              quality: task.quality,
+            });
+            throw attachTaskSnapshot(budgetError, task);
+          }
+          const attemptPrompt = qualityRepairInstruction
+            ? `${task.prompt}\n\nQuality repair instruction: ${qualityRepairInstruction}`
+            : task.prompt;
           task = transition(task, { type: "running" }, options, {
             stage: "generating",
             message: `กำลังสร้างภาพ (ครั้งที่ ${attempt}/${task.maxAttempts})…`,
@@ -139,7 +167,7 @@ export async function runContextAwareImageTask(
             quality: task.quality,
           });
           context.update({
-            phase: "running",
+            phase: "generating",
             progress: null,
             message: `กำลังสร้างภาพ (ครั้งที่ ${attempt}/${task.maxAttempts})…`,
           });
@@ -151,7 +179,7 @@ export async function runContextAwareImageTask(
           try {
             const generated = await generateAIImage(
               {
-                prompt: task.prompt,
+                prompt: attemptPrompt,
                 width: dimensions.width,
                 height: dimensions.height,
                 aspectRatio: dimensions.aspectRatio,
@@ -159,6 +187,7 @@ export async function runContextAwareImageTask(
                 inputImages,
                 cloudConsent: options.cloudConsent === true,
                 enhance: false,
+                maxCostUsd: GPT_IMAGE_2_ESTIMATED_COST_USD,
               },
               executionSignal,
             );
@@ -171,6 +200,7 @@ export async function runContextAwareImageTask(
               outputCount: 1,
             });
             if (!technicalGate.passed) {
+              qualityRepairInstruction = buildQualityRepairInstruction(technicalGate.blockers);
               throw new Error(
                 `Generated image failed the visual quality gate: ${technicalGate.blockers.join(" ")}`,
               );
@@ -185,6 +215,7 @@ export async function runContextAwareImageTask(
               submittedReferenceCount: inputImages.length,
             });
             if (!briefGate.passed) {
+              qualityRepairInstruction = buildQualityRepairInstruction(briefGate.blockers);
               throw new Error(
                 `Generated image failed the brief quality gate: ${briefGate.blockers.join(" ")}`,
               );
@@ -243,6 +274,7 @@ export async function runContextAwareImageTask(
               outputAnalysis,
             });
             if (!semanticGate.passed) {
+              qualityRepairInstruction = buildQualityRepairInstruction(semanticGate.blockers);
               throw new Error(
                 `Generated image failed the semantic quality gate: ${semanticGate.blockers.join(" ")}`,
               );
@@ -309,6 +341,10 @@ export async function runContextAwareImageTask(
             }
             task = appendAiTaskEvent(task, { type: "commit.completed", attempt });
             state.selectOnly([element.id]);
+            task = appendAiTaskEvent(task, {
+              type: "task.succeeded",
+              summary: "Generated image passed quality, preload, and atomic commit checks",
+            });
             task = transition(task, { type: "succeeded" }, options, {
               stage: "succeeded",
               message: `สร้างและวางภาพสำเร็จ (${preloaded.width} × ${preloaded.height}px) โดยคงต้นฉบับไว้`,
@@ -327,6 +363,9 @@ export async function runContextAwareImageTask(
             lastError = error;
             if (isAbortError(error)) throw error;
             const kind = classifyFailure(error);
+            if (kind === "quality" && !qualityRepairInstruction) {
+              qualityRepairInstruction = buildQualityRepairInstruction([errorMessage(error)]);
+            }
             if (kind === "quality") {
               task = appendAiTaskEvent(task, { type: "quality.checked", passed: false, attempt });
             }
@@ -337,6 +376,10 @@ export async function runContextAwareImageTask(
               reason: recovery.reason,
             });
             if (recovery.action === "outcome-unknown") {
+              task = appendAiTaskEvent(task, {
+                type: "task.outcome-unknown",
+                reason: "Provider outcome could not be confirmed",
+              });
               task = transition(
                 task,
                 { type: "outcome-unknown", reason: "provider result could not be confirmed" },
@@ -370,6 +413,10 @@ export async function runContextAwareImageTask(
               context.update({ progress: 0, message: `กำลังแก้ปัญหาและลองใหม่…` });
               continue;
             }
+            task = appendAiTaskEvent(task, {
+              type: "task.failed",
+              reason: "Task execution failed before commit",
+            });
             task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
               stage: "failed",
               message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
@@ -389,6 +436,10 @@ export async function runContextAwareImageTask(
     await job.promise;
   } catch (error) {
     if (isAbortError(error)) {
+      task = appendAiTaskEvent(task, {
+        type: "task.cancelled",
+        reason: "Task cancelled before commit",
+      });
       task = transition(task, { type: "cancelled", reason: "ผู้ใช้ยกเลิก" }, options, {
         stage: "cancelled",
         message: "ยกเลิก Task แล้ว และไม่มีการเปลี่ยนแปลงบน Canvas",
@@ -400,6 +451,10 @@ export async function runContextAwareImageTask(
     throw error;
   }
   if (signal.aborted) {
+    task = appendAiTaskEvent(task, {
+      type: "task.cancelled",
+      reason: "Task cancelled before queue execution",
+    });
     task = transition(task, { type: "cancelled", reason: "ผู้ใช้ยกเลิกก่อนเริ่มงาน" }, options, {
       stage: "cancelled",
       message: "ยกเลิก Task ที่รอคิวแล้ว และไม่มีการเปลี่ยนแปลงบน Canvas",
@@ -458,6 +513,7 @@ function transition(
   update: ContextAwareTaskUpdate,
 ): AiTask {
   const next = reduceAiTask(task, event).task;
+  registerAiTask(next);
   options.onUpdate?.(update);
   return next;
 }
@@ -507,6 +563,14 @@ function classifyFailure(error: unknown): RecoveryFailureKind {
   if (message.includes("network") || message.includes("reach") || message.includes("timeout"))
     return "network";
   return "capability";
+}
+
+function buildQualityRepairInstruction(blockers: readonly string[]): string {
+  const diagnosis = blockers
+    .join(" ")
+    .replace(/data:image\/[^\s]+|https?:\/\/[^\s]+|bearer\s+\S+/giu, "[REDACTED]")
+    .slice(0, 360);
+  return `Regenerate with a materially different composition and correct the prior quality-gate finding: ${diagnosis}`;
 }
 
 function errorMessage(error: unknown): string {

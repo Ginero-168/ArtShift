@@ -232,11 +232,13 @@ export async function executeCoPilotInstruction(
       };
     }
 
+    const workspaceSlide = st.currentSlide();
     const decision = prepareContextAwareTurn({
       prompt,
       refs: [],
       analyses: [],
       selectedIds: st.selectedIds,
+      canvas: workspaceSlide ? { slide: workspaceSlide, selectedIds: st.selectedIds } : undefined,
       clarificationRound: options.contextAwareValidated ? 2 : 0,
     });
     if (decision.kind === "clarification") {

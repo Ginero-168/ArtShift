@@ -1,6 +1,7 @@
-import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import { GPT_IMAGE_2_ESTIMATED_COST_USD, isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
+import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
 import { chooseImageQuality } from "./imageQualityPolicy";
 import type { ComposerImageRef } from "./imageReferences";
 import {
@@ -27,6 +28,10 @@ export type ContextAwareTurnInput = {
   analyses: readonly ImageReferenceAnalysis[];
   selectedIds?: ReadonlySet<string>;
   canvas?: Parameters<typeof inspectCanvas>[0];
+  clarification?: {
+    question: string;
+    optionIds: readonly string[];
+  };
   clarificationRound?: number;
 };
 
@@ -67,6 +72,7 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     objects: analysis.objects,
     visibleText: analysis.visibleText,
   }));
+  const canvasInspection = input.canvas ? inspectCanvas(input.canvas) : undefined;
   const assessment = assessImageIntent({
     prompt: input.prompt,
     analyses,
@@ -130,7 +136,9 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     })),
     analysisComplete: input.refs.length === 0 || input.analyses.length === input.refs.length,
     cloudConsentRequired: true,
-    estimatedMaxCostUsd: quality.quality === "high" ? 0.05 : 0.02,
+    estimatedMaxCostUsd: GPT_IMAGE_2_ESTIMATED_COST_USD * quality.maxAttempts,
+    harnessVersion: ARTSHIFT_HARNESS_VERSION,
+    harnessRuleIds: ARTSHIFT_HARNESS_RULE_IDS,
     ...(requiredSubjects.length > 0 ? { requiredSubjects } : {}),
     ...(requiredText ? { requiredText } : {}),
     ...(input.analyses.length > 0
@@ -148,8 +156,29 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
   const task = createAiTask({
     ...plan,
     preTaskTrace: [
+      ...(canvasInspection
+        ? [
+            {
+              type: "context.inspected" as const,
+              objectCount: canvasInspection.objectCount,
+              selectedCount: canvasInspection.selectedCount,
+            },
+          ]
+        : []),
       ...(input.refs.length > 0
-        ? [{ type: "reference.analysis.completed" as const, count: input.analyses.length }]
+        ? [
+            { type: "reference.analysis.started" as const, count: input.refs.length },
+            { type: "reference.analysis.completed" as const, count: input.analyses.length },
+          ]
+        : []),
+      ...(input.clarification
+        ? [
+            {
+              type: "clarification.requested" as const,
+              question: input.clarification.question,
+              optionIds: [...input.clarification.optionIds],
+            },
+          ]
         : []),
       { type: "intent.assessed" as const, complete: true },
     ],

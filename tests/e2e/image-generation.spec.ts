@@ -35,15 +35,18 @@ test("uses the automatic Replicate GPT Image 2 generation contract", async ({ pa
 
   await modal.getByLabel("Prompt (คำอธิบายภาพ)").fill("a warm editorial portrait");
   await modal.getByRole("button", { name: /Generate Image/ }).click();
-  await expect(modal.getByRole("button", { name: /Insert to Canvas/ })).toBeVisible();
+  await expect(modal).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Image", exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
 
   expect(requestBody).toMatchObject({
     prompt: expect.stringContaining("a warm editorial portrait"),
     aspectRatio: "1:1",
     width: 1024,
     height: 1024,
-    quality: "medium",
-    enhance: true,
+    quality: "high",
+    enhance: false,
   });
   expect(requestBody).not.toHaveProperty("model");
   expect(requestBody).not.toHaveProperty("provider");

@@ -40,7 +40,7 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     environment.REPLICATE_RECRAFT_VECTORIZE_MODEL || "recraft-ai/recraft-vectorize",
     environment.REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION,
   );
-  const replicateGptImage2 = withVersion(
+  const replicateGptImage2 = pinnedModel(
     REPLICATE_GPT_IMAGE_2_MODEL,
     environment.REPLICATE_GPT_IMAGE_2_VERSION,
   );
@@ -137,10 +137,12 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
       ],
     },
 
-    "image.generate": {
-      economy: [imageGptRoute(replicateGptImage2)],
-      quality: [imageGptRoute(replicateGptImage2)],
-    },
+    "image.generate": replicateGptImage2
+      ? {
+          economy: [imageGptRoute(replicateGptImage2)],
+          quality: [imageGptRoute(replicateGptImage2)],
+        }
+      : { economy: [], quality: [] },
   };
 }
 
@@ -152,6 +154,11 @@ function imageGptRoute(model: string): AiRouteTarget {
     expectedMaxUsd: 0.05,
     pricing: { currency: "USD", perRunUsd: 0.05 },
   };
+}
+
+function pinnedModel(model: string, version: string | undefined): string | undefined {
+  if (!version || !/^[a-f0-9]{64}$/iu.test(version)) return undefined;
+  return `${model}@${version}`;
 }
 
 function withVersion(model: string, version: string | undefined): string {
