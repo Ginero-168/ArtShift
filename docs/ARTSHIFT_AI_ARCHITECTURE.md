@@ -1,6 +1,6 @@
 # ArtShift AI Architecture — 120B-First Creative Director
 
-สถานะเอกสาร: candidate implementation, ยังไม่ deploy Production
+สถานะเอกสาร: deployed to Production; runtime implementation commit `5acaf7c`
 วันที่: 2026-09-07 UTC
 
 ## Product identity
