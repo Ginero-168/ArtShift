@@ -34,7 +34,7 @@ export function renderHarmonyPrompt(input: AiAssistantChatInput): string {
     "You are ChatGPT, a large language model trained by OpenAI.",
     "Knowledge cutoff: 2024-06",
     `Current date: ${new Date().toISOString().slice(0, 10)}`,
-    "Reasoning: low",
+    "Reasoning: high",
     "# Valid channels: analysis, commentary, final.",
   ].join("\n");
   const developer = [

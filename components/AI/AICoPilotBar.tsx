@@ -9,6 +9,11 @@ import {
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import { applyCreativeDirectionToTask } from "@/lib/ai/orchestration/creativeDirector";
+import {
+  prepareRemoteCreativeDirection,
+  reviewRemoteCreativeOutput,
+} from "@/lib/ai/orchestration/creativeDirectorClient";
 import {
   buildComposerImageSelection,
   snapshotComposerImageRefs,
@@ -336,57 +341,106 @@ export default function AICoPilotBar() {
           ];
         } else {
           setPendingClarification(null);
+          const initialTask = contextDecision.task;
           const taskAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
-            agent: contextDecision.task.subAgent === "image_editor" ? "image_edit" : "image_gen",
-            title: `🧩 Task · ${contextDecision.task.subAgent}`,
-            description: `พร้อมทำงานด้วยคุณภาพอัตโนมัติ: ${contextDecision.task.quality}`,
+            agent: initialTask.subAgent === "image_editor" ? "image_edit" : "image_gen",
+            title: `🧩 Task · ${initialTask.subAgent}`,
+            description: "กำลังส่ง brief ให้ Creative Director วางแผน…",
             status: "running",
             timestamp: Date.now(),
-            taskId: contextDecision.task.id,
-            stage: "planned",
+            taskId: initialTask.id,
+            stage: "analyzing",
             attempt: 0,
-            quality: contextDecision.task.quality,
+            quality: initialTask.quality,
           };
           actions = [...actions, taskAction];
           const consent =
             typeof window === "undefined" ||
             window.confirm(
-              `งานนี้จะส่ง ${refsForTurn.length ? "ภาพที่เลือกและ" : "คำสั่งไปยัง"} AI provider เพื่อสร้างผลลัพธ์ (คุณภาพอัตโนมัติ: ${contextDecision.task.quality}, สูงสุด ${contextDecision.task.maxAttempts} ครั้ง) ดำเนินการต่อหรือไม่?`,
+              `งานนี้จะส่ง ${refsForTurn.length ? "สรุปภาพที่วิเคราะห์แล้วและ" : ""}คำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์ (คุณภาพอัตโนมัติ: ${initialTask.quality}, สูงสุด ${initialTask.maxAttempts} ครั้ง) ดำเนินการต่อหรือไม่?`,
             );
           if (!consent) {
             taskAction.status = "error";
-            taskAction.description = "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง AI provider";
-            reply = "ยกเลิก Task แล้วครับ ยังไม่มีการส่งภาพหรือเรียก AI provider";
+            taskAction.stage = "cancelled";
+            taskAction.description = "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
+            reply = "ยกเลิก Task แล้วครับ ยังไม่มีการส่ง prompt, ภาพ หรือการเรียก AI provider";
           } else {
             try {
-              const result = await runContextAwareImageTask(contextDecision.task, refsForTurn, {
-                signal: controller.signal,
-                cloudConsent: true,
-                onUpdate: (update) => {
-                  taskAction.description = `${update.message} · ครั้งที่ ${update.attempt}/${contextDecision.task.maxAttempts}`;
-                  taskAction.stage = update.stage;
-                  taskAction.attempt = update.attempt;
-                  taskAction.quality = update.quality;
-                  taskAction.status =
-                    update.stage === "failed" ||
-                    update.stage === "cancelled" ||
-                    update.stage === "outcome-unknown"
-                      ? "error"
-                      : update.stage === "succeeded"
-                        ? "success"
-                        : "running";
-                  upsertCurrentAction({ ...taskAction });
+              const direction = await prepareRemoteCreativeDirection(
+                {
+                  prompt: promptToSend,
+                  canvasSummary: {
+                    objectCount: elementCount,
+                    selectedCount: selectedIds.size,
+                    width: slide?.width ?? 1920,
+                    height: slide?.height ?? 1080,
+                  },
+                  referenceAnalyses: analysesForTurn,
                 },
-              });
-              taskAction.status = "success";
-              taskAction.description = `สำเร็จและวางผลลัพธ์บน Canvas (${result.width} × ${result.height}px)`;
-              reply = `สร้างภาพตาม brief และวางบน Canvas เรียบร้อยแล้วครับ ใช้คุณภาพอัตโนมัติ: ${result.task.quality} โดยคงต้นฉบับไว้`;
-              suggestions = [
-                "🪄 ลบพื้นหลังของรูปนี้",
-                "⚡ แปลงรูปนี้เป็น Vector Paths",
-                "📐 จัดวาง Layout ให้สวยงาม",
-              ];
+                { signal: controller.signal, cloudConsent: true },
+              );
+
+              if (direction.kind === "answer") {
+                taskAction.status = "success";
+                taskAction.stage = "succeeded";
+                taskAction.description = "Creative Director ตอบโดยไม่เรียก Image Model";
+                reply = direction.text;
+                suggestions = ["ระบุงานออกแบบที่ต้องการ", "เลือกภาพบน Canvas แล้วขอให้วิเคราะห์"];
+              } else if (direction.kind === "clarification") {
+                taskAction.status = "success";
+                taskAction.stage = "clarifying";
+                taskAction.description = "Creative Director ต้องการรายละเอียดเพิ่มก่อนเลือก Specialist";
+                reply = direction.question;
+                suggestions = direction.options;
+              } else if (direction.search.required) {
+                taskAction.status = "success";
+                taskAction.stage = "analyzing";
+                taskAction.description = "Creative Director ระบุว่าต้องค้น Context ภายนอกก่อนสร้างงาน";
+                reply = `ยังไม่เรียก Image Model ครับ Creative Director ต้องค้นข้อมูลเพิ่มก่อน: ${direction.search.queries.join(", ")}`;
+                suggestions = ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"];
+              } else {
+                const directedTask = applyCreativeDirectionToTask(initialTask, direction);
+                taskAction.agent =
+                  directedTask.subAgent === "image_editor" ? "image_edit" : "image_gen";
+                taskAction.title = `🧠 Creative Director → ${directedTask.subAgent}`;
+                taskAction.description = `เลือก ${direction.modelAlias} · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
+                taskAction.stage = "planned";
+                upsertCurrentAction({ ...taskAction });
+
+                const result = await runContextAwareImageTask(directedTask, refsForTurn, {
+                  signal: controller.signal,
+                  cloudConsent: true,
+                  reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
+                    reviewRemoteCreativeOutput(
+                      { prompt, reviewCriteria, outputAnalysis },
+                      { signal, cloudConsent: true },
+                    ),
+                  onUpdate: (update) => {
+                    taskAction.description = `${update.message} · ครั้งที่ ${update.attempt}/${directedTask.maxAttempts}`;
+                    taskAction.stage = update.stage;
+                    taskAction.attempt = update.attempt;
+                    taskAction.quality = update.quality;
+                    taskAction.status =
+                      update.stage === "failed" ||
+                      update.stage === "cancelled" ||
+                      update.stage === "outcome-unknown"
+                        ? "error"
+                        : update.stage === "succeeded"
+                          ? "success"
+                          : "running";
+                    upsertCurrentAction({ ...taskAction });
+                  },
+                });
+                taskAction.status = "success";
+                taskAction.description = `Creative Director ตรวจ brief และวางผลลัพธ์บน Canvas (${result.width} × ${result.height}px)`;
+                reply = `สร้างภาพตามแผนของ Creative Director และวางบน Canvas เรียบร้อยแล้วครับ ใช้ ${direction.modelAlias} ด้วยคุณภาพอัตโนมัติ: ${result.task.quality} โดยคงต้นฉบับไว้`;
+                suggestions = [
+                  "🪄 ลบพื้นหลังของรูปนี้",
+                  "⚡ แปลงรูปนี้เป็น Vector Paths",
+                  "📐 จัดวาง Layout ให้สวยงาม",
+                ];
+              }
             } catch (error) {
               const wasCancelled =
                 (error as Error).name === "AbortError" || controller.signal.aborted;

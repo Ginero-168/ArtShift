@@ -14,12 +14,12 @@ const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
   "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf";
 
 export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>> = {
-  "assistant.chat": "economy",
+  "assistant.chat": "quality",
   "vision.describe": "economy",
   "vision.propose": "quality",
   "vision.ocr": "economy",
   "vectorize.recraft": "quality",
-  "prompt.enhance": "economy",
+  "prompt.enhance": "quality",
   "image.generate": "quality",
   "image.upscale": "quality",
 };
@@ -27,13 +27,11 @@ export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>
 export function createAiRouteTable(environment: Environment = process.env): AiRouteTable {
   const googleModel = environment.GEMINI_MODEL || "gemini-2.5-flash";
   const openAiModel = environment.OPENAI_MODEL || "gpt-4o-mini";
-  const replicateChatModel = withVersion(
-    environment.REPLICATE_CHAT_MODEL || "openai/gpt-oss-20b",
-    environment.REPLICATE_CHAT_MODEL_VERSION,
-  );
-  const replicateChatQualityModel = withVersion(
-    environment.REPLICATE_CHAT_QUALITY_MODEL || "openai/gpt-oss-120b",
-    environment.REPLICATE_CHAT_QUALITY_MODEL_VERSION,
+  const creativeDirectorModel = withVersion(
+    environment.REPLICATE_BRAIN_MODEL ||
+      environment.REPLICATE_CHAT_QUALITY_MODEL ||
+      "openai/gpt-oss-120b",
+    environment.REPLICATE_BRAIN_MODEL_VERSION || environment.REPLICATE_CHAT_QUALITY_MODEL_VERSION,
   );
   const replicateGpt = `openai/gpt-4o-mini@${environment.REPLICATE_GPT4O_MINI_VERSION || DEFAULT_REPLICATE_GPT4O_MINI_VERSION}`;
   const replicateGemini = `google/gemini-3-flash@${environment.REPLICATE_GEMINI_3_FLASH_VERSION || DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION}`;
@@ -75,44 +73,12 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 
   return {
     "assistant.chat": {
-      economy: [
-        {
-          provider: "replicate",
-          model: replicateChatModel,
-          alias: "chat-primary",
-          expectedMaxUsd: 0.002,
-          pricing: { currency: "USD", inputPerMillionTokens: 0.09, outputPerMillionTokens: 0.36 },
-        },
-      ],
-      quality: [
-        {
-          provider: "replicate",
-          model: replicateChatQualityModel,
-          alias: "chat-quality",
-          expectedMaxUsd: 0.006,
-          pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
-        },
-      ],
+      economy: [creativeDirectorRoute(creativeDirectorModel)],
+      quality: [creativeDirectorRoute(creativeDirectorModel)],
     },
     "prompt.enhance": {
-      economy: [
-        {
-          provider: "replicate",
-          model: replicateChatModel,
-          alias: "prompt-primary",
-          expectedMaxUsd: 0.001,
-          pricing: { currency: "USD", inputPerMillionTokens: 0.09, outputPerMillionTokens: 0.36 },
-        },
-      ],
-      quality: [
-        {
-          provider: "replicate",
-          model: replicateChatQualityModel,
-          alias: "prompt-quality",
-          expectedMaxUsd: 0.003,
-          pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
-        },
-      ],
+      economy: [creativeDirectorRoute(creativeDirectorModel, "prompt-director")],
+      quality: [creativeDirectorRoute(creativeDirectorModel, "prompt-director")],
     },
     "vision.describe": { economy: visionEconomy, quality: visionQuality },
     "vision.propose": { economy: visionEconomy, quality: visionQuality },
@@ -144,6 +110,16 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
           quality: [imageGptRoute(replicateGptImage2)],
         }
       : { economy: [], quality: [] },
+  };
+}
+
+function creativeDirectorRoute(model: string, alias = "creative-director"): AiRouteTarget {
+  return {
+    provider: "replicate",
+    model,
+    alias,
+    expectedMaxUsd: 0.01,
+    pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
   };
 }
 

@@ -1,0 +1,281 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  applyCreativeDirectionToTask,
+  CREATIVE_DIRECTOR_MODEL_ALIAS,
+  CREATIVE_DIRECTOR_SYSTEM,
+  prepareCreativeDirection,
+  reviewCreativeOutput,
+} from "@/lib/ai/orchestration/creativeDirector";
+import {
+  ARTSHIFT_HARNESS_RULE_IDS,
+  ARTSHIFT_HARNESS_VERSION,
+} from "@/lib/ai/orchestration/harnessPolicy";
+import { createAiTask } from "@/lib/ai/orchestration/taskMachine";
+
+const baseTask = () =>
+  createAiTask({
+    id: "task-1",
+    prompt: "สร้างภาพโฆษณาขวดเซรั่มแบบสตูดิโอสำหรับ Instagram 1:1",
+    subAgent: "image_generator",
+    capability: "IMAGE_DEFAULT",
+    quality: "high",
+    qualityRationale: "Product output needs high fidelity.",
+    maxAttempts: 2,
+    selectedImages: [],
+    analysisComplete: true,
+    cloudConsentRequired: true,
+    estimatedMaxCostUsd: 0.1,
+    requestedDimensions: { width: 1024, height: 1024, aspectRatio: "1:1" },
+    harnessVersion: ARTSHIFT_HARNESS_VERSION,
+    harnessRuleIds: ARTSHIFT_HARNESS_RULE_IDS,
+  });
+
+const toolResult = {
+  output: {
+    text: "",
+    stopReason: "tool_use" as const,
+    assistantMessage: { role: "assistant" as const, content: "" },
+    toolCalls: [
+      {
+        type: "tool_call" as const,
+        id: "call-1",
+        name: "propose_creative_direction",
+        input: {
+          kind: "image-task",
+          summary: "Premium serum product key visual",
+          refinedPrompt:
+            "Premium studio product photograph of a serum bottle, restrained luxury lighting, generous negative space, square social composition",
+          specialist: "image_generator",
+          capability: "IMAGE_DEFAULT",
+          modelAlias: "image-gpt-2",
+          knowledgeSkillIds: ["product-image", "instagram-post"],
+          reviewCriteria: ["serum bottle is the clear subject", "premium restrained lighting"],
+          search: { required: false, queries: [], sources: [] },
+        },
+      },
+    ],
+  },
+  metadata: {
+    task: "assistant.chat" as const,
+    provider: "replicate" as const,
+    model: "openai/gpt-oss-120b",
+    modelAlias: CREATIVE_DIRECTOR_MODEL_ALIAS,
+    durationMs: 1,
+    usage: {},
+    cached: false,
+    warnings: [],
+  },
+};
+
+describe("gpt-oss-120b Creative Director", () => {
+  it("declares the ArtShift layered director responsibilities", () => {
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Understand");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Vision");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Knowledge");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Search");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("specialist");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Review");
+  });
+
+  it("always executes the brain on the quality profile", async () => {
+    const execute = vi.fn().mockResolvedValue(toolResult);
+    const signal = new AbortController().signal;
+    const result = await prepareCreativeDirection(
+      {
+        prompt: baseTask().prompt,
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT", "IMAGE_VECTOR"],
+        cloudConsent: true,
+      },
+      { execute, signal },
+    );
+
+    expect(execute).toHaveBeenCalledWith(
+      "assistant.chat",
+      expect.objectContaining({ system: CREATIVE_DIRECTOR_SYSTEM }),
+      expect.objectContaining({
+        profile: "quality",
+        modelAlias: CREATIVE_DIRECTOR_MODEL_ALIAS,
+        cloudConsent: true,
+        allowFallback: false,
+        signal,
+      }),
+    );
+    expect(result).toMatchObject({ kind: "image-task", modelAlias: "image-gpt-2" });
+  });
+
+  it("rejects a model or capability that is not available", async () => {
+    const invalid = structuredClone(toolResult);
+    invalid.output.toolCalls[0].input.modelAlias = "flux-unknown";
+    const execute = vi.fn().mockResolvedValue(invalid);
+
+    await expect(
+      prepareCreativeDirection(
+        {
+          prompt: baseTask().prompt,
+          canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+          referenceAnalyses: [],
+          availableCapabilities: ["IMAGE_DEFAULT"],
+          cloudConsent: true,
+        },
+        { execute },
+      ),
+    ).rejects.toThrow("invalid Creative Director plan");
+  });
+
+  it("executes one bounded image-reference search pass and asks the brain to finalize the plan", async () => {
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({
+        output: {
+          text: "",
+          toolCalls: [
+            {
+              id: "search-1",
+              name: "propose_creative_direction",
+              input: {
+                ...toolResult.output.toolCalls[0].input,
+                search: {
+                  required: true,
+                  queries: ["premium serum studio advertising"],
+                  sources: ["images"],
+                },
+              },
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce(toolResult);
+    const searchImages = vi.fn().mockResolvedValue([
+      {
+        title: "Amber serum bottle on stone",
+        source: "unsplash",
+        pageUrl: "https://unsplash.com/photos/example",
+        previewUrl: "https://images.unsplash.com/photo-example?w=640",
+      },
+    ]);
+    const signal = new AbortController().signal;
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "สร้างภาพโฆษณาขวดเซรั่มแบบ studio สำหรับ Instagram 1:1",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages, signal },
+    );
+
+    expect(searchImages).toHaveBeenCalledWith("premium serum studio advertising", 3, signal);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(execute.mock.calls[1]?.[1])).toContain("Amber serum bottle on stone");
+    expect(result).toMatchObject({ kind: "image-task", search: { required: false } });
+  });
+
+  it("does not advertise or execute image search when its provider is unconfigured", async () => {
+    const searchDirection = structuredClone(toolResult) as {
+      output: { toolCalls: Array<{ input: Record<string, unknown> }> };
+    };
+    searchDirection.output.toolCalls[0].input.search = {
+      required: true,
+      queries: ["concert poster reference"],
+      sources: ["images"],
+    };
+    const execute = vi.fn().mockResolvedValue(searchDirection);
+    const searchImages = vi.fn();
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: baseTask().prompt,
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages, searchImagesAvailable: false },
+    );
+
+    expect(searchImages).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ kind: "image-task", search: { required: true } });
+  });
+
+  it("applies a validated direction while preserving server-owned execution policy", () => {
+    const task = baseTask();
+    const directed = applyCreativeDirectionToTask(task, {
+      kind: "image-task",
+      summary: "Premium serum visual",
+      refinedPrompt: "Premium serum bottle studio key visual for Instagram, square composition",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: ["product-image"],
+      reviewCriteria: ["serum bottle remains clear"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(directed.prompt).toContain("Premium serum bottle");
+    expect(directed.maxAttempts).toBe(task.maxAttempts);
+    expect(directed.estimatedMaxCostUsd).toBe(task.estimatedMaxCostUsd);
+    expect(directed.selectedImages).toEqual(task.selectedImages);
+    expect(directed.history.at(-1)).toMatchObject({
+      type: "director.planned",
+      modelAlias: CREATIVE_DIRECTOR_MODEL_ALIAS,
+      specialist: "image_generator",
+    });
+  });
+
+  it("uses the same 120B brain to review local Vision evidence against the plan", async () => {
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: "",
+        toolCalls: [
+          {
+            id: "review-1",
+            name: "review_creative_output",
+            input: {
+              passed: false,
+              summary: "The product is not visually dominant.",
+              repairInstruction: "Increase product scale and simplify the background.",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await reviewCreativeOutput(
+      {
+        prompt: "Premium serum campaign image",
+        reviewCriteria: ["product is visually dominant"],
+        outputAnalysis: {
+          caption: "small bottle in a busy room",
+          objects: ["bottle", "chair", "window"],
+          visibleText: "",
+          limitations: [],
+        },
+        cloudConsent: true,
+      },
+      { execute },
+    );
+
+    expect(result).toEqual({
+      passed: false,
+      summary: "The product is not visually dominant.",
+      repairInstruction: "Increase product scale and simplify the background.",
+    });
+    expect(execute).toHaveBeenCalledWith(
+      "assistant.chat",
+      expect.objectContaining({
+        system: expect.stringContaining("REVIEW PROTOCOL"),
+        tools: [expect.objectContaining({ name: "review_creative_output" })],
+      }),
+      expect.objectContaining({
+        profile: "quality",
+        modelAlias: CREATIVE_DIRECTOR_MODEL_ALIAS,
+        allowFallback: false,
+      }),
+    );
+  });
+});

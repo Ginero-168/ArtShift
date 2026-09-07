@@ -209,6 +209,45 @@ describe("context-aware image task runner", () => {
     );
   });
 
+  it("uses the Creative Director review to diagnose and repair a generated result", async () => {
+    const reviewOutput = vi
+      .fn()
+      .mockResolvedValueOnce({
+        passed: false,
+        summary: "The product is too small in the frame.",
+        repairInstruction: "Make the product the dominant subject with clearer hierarchy.",
+      })
+      .mockResolvedValueOnce({
+        passed: true,
+        summary: "The product is now dominant and the hierarchy is clear.",
+      });
+    const directorTask = createAiTask({
+      ...plan,
+      id: "director-review-task",
+      reviewCriteria: ["product is the dominant subject", "hierarchy is clear"],
+    });
+
+    const result = await runContextAwareImageTask(directorTask, [], {
+      cloudConsent: true,
+      analyzeOutput: async () => ({
+        caption: "a product bottle in a studio",
+        objects: ["product bottle"],
+        visibleText: "",
+        limitations: [],
+      }),
+      reviewOutput,
+    });
+
+    expect(reviewOutput).toHaveBeenCalledTimes(2);
+    expect(generateImageMock).toHaveBeenCalledTimes(2);
+    expect(generateImageMock.mock.calls[1]?.[0]?.prompt).toContain(
+      "Make the product the dominant subject",
+    );
+    expect(result.task.history.filter((event) => event.type === "director.reviewed")).toHaveLength(
+      2,
+    );
+  });
+
   it("performs one diagnosed quality retry and no more", async () => {
     generateImageMock
       .mockRejectedValueOnce(new Error("Generated image failed the visual quality gate"))

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateImageMock = vi.hoisted(() => vi.fn());
 const preloadDataURLMock = vi.hoisted(() => vi.fn());
+const prepareDirectionMock = vi.hoisted(() => vi.fn());
+const reviewOutputMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/ai/imageGeneration")>();
@@ -11,6 +13,23 @@ vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
 vi.mock("@/lib/engine/imageCache", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/engine/imageCache")>();
   return { ...actual, preloadDataURL: preloadDataURLMock };
+});
+
+vi.mock("@/lib/ai/orchestration/creativeDirectorClient", () => ({
+  prepareRemoteCreativeDirection: prepareDirectionMock,
+  reviewRemoteCreativeOutput: reviewOutputMock,
+}));
+
+vi.mock("@/lib/vision/visionEngine", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/vision/visionEngine")>();
+  return {
+    ...actual,
+    visionCaption: vi.fn().mockResolvedValue("a cat in a studio portrait"),
+    visionDetect: vi.fn().mockResolvedValue({
+      objects: [{ label: "cat", score: 0.99, box: [0, 0, 10, 10] }],
+    }),
+    visionOcr: vi.fn().mockResolvedValue(""),
+  };
 });
 
 import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
@@ -30,12 +49,30 @@ describe("AI Co-Pilot image commands", () => {
       model: "openai/gpt-image-2",
       prompt: "แมว",
     });
+    preloadDataURLMock.mockReset();
     preloadDataURLMock.mockResolvedValue({
       fileId: "generated-image",
       dataURL: "data:image/png;base64,AA==",
       img: {} as HTMLImageElement,
       width: 1024,
       height: 1024,
+    });
+    prepareDirectionMock.mockReset();
+    reviewOutputMock.mockReset();
+    prepareDirectionMock.mockResolvedValue({
+      kind: "image-task",
+      summary: "Studio profile image",
+      refinedPrompt: "Studio portrait of a cat for a square profile image",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: ["instagram-post"],
+      reviewCriteria: ["cat is the clear subject"],
+      search: { required: false, queries: [], sources: [] },
+    });
+    reviewOutputMock.mockResolvedValue({
+      passed: true,
+      summary: "Matches the approved direction.",
     });
 
     const layer = createEngineLayer("free", { name: "Test Layer" });
@@ -68,6 +105,18 @@ describe("AI Co-Pilot image commands", () => {
     });
   });
 
+  it("returns the explicit unavailable-model reason without calling the Director or image provider", async () => {
+    const result = await executeCoPilotInstruction(
+      "สร้างภาพโปสเตอร์คอนเสิร์ตสีแดงจัดจ้าน ใช้ Flux",
+      undefined,
+      { cloudConsent: true },
+    );
+
+    expect(result.reply).toContain("Model flux-2-max ยังไม่พร้อม");
+    expect(prepareDirectionMock).not.toHaveBeenCalled();
+    expect(generateImageMock).not.toHaveBeenCalled();
+  });
+
   it("clarifies a short Thai image request before generation", async () => {
     const result = await executeCoPilotInstruction("ขอภาพแมว");
 
@@ -89,6 +138,7 @@ describe("AI Co-Pilot image commands", () => {
 
     expect(result.actions[0]).not.toHaveProperty("mode");
     expect(result.reply).not.toMatch(/Eco|Fast/);
+    expect(prepareDirectionMock).toHaveBeenCalledTimes(1);
     expect(generateImageMock).toHaveBeenCalledTimes(1);
   });
 

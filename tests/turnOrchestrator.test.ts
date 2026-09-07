@@ -21,6 +21,19 @@ const slide = {
 };
 
 describe("context-aware turn orchestrator", () => {
+  it("refuses an explicitly requested unavailable image model instead of silently substituting", () => {
+    const result = prepareContextAwareTurn({
+      prompt: "สร้างโปสเตอร์คอนเสิร์ตสีแดงจัดจ้าน ใช้ Flux",
+      refs: [],
+      analyses: [],
+    });
+
+    expect(result).toMatchObject({
+      kind: "capability-unavailable",
+      capability: "flux-2-max",
+    });
+  });
+
   it("answers Canvas inventory locally without creating a task", () => {
     const result = prepareContextAwareTurn({
       prompt: "บน Canvas มีอะไรอยู่บ้าง",

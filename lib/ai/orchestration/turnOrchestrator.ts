@@ -5,6 +5,11 @@ import {
 } from "@/lib/ai/imageGeneration";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
+import {
+  CREATING_MODEL_CATALOG,
+  detectRequestedCreatingModel,
+  resolveCreatingModel,
+} from "./creatingModelCatalog";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
 import { chooseImageQuality } from "./imageQualityPolicy";
 import type { ComposerImageRef } from "./imageReferences";
@@ -65,6 +70,24 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     return { kind: "answer", reply: inspection.reply, source: "canvas-local" };
   }
 
+  const requestedModel = detectRequestedCreatingModel(input.prompt);
+  const requestsModelExecution =
+    requestedModel !== undefined &&
+    /(?:สร้าง|วาด|ออกแบบ|generate|create|edit|แก้(?:ไข)?(?:ภาพ|รูป)?)/iu.test(input.prompt);
+  if (requestedModel && requestsModelExecution) {
+    const requestedCapability = input.refs.length > 0 ? "edit" : "generate";
+    const modelResolution = resolveCreatingModel(requestedCapability, requestedModel);
+    if (!modelResolution.ok) {
+      const model = CREATING_MODEL_CATALOG.find((entry) => entry.alias === requestedModel);
+      return {
+        kind: "capability-unavailable",
+        capability: requestedModel,
+        reason: model?.notes ?? modelResolution.reason,
+        reply: `ยังไม่สร้าง Task ครับ เพราะ Model ${requestedModel} ยังไม่พร้อมสำหรับงานนี้ และ ArtShift จะไม่เปลี่ยนไปใช้ Model อื่นโดยไม่บอก`,
+      };
+    }
+  }
+
   if (!isImageGenerationPrompt(input.prompt) && input.refs.length === 0) {
     return { kind: "continue", analyses: [] };
   }
@@ -81,7 +104,7 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
   const assessment = assessImageIntent({
     prompt: input.prompt,
     analyses,
-    hasSelection: input.refs.length > 0,
+    hasSelection: input.refs.length > 0 || Boolean(input.selectedIds?.size),
   });
   const round = input.clarificationRound ?? 0;
   if (assessment.kind === "clarification" && round < 2) {

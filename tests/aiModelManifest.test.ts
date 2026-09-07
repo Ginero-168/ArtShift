@@ -20,33 +20,39 @@ describe("AI model manifest", () => {
     });
   });
 
-  it("routes chat economy to 20B and quality to 120B", () => {
+  it("uses gpt-oss-120b as the baseline Creative Director for every chat profile", () => {
     const routes = createAiRouteTable({});
 
     expect(routes["assistant.chat"]?.economy?.[0]).toMatchObject({
       provider: "replicate",
-      model: "openai/gpt-oss-20b",
-      alias: "chat-primary",
+      model: "openai/gpt-oss-120b",
+      alias: "creative-director",
     });
     expect(routes["assistant.chat"]?.quality?.[0]).toMatchObject({
       provider: "replicate",
       model: "openai/gpt-oss-120b",
-      alias: "chat-quality",
+      alias: "creative-director",
     });
+    expect(JSON.stringify(routes["assistant.chat"])).not.toContain("gpt-oss-20b");
   });
 
-  it("allows chat model versions to be pinned through environment", () => {
+  it("pins the Creative Director model through the quality model environment", () => {
     const routes = createAiRouteTable({
-      REPLICATE_CHAT_MODEL_VERSION: "c".repeat(64),
       REPLICATE_CHAT_QUALITY_MODEL_VERSION: "d".repeat(64),
     });
 
     expect(routes["assistant.chat"]?.economy?.[0]?.model).toBe(
-      `openai/gpt-oss-20b@${"c".repeat(64)}`,
+      `openai/gpt-oss-120b@${"d".repeat(64)}`,
     );
     expect(routes["assistant.chat"]?.quality?.[0]?.model).toBe(
       `openai/gpt-oss-120b@${"d".repeat(64)}`,
     );
+  });
+
+  it("keeps assistant chat and prompt enhancement on the quality profile", async () => {
+    const manifest = await import("@/lib/server/ai/modelManifest");
+    expect(manifest.AI_DEFAULT_PROFILES["assistant.chat"]).toBe("quality");
+    expect(manifest.AI_DEFAULT_PROFILES["prompt.enhance"]).toBe("quality");
   });
 
   it("routes Recraft vectorization to the requested Replicate model", () => {

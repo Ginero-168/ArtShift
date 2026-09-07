@@ -92,6 +92,11 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
       return;
     }
 
+    const consent = window.confirm(
+      "ส่ง prompt ไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์หรือไม่?",
+    );
+    if (!consent) return;
+
     generationAbortRef.current?.abort();
     const controller = new AbortController();
     generationAbortRef.current = controller;

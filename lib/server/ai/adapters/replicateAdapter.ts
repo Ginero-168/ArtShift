@@ -32,8 +32,7 @@ const SUPPORTED_TASKS: AiTaskKind[] = [
 ];
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
-const CHAT_MODEL = "openai/gpt-oss-20b";
-const CHAT_QUALITY_MODEL = "openai/gpt-oss-120b";
+const CHAT_MODEL = "openai/gpt-oss-120b";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
@@ -70,13 +69,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       models: [
         {
           id: CHAT_MODEL,
-          alias: "chat-primary",
-          profile: "economy",
-          pricing: { currency: "USD", inputPerMillionTokens: 0.09, outputPerMillionTokens: 0.36 },
-        },
-        {
-          id: CHAT_QUALITY_MODEL,
-          alias: "chat-quality",
+          alias: "creative-director",
           profile: "quality",
           pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
         },
@@ -212,7 +205,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       model,
       {
         prompt: renderHarmonyPrompt(input),
-        max_tokens: Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 2_048)),
+        max_tokens: Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 4_096)),
         temperature: 0.1,
         top_p: 1,
       },
@@ -869,7 +862,7 @@ function parseReplicateModel(model: string): { slug: string; version?: string } 
 }
 
 function assertSupportedChatModel(model: string): void {
-  if (model === CHAT_MODEL || model === CHAT_QUALITY_MODEL) return;
+  if (model === CHAT_MODEL) return;
   throw new AiRuntimeError("INVALID_INPUT", `Unsupported Replicate chat model ${model}.`, {
     provider: "replicate",
   });

@@ -3,6 +3,92 @@ import { expect, test } from "@playwright/test";
 const TEST_IMAGE_PNG_256 =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAACYUlEQVR42u3UMQEAAAQAQXFEFFYXCmjghivww0dWD/BTiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABCAEGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAGAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQCXBWNwJTbzQ1x7AAAAAElFTkSuQmCC";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    class MockVisionWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      postMessage(message: { type: string; id: number; taskPrompt?: string }) {
+        if (message.type !== "execute") return;
+        const task = message.taskPrompt ?? "";
+        const output = task.includes("<OD>")
+          ? {
+              bboxes: [
+                [0, 0, 128, 256],
+                [128, 0, 256, 256],
+              ],
+              labels: ["product", "cat แมว"],
+            }
+          : task.includes("<OCR>")
+            ? "SALE"
+            : "a product photo of a cat แมว in a studio";
+        queueMicrotask(() => {
+          this.onmessage?.({
+            data: { type: "result", id: message.id, result: { output, width: 256, height: 256 } },
+          } as MessageEvent);
+        });
+      }
+      terminate() {}
+      addEventListener() {}
+      removeEventListener() {}
+      dispatchEvent() {
+        return false;
+      }
+    }
+    window.Worker = MockVisionWorker as unknown as typeof Worker;
+  });
+  await page.route("**/api/ai/director", async (route) => {
+    const request = JSON.parse(route.request().postData() ?? "{}") as {
+      prompt?: string;
+      referenceAnalyses?: unknown[];
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        direction: {
+          kind: "image-task",
+          summary: "Validated E2E creative direction",
+          refinedPrompt: request.prompt || "Validated E2E image brief",
+          specialist: request.referenceAnalyses?.length ? "image_editor" : "image_generator",
+          capability: request.referenceAnalyses?.length ? "IMAGE_EDIT" : "IMAGE_DEFAULT",
+          modelAlias: "image-gpt-2",
+          knowledgeSkillIds: ["poster-design"],
+          reviewCriteria: ["main subject is clear", "composition follows the brief"],
+          search: { required: false, queries: [], sources: [] },
+        },
+      }),
+    });
+  });
+  await page.route("**/api/ai/director/review", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        review: { passed: true, summary: "Matches the approved E2E direction." },
+      }),
+    });
+  });
+});
+
+test("refuses an explicitly requested unavailable model before any paid call", async ({ page }) => {
+  let directorRequests = 0;
+  let imageRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/api/ai/director")) directorRequests += 1;
+    if (request.url().includes("/api/ai/image")) imageRequests += 1;
+  });
+
+  await page.goto("/");
+  await page.getByRole("tab", { name: /AI Assistance/i }).click();
+  await page.getByLabel("AI Assistance prompt").fill("สร้างภาพโปสเตอร์คอนเสิร์ตสีแดงจัดจ้าน ใช้ Flux");
+  await page.getByTitle("Send to AI Assistance").click();
+
+  await expect(page.getByText(/Model flux-2-max ยังไม่พร้อม/)).toBeVisible();
+  expect(directorRequests).toBe(0);
+  expect(imageRequests).toBe(0);
+});
+
 test("uses the automatic Replicate GPT Image 2 generation contract", async ({ page }) => {
   let requestBody: Record<string, unknown> | undefined;
   await page.route("**/api/ai/image", async (route) => {
@@ -34,6 +120,7 @@ test("uses the automatic Replicate GPT Image 2 generation contract", async ({ pa
   await expect(modal.getByText(/100% Free|FLUX|Pollinations/)).toHaveCount(0);
 
   await modal.getByLabel("Prompt (คำอธิบายภาพ)").fill("a warm editorial portrait");
+  page.once("dialog", async (dialog) => dialog.accept());
   await modal.getByRole("button", { name: /Generate Image/ }).click();
   await expect(modal).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Image", exact: true })).toBeVisible({
@@ -164,14 +251,18 @@ test("creates the task only after a clarification answer and consent", async ({ 
 
   await expect.poll(() => requestBody).toBeTruthy();
   await expect(page.getByTestId("processing-preview")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText(/Task · image_generator/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Creative Director → image_generator/)).toBeVisible({
+    timeout: 10_000,
+  });
   expect(requestBody).toMatchObject({
     quality: "medium",
     cloudConsent: true,
     aspectRatio: "1:1",
   });
   releaseResponse?.();
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toBeVisible({
+    timeout: 60_000,
+  });
 });
 test("runs a complete image task only after consent and shows the Canvas preloader", async ({
   page,
@@ -226,8 +317,10 @@ test("runs a complete image task only after consent and shows the Canvas preload
   });
   releaseResponse?.();
 
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText(/Task · image_generator/)).toBeVisible();
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(page.getByText(/Creative Director → image_generator/)).toBeVisible();
 });
 
 test("cancels a running image task without leaving a preview", async ({ page }) => {
@@ -358,7 +451,7 @@ test("analyzes the visible selected image before the generation request", async 
   await expect(page.getByText(/วิเคราะห์ภาพเสร็จแล้ว 1 รายการ/)).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => providerCalls).toBe(1);
   expect(requestBody?.inputImages).toHaveLength(1);
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toBeVisible({
     timeout: 30_000,
   });
 });

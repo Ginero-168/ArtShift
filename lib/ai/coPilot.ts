@@ -5,9 +5,13 @@
  */
 
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import { applyCreativeDirectionToTask } from "@/lib/ai/orchestration/creativeDirector";
+import {
+  prepareRemoteCreativeDirection,
+  reviewRemoteCreativeOutput,
+} from "@/lib/ai/orchestration/creativeDirectorClient";
 import { buildComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
-import { assessImageIntent } from "@/lib/ai/orchestration/intentCompleteness";
 import { prepareContextAwareTurn } from "@/lib/ai/orchestration/turnOrchestrator";
 import { removeBackground } from "@/lib/ai/removeBg";
 import type { VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
@@ -185,31 +189,8 @@ export async function executeCoPilotInstruction(
     if (onActionUpdate) onActionUpdate({ ...act });
   };
 
-  if (isImageGenerationPrompt(prompt) && !options.contextAwareValidated) {
-    const assessment = assessImageIntent({
-      prompt,
-      analyses: [],
-      hasSelection: context.selectedIds.length > 0,
-    });
-    if (assessment.kind === "clarification") {
-      const act = logAction(
-        "orchestrator",
-        "🧭 Intent Clarification",
-        "ยังไม่ส่งคำสั่งสร้างภาพ เพราะ brief ยังไม่ครบ",
-        "success",
-      );
-      return {
-        reply: assessment.question,
-        actions: [act],
-        suggestions: assessment.options.map(
-          (option) => `${option.id === "OTHER" ? "Other" : `${option.id}.`} ${option.label}`,
-        ),
-      };
-    }
-  }
-
   // -------------------------------------------------------------
-  // 1. SUB-AGENT: IMAGE GENERATOR (REPLICATE GPT IMAGE 2 LOW)
+  // 1. SUB-AGENT: CONTEXT-AWARE IMAGE SPECIALIST
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
   // -------------------------------------------------------------
   if (isImageGenerationPrompt(prompt)) {
@@ -256,6 +237,19 @@ export async function executeCoPilotInstruction(
         ),
       };
     }
+    if (decision.kind === "capability-unavailable") {
+      const act = logAction(
+        "orchestrator",
+        `🧭 Model · ${decision.capability}`,
+        decision.reason,
+        "error",
+      );
+      return {
+        reply: decision.reply,
+        actions: [act],
+        suggestions: ["เลือก GPT Image 2", "ตรวจสอบ Model ที่พร้อมใช้งาน"],
+      };
+    }
     if (decision.kind !== "task") {
       const act = logAction(
         "orchestrator",
@@ -290,14 +284,56 @@ export async function executeCoPilotInstruction(
     }
 
     try {
-      const result = await runContextAwareImageTask(task, [], {
+      act.stage = "analyzing";
+      act.description = "กำลังส่ง brief ให้ gpt-oss-120b Creative Director วางแผน…";
+      onActionUpdate?.({ ...act });
+      const direction = await prepareRemoteCreativeDirection(
+        {
+          prompt,
+          canvasSummary: {
+            objectCount: context.elementCount,
+            selectedCount: context.selectedIds.length,
+            width: context.width,
+            height: context.height,
+          },
+          referenceAnalyses: [],
+        },
+        { signal: options.signal, cloudConsent: true },
+      );
+      if (direction.kind === "answer") {
+        updateActionStatus(act, "success", "Creative Director ตอบโดยไม่เรียก Image Model");
+        return { reply: direction.text, actions, suggestions: ["ระบุ brief สำหรับสร้างภาพ"] };
+      }
+      if (direction.kind === "clarification") {
+        updateActionStatus(act, "success", "Creative Director ต้องการรายละเอียดเพิ่มก่อนสร้างภาพ");
+        return { reply: direction.question, actions, suggestions: direction.options };
+      }
+      if (direction.search.required) {
+        updateActionStatus(act, "success", "Creative Director ระบุว่าต้องค้น Context ก่อนสร้างภาพ");
+        return {
+          reply: `ยังไม่เรียก Image Model ครับ ต้องค้นข้อมูลเพิ่มก่อน: ${direction.search.queries.join(", ")}`,
+          actions,
+          suggestions: ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"],
+        };
+      }
+      const directedTask = applyCreativeDirectionToTask(task, direction);
+      act.title = `🧠 Creative Director → ${directedTask.subAgent}`;
+      act.stage = "planned";
+      act.description = `เลือก ${direction.modelAlias} · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
+      onActionUpdate?.({ ...act });
+      const result = await runContextAwareImageTask(directedTask, [], {
         signal: options.signal,
         cloudConsent: true,
+        reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
+          reviewRemoteCreativeOutput(
+            { prompt, reviewCriteria, outputAnalysis },
+            { signal, cloudConsent: true },
+          ),
         onUpdate: (update) => {
           act.stage = update.stage;
           act.attempt = update.attempt;
           act.quality = update.quality;
-          act.description = `${update.message} · ครั้งที่ ${update.attempt}/${task.maxAttempts}`;
+          act.description = `${update.message} · ครั้งที่ ${update.attempt}/${directedTask.maxAttempts}`;
           onActionUpdate?.({ ...act });
         },
       });
@@ -307,7 +343,7 @@ export async function executeCoPilotInstruction(
         `สร้างและวางผลลัพธ์สำเร็จ (${result.width}×${result.height}px) โดยคงต้นฉบับไว้`,
       );
       return {
-        reply: `สร้างภาพตาม brief และวางบน Canvas เรียบร้อยแล้วครับ ใช้คุณภาพอัตโนมัติ: ${result.task.quality}`,
+        reply: `สร้างภาพตามแผนของ Creative Director และวางบน Canvas เรียบร้อยแล้วครับ ใช้ ${direction.modelAlias} ด้วยคุณภาพอัตโนมัติ: ${result.task.quality}`,
         actions,
         suggestions: ["🪄 ลบพื้นหลังของรูปนี้", "⚡ แปลงรูปนี้เป็น Vector Paths", "📐 จัดวาง Layout ให้สวยงาม"],
       };

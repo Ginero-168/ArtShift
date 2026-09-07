@@ -54,6 +54,14 @@ export type AiTaskPlan = {
     visibleText: string;
     limitations: readonly string[];
   }[];
+  brainModelAlias?: "creative-director";
+  knowledgeSkillIds?: readonly string[];
+  reviewCriteria?: readonly string[];
+  contextSearch?: {
+    required: boolean;
+    queries: readonly string[];
+    sources: readonly ("web" | "images" | "website")[];
+  };
 };
 
 export type AiTask = AiTaskPlan & {
@@ -68,6 +76,14 @@ export type AiTaskTracePayload =
   | { type: "reference.analysis.completed"; count: number }
   | { type: "intent.assessed"; complete: boolean }
   | { type: "clarification.requested"; question: string; optionIds: readonly string[] }
+  | {
+      type: "director.planned";
+      modelAlias: "creative-director";
+      specialist: string;
+      knowledgeSkillIds: readonly string[];
+      searchRequired: boolean;
+    }
+  | { type: "director.reviewed"; passed: boolean; attempt: number }
   | { type: "task.created"; capability: string }
   | { type: "provider.requested"; attempt: number }
   | { type: "quality.checked"; passed: boolean; attempt: number }
@@ -122,6 +138,8 @@ const TRACE_EVENT_TYPES = new Set<AiTaskTracePayload["type"]>([
   "reference.analysis.completed",
   "intent.assessed",
   "clarification.requested",
+  "director.planned",
+  "director.reviewed",
   "task.created",
   "provider.requested",
   "quality.checked",
@@ -240,12 +258,14 @@ function traceStage(event: AiTaskTracePayload): AiTaskStatus {
     case "reference.analysis.completed":
     case "intent.assessed":
     case "clarification.requested":
+    case "director.planned":
       return "analyzing";
     case "task.created":
       return "awaiting-consent";
     case "provider.requested":
       return "running";
     case "quality.checked":
+    case "director.reviewed":
       return "quality-check";
     case "preload.completed":
       return "preloading";

@@ -65,6 +65,12 @@ export async function runContextAwareImageTask(
       height: number,
       signal: AbortSignal,
     ) => Promise<GeneratedOutputAnalysis | undefined>;
+    reviewOutput?: (input: {
+      prompt: string;
+      reviewCriteria: readonly string[];
+      outputAnalysis: GeneratedOutputAnalysis;
+      signal: AbortSignal;
+    }) => Promise<{ passed: boolean; summary: string; repairInstruction?: string }>;
     onUpdate?: (update: ContextAwareTaskUpdate) => void;
   } = {},
 ): Promise<ContextAwareTaskResult> {
@@ -256,6 +262,7 @@ export async function runContextAwareImageTask(
             const requiresLocalOutputReview =
               Boolean(task.requiredSubjects?.length) ||
               Boolean(task.requiredText?.trim()) ||
+              Boolean(task.reviewCriteria?.length) ||
               task.selectedImages.length > 0;
             if (requiresLocalOutputReview) {
               try {
@@ -299,6 +306,30 @@ export async function runContextAwareImageTask(
               throw new Error(
                 `Generated image failed the semantic quality gate: ${semanticGate.blockers.join(" ")}`,
               );
+            }
+            if (task.reviewCriteria?.length) {
+              if (!outputAnalysis || !options.reviewOutput) {
+                throw new Error(
+                  "Generated image failed the Creative Director review: local review evidence or reviewer unavailable",
+                );
+              }
+              const directorReview = await options.reviewOutput({
+                prompt: task.prompt,
+                reviewCriteria: task.reviewCriteria,
+                outputAnalysis,
+                signal: executionSignal,
+              });
+              task = appendAiTaskEvent(task, {
+                type: "director.reviewed",
+                passed: directorReview.passed,
+                attempt,
+              });
+              if (!directorReview.passed) {
+                qualityRepairInstruction = directorReview.repairInstruction;
+                throw new Error(
+                  `Generated image failed the Creative Director review: ${directorReview.summary}`,
+                );
+              }
             }
             task = appendAiTaskEvent(task, {
               type: "quality.checked",
@@ -574,7 +605,12 @@ function classifyFailure(error: unknown): RecoveryFailureKind {
     return "invalid_input";
   if (message.includes("invalid") || message.includes("unsupported")) return "invalid_input";
   if (message.includes("budget") || message.includes("cost")) return "budget";
-  if (message.includes("quality gate") || message.includes("brief")) return "quality";
+  if (
+    message.includes("quality gate") ||
+    message.includes("brief") ||
+    message.includes("creative director review")
+  )
+    return "quality";
   if (message.includes("network") || message.includes("reach") || message.includes("timeout"))
     return "network";
   return "capability";

@@ -58,7 +58,7 @@ describe("Replicate AI adapter", () => {
       new Response(
         JSON.stringify({
           id: "prediction-chat-1",
-          model: "openai/gpt-oss-20b",
+          model: "openai/gpt-oss-120b",
           version: "abcdef0123456789abcdef0123456789",
           status: "succeeded",
           output: [
@@ -85,7 +85,7 @@ describe("Replicate AI adapter", () => {
           },
         ],
       },
-      model: "openai/gpt-oss-20b@abcdef0123456789abcdef0123456789",
+      model: "openai/gpt-oss-120b@abcdef0123456789abcdef0123456789",
       signal: new AbortController().signal,
     });
 
@@ -108,8 +108,9 @@ describe("Replicate AI adapter", () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(request.body));
     expect(body.input.prompt).toContain("<｜start｜>system");
+    expect(body.input.prompt).toContain("Reasoning: high");
     expect(body.input.prompt).toContain("propose_design_plan");
-    expect(body.input.max_tokens).toBeGreaterThan(0);
+    expect(body.input.max_tokens).toBeGreaterThanOrEqual(4_096);
   });
 
   it("returns prompt enhancement text through the same Replicate provider", async () => {
@@ -130,7 +131,7 @@ describe("Replicate AI adapter", () => {
     const result = await adapter.execute({
       task: "prompt.enhance",
       input: { prompt: "make a premium poster", purpose: "design" },
-      model: "openai/gpt-oss-20b",
+      model: "openai/gpt-oss-120b",
       signal: new AbortController().signal,
     });
 
