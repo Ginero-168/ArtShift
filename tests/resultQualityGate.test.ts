@@ -9,6 +9,10 @@ describe("generated image quality gate", () => {
       requestedAspectRatio: "1:1",
       requiredSubjects: ["mug"],
       requiredText: "SALE",
+      referenceRequired: true,
+      referenceFacts: [
+        { caption: "a coffee mug", objects: ["mug"], visibleText: "SALE", limitations: [] },
+      ],
       outputAnalysis: {
         caption: "a white mug on a table",
         objects: ["mug", "table"],
@@ -63,5 +67,23 @@ describe("generated image quality gate", () => {
     expect(result.passed).toBe(false);
     expect(result.review).toBe("unverifiable");
     expect(result.blockers).toContain("Required subjects need local output analysis.");
+  });
+
+  it("does not claim reference fidelity without a source comparison signal", () => {
+    const result = runGeneratedImageQualityGate({
+      outputWidth: 1024,
+      outputHeight: 1024,
+      requestedAspectRatio: "1:1",
+      referenceRequired: true,
+      outputAnalysis: {
+        caption: "a landscape photograph",
+        objects: ["tree"],
+        visibleText: "",
+        limitations: [],
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.checks.find((check) => check.id === "reference")?.passed).toBe(false);
   });
 });

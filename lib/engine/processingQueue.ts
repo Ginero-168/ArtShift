@@ -15,6 +15,7 @@ export type ProcessingJobContext = {
 export type EnqueueProcessingJobInput = {
   preview: ProcessingPreviewInput;
   run: (context: ProcessingJobContext) => Promise<void>;
+  signal?: AbortSignal;
 };
 
 type QueueJob = {
@@ -23,6 +24,7 @@ type QueueJob = {
   run: EnqueueProcessingJobInput["run"];
   resolve: () => void;
   reject: (error: unknown) => void;
+  cleanup: () => void;
 };
 
 export type EnqueuedProcessingJob = {
@@ -48,13 +50,21 @@ export function enqueueProcessingJob(input: EnqueueProcessingJobInput): Enqueued
     resolvePromise = resolve;
     rejectPromise = reject;
   });
-  queue.push({
+  const cleanup = () => input.signal?.removeEventListener("abort", cancel);
+  const cancel = () => cancelProcessingJob(id);
+  const job: QueueJob = {
     id,
     controller,
     run: input.run,
     resolve: resolvePromise,
     reject: rejectPromise,
-  });
+    cleanup,
+  };
+  queue.push(job);
+  if (input.signal) {
+    if (input.signal.aborted) cancel();
+    else input.signal.addEventListener("abort", cancel, { once: true });
+  }
   refreshQueuePositions();
   void pumpQueue();
 
@@ -71,6 +81,7 @@ export function cancelProcessingJob(id: string): void {
     const [job] = queue.splice(queuedIndex, 1);
     job.controller.abort();
     clearProcessingPreview(job.id);
+    job.cleanup();
     job.resolve();
     refreshQueuePositions();
     return;
@@ -103,6 +114,7 @@ async function pumpQueue(): Promise<void> {
     next.reject(error);
   } finally {
     clearProcessingPreview(next.id);
+    next.cleanup();
     activeJob = null;
     void pumpQueue();
   }

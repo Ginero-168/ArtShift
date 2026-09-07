@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildComposerImageRefs,
+  buildComposerImageSelection,
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
 import { createImage, createText } from "@/lib/engine/factory";
@@ -36,6 +37,26 @@ describe("selected image references", () => {
         sourceHeight: 800,
       }),
     ]);
+  });
+
+  it("caps analyzed references at four and reports omitted selections", () => {
+    const images = Array.from({ length: 5 }, (_, index) => ({
+      ...createImage({
+        x: index * 10,
+        y: 0,
+        width: 100,
+        height: 100,
+        fileId: `file-${index}`,
+        naturalWidth: 100,
+        naturalHeight: 100,
+      }),
+      id: `image-${index}`,
+    }));
+    const selection = buildComposerImageSelection(images, new Set(images.map((image) => image.id)));
+
+    expect(selection.refs).toHaveLength(4);
+    expect(selection.omittedCount).toBe(1);
+    expect(selection.totalCount).toBe(5);
   });
 
   it("snapshots refs so later selection changes cannot retarget a task", () => {

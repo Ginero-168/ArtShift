@@ -10,7 +10,7 @@ import {
 } from "@/lib/ai/coPilot";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import {
-  buildComposerImageRefs,
+  buildComposerImageSelection,
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
@@ -44,7 +44,8 @@ export default function AICoPilotBar() {
     s.doc.slides.find((candidate) => candidate.id === s.currentSlideId),
   );
   const selectedIds = useEngine((s) => s.selectedIds);
-  const selectedImageRefs = buildComposerImageRefs(slide?.elements ?? [], selectedIds);
+  const selectedImageSelection = buildComposerImageSelection(slide?.elements ?? [], selectedIds);
+  const selectedImageRefs = selectedImageSelection.refs;
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -106,6 +107,13 @@ export default function AICoPilotBar() {
     });
   }, []);
 
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
+
   const upsertCurrentAction = (action: SubAgentActionLog) => {
     setCurrentActions((prev) => {
       const idx = prev.findIndex((candidate) => candidate.id === action.id);
@@ -140,6 +148,27 @@ export default function AICoPilotBar() {
     const promptToSend = pending
       ? `${pending.originalPrompt}\n\nDirection ที่เลือก: ${selectedOption?.label ?? `Other: ${rawPrompt}`}`
       : rawPrompt;
+    if (!pending && selectedImageSelection.omittedCount > 0) {
+      const omittedCount = selectedImageSelection.omittedCount;
+      setInput("");
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: rawPrompt,
+          timestamp: Date.now(),
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `ตอนนี้เลือกภาพสำหรับ AI มากเกินไปครับ (${selectedImageSelection.totalCount} ภาพ) กรุณาลด selection เหลือไม่เกิน 4 ภาพก่อนส่งงาน (+${omittedCount})`,
+          timestamp: Date.now(),
+          suggestions: ["ลด selection เหลือไม่เกิน 4 ภาพ", "ถามเกี่ยวกับ Canvas แบบ local"],
+        },
+      ]);
+      return;
+    }
     const refsForTurn = snapshotComposerImageRefs(
       pending ? pending.selectedImages : selectedImageRefs,
     );
@@ -275,6 +304,21 @@ export default function AICoPilotBar() {
               timestamp: Date.now(),
             },
           ];
+        } else if (contextDecision.kind === "capability-unavailable") {
+          setPendingClarification(null);
+          reply = contextDecision.reply;
+          suggestions = ["ปรับคำขอให้ใช้ความสามารถที่พร้อมใช้งาน", "ถามเกี่ยวกับ Canvas แบบ local"];
+          actions = [
+            ...actions,
+            {
+              id: crypto.randomUUID(),
+              agent: "orchestrator",
+              title: `🧭 Capability · ${contextDecision.capability}`,
+              description: contextDecision.reason,
+              status: "error",
+              timestamp: Date.now(),
+            },
+          ];
         } else {
           setPendingClarification(null);
           const taskAction: SubAgentActionLog = {
@@ -310,7 +354,9 @@ export default function AICoPilotBar() {
                   taskAction.attempt = update.attempt;
                   taskAction.quality = update.quality;
                   taskAction.status =
-                    update.stage === "failed" || update.stage === "cancelled"
+                    update.stage === "failed" ||
+                    update.stage === "cancelled" ||
+                    update.stage === "outcome-unknown"
                       ? "error"
                       : update.stage === "succeeded"
                         ? "success"
@@ -329,16 +375,28 @@ export default function AICoPilotBar() {
             } catch (error) {
               const wasCancelled =
                 (error as Error).name === "AbortError" || controller.signal.aborted;
+              const outcomeUnknown = (error as Error).name === "OutcomeUnknownError";
               taskAction.status = "error";
-              taskAction.description = wasCancelled
-                ? "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas"
-                : `Task ไม่สำเร็จ: ${(error as Error).message}`;
-              reply = wasCancelled
-                ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
-                : `Task ไม่สำเร็จครับ: ${(error as Error).message}`;
-              suggestions = wasCancelled
-                ? ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"]
-                : ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก", "ยกเลิก Task นี้"];
+              taskAction.stage = outcomeUnknown
+                ? "outcome-unknown"
+                : wasCancelled
+                  ? "cancelled"
+                  : "failed";
+              taskAction.description = outcomeUnknown
+                ? "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ"
+                : wasCancelled
+                  ? "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas"
+                  : `Task ไม่สำเร็จ: ${(error as Error).message}`;
+              reply = outcomeUnknown
+                ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติเพื่อป้องกันค่าใช้จ่ายซ้ำ"
+                : wasCancelled
+                  ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
+                  : `Task ไม่สำเร็จครับ: ${(error as Error).message}`;
+              suggestions = outcomeUnknown
+                ? ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"]
+                : wasCancelled
+                  ? ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"]
+                  : ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก", "ยกเลิก Task นี้"];
             }
           }
           upsertCurrentAction({ ...taskAction });
@@ -440,62 +498,76 @@ export default function AICoPilotBar() {
             .slice(-10),
           { role: "user", content: promptToSend },
         ];
-        const result = await prepareRemoteDesignTurn(
-          history,
-          buildDesignAgentContext(),
-          controller.signal,
-        );
+        const remoteConsent =
+          typeof window !== "undefined" &&
+          window.confirm(
+            "คำขอนี้จะส่ง prompt และสรุปบริบท Artwork ไปยัง AI provider เพื่อช่วยวางแผน ดำเนินการต่อหรือไม่?",
+          );
+        if (!remoteConsent) {
+          remoteActions[0] = {
+            ...remoteActions[0],
+            status: "error",
+            description: "ยังไม่ได้รับอนุญาตให้ส่ง prompt และบริบทไปยัง AI provider",
+          };
+          reply = "ยกเลิกคำขอแล้วครับ ยังไม่มีการส่ง prompt หรือบริบท Artwork ออกนอกเครื่อง";
+          suggestions = ["ถามเกี่ยวกับ Canvas แบบ local", "ระบุคำสั่งที่แก้ได้แบบ local"];
+        } else {
+          const result = await prepareRemoteDesignTurn(history, buildDesignAgentContext(), {
+            signal: controller.signal,
+            cloudConsent: true,
+          });
 
-        if (result.type === "proposal") {
-          if (result.proposal.requiresApproval) {
-            setPendingPlan(result.proposal);
-            remoteActions[0] = {
-              ...remoteActions[0],
-              status: "success",
-              description: `เตรียมแผน ${result.proposal.commands.length} รายการ รอการอนุมัติ`,
-            };
-            reply = "ผมเตรียมแผนแก้ไข Artwork ให้แล้วครับ ตรวจสอบสรุปด้านล่างและกด Apply plan เมื่อพร้อม";
-            suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน", "ทิ้งแผนนี้"];
-          } else {
-            const applied = applyAiPlan(result.proposal, { approved: true });
-            if (applied.ok) {
+          if (result.type === "proposal") {
+            if (result.proposal.requiresApproval) {
+              setPendingPlan(result.proposal);
               remoteActions[0] = {
                 ...remoteActions[0],
                 status: "success",
-                description: `ดำเนินการแบบ atomic สำเร็จ ${applied.receipts.length} รายการ`,
+                description: `เตรียมแผน ${result.proposal.commands.length} รายการ รอการอนุมัติ`,
               };
-              reply = `ดำเนินการตามแผนเรียบร้อยแล้วครับ (${applied.receipts.length} รายการ) และสร้าง Undo boundary เดียวให้แล้ว`;
-              suggestions = ["↶ Undo แผนล่าสุด", "📐 ตรวจสอบ Layout", "✍️ ปรับรายละเอียดต่อ"];
+              reply = "ผมเตรียมแผนแก้ไข Artwork ให้แล้วครับ ตรวจสอบสรุปด้านล่างและกด Apply plan เมื่อพร้อม";
+              suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน", "ทิ้งแผนนี้"];
             } else {
-              remoteActions[0] = {
-                ...remoteActions[0],
-                status: "error",
-                description: applied.error,
-              };
-              reply = `ยังไม่ได้แก้ Artwork ครับ: ${applied.error}`;
-              suggestions = ["รีเฟรชบริบทแล้วลองใหม่", "ตรวจสอบ Object ที่เลือก"];
+              const applied = applyAiPlan(result.proposal, { approved: true });
+              if (applied.ok) {
+                remoteActions[0] = {
+                  ...remoteActions[0],
+                  status: "success",
+                  description: `ดำเนินการแบบ atomic สำเร็จ ${applied.receipts.length} รายการ`,
+                };
+                reply = `ดำเนินการตามแผนเรียบร้อยแล้วครับ (${applied.receipts.length} รายการ) และสร้าง Undo boundary เดียวให้แล้ว`;
+                suggestions = ["↶ Undo แผนล่าสุด", "📐 ตรวจสอบ Layout", "✍️ ปรับรายละเอียดต่อ"];
+              } else {
+                remoteActions[0] = {
+                  ...remoteActions[0],
+                  status: "error",
+                  description: applied.error,
+                };
+                reply = `ยังไม่ได้แก้ Artwork ครับ: ${applied.error}`;
+                suggestions = ["รีเฟรชบริบทแล้วลองใหม่", "ตรวจสอบ Object ที่เลือก"];
+              }
             }
+          } else if (result.type === "question") {
+            remoteActions[0] = {
+              ...remoteActions[0],
+              status: "success",
+              description: "ต้องการรายละเอียดเพิ่มก่อนเริ่มงาน",
+            };
+            reply = result.text;
+            suggestions = ["ระบุเป้าหมายและขนาดงาน", "เพิ่ม reference หรือ Brand direction"];
+          } else {
+            remoteActions[0] = {
+              ...remoteActions[0],
+              status: "success",
+              description: "ได้รับคำตอบจาก Design Agent แล้ว",
+            };
+            reply = result.text;
+            suggestions = [
+              "📐 ขอให้จัด Layout ต่อ",
+              "✍️ ขอให้สร้าง direction ใหม่",
+              "🧩 ใช้เครื่องมือแก้ไขเฉพาะทาง",
+            ];
           }
-        } else if (result.type === "question") {
-          remoteActions[0] = {
-            ...remoteActions[0],
-            status: "success",
-            description: "ต้องการรายละเอียดเพิ่มก่อนเริ่มงาน",
-          };
-          reply = result.text;
-          suggestions = ["ระบุเป้าหมายและขนาดงาน", "เพิ่ม reference หรือ Brand direction"];
-        } else {
-          remoteActions[0] = {
-            ...remoteActions[0],
-            status: "success",
-            description: "ได้รับคำตอบจาก Design Agent แล้ว",
-          };
-          reply = result.text;
-          suggestions = [
-            "📐 ขอให้จัด Layout ต่อ",
-            "✍️ ขอให้สร้าง direction ใหม่",
-            "🧩 ใช้เครื่องมือแก้ไขเฉพาะทาง",
-          ];
         }
         upsertCurrentAction(remoteActions[0]);
         actions = remoteActions;
@@ -963,7 +1035,11 @@ export default function AICoPilotBar() {
               boxSizing: "border-box",
             }}
           >
-            <ComposerImageTags refs={snapshotComposerImageRefs(selectedImageRefs)} />
+            <ComposerImageTags
+              refs={snapshotComposerImageRefs(selectedImageRefs)}
+              omittedCount={selectedImageSelection.omittedCount}
+              onRemove={(ref) => useEngine.getState().toggleSelect(ref.objectId)}
+            />
             <textarea
               ref={inputRef}
               rows={3}

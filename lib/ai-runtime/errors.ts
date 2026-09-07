@@ -16,17 +16,27 @@ export class AiRuntimeError extends Error {
   readonly code: AiRuntimeErrorCode;
   readonly provider?: AiProviderId;
   readonly retryAfterSeconds?: number;
+  readonly outcomeUnknown: boolean;
+  readonly predictionId?: string;
 
   constructor(
     code: AiRuntimeErrorCode,
     message: string,
-    options: { cause?: unknown; provider?: AiProviderId; retryAfterSeconds?: number } = {},
+    options: {
+      cause?: unknown;
+      provider?: AiProviderId;
+      retryAfterSeconds?: number;
+      outcomeUnknown?: boolean;
+      predictionId?: string;
+    } = {},
   ) {
     super(message, { cause: options.cause });
     this.name = "AiRuntimeError";
     this.code = code;
     this.provider = options.provider;
     this.retryAfterSeconds = options.retryAfterSeconds;
+    this.outcomeUnknown = options.outcomeUnknown === true;
+    this.predictionId = options.predictionId;
   }
 }
 

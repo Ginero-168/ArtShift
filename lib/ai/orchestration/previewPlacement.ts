@@ -7,7 +7,12 @@ export type AnchorRect = {
   height: number;
 };
 
-export type PreviewViewport = { width: number; height: number };
+export type PreviewViewport = {
+  left?: number;
+  top?: number;
+  width: number;
+  height: number;
+};
 export type PreviewPlacement = "top-start" | "bottom-start" | "left-start" | "right-start";
 
 export type PlacedImagePreview = {
@@ -26,6 +31,8 @@ export function placeImagePreview(
   requested: { width: number; height: number },
   viewport: PreviewViewport,
 ): PlacedImagePreview {
+  const originLeft = viewport.left ?? 0;
+  const originTop = viewport.top ?? 0;
   const maxWidth = Math.max(1, viewport.width - SAFE_PADDING * 2);
   const maxHeight = Math.max(1, viewport.height - SAFE_PADDING * 2);
   const ratio = Math.min(
@@ -37,19 +44,19 @@ export function placeImagePreview(
   const height = Math.max(1, Math.round(requested.height * ratio));
   const left = clamp(
     anchor.left,
-    SAFE_PADDING,
-    Math.max(SAFE_PADDING, viewport.width - SAFE_PADDING - width),
+    originLeft + SAFE_PADDING,
+    Math.max(originLeft + SAFE_PADDING, originLeft + viewport.width - SAFE_PADDING - width),
   );
   const topAbove = anchor.top - ANCHOR_GAP - height;
-  if (topAbove >= SAFE_PADDING) {
+  if (topAbove >= originTop + SAFE_PADDING) {
     return { left, top: topAbove, width, height, placement: "top-start" };
   }
 
   const topBelow = anchor.bottom + ANCHOR_GAP;
   const clampedBelow = clamp(
     topBelow,
-    SAFE_PADDING,
-    Math.max(SAFE_PADDING, viewport.height - SAFE_PADDING - height),
+    originTop + SAFE_PADDING,
+    Math.max(originTop + SAFE_PADDING, originTop + viewport.height - SAFE_PADDING - height),
   );
   return {
     left,

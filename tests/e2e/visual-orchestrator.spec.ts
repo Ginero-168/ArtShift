@@ -27,7 +27,7 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
     await input.fill("ขอภาพแมว");
     await input.press("Enter");
 
-    await expect(page.getByText(/direction/i)).toBeVisible();
+    await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
     expect(imageRequestCount).toBe(0);
     expect(requestBody).toBeUndefined();
   });

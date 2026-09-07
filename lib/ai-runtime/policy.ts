@@ -30,7 +30,10 @@ export function assertAiTaskPolicy(task: AiTaskKind, options: AiExecutionOptions
   if (policy.locality === "local-only") {
     throw new AiRuntimeError("POLICY_DENIED", `${task} is restricted to the local runtime.`);
   }
-  if (policy.locality === "cloud-opt-in" && options.cloudConsent !== true) {
+  if (
+    (policy.locality === "cloud-opt-in" || policy.locality === "cloud-required") &&
+    options.cloudConsent !== true
+  ) {
     throw new AiRuntimeError(
       "POLICY_DENIED",
       `${task} requires explicit cloud consent before image or prompt data leaves this device.`,

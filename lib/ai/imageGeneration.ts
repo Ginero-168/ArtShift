@@ -168,8 +168,16 @@ export async function generateAIImage(
     dataUrl?: string;
     seed?: number;
     error?: string;
+    code?: string;
   };
   if (!apiRes.ok) {
+    if (data.code === "OUTCOME_UNKNOWN") {
+      const outcomeError = new Error(
+        data.error || "AI provider result is uncertain; no duplicate request was created.",
+      );
+      outcomeError.name = "OutcomeUnknownError";
+      throw outcomeError;
+    }
     throw new Error(data.error || `AI Image Studio failed with status ${apiRes.status}.`);
   }
   if (!data.dataUrl?.startsWith("data:image/")) {

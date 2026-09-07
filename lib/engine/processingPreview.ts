@@ -1,5 +1,10 @@
 export type ProcessingPreviewKind = "extract" | "remove-bg" | "vectorize" | "upscale" | "generate";
-export type ProcessingPreviewPhase = "queued" | "running";
+export type ProcessingPreviewPhase =
+  | "queued"
+  | "running"
+  | "quality-check"
+  | "preloading"
+  | "committing";
 
 export const PROCESSING_PREVIEW_GAP = 32;
 

@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import type { AiChatMessage } from "@/lib/ai-runtime/contracts";
 import { type DesignAgentContext, prepareDesignTurn } from "@/lib/designAgent/server";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
-import { getSessionReplicateToken } from "@/lib/server/ai/userCredentials";
+import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
+import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,9 +12,12 @@ const limiter = new RateLimiter(30, 60_000);
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 20_000;
 const MAX_CONTEXT_CHARS = 80_000;
+const MAX_BODY_BYTES = 1_500_000;
 
 export async function POST(req: NextRequest) {
-  const limit = limiter.check(getClientIp(req));
+  const account = getUserAccount(req);
+  const limitKey = account ? `account:${account.id}` : `ip:${getClientIp(req)}`;
+  const limit = limiter.check(limitKey);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Please slow down." },
@@ -23,12 +27,30 @@ export async function POST(req: NextRequest) {
 
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readBoundedJson(req, MAX_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json(
+        { error: "Design-agent request body is too large." },
+        { status: 413 },
+      );
+    }
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
   if (!isRecord(body))
     return NextResponse.json({ error: "Request must be an object." }, { status: 400 });
+  if (!account) {
+    return NextResponse.json(
+      { error: "Authentication is required for remote AI." },
+      { status: 401 },
+    );
+  }
+  if (body.cloudConsent !== true) {
+    return NextResponse.json(
+      { error: "Explicit cloud consent is required for remote AI." },
+      { status: 403 },
+    );
+  }
 
   const messages = parseMessages(body.messages);
   const context = parseContext(body.context);
@@ -42,11 +64,15 @@ export async function POST(req: NextRequest) {
   try {
     const result = await prepareDesignTurn(messages, context, {
       replicateToken: getSessionReplicateToken(req),
+      accountId: account.id,
+      cloudConsent: true,
     });
     return NextResponse.json({ result });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Design agent request failed.";
-    return NextResponse.json({ error: `Design agent error: ${message}` }, { status: 500 });
+  } catch {
+    return NextResponse.json(
+      { error: "Design agent is temporarily unavailable." },
+      { status: 502 },
+    );
   }
 }
 

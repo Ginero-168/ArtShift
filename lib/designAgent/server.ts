@@ -17,6 +17,8 @@ export type DesignAgentContext = {
 
 export type PrepareDesignTurnOptions = {
   replicateToken?: string;
+  accountId?: string;
+  cloudConsent?: boolean;
 };
 
 export type PreparedDesignTurn =
@@ -146,8 +148,17 @@ export async function prepareDesignTurn(
       text: "งานนี้ต้องใช้ Replicate AI เพื่อเตรียมคำตอบหรือแผนแก้ไข กรุณาเพิ่ม Key ที่ AI Provider Settings ก่อนครับ",
     };
   }
+  if (options.cloudConsent !== true) {
+    return {
+      type: "text",
+      text: "ยังไม่ได้รับอนุญาตให้ส่ง prompt และบริบท Artwork ไปยัง AI provider ครับ",
+    };
+  }
 
-  const ai = getServerAiRuntime({ replicateToken: options.replicateToken });
+  const ai = getServerAiRuntime({
+    replicateToken: options.replicateToken,
+    accountId: options.accountId,
+  });
   const result = await ai.execute(
     "assistant.chat",
     {
@@ -168,8 +179,9 @@ export async function prepareDesignTurn(
     {
       profile: policy.mayUseRemote ? "quality" : "economy",
       cache: false,
-      cloudConsent: policy.mayUseRemote,
+      cloudConsent: true,
       maxCostUsd: policy.mayUseRemote ? 0.25 : 0.05,
+      accountId: options.accountId,
     },
   );
 

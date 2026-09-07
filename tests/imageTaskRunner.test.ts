@@ -21,7 +21,13 @@ vi.mock("@/lib/vision/visionEngine", () => ({
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import type { AiTaskPlan } from "@/lib/ai/orchestration/taskMachine";
 import { createAiTask } from "@/lib/ai/orchestration/taskMachine";
+import {
+  clearCanvasViewport,
+  getCanvasViewport,
+  publishCanvasViewport,
+} from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
+import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
 import { createHistory } from "@/lib/engine/history";
 import { createEngineLayer } from "@/lib/engine/layers";
 import { getProcessingPreviews } from "@/lib/engine/processingPreview";
@@ -75,6 +81,7 @@ function resetEngine() {
 
 describe("context-aware image task runner", () => {
   beforeEach(() => {
+    clearCanvasViewport();
     resetEngine();
     generateImageMock.mockReset();
     preloadDataURLMock.mockReset();
@@ -129,6 +136,61 @@ describe("context-aware image task runner", () => {
     );
     expect(new Set(events).size).toBeGreaterThan(4);
     expect(useEngine.getState().history.past).toHaveLength(1);
+    expect(result.task.harnessVersion).toBe("2.2");
+    expect(result.task.history.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        "task.created",
+        "intent.assessed",
+        "provider.requested",
+        "quality.checked",
+        "preload.completed",
+        "commit.started",
+        "commit.completed",
+      ]),
+    );
+  });
+
+  it("commits at the latest viewport after a pan or zoom during generation", async () => {
+    const latestViewport = {
+      width: 400,
+      height: 300,
+      scale: 1,
+      tx: -800,
+      ty: -400,
+      slideWidth: 1920,
+      slideHeight: 1080,
+    } as const;
+    publishCanvasViewport({
+      width: 400,
+      height: 300,
+      scale: 1,
+      tx: 0,
+      ty: 0,
+      slideWidth: 1920,
+      slideHeight: 1080,
+    });
+    generateImageMock.mockImplementationOnce(async () => {
+      publishCanvasViewport(latestViewport);
+      return {
+        dataUrl: "data:image/png;base64,AA==",
+        fileId: "generated-latest-viewport",
+        width: 1024,
+        height: 1024,
+        seed: 0,
+        model: "openai/gpt-image-2",
+        prompt: plan.prompt,
+      };
+    });
+
+    await runContextAwareImageTask(createAiTask(plan), [], { cloudConsent: true });
+
+    const inserted = useEngine.getState().currentSlide()?.elements[0];
+    expect(inserted).toMatchObject(
+      getGenerationPreviewBounds(getCanvasViewport() ?? latestViewport, {
+        width: 1024,
+        height: 1024,
+      }),
+    );
   });
 
   it("performs one diagnosed quality retry and no more", async () => {
@@ -205,6 +267,15 @@ describe("context-aware image task runner", () => {
       subAgent: "image_editor",
       quality: "high",
       selectedImages: [selectedRef],
+      referenceFacts: [
+        {
+          objectId: selectedRef.objectId,
+          caption: "a usable generated image",
+          objects: [],
+          visibleText: "",
+          limitations: [],
+        },
+      ],
     };
 
     await runContextAwareImageTask(createAiTask(selectedPlan), [selectedRef], {
@@ -264,6 +335,53 @@ describe("context-aware image task runner", () => {
     ).rejects.toThrow("selected image changed");
     expect(generateImageMock).not.toHaveBeenCalled();
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+  });
+
+  it("fails closed when the Canvas target changes before commit", async () => {
+    generateImageMock.mockImplementation(async () => {
+      useEngine.setState((state) => ({
+        doc: { ...state.doc, updatedAt: state.doc.updatedAt + 1 },
+      }));
+      return {
+        dataUrl: "data:image/png;base64,AA==",
+        fileId: "generated-file",
+        width: 1024,
+        height: 1024,
+        seed: 0,
+        model: "openai/gpt-image-2",
+        prompt: plan.prompt,
+      };
+    });
+
+    let failure: unknown;
+    try {
+      await runContextAwareImageTask(createAiTask(plan), [], { cloudConsent: true });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      message: expect.stringContaining("Canvas target changed"),
+      task: { status: "failed" },
+    });
+
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
+    expect(useEngine.getState().history.past).toHaveLength(0);
+  });
+
+  it("marks an ambiguous provider failure as outcome-unknown without retrying", async () => {
+    generateImageMock.mockRejectedValueOnce(new Error("network timeout"));
+
+    await expect(
+      runContextAwareImageTask(createAiTask(plan), [], { cloudConsent: true }),
+    ).rejects.toMatchObject({
+      name: "OutcomeUnknownError",
+      task: { status: "outcome-unknown" },
+    });
+
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
+    expect(useEngine.getState().history.past).toHaveLength(0);
   });
 
   it("requires explicit consent before queueing a cloud task", async () => {

@@ -231,6 +231,8 @@ export type AiExecutionOptions = {
   timeoutMs?: number;
   maxCostUsd?: number;
   cache?: boolean;
+  /** Internal server scope; public clients must never be allowed to set this. */
+  accountId?: string;
   signal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
 };

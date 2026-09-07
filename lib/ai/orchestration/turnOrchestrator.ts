@@ -1,3 +1,5 @@
+import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import { chooseImageQuality } from "./imageQualityPolicy";
 import type { ComposerImageRef } from "./imageReferences";
@@ -32,17 +34,18 @@ export type ContextAwareTurnResult =
   | { kind: "answer"; reply: string; source: "canvas-local" }
   | { kind: "continue"; analyses: ImageReferenceAnalysis[] }
   | { kind: "clarification"; pending: PendingClarification }
+  | { kind: "capability-unavailable"; capability: string; reason: string; reply: string }
   | { kind: "task"; task: AiTask };
 
 export function isCanvasInventoryPrompt(prompt: string): boolean {
-  const value = prompt.toLocaleLowerCase();
+  const value = prompt.trim().toLocaleLowerCase();
   return (
-    value.includes("บน canvas") ||
-    value.includes("ใน canvas") ||
-    value.includes("canvas มีอะไร") ||
-    value.includes("what is on the canvas") ||
-    value.includes("canvas inventory") ||
-    value.includes("object บน")
+    /^(?:ช่วย|กรุณา)?\s*(?:บอก|แสดง|ตรวจสอบ|เช็ค|ดู)?\s*(?:ว่า)?\s*(?:บน|ใน)\s*canvas\s*(?:มีอะไร|มี object|มีอ็อบเจ็กต์|มีอะไรอยู่)/iu.test(
+      value,
+    ) ||
+    /(?:มีอะไรอยู่บน|มีอะไรใน)\s*canvas/iu.test(value) ||
+    /^(?:what(?:\s+is|'s)|list|show|count)\b.*\b(?:on|in)\s+the\s+canvas\b/iu.test(value) ||
+    /^(?:canvas inventory|inventory of the canvas)\b/iu.test(value)
   );
 }
 
@@ -52,7 +55,7 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     return { kind: "answer", reply: inspection.reply, source: "canvas-local" };
   }
 
-  if (!isImageGenerationRequest(input.prompt) && input.refs.length === 0) {
+  if (!isImageGenerationPrompt(input.prompt) && input.refs.length === 0) {
     return { kind: "continue", analyses: [] };
   }
   if (input.refs.length > 0 && input.analyses.length !== input.refs.length) {
@@ -85,6 +88,20 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     };
   }
 
+  const visualPlan = planVisualRequest(input.prompt, {
+    hasSelection: input.refs.length > 0,
+    selectedObjectCount: input.refs.length,
+    hasReference: input.refs.length > 0,
+  });
+  if (!visualPlan.capabilityAvailable) {
+    return {
+      kind: "capability-unavailable",
+      capability: visualPlan.capabilityAlias,
+      reason: visualPlan.reason,
+      reply: `ยังไม่สร้าง Task ครับ เพราะความสามารถ ${visualPlan.capabilityAlias} ยังไม่พร้อมใช้งานใน runtime นี้`,
+    };
+  }
+
   const taskClass = input.refs.length > 0 || input.prompt.length > 100 ? "complex" : "simple";
   const quality = chooseImageQuality({
     prompt: input.prompt,
@@ -93,11 +110,15 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     requiresExactText: /(?:ข้อความ|ตัวอักษร|headline|typography)/iu.test(input.prompt),
     finalUse: /(?:final|production|print|พิมพ์|ใช้งานจริง)/iu.test(input.prompt),
   });
+  const requiredText = extractRequiredText(input.prompt);
+  const requiredSubjects = [
+    ...new Set(input.analyses.flatMap((analysis) => analysis.objects)),
+  ].slice(0, 3);
   const plan: AiTaskPlan = {
     id: crypto.randomUUID(),
     prompt: input.prompt,
     subAgent: input.refs.length > 0 ? "image_editor" : "image_generator",
-    capability: "IMAGE_DEFAULT",
+    capability: visualPlan.capabilityAlias,
     quality: quality.quality,
     qualityRationale: quality.rationale,
     maxAttempts: quality.maxAttempts,
@@ -110,27 +131,37 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     analysisComplete: input.refs.length === 0 || input.analyses.length === input.refs.length,
     cloudConsentRequired: true,
     estimatedMaxCostUsd: quality.quality === "high" ? 0.05 : 0.02,
+    ...(requiredSubjects.length > 0 ? { requiredSubjects } : {}),
+    ...(requiredText ? { requiredText } : {}),
     ...(input.analyses.length > 0
       ? {
-          requiredSubjects: [
-            ...new Set(input.analyses.flatMap((analysis) => analysis.objects)),
-          ].slice(0, 3),
+          referenceFacts: input.analyses.map((analysis) => ({
+            objectId: analysis.ref.objectId,
+            caption: analysis.caption,
+            objects: analysis.objects,
+            visibleText: analysis.visibleText,
+            limitations: analysis.limitations,
+          })),
         }
       : {}),
   };
-  return { kind: "task", task: createAiTask(plan) };
+  const task = createAiTask({
+    ...plan,
+    preTaskTrace: [
+      ...(input.refs.length > 0
+        ? [{ type: "reference.analysis.completed" as const, count: input.analyses.length }]
+        : []),
+      { type: "intent.assessed" as const, complete: true },
+    ],
+  });
+  return { kind: "task", task };
 }
 
-function isImageGenerationRequest(prompt: string): boolean {
-  const value = prompt.toLocaleLowerCase();
-  return (
-    value.includes("สร้างรูป") ||
-    value.includes("สร้างภาพ") ||
-    value.includes("วาดรูป") ||
-    value.includes("วาดภาพ") ||
-    value.includes("generate image") ||
-    value.includes("create image") ||
-    value.includes("picture of") ||
-    value.includes("image of")
+function extractRequiredText(prompt: string): string | undefined {
+  const quoted = prompt.match(
+    /(?:ข้อความ|ตัวอักษร|headline|text|คำว่า|เขียนว่า)\s*[:：]?\s*["“”']([^"“”']{1,240})["“”']/iu,
   );
+  if (quoted?.[1]?.trim()) return quoted[1].trim();
+  const unquoted = prompt.match(/(?:headline|text|คำว่า|เขียนว่า)\s*[:：]\s*([^\n,]{1,240})/iu);
+  return unquoted?.[1]?.trim() || undefined;
 }

@@ -96,8 +96,10 @@ export const VISUAL_CAPABILITY_REGISTRY: Readonly<
   IMAGE_EDIT: {
     alias: "IMAGE_EDIT",
     execution: "image.generate",
-    available: false,
-    reason: "The current image route does not accept reference-image editing inputs yet.",
+    modelAlias: "image-gpt-2",
+    available: true,
+    reason:
+      "Reference-conditioned generation is available through the server image route with bounded input images.",
   },
   IMAGE_TEXT: {
     alias: "IMAGE_TEXT",
@@ -172,7 +174,7 @@ export function planVisualRequest(
     };
   }
 
-  const capabilityAlias = selectCapability(normalizedPrompt, intent, taskClass, hasReference);
+  const capabilityAlias = selectCapability(normalizedPrompt, intent, hasReference);
   const capability = resolveVisualCapability(capabilityAlias);
   const route: VisualRoute = capability.available ? "direct" : "orchestrator";
   return {
@@ -207,19 +209,10 @@ function classifyTaskClass(
 function selectCapability(
   prompt: string,
   intent: DesignIntentKind,
-  taskClass: VisualTaskClass,
   hasReference: boolean,
 ): VisualCapabilityAlias {
   if (intent === "answer") return "ORCHESTRATOR_DEFAULT";
-  if (/ข้อความ|ตัวอักษร|typography|headline|wordmark|poster|โปสเตอร์/i.test(prompt)) {
-    return "IMAGE_TEXT";
-  }
   if (intent === "local-edit" || intent === "destructive" || hasReference) return "IMAGE_EDIT";
   if (/โลโก้|ไอคอน|vector|เวกเตอร์|logo|icon/i.test(prompt)) return "IMAGE_VECTOR";
-  if (/เร็ว|ด่วน|draft|quick|ร่าง/i.test(prompt)) return "IMAGE_FAST";
-  if (/วาด|illustration|cartoon|anime|การ์ตูน|ภาพวาด/i.test(prompt)) {
-    return "IMAGE_CREATIVE";
-  }
-  if (taskClass === "complex") return "IMAGE_PRO";
   return "IMAGE_DEFAULT";
 }

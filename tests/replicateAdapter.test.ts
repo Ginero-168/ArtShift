@@ -499,4 +499,36 @@ describe("Replicate AI adapter", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
+
+  it("marks a created prediction as outcome-unknown when polling loses transport", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-uncertain-1",
+            status: "processing",
+            urls: { get: "https://api.replicate.com/v1/predictions/prediction-uncertain-1" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockRejectedValueOnce(new Error("poll network down"));
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "vision.ocr",
+        input: { image: { dataUrl: "data:image/png;base64,AAAA" } },
+        model: "openai/gpt-4o-mini",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
+      code: "PROVIDER_UNAVAILABLE",
+      outcomeUnknown: true,
+      predictionId: "prediction-uncertain-1",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

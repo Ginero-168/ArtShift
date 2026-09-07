@@ -1,3 +1,5 @@
+import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
+
 export type AiImageQuality = "low" | "medium" | "high";
 
 export type AiTaskStatus =
@@ -35,15 +37,47 @@ export type AiTaskPlan = {
   estimatedMaxCostUsd: number;
   requiredSubjects?: readonly string[];
   requiredText?: string;
+  harnessVersion?: string;
+  harnessRuleIds?: readonly string[];
+  preTaskTrace?: readonly AiTaskTraceEvent[];
+  referenceFacts?: readonly {
+    objectId: string;
+    caption: string;
+    objects: readonly string[];
+    visibleText: string;
+    limitations: readonly string[];
+  }[];
 };
 
 export type AiTask = AiTaskPlan & {
+  harnessVersion: typeof ARTSHIFT_HARNESS_VERSION;
+  harnessRuleIds: readonly string[];
   status: AiTaskStatus;
   attempt: number;
   history: readonly AiTaskEvent[];
 };
 
 export type AiTaskEvent =
+  | {
+      type: "task.created";
+      subAgent: string;
+      capability: string;
+      harnessVersion: typeof ARTSHIFT_HARNESS_VERSION;
+      ruleIds: readonly string[];
+    }
+  | { type: "reference.analysis.started"; count: number }
+  | { type: "reference.analysis.completed"; count: number }
+  | { type: "intent.assessed"; complete: boolean }
+  | { type: "provider.requested"; attempt: number; subAgent: string }
+  | { type: "quality.checked"; passed: boolean; attempt: number }
+  | { type: "preload.completed"; attempt: number }
+  | { type: "commit.started"; attempt: number }
+  | { type: "commit.completed"; attempt: number }
+  | {
+      type: "recovery.decided";
+      action: "retry" | "resume" | "stop" | "outcome-unknown";
+      reason: string;
+    }
   | { type: "consent-granted" }
   | { type: "queued" }
   | { type: "running" }
@@ -56,6 +90,23 @@ export type AiTaskEvent =
   | { type: "outcome-unknown"; reason: string }
   | { type: "retry"; reason: string }
   | { type: "task.started"; attempt: number };
+
+export type AiTaskTraceEvent = Extract<
+  AiTaskEvent,
+  {
+    type:
+      | "task.created"
+      | "reference.analysis.started"
+      | "reference.analysis.completed"
+      | "intent.assessed"
+      | "provider.requested"
+      | "quality.checked"
+      | "preload.completed"
+      | "commit.started"
+      | "commit.completed"
+      | "recovery.decided";
+  }
+>;
 
 export type AiTaskTransition = {
   task: AiTask;
@@ -78,12 +129,49 @@ export function createAiTask(plan: AiTaskPlan): AiTask {
   if (!Number.isInteger(plan.maxAttempts) || plan.maxAttempts < 1 || plan.maxAttempts > 2) {
     throw new Error("task attempt limit is invalid");
   }
+  const harnessVersion = plan.harnessVersion ?? ARTSHIFT_HARNESS_VERSION;
+  const harnessRuleIds = plan.harnessRuleIds ?? ARTSHIFT_HARNESS_RULE_IDS;
+  if (
+    harnessVersion !== ARTSHIFT_HARNESS_VERSION ||
+    ARTSHIFT_HARNESS_RULE_IDS.some((ruleId) => !harnessRuleIds.includes(ruleId))
+  ) {
+    throw new Error("task Harness contract is invalid");
+  }
+  if (
+    plan.preTaskTrace?.some((event) => event.type === "task.created") ||
+    plan.preTaskTrace?.some((event) => "reason" in event && UNSAFE_TEXT.test(event.reason))
+  ) {
+    throw new Error("task pre-trace is invalid");
+  }
   return {
     ...plan,
+    harnessVersion: ARTSHIFT_HARNESS_VERSION,
+    harnessRuleIds: [...harnessRuleIds],
     status: plan.cloudConsentRequired ? "awaiting-consent" : "planned",
     attempt: 0,
-    history: [],
+    history: [
+      ...(plan.preTaskTrace ?? []),
+      {
+        type: "task.created",
+        subAgent: plan.subAgent,
+        capability: plan.capability,
+        harnessVersion: ARTSHIFT_HARNESS_VERSION,
+        ruleIds: [...harnessRuleIds],
+      },
+    ],
   };
+}
+
+export function assertAiTaskHarness(task: {
+  harnessVersion: string;
+  harnessRuleIds: readonly string[];
+}): void {
+  if (
+    task.harnessVersion !== ARTSHIFT_HARNESS_VERSION ||
+    ARTSHIFT_HARNESS_RULE_IDS.some((ruleId) => !task.harnessRuleIds.includes(ruleId))
+  ) {
+    throw new Error("task Harness contract is invalid");
+  }
 }
 
 export function reduceAiTask(task: AiTask, event: AiTaskEvent): AiTaskTransition {
@@ -94,6 +182,12 @@ export function reduceAiTask(task: AiTask, event: AiTaskEvent): AiTaskTransition
     throw new Error("cannot retry an unknown outcome");
   }
   const history = [...task.history, event];
+  if (isTraceEvent(event)) {
+    if (["succeeded", "failed", "cancelled", "outcome-unknown"].includes(task.status)) {
+      throw new Error(`cannot append trace to terminal task: ${task.status}`);
+    }
+    return { task: { ...task, history }, events: [event] };
+  }
   switch (event.type) {
     case "consent-granted":
       requireStatus(task, ["planned", "awaiting-consent"]);
@@ -145,6 +239,31 @@ export function reduceAiTask(task: AiTask, event: AiTaskEvent): AiTaskTransition
     case "task.started":
       throw new Error("task.started is an internal event");
   }
+}
+
+export function appendAiTaskEvent(task: AiTask, event: AiTaskTraceEvent): AiTask {
+  if ("reason" in event && event.reason && UNSAFE_TEXT.test(event.reason)) {
+    throw new Error("unsafe task text");
+  }
+  if (["succeeded", "failed", "cancelled", "outcome-unknown"].includes(task.status)) {
+    throw new Error(`cannot append trace to terminal task: ${task.status}`);
+  }
+  return { ...task, history: [...task.history, event] };
+}
+
+function isTraceEvent(event: AiTaskEvent): event is AiTaskTraceEvent {
+  return (
+    event.type === "task.created" ||
+    event.type === "reference.analysis.started" ||
+    event.type === "reference.analysis.completed" ||
+    event.type === "intent.assessed" ||
+    event.type === "provider.requested" ||
+    event.type === "quality.checked" ||
+    event.type === "preload.completed" ||
+    event.type === "commit.started" ||
+    event.type === "commit.completed" ||
+    event.type === "recovery.decided"
+  );
 }
 
 function requireStatus(task: AiTask, allowed: AiTaskStatus[]): void {

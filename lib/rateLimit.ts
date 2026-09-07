@@ -34,7 +34,7 @@ export class RateLimiter {
 }
 
 export function getClientIp(req: { headers: Headers; ip?: string | null }): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+  const realIp = req.headers.get("x-real-ip")?.trim();
+  if (realIp && !/[\s,]/u.test(realIp) && realIp.length <= 64) return realIp;
   return req.ip ?? "unknown";
 }

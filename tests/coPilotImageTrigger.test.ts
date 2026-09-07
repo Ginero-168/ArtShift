@@ -80,7 +80,11 @@ describe("AI Co-Pilot image commands", () => {
     const result = await executeCoPilotInstruction(
       "ขอภาพแมวในสตูดิโอสำหรับโปรไฟล์ อัตราส่วน 1:1",
       undefined,
-      { contextAwareValidated: true, imageQuality: "medium" },
+      {
+        contextAwareValidated: true,
+        imageQuality: "medium",
+        cloudConsent: true,
+      },
     );
 
     expect(result.actions[0]).not.toHaveProperty("mode");
@@ -106,7 +110,11 @@ describe("AI Co-Pilot image commands", () => {
     const execution = executeCoPilotInstruction(
       "ขอภาพแมวในสตูดิโอสำหรับโปรไฟล์ อัตราส่วน 1:1",
       undefined,
-      { contextAwareValidated: true, imageQuality: "medium" },
+      {
+        contextAwareValidated: true,
+        imageQuality: "medium",
+        cloudConsent: true,
+      },
     );
     await vi.waitFor(() =>
       expect(preloadDataURLMock).toHaveBeenCalledWith("data:image/png;base64,AA=="),
@@ -142,7 +150,11 @@ describe("AI Co-Pilot image commands", () => {
     const result = await executeCoPilotInstruction(
       "ขอภาพแมวในสตูดิโอสำหรับโปรไฟล์ อัตราส่วน 1:1",
       undefined,
-      { contextAwareValidated: true, imageQuality: "medium" },
+      {
+        contextAwareValidated: true,
+        imageQuality: "medium",
+        cloudConsent: true,
+      },
     );
 
     expect(result.reply).toContain("generated image decode failed");

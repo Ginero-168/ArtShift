@@ -41,10 +41,14 @@ export function inspectCanvas(input: CanvasInspectionInput): CanvasInspection {
   const elements = input.slide.elements.filter((element) => !element.isDeleted);
   const typeCounts = countByType(elements);
   const selected = elements.filter((element) => input.selectedIds.has(element.id));
-  const hiddenCount = elements.filter(
-    (element) => element.hidden === true || element.visible === false,
-  ).length;
-  const lockedCount = elements.filter((element) => element.locked).length;
+  const hiddenCount = elements.filter((element) => {
+    const layer = findContainingLayer(input.slide, element.id);
+    return element.hidden === true || element.visible === false || layer?.visible === false;
+  }).length;
+  const lockedCount = elements.filter((element) => {
+    const layer = findContainingLayer(input.slide, element.id);
+    return element.locked === true || layer?.locked === true;
+  }).length;
 
   if (elements.length === 0) {
     return {
@@ -68,6 +72,15 @@ export function inspectCanvas(input: CanvasInspectionInput): CanvasInspection {
     hiddenCount ? `ซ่อนอยู่ ${hiddenCount}` : "ไม่มี Object ที่ซ่อน",
     lockedCount ? `ล็อกอยู่ ${lockedCount}` : "ไม่มี Object ที่ล็อก",
   ].join(" และ ");
+  const objectInventory = elements.slice(0, 8).map((element) => {
+    const layer = findContainingLayer(input.slide, element.id);
+    const flags = [
+      element.hidden === true || element.visible === false || layer?.visible === false ? "ซ่อน" : "",
+      element.locked === true || layer?.locked === true ? "ล็อก" : "",
+    ].filter(Boolean);
+    return `- ${readableElementName(element)} · ${element.width} × ${element.height} px${flags.length ? ` · ${flags.join(", ")}` : ""}`;
+  });
+  if (elements.length > 8) objectInventory.push(`…และอีก ${elements.length - 8} Object`);
 
   return {
     objectCount: elements.length,
@@ -82,12 +95,7 @@ export function inspectCanvas(input: CanvasInspectionInput): CanvasInspection {
       selected.length ? `${selectedSummary}` : selectedSummary,
       `${stateSummary}`,
       `Layer: ${input.slide.layers.map((layer) => layer.name).join(", ") || "ยังไม่มีชื่อ Layer"}`,
-      ...selected
-        .slice(0, 8)
-        .map(
-          (element) =>
-            `- ${readableElementName(element)} · ${element.width} × ${element.height} px`,
-        ),
+      ...objectInventory,
     ].join("\n"),
   };
 }
@@ -99,7 +107,12 @@ function countByType(elements: readonly EngineElement[]): Record<string, number>
   }, {});
 }
 
+function findContainingLayer(slide: Pick<EngineSlide, "layers">, objectId: string) {
+  return slide.layers.find((layer) => layer.objectIds.includes(objectId));
+}
+
 function readableElementName(element: EngineElement): string {
   if (element.type === "text") return element.text.trim() || element.name || "Text";
+  if (element.type === "image") return element.sourceName || element.name || "Image";
   return element.name || TYPE_LABELS[element.type] || element.type;
 }

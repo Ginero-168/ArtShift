@@ -15,6 +15,15 @@ describe("bounded recovery policy", () => {
       decideRecovery({ kind: "polling", attempt: 1, maxAttempts: 2, predictionId: "pred-1" }),
     ).toMatchObject({ action: "resume" });
   });
+  it("does not create a new paid request for an ambiguous transport outcome", () => {
+    expect(decideRecovery({ kind: "network", attempt: 1, maxAttempts: 2 })).toMatchObject({
+      action: "outcome-unknown",
+    });
+    expect(decideRecovery({ kind: "polling", attempt: 1, maxAttempts: 2 })).toMatchObject({
+      action: "outcome-unknown",
+    });
+  });
+
   it("allows one diagnosed quality retry", () => {
     expect(decideRecovery({ kind: "quality", attempt: 1, maxAttempts: 2 })).toMatchObject({
       action: "retry",

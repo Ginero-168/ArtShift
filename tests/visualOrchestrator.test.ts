@@ -31,25 +31,23 @@ describe("Visual Orchestrator Kernel", () => {
     expect(plan.clarification).toBeTruthy();
   });
 
-  it("routes complex typography work to IMAGE_TEXT orchestration instead of silently using the default image route", () => {
+  it("routes complex text work through the current image generation alias with high-quality policy", () => {
     const plan = planVisualRequest("สร้างโปสเตอร์หนังสือ 3 แบบ พร้อมข้อความภาษาไทย", {
       hasSelection: false,
       elementCount: 0,
-      hasReference: true,
     });
 
     expect(plan).toMatchObject({
       taskClass: "complex",
-      capabilityAlias: "IMAGE_TEXT",
-      route: "orchestrator",
-      capabilityAvailable: false,
-      requiresApproval: true,
-      needsVisualAnalysis: true,
+      capabilityAlias: "IMAGE_DEFAULT",
+      route: "direct",
+      capabilityAvailable: true,
+      requiresApproval: false,
+      needsVisualAnalysis: false,
     });
-    expect(plan.reason).toContain("IMAGE_TEXT");
   });
 
-  it("requires visual analysis before a selected reference-sensitive edit", () => {
+  it("routes reference-conditioned edits through the available IMAGE_EDIT contract", () => {
     const plan = planVisualRequest("เปลี่ยนพื้นหลังของรูปนี้จาก reference", {
       hasSelection: true,
       selectedObjectCount: 1,
@@ -60,9 +58,11 @@ describe("Visual Orchestrator Kernel", () => {
 
     expect(plan).toMatchObject({
       capabilityAlias: "IMAGE_EDIT",
-      route: "orchestrator",
+      route: "direct",
+      capabilityAvailable: true,
+      modelAlias: "image-gpt-2",
       needsVisualAnalysis: true,
-      requiresApproval: true,
+      requiresApproval: false,
     });
   });
 

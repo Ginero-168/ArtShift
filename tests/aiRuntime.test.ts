@@ -130,6 +130,44 @@ describe("RoutedAiRuntime", () => {
     ).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
   });
 
+  it("scopes the monthly budget to the authenticated account", async () => {
+    const ledger = new InMemoryAiUsageLedger();
+    ledger.record({
+      at: Date.now(),
+      accountId: "account-a",
+      task: "vision.describe",
+      provider: "mock",
+      model: "mock",
+      durationMs: 1,
+      usage: { estimatedUsd: 1 },
+      cached: false,
+      ok: true,
+    });
+    const adapter = new MockAiProviderAdapter(() => ({ output: { text: "account-b result" } }));
+    const runtime = new RoutedAiRuntime({
+      adapters: [adapter],
+      routes: { "vision.describe": { economy: [{ provider: "mock", model: "mock" }] } },
+      ledger,
+      monthlyBudgetUsd: 1,
+    });
+
+    await expect(
+      runtime.execute("vision.describe", visionInput, {
+        cloudConsent: true,
+        accountId: "account-a",
+        cache: false,
+      }),
+    ).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+    const otherAccount = await runtime.execute("vision.describe", visionInput, {
+      cloudConsent: true,
+      accountId: "account-b",
+      cache: false,
+    });
+
+    expect(otherAccount.output.text).toBe("account-b result");
+    expect(adapter.requests).toHaveLength(1);
+  });
+
   it("enforces a per-command cost ceiling before a provider request", async () => {
     const adapter = new MockAiProviderAdapter(() => ({ output: { text: "unused" } }));
     const runtime = new RoutedAiRuntime({

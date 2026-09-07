@@ -2,16 +2,23 @@ import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtimeMock = vi.hoisted(() => ({ execute: vi.fn() }));
+const accountMock = vi.hoisted(() => ({ value: { id: "account-test" } as { id: string } | null }));
 
 vi.mock("@/lib/server/ai/runtime", () => ({
   getServerAiRuntime: () => runtimeMock,
 }));
+vi.mock("@/lib/server/ai/userCredentials", () => ({
+  getUserAccount: () => accountMock.value,
+  getSessionReplicateToken: () => undefined,
+}));
 
 import { POST } from "../app/api/ai/image/route";
 
-function request(body: unknown): NextRequest {
+function request(body: unknown, contentLength?: number): NextRequest {
   return {
-    headers: new Headers(),
+    headers: new Headers(
+      contentLength === undefined ? undefined : { "content-length": String(contentLength) },
+    ),
     json: async () => body,
     signal: new AbortController().signal,
   } as unknown as NextRequest;
@@ -35,8 +42,26 @@ const imageExecution = {
 
 describe("AI image generation API", () => {
   beforeEach(() => {
+    accountMock.value = { id: "account-test" };
     runtimeMock.execute.mockReset();
     runtimeMock.execute.mockResolvedValue(imageExecution);
+  });
+
+  it("rejects an oversized body before parsing", async () => {
+    const response = await POST(request({}, 32 * 1024 * 1024 + 1));
+
+    expect(response.status).toBe(413);
+    expect(runtimeMock.execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated requests before provider execution", async () => {
+    accountMock.value = null;
+    const response = await POST(
+      request({ prompt: "แมวสีส้ม", enhance: false, cloudConsent: true, quality: "medium" }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(runtimeMock.execute).not.toHaveBeenCalled();
   });
 
   it("honors enhance=false without calling the prompt task", async () => {
@@ -46,6 +71,7 @@ describe("AI image generation API", () => {
         model: "client-selected-model",
         enhance: false,
         cloudConsent: true,
+        quality: "medium",
         width: 512,
         height: 512,
       }),
@@ -71,7 +97,9 @@ describe("AI image generation API", () => {
       .mockResolvedValueOnce({ output: { prompt: "A highly detailed orange cat" } })
       .mockResolvedValueOnce(imageExecution);
 
-    const response = await POST(request({ prompt: "แมวสีส้ม", enhance: true, cloudConsent: true }));
+    const response = await POST(
+      request({ prompt: "แมวสีส้ม", enhance: true, cloudConsent: true, quality: "medium" }),
+    );
 
     expect(response.status).toBe(200);
     expect(runtimeMock.execute).toHaveBeenNthCalledWith(
@@ -93,7 +121,9 @@ describe("AI image generation API", () => {
       .mockRejectedValueOnce(new Error("prompt provider unavailable"))
       .mockResolvedValueOnce(imageExecution);
 
-    const response = await POST(request({ prompt: "แมวสีส้ม", enhance: true, cloudConsent: true }));
+    const response = await POST(
+      request({ prompt: "แมวสีส้ม", enhance: true, cloudConsent: true, quality: "medium" }),
+    );
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -119,6 +149,15 @@ describe("AI image generation API", () => {
     const response = await POST(request({ prompt: "แมวสีส้ม", enhance: false }));
 
     expect(response.status).toBe(403);
+    expect(runtimeMock.execute).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "fast"])("rejects invalid quality values: %s", async (quality) => {
+    const response = await POST(
+      request({ prompt: "แมวสีส้ม", enhance: false, cloudConsent: true, quality }),
+    );
+
+    expect(response.status).toBe(400);
     expect(runtimeMock.execute).not.toHaveBeenCalled();
   });
 
@@ -169,7 +208,12 @@ describe("AI image generation API", () => {
     runtimeMock.execute.mockRejectedValue(new Error("provider secret api_key=DO_NOT_LEAK"));
 
     const response = await POST(
-      request({ prompt: "สร้างภาพแมวในสตูดิโอ", enhance: false, cloudConsent: true }),
+      request({
+        prompt: "สร้างภาพแมวในสตูดิโอ",
+        enhance: false,
+        cloudConsent: true,
+        quality: "medium",
+      }),
     );
     const data = await response.json();
 

@@ -79,11 +79,97 @@ test("does not send an ambiguous chat image request before clarification", async
   await chatInput.fill("ขอภาพแมว");
   await chatInput.press("Enter");
 
-  await expect(page.getByText(/direction/i)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible({
+    timeout: 60_000,
+  });
   expect(requestCount).toBe(0);
   expect(requestBody).toBeUndefined();
 });
 
+test("does not call the provider until the user chooses a clarification direction", async ({
+  page,
+}) => {
+  let requestCount = 0;
+  await page.route("**/api/ai/image", async (route) => {
+    requestCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        dataUrl: TEST_IMAGE_PNG_256,
+        width: 1024,
+        height: 1024,
+        seed: 2,
+        provider: "replicate",
+        model: "openai/gpt-image-2",
+        warnings: [],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
+  const chatInput = page.getByPlaceholder("บอกสิ่งที่ต้องการออกแบบ...");
+  await chatInput.fill("สร้างภาพแมว");
+  await chatInput.press("Enter");
+
+  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(page.getByRole("button", { name: /^A\./ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^B\./ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^C\./ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Other/ })).toBeVisible();
+  expect(requestCount).toBe(0);
+});
+
+test("creates the task only after a clarification answer and consent", async ({ page }) => {
+  let requestBody: Record<string, unknown> | undefined;
+  let releaseResponse: (() => void) | undefined;
+  const responseReady = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/ai/image", async (route) => {
+    requestBody = JSON.parse(route.request().postData() ?? "{}") as Record<string, unknown>;
+    await responseReady;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        dataUrl: TEST_IMAGE_PNG_256,
+        width: 1024,
+        height: 1024,
+        seed: 3,
+        provider: "replicate",
+        model: "openai/gpt-image-2",
+        warnings: [],
+      }),
+    });
+  });
+  page.on("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+
+  await page.goto("/");
+  await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
+  const chatInput = page.getByPlaceholder("บอกสิ่งที่ต้องการออกแบบ...");
+  await chatInput.fill("สร้างภาพแมว");
+  await chatInput.press("Enter");
+  await page.getByRole("button", { name: /^A\./ }).click();
+
+  await expect.poll(() => requestBody).toBeTruthy();
+  await expect(page.getByTestId("processing-preview")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Task · image_generator/)).toBeVisible({ timeout: 10_000 });
+  expect(requestBody).toMatchObject({
+    quality: "medium",
+    cloudConsent: true,
+    aspectRatio: "1:1",
+  });
+  releaseResponse?.();
+  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 60_000 });
+});
 test("runs a complete image task only after consent and shows the Canvas preloader", async ({
   page,
 }) => {
@@ -196,6 +282,83 @@ test("answers a Canvas inventory question locally without calling a provider", a
   expect(requestCount).toBe(0);
 });
 
+test("analyzes the visible selected image before the generation request", async ({ page }) => {
+  await page.addInitScript(() => {
+    class MockVisionWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      postMessage(message: { type: string; id: number; taskPrompt?: string }) {
+        if (message.type !== "execute") return;
+        const task = message.taskPrompt ?? "";
+        const output = task.includes("<OD>")
+          ? { bboxes: [[0, 0, 256, 256]], labels: ["product"] }
+          : task.includes("<OCR>")
+            ? "SALE"
+            : "a product photo";
+        queueMicrotask(() => {
+          this.onmessage?.({
+            data: { type: "result", id: message.id, result: { output, width: 256, height: 256 } },
+          } as MessageEvent);
+        });
+      }
+      terminate() {}
+      addEventListener() {}
+      removeEventListener() {}
+      dispatchEvent() {
+        return false;
+      }
+    }
+    window.Worker = MockVisionWorker as unknown as typeof Worker;
+  });
+
+  const imageBuffer = Buffer.from(TEST_IMAGE_PNG_256.split(",")[1] ?? "", "base64");
+  let providerCalls = 0;
+  let requestBody: Record<string, unknown> | undefined;
+  await page.route("**/api/ai/image", async (route) => {
+    providerCalls += 1;
+    requestBody = JSON.parse(route.request().postData() ?? "{}") as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        dataUrl: TEST_IMAGE_PNG_256,
+        width: 1024,
+        height: 1024,
+        seed: 4,
+        provider: "replicate",
+        model: "openai/gpt-image-2",
+        warnings: [],
+      }),
+    });
+  });
+  page.on("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Photo", exact: true }).click();
+  await page
+    .locator("label")
+    .filter({ hasText: "Choose image" })
+    .locator('input[type="file"]')
+    .setInputFiles({ name: "visible-product.png", mimeType: "image/png", buffer: imageBuffer });
+  await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
+  await expect(page.getByTestId("selected-image-tags")).toBeVisible({ timeout: 10_000 });
+
+  const chatInput = page.getByPlaceholder("แก้ไขภาพหรือวัตถุที่เลือก...");
+  await chatInput.fill(
+    "สร้างภาพโฆษณาจากภาพนี้ แบบภาพถ่ายสตูดิโอ ฉากหลังสะอาด สำหรับ Instagram อัตราส่วน 1:1",
+  );
+  await chatInput.press("Enter");
+
+  await expect(page.getByText(/วิเคราะห์ภาพเสร็จแล้ว 1 รายการ/)).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => providerCalls).toBe(1);
+  expect(requestBody?.inputImages).toHaveLength(1);
+  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({
+    timeout: 30_000,
+  });
+});
 test("shows a selected-image name tag and local hover preview", async ({ page }) => {
   const imageBuffer = Buffer.from(TEST_IMAGE_PNG_256.split(",")[1] ?? "", "base64");
   let providerRequests = 0;
@@ -220,5 +383,9 @@ test("shows a selected-image name tag and local hover preview", async ({ page })
   await expect(tag).toContainText("selected-product.png");
   await tag.hover();
   await expect(page.getByTestId("selected-image-preview")).toBeVisible({ timeout: 10_000 });
+  await page
+    .getByRole("button", { name: "Remove selected image selected-product.png", exact: true })
+    .click();
+  await expect(tags.locator("button")).toHaveCount(0);
   expect(providerRequests).toBe(0);
 });

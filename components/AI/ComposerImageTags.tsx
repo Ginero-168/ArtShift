@@ -7,9 +7,11 @@ import ImageReferencePreview from "./ImageReferencePreview";
 
 type Props = {
   refs: readonly ComposerImageRef[];
+  omittedCount?: number;
+  onRemove?: (ref: ComposerImageRef) => void;
 };
 
-export default function ComposerImageTags({ refs }: Props) {
+export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: Props) {
   const [, rerender] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
@@ -63,69 +65,117 @@ export default function ComposerImageTags({ refs }: Props) {
       }}
     >
       {refs.map((ref) => (
-        <button
+        <span
           key={`${ref.objectId}:${ref.elementVersion}`}
-          type="button"
-          data-testid={`selected-image-tag-${ref.objectId}`}
-          aria-label={`Selected image ${ref.displayName}`}
-          title={`${ref.displayName} · ${ref.sourceWidth} × ${ref.sourceHeight}px`}
-          onPointerEnter={(event) => openPreview(event.currentTarget, ref.objectId)}
-          onPointerLeave={scheduleClose}
-          onFocus={(event) => openPreview(event.currentTarget, ref.objectId)}
-          onBlur={scheduleClose}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              setActiveId(null);
-              setAnchor(null);
-            }
-          }}
+          role="listitem"
+          style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
+        >
+          <button
+            type="button"
+            data-testid={`selected-image-tag-${ref.objectId}`}
+            aria-label={`Selected image ${ref.displayName}`}
+            title={`${ref.displayName} · ${ref.sourceWidth} × ${ref.sourceHeight}px`}
+            onPointerEnter={(event) => openPreview(event.currentTarget, ref.objectId)}
+            onPointerLeave={scheduleClose}
+            onFocus={(event) => openPreview(event.currentTarget, ref.objectId)}
+            onBlur={scheduleClose}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setActiveId(null);
+                setAnchor(null);
+              }
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              maxWidth: "min(100%, 260px)",
+              minHeight: 30,
+              padding: "4px 8px 4px 5px",
+              borderRadius: 8,
+              border: "1px solid #c7d2fe",
+              background: "#eef2ff",
+              color: "#3730a3",
+              cursor: "default",
+              font: "600 10px/1.2 inherit",
+              textAlign: "left",
+            }}
+          >
+            {getCached(ref.fileId)?.dataURL ? (
+              // biome-ignore lint/performance/noImgElement: local thumbnail for selected Canvas context
+              <img
+                src={getCached(ref.fileId)?.dataURL}
+                alt=""
+                draggable={false}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  objectFit: "cover",
+                  flex: "0 0 auto",
+                }}
+              />
+            ) : (
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  background: "#c7d2fe",
+                  flex: "0 0 auto",
+                }}
+              />
+            )}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              @{ref.displayName}
+            </span>
+          </button>
+          {onRemove ? (
+            <button
+              type="button"
+              data-testid={`remove-selected-image-tag-${ref.objectId}`}
+              aria-label={`Remove selected image ${ref.displayName}`}
+              title="นำภาพออกจากบริบท AI"
+              onClick={() => onRemove(ref)}
+              style={{
+                width: 22,
+                height: 22,
+                padding: 0,
+                border: "1px solid #c7d2fe",
+                borderRadius: 6,
+                background: "#ffffffaa",
+                color: "#3730a3",
+                cursor: "pointer",
+                font: "700 14px/1 inherit",
+              }}
+            >
+              ×
+            </button>
+          ) : null}
+        </span>
+      ))}
+      {omittedCount > 0 ? (
+        <span
+          role="status"
+          data-testid="selected-image-overflow"
+          aria-label={`${omittedCount} more selected Canvas images`}
+          title="ลด selection เหลือไม่เกิน 4 ภาพก่อนส่งงาน"
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 6,
-            maxWidth: "min(100%, 260px)",
             minHeight: 30,
-            padding: "4px 8px 4px 5px",
+            padding: "0 8px",
             borderRadius: 8,
-            border: "1px solid #c7d2fe",
-            background: "#eef2ff",
-            color: "#3730a3",
-            cursor: "default",
-            font: "600 10px/1.2 inherit",
-            textAlign: "left",
+            background: "#f1f5f9",
+            border: "1px solid #cbd5e1",
+            color: "#475569",
+            font: "700 10px/1 inherit",
           }}
         >
-          {getCached(ref.fileId)?.dataURL ? (
-            // biome-ignore lint/performance/noImgElement: local thumbnail for selected Canvas context
-            <img
-              src={getCached(ref.fileId)?.dataURL}
-              alt=""
-              draggable={false}
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 5,
-                objectFit: "cover",
-                flex: "0 0 auto",
-              }}
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 5,
-                background: "#c7d2fe",
-                flex: "0 0 auto",
-              }}
-            />
-          )}
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            @{ref.displayName}
-          </span>
-        </button>
-      ))}
+          +{omittedCount}
+        </span>
+      ) : null}
       {activeRef && anchor ? (
         <ImageReferencePreview
           anchor={anchor}

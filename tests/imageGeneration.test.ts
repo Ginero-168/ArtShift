@@ -132,6 +132,24 @@ describe("GPT Image 2 generation client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/ai/image");
   });
 
+  it("preserves an uncertain provider outcome as a terminal error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: vi.fn().mockResolvedValue({
+          code: "OUTCOME_UNKNOWN",
+          error: "AI provider result is uncertain; no duplicate request was created.",
+        }),
+      }),
+    );
+
+    await expect(generateAIImage({ prompt: "a cat", cloudConsent: true })).rejects.toMatchObject({
+      name: "OutcomeUnknownError",
+    });
+  });
+
   it("enriches Thai prompts into detailed English visual prompts", async () => {
     const { enrichPrompt } = await import("@/lib/ai/imageGeneration");
     const result = enrichPrompt("สร้างรูปแมวให้หน่อย");

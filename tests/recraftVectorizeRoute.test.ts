@@ -8,6 +8,7 @@ vi.mock("@/lib/server/ai/runtime", () => ({
 }));
 vi.mock("@/lib/server/ai/userCredentials", () => ({
   getSessionReplicateToken: () => undefined,
+  getUserAccount: () => ({ id: "account-test" }),
 }));
 
 import { POST } from "@/app/api/vectorize/recraft/route";

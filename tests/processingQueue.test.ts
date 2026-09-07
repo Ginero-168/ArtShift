@@ -107,4 +107,52 @@ describe("processing queue", () => {
     await second.promise;
     expect(events).toEqual(["first:start", "first:end"]);
   });
+
+  it("cancels a queued job when its caller signal aborts", async () => {
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const controller = new AbortController();
+    const events: string[] = [];
+
+    const first = enqueueProcessingJob({
+      preview: {
+        kind: "generate",
+        label: "First",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        progress: 0,
+      },
+      run: async () => {
+        events.push("first:start");
+        await firstGate;
+      },
+    });
+    const second = enqueueProcessingJob({
+      signal: controller.signal,
+      preview: {
+        kind: "generate",
+        label: "Second",
+        x: 120,
+        y: 0,
+        width: 100,
+        height: 100,
+        progress: 0,
+      },
+      run: async () => {
+        events.push("second:start");
+      },
+    });
+
+    controller.abort();
+    await second.promise;
+    expect(events).toEqual(["first:start"]);
+    expect(getProcessingPreviews().map((preview) => preview.id)).toEqual([first.id]);
+
+    releaseFirst();
+    await first.promise;
+  });
 });

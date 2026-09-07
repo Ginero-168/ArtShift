@@ -55,10 +55,31 @@ describe("remote Design Agent approval boundary", () => {
         selectedObjectIds: ["title-1"],
         snapshot: {},
       },
-      { replicateToken: "test-only-token" },
+      { replicateToken: "test-only-token", cloudConsent: true },
     );
 
     expect(result.type).toBe("proposal");
     if (result.type === "proposal") expect(result.proposal.requiresApproval).toBe(true);
+  });
+
+  it("does not call the runtime without explicit remote consent", async () => {
+    executeMock.mockReset();
+    const result = await prepareDesignTurn(
+      [{ role: "user", content: "ช่วยออกแบบโปสเตอร์" }],
+      {
+        docId: "doc-1",
+        baseRevision: 100,
+        artworkId: "art-1",
+        artworkWidth: 1920,
+        artworkHeight: 1080,
+        hasSelection: false,
+        selectedObjectIds: [],
+        snapshot: {},
+      },
+      { replicateToken: "configured" },
+    );
+
+    expect(result).toMatchObject({ type: "text" });
+    expect(executeMock).not.toHaveBeenCalled();
   });
 });

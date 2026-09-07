@@ -19,7 +19,8 @@ export type RecoveryInput = {
 export type RecoveryDecision =
   | { action: "stop"; reason: string }
   | { action: "resume"; reason: string }
-  | { action: "retry"; nextAttempt: number; reason: string };
+  | { action: "retry"; nextAttempt: number; reason: string }
+  | { action: "outcome-unknown"; reason: string };
 
 export function decideRecovery(input: RecoveryInput): RecoveryDecision {
   if (
@@ -27,8 +28,20 @@ export function decideRecovery(input: RecoveryInput): RecoveryDecision {
   ) {
     return { action: "stop", reason: `ไม่ retry สำหรับความล้มเหลวประเภท ${input.kind}` };
   }
-  if (input.kind === "polling" && input.predictionId) {
-    return { action: "resume", reason: "ติดตาม prediction เดิมเพื่อป้องกันงานซ้ำ" };
+  if (input.kind === "polling") {
+    if (input.predictionId) {
+      return { action: "resume", reason: "ติดตาม prediction เดิมเพื่อป้องกันงานซ้ำ" };
+    }
+    return {
+      action: "outcome-unknown",
+      reason: "ไม่พบ prediction handle จึงยืนยันผลลัพธ์ provider เดิมไม่ได้",
+    };
+  }
+  if (input.kind === "network") {
+    return {
+      action: "outcome-unknown",
+      reason: "การเชื่อมต่อขาดหลังเริ่มงาน จึงไม่สร้างคำขอที่อาจซ้ำโดยอัตโนมัติ",
+    };
   }
   if (input.attempt >= input.maxAttempts) {
     return { action: "stop", reason: "ถึงขีดจำกัดจำนวน attempt แล้ว" };
@@ -38,13 +51,6 @@ export function decideRecovery(input: RecoveryInput): RecoveryDecision {
       action: "retry",
       nextAttempt: input.attempt + 1,
       reason: "แก้เงื่อนไขที่ Quality Gate ระบุและลองใหม่หนึ่งครั้ง",
-    };
-  }
-  if (input.kind === "network") {
-    return {
-      action: "retry",
-      nextAttempt: input.attempt + 1,
-      reason: "ลอง transport ใหม่ภายใน budget ที่กำหนด",
     };
   }
   return { action: "stop", reason: "ไม่มี recovery strategy ที่ยืนยันได้" };

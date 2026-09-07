@@ -16,6 +16,17 @@ describe("automatic image quality policy", () => {
       }),
     ).toMatchObject({ quality: "high" });
   });
+  it("never downgrades final or product work to low", () => {
+    expect(
+      chooseImageQuality({
+        prompt: "quick draft product packaging for final print",
+        taskClass: "complex",
+        hasReference: false,
+        finalUse: true,
+      }),
+    ).toMatchObject({ quality: "high" });
+  });
+
   it("uses low only for an explicit draft request", () => {
     expect(
       chooseImageQuality({

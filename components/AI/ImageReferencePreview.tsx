@@ -46,6 +46,8 @@ export default function ImageReferencePreview({
           },
           { width: Math.max(1, width), height: Math.max(1, height) },
           {
+            left: viewport?.offsetLeft ?? 0,
+            top: viewport?.offsetTop ?? 0,
             width: viewport?.width ?? window.innerWidth,
             height: viewport?.height ?? window.innerHeight,
           },

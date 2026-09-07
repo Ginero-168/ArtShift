@@ -112,7 +112,7 @@ export class RoutedAiRuntime implements AiRuntime {
     executionOptions: AiExecutionOptions = {},
   ): Promise<AiExecution<AiTaskOutput<K>>> {
     assertAiTaskPolicy(task, executionOptions);
-    this.assertMonthlyBudget();
+    this.assertMonthlyBudget(executionOptions.accountId);
 
     const profile = executionOptions.profile ?? this.options.defaultProfiles?.[task] ?? "economy";
     const targets = this.resolveTargets(task, profile, executionOptions);
@@ -204,6 +204,7 @@ export class RoutedAiRuntime implements AiRuntime {
         };
         this.ledger.record({
           at: Date.now(),
+          accountId: executionOptions.accountId,
           task,
           provider: target.provider,
           model: result.model ?? target.model,
@@ -221,6 +222,7 @@ export class RoutedAiRuntime implements AiRuntime {
             : normalizeAiError(error, target.provider);
         this.ledger.record({
           at: Date.now(),
+          accountId: executionOptions.accountId,
           task,
           provider: target.provider,
           model: target.model,
@@ -266,12 +268,12 @@ export class RoutedAiRuntime implements AiRuntime {
     };
   }
 
-  usageSummary() {
-    return this.ledger.summary();
+  usageSummary(accountId?: string) {
+    return this.ledger.summary(undefined, accountId);
   }
 
-  recentUsage(limit = 20) {
-    return this.ledger.recent(limit);
+  recentUsage(limit = 20, accountId?: string) {
+    return this.ledger.recent(limit, accountId);
   }
 
   clearCache(): void {
@@ -291,9 +293,9 @@ export class RoutedAiRuntime implements AiRuntime {
     });
   }
 
-  private assertMonthlyBudget(): void {
+  private assertMonthlyBudget(accountId?: string): void {
     if (typeof this.options.monthlyBudgetUsd !== "number") return;
-    if (this.ledger.summary().estimatedUsd >= this.options.monthlyBudgetUsd) {
+    if (this.ledger.summary(undefined, accountId).estimatedUsd >= this.options.monthlyBudgetUsd) {
       throw new AiRuntimeError(
         "BUDGET_EXCEEDED",
         `The monthly AI budget of $${this.options.monthlyBudgetUsd.toFixed(2)} has been reached.`,

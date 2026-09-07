@@ -5,6 +5,7 @@ export type UnifiedPromptRoute = "local-plan" | "tool-command" | "design-agent";
 type VisualRouteHint = {
   route: "direct" | "orchestrator" | "clarify";
   capabilityAvailable: boolean;
+  taskClass?: "simple" | "complex";
 };
 
 export const UNIFIED_AI_SYSTEM = Object.freeze({
@@ -24,7 +25,9 @@ export function routeUnifiedPrompt(input: {
   if (input.hasLocalPlan) return "local-plan";
   if (
     input.visualPlan &&
-    (input.visualPlan.route !== "direct" || !input.visualPlan.capabilityAvailable)
+    (input.visualPlan.taskClass === "complex" ||
+      input.visualPlan.route !== "direct" ||
+      !input.visualPlan.capabilityAvailable)
   ) {
     return "design-agent";
   }

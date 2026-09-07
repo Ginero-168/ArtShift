@@ -1,9 +1,9 @@
 import { generateAIImage } from "@/lib/ai/imageGeneration";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
-import { getCanvasViewport } from "@/lib/engine/canvasViewport";
+import { getCanvasViewport, subscribeCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
 import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
-import { getCached, preloadDataURL } from "@/lib/engine/imageCache";
+import { preloadDataURL } from "@/lib/engine/imageCache";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
@@ -11,7 +11,14 @@ import { runBriefQualityGate } from "./briefQualityGate";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
 import { type GeneratedOutputAnalysis, runGeneratedImageQualityGate } from "./resultQualityGate";
-import { type AiTask, type AiTaskEvent, reduceAiTask } from "./taskMachine";
+import {
+  type AiTask,
+  type AiTaskEvent,
+  appendAiTaskEvent,
+  assertAiTaskHarness,
+  reduceAiTask,
+} from "./taskMachine";
+import { renderVisibleReference } from "./visibleReferenceRenderer";
 
 export type ContextAwareTaskStage =
   | "queued"
@@ -23,7 +30,8 @@ export type ContextAwareTaskStage =
   | "committing"
   | "succeeded"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "outcome-unknown";
 
 export type ContextAwareTaskUpdate = {
   stage: ContextAwareTaskStage;
@@ -56,11 +64,21 @@ export async function runContextAwareImageTask(
   } = {},
 ): Promise<ContextAwareTaskResult> {
   const signal = options.signal ?? new AbortController().signal;
+  assertAiTaskHarness(initialTask);
   if (initialTask.cloudConsentRequired && options.cloudConsent !== true) {
     throw new Error("Explicit cloud consent is required before starting this task");
   }
   let task = initialTask;
+  if (!task.history.some((event) => event.type === "intent.assessed")) {
+    task = appendAiTaskEvent(task, { type: "intent.assessed", complete: true });
+  }
   const inputImages = resolveReferenceImages(refs);
+  const initialState = useEngine.getState();
+  const targetSnapshot = {
+    docId: initialState.doc.id,
+    slideId: initialState.currentSlideId,
+    revision: initialState.doc.updatedAt,
+  };
   const dimensions = resolveOutputDimensions(task.prompt);
   const viewport =
     getCanvasViewport() ??
@@ -91,6 +109,7 @@ export async function runContextAwareImageTask(
   });
 
   const job = enqueueProcessingJob({
+    signal,
     preview: {
       kind: "generate",
       label: refs.length ? "Image Editor" : "Image Generator",
@@ -103,189 +122,265 @@ export async function runContextAwareImageTask(
       message: "เตรียมพื้นที่ผลลัพธ์ใน Canvas…",
     },
     run: async (context) => {
-      for (let attempt = 1; attempt <= task.maxAttempts; attempt++) {
-        throwIfAborted(signal);
-        task = transition(task, { type: "running" }, options, {
-          stage: "generating",
-          message: `กำลังสร้างภาพ (ครั้งที่ ${attempt}/${task.maxAttempts})…`,
-          attempt,
-          quality: task.quality,
-        });
-        context.update({
-          phase: "running",
-          progress: null,
-          message: `กำลังสร้างภาพ (ครั้งที่ ${attempt}/${task.maxAttempts})…`,
-        });
-        try {
-          const generated = await generateAIImage(
-            {
-              prompt: task.prompt,
-              width: dimensions.width,
-              height: dimensions.height,
-              aspectRatio: dimensions.aspectRatio,
-              quality: task.quality,
-              inputImages,
-              cloudConsent: options.cloudConsent === true,
-              enhance: false,
-            },
-            signal,
-          );
-          throwIfAborted(signal);
-          const technicalGate = runVisualQualityGate({
-            dataUrl: generated.dataUrl,
-            prompt: task.prompt,
-            width: generated.width,
-            height: generated.height,
-            outputCount: 1,
-          });
-          if (!technicalGate.passed) {
-            throw new Error(
-              `Generated image failed the visual quality gate: ${technicalGate.blockers.join(" ")}`,
-            );
-          }
-          const briefGate = runBriefQualityGate({
-            prompt: task.prompt,
-            outputWidth: generated.width,
-            outputHeight: generated.height,
-            outputCount: 1,
-            requestedAspectRatio: dimensions.aspectRatio,
-            referenceCount: task.selectedImages.length,
-            submittedReferenceCount: inputImages.length,
-          });
-          if (!briefGate.passed) {
-            throw new Error(
-              `Generated image failed the brief quality gate: ${briefGate.blockers.join(" ")}`,
-            );
-          }
-          task = transition(task, { type: "quality-check" }, options, {
-            stage: "quality-check",
-            message: "กำลังตรวจผลลัพธ์เทียบกับ brief…",
+      const executionSignal = context.signal;
+      const unsubscribeViewport = subscribeCanvasViewport(() => {
+        const currentViewport = getCanvasViewport();
+        if (!currentViewport) return;
+        const nextBounds = getGenerationPreviewBounds(currentViewport, dimensions);
+        context.update({ ...nextBounds });
+      });
+      try {
+        for (let attempt = 1; attempt <= task.maxAttempts; attempt++) {
+          throwIfAborted(executionSignal);
+          task = transition(task, { type: "running" }, options, {
+            stage: "generating",
+            message: `กำลังสร้างภาพ (ครั้งที่ ${attempt}/${task.maxAttempts})…`,
             attempt,
             quality: task.quality,
           });
-          let outputAnalysis: GeneratedOutputAnalysis | undefined;
-          const requiresLocalOutputReview =
-            Boolean(task.requiredSubjects?.length) ||
-            Boolean(task.requiredText?.trim()) ||
-            task.selectedImages.length > 0;
-          if (requiresLocalOutputReview) {
-            try {
-              outputAnalysis = await (options.analyzeOutput ?? analyzeGeneratedOutput)(
-                generated.dataUrl,
-                generated.fileId,
-                generated.width,
-                generated.height,
-                signal,
+          context.update({
+            phase: "running",
+            progress: null,
+            message: `กำลังสร้างภาพ (ครั้งที่ ${attempt}/${task.maxAttempts})…`,
+          });
+          task = appendAiTaskEvent(task, {
+            type: "provider.requested",
+            attempt,
+            subAgent: task.subAgent,
+          });
+          try {
+            const generated = await generateAIImage(
+              {
+                prompt: task.prompt,
+                width: dimensions.width,
+                height: dimensions.height,
+                aspectRatio: dimensions.aspectRatio,
+                quality: task.quality,
+                inputImages,
+                cloudConsent: options.cloudConsent === true,
+                enhance: false,
+              },
+              executionSignal,
+            );
+            throwIfAborted(executionSignal);
+            const technicalGate = runVisualQualityGate({
+              dataUrl: generated.dataUrl,
+              prompt: task.prompt,
+              width: generated.width,
+              height: generated.height,
+              outputCount: 1,
+            });
+            if (!technicalGate.passed) {
+              throw new Error(
+                `Generated image failed the visual quality gate: ${technicalGate.blockers.join(" ")}`,
               );
-            } catch (error) {
-              if (isAbortError(error)) throw error;
-              if (task.requiredSubjects?.length || task.requiredText?.trim()) {
-                throw new Error(
-                  "Generated image failed the quality gate: local output review unavailable",
+            }
+            const briefGate = runBriefQualityGate({
+              prompt: task.prompt,
+              outputWidth: generated.width,
+              outputHeight: generated.height,
+              outputCount: 1,
+              requestedAspectRatio: dimensions.aspectRatio,
+              referenceCount: task.selectedImages.length,
+              submittedReferenceCount: inputImages.length,
+            });
+            if (!briefGate.passed) {
+              throw new Error(
+                `Generated image failed the brief quality gate: ${briefGate.blockers.join(" ")}`,
+              );
+            }
+            task = transition(task, { type: "quality-check" }, options, {
+              stage: "quality-check",
+              message: "กำลังตรวจผลลัพธ์เทียบกับ brief…",
+              attempt,
+              quality: task.quality,
+            });
+            context.update({
+              phase: "quality-check",
+              progress: 0.45,
+              message: "กำลังตรวจผลลัพธ์เทียบกับ brief…",
+            });
+            let outputAnalysis: GeneratedOutputAnalysis | undefined;
+            const requiresLocalOutputReview =
+              Boolean(task.requiredSubjects?.length) ||
+              Boolean(task.requiredText?.trim()) ||
+              task.selectedImages.length > 0;
+            if (requiresLocalOutputReview) {
+              try {
+                outputAnalysis = await (options.analyzeOutput ?? analyzeGeneratedOutput)(
+                  generated.dataUrl,
+                  generated.fileId,
+                  generated.width,
+                  generated.height,
+                  executionSignal,
                 );
+              } catch (error) {
+                if (isAbortError(error)) throw error;
+                if (task.requiredSubjects?.length || task.requiredText?.trim()) {
+                  throw new Error(
+                    "Generated image failed the quality gate: local output review unavailable",
+                  );
+                }
+                context.update({
+                  progress: 0.7,
+                  message: "ตรวจภาพเชิงความหมายไม่ได้ จึงใช้การตรวจทางเทคนิคต่อ",
+                });
               }
+            } else {
               context.update({
                 progress: 0.7,
-                message: "ตรวจภาพเชิงความหมายไม่ได้ จึงใช้การตรวจทางเทคนิคต่อ",
+                message: "ไม่มี hard semantic constraint จึงใช้การตรวจทางเทคนิคต่อ",
               });
             }
-          } else {
-            context.update({
-              progress: 0.7,
-              message: "ไม่มี hard semantic constraint จึงใช้การตรวจทางเทคนิคต่อ",
+            const semanticGate = runGeneratedImageQualityGate({
+              outputWidth: generated.width,
+              outputHeight: generated.height,
+              requestedAspectRatio: dimensions.aspectRatio,
+              requiredSubjects: task.requiredSubjects,
+              requiredText: task.requiredText,
+              referenceRequired: task.selectedImages.length > 0,
+              referenceFacts: task.referenceFacts,
+              outputAnalysis,
             });
-          }
-          const semanticGate = runGeneratedImageQualityGate({
-            outputWidth: generated.width,
-            outputHeight: generated.height,
-            requestedAspectRatio: dimensions.aspectRatio,
-            requiredSubjects: task.requiredSubjects,
-            requiredText: task.requiredText,
-            outputAnalysis,
-          });
-          if (!semanticGate.passed) {
-            throw new Error(
-              `Generated image failed the semantic quality gate: ${semanticGate.blockers.join(" ")}`,
+            if (!semanticGate.passed) {
+              throw new Error(
+                `Generated image failed the semantic quality gate: ${semanticGate.blockers.join(" ")}`,
+              );
+            }
+            task = appendAiTaskEvent(task, {
+              type: "quality.checked",
+              passed: true,
+              attempt,
+            });
+            context.update({ progress: 0.78, message: "ตรวจผลลัพธ์เทียบกับ brief แล้ว" });
+            const preloaded = await preloadDataURL(generated.dataUrl);
+            throwIfAborted(executionSignal);
+            task = appendAiTaskEvent(task, { type: "preload.completed", attempt });
+            task = transition(task, { type: "preloading" }, options, {
+              stage: "preloading",
+              message: "กำลังโหลดภาพให้พร้อมก่อนวางบน Canvas…",
+              attempt,
+              quality: task.quality,
+            });
+            context.update({
+              phase: "preloading",
+              progress: 0.92,
+              message: "กำลังโหลดภาพให้พร้อมก่อนวางบน Canvas…",
+            });
+            const state = useEngine.getState();
+            const slide = state.currentSlide();
+            assertCommitTarget(state, targetSnapshot, refs);
+            if (!slide) throw new Error("ไม่พบ Canvas ที่กำลังใช้งาน");
+            if (slide.layers.length === 0) throw new Error("ไม่พบ Layer สำหรับวางผลลัพธ์บน Canvas");
+            const historyBeforeCommit = state.history.past.length;
+            const currentViewport = getCanvasViewport() ?? viewport;
+            const finalBounds = getGenerationPreviewBounds(
+              { ...currentViewport, slideWidth: slide.width, slideHeight: slide.height },
+              { width: preloaded.width, height: preloaded.height },
             );
-          }
-          context.update({ progress: 0.78, message: "ตรวจผลลัพธ์เทียบกับ brief แล้ว" });
-          const preloaded = await preloadDataURL(generated.dataUrl);
-          throwIfAborted(signal);
-          task = transition(task, { type: "preloading" }, options, {
-            stage: "preloading",
-            message: "กำลังโหลดภาพให้พร้อมก่อนวางบน Canvas…",
-            attempt,
-            quality: task.quality,
-          });
-          context.update({ progress: 0.92, message: "กำลังโหลดภาพให้พร้อมก่อนวางบน Canvas…" });
-          const state = useEngine.getState();
-          const slide = state.currentSlide();
-          if (!slide) throw new Error("ไม่พบ Canvas ที่กำลังใช้งาน");
-          const finalBounds = getGenerationPreviewBounds(
-            { ...viewport, slideWidth: slide.width, slideHeight: slide.height },
-            { width: preloaded.width, height: preloaded.height },
-          );
-          task = transition(task, { type: "committing" }, options, {
-            stage: "committing",
-            message: "กำลังเพิ่มผลลัพธ์แบบ atomic โดยไม่ทับต้นฉบับ…",
-            attempt,
-            quality: task.quality,
-          });
-          context.update({ progress: 0.98, message: "กำลังเพิ่มผลลัพธ์ลง Canvas…" });
-          const element = createImage({
-            x: finalBounds.x,
-            y: finalBounds.y,
-            width: finalBounds.width,
-            height: finalBounds.height,
-            fileId: preloaded.fileId,
-            naturalWidth: preloaded.width,
-            naturalHeight: preloaded.height,
-          });
-          state.addElement(element, `AI task ${task.id} generate image`);
-          state.selectOnly([element.id]);
-          task = transition(task, { type: "succeeded" }, options, {
-            stage: "succeeded",
-            message: `สร้างและวางภาพสำเร็จ (${preloaded.width} × ${preloaded.height}px) โดยคงต้นฉบับไว้`,
-            attempt,
-            quality: task.quality,
-          });
-          context.update({ progress: 1, message: "สร้างและวางภาพสำเร็จ" });
-          committed = {
-            task,
-            elementId: element.id,
-            width: preloaded.width,
-            height: preloaded.height,
-          };
-          return;
-        } catch (error) {
-          lastError = error;
-          if (isAbortError(error)) throw error;
-          const kind = classifyFailure(error);
-          const recovery = decideRecovery({ kind, attempt, maxAttempts: task.maxAttempts });
-          if (recovery.action === "retry") {
+            task = appendAiTaskEvent(task, { type: "commit.started", attempt });
+            task = transition(task, { type: "committing" }, options, {
+              stage: "committing",
+              message: "กำลังเพิ่มผลลัพธ์แบบ atomic โดยไม่ทับต้นฉบับ…",
+              attempt,
+              quality: task.quality,
+            });
+            context.update({
+              phase: "committing",
+              progress: 0.98,
+              message: "กำลังเพิ่มผลลัพธ์ลง Canvas…",
+            });
+            const element = createImage({
+              x: finalBounds.x,
+              y: finalBounds.y,
+              width: finalBounds.width,
+              height: finalBounds.height,
+              fileId: preloaded.fileId,
+              naturalWidth: preloaded.width,
+              naturalHeight: preloaded.height,
+            });
+            state.addElement(element, `AI task ${task.id} generate image`);
+            const afterCommit = useEngine.getState();
+            const inserted = afterCommit
+              .currentSlide()
+              ?.elements.some((candidate) => candidate.id === element.id && !candidate.isDeleted);
+            if (!inserted || afterCommit.history.past.length !== historyBeforeCommit + 1) {
+              throw new Error("Canvas commit was not applied atomically");
+            }
+            task = appendAiTaskEvent(task, { type: "commit.completed", attempt });
+            state.selectOnly([element.id]);
+            task = transition(task, { type: "succeeded" }, options, {
+              stage: "succeeded",
+              message: `สร้างและวางภาพสำเร็จ (${preloaded.width} × ${preloaded.height}px) โดยคงต้นฉบับไว้`,
+              attempt,
+              quality: task.quality,
+            });
+            context.update({ progress: 1, message: "สร้างและวางภาพสำเร็จ" });
+            committed = {
+              task,
+              elementId: element.id,
+              width: preloaded.width,
+              height: preloaded.height,
+            };
+            return;
+          } catch (error) {
+            lastError = error;
+            if (isAbortError(error)) throw error;
+            const kind = classifyFailure(error);
+            if (kind === "quality") {
+              task = appendAiTaskEvent(task, { type: "quality.checked", passed: false, attempt });
+            }
+            const recovery = decideRecovery({ kind, attempt, maxAttempts: task.maxAttempts });
+            task = appendAiTaskEvent(task, {
+              type: "recovery.decided",
+              action: recovery.action,
+              reason: recovery.reason,
+            });
+            if (recovery.action === "outcome-unknown") {
+              task = transition(
+                task,
+                { type: "outcome-unknown", reason: "provider result could not be confirmed" },
+                options,
+                {
+                  stage: "outcome-unknown",
+                  message: "ผลลัพธ์จาก AI provider ยังยืนยันไม่ได้ จึงไม่สร้างคำขอซ้ำ",
+                  attempt,
+                  quality: task.quality,
+                },
+              );
+              context.update({
+                progress: null,
+                message: "ผลลัพธ์ยังยืนยันไม่ได้ — ไม่มีการสร้างงานซ้ำอัตโนมัติ",
+              });
+              throw createOutcomeUnknownError(task);
+            }
+            if (recovery.action === "retry") {
+              task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
+                stage: "failed",
+                message: `ครั้งที่ ${attempt} ไม่ผ่าน: ${recovery.reason}`,
+                attempt,
+                quality: task.quality,
+              });
+              task = transition(task, { type: "retry", reason: recovery.reason }, options, {
+                stage: "retrying",
+                message: `กำลังแก้ปัญหาและลองใหม่: ${recovery.reason}`,
+                attempt,
+                quality: task.quality,
+              });
+              context.update({ progress: 0, message: `กำลังแก้ปัญหาและลองใหม่…` });
+              continue;
+            }
             task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
               stage: "failed",
-              message: `ครั้งที่ ${attempt} ไม่ผ่าน: ${recovery.reason}`,
+              message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
               attempt,
               quality: task.quality,
             });
-            task = transition(task, { type: "retry", reason: recovery.reason }, options, {
-              stage: "retrying",
-              message: `กำลังแก้ปัญหาและลองใหม่: ${recovery.reason}`,
-              attempt,
-              quality: task.quality,
-            });
-            context.update({ progress: 0, message: `กำลังแก้ปัญหาและลองใหม่…` });
-            continue;
+            throw attachTaskSnapshot(error, task);
           }
-          task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
-            stage: "failed",
-            message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
-            attempt,
-            quality: task.quality,
-          });
-          throw error;
         }
+      } finally {
+        unsubscribeViewport();
       }
     },
   });
@@ -300,8 +395,18 @@ export async function runContextAwareImageTask(
         attempt: task.attempt,
         quality: task.quality,
       });
+      throw attachTaskSnapshot(error, task);
     }
     throw error;
+  }
+  if (signal.aborted) {
+    task = transition(task, { type: "cancelled", reason: "ผู้ใช้ยกเลิกก่อนเริ่มงาน" }, options, {
+      stage: "cancelled",
+      message: "ยกเลิก Task ที่รอคิวแล้ว และไม่มีการเปลี่ยนแปลงบน Canvas",
+      attempt: task.attempt,
+      quality: task.quality,
+    });
+    throw attachTaskSnapshot(createAbortError(), task);
   }
   if (!committed) throw lastError instanceof Error ? lastError : new Error("AI Task ไม่ได้สร้างผลลัพธ์");
   return committed;
@@ -315,22 +420,19 @@ function resolveReferenceImages(
   return refs.map((ref) => {
     const element = slide?.elements.find((candidate) => candidate.id === ref.objectId);
     if (
-      element?.type !== "image" ||
+      (element?.type !== "image" && element?.type !== "bookMockup") ||
       element?.version !== ref.elementVersion ||
       element?.fileId !== ref.fileId
     ) {
       throw new Error(`selected image changed before execution: ${ref.displayName}`);
     }
-    const cached = getCached(ref.fileId);
-    if (!cached?.dataURL) {
-      throw new Error(`selected image is no longer available locally: ${ref.displayName}`);
-    }
-    const mimeType = cached.dataURL.match(/^data:(image\/(?:png|jpeg|webp));base64,/u)?.[1] as
+    const rendered = renderVisibleReference(ref);
+    const mimeType = rendered.dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,/u)?.[1] as
       | "image/png"
       | "image/jpeg"
       | "image/webp"
       | undefined;
-    return { dataUrl: cached.dataURL, ...(mimeType ? { mimeType } : {}) };
+    return { dataUrl: rendered.dataUrl, ...(mimeType ? { mimeType } : {}) };
   });
 }
 
@@ -360,6 +462,32 @@ function transition(
   return next;
 }
 
+function assertCommitTarget(
+  state: ReturnType<typeof useEngine.getState>,
+  snapshot: { docId: string; slideId: string; revision: number },
+  refs: readonly ComposerImageRef[],
+): void {
+  if (
+    state.doc.id !== snapshot.docId ||
+    state.currentSlideId !== snapshot.slideId ||
+    state.doc.updatedAt !== snapshot.revision
+  ) {
+    throw new Error("Canvas target changed before commit; please resend the task");
+  }
+  const slide = state.currentSlide();
+  if (!slide) throw new Error("Canvas target disappeared before commit");
+  for (const ref of refs) {
+    const element = slide.elements.find((candidate) => candidate.id === ref.objectId);
+    if (
+      (element?.type !== "image" && element?.type !== "bookMockup") ||
+      element.version !== ref.elementVersion ||
+      element.fileId !== ref.fileId
+    ) {
+      throw new Error(`selected image changed before commit: ${ref.displayName}`);
+    }
+  }
+}
+
 function classifyFailure(error: unknown): RecoveryFailureKind {
   const message = errorMessage(error).toLocaleLowerCase();
   if (
@@ -367,6 +495,12 @@ function classifyFailure(error: unknown): RecoveryFailureKind {
     (message.includes("credential") || message.includes("auth") || message.includes("key"))
   )
     return "auth";
+  if (
+    message.includes("canvas target") ||
+    message.includes("selected image changed") ||
+    message.includes("commit was not applied")
+  )
+    return "invalid_input";
   if (message.includes("invalid") || message.includes("unsupported")) return "invalid_input";
   if (message.includes("budget") || message.includes("cost")) return "budget";
   if (message.includes("quality gate") || message.includes("brief")) return "quality";
@@ -406,6 +540,24 @@ function throwIfAborted(signal: AbortSignal): void {
   const error = new Error("การสร้างภาพถูกยกเลิกแล้วครับ");
   error.name = "AbortError";
   throw error;
+}
+
+function attachTaskSnapshot(error: unknown, task: AiTask): Error {
+  const target = error instanceof Error ? error : new Error("AI task failed.");
+  Object.defineProperty(target, "task", { value: task, enumerable: false, configurable: false });
+  return target;
+}
+
+function createOutcomeUnknownError(task: AiTask): Error {
+  const error = new Error("AI provider result is uncertain; no duplicate request was created.");
+  error.name = "OutcomeUnknownError";
+  return attachTaskSnapshot(error, task);
+}
+
+function createAbortError(): Error {
+  const error = new Error("การสร้างภาพถูกยกเลิกแล้วครับ");
+  error.name = "AbortError";
+  return error;
 }
 
 function isAbortError(error: unknown): boolean {

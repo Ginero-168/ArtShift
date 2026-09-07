@@ -68,14 +68,14 @@ export function buildDesignAgentContext(
 export async function prepareRemoteDesignTurn(
   messages: ClientChatMessage[],
   context: DesignAgentContext,
-  signal?: AbortSignal,
+  options: { signal?: AbortSignal; cloudConsent?: boolean } = {},
 ): Promise<PreparedDesignResult> {
   const response = await fetch("/api/design-agent", {
     method: "POST",
     cache: "no-store",
     headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ messages, context }),
-    signal,
+    body: JSON.stringify({ messages, context, cloudConsent: options.cloudConsent === true }),
+    signal: options.signal,
   });
   const payload = (await response.json().catch(() => null)) as {
     result?: PreparedDesignResult;

@@ -4,6 +4,14 @@ const getCachedMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/engine/imageCache", () => ({ getCached: getCachedMock }));
 vi.mock("@/lib/vision/assetAnalysisBrowser", () => ({ getAssetAnalysis: vi.fn(() => undefined) }));
+vi.mock("@/lib/ai/orchestration/visibleReferenceRenderer", () => ({
+  renderVisibleReference: vi.fn(() => ({
+    dataUrl: "data:image/png;base64,VISIBLE_RENDER",
+    width: 400,
+    height: 300,
+    limitations: ["test visible render"],
+  })),
+}));
 vi.mock("@/lib/vision/visionEngine", () => ({
   visionCaption: vi.fn(),
   visionDetect: vi.fn(),
@@ -48,11 +56,12 @@ describe("local selected-image analysis", () => {
       width: 800,
       height: 600,
     });
+    const configuredAnalyzers = analyzers();
     const result = await analyzeImageReference(
       ref,
       new AbortController().signal,
       undefined,
-      analyzers(),
+      configuredAnalyzers,
     );
 
     expect(result).toMatchObject({
@@ -60,8 +69,14 @@ describe("local selected-image analysis", () => {
       caption: "a red coffee mug",
       objects: ["mug", "table"],
       visibleText: "SALE 20%",
-      dimensions: { width: 800, height: 600 },
+      dimensions: { width: 400, height: 300 },
+      limitations: ["test visible render"],
     });
+    expect(configuredAnalyzers.caption).toHaveBeenCalledWith(
+      "data:image/png;base64,VISIBLE_RENDER",
+      "detailed",
+      expect.any(Function),
+    );
     expect(JSON.stringify(result)).not.toContain("SECRET_IMAGE_BYTES");
   });
 

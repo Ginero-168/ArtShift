@@ -137,6 +137,23 @@ describe("transient processing preview", () => {
     });
   });
 
+  it("keeps quality, preload and commit phases explicit", () => {
+    const id = beginProcessingPreview({
+      kind: "generate",
+      label: "Generate",
+      x: 100,
+      y: 80,
+      width: 320,
+      height: 220,
+      progress: null,
+    });
+
+    for (const phase of ["quality-check", "preloading", "committing"] as const) {
+      updateProcessingPreview(id, { phase });
+      expect(getProcessingPreview()).toMatchObject({ id, phase });
+    }
+  });
+
   it("clears only the matching request so cancellation cannot leave a stale preview", () => {
     const firstId = beginProcessingPreview({
       kind: "remove-bg",

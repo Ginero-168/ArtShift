@@ -4,21 +4,19 @@
  * edits visuals (RemoveBG, Vectorize), and arranges layouts (60-30-10).
  */
 
-import {
-  cleanImagePrompt,
-  generateAIImage,
-  isImageGenerationPrompt,
-} from "@/lib/ai/imageGeneration";
+import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import { buildComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
+import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import { assessImageIntent } from "@/lib/ai/orchestration/intentCompleteness";
+import { prepareContextAwareTurn } from "@/lib/ai/orchestration/turnOrchestrator";
 import { removeBackground } from "@/lib/ai/removeBg";
-import { planVisualRequest, type VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
+import type { VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
-import { createImage, createRect, createText } from "@/lib/engine/factory";
-import { getCached, loadDataURL, preloadDataURL } from "@/lib/engine/imageCache";
+import { createRect, createText } from "@/lib/engine/factory";
+import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement, TextElement } from "@/lib/engine/types";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
-import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 
 export type CoPilotRole = "user" | "assistant" | "system";
 
@@ -75,6 +73,7 @@ export interface WorkspaceContext {
 
 export type CoPilotOptions = {
   signal?: AbortSignal;
+  cloudConsent?: boolean;
   visualPlan?: VisualRoutePlan;
   contextAwareValidated?: boolean;
   imageQuality?: "low" | "medium" | "high";
@@ -214,112 +213,127 @@ export async function executeCoPilotInstruction(
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
   // -------------------------------------------------------------
   if (isImageGenerationPrompt(prompt)) {
-    const visualPlan =
-      options.visualPlan ??
-      planVisualRequest(prompt, {
-        hasSelection: context.selectedIds.length > 0,
-        selectedObjectCount: context.selectedIds.length,
-        elementCount: context.elementCount,
-        hasImageAsset: context.elementsSummary.some((element) => element.type === "image"),
-      });
-
-    if (visualPlan.route !== "direct" || !visualPlan.capabilityAvailable) {
-      const act = logAction("orchestrator", "🧭 Visual Orchestrator", visualPlan.reason);
-      const message =
-        visualPlan.clarification ?? `คำขอนี้ต้องผ่านการวางแผนก่อนครับ (${visualPlan.capabilityAlias})`;
-      updateActionStatus(act, "error", message);
+    const selectedRefs = buildComposerImageRefs(
+      st.doc.slides.find((slide) => slide.id === st.currentSlideId)?.elements ?? [],
+      st.selectedIds,
+    );
+    if (selectedRefs.length > 0) {
+      const act = logAction(
+        "orchestrator",
+        "🧭 Context-aware image task",
+        "คำขอที่มีภาพเลือกต้องเริ่มจาก AI Assistance เพื่อวิเคราะห์ reference ก่อน",
+        "error",
+      );
       return {
-        reply: message,
-        actions,
-        suggestions: [
-          "เพิ่มรายละเอียดของ brief",
-          "เพิ่ม reference หรือข้อความที่ต้องการ",
-          "เปิด AI Provider Settings",
-        ],
+        reply:
+          "ยังไม่สร้างภาพครับ กรุณาส่งคำขอนี้จาก AI Assistance โดยคงภาพที่เลือกไว้ เพื่อให้วิเคราะห์ reference ก่อน",
+        actions: [act],
+        suggestions: ["เปิด AI Assistance", "ตรวจสอบภาพที่เลือก"],
       };
     }
 
+    const decision = prepareContextAwareTurn({
+      prompt,
+      refs: [],
+      analyses: [],
+      selectedIds: st.selectedIds,
+      clarificationRound: options.contextAwareValidated ? 2 : 0,
+    });
+    if (decision.kind === "clarification") {
+      const act = logAction(
+        "orchestrator",
+        "🧭 Intent Clarification",
+        "ยังไม่ส่งคำสั่งสร้างภาพ เพราะ brief ยังไม่ครบ",
+        "success",
+      );
+      return {
+        reply: decision.pending.question,
+        actions: [act],
+        suggestions: decision.pending.options.map(
+          (option) => `${option.id === "OTHER" ? "Other" : `${option.id}.`} ${option.label}`,
+        ),
+      };
+    }
+    if (decision.kind !== "task") {
+      const act = logAction(
+        "orchestrator",
+        "🧭 Context-aware image task",
+        "ยังไม่สามารถสร้าง Task จาก brief นี้ได้",
+        "error",
+      );
+      return {
+        reply: "ยังไม่สร้างภาพครับ เพราะยังเตรียม Task จาก brief นี้ไม่ได้",
+        actions: [act],
+        suggestions: ["เพิ่มรายละเอียดของ brief"],
+      };
+    }
+
+    const task = decision.task;
     const act = logAction(
       "image_gen",
-      "🎨 Generating Image with GPT Image 2",
-      `Creating ${visualPlan.capabilityAlias} visual asset for: "${prompt}"...`,
+      `🧩 Task · ${task.subAgent}`,
+      `พร้อมทำงานด้วยคุณภาพอัตโนมัติ: ${task.quality}`,
     );
+    act.taskId = task.id;
+    act.stage = "planned";
+    act.attempt = 0;
+    act.quality = task.quality;
+    if (task.cloudConsentRequired && options.cloudConsent !== true) {
+      updateActionStatus(act, "error", "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง AI provider");
+      return {
+        reply: "ยังไม่ได้สร้างภาพครับ ต้องได้รับอนุญาตก่อนส่งงานไปยัง AI provider",
+        actions,
+        suggestions: ["ยืนยันการส่งงานไปยัง AI provider"],
+      };
+    }
 
     try {
-      // Clean up prompt
-      let cleanPrompt = cleanImagePrompt(prompt);
-
-      if (!cleanPrompt) cleanPrompt = prompt;
-
-      const imageRequest = {
-        prompt: cleanPrompt,
-        aspectRatio: "1:1" as const,
-        width: 1024,
-        height: 1024,
-        quality: options.imageQuality ?? "medium",
+      const result = await runContextAwareImageTask(task, [], {
+        signal: options.signal,
         cloudConsent: true,
-        enhance: true,
-      };
-      const res = options.signal
-        ? await generateAIImage(imageRequest, options.signal)
-        : await generateAIImage(imageRequest);
-      const preloaded = await preloadDataURL(res.dataUrl);
-      if (options.signal?.aborted) {
-        const abortError = new Error("The operation was aborted.");
-        abortError.name = "AbortError";
-        throw abortError;
-      }
-
-      const maxW = context.width * 0.5;
-      const maxH = context.height * 0.5;
-      const scale = Math.min(maxW / preloaded.width, maxH / preloaded.height, 1);
-      const w = Math.round(preloaded.width * scale);
-      const h = Math.round(preloaded.height * scale);
-      const x = Math.round((context.width - w) / 2);
-      const y = Math.round((context.height - h) / 2);
-
-      const newElement = createImage({
-        x,
-        y,
-        width: w,
-        height: h,
-        fileId: preloaded.fileId,
-        naturalWidth: preloaded.width,
-        naturalHeight: preloaded.height,
+        onUpdate: (update) => {
+          act.stage = update.stage;
+          act.attempt = update.attempt;
+          act.quality = update.quality;
+          act.description = `${update.message} · ครั้งที่ ${update.attempt}/${task.maxAttempts}`;
+          onActionUpdate?.({ ...act });
+        },
       });
-
-      const generatedAsset = preloaded;
-      enqueueAssetAnalysis({
-        fileId: generatedAsset.fileId,
-        dataURL: generatedAsset.dataURL,
-        width: generatedAsset.width,
-        height: generatedAsset.height,
-      });
-      st.addElement(newElement, `co-pilot generate image: ${cleanPrompt.slice(0, 20)}`);
-      st.selectOnly([newElement.id]);
-
       updateActionStatus(
         act,
         "success",
-        `Created and placed GPT Image 2 ${options.imageQuality ?? "medium"}-quality image (${w}×${h}px) on canvas.`,
+        `สร้างและวางผลลัพธ์สำเร็จ (${result.width}×${result.height}px) โดยคงต้นฉบับไว้`,
       );
-
       return {
-        reply: `สร้างรูปภาพ "${cleanPrompt}" ด้วย Replicate GPT Image 2 (คุณภาพอัตโนมัติ: ${options.imageQuality ?? "medium"}) ให้เรียบร้อยและวางลงกึ่งกลางแคนวาสแล้วครับ!`,
+        reply: `สร้างภาพตาม brief และวางบน Canvas เรียบร้อยแล้วครับ ใช้คุณภาพอัตโนมัติ: ${result.task.quality}`,
         actions,
-        suggestions: [
-          "🪄 ลบพื้นหลังของรูปนี้",
-          "⚡ แปลงรูปนี้เป็น Vector Paths",
-          "📐 จัดวาง Layout ให้สวยงาม",
-          "✍️ เพิ่มหัวข้อและสโลแกน",
-        ],
+        suggestions: ["🪄 ลบพื้นหลังของรูปนี้", "⚡ แปลงรูปนี้เป็น Vector Paths", "📐 จัดวาง Layout ให้สวยงาม"],
       };
-    } catch (err) {
-      updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);
+    } catch (error) {
+      const wasCancelled = (error as Error).name === "AbortError" || options.signal?.aborted;
+      const outcomeUnknown = (error as Error).name === "OutcomeUnknownError";
+      act.stage = outcomeUnknown ? "outcome-unknown" : wasCancelled ? "cancelled" : "failed";
+      updateActionStatus(
+        act,
+        "error",
+        outcomeUnknown
+          ? "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ"
+          : wasCancelled
+            ? "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas"
+            : `Task ไม่สำเร็จ: ${(error as Error).message}`,
+      );
       return {
-        reply: `ขออภัยครับ ไม่สามารถสร้างรูปภาพได้: ${(err as Error).message}`,
+        reply: outcomeUnknown
+          ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติเพื่อป้องกันค่าใช้จ่ายซ้ำ"
+          : wasCancelled
+            ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
+            : `Task ไม่สำเร็จครับ: ${(error as Error).message}`,
         actions,
-        suggestions: ["✨ ลองสร้างรูปภาพใหม่อีกครั้ง", "🎨 ระบุคำค้นหาเพิ่มเติม เช่น แมวส้มน่ารัก"],
+        suggestions: outcomeUnknown
+          ? ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"]
+          : wasCancelled
+            ? ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"]
+            : ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"],
       };
     }
   }

@@ -1,7 +1,7 @@
-import { getCached } from "@/lib/engine/imageCache";
 import { getAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 import type { ComposerImageRef } from "./imageReferences";
+import { renderVisibleReference } from "./visibleReferenceRenderer";
 
 export type ImageReferenceAnalysis = {
   ref: Pick<ComposerImageRef, "objectId" | "elementVersion" | "displayName">;
@@ -44,18 +44,17 @@ export async function analyzeImageReference(
   analyzers: ImageReferenceAnalyzers = defaultAnalyzers,
 ): Promise<ImageReferenceAnalysis> {
   throwIfAborted(signal);
-  const cached = getCached(ref.fileId);
-  if (!cached?.dataURL) throw new Error(`ไม่พบข้อมูลภาพ ${ref.displayName} ในเครื่อง`);
+  const visible = renderVisibleReference(ref);
   onProgress?.("กำลังอ่านภาพที่เลือก", 0.05);
 
   const [caption, detection, visibleText] = await Promise.all([
-    analyzers.caption(cached.dataURL, "detailed", (progress) =>
+    analyzers.caption(visible.dataUrl, "detailed", (progress) =>
       onProgress?.("กำลังอ่านบริบทภาพ", 0.1 + progress * 0.25),
     ),
-    analyzers.detect(cached.dataURL, (progress) =>
+    analyzers.detect(visible.dataUrl, (progress) =>
       onProgress?.("กำลังตรวจวัตถุในภาพ", 0.1 + progress * 0.25),
     ),
-    analyzers.ocr(cached.dataURL, (progress) =>
+    analyzers.ocr(visible.dataUrl, (progress) =>
       onProgress?.("กำลังตรวจข้อความในภาพ", 0.1 + progress * 0.25),
     ),
   ]);
@@ -75,17 +74,21 @@ export async function analyzeImageReference(
     objects: detection.objects.map((object) => object.label.trim()).filter(Boolean),
     visibleText: visibleText.trim(),
     dimensions: {
-      width: cached.width,
-      height: cached.height,
-      aspectRatio: cached.width / Math.max(1, cached.height),
+      width: visible.width,
+      height: visible.height,
+      aspectRatio: visible.width / Math.max(1, visible.height),
     },
     transparency,
     appearanceNotes: [
       `Canvas placement ${Math.round(ref.width)} × ${Math.round(ref.height)} px`,
       `rotation ${Math.round((ref.angle * 180) / Math.PI)}°`,
     ],
-    limitations:
-      asset?.result?.foregroundStatus === "failed" ? ["foreground preview analysis failed"] : [],
+    limitations: [
+      ...visible.limitations,
+      ...(asset?.result?.foregroundStatus === "failed"
+        ? ["foreground preview analysis failed"]
+        : []),
+    ],
   };
 }
 

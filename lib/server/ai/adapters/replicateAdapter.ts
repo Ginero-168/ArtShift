@@ -505,13 +505,42 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           );
         }
         await delay(1_000, signal);
-        const response = await fetch(current.urls.get, {
-          headers: { Authorization: `Bearer ${this.apiToken}` },
-          signal,
-        });
-        if (safeErrors) await assertRecraftProviderResponse(response);
-        else await assertProviderResponse(response, this.id);
-        current = (await response.json()) as ReplicatePrediction;
+        let response: Response;
+        try {
+          response = await fetch(current.urls.get, {
+            headers: { Authorization: `Bearer ${this.apiToken}` },
+            signal,
+          });
+        } catch (error) {
+          if (signal.aborted) throw error;
+          throw new AiRuntimeError(
+            "PROVIDER_UNAVAILABLE",
+            "Replicate prediction status could not be confirmed.",
+            {
+              provider: this.id,
+              cause: error,
+              outcomeUnknown: true,
+              predictionId: current.id,
+            },
+          );
+        }
+        try {
+          if (safeErrors) await assertRecraftProviderResponse(response);
+          else await assertProviderResponse(response, this.id);
+          current = (await response.json()) as ReplicatePrediction;
+        } catch (error) {
+          if (signal.aborted) throw error;
+          throw new AiRuntimeError(
+            "PROVIDER_UNAVAILABLE",
+            "Replicate prediction status could not be confirmed.",
+            {
+              provider: this.id,
+              cause: error,
+              outcomeUnknown: true,
+              predictionId: current.id,
+            },
+          );
+        }
       }
       if (current.status !== "succeeded") {
         throw new AiRuntimeError(

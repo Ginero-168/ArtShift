@@ -2,6 +2,7 @@ import type { AiModelPricing, AiProviderId, AiTaskKind, AiUsage } from "./contra
 
 export type AiUsageRecord = {
   at: number;
+  accountId?: string;
   task: AiTaskKind;
   provider: AiProviderId;
   model: string;
@@ -23,8 +24,8 @@ export type AiUsageSummary = {
 
 export interface AiUsageLedger {
   record(entry: AiUsageRecord): void;
-  summary(since?: number): AiUsageSummary;
-  recent(limit?: number): AiUsageRecord[];
+  summary(since?: number, accountId?: string): AiUsageSummary;
+  recent(limit?: number, accountId?: string): AiUsageRecord[];
 }
 
 export class InMemoryAiUsageLedger implements AiUsageLedger {
@@ -39,8 +40,10 @@ export class InMemoryAiUsageLedger implements AiUsageLedger {
     }
   }
 
-  summary(since = startOfCurrentMonth()): AiUsageSummary {
-    const entries = this.entries.filter((entry) => entry.at >= since);
+  summary(since = startOfCurrentMonth(), accountId?: string): AiUsageSummary {
+    const entries = this.entries.filter(
+      (entry) => entry.at >= since && (accountId === undefined || entry.accountId === accountId),
+    );
     return {
       since,
       requests: entries.length,
@@ -51,8 +54,12 @@ export class InMemoryAiUsageLedger implements AiUsageLedger {
     };
   }
 
-  recent(limit = 20): AiUsageRecord[] {
-    return this.entries.slice(-Math.max(0, limit)).reverse();
+  recent(limit = 20, accountId?: string): AiUsageRecord[] {
+    const entries =
+      accountId === undefined
+        ? this.entries
+        : this.entries.filter((entry) => entry.accountId === accountId);
+    return entries.slice(-Math.max(0, limit)).reverse();
   }
 }
 

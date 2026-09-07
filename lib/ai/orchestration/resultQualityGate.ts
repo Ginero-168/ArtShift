@@ -11,6 +11,13 @@ export type GeneratedImageQualityInput = {
   requestedAspectRatio?: string;
   requiredSubjects?: readonly string[];
   requiredText?: string;
+  referenceRequired?: boolean;
+  referenceFacts?: readonly {
+    caption: string;
+    objects: readonly string[];
+    visibleText: string;
+    limitations: readonly string[];
+  }[];
   outputAnalysis?: GeneratedOutputAnalysis;
 };
 
@@ -52,8 +59,10 @@ export function runGeneratedImageQualityGate(
     },
     {
       id: "reference",
-      passed: !input.outputAnalysis || input.outputAnalysis.limitations.length === 0,
-      detail: "Reference fidelity is only claimed when local evidence supports it.",
+      passed: referenceMatches(input),
+      detail: input.referenceRequired
+        ? "Reference fidelity needs a source comparison signal and limitation-free local output evidence."
+        : "No reference fidelity claim is required for this task.",
     },
   ];
   const blockers = checks.filter((check) => !check.passed).map((check) => check.detail);
@@ -63,6 +72,26 @@ export function runGeneratedImageQualityGate(
     blockers,
     review: reviewKind(input),
   };
+}
+
+function referenceMatches(input: GeneratedImageQualityInput): boolean {
+  if (!input.referenceRequired) return true;
+  const output = input.outputAnalysis;
+  const facts = input.referenceFacts;
+  if (!output || !facts?.length || output.limitations.length > 0) return false;
+  const outputEvidence = [output.caption, ...output.objects].join(" ").toLocaleLowerCase();
+  const sourceObjects = facts
+    .flatMap((fact) => fact.objects)
+    .map((object) => object.trim().toLocaleLowerCase())
+    .filter(Boolean);
+  const sourceCaptions = facts
+    .map((fact) => fact.caption.trim().toLocaleLowerCase())
+    .filter(Boolean);
+  if (facts.some((fact) => fact.limitations.length > 0)) return false;
+  if (sourceObjects.length > 0) {
+    return sourceObjects.some((object) => outputEvidence.includes(object));
+  }
+  return sourceCaptions.some((caption) => caption && outputEvidence.includes(caption));
 }
 
 function requiredSubjectsMatch(input: GeneratedImageQualityInput): boolean {
@@ -82,7 +111,7 @@ function requiredTextMatches(input: GeneratedImageQualityInput): boolean {
 }
 
 function reviewKind(input: GeneratedImageQualityInput): GeneratedImageQualityResult["review"] {
-  if (input.requiredSubjects?.length || input.requiredText?.trim()) {
+  if (input.requiredSubjects?.length || input.requiredText?.trim() || input.referenceRequired) {
     return input.outputAnalysis ? "local-analysis" : "unverifiable";
   }
   if (input.outputAnalysis) return "local-analysis";

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { prepareContextAwareTurn } from "@/lib/ai/orchestration/turnOrchestrator";
+import {
+  isCanvasInventoryPrompt,
+  prepareContextAwareTurn,
+} from "@/lib/ai/orchestration/turnOrchestrator";
 import { createRect } from "@/lib/engine/factory";
 import { createEngineLayer } from "@/lib/engine/layers";
 
@@ -24,12 +27,24 @@ describe("context-aware turn orchestrator", () => {
     expect(result).toMatchObject({ kind: "answer", source: "canvas-local" });
   });
 
-  it("returns clarification for an ambiguous image request", () => {
+  it("does not classify a generation request as Canvas inventory", () => {
+    expect(isCanvasInventoryPrompt("สร้างภาพแมวบน Canvas สำหรับโพสต์")).toBe(false);
+  });
+
+  it("returns clarification for an ambiguous image request", async () => {
     const result = prepareContextAwareTurn({ prompt: "สร้างภาพแมว", refs: [], analyses: [] });
     expect(result.kind).toBe("clarification");
     if (result.kind !== "clarification") return;
     expect(result.pending.options.map((option) => option.id)).toEqual(["A", "B", "C", "OTHER"]);
   });
+
+  it.each(["ขอภาพแมว", "ทำภาพแมว", "draw a cat"])(
+    "keeps %s behind the context-aware clarification gate",
+    (prompt) => {
+      const result = prepareContextAwareTurn({ prompt, refs: [], analyses: [] });
+      expect(result.kind).toBe("clarification");
+    },
+  );
 
   it("refuses to plan a selected-image task before analysis completes", () => {
     const ref = {
@@ -46,6 +61,27 @@ describe("context-aware turn orchestrator", () => {
     expect(() =>
       prepareContextAwareTurn({ prompt: "สร้างภาพโฆษณา", refs: [ref], analyses: [] }),
     ).toThrow("selected image analysis must complete before planning the task");
+  });
+
+  it("creates an image task with exact text requirements from the brief", () => {
+    const result = prepareContextAwareTurn({
+      prompt:
+        'สร้างภาพป้ายสินค้า product photo ในสตูดิโอ แบบ centered สำหรับ Instagram อัตราส่วน 1:1 พร้อมข้อความ "SALE 50%"',
+      refs: [],
+      analyses: [],
+    });
+    expect(result.kind).toBe("task");
+    if (result.kind !== "task") return;
+    expect(result.task.requiredText).toBe("SALE 50%");
+  });
+
+  it("does not create a task for unavailable vector output", () => {
+    const result = prepareContextAwareTurn({
+      prompt: "สร้างภาพโลโก้เวกเตอร์แบบ minimal สำหรับแบรนด์สินค้า บนพื้นขาว อัตราส่วน 1:1 สำหรับ Instagram",
+      refs: [],
+      analyses: [],
+    });
+    expect(result).toMatchObject({ kind: "capability-unavailable", capability: "IMAGE_VECTOR" });
   });
 
   it("creates an image task with automatic high quality for a selected reference", () => {
