@@ -386,6 +386,15 @@ test("shows a selected-image name tag and local hover preview", async ({ page })
   await expect(tag).toContainText("selected-product.png");
   await tag.hover();
   await expect(page.getByTestId("selected-image-preview")).toBeVisible({ timeout: 10_000 });
+  const tagBox = await tag.boundingBox();
+  const tagThumbnailBox = await tag.locator("img").boundingBox();
+  const previewBox = await page.getByTestId("selected-image-preview").boundingBox();
+  expect(tagBox?.width).toBeLessThanOrEqual(160);
+  expect(tagBox?.height).toBeLessThanOrEqual(28);
+  expect(tagThumbnailBox?.width).toBeLessThanOrEqual(20);
+  expect(tagThumbnailBox?.height).toBeLessThanOrEqual(20);
+  expect(previewBox?.width).toBe(75);
+  expect(previewBox?.height).toBe(75);
   await page
     .getByRole("button", { name: "Remove selected image selected-product.png", exact: true })
     .click();

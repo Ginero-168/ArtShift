@@ -2,6 +2,23 @@ import { describe, expect, it } from "vitest";
 import { placeImagePreview } from "@/lib/ai/orchestration/previewPlacement";
 
 describe("image hover preview placement", () => {
+  it("caps the hover preview at a compact 75px maximum while preserving aspect ratio", () => {
+    const square = placeImagePreview(
+      { left: 32, top: 600, right: 132, bottom: 632, width: 100, height: 32 },
+      { width: 2048, height: 2048 },
+      { width: 800, height: 900 },
+    );
+    expect(square).toMatchObject({ width: 75, height: 75 });
+
+    const landscape = placeImagePreview(
+      { left: 32, top: 600, right: 132, bottom: 632, width: 100, height: 32 },
+      { width: 1600, height: 900 },
+      { width: 800, height: 900 },
+    );
+    expect(landscape.width).toBe(75);
+    expect(landscape.height).toBe(42);
+  });
+
   it("prefers top-start and keeps the preview within the viewport", () => {
     expect(
       placeImagePreview(
@@ -9,7 +26,7 @@ describe("image hover preview placement", () => {
         { width: 360, height: 360 },
         { width: 800, height: 900 },
       ),
-    ).toMatchObject({ placement: "top-start", left: 32, top: 232 });
+    ).toMatchObject({ placement: "top-start", left: 32, top: 517 });
   });
 
   it("keeps fixed coordinates inside a panned visual viewport", () => {

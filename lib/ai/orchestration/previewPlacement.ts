@@ -25,6 +25,7 @@ export type PlacedImagePreview = {
 
 const SAFE_PADDING = 12;
 const ANCHOR_GAP = 8;
+export const IMAGE_REFERENCE_PREVIEW_MAX_SIZE = 75;
 
 export function placeImagePreview(
   anchor: AnchorRect,
@@ -33,8 +34,14 @@ export function placeImagePreview(
 ): PlacedImagePreview {
   const originLeft = viewport.left ?? 0;
   const originTop = viewport.top ?? 0;
-  const maxWidth = Math.max(1, viewport.width - SAFE_PADDING * 2);
-  const maxHeight = Math.max(1, viewport.height - SAFE_PADDING * 2);
+  const maxWidth = Math.max(
+    1,
+    Math.min(IMAGE_REFERENCE_PREVIEW_MAX_SIZE, viewport.width - SAFE_PADDING * 2),
+  );
+  const maxHeight = Math.max(
+    1,
+    Math.min(IMAGE_REFERENCE_PREVIEW_MAX_SIZE, viewport.height - SAFE_PADDING * 2),
+  );
   const ratio = Math.min(
     maxWidth / Math.max(1, requested.width),
     maxHeight / Math.max(1, requested.height),

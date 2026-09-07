@@ -90,11 +90,12 @@ export default function ImageReferencePreview({
         width: placement.width,
         height: placement.height,
         zIndex: 1000,
+        boxSizing: "border-box",
         overflow: "hidden",
         border: "1px solid #6366f1",
-        borderRadius: 10,
+        borderRadius: 8,
         background: "#0f172a",
-        boxShadow: "0 16px 40px rgba(15, 23, 42, 0.28)",
+        boxShadow: "0 6px 16px rgba(15, 23, 42, 0.24)",
         pointerEvents: "auto",
       }}
     >
@@ -115,7 +116,9 @@ export default function ImageReferencePreview({
             placeItems: "center",
             padding: 16,
             color: "#cbd5e1",
-            font: "600 11px/1.4 inherit",
+            fontSize: 11,
+            fontWeight: 600,
+            lineHeight: 1.4,
             textAlign: "center",
           }}
         >
@@ -128,15 +131,19 @@ export default function ImageReferencePreview({
         onClick={onClose}
         style={{
           position: "absolute",
-          top: 6,
-          right: 6,
-          width: 24,
-          height: 24,
+          top: 4,
+          right: 4,
+          width: 18,
+          height: 18,
+          padding: 0,
           border: 0,
           borderRadius: "50%",
           background: "rgba(15, 23, 42, 0.72)",
           color: "#fff",
           cursor: "pointer",
+          fontSize: 13,
+          fontWeight: 700,
+          lineHeight: "18px",
         }}
       >
         ×

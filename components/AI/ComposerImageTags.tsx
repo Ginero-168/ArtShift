@@ -60,7 +60,7 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
         display: "flex",
         flexWrap: "wrap",
         alignItems: "center",
-        gap: 5,
+        gap: 4,
         minWidth: 0,
       }}
     >
@@ -68,7 +68,7 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
         <span
           key={`${ref.objectId}:${ref.elementVersion}`}
           role="listitem"
-          style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 2 }}
         >
           <button
             type="button"
@@ -88,16 +88,19 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 6,
-              maxWidth: "min(100%, 260px)",
-              minHeight: 30,
-              padding: "4px 8px 4px 5px",
+              gap: 4,
+              maxWidth: "min(100%, 160px)",
+              minHeight: 26,
+              boxSizing: "border-box",
+              padding: "3px 6px 3px 4px",
               borderRadius: 8,
               border: "1px solid #c7d2fe",
               background: "#eef2ff",
               color: "#3730a3",
               cursor: "default",
-              font: "600 10px/1.2 inherit",
+              fontSize: 10,
+              fontWeight: 600,
+              lineHeight: 1.2,
               textAlign: "left",
             }}
           >
@@ -108,9 +111,9 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
                 alt=""
                 draggable={false}
                 style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 5,
+                  width: 18,
+                  height: 18,
+                  borderRadius: 4,
                   objectFit: "cover",
                   flex: "0 0 auto",
                 }}
@@ -119,9 +122,9 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
               <span
                 aria-hidden="true"
                 style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 5,
+                  width: 18,
+                  height: 18,
+                  borderRadius: 4,
                   background: "#c7d2fe",
                   flex: "0 0 auto",
                 }}
@@ -139,15 +142,18 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
               title="นำภาพออกจากบริบท AI"
               onClick={() => onRemove(ref)}
               style={{
-                width: 22,
-                height: 22,
+                width: 20,
+                height: 20,
+                boxSizing: "border-box",
                 padding: 0,
                 border: "1px solid #c7d2fe",
-                borderRadius: 6,
+                borderRadius: 5,
                 background: "#ffffffaa",
                 color: "#3730a3",
                 cursor: "pointer",
-                font: "700 14px/1 inherit",
+                fontSize: 14,
+                fontWeight: 700,
+                lineHeight: 1,
               }}
             >
               ×
@@ -164,13 +170,16 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
           style={{
             display: "inline-flex",
             alignItems: "center",
-            minHeight: 30,
-            padding: "0 8px",
-            borderRadius: 8,
+            minHeight: 26,
+            boxSizing: "border-box",
+            padding: "0 6px",
+            borderRadius: 7,
             background: "#f1f5f9",
             border: "1px solid #cbd5e1",
             color: "#475569",
-            font: "700 10px/1 inherit",
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: 1,
           }}
         >
           +{omittedCount}
