@@ -25,6 +25,31 @@ test("ambiguous image intent shows A/B/C/Other without an image request", async 
   expect(requestCount).toBe(0);
 });
 
+test("derives infographic directions from the submitted topic and composes the selected brief", async ({
+  page,
+}) => {
+  const generation = await mockImageRoute(page);
+  page.on("dialog", async (dialog) => dialog.accept());
+
+  const chat = await openAssistant(page);
+  await chat.fill("Infographic ที่เกี่ยวกับถั่ว");
+  await chat.press("Enter");
+
+  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
+  const options = page.getByRole("button", { name: /^[ABC]\./ });
+  await expect(options.nth(0)).toContainText("ถั่ว");
+  await expect(options.nth(0)).toContainText(/โครงสร้าง|อธิบาย/iu);
+  await expect(options.nth(1)).toContainText(/เปรียบเทียบ|ข้อมูล|คุณสมบัติ/iu);
+  await expect(options.nth(2)).toContainText(/ตัวละคร|มาสคอต|editorial/iu);
+  await options.nth(2).click();
+
+  await expect.poll(() => generation.requests.length).toBe(1);
+  expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("อินโฟกราฟิก"));
+  expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("ถั่ว"));
+  expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("ตัวละคร"));
+  expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("โปสเตอร์"));
+});
+
 test("a clarification answer reuses the brief and reaches the task/provider seam", async ({
   page,
 }) => {

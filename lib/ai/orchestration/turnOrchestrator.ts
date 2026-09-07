@@ -33,6 +33,7 @@ export type ContextAwareTurnInput = {
   selectedIds?: ReadonlySet<string>;
   canvas?: Parameters<typeof inspectCanvas>[0];
   clarification?: {
+    originalPrompt?: string;
     question: string;
     optionIds: readonly string[];
   };
@@ -112,7 +113,8 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     };
   }
 
-  const taskClass = input.refs.length > 0 || input.prompt.length > 100 ? "complex" : "simple";
+  const taskBriefPrompt = input.clarification?.originalPrompt ?? input.prompt;
+  const taskClass = input.refs.length > 0 || taskBriefPrompt.length > 100 ? "complex" : "simple";
   const quality = chooseImageQuality({
     prompt: input.prompt,
     taskClass,

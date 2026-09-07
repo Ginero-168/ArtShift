@@ -137,7 +137,10 @@ export function isImageGenerationPrompt(userPrompt: string): boolean {
     (prompt.startsWith("ภาพ") && prompt.length > 5) ||
     prompt.includes("draw ") ||
     prompt.includes("picture of") ||
-    prompt.includes("image of")
+    prompt.includes("image of") ||
+    prompt.includes("infographic") ||
+    prompt.includes("อินโฟกราฟิก") ||
+    prompt.includes("information graphic")
   );
 }
 

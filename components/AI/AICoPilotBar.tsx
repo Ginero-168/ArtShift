@@ -14,6 +14,7 @@ import {
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
+import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import {
   analyzeImageReferences,
   type ImageReferenceAnalysis,
@@ -146,7 +147,10 @@ export default function AICoPilotBar() {
       return;
     }
     const promptToSend = pending
-      ? `${pending.originalPrompt}\n\nDirection ที่เลือก: ${selectedOption?.label ?? `Other: ${rawPrompt}`}`
+      ? composeClarifiedImagePrompt(
+          pending.originalPrompt,
+          selectedOption?.label ?? `Other: ${rawPrompt}`,
+        )
       : rawPrompt;
     if (!pending && selectedImageSelection.omittedCount > 0) {
       const omittedCount = selectedImageSelection.omittedCount;
@@ -281,6 +285,7 @@ export default function AICoPilotBar() {
             canvas: slide ? { slide, selectedIds } : undefined,
             clarification: pending
               ? {
+                  originalPrompt: pending.originalPrompt,
                   question: pending.question,
                   optionIds: pending.options.map((option) => option.id),
                 }

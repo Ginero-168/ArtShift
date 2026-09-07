@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ASPECT_RATIOS, cleanImagePrompt, generateAIImage } from "@/lib/ai/imageGeneration";
+import {
+  ASPECT_RATIOS,
+  cleanImagePrompt,
+  generateAIImage,
+  isImageGenerationPrompt,
+} from "@/lib/ai/imageGeneration";
 
 describe("GPT Image 2 generation client", () => {
   afterEach(() => {
@@ -13,6 +18,10 @@ describe("GPT Image 2 generation client", () => {
     expect(square?.height).toBe(1024);
   });
 
+  it("recognizes infographic briefs as image-generation intent", () => {
+    expect(isImageGenerationPrompt("Infographic ที่เกี่ยวกับถั่ว")).toBe(true);
+    expect(isImageGenerationPrompt("อินโฟกราฟิกเกี่ยวกับการเกิดฝน")).toBe(true);
+  });
   it("throws an error if prompt is empty", async () => {
     await expect(generateAIImage({ prompt: "   " })).rejects.toThrow(
       "Please enter a prompt to generate an image.",
