@@ -29,7 +29,7 @@ export const IMAGE_REFERENCE_PREVIEW_MAX_SIZE = 75;
 
 export function placeImagePreview(
   anchor: AnchorRect,
-  requested: { width: number; height: number },
+  _requested: { width: number; height: number },
   viewport: PreviewViewport,
 ): PlacedImagePreview {
   const originLeft = viewport.left ?? 0;
@@ -42,13 +42,9 @@ export function placeImagePreview(
     1,
     Math.min(IMAGE_REFERENCE_PREVIEW_MAX_SIZE, viewport.height - SAFE_PADDING * 2),
   );
-  const ratio = Math.min(
-    maxWidth / Math.max(1, requested.width),
-    maxHeight / Math.max(1, requested.height),
-    1,
-  );
-  const width = Math.max(1, Math.round(requested.width * ratio));
-  const height = Math.max(1, Math.round(requested.height * ratio));
+  const size = Math.max(1, Math.min(maxWidth, maxHeight));
+  const width = size;
+  const height = size;
   const left = clamp(
     anchor.left,
     originLeft + SAFE_PADDING,
