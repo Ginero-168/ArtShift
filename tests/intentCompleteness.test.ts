@@ -44,6 +44,7 @@ describe("image intent completeness", () => {
       .filter((option) => option.id !== "OTHER")
       .map((option) => option.label);
     expect(labels.every((label) => label.includes("ถั่ว"))).toBe(true);
+    expect(labels.join(" ")).not.toContain("อินโฟกราฟิกเกี่ยวกับInfographic ที่เกี่ยวกับถั่ว");
     expect(labels.join(" ")).not.toContain("Infographic ที่เกี่ยวกับถั่ว แบบภาพถ่ายสตูดิโอ");
     expect(labels[0]).toMatch(/ขั้นตอน|โครงสร้าง|อธิบาย/iu);
     expect(labels[1]).toMatch(/เปรียบเทียบ|ข้อมูล|คุณสมบัติ/iu);

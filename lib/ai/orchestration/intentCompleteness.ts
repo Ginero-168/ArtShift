@@ -165,7 +165,7 @@ function extractTopic(prompt: string): string | undefined {
     .replace(/[.!?。！？]+$/u, "")
     .trim();
   const infographicTopic = cleaned.match(
-    /^(?:infographic|อินโฟกราฟิก|information\s+graphic|แผนภาพข้อมูล)\s*(?:(?:ที่\s*)?(?:เกี่ยวกับ|เรื่อง|ของ)|about|on)\s+(.+?)\s*$/iu,
+    /^(?:infographic|อินโฟกราฟิก|information\s+graphic|แผนภาพข้อมูล)\s*(?:(?:ที่\s*)?(?:เกี่ยวกับ|เรื่อง|ของ)|about|on)\s*(.+?)\s*$/iu,
   );
   if (infographicTopic?.[1]) return trimTopic(infographicTopic[1]);
   const aboutTopic = cleaned.match(/^(?:เกี่ยวกับ|about|on|เรื่อง)\s+(.+?)\s*$/iu);

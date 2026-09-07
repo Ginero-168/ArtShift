@@ -38,6 +38,7 @@ test("derives infographic directions from the submitted topic and composes the s
   await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
   const options = page.getByRole("button", { name: /^[ABC]\./ });
   await expect(options.nth(0)).toContainText("ถั่ว");
+  await expect(options.nth(0)).not.toContainText("เกี่ยวกับInfographic");
   await expect(options.nth(0)).toContainText(/โครงสร้าง|อธิบาย/iu);
   await expect(options.nth(1)).toContainText(/เปรียบเทียบ|ข้อมูล|คุณสมบัติ/iu);
   await expect(options.nth(2)).toContainText(/ตัวละคร|มาสคอต|editorial/iu);
