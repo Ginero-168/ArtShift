@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/imageGeneration";
 import { GPT_IMAGE_2_MAX_COST_USD } from "@/lib/ai/pricing";
+import { GPT_IMAGE_2_EXECUTION_TIMEOUT_MS } from "@/lib/ai/runtimeLimits";
 import type { AiImageGenerateInput } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
         modelAlias: "image-gpt-2",
         cloudConsent: true,
         allowFallback: false,
-        timeoutMs: 90_000,
+        timeoutMs: GPT_IMAGE_2_EXECUTION_TIMEOUT_MS,
         maxCostUsd: GPT_IMAGE_2_MAX_COST_USD,
         accountId: account.id,
         signal: req.signal,

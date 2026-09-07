@@ -1,3 +1,4 @@
+import { REPLICATE_PREDICTION_CANCEL_AFTER } from "@/lib/ai/runtimeLimits";
 import type {
   AiAssistantChatInput,
   AiAssistantChatOutput,
@@ -469,7 +470,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         Authorization: `Bearer ${this.apiToken}`,
         "Content-Type": "application/json",
         Prefer: "wait=60",
-        "Cancel-After": "90s",
+        "Cancel-After": REPLICATE_PREDICTION_CANCEL_AFTER,
       },
       body: JSON.stringify(model.version ? { version: model.version, input } : { input }),
       signal,
@@ -504,7 +505,23 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
             },
           );
         }
-        await delay(1_000, signal);
+        try {
+          await delay(1_000, signal);
+        } catch (error) {
+          if (isExecutionTimeout(signal.reason) && current.id) {
+            throw new AiRuntimeError(
+              "PROVIDER_UNAVAILABLE",
+              "Replicate prediction status could not be confirmed.",
+              {
+                provider: this.id,
+                cause: error,
+                outcomeUnknown: true,
+                predictionId: current.id,
+              },
+            );
+          }
+          throw error;
+        }
         let response: Response;
         try {
           response = await fetch(current.urls.get, {
@@ -830,6 +847,10 @@ async function fetchRecraftSvg(outputUrl: string, signal: AbortSignal): Promise<
     });
   }
   return svg;
+}
+
+function isExecutionTimeout(reason: unknown): boolean {
+  return reason instanceof AiRuntimeError && reason.code === "TIMEOUT";
 }
 
 function parseReplicateModel(model: string): { slug: string; version?: string } {

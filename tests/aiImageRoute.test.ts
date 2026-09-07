@@ -12,6 +12,7 @@ vi.mock("@/lib/server/ai/userCredentials", () => ({
   getSessionReplicateToken: () => undefined,
 }));
 
+import { GPT_IMAGE_2_EXECUTION_TIMEOUT_MS } from "@/lib/ai/runtimeLimits";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { POST } from "../app/api/ai/image/route";
 
@@ -108,7 +109,7 @@ describe("AI image generation API", () => {
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "image.generate",
       expect.any(Object),
-      expect.objectContaining({ maxCostUsd: 0.05 }),
+      expect.objectContaining({ maxCostUsd: 0.05, timeoutMs: GPT_IMAGE_2_EXECUTION_TIMEOUT_MS }),
     );
   });
 

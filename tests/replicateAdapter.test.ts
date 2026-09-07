@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { ReplicateAiAdapter } from "@/lib/server/ai/adapters/replicateAdapter";
 
 describe("Replicate AI adapter", () => {
@@ -47,7 +48,7 @@ describe("Replicate AI adapter", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.replicate.com/v1/predictions",
       expect.objectContaining({
-        headers: expect.objectContaining({ Prefer: "wait=60", "Cancel-After": "90s" }),
+        headers: expect.objectContaining({ Prefer: "wait=60", "Cancel-After": "180s" }),
       }),
     );
   });
@@ -286,6 +287,51 @@ describe("Replicate AI adapter", () => {
     });
   });
 
+  it("preserves the prediction identity when the local timeout fires after acceptance", async () => {
+    const controller = new AbortController();
+    const timeout = new AiRuntimeError("TIMEOUT", "AI execution timed out.");
+    let createCalls = 0;
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith("/cancel")) return new Response("{}", { status: 200 });
+      createCalls += 1;
+      if (createCalls === 1) {
+        setTimeout(() => controller.abort(timeout), 10);
+        return new Response(
+          JSON.stringify({
+            id: "prediction-timeout-1",
+            status: "processing",
+            urls: {
+              get: "https://api.replicate.com/v1/predictions/prediction-timeout-1",
+              cancel: "https://api.replicate.com/v1/predictions/prediction-timeout-1/cancel",
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response("{}", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "image.generate",
+        input: { prompt: "a cat", width: 1024, height: 1024 },
+        model:
+          "openai/gpt-image-2@abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({
+      code: "PROVIDER_UNAVAILABLE",
+      outcomeUnknown: true,
+      predictionId: "prediction-timeout-1",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.replicate.com/v1/predictions/prediction-timeout-1/cancel",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("vectorizes a raster input with Recraft and validates the returned SVG file", async () => {
     const svg = '<svg viewBox="0 0 256 256"><path fill="#ff0000" d="M0 0h256v256H0z"/></svg>';
     const fetchMock = vi
@@ -328,7 +374,7 @@ describe("Replicate AI adapter", () => {
       1,
       "https://api.replicate.com/v1/models/recraft-ai/recraft-vectorize/predictions",
       expect.objectContaining({
-        headers: expect.objectContaining({ Prefer: "wait=60", "Cancel-After": "90s" }),
+        headers: expect.objectContaining({ Prefer: "wait=60", "Cancel-After": "180s" }),
         body: JSON.stringify({ input: { image: "data:image/png;base64,AAAA" } }),
       }),
     );
