@@ -67,6 +67,7 @@ export function createEnginePersistence(options: EnginePersistenceOptions) {
   };
 
   let preserveBackupOnNextSave = false;
+  let lastSavedAt = 0;
 
   return {
     async load(): Promise<EngineLoadResult> {
@@ -79,6 +80,7 @@ export function createEnginePersistence(options: EnginePersistenceOptions) {
           if (!snapshot) continue;
           foundSnapshot = true;
           const doc = await codec.decode(snapshot.payload);
+          lastSavedAt = Math.max(lastSavedAt, snapshot.savedAt);
           if (slot === "active") return { status: "loaded", doc, savedAt: snapshot.savedAt };
           preserveBackupOnNextSave = true;
           return { status: "recovered", doc, savedAt: snapshot.savedAt, source: "backup" };
@@ -108,11 +110,13 @@ export function createEnginePersistence(options: EnginePersistenceOptions) {
 
     async save(doc: EngineDoc): Promise<EngineSaveResult> {
       try {
-        const savedAt = Date.now();
+        // Preserve save ordering even within one millisecond or after clock rollback.
+        const savedAt = Math.max(Date.now(), lastSavedAt + 1);
         await options.backend.replace(
           { payload: codec.encode(doc), savedAt },
           { preserveBackup: preserveBackupOnNextSave },
         );
+        lastSavedAt = savedAt;
         preserveBackupOnNextSave = false;
         return { ok: true, savedAt };
       } catch (error) {
@@ -228,22 +232,27 @@ class LocalStorageBackend implements PersistenceBackend {
   }
 }
 
-class ResilientBackend implements PersistenceBackend {
+export class ResilientBackend implements PersistenceBackend {
   constructor(
     private readonly primary: PersistenceBackend | null,
     private readonly fallback: PersistenceBackend,
   ) {}
 
   async read(slot: SnapshotSlot): Promise<StoredSnapshot | null> {
-    if (this.primary) {
-      try {
-        const value = await this.primary.read(slot);
-        if (value) return value;
-      } catch {
-        // The local adapter below remains usable in private/restricted browsers.
-      }
+    const results = await Promise.allSettled([
+      this.primary?.read(slot) ?? Promise.resolve(null),
+      this.fallback.read(slot),
+    ]);
+    let latest: StoredSnapshot | null = null;
+    for (const result of results) {
+      if (result.status !== "fulfilled" || !result.value) continue;
+      if (!latest || result.value.savedAt > latest.savedAt) latest = result.value;
     }
-    return this.fallback.read(slot);
+    if (latest) return latest;
+    // Preserve restricted-browser fallback when the primary is unavailable.
+    const fallback = results[1];
+    if (fallback.status === "rejected") throw fallback.reason;
+    return null;
   }
 
   async replace(snapshot: StoredSnapshot, options?: { preserveBackup?: boolean }): Promise<void> {

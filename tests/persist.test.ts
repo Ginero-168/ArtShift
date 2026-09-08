@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createEnginePersistence,
   type PersistenceBackend,
+  ResilientBackend,
   type StoredSnapshot,
 } from "@/lib/engine/persist";
 import { fromJSON } from "@/lib/engine/serialize";
@@ -134,5 +135,59 @@ describe("document schema migration", () => {
 
     expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
     expect(migrated.slides[0].layers).toHaveLength(1);
+  });
+});
+
+describe("resilient persistence", () => {
+  it("loads the successful fallback save instead of the stale primary snapshot", async () => {
+    const primary = new MemoryBackend();
+    const fallback = new MemoryBackend();
+    primary.active = { payload: codec.encode(document("Old")), savedAt: 1 };
+    primary.failWrites = true;
+    const persistence = createEnginePersistence({
+      backend: new ResilientBackend(primary, fallback),
+      codec,
+    });
+    await expect(persistence.save(document("Latest"))).resolves.toMatchObject({ ok: true });
+    await expect(persistence.load()).resolves.toMatchObject({ doc: { title: "Latest" } });
+  });
+
+  it("orders saves even when the clock has not advanced", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(100);
+    try {
+      const primary = new MemoryBackend();
+      const fallback = new MemoryBackend();
+      const persistence = createEnginePersistence({
+        backend: new ResilientBackend(primary, fallback),
+        codec,
+      });
+      await persistence.save(document("Old"));
+      primary.failWrites = true;
+      await persistence.save(document("Latest"));
+      await expect(persistence.load()).resolves.toMatchObject({ doc: { title: "Latest" } });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("prefers the newer primary after primary writes recover", async () => {
+    const primary = new MemoryBackend();
+    const fallback = new MemoryBackend();
+    primary.active = { payload: codec.encode(document("Latest")), savedAt: 3 };
+    fallback.active = { payload: codec.encode(document("Old")), savedAt: 2 };
+    const backend = new ResilientBackend(primary, fallback);
+    expect((await backend.read("active"))?.payload.doc.title).toBe("Latest");
+  });
+
+  it("reads the primary even when the fallback is inaccessible", async () => {
+    const primary = new MemoryBackend();
+    const fallback = new MemoryBackend();
+    primary.active = { payload: codec.encode(document("Safe")), savedAt: 1 };
+    fallback.read = async () => {
+      throw new Error("storage blocked");
+    };
+    expect((await new ResilientBackend(primary, fallback).read("active"))?.payload.doc.title).toBe(
+      "Safe",
+    );
   });
 });

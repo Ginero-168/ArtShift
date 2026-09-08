@@ -109,6 +109,50 @@ test("lets the Director answer an unavailable model without image execution", as
   expect(imageRequests).toBe(0);
 });
 
+test("routes a Thai multi-image brief through Director-first chat instead of the legacy Design Agent", async ({
+  page,
+}) => {
+  let directorRequests = 0;
+  let legacyDesignAgentRequests = 0;
+  let imageRequests = 0;
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === "/api/ai/director") directorRequests += 1;
+    if (pathname === "/api/design-agent") legacyDesignAgentRequests += 1;
+    if (pathname === "/api/ai/image") imageRequests += 1;
+  });
+  await page.route("**/api/ai/image", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        dataUrl: TEST_IMAGE_PNG_256,
+        prompt: "สามภาพหมูต่างสี",
+        width: 1024,
+        height: 1024,
+        seed: 0,
+        provider: "replicate",
+        model: "openai/gpt-image-2",
+        warnings: [],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
+  const chatInput = page.getByPlaceholder("บอกสิ่งที่ต้องการออกแบบ...");
+  await chatInput.fill("สร้างรูปหมู 3 รูป ต่างสีกัน");
+  await chatInput.press("Enter");
+
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director/)).toBeVisible({
+    timeout: 60_000,
+  });
+  expect(directorRequests).toBe(1);
+  expect(legacyDesignAgentRequests).toBe(0);
+  expect(imageRequests).toBe(1);
+});
+
 test("uses the automatic Replicate GPT Image 2 generation contract", async ({ page }) => {
   let requestBody: Record<string, unknown> | undefined;
   await page.route("**/api/ai/image", async (route) => {
@@ -136,7 +180,7 @@ test("uses the automatic Replicate GPT Image 2 generation contract", async ({ pa
   const modal = page.getByRole("dialog", { name: "AI Image Studio" });
   await expect(modal).toBeVisible();
   await expect(modal.getByText(/openai\/gpt-image-2/)).toBeVisible();
-  await expect(modal.getByText(/quality: auto \(default medium\)/)).toBeVisible();
+  await expect(modal.getByText(/quality: auto \(default high\)/)).toBeVisible();
   await expect(modal.getByText(/100% Free|FLUX|Pollinations/)).toHaveCount(0);
 
   await modal.getByLabel("Prompt (คำอธิบายภาพ)").fill("a warm editorial portrait");
@@ -151,7 +195,7 @@ test("uses the automatic Replicate GPT Image 2 generation contract", async ({ pa
     aspectRatio: "1:1",
     width: 1024,
     height: 1024,
-    quality: "medium",
+    quality: "high",
     enhance: false,
   });
   expect(requestBody).not.toHaveProperty("model");
@@ -270,7 +314,7 @@ test("creates the task only after a clarification answer and consent", async ({ 
     timeout: 10_000,
   });
   expect(requestBody).toMatchObject({
-    quality: "medium",
+    quality: "high",
     cloudConsent: true,
     aspectRatio: "1:1",
   });
@@ -321,7 +365,7 @@ test("runs a complete image task only after consent and shows the Canvas preload
     page.getByTestId("processing-preview").getByText("กำลังทำงาน", { exact: true }),
   ).toBeVisible({ timeout: 10_000 });
   expect(requestBody).toMatchObject({
-    quality: "medium",
+    quality: "high",
     width: 1024,
     height: 1024,
     aspectRatio: "1:1",

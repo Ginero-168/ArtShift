@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { chooseImageQuality } from "@/lib/ai/orchestration/imageQualityPolicy";
 
 describe("automatic image quality policy", () => {
-  it("defaults ordinary complete work to medium", () => {
+  it("defaults ordinary complete work to high with three quality attempts", () => {
     expect(
       chooseImageQuality({ prompt: "a cat in a room", taskClass: "simple", hasReference: false }),
-    ).toMatchObject({ quality: "medium" });
+    ).toMatchObject({ quality: "high", maxAttempts: 3 });
   });
   it("uses high for product/reference/text fidelity", () => {
     expect(

@@ -179,7 +179,7 @@ export function createAiTask(plan: AiTaskPlan): AiTask {
   ) {
     throw new Error("unsafe task text");
   }
-  if (!Number.isInteger(plan.maxAttempts) || plan.maxAttempts < 1 || plan.maxAttempts > 2) {
+  if (!Number.isInteger(plan.maxAttempts) || plan.maxAttempts < 1 || plan.maxAttempts > 3) {
     throw new Error("task attempt limit is invalid");
   }
   assertAiTaskHarness(plan);

@@ -1,10 +1,94 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
+import { RoutedAiRuntime } from "@/lib/ai-runtime/runtime";
 import { ReplicateAiAdapter } from "@/lib/server/ai/adapters/replicateAdapter";
 
 describe("Replicate AI adapter", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("preserves unknown prediction outcome across the runtime timeout boundary", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "accepted-prediction",
+          status: "processing",
+          urls: { get: "https://api.replicate.com/v1/predictions/accepted-prediction" },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const runtime = new RoutedAiRuntime({
+      adapters: [new ReplicateAiAdapter("test-token")],
+      routes: {
+        "vision.describe": { economy: [{ provider: "replicate", model: "openai/gpt-4o-mini" }] },
+      },
+    });
+    await expect(
+      runtime.execute(
+        "vision.describe",
+        {
+          image: { dataUrl: "data:image/png;base64,AAAA" },
+        },
+        { cloudConsent: true, timeoutMs: 10 },
+      ),
+    ).rejects.toMatchObject({
+      outcomeUnknown: true,
+      predictionId: "accepted-prediction",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the prediction when timeout interrupts a status fetch", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              id: "polling-prediction",
+              status: "processing",
+              urls: { get: "https://api.replicate.com/v1/predictions/polling-prediction" },
+            }),
+            { status: 200 },
+          ),
+        )
+        .mockImplementation(
+          (_url, init) =>
+            new Promise((_resolve, reject) => {
+              init.signal.addEventListener("abort", () => reject(init.signal.reason), {
+                once: true,
+              });
+            }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      const runtime = new RoutedAiRuntime({
+        adapters: [new ReplicateAiAdapter("test-token")],
+        routes: {
+          "vision.describe": { economy: [{ provider: "replicate", model: "openai/gpt-4o-mini" }] },
+        },
+      });
+      const outcome = runtime
+        .execute(
+          "vision.describe",
+          {
+            image: { dataUrl: "data:image/png;base64,AAAA" },
+          },
+          { cloudConsent: true, cache: false, timeoutMs: 1500 },
+        )
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await outcome).toMatchObject({
+        outcomeUnknown: true,
+        predictionId: "polling-prediction",
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("maps official-model output and optional metrics to the normalized contract", async () => {

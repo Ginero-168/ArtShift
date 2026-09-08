@@ -6,7 +6,7 @@
 
 - ผู้ใช้เลือก `openai/gpt-oss-120b` เป็นสมองพื้นฐานของ ArtShift และให้ priority กับ performance/quality ก่อน cost
 - `assistant.chat` และ `prompt.enhance` ทุก profile route ไป `openai/gpt-oss-120b` ผ่าน Replicate; ไม่มี automatic downgrade ไป 20B
-- Replicate Harmony prompt ใช้ `Reasoning: high` และ default output budget 4,096 tokens
+- Replicate Harmony prompt ใช้ `Reasoning: high` และ AI Chat/Creative Director มี output budget 8,192 tokens
 - `AnthropicAiAdapter` รองรับ `assistant.chat` แต่ route manifest ยังไม่ได้เลือก Anthropic เป็น route หลัก
 - `GoogleAiAdapter` ปัจจุบันรองรับ vision/prompt enhancement แต่ยังไม่รองรับ `assistant.chat`
 
@@ -63,6 +63,7 @@
 2. งานสร้าง/แก้ภาพที่ครบ brief ต้องผ่าน 120B Creative Director เพื่อ Understand → Reason → Plan → Decide ก่อน Image Model
 3. ผลงานผ่าน local Vision/technical/semantic checks แล้วส่ง summary กลับ 120B เพื่อ Review; ไม่ส่ง raw image/Base64 เข้า brain prompt
 4. ยังไม่เพิ่ม Gemini/Claude/Flux/Nano Banana/Ideogram เป็น live route จนกว่าจะผ่าน adapter contract, provider consent, pricing/license check และ ArtShift-specific quality benchmark
+5. AI Chat ทำงานแบบ quality-first: ไม่มี monthly/per-command cost gate ในเส้นทาง Design Agent, Creative Director และ image generation; งานภาพทั่วไปเริ่มที่ high และ Quality Gate ลองแก้ได้สูงสุด 3 ครั้ง
 
 ## Acceptance benchmark ก่อนเปลี่ยน default
 

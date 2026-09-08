@@ -20,8 +20,12 @@ export const UNIFIED_AI_SYSTEM = Object.freeze({
 export function routeUnifiedPrompt(input: {
   hasLocalPlan: boolean;
   hasToolCommand: boolean;
+  isImageGeneration?: boolean;
   visualPlan?: VisualRouteHint;
 }): UnifiedPromptRoute {
+  // Image conversations must enter the Director-first path. The legacy
+  // Design Agent owns reviewable Canvas edit plans, not image generation.
+  if (input.isImageGeneration) return "tool-command";
   if (input.hasLocalPlan) return "local-plan";
   if (
     input.visualPlan &&

@@ -285,26 +285,19 @@ describe("context-aware image task runner", () => {
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
   });
 
-  it("stops before a quality retry when the task budget cannot cover it", async () => {
+  it("continues a quality retry without applying the legacy task cost estimate", async () => {
     generateImageMock.mockRejectedValueOnce(
       new Error("Generated image failed the visual quality gate"),
     );
 
-    let failure: unknown;
-    try {
-      await runContextAwareImageTask(
-        createAiTask({ ...plan, id: "budget-limited", estimatedMaxCostUsd: 0.05 }),
+    await expect(
+      runContextAwareImageTask(
+        createAiTask({ ...plan, id: "quality-first", estimatedMaxCostUsd: 0 }),
         [],
         { cloudConsent: true },
-      );
-    } catch (error) {
-      failure = error;
-    }
-
-    expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).message).toContain("Task budget");
-    expect((failure as Error & { task?: { status: string } }).task?.status).toBe("failed");
-    expect(generateImageMock).toHaveBeenCalledTimes(1);
+      ),
+    ).resolves.toMatchObject({ task: { status: "succeeded" } });
+    expect(generateImageMock).toHaveBeenCalledTimes(2);
   });
 
   it("passes a verified selected-image reference to the provider and preserves the source", async () => {

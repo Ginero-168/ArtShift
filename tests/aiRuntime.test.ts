@@ -168,6 +168,35 @@ describe("RoutedAiRuntime", () => {
     expect(adapter.requests).toHaveLength(1);
   });
 
+  it("keeps an exhausted account blocked after unrelated history is evicted", async () => {
+    const ledger = new InMemoryAiUsageLedger(2);
+    const entry = {
+      at: Date.now(),
+      accountId: "a",
+      task: "vision.describe" as const,
+      provider: "mock" as const,
+      model: "mock",
+      durationMs: 1,
+      usage: { estimatedUsd: 10 },
+      cached: false,
+      ok: true,
+    };
+    ledger.record(entry);
+    ledger.record({ ...entry, accountId: "b", usage: { estimatedUsd: 0 } });
+    ledger.record({ ...entry, accountId: "b", usage: { estimatedUsd: 0 } });
+    const adapter = new MockAiProviderAdapter(() => ({ output: { text: "unused" } }));
+    const runtime = new RoutedAiRuntime({
+      adapters: [adapter],
+      ledger,
+      monthlyBudgetUsd: 10,
+      routes: { "vision.describe": { economy: [{ provider: "mock", model: "mock" }] } },
+    });
+    await expect(
+      runtime.execute("vision.describe", visionInput, { cloudConsent: true, accountId: "a" }),
+    ).rejects.toMatchObject({ code: "BUDGET_EXCEEDED" });
+    expect(adapter.requests).toHaveLength(0);
+  });
+
   it("enforces a per-command cost ceiling before a provider request", async () => {
     const adapter = new MockAiProviderAdapter(() => ({ output: { text: "unused" } }));
     const runtime = new RoutedAiRuntime({
@@ -203,6 +232,30 @@ describe("RoutedAiRuntime", () => {
     const capabilities = await runtime.capabilities();
     expect(capabilities.tasks["assistant.chat"].providers).toEqual(["mock"]);
     expect(capabilities.tasks["vision.describe"].providers).toEqual([]);
+  });
+
+  it("does not invoke a fallback after an unknown billable outcome", async () => {
+    const adapter = new MockAiProviderAdapter(() => {
+      throw new AiRuntimeError("PROVIDER_UNAVAILABLE", "Polling failed", {
+        outcomeUnknown: true,
+        predictionId: "accepted",
+      });
+    });
+    const runtime = new RoutedAiRuntime({
+      adapters: [adapter],
+      routes: {
+        "vision.describe": {
+          economy: [
+            { provider: "mock", model: "first" },
+            { provider: "mock", model: "second" },
+          ],
+        },
+      },
+    });
+    await expect(
+      runtime.execute("vision.describe", visionInput, { cloudConsent: true, allowFallback: true }),
+    ).rejects.toMatchObject({ outcomeUnknown: true, predictionId: "accepted" });
+    expect(adapter.requests).toHaveLength(1);
   });
 
   it("preserves TIMEOUT instead of reporting a timeout as a user cancellation", async () => {

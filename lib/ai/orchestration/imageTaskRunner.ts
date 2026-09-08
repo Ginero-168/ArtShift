@@ -1,8 +1,4 @@
-import {
-  GPT_IMAGE_2_ESTIMATED_COST_USD,
-  generateAIImage,
-  resolveImageGenerationDimensions,
-} from "@/lib/ai/imageGeneration";
+import { generateAIImage, resolveImageGenerationDimensions } from "@/lib/ai/imageGeneration";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport, subscribeCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
@@ -168,23 +164,6 @@ export async function runContextAwareImageTask(
         });
         for (let attempt = 1; attempt <= task.maxAttempts; attempt++) {
           throwIfAborted(executionSignal);
-          const reservedCostUsd = attempt * GPT_IMAGE_2_ESTIMATED_COST_USD;
-          if (reservedCostUsd > task.estimatedMaxCostUsd + Number.EPSILON) {
-            const budgetError = new Error(
-              `Task budget cannot cover attempt ${attempt}; no provider request was created.`,
-            );
-            task = appendAiTaskEvent(task, {
-              type: "task.failed",
-              reason: "Task budget cannot cover the next attempt",
-            });
-            task = transition(task, { type: "failed", reason: budgetError.message }, options, {
-              stage: "failed",
-              message: "งบประมาณของ Task ไม่พอสำหรับการลองครั้งถัดไป จึงหยุดก่อนส่ง provider",
-              attempt: task.attempt,
-              quality: task.quality,
-            });
-            throw attachTaskSnapshot(budgetError, task);
-          }
           const attemptPrompt = qualityRepairInstruction
             ? `${task.prompt}\n\nQuality repair instruction: ${qualityRepairInstruction}`
             : task.prompt;

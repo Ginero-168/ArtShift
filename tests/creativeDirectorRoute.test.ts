@@ -89,11 +89,25 @@ describe("Creative Director route", () => {
   });
 
   it("uses server-owned capabilities and the authenticated 120B runtime", async () => {
-    const response = await POST(request({ ...body, availableCapabilities: ["FLUX_UNKNOWN"] }));
+    const response = await POST(
+      request({
+        ...body,
+        availableCapabilities: ["FLUX_UNKNOWN"],
+        conversationHistory: [
+          { role: "user", content: "ทำโฆษณาหนังสือแนวลึกลับ" },
+          { role: "assistant", content: "ต้องการปรับอะไรต่อครับ" },
+        ],
+        artworkContext: { selection: [{ id: "cover-1", type: "image" }] },
+      }),
+    );
     expect(response.status).toBe(200);
     expect(prepareMock).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: body.prompt,
+        conversationHistory: expect.arrayContaining([
+          expect.objectContaining({ content: "ทำโฆษณาหนังสือแนวลึกลับ" }),
+        ]),
+        artworkContext: { selection: [{ id: "cover-1", type: "image" }] },
         availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
         cloudConsent: true,
         accountId: "account-1",
@@ -104,6 +118,14 @@ describe("Creative Director route", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("rejects unsafe image data hidden in Artwork context", async () => {
+    const response = await POST(
+      request({ ...body, artworkContext: { image: "data:image/png;base64,AAAA" } }),
+    );
+    expect(response.status).toBe(400);
+    expect(prepareMock).not.toHaveBeenCalled();
   });
 
   it("distinguishes a rejected Director plan from provider unavailability safely", async () => {

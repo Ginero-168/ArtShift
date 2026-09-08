@@ -1,7 +1,6 @@
 node_modules
 .next
-.next-dev
-.next-dev-*
+.next*
 out
 dist
 .env.local
@@ -22,3 +21,6 @@ next-env.d.ts.backup
 test-results/
 .model-cache/
 .artshift/
+.cache/
+.config/
+.npm/

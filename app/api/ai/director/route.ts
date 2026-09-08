@@ -112,6 +112,12 @@ function parseDirectorInput(
     return null;
   }
   if (!Array.isArray(value.referenceAnalyses) || value.referenceAnalyses.length > 4) return null;
+  const conversationHistory = parseConversationHistory(value.conversationHistory);
+  if (value.conversationHistory !== undefined && !conversationHistory) return null;
+  const artworkContext = parseArtworkContext(value.artworkContext);
+  if (value.artworkContext !== undefined && artworkContext === undefined) return null;
+  const designContext = parseDesignContext(value.designContext);
+  if (value.designContext !== undefined && !designContext) return null;
   const referenceAnalyses: Array<CreativeDirectorInput["referenceAnalyses"][number]> = [];
   for (const candidate of value.referenceAnalyses) {
     if (!isRecord(candidate) || containsSensitivePayload(candidate)) return null;
@@ -143,6 +149,9 @@ function parseDirectorInput(
   }
   return {
     prompt: value.prompt,
+    ...(conversationHistory ? { conversationHistory } : {}),
+    ...(artworkContext !== undefined ? { artworkContext } : {}),
+    ...(designContext ? { designContext } : {}),
     canvasSummary: {
       objectCount: canvas.objectCount,
       selectedCount: canvas.selectedCount,
@@ -152,6 +161,68 @@ function parseDirectorInput(
     },
     referenceAnalyses,
   };
+}
+
+function parseDesignContext(
+  value: unknown,
+): CreativeDirectorInput["designContext"] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || containsSensitivePayload(value)) return null;
+  const snapshot = parseArtworkContext(value.snapshot);
+  if (
+    snapshot === undefined ||
+    !isSafeString(value.docId, 200, 1) ||
+    !isSafeString(value.artworkId, 200, 1) ||
+    !isRevision(value.baseRevision) ||
+    !isBoundedNumber(value.artworkWidth, 1, 100_000) ||
+    !isBoundedNumber(value.artworkHeight, 1, 100_000) ||
+    typeof value.hasSelection !== "boolean" ||
+    !Array.isArray(value.selectedObjectIds) ||
+    value.selectedObjectIds.length > 300 ||
+    value.selectedObjectIds.some((id) => !isSafeString(id, 200, 1))
+  ) {
+    return null;
+  }
+  return {
+    docId: value.docId,
+    artworkId: value.artworkId,
+    baseRevision: value.baseRevision,
+    artworkWidth: value.artworkWidth,
+    artworkHeight: value.artworkHeight,
+    hasSelection: value.hasSelection,
+    selectedObjectIds: value.selectedObjectIds,
+    snapshot,
+  };
+}
+
+function parseConversationHistory(
+  value: unknown,
+): CreativeDirectorInput["conversationHistory"] | null | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 12) return null;
+  const messages: NonNullable<CreativeDirectorInput["conversationHistory"]>[number][] = [];
+  for (const item of value) {
+    if (
+      !isRecord(item) ||
+      (item.role !== "user" && item.role !== "assistant") ||
+      !isSafeString(item.content, 12_000, 1) ||
+      containsSensitivePayload(item.content)
+    ) {
+      return null;
+    }
+    messages.push({ role: item.role, content: item.content });
+  }
+  return messages;
+}
+
+function parseArtworkContext(value: unknown): unknown | undefined {
+  if (value === undefined) return undefined;
+  if (containsSensitivePayload(value)) return undefined;
+  try {
+    return JSON.stringify(value).length <= 80_000 ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function containsSensitivePayload(value: unknown, seen = new Set<object>()): boolean {
@@ -170,6 +241,13 @@ function containsSensitivePayload(value: unknown, seen = new Set<object>()): boo
 
 function isBoundedNumber(value: unknown, min: number, max: number): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+}
+
+function isRevision(value: unknown): value is number | string {
+  return (
+    (typeof value === "number" && Number.isFinite(value)) ||
+    (typeof value === "string" && value.length > 0 && value.length <= 200)
+  );
 }
 
 function isSafeString(value: unknown, max: number, min = 0): value is string {

@@ -8,7 +8,7 @@ const LEGACY_CHAT_REMOVED = "LEGACY_CHAT_REMOVED";
 
 /**
  * Compatibility tombstone for the retired chat endpoint. The live editor uses
- * `/api/design-agent` and applies only validated, reviewable plans.
+ * `/api/ai/director` and applies only validated, reviewable plans.
  */
 export async function POST(_request: NextRequest) {
   return jsonNoStore(

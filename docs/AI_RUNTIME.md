@@ -7,7 +7,7 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 - `lib/ai-runtime/` owns public contracts, locality policy, routing behavior, result caching and usage normalization.
 - `lib/server/ai/modelManifest.ts` owns stable aliases, provider/model mapping, pinned Replicate wrapper versions, price estimates and preflight cost ceilings.
 - `lib/server/ai/adapters/` contains one adapter per external provider. Provider-native fields stop at this directory.
-- `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. Assistant tools/system prompts remain private to `app/api/design-agent`; `/api/chat` is a 410 compatibility tombstone.
+- `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. The single assistant system prompt and planning tools remain private to `app/api/ai/director`; `/api/design-agent` is a compatibility adapter and `/api/chat` is a 410 tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
 - `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser RMBG model is not ready. Extraction geometry comes from alpha components with SAM 2 mask refinement, not from a vision-language detector. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
 - `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent. Image prompts additionally pass through `lib/ai/visualOrchestrator.ts` and the context-aware orchestration modules, which own capability-alias planning without exposing provider selection to the UI.
@@ -137,8 +137,7 @@ differ.
 
 ## Cost, cache and telemetry
 
-- `AI_MONTHLY_BUDGET_USD` blocks new jobs when the in-memory monthly estimate reaches the limit.
-- Route targets may define `expectedMaxUsd`; `maxCostUsd` is checked before a provider call and actual normalized usage is checked after it.
+- Usage metadata remains available for diagnostics, but the server does not block AI Chat or image generation by monthly or per-command cost while quality-first mode is active.
 - Usage records contain provider, actual model/version, task, latency, token counts, cost estimate and normalized error only. Raw prompts and images are not logged.
 - Cache keys are SHA-256 digests of normalized requests. Raw image data URLs and prompts are not stored in cache keys.
 - The current ledger/result cache are process-memory controls. They reset on server restart and are not a billing source of truth; use provider billing plus durable storage before multi-instance production rollout.

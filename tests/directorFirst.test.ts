@@ -10,6 +10,42 @@ import {
 } from "@/lib/ai/orchestration/turnOrchestrator";
 
 describe("Director owns readiness", () => {
+  it("uses conversation and Artwork context without a cost ceiling", async () => {
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: "",
+        toolCalls: [
+          {
+            name: "propose_creative_direction",
+            input: { kind: "answer", text: "จะรักษาปกเดิมและปรับพื้นหลังให้เข้มขึ้น" },
+          },
+        ],
+      },
+    });
+    await prepareCreativeDirection(
+      {
+        prompt: "ทำให้เข้มขึ้นแต่ปกเหมือนเดิม",
+        conversationHistory: [
+          { role: "user", content: "สร้างภาพโฆษณาหนังสือเล่มนี้" },
+          { role: "assistant", content: "ต้องการแก้อะไรต่อครับ" },
+        ],
+        artworkContext: { selection: [{ id: "cover-1", type: "image", name: "Book cover" }] },
+        canvasSummary: { objectCount: 1, selectedCount: 1, width: 1080, height: 1080 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+
+    const [task, request, options] = execute.mock.calls[0];
+    expect(task).toBe("assistant.chat");
+    expect(request.maxTokens).toBeGreaterThanOrEqual(8_192);
+    expect(JSON.stringify(request.messages)).toContain("สร้างภาพโฆษณาหนังสือเล่มนี้");
+    expect(JSON.stringify(request.messages)).toContain("cover-1");
+    expect(options).not.toHaveProperty("maxCostUsd");
+  });
+
   it.each(["สร้างภาพแมว", "draw a cat", "สร้างภาพ " + "รายละเอียด ".repeat(100)])(
     "never creates a task or canned clarification for %s",
     (prompt) => {

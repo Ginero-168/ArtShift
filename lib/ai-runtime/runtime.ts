@@ -217,9 +217,11 @@ export class RoutedAiRuntime implements AiRuntime {
         return execution;
       } catch (error) {
         lastError =
-          signal.aborted && signal.reason instanceof AiRuntimeError
-            ? signal.reason
-            : normalizeAiError(error, target.provider);
+          error instanceof AiRuntimeError && error.outcomeUnknown
+            ? error
+            : signal.aborted && signal.reason instanceof AiRuntimeError
+              ? signal.reason
+              : normalizeAiError(error, target.provider);
         this.ledger.record({
           at: Date.now(),
           accountId: executionOptions.accountId,
@@ -232,6 +234,8 @@ export class RoutedAiRuntime implements AiRuntime {
           ok: false,
           errorCode: lastError.code,
         });
+        // A fallback could create a second billable job while the first is still running.
+        if (lastError.outcomeUnknown) throw lastError;
       } finally {
         dispose();
       }

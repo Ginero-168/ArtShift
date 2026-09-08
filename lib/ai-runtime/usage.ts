@@ -30,10 +30,22 @@ export interface AiUsageLedger {
 
 export class InMemoryAiUsageLedger implements AiUsageLedger {
   private readonly entries: AiUsageRecord[] = [];
+  private month = startOfCurrentMonth();
+  private monthlyTotal = emptySummary(this.month);
+  private readonly monthlyAccounts = new Map<string, AiUsageSummary>();
 
   constructor(private readonly maxEntries = 500) {}
 
   record(entry: AiUsageRecord): void {
+    this.refreshMonth();
+    if (entry.at >= this.month) {
+      addUsage(this.monthlyTotal, entry);
+      if (entry.accountId !== undefined) {
+        const account = this.monthlyAccounts.get(entry.accountId) ?? emptySummary(this.month);
+        addUsage(account, entry);
+        this.monthlyAccounts.set(entry.accountId, account);
+      }
+    }
     this.entries.push(entry);
     if (this.entries.length > this.maxEntries) {
       this.entries.splice(0, this.entries.length - this.maxEntries);
@@ -41,6 +53,16 @@ export class InMemoryAiUsageLedger implements AiUsageLedger {
   }
 
   summary(since = startOfCurrentMonth(), accountId?: string): AiUsageSummary {
+    this.refreshMonth();
+    // Monthly accounting must survive eviction from the recent diagnostic history.
+    if (since === this.month) {
+      return {
+        ...(accountId === undefined
+          ? this.monthlyTotal
+          : (this.monthlyAccounts.get(accountId) ?? emptySummary(this.month))),
+      };
+    }
+    // Explicit custom windows retain the existing recent-history semantics.
     const entries = this.entries.filter(
       (entry) => entry.at >= since && (accountId === undefined || entry.accountId === accountId),
     );
@@ -54,6 +76,14 @@ export class InMemoryAiUsageLedger implements AiUsageLedger {
     };
   }
 
+  private refreshMonth(): void {
+    const month = startOfCurrentMonth();
+    if (month === this.month) return;
+    this.month = month;
+    this.monthlyTotal = emptySummary(month);
+    this.monthlyAccounts.clear();
+  }
+
   recent(limit = 20, accountId?: string): AiUsageRecord[] {
     const entries =
       accountId === undefined
@@ -61,6 +91,18 @@ export class InMemoryAiUsageLedger implements AiUsageLedger {
         : this.entries.filter((entry) => entry.accountId === accountId);
     return entries.slice(-Math.max(0, limit)).reverse();
   }
+}
+
+function emptySummary(since: number): AiUsageSummary {
+  return { since, requests: 0, failures: 0, estimatedUsd: 0, inputTokens: 0, outputTokens: 0 };
+}
+
+function addUsage(summary: AiUsageSummary, entry: AiUsageRecord): void {
+  summary.requests += 1;
+  summary.failures += entry.ok ? 0 : 1;
+  summary.estimatedUsd += entry.usage.estimatedUsd ?? 0;
+  summary.inputTokens += entry.usage.inputTokens ?? 0;
+  summary.outputTokens += entry.usage.outputTokens ?? 0;
 }
 
 export function estimateAiCost(usage: AiUsage, pricing?: AiModelPricing): number | undefined {

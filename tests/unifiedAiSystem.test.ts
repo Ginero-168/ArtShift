@@ -28,8 +28,8 @@ describe("unified AI system", () => {
     expect(routeUnifiedPrompt(input)).toBe(expected);
   });
 
-  it("routes a complex visual plan to the Design Agent before tool execution", () => {
-    const visualPlan = planVisualRequest("สร้างโปสเตอร์หนังสือ 3 แบบ พร้อมข้อความภาษาไทย", {
+  it("routes image generation to the Director-first tool path even when visual planning calls it complex", () => {
+    const visualPlan = planVisualRequest("สร้างรูปหมู 3 รูป ต่างสีกัน", {
       hasSelection: false,
       elementCount: 0,
     });
@@ -38,6 +38,39 @@ describe("unified AI system", () => {
       routeUnifiedPrompt({
         hasLocalPlan: false,
         hasToolCommand: true,
+        isImageGeneration: true,
+        visualPlan,
+      }),
+    ).toBe("tool-command");
+  });
+
+  it("prioritizes Director-first image routing over a coincidental local edit plan", () => {
+    const visualPlan = planVisualRequest("สร้างรูปหมู 3 รูป ต่างสีกัน", {
+      hasSelection: true,
+      elementCount: 2,
+    });
+
+    expect(
+      routeUnifiedPrompt({
+        hasLocalPlan: true,
+        hasToolCommand: true,
+        isImageGeneration: true,
+        visualPlan,
+      }),
+    ).toBe("tool-command");
+  });
+
+  it("keeps complex non-image visual plans on the Design Agent path", () => {
+    const visualPlan = planVisualRequest("วางแผนโปสเตอร์หนังสือ 3 แบบ พร้อมข้อความภาษาไทย", {
+      hasSelection: false,
+      elementCount: 0,
+    });
+
+    expect(
+      routeUnifiedPrompt({
+        hasLocalPlan: false,
+        hasToolCommand: true,
+        isImageGeneration: false,
         visualPlan,
       }),
     ).toBe("design-agent");

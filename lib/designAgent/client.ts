@@ -1,7 +1,6 @@
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { type EngineState, useEngine } from "@/lib/engine/store";
-import type { PlanProposal } from "./contracts";
-import type { DesignAgentContext } from "./server";
+import type { ArtworkExecutionContext, PlanProposal } from "./contracts";
 
 export type ClientChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -12,7 +11,7 @@ export type PreparedDesignResult =
 
 export function buildDesignAgentContext(
   state: EngineState = useEngine.getState(),
-): DesignAgentContext {
+): ArtworkExecutionContext {
   const slide =
     state.doc.slides.find((candidate) => candidate.id === state.currentSlideId) ??
     state.doc.slides[0];
@@ -67,7 +66,7 @@ export function buildDesignAgentContext(
 
 export async function prepareRemoteDesignTurn(
   messages: ClientChatMessage[],
-  context: DesignAgentContext,
+  context: ArtworkExecutionContext,
   options: { signal?: AbortSignal; cloudConsent?: boolean } = {},
 ): Promise<PreparedDesignResult> {
   const response = await fetch("/api/design-agent", {

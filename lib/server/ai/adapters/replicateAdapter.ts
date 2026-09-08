@@ -36,7 +36,7 @@ const CHAT_MODEL = "openai/gpt-oss-120b";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
-const MAX_CHAT_OUTPUT_TOKENS = 4_096;
+const MAX_CHAT_OUTPUT_TOKENS = 8_192;
 const MAX_RECRAFT_INPUT_BYTES = 5 * 1024 * 1024;
 const MAX_RECRAFT_PIXELS = 16_000_000;
 const MAX_RECRAFT_SVG_CHARS = 4_000_000;
@@ -522,7 +522,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
             signal,
           });
         } catch (error) {
-          if (signal.aborted) throw error;
+          if (signal.aborted && !isExecutionTimeout(signal.reason)) throw error;
           throw new AiRuntimeError(
             "PROVIDER_UNAVAILABLE",
             "Replicate prediction status could not be confirmed.",
@@ -539,7 +539,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           else await assertProviderResponse(response, this.id);
           current = (await response.json()) as ReplicatePrediction;
         } catch (error) {
-          if (signal.aborted) throw error;
+          if (signal.aborted && !isExecutionTimeout(signal.reason)) throw error;
           throw new AiRuntimeError(
             "PROVIDER_UNAVAILABLE",
             "Replicate prediction status could not be confirmed.",

@@ -280,7 +280,7 @@ export default function ModelManagerPanel({ onResetProject }: ModelManagerPanelP
       <div className="model-manager-section-head">
         <div>
           <div className="model-manager-kicker">Remote runtime</div>
-          <h3>Providers & usage</h3>
+          <h3>Providers & activity</h3>
         </div>
         <span>
           {remoteReport
@@ -293,20 +293,18 @@ export default function ModelManagerPanel({ onResetProject }: ModelManagerPanelP
         <>
           <div className="model-manager-storage">
             <div className="model-manager-row-head">
-              <span>Estimated monthly AI cost</span>
-              <span>${remoteReport.budget.monthlyUsage.estimatedUsd.toFixed(4)}</span>
+              <span>AI activity this month</span>
+              <span>
+                {remoteReport.budget.monthlyUsage.requests} requests ·{" "}
+                {remoteReport.budget.monthlyUsage.failures} failed
+              </span>
             </div>
             <div className="model-manager-storage-meta">
               <span>
                 {remoteReport.budget.monthlyUsage.inputTokens.toLocaleString()} input ·{" "}
                 {remoteReport.budget.monthlyUsage.outputTokens.toLocaleString()} output tokens
               </span>
-              <span>
-                {remoteReport.budget.monthlyBudgetUsd
-                  ? `$${remoteReport.budget.monthlyBudgetUsd.toFixed(2)} budget`
-                  : "No server budget configured"}{" "}
-                · in-memory estimate
-              </span>
+              <span>Quality-first runtime</span>
             </div>
           </div>
 

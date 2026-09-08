@@ -6,7 +6,70 @@ type GenerationRoute = {
   release: () => void;
 };
 
-test("ambiguous image intent shows A/B/C/Other without an image request", async ({ page }) => {
+test.beforeEach(async ({ page }) => {
+  page.on("dialog", (dialog) => dialog.accept());
+  await installDeterministicVisionWorker(page);
+  await page.route("**/api/ai/director", async (route) => {
+    const request = JSON.parse(route.request().postData() ?? "{}") as {
+      prompt?: string;
+      referenceAnalyses?: unknown[];
+    };
+    const prompt = request.prompt ?? "";
+    if (prompt === "ขอภาพแมว" || prompt === "สร้างภาพแมว") {
+      await route.fulfill({
+        json: {
+          direction: {
+            kind: "clarification",
+            question: "แมวควรอยู่ที่ไหน?",
+            options: ["ริมหน้าต่าง", "ในสวน", "ในสตูดิโอ"],
+          },
+        },
+      });
+      return;
+    }
+    if (prompt === "Infographic ที่เกี่ยวกับถั่ว") {
+      await route.fulfill({
+        json: {
+          direction: {
+            kind: "clarification",
+            question: "อยากเล่าเรื่องถั่วด้วยแนวทางไหน?",
+            options: [
+              "อธิบายโครงสร้างและชนิดของถั่ว",
+              "เปรียบเทียบข้อมูลและคุณสมบัติของถั่ว",
+              "ใช้ตัวละครถั่วแบบมาสคอตในโปสเตอร์ editorial",
+            ],
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        direction: {
+          kind: "image-task",
+          outputCount: 1,
+          summary: "Validated context-aware E2E direction",
+          refinedPrompt: prompt || "Validated context-aware E2E image brief",
+          specialist: request.referenceAnalyses?.length ? "image_editor" : "image_generator",
+          capability: request.referenceAnalyses?.length ? "IMAGE_EDIT" : "IMAGE_DEFAULT",
+          modelAlias: "image-gpt-2",
+          knowledgeSkillIds: [],
+          reviewCriteria: ["main subject is clear", "composition follows the brief"],
+          search: { required: false, queries: [], sources: [] },
+        },
+      },
+    });
+  });
+  await page.route("**/api/ai/director/review", async (route) => {
+    await route.fulfill({
+      json: { review: { passed: true, summary: "Matches the approved E2E direction." } },
+    });
+  });
+});
+
+test("ambiguous image intent shows Director clarification without an image request", async ({
+  page,
+}) => {
   let requestCount = 0;
   await page.route("**/api/ai/image", async (route) => {
     requestCount += 1;
@@ -17,11 +80,10 @@ test("ambiguous image intent shows A/B/C/Other without an image request", async 
   await chat.fill("สร้างภาพแมว");
   await chat.press("Enter");
 
-  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /^A\./ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^B\./ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^C\./ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Other/ })).toBeVisible();
+  await expect(page.getByText("แมวควรอยู่ที่ไหน?", { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "ริมหน้าต่าง", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ในสวน", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ในสตูดิโอ", exact: true })).toBeVisible();
   expect(requestCount).toBe(0);
 });
 
@@ -29,14 +91,17 @@ test("derives infographic directions from the submitted topic and composes the s
   page,
 }) => {
   const generation = await mockImageRoute(page);
-  page.on("dialog", async (dialog) => dialog.accept());
 
   const chat = await openAssistant(page);
   await chat.fill("Infographic ที่เกี่ยวกับถั่ว");
   await chat.press("Enter");
 
-  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
-  const options = page.getByRole("button", { name: /^[ABC]\./ });
+  await expect(
+    page.getByText("อยากเล่าเรื่องถั่วด้วยแนวทางไหน?", { exact: false }).first(),
+  ).toBeVisible();
+  const options = page.getByRole("button", {
+    name: /อธิบายโครงสร้าง|เปรียบเทียบข้อมูล|ตัวละครถั่ว/iu,
+  });
   await expect(options.nth(0)).toContainText("ถั่ว");
   await expect(options.nth(0)).not.toContainText("เกี่ยวกับInfographic");
   await expect(options.nth(0)).toContainText(/โครงสร้าง|อธิบาย/iu);
@@ -45,7 +110,7 @@ test("derives infographic directions from the submitted topic and composes the s
   await options.nth(2).click();
 
   await expect.poll(() => generation.requests.length).toBe(1);
-  expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("อินโฟกราฟิก"));
+  expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("Infographic"));
   expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("ถั่ว"));
   expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("ตัวละคร"));
   expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("โปสเตอร์"));
@@ -55,17 +120,18 @@ test("a clarification answer reuses the brief and reaches the task/provider seam
   page,
 }) => {
   const generation = await mockImageRoute(page);
-  page.on("dialog", async (dialog) => dialog.accept());
 
   const chat = await openAssistant(page);
   await chat.fill("ขอภาพแมว");
   await chat.press("Enter");
-  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
-  await page.getByRole("button", { name: /^A\./ }).click();
+  await expect(page.getByText("แมวควรอยู่ที่ไหน?", { exact: false }).first()).toBeVisible();
+  await page.getByRole("button", { name: "ริมหน้าต่าง", exact: true }).click();
 
   await expect.poll(() => generation.requests.length).toBe(1);
-  await expect(page.getByText(/Task · image_generator/)).toBeVisible();
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Creative Director → image_generator/)).toBeVisible();
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toBeVisible({
+    timeout: 30_000,
+  });
   expect(generation.requests[0]?.prompt).toEqual(expect.stringContaining("ขอภาพแมว"));
   expect(generation.requests[0]).toMatchObject({ cloudConsent: true });
 });
@@ -73,9 +139,7 @@ test("a clarification answer reuses the brief and reaches the task/provider seam
 test("one selected image gets a tag, local preview, analysis, and reference request", async ({
   page,
 }) => {
-  await installDeterministicVisionWorker(page);
   const generation = await mockImageRoute(page);
-  page.on("dialog", async (dialog) => dialog.accept());
 
   await page.goto("/");
   await uploadImage(page, "reference-one.png");
@@ -92,7 +156,9 @@ test("one selected image gets a tag, local preview, analysis, and reference requ
   await expect(page.getByText(/วิเคราะห์ภาพเสร็จแล้ว 1 รายการ/)).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => generation.requests.length).toBe(1);
   expect(generation.requests[0]?.inputImages).toHaveLength(1);
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toBeVisible({
+    timeout: 30_000,
+  });
 });
 
 test("five selected images are narrowed locally and do not call the provider", async ({ page }) => {
@@ -131,7 +197,6 @@ test("changing the Canvas target while generation is blocked fails without a suc
   page,
 }) => {
   const generation = await mockImageRoute(page, { hold: true });
-  page.on("dialog", async (dialog) => dialog.accept());
   const chat = await openAssistant(page);
   await chat.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
   await chat.press("Enter");
@@ -144,14 +209,13 @@ test("changing the Canvas target while generation is blocked fails without a suc
   await expect(page.getByText(/Task ไม่สำเร็จ|Canvas target changed/).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toHaveCount(0);
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toHaveCount(0);
 });
 
 test("preloader exposes analyzing/generating and clears after a successful viewport-safe commit", async ({
   page,
 }) => {
   const generation = await mockImageRoute(page, { hold: true });
-  page.on("dialog", async (dialog) => dialog.accept());
   const chat = await openAssistant(page);
   await chat.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
   await chat.press("Enter");
@@ -163,7 +227,9 @@ test("preloader exposes analyzing/generating and clears after a successful viewp
     .toMatch(/analyzing|generating/);
   await expect(preview.getByText("กำลังทำงาน", { exact: true })).toBeVisible();
   generation.release();
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(preview).toHaveCount(0);
 });
 
@@ -171,7 +237,6 @@ test("cancelling a running task clears the preview and leaves no result message"
   page,
 }) => {
   const generation = await mockImageRoute(page, { hold: true });
-  page.on("dialog", async (dialog) => dialog.accept());
   const chat = await openAssistant(page);
   await chat.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
   await chat.press("Enter");
@@ -181,21 +246,22 @@ test("cancelling a running task clears the preview and leaves no result message"
 
   await expect(page.getByText(/ยกเลิกงานที่กำลังประมวลผลแล้ว/)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("processing-preview")).toHaveCount(0);
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toHaveCount(0);
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toHaveCount(0);
 });
 
 test("a known quality failure gets one corrected retry within the task budget", async ({
   page,
 }) => {
   const generation = await mockImageRoute(page, { firstSmall: true });
-  page.on("dialog", async (dialog) => dialog.accept());
   const chat = await openAssistant(page);
   await chat.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
   await chat.press("Enter");
 
   await expect.poll(() => generation.requests.length).toBe(2);
   expect(generation.requests[1]?.prompt).not.toBe(generation.requests[0]?.prompt);
-  await expect(page.getByText(/สร้างภาพตาม brief และวางบน Canvas/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/สร้างภาพตามแผนของ Creative Director และวางบน Canvas/)).toBeVisible({
+    timeout: 30_000,
+  });
 });
 
 test("keeps an uncertain provider result terminal without creating a second request", async ({
@@ -214,8 +280,6 @@ test("keeps an uncertain provider result terminal without creating a second requ
       }),
     });
   });
-  page.on("dialog", async (dialog) => dialog.accept());
-
   const chat = await openAssistant(page);
   await chat.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
   await chat.press("Enter");

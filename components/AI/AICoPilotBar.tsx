@@ -33,11 +33,7 @@ import {
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
-import {
-  buildDesignAgentContext,
-  type ClientChatMessage,
-  prepareRemoteDesignTurn,
-} from "@/lib/designAgent/client";
+import { buildDesignAgentContext, type ClientChatMessage } from "@/lib/designAgent/client";
 import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
 import { summarizePlanForReview } from "@/lib/designAgent/planReview";
@@ -316,6 +312,15 @@ export default function AICoPilotBar() {
               const direction = await prepareRemoteCreativeDirection(
                 {
                   prompt: promptToSend,
+                  conversationHistory: messages
+                    .flatMap((message): ClientChatMessage[] =>
+                      (message.role === "user" || message.role === "assistant") &&
+                      message.kind !== "progress"
+                        ? [{ role: message.role, content: message.content }]
+                        : [],
+                    )
+                    .slice(-12),
+                  designContext: buildDesignAgentContext(),
                   canvasSummary: {
                     objectCount: elementCount,
                     selectedCount: selectedIds.size,
@@ -349,6 +354,15 @@ export default function AICoPilotBar() {
                   options: direction.options.map((label, index) => ({ id: String(index), label })),
                   round: (pending?.round ?? 0) + 1,
                 });
+              } else if (direction.kind === "design-plan") {
+                setPendingClarification(null);
+                setPendingPlan(direction.proposal);
+                taskAction.status = "success";
+                taskAction.stage = "planned";
+                taskAction.description = `เตรียมแผนแก้ Canvas ${direction.proposal.commands.length} รายการ รอการอนุมัติ`;
+                reply =
+                  "ArtShift Orchestrator เตรียมแผนแก้ไข Canvas แล้วครับ ตรวจสอบและกด Apply plan เพื่อดำเนินงาน";
+                suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน"];
               } else if (direction.search.required) {
                 taskAction.status = "success";
                 taskAction.stage = "analyzing";
@@ -416,7 +430,7 @@ export default function AICoPilotBar() {
                   ? "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas"
                   : `Task ไม่สำเร็จ: ${(error as Error).message}`;
               reply = outcomeUnknown
-                ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติเพื่อป้องกันค่าใช้จ่ายซ้ำ"
+                ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้"
                 : wasCancelled
                   ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
                   : `Task ไม่สำเร็จครับ: ${(error as Error).message}`;
@@ -443,8 +457,9 @@ export default function AICoPilotBar() {
         return;
       }
 
-      const localPlan = buildLocalEditPlan(promptToSend);
-      const visualPlan = isImageGenerationPrompt(promptToSend)
+      const isImageGeneration = isImageGenerationPrompt(promptToSend);
+      const localPlan = isImageGeneration ? null : buildLocalEditPlan(promptToSend);
+      const visualPlan = isImageGeneration
         ? planVisualRequest(promptToSend, {
             hasSelection: selectedIds.size > 0,
             selectedObjectCount: selectedIds.size,
@@ -457,6 +472,7 @@ export default function AICoPilotBar() {
       const route = routeUnifiedPrompt({
         hasLocalPlan: Boolean(localPlan),
         hasToolCommand: isToolCoPilotPrompt(promptToSend),
+        isImageGeneration,
         visualPlan,
       });
       let reply = "";
@@ -514,7 +530,7 @@ export default function AICoPilotBar() {
           upsertCurrentAction(action);
         };
 
-        addRemoteAction("✦ Design Agent", "กำลังวิเคราะห์คำสั่งและบริบทของ Artwork...");
+        addRemoteAction("🧠 ArtShift Orchestrator", "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...");
         const history: ClientChatMessage[] = [
           ...messages
             .flatMap((message): ClientChatMessage[] =>
@@ -540,12 +556,24 @@ export default function AICoPilotBar() {
           reply = "ยกเลิกคำขอแล้วครับ ยังไม่มีการส่ง prompt หรือบริบท Artwork ออกนอกเครื่อง";
           suggestions = ["ถามเกี่ยวกับ Canvas แบบ local", "ระบุคำสั่งที่แก้ได้แบบ local"];
         } else {
-          const result = await prepareRemoteDesignTurn(history, buildDesignAgentContext(), {
-            signal: controller.signal,
-            cloudConsent: true,
-          });
+          const designContext = buildDesignAgentContext();
+          const result = await prepareRemoteCreativeDirection(
+            {
+              prompt: promptToSend,
+              conversationHistory: history,
+              designContext,
+              canvasSummary: {
+                objectCount: elementCount,
+                selectedCount: selectedIds.size,
+                width: slide?.width ?? 1920,
+                height: slide?.height ?? 1080,
+              },
+              referenceAnalyses: [],
+            },
+            { signal: controller.signal, cloudConsent: true },
+          );
 
-          if (result.type === "proposal") {
+          if (result.kind === "design-plan") {
             if (result.proposal.requiresApproval) {
               setPendingPlan(result.proposal);
               remoteActions[0] = {
@@ -575,19 +603,28 @@ export default function AICoPilotBar() {
                 suggestions = ["รีเฟรชบริบทแล้วลองใหม่", "ตรวจสอบ Object ที่เลือก"];
               }
             }
-          } else if (result.type === "question") {
+          } else if (result.kind === "clarification") {
             remoteActions[0] = {
               ...remoteActions[0],
               status: "success",
               description: "ต้องการรายละเอียดเพิ่มก่อนเริ่มงาน",
             };
-            reply = result.text;
-            suggestions = ["ระบุเป้าหมายและขนาดงาน", "เพิ่ม reference หรือ Brand direction"];
-          } else {
+            reply = result.question;
+            suggestions = result.options;
+            setPendingClarification({
+              id: crypto.randomUUID(),
+              originalPrompt: promptToSend,
+              selectedImages: [],
+              analyses: [],
+              question: result.question,
+              options: result.options.map((label, index) => ({ id: String(index), label })),
+              round: (pending?.round ?? 0) + 1,
+            });
+          } else if (result.kind === "answer") {
             remoteActions[0] = {
               ...remoteActions[0],
               status: "success",
-              description: "ได้รับคำตอบจาก Design Agent แล้ว",
+              description: "ArtShift Orchestrator ตอบโดยไม่ต้องเรียก executor",
             };
             reply = result.text;
             suggestions = [
@@ -595,6 +632,54 @@ export default function AICoPilotBar() {
               "✍️ ขอให้สร้าง direction ใหม่",
               "🧩 ใช้เครื่องมือแก้ไขเฉพาะทาง",
             ];
+          } else {
+            const directedTask = createDirectedImageTask(
+              {
+                prompt: promptToSend,
+                refs: [],
+                analyses: [],
+                canvas: slide ? { slide, selectedIds } : undefined,
+              },
+              result,
+            );
+            remoteActions[0] = {
+              ...remoteActions[0],
+              title: `🧠 ArtShift Orchestrator → ${directedTask.subAgent}`,
+              description: `กำลังดำเนินงานด้วย ${result.modelAlias}`,
+            };
+            upsertCurrentAction(remoteActions[0]);
+            const generated = await runContextAwareImageTask(directedTask, [], {
+              signal: controller.signal,
+              cloudConsent: true,
+              reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
+                reviewRemoteCreativeOutput(
+                  { prompt, reviewCriteria, outputAnalysis },
+                  { signal, cloudConsent: true },
+                ),
+              onUpdate: (update) => {
+                remoteActions[0] = {
+                  ...remoteActions[0],
+                  status:
+                    update.stage === "failed" || update.stage === "outcome-unknown"
+                      ? "error"
+                      : update.stage === "succeeded"
+                        ? "success"
+                        : "running",
+                  description: update.message,
+                  stage: update.stage,
+                  attempt: update.attempt,
+                  quality: update.quality,
+                };
+                upsertCurrentAction(remoteActions[0]);
+              },
+            });
+            remoteActions[0] = {
+              ...remoteActions[0],
+              status: "success",
+              description: `ตรวจและวางผลลัพธ์บน Canvas แล้ว (${generated.width} × ${generated.height}px)`,
+            };
+            reply = "ArtShift Orchestrator สร้าง ตรวจ และวางผลลัพธ์บน Canvas เรียบร้อยแล้วครับ";
+            suggestions = ["ปรับรายละเอียดต่อ", "ตรวจสอบ Layout", "↶ Undo ผลลัพธ์ล่าสุด"];
           }
         }
         upsertCurrentAction(remoteActions[0]);
@@ -916,12 +1001,6 @@ export default function AICoPilotBar() {
                     <li key={`${change}-${index}`}>{change}</li>
                   ))}
                 </ul>
-                <div style={{ marginTop: 5 }}>
-                  <strong>Estimated AI cost:</strong>{" "}
-                  {pendingReview.estimatedRemoteCostUsd > 0
-                    ? `$${pendingReview.estimatedRemoteCostUsd.toFixed(4)}`
-                    : "$0.0000"}
-                </div>
                 <div style={{ marginTop: 3, fontWeight: 600 }}>
                   ต้องกด Apply plan เพื่อยืนยันก่อนแก้ไข Artwork
                 </div>

@@ -1,5 +1,16 @@
 export type Revision = number | string;
 
+export type ArtworkExecutionContext = {
+  docId: string;
+  baseRevision: Revision;
+  artworkId: string;
+  artworkWidth: number;
+  artworkHeight: number;
+  hasSelection: boolean;
+  selectedObjectIds: string[];
+  snapshot: unknown;
+};
+
 export type AssetRef = {
   fileId: string;
   kind: "image" | "pdf";

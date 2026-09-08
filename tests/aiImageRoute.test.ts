@@ -94,7 +94,7 @@ describe("AI image generation API", () => {
     expect(runtimeMock.execute.mock.calls[0]?.[1]).not.toHaveProperty("model");
   });
 
-  it("ignores a client-supplied cost ceiling and uses the server policy", async () => {
+  it("ignores a client-supplied cost ceiling without imposing a server cost gate", async () => {
     const response = await POST(
       request({
         prompt: "แมวสีส้ม",
@@ -109,8 +109,9 @@ describe("AI image generation API", () => {
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "image.generate",
       expect.any(Object),
-      expect.objectContaining({ maxCostUsd: 0.05, timeoutMs: GPT_IMAGE_2_EXECUTION_TIMEOUT_MS }),
+      expect.objectContaining({ timeoutMs: GPT_IMAGE_2_EXECUTION_TIMEOUT_MS }),
     );
+    expect(runtimeMock.execute.mock.calls[0]?.[2]).not.toHaveProperty("maxCostUsd");
   });
 
   it("routes prompt enhancement and image generation through the AI Runtime", async () => {

@@ -213,7 +213,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
               </h2>
               <p style={{ fontSize: 11, color: "#64748b", margin: 0, marginTop: 2 }}>
                 Replicate · {GPT_IMAGE_2_MODEL} · quality: auto (default {GPT_IMAGE_2_QUALITY}) ·
-                cost varies by quality
+                quality-first generation
               </p>
             </div>
           </div>

@@ -9,7 +9,7 @@ import { GPT_IMAGE_2_MAX_COST_USD } from "./pricing";
 import { runVisualQualityGate } from "./visualQualityGate";
 
 export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
-export const GPT_IMAGE_2_QUALITY = "medium" as const;
+export const GPT_IMAGE_2_QUALITY = "high" as const;
 export const GPT_IMAGE_2_ESTIMATED_COST_USD = GPT_IMAGE_2_MAX_COST_USD;
 export type GptImageQuality = "low" | "medium" | "high";
 

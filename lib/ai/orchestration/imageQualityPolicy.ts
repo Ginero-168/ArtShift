@@ -26,7 +26,7 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
     return {
       quality: "high",
       rationale: "ต้องรักษาความถูกต้องของ reference, สินค้า, ข้อความ หรือองค์ประกอบซับซ้อน",
-      maxAttempts: 2,
+      maxAttempts: 3,
     };
   }
   if (
@@ -41,8 +41,8 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
     };
   }
   return {
-    quality: "medium",
-    rationale: "มาตรฐานเริ่มต้นสำหรับงานที่ intent ครบและต้องการคุณภาพใช้งานได้จริง",
-    maxAttempts: 2,
+    quality: "high",
+    rationale: "โหมด quality-first ใช้คุณภาพสูงสุดและเปิดโอกาสให้ Quality Gate แก้ผลลัพธ์",
+    maxAttempts: 3,
   };
 }

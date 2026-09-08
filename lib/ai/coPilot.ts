@@ -19,6 +19,7 @@ import {
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { removeBackground } from "@/lib/ai/removeBg";
 import type { VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
+import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createRect, createText } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
@@ -161,6 +162,7 @@ export async function executeCoPilotInstruction(
   suggestions: string[];
   pendingClarification?: PendingClarification;
   imageCreated?: boolean;
+  planProposal?: PlanProposal;
 }> {
   const pending = options.pendingClarification;
   const prompt = pending
@@ -279,6 +281,19 @@ export async function executeCoPilotInstruction(
           },
         };
       }
+      if (direction.kind === "design-plan") {
+        updateActionStatus(
+          act,
+          "success",
+          `Creative Director เตรียมแผนแก้ Canvas ${direction.proposal.commands.length} รายการ`,
+        );
+        return {
+          reply: `Creative Director เตรียมแผนแก้ไข Canvas แล้วครับ (${direction.proposal.summary}) ตรวจสอบและกด Apply plan เพื่อดำเนินงาน`,
+          actions,
+          suggestions: ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน"],
+          planProposal: direction.proposal,
+        };
+      }
       if (direction.search.required) {
         updateActionStatus(act, "success", "Creative Director ระบุว่าต้องค้น Context ก่อนสร้างภาพ");
         return {
@@ -345,7 +360,7 @@ export async function executeCoPilotInstruction(
       );
       return {
         reply: outcomeUnknown
-          ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติเพื่อป้องกันค่าใช้จ่ายซ้ำ"
+          ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้"
           : wasCancelled
             ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
             : `Task ไม่สำเร็จครับ: ${(error as Error).message}`,
