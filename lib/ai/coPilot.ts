@@ -9,12 +9,12 @@ import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
+import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import { buildComposerImageSelection } from "@/lib/ai/orchestration/imageReferences";
-import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { analyzeImageReferences } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
-  createDirectedImageTask,
+  createDirectedImageRun,
   type PendingClarification,
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { removeBackground } from "@/lib/ai/removeBg";
@@ -302,7 +302,7 @@ export async function executeCoPilotInstruction(
           suggestions: ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"],
         };
       }
-      const directedTask = createDirectedImageTask(
+      const imageRun = createDirectedImageRun(
         {
           prompt,
           refs: selectedRefs,
@@ -313,12 +313,15 @@ export async function executeCoPilotInstruction(
         },
         direction,
       );
-      act.taskId = directedTask.id;
-      act.title = `🧠 Creative Director → ${directedTask.subAgent}`;
+      act.taskId = imageRun.id;
+      const countLabel =
+        imageRun.requestedOutputCount > 1 ? ` (${imageRun.requestedOutputCount} ภาพ)` : "";
+      act.title = `🧠 Creative Director → ${direction.specialist}${countLabel}`;
       act.stage = "planned";
-      act.description = `เลือก ${direction.modelAlias} · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
+      act.description = `เลือก ${direction.modelAlias} · วางแผนสร้าง ${imageRun.requestedOutputCount} ภาพ · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
       onActionUpdate?.({ ...act });
-      const result = await runContextAwareImageTask(directedTask, selectedRefs, {
+
+      const runResult = await runContextAwareImageRun(imageRun, selectedRefs, {
         signal: options.signal,
         cloudConsent: true,
         reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
@@ -328,20 +331,46 @@ export async function executeCoPilotInstruction(
           ),
         onUpdate: (update) => {
           act.stage = update.stage;
-          act.attempt = update.attempt;
-          act.quality = update.quality;
-          act.description = `${update.message} · ครั้งที่ ${update.attempt}/${directedTask.maxAttempts}`;
+          act.description = `${update.message} · สำเร็จ ${update.completedCount}/${update.requestedOutputCount}`;
           onActionUpdate?.({ ...act });
         },
       });
-      updateActionStatus(
-        act,
-        "success",
-        `สร้างและวางผลลัพธ์สำเร็จ (${result.width}×${result.height}px) โดยคงต้นฉบับไว้`,
-      );
+
+      if (runResult.status === "cancelled") {
+        updateActionStatus(
+          act,
+          "error",
+          "ยกเลิกงานสร้างภาพตามคำขอแล้ว และไม่มีการเปลี่ยนแปลงที่ไม่สมบูรณ์บน Canvas",
+        );
+        return {
+          reply: "ยกเลิกงานสร้างภาพตามคำขอแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas",
+          actions,
+          suggestions: ["ระบุ brief ใหม่", "ตรวจสอบภาพที่เลือก"],
+        };
+      }
+
+      if (runResult.status === "partial" && runResult.completedCount === 0) {
+        const firstError = runResult.items.find((i) => i.error)?.error || "การสร้างภาพไม่สำเร็จ";
+        updateActionStatus(act, "error", `Task ไม่สำเร็จ: ${firstError}`);
+        return {
+          reply: `การสร้างภาพไม่สำเร็จครับ: ${firstError}`,
+          actions,
+          suggestions: ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"],
+        };
+      }
+
+      const completedSummary =
+        imageRun.requestedOutputCount > 1
+          ? `สร้างและจัดวางสำเร็จ ${runResult.completedCount}/${imageRun.requestedOutputCount} ภาพ`
+          : "สร้างและวางผลลัพธ์สำเร็จ";
+      updateActionStatus(act, "success", `${completedSummary} โดยจัดวางไม่ซ้อนทับกัน`);
+
+      const partialNote =
+        runResult.failedCount > 0 ? ` (มี ${runResult.failedCount} ภาพที่ไม่สำเร็จ)` : "";
+
       return {
-        reply: `สร้างภาพตามแผนของ Creative Director และวางบน Canvas เรียบร้อยแล้วครับ ใช้ ${direction.modelAlias} ด้วยคุณภาพอัตโนมัติ: ${result.task.quality}`,
-        imageCreated: true,
+        reply: `สร้างภาพตามแผนของ Creative Director และวางบน Canvas เรียบร้อยแล้วครับ (${completedSummary})${partialNote} ใช้ ${direction.modelAlias} โดยจัดวางแยกตำแหน่งไม่ซ้อนทับกัน`,
+        imageCreated: runResult.completedCount > 0,
         actions,
         suggestions: ["🪄 ลบพื้นหลังของรูปนี้", "⚡ แปลงรูปนี้เป็น Vector Paths", "📐 จัดวาง Layout ให้สวยงาม"],
       };

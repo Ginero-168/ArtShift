@@ -40,7 +40,9 @@ export type CreativeDirection =
   | { kind: "design-plan"; proposal: PlanProposal }
   | {
       kind: "image-task";
-      outputCount: 1;
+      outputCount?: 1;
+      requestedOutputCount?: number;
+      outputBriefs?: string[];
       summary: string;
       refinedPrompt: string;
       specialist: "image_generator" | "image_editor";
@@ -125,7 +127,14 @@ const CREATIVE_DIRECTION_TOOL = {
       text: { type: "string", minLength: 1, maxLength: 8_000 },
       question: { type: "string", minLength: 1, maxLength: 1_000 },
       options: { type: "array", maxItems: 4, items: { type: "string", maxLength: 500 } },
-      outputCount: { type: "integer", const: 1 },
+      outputCount: { type: "integer", minimum: 1, maximum: 5 },
+      requestedOutputCount: { type: "integer", minimum: 1, maximum: 5 },
+      outputBriefs: {
+        type: "array",
+        minItems: 1,
+        maxItems: 5,
+        items: { type: "string", maxLength: 2000 },
+      },
       summary: { type: "string", minLength: 1, maxLength: 2_000 },
       refinedPrompt: { type: "string", minLength: 8, maxLength: 20_000 },
       specialist: { type: "string", enum: ["image_generator", "image_editor"] },
@@ -232,7 +241,9 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Choose one allowlisted specialist and capability. Respect an explicit user model preference only when that model is listed as available.",
   "For supported Canvas edits, call propose_design_plan with exact current ids and a complete atomic command plan. Ask one focused clarification only when a missing fact materially changes the result.",
   "For image creation or image editing, call propose_creative_direction. For an answer that needs no execution, return answer. Never return competing plans or call both planning tools in one turn.",
-  "Execution supports exactly one output artifact per task (outputCount=1). If the user requires multiple separate images, return an answer explaining this limitation or ask which single image to start with. Never flatten separate deliverables into a collage or claim a multi-output task is executable.",
+  "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested (1 to 5). A clear requested quantity (e.g. '3 รูป', '5 แบบ', '2 images') is authoritative and is not by itself a reason to ask a clarification.",
+  "Return exactly one concise outputBrief in outputBriefs per requested output. Each outputBrief must describe one standalone image and preserve requested differences such as color, subject, angle, or composition. Never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
+  "Execution creates up to 5 separate outputs concurrently. Do not ask the user which single image to start with when 1 to 5 images are requested.",
   "For image creation, produce a precise refinedPrompt that preserves subjects, quantities, exact text, relationships, brand constraints and intended use.",
   "Define observable Review criteria for the generated result. Do not reveal chain-of-thought; return only the structured direction tool call.",
   "Track the user's corrections and prior answers. Do not ask again for facts already present in conversation or Artwork context. If execution evidence reports a failure, revise the plan or provide a precise recovery step.",
@@ -275,7 +286,13 @@ export async function prepareCreativeDirection(
               : null,
             vision: normalizeReferenceAnalyses(input.referenceAnalyses),
             knowledge,
-            executionLimits: { maxOutputCount: 1, separateBatchOutputs: false },
+            executionLimits: {
+              maxOutputCount: 1,
+              maxBatchSize: 5,
+              maxRequestedOutputCount: 5,
+              separateBatchOutputs: true,
+              automaticBatchContinuation: true,
+            },
             availableCapabilities: [...new Set(input.availableCapabilities)].slice(0, 32),
             availableSearchSources: searchImagesAvailable ? ["images"] : [],
             unavailableSearchSources: ["web", "website"],
@@ -455,13 +472,14 @@ export async function reviewCreativeOutput(
 export function applyCreativeDirectionToTask(
   task: AiTask,
   direction: Extract<CreativeDirection, { kind: "image-task" }>,
+  options: { outputPrompt?: string } = {},
 ): AiTask {
   if (direction.search.required) {
     throw new Error("Creative Director context search must complete before image execution");
   }
   const directed: AiTask = {
     ...task,
-    prompt: direction.refinedPrompt,
+    prompt: options.outputPrompt ?? direction.refinedPrompt,
     subAgent: direction.specialist,
     capability: direction.capability,
     brainModelAlias: CREATIVE_DIRECTOR_MODEL_ALIAS,
@@ -505,6 +523,8 @@ export function parseCreativeDirection(
         : [
             "kind",
             "outputCount",
+            "requestedOutputCount",
+            "outputBriefs",
             "summary",
             "refinedPrompt",
             "specialist",
@@ -528,8 +548,32 @@ export function parseCreativeDirection(
     return { kind: "clarification", question: value.question.trim(), options: value.options };
   }
   if (value.kind !== "image-task") return invalidDirection();
+  if (value.outputCount === undefined && value.requestedOutputCount === undefined) {
+    return invalidDirection();
+  }
+  if (value.outputCount !== undefined && value.outputCount !== 1) {
+    return invalidDirection();
+  }
+  const rawCount = value.requestedOutputCount ?? value.outputCount;
+  const requestedOutputCount = Number(rawCount);
   if (
-    value.outputCount !== 1 ||
+    !Number.isInteger(requestedOutputCount) ||
+    requestedOutputCount < 1 ||
+    requestedOutputCount > 100
+  ) {
+    return invalidDirection();
+  }
+  const rawBriefs = Array.isArray(value.outputBriefs)
+    ? value.outputBriefs
+    : Array.from({ length: requestedOutputCount }, (_, idx) =>
+        idx === 0
+          ? String(value.refinedPrompt ?? "").trim()
+          : `${String(value.refinedPrompt ?? "").trim()} (variation ${idx + 1})`,
+      );
+  if (!isStringArray(rawBriefs, 100, 20_000, 1) || rawBriefs.length !== requestedOutputCount) {
+    return invalidDirection();
+  }
+  if (
     !isBoundedString(value.summary, 2_000) ||
     !isBoundedString(value.refinedPrompt, 20_000, 8) ||
     (value.specialist !== "image_generator" && value.specialist !== "image_editor") ||
@@ -567,6 +611,8 @@ export function parseCreativeDirection(
   return {
     kind: "image-task",
     outputCount: 1,
+    requestedOutputCount,
+    outputBriefs: rawBriefs.map((brief) => brief.trim()),
     summary: value.summary.trim(),
     refinedPrompt: value.refinedPrompt.trim(),
     specialist: value.specialist,

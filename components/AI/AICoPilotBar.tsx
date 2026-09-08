@@ -13,6 +13,7 @@ import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
+import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import {
   buildComposerImageSelection,
   snapshotComposerImageRefs,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
   type ContextAwareTurnResult,
+  createDirectedImageRun,
   createDirectedImageTask,
   isCanvasInventoryPrompt,
   type PendingClarification,
@@ -370,18 +372,21 @@ export default function AICoPilotBar() {
                 reply = `ยังไม่เรียก Image Model ครับ Creative Director ต้องค้นข้อมูลเพิ่มก่อน: ${direction.search.queries.join(", ")}`;
                 suggestions = ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"];
               } else {
-                const directedTask = createDirectedImageTask(contextDecision.input, direction);
+                const imageRun = createDirectedImageRun(contextDecision.input, direction);
                 setPendingClarification(null);
-                taskAction.taskId = directedTask.id;
-                taskAction.quality = directedTask.quality;
+                taskAction.taskId = imageRun.id;
+                const countLabel =
+                  imageRun.requestedOutputCount > 1
+                    ? ` (${imageRun.requestedOutputCount} ภาพ)`
+                    : "";
                 taskAction.agent =
-                  directedTask.subAgent === "image_editor" ? "image_edit" : "image_gen";
-                taskAction.title = `🧠 Creative Director → ${directedTask.subAgent}`;
-                taskAction.description = `เลือก ${direction.modelAlias} · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
+                  direction.specialist === "image_editor" ? "image_edit" : "image_gen";
+                taskAction.title = `🧠 Creative Director → ${direction.specialist}${countLabel}`;
+                taskAction.description = `เลือก ${direction.modelAlias} · วางแผนสร้าง ${imageRun.requestedOutputCount} ภาพ · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
                 taskAction.stage = "planned";
                 upsertCurrentAction({ ...taskAction });
 
-                const result = await runContextAwareImageTask(directedTask, refsForTurn, {
+                const runResult = await runContextAwareImageRun(imageRun, refsForTurn, {
                   signal: controller.signal,
                   cloudConsent: true,
                   reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
@@ -390,10 +395,8 @@ export default function AICoPilotBar() {
                       { signal, cloudConsent: true },
                     ),
                   onUpdate: (update) => {
-                    taskAction.description = `${update.message} · ครั้งที่ ${update.attempt}/${directedTask.maxAttempts}`;
+                    taskAction.description = `${update.message} · สำเร็จ ${update.completedCount}/${update.requestedOutputCount}`;
                     taskAction.stage = update.stage;
-                    taskAction.attempt = update.attempt;
-                    taskAction.quality = update.quality;
                     taskAction.status =
                       update.stage === "failed" ||
                       update.stage === "cancelled" ||
@@ -405,14 +408,38 @@ export default function AICoPilotBar() {
                     upsertCurrentAction({ ...taskAction });
                   },
                 });
-                taskAction.status = "success";
-                taskAction.description = `Creative Director ตรวจ brief และวางผลลัพธ์บน Canvas (${result.width} × ${result.height}px)`;
-                reply = `สร้างภาพตามแผนของ Creative Director และวางบน Canvas เรียบร้อยแล้วครับ ใช้ ${direction.modelAlias} ด้วยคุณภาพอัตโนมัติ: ${result.task.quality} โดยคงต้นฉบับไว้`;
-                suggestions = [
-                  "🪄 ลบพื้นหลังของรูปนี้",
-                  "⚡ แปลงรูปนี้เป็น Vector Paths",
-                  "📐 จัดวาง Layout ให้สวยงาม",
-                ];
+
+                if (runResult.status === "cancelled") {
+                  taskAction.status = "error";
+                  taskAction.stage = "cancelled";
+                  taskAction.description = "ยกเลิกงานสร้างภาพตามคำขอแล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
+                  reply = "ยกเลิกงานสร้างภาพตามคำขอแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas";
+                  suggestions = ["ระบุ brief ใหม่", "ตรวจสอบภาพที่เลือก"];
+                } else if (runResult.status === "partial" && runResult.completedCount === 0) {
+                  const firstError =
+                    runResult.items.find((i) => i.error)?.error || "การสร้างภาพไม่สำเร็จ";
+                  taskAction.status = "error";
+                  taskAction.stage = "failed";
+                  taskAction.description = `Task ไม่สำเร็จ: ${firstError}`;
+                  reply = `การสร้างภาพไม่สำเร็จครับ: ${firstError}`;
+                  suggestions = ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"];
+                } else {
+                  taskAction.status = "success";
+                  taskAction.stage = "succeeded";
+                  const summaryMsg =
+                    imageRun.requestedOutputCount > 1
+                      ? `สำเร็จ ${runResult.completedCount}/${imageRun.requestedOutputCount} ภาพ`
+                      : "สำเร็จ";
+                  taskAction.description = `Creative Director ตรวจ brief และจัดวางภาพบน Canvas (${summaryMsg})`;
+                  const partialNote =
+                    runResult.failedCount > 0 ? ` (มี ${runResult.failedCount} ภาพที่ไม่สำเร็จ)` : "";
+                  reply = `สร้างภาพตามแผนของ Creative Director และวางบน Canvas เรียบร้อยแล้วครับ (${summaryMsg})${partialNote} ใช้ ${direction.modelAlias} โดยจัดวางไม่ซ้อนทับกัน`;
+                  suggestions = [
+                    "🪄 ลบพื้นหลังของรูปนี้",
+                    "⚡ แปลงรูปนี้เป็น Vector Paths",
+                    "📐 จัดวาง Layout ให้สวยงาม",
+                  ];
+                }
               }
             } catch (error) {
               const wasCancelled =

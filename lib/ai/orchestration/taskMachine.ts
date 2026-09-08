@@ -62,6 +62,14 @@ export type AiTaskPlan = {
     queries: readonly string[];
     sources: readonly ("web" | "images" | "website")[];
   };
+  imageRun?: {
+    runId: string;
+    outputIndex: number;
+    requestedOutputCount: number;
+    batchIndex: number;
+    totalBatches: number;
+    maxBatchSize: 5;
+  };
 };
 
 export type AiTask = AiTaskPlan & {
@@ -181,6 +189,9 @@ export function createAiTask(plan: AiTaskPlan): AiTask {
   }
   if (!Number.isInteger(plan.maxAttempts) || plan.maxAttempts < 1 || plan.maxAttempts > 3) {
     throw new Error("task attempt limit is invalid");
+  }
+  if (plan.imageRun && !isValidImageRunMetadata(plan.imageRun)) {
+    throw new Error("image run metadata is invalid");
   }
   assertAiTaskHarness(plan);
   if (
@@ -385,6 +396,23 @@ function containsUnsafeTraceText(value: unknown, seen = new Set<object>()): bool
   seen.add(value);
   if (Array.isArray(value)) return value.some((item) => containsUnsafeTraceText(item, seen));
   return Object.values(value).some((item) => containsUnsafeTraceText(item, seen));
+}
+
+function isValidImageRunMetadata(value: NonNullable<AiTaskPlan["imageRun"]>): boolean {
+  return (
+    typeof value.runId === "string" &&
+    value.runId.trim().length > 0 &&
+    value.runId.length <= 200 &&
+    Number.isInteger(value.outputIndex) &&
+    value.outputIndex >= 1 &&
+    Number.isInteger(value.requestedOutputCount) &&
+    value.requestedOutputCount >= value.outputIndex &&
+    Number.isInteger(value.batchIndex) &&
+    value.batchIndex >= 1 &&
+    Number.isInteger(value.totalBatches) &&
+    value.totalBatches >= value.batchIndex &&
+    value.maxBatchSize === 5
+  );
 }
 
 function isTraceEvent(event: { type: string }): event is AiTaskTracePayload {

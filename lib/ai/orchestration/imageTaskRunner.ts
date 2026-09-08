@@ -48,27 +48,30 @@ export type ContextAwareTaskResult = {
   height: number;
 };
 
+export type ContextAwareImageTaskOptions = {
+  signal?: AbortSignal;
+  cloudConsent?: boolean;
+  placement?: { outputIndex: number; requestedOutputCount: number };
+  analyzeOutput?: (
+    dataURL: string,
+    fileId: string,
+    width: number,
+    height: number,
+    signal: AbortSignal,
+  ) => Promise<GeneratedOutputAnalysis | undefined>;
+  reviewOutput?: (input: {
+    prompt: string;
+    reviewCriteria: readonly string[];
+    outputAnalysis: GeneratedOutputAnalysis;
+    signal: AbortSignal;
+  }) => Promise<{ passed: boolean; summary: string; repairInstruction?: string }>;
+  onUpdate?: (update: ContextAwareTaskUpdate) => void;
+};
+
 export async function runContextAwareImageTask(
   initialTask: AiTask,
   refs: readonly ComposerImageRef[],
-  options: {
-    signal?: AbortSignal;
-    cloudConsent?: boolean;
-    analyzeOutput?: (
-      dataURL: string,
-      fileId: string,
-      width: number,
-      height: number,
-      signal: AbortSignal,
-    ) => Promise<GeneratedOutputAnalysis | undefined>;
-    reviewOutput?: (input: {
-      prompt: string;
-      reviewCriteria: readonly string[];
-      outputAnalysis: GeneratedOutputAnalysis;
-      signal: AbortSignal;
-    }) => Promise<{ passed: boolean; summary: string; repairInstruction?: string }>;
-    onUpdate?: (update: ContextAwareTaskUpdate) => void;
-  } = {},
+  options: ContextAwareImageTaskOptions = {},
 ): Promise<ContextAwareTaskResult> {
   const signal = options.signal ?? new AbortController().signal;
   assertAiTaskHarness(initialTask);
@@ -100,6 +103,7 @@ export async function runContextAwareImageTask(
     throw attachTaskSnapshot(error, task);
   }
   const initialState = useEngine.getState();
+  const initialSlide = initialState.currentSlide();
   const targetSnapshot = {
     docId: initialState.doc.id,
     slideId: initialState.currentSlideId,
@@ -135,15 +139,23 @@ export async function runContextAwareImageTask(
     quality: task.quality,
   });
 
+  const previewPlacement = computeMultiImagePlacement(
+    previewBounds,
+    options.placement,
+    initialSlide?.width ?? 1920,
+    initialSlide?.height ?? 1080,
+  );
+
   const job = enqueueProcessingJob({
     signal,
+    concurrent: true,
     preview: {
       kind: "generate",
       label: refs.length ? "Image Editor" : "Image Generator",
-      x: previewBounds.x,
-      y: previewBounds.y,
-      width: previewBounds.width,
-      height: previewBounds.height,
+      x: previewPlacement.x,
+      y: previewPlacement.y,
+      width: previewPlacement.width,
+      height: previewPlacement.height,
       progress: 0,
       sourceDataUrl: inputImages[0]?.dataUrl,
       message: "เตรียมพื้นที่ผลลัพธ์ใน Canvas…",
@@ -153,8 +165,15 @@ export async function runContextAwareImageTask(
       const unsubscribeViewport = subscribeCanvasViewport(() => {
         const currentViewport = getCanvasViewport();
         if (!currentViewport) return;
+        const currentSlide = useEngine.getState().currentSlide();
         const nextBounds = getGenerationPreviewBounds(currentViewport, dimensions);
-        context.update({ ...nextBounds });
+        const nextPlaced = computeMultiImagePlacement(
+          nextBounds,
+          options.placement,
+          currentSlide?.width ?? 1920,
+          currentSlide?.height ?? 1080,
+        );
+        context.update({ ...nextPlaced });
       });
       try {
         context.update({
@@ -332,14 +351,20 @@ export async function runContextAwareImageTask(
             });
             const state = useEngine.getState();
             const slide = state.currentSlide();
-            assertCommitTarget(state, targetSnapshot, refs);
+            assertCommitTarget(state, targetSnapshot, refs, Boolean(task.imageRun));
             if (!slide) throw new Error("ไม่พบ Canvas ที่กำลังใช้งาน");
             if (slide.layers.length === 0) throw new Error("ไม่พบ Layer สำหรับวางผลลัพธ์บน Canvas");
             const historyBeforeCommit = state.history.past.length;
             const currentViewport = getCanvasViewport() ?? viewport;
-            const finalBounds = getGenerationPreviewBounds(
+            const baseBounds = getGenerationPreviewBounds(
               { ...currentViewport, slideWidth: slide.width, slideHeight: slide.height },
               { width: preloaded.width, height: preloaded.height },
+            );
+            const finalBounds = computeMultiImagePlacement(
+              baseBounds,
+              options.placement,
+              slide.width,
+              slide.height,
             );
             task = appendAiTaskEvent(task, { type: "commit.started", attempt });
             task = transition(task, { type: "committing" }, options, {
@@ -546,11 +571,12 @@ function assertCommitTarget(
   state: ReturnType<typeof useEngine.getState>,
   snapshot: { docId: string; slideId: string; revision: number },
   refs: readonly ComposerImageRef[],
+  allowPeerDocRevision = false,
 ): void {
   if (
     state.doc.id !== snapshot.docId ||
     state.currentSlideId !== snapshot.slideId ||
-    state.doc.updatedAt !== snapshot.revision
+    (!allowPeerDocRevision && state.doc.updatedAt !== snapshot.revision)
   ) {
     throw new Error("Canvas target changed before commit; please resend the task");
   }
@@ -668,4 +694,57 @@ function predictionIdFromError(error: unknown): string | undefined {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
+}
+
+export function computeMultiImagePlacement(
+  baseBounds: { x: number; y: number; width: number; height: number },
+  placement: { outputIndex: number; requestedOutputCount: number } | undefined,
+  slideWidth: number,
+  slideHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  if (!placement || placement.requestedOutputCount <= 1) {
+    return baseBounds;
+  }
+
+  const count = Math.max(1, Math.min(5, Math.floor(placement.requestedOutputCount)));
+  const rawIndex = placement.outputIndex ?? 1;
+  const zeroIndex = rawIndex >= 1 ? rawIndex - 1 : rawIndex;
+  const index = Math.max(0, Math.min(count - 1, Math.floor(zeroIndex)));
+
+  const aspectRatio = baseBounds.height > 0 ? baseBounds.width / baseBounds.height : 1;
+  const padding = 32;
+  const gap = count > 3 ? 20 : 28;
+
+  const maxAvailW = Math.max(100, slideWidth - padding * 2);
+  const maxAvailH = Math.max(100, slideHeight - padding * 2);
+
+  let targetW = baseBounds.width;
+  let targetH = baseBounds.height;
+
+  const totalGap = (count - 1) * gap;
+  const maxWPerItem = (maxAvailW - totalGap) / count;
+
+  if (targetW > maxWPerItem) {
+    targetW = maxWPerItem;
+    targetH = targetW / aspectRatio;
+  }
+
+  if (targetH > maxAvailH * 0.85) {
+    targetH = maxAvailH * 0.85;
+    targetW = targetH * aspectRatio;
+  }
+
+  const totalRowW = count * targetW + totalGap;
+  const startX = Math.max(padding, (slideWidth - totalRowW) / 2);
+  const startY = Math.max(padding, (slideHeight - targetH) / 2);
+
+  const x = Math.round(startX + index * (targetW + gap));
+  const y = Math.round(startY);
+
+  return {
+    x,
+    y,
+    width: Math.round(targetW),
+    height: Math.round(targetH),
+  };
 }

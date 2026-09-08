@@ -9,11 +9,18 @@ import {
   parseCreativeDirection,
 } from "./creativeDirector";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
+import {
+  type DirectedImageRun,
+  MAX_IMAGE_OUTPUTS_PER_BATCH,
+  planImageBatches,
+} from "./imageBatchRunner";
 import { chooseImageQuality } from "./imageQualityPolicy";
 import type { ComposerImageRef } from "./imageReferences";
 import type { ClarificationOption } from "./intentCompleteness";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
 import { type AiTask, type AiTaskPlan, createAiTask } from "./taskMachine";
+
+export type { DirectedImageRun };
 
 export type PendingClarification = {
   id: string;
@@ -176,4 +183,47 @@ function extractRequiredText(prompt: string): string | undefined {
   if (quoted?.[1]?.trim()) return quoted[1].trim();
   const unquoted = prompt.match(/(?:headline|text|คำว่า|เขียนว่า)\s*[:：]\s*([^\n,]{1,240})/iu);
   return unquoted?.[1]?.trim() || undefined;
+}
+
+export function createDirectedImageRun(
+  input: ContextAwareTurnInput,
+  direction: Extract<CreativeDirection, { kind: "image-task" }>,
+  options: { runId?: string } = {},
+): DirectedImageRun {
+  const count = direction.requestedOutputCount ?? direction.outputCount ?? 1;
+  const briefs =
+    direction.outputBriefs && direction.outputBriefs.length === count
+      ? direction.outputBriefs
+      : Array.from({ length: count }, (_, idx) =>
+          idx === 0 ? direction.refinedPrompt : `${direction.refinedPrompt} (variation ${idx + 1})`,
+        );
+  const batches = planImageBatches(count);
+  const runId = options.runId ?? crypto.randomUUID();
+  const tasks: AiTask[] = briefs.map((brief, index) => {
+    const baseTask = createDirectedImageTask(input, direction);
+    const batchIndex = batches.findIndex((b) => b.itemIndexes.includes(index)) + 1;
+    const taskPrompt = `${brief}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+    return {
+      ...baseTask,
+      id: `${runId}-task-${index + 1}`,
+      prompt: taskPrompt,
+      imageRun: {
+        runId,
+        outputIndex: index + 1,
+        requestedOutputCount: count,
+        batchIndex,
+        totalBatches: batches.length,
+        maxBatchSize: MAX_IMAGE_OUTPUTS_PER_BATCH,
+      },
+    };
+  });
+  return {
+    id: runId,
+    requestedOutputCount: count,
+    maxBatchSize: MAX_IMAGE_OUTPUTS_PER_BATCH,
+    totalBatches: batches.length,
+    estimatedMaxCostUsd: tasks.reduce((sum, task) => sum + task.estimatedMaxCostUsd, 0),
+    batches,
+    tasks,
+  };
 }

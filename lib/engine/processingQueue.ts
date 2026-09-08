@@ -16,6 +16,7 @@ export type EnqueueProcessingJobInput = {
   preview: ProcessingPreviewInput;
   run: (context: ProcessingJobContext) => Promise<void>;
   signal?: AbortSignal;
+  concurrent?: boolean;
 };
 
 type QueueJob = {
@@ -34,9 +35,62 @@ export type EnqueuedProcessingJob = {
 };
 
 const queue: QueueJob[] = [];
+const concurrentJobs = new Map<string, QueueJob>();
 let activeJob: QueueJob | null = null;
 
 export function enqueueProcessingJob(input: EnqueueProcessingJobInput): EnqueuedProcessingJob {
+  if (input.concurrent) {
+    const id = beginProcessingPreview({
+      ...input.preview,
+      phase: "running",
+      queuePosition: undefined,
+      message: input.preview.message ?? "กำลังประมวลผล…",
+    });
+    const controller = new AbortController();
+    let resolvePromise!: () => void;
+    let rejectPromise!: (error: unknown) => void;
+    const promise = new Promise<void>((resolve, reject) => {
+      resolvePromise = resolve;
+      rejectPromise = reject;
+    });
+    const cancel = () => cancelProcessingJob(id);
+    const cleanup = () => input.signal?.removeEventListener("abort", cancel);
+    const job: QueueJob = {
+      id,
+      controller,
+      run: input.run,
+      resolve: resolvePromise,
+      reject: rejectPromise,
+      cleanup,
+    };
+    concurrentJobs.set(id, job);
+    if (input.signal) {
+      if (input.signal.aborted) cancel();
+      else input.signal.addEventListener("abort", cancel, { once: true });
+    }
+    (async () => {
+      try {
+        await job.run({
+          id: job.id,
+          signal: job.controller.signal,
+          update: (patch) => updateProcessingPreview(job.id, patch),
+        });
+        job.resolve();
+      } catch (error) {
+        job.reject(error);
+      } finally {
+        clearProcessingPreview(job.id);
+        job.cleanup();
+        concurrentJobs.delete(id);
+      }
+    })();
+    return {
+      id,
+      promise,
+      cancel,
+    };
+  }
+
   const id = beginProcessingPreview({
     ...input.preview,
     phase: "queued",
@@ -76,6 +130,15 @@ export function enqueueProcessingJob(input: EnqueueProcessingJobInput): Enqueued
 }
 
 export function cancelProcessingJob(id: string): void {
+  const concurrent = concurrentJobs.get(id);
+  if (concurrent) {
+    concurrent.controller.abort();
+    clearProcessingPreview(concurrent.id);
+    concurrent.cleanup();
+    concurrent.resolve();
+    concurrentJobs.delete(id);
+    return;
+  }
   const queuedIndex = queue.findIndex((job) => job.id === id);
   if (queuedIndex >= 0) {
     const [job] = queue.splice(queuedIndex, 1);
