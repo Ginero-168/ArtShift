@@ -15,11 +15,16 @@ import {
   type CreativeDirection,
   parseCreativeDirection,
 } from "./creativeDirector";
+import { prepareRemoteOrchestratorTurn } from "./creativeDirectorClient";
 import {
   advancePlanStep,
   type SequentialExecutionPlan,
   type SequentialExecutionStep,
 } from "./executionGraph";
+
+export { useDirectorSession } from "./sessionState";
+
+import type { ArtworkExecutionContext, PlanProposal } from "@/lib/designAgent/contracts";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
 import {
   type DirectedImageRun,
@@ -30,6 +35,7 @@ import { chooseImageQuality } from "./imageQualityPolicy";
 import type { ComposerImageRef } from "./imageReferences";
 import type { ClarificationOption } from "./intentCompleteness";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
+import { useDirectorSession } from "./sessionState";
 import { type AiTask, type AiTaskPlan, createAiTask } from "./taskMachine";
 
 export type { DirectedImageRun, SequentialExecutionPlan, SequentialExecutionStep };
@@ -65,10 +71,10 @@ export type ContextAwareTurnResult =
 export function isCanvasInventoryPrompt(prompt: string): boolean {
   const value = prompt.trim().toLocaleLowerCase();
   return (
-    /^(?:ช่วย|กรุณา)?\s*(?:บอก|แสดง|ตรวจสอบ|เช็ค|ดู)?\s*(?:ว่า)?\s*(?:บน|ใน)\s*canvas\s*(?:มีอะไร|มี object|มีอ็อบเจ็กต์|มีอะไรอยู่)/iu.test(
+    /^(?:ช่วย|กรุณา)?\s*(?:บอก|แสดง|ตรวจสอบ|เช็ค|ดู|สรุป)?\s*(?:ว่า)?\s*(?:บน|ใน|สิ่งที่อยู่บน)\s*canvas\s*(?:มีอะไร|มี object|มีอ็อบเจ็กต์|มีอะไรอยู่)?/iu.test(
       value,
     ) ||
-    /(?:มีอะไรอยู่บน|มีอะไรใน)\s*canvas/iu.test(value) ||
+    /(?:มีอะไรอยู่บน|มีอะไรใน|สรุป.*(?:บน|ใน))\s*canvas/iu.test(value) ||
     /^(?:what(?:\s+is|'s)|list|show|count)\b.*\b(?:on|in)\s+the\s+canvas\b/iu.test(value) ||
     /^(?:canvas inventory|inventory of the canvas)\b/iu.test(value)
   );
@@ -95,7 +101,12 @@ export function createDirectedImageTask(
     direction,
     {
       prompt: input.prompt,
-      canvasSummary: { objectCount: 0, selectedCount: input.refs.length, width: 1, height: 1 },
+      canvasSummary: {
+        objectCount: input.canvas?.slide.elements.length ?? 0,
+        selectedCount: input.refs.length,
+        width: input.canvas?.slide.width ?? 1920,
+        height: input.canvas?.slide.height ?? 1080,
+      },
       referenceAnalyses: input.analyses,
       availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
     },
@@ -319,7 +330,7 @@ async function executeDefaultSpecialistStep(
       return {
         artifactKind: "image",
         data: { ...generated, elementId: element.id },
-        reviewScore: 1,
+        reviewStatus: "not_checked",
         notes: `${step.specialist} completed through the ArtShift image route`,
       };
     }
@@ -354,7 +365,7 @@ async function executeDefaultSpecialistStep(
       return {
         artifactKind: "mask",
         data: { elements: result.elements, totalNodes: result.totalNodes, backend: result.backend },
-        reviewScore: 1,
+        reviewStatus: "not_checked",
         notes: `Vectorizer produced ${result.elements.length} editable paths`,
       };
     }
@@ -400,7 +411,7 @@ async function executeDefaultSpecialistStep(
           ...(subheading ? { subheading } : {}),
           elementIds: elements.map((e) => e.id),
         },
-        reviewScore: 1,
+        reviewStatus: "not_checked",
         notes: "Copywriter text committed to the active Artwork",
       };
     }
@@ -415,7 +426,7 @@ async function executeDefaultSpecialistStep(
       return {
         artifactKind: "layout_commands",
         data: { patches, updatedCount: patches.length },
-        reviewScore: 1,
+        reviewStatus: "not_checked",
         notes: `Layout applied to ${patches.length} Objects`,
       };
     }
@@ -447,7 +458,7 @@ async function executeDefaultSpecialistStep(
           rules: brand.rules,
           appliedTo: patches.map((patch) => patch.id),
         },
-        reviewScore: 1,
+        reviewStatus: "not_checked",
         notes: `Brand Kit ${brand.name} applied to ${patches.length} Objects`,
       };
     }
@@ -512,6 +523,19 @@ export async function runSequentialExecutionPlan(
   initialPlan: SequentialExecutionPlan,
   options: SequentialPlanExecutionOptions = {},
 ): Promise<SequentialExecutionPlan> {
+  // Guard against completed or aborted plan or all steps already executed
+  if (
+    initialPlan.overallStatus === "completed" ||
+    initialPlan.overallStatus === "aborted" ||
+    initialPlan.currentStepIndex >= initialPlan.steps.length ||
+    initialPlan.steps.every((step) => step.status === "completed" || step.status === "skipped")
+  ) {
+    return {
+      ...initialPlan,
+      overallStatus: initialPlan.overallStatus === "aborted" ? "aborted" : "completed",
+    };
+  }
+
   let currentPlan: SequentialExecutionPlan = {
     ...initialPlan,
     overallStatus: "executing",
@@ -529,6 +553,10 @@ export async function runSequentialExecutionPlan(
         updatedAt: Date.now(),
       };
       return currentPlan;
+    }
+
+    if (currentPlan.steps[i].status === "completed" || currentPlan.steps[i].status === "skipped") {
+      continue;
     }
 
     const currentStep = {
@@ -601,4 +629,174 @@ export async function runSequentialExecutionPlan(
   }
 
   return currentPlan;
+}
+
+/**
+ * Unified Orchestration Entry Point (ORCH-05).
+ * UI callers use submitTurn to send user prompts with session and artwork context.
+ */
+export type SubmitTurnRequest = {
+  sessionId?: string;
+  prompt: string;
+  refs?: readonly ComposerImageRef[];
+  analyses?: readonly ImageReferenceAnalysis[];
+  canvas?: Parameters<typeof inspectCanvas>[0];
+  designContext?: ArtworkExecutionContext;
+  cloudConsent?: boolean;
+  signal?: AbortSignal;
+};
+
+export type SubmitTurnResponse =
+  | { kind: "answer"; reply: string; source: "canvas-local" | "director" }
+  | {
+      kind: "clarification";
+      question: string;
+      options: string[];
+      pendingClarification: PendingClarification;
+    }
+  | { kind: "design-plan"; proposal: PlanProposal }
+  | { kind: "sequential-plan"; plan: SequentialExecutionPlan }
+  | {
+      kind: "image-task";
+      imageRun: DirectedImageRun;
+      direction: Extract<CreativeDirection, { kind: "image-task" }>;
+    };
+
+export async function submitTurn(request: SubmitTurnRequest): Promise<SubmitTurnResponse> {
+  const signal = request.signal ?? new AbortController().signal;
+
+  // 1. Check local-only canvas inventory first
+  if (isCanvasInventoryPrompt(request.prompt) && request.canvas) {
+    const inspection = inspectCanvas(request.canvas);
+    return { kind: "answer", reply: inspection.reply, source: "canvas-local" };
+  }
+
+  // 2. Prepare caller context
+  const refs = request.refs ?? [];
+  const analyses = request.analyses ?? [];
+
+  const canvasSummary = request.canvas?.slide
+    ? {
+        objectCount: request.canvas.slide.elements.length,
+        selectedCount: request.canvas.selectedIds.size,
+        width: request.canvas.slide.width,
+        height: request.canvas.slide.height,
+      }
+    : { objectCount: 0, selectedCount: 0, width: 1920, height: 1080 };
+
+  const direction = await prepareRemoteOrchestratorTurn(
+    {
+      prompt: request.prompt,
+      canvasSummary,
+      designContext: request.designContext,
+      referenceAnalyses: analyses,
+    },
+    { signal, cloudConsent: request.cloudConsent ?? true },
+  );
+
+  if (direction.kind === "answer") {
+    return { kind: "answer", reply: direction.text, source: "director" };
+  }
+
+  if (direction.kind === "clarification") {
+    const pendingClarification: PendingClarification = {
+      id: crypto.randomUUID(),
+      originalPrompt: request.prompt,
+      selectedImages: [...refs],
+      analyses: [...analyses],
+      question: direction.question,
+      options: direction.options.map((label, index) => ({ id: String(index), label })),
+      round: 1,
+    };
+    return {
+      kind: "clarification",
+      question: direction.question,
+      options: direction.options,
+      pendingClarification,
+    };
+  }
+
+  if (direction.kind === "design-plan") {
+    return { kind: "design-plan", proposal: direction.proposal };
+  }
+
+  if (direction.kind === "sequential-plan") {
+    return { kind: "sequential-plan", plan: direction.plan };
+  }
+
+  if (direction.kind === "image-task") {
+    const imageRun = createDirectedImageRun(
+      {
+        prompt: request.prompt,
+        refs,
+        analyses,
+        canvas: request.canvas,
+      },
+      direction,
+    );
+    return { kind: "image-task", imageRun, direction };
+  }
+
+  throw new Error(`Unexpected creative direction: ${JSON.stringify(direction)}`);
+}
+
+/**
+ * Control an ongoing run or plan version (ORCH-05).
+ */
+export type ControlRunRequest = {
+  sessionId?: string;
+  runId: string;
+  action: "approve" | "cancel" | "resume";
+  plan?: SequentialExecutionPlan;
+  signal?: AbortSignal;
+};
+
+export async function controlRun(
+  request: ControlRunRequest,
+  options?: SequentialPlanExecutionOptions,
+): Promise<{ status: "completed" | "paused" | "aborted"; plan?: SequentialExecutionPlan }> {
+  if (request.action === "cancel") {
+    if (request.plan) {
+      return {
+        status: "aborted",
+        plan: {
+          ...request.plan,
+          overallStatus: "aborted",
+          updatedAt: Date.now(),
+        },
+      };
+    }
+    return { status: "aborted" };
+  }
+
+  if (request.action === "approve" || request.action === "resume") {
+    if (!request.plan) {
+      throw new Error("Sequential plan is required to approve or resume execution");
+    }
+    const executed = await runSequentialExecutionPlan(request.plan, options);
+    return {
+      status:
+        executed.overallStatus === "completed"
+          ? "completed"
+          : executed.overallStatus === "aborted"
+            ? "aborted"
+            : "paused",
+      plan: executed,
+    };
+  }
+
+  throw new Error(`Unsupported control action: ${String(request.action)}`);
+}
+
+/**
+ * Observe session state and progress events (ORCH-05).
+ */
+export function observeSession(sessionId: string) {
+  const state = useDirectorSession.getState();
+  return {
+    sessionId: state.sessionId || sessionId,
+    turns: state.turns,
+    activeGhostVariationId: state.activeGhostVariationId,
+    currentSnapshotId: state.currentSnapshotId,
+  };
 }

@@ -9,6 +9,7 @@ import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 import { runBriefQualityGate } from "./briefQualityGate";
+import type { CreativeOutputReview, CriterionEvidenceStatus } from "./creativeDirector";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
 import { type GeneratedOutputAnalysis, runGeneratedImageQualityGate } from "./resultQualityGate";
@@ -45,6 +46,8 @@ export type ContextAwareTaskUpdate = {
 export type ContextAwareTaskResult = {
   task: AiTask;
   elementId: string;
+  fileId: string;
+  dataUrl?: string;
   width: number;
   height: number;
 };
@@ -65,7 +68,7 @@ export type ContextAwareImageTaskOptions = {
     reviewCriteria: readonly string[];
     outputAnalysis: GeneratedOutputAnalysis;
     signal: AbortSignal;
-  }) => Promise<{ passed: boolean; summary: string; repairInstruction?: string }>;
+  }) => Promise<CreativeOutputReview>;
   onUpdate?: (update: ContextAwareTaskUpdate) => void;
 };
 
@@ -310,15 +313,12 @@ export async function runContextAwareImageTask(
             }
             if (task.reviewCriteria?.length) {
               if (outputAnalysis && options.reviewOutput) {
-                let directorReview: {
-                  passed: boolean;
-                  summary: string;
-                  repairInstruction?: string;
-                } | null = null;
+                const criteria = task.reviewCriteria ?? [];
+                let directorReview: CreativeOutputReview | null = null;
                 try {
                   directorReview = await options.reviewOutput({
                     prompt: task.prompt,
-                    reviewCriteria: task.reviewCriteria,
+                    reviewCriteria: criteria,
                     outputAnalysis,
                     signal: executionSignal,
                   });
@@ -330,7 +330,14 @@ export async function runContextAwareImageTask(
                   );
                   task = appendAiTaskEvent(task, {
                     type: "director.reviewed",
-                    passed: true,
+                    passed: false,
+                    status: "unavailable",
+                    reason: (reviewError as Error).message || "Creative Director review pass unavailable",
+                    criteriaEvidence: criteria.map((criterion) => ({
+                      criterion,
+                      status: "unavailable" as CriterionEvidenceStatus,
+                      notes: "Review service unavailable",
+                    })),
                     attempt,
                   });
                 }
@@ -338,6 +345,12 @@ export async function runContextAwareImageTask(
                   task = appendAiTaskEvent(task, {
                     type: "director.reviewed",
                     passed: directorReview.passed,
+                    status: directorReview.status ?? "reviewed",
+                    criteriaEvidence: directorReview.criteriaEvidence ?? criteria.map((criterion) => ({
+                      criterion,
+                      status: (directorReview!.passed ? "passed" : "failed") as CriterionEvidenceStatus,
+                      notes: directorReview!.summary,
+                    })),
                     attempt,
                   });
                   if (!directorReview.passed) {
@@ -440,6 +453,8 @@ export async function runContextAwareImageTask(
             committed = {
               task,
               elementId: element.id,
+              fileId: preloaded.fileId,
+              dataUrl: preloaded.dataURL,
               width: preloaded.width,
               height: preloaded.height,
             };

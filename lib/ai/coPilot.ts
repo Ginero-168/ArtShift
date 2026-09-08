@@ -19,6 +19,7 @@ import {
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { removeBackground } from "@/lib/ai/removeBg";
 import type { VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
+import { buildDesignAgentContext } from "@/lib/designAgent/client";
 import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createRect, createText } from "@/lib/engine/factory";
@@ -256,6 +257,7 @@ export async function executeCoPilotInstruction(
             width: context.width,
             height: context.height,
           },
+          designContext: buildDesignAgentContext(st),
           referenceAnalyses: analyses,
         },
         { signal: options.signal, cloudConsent: true },

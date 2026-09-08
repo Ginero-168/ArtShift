@@ -271,9 +271,17 @@ describe("gpt-oss-120b Creative Director", () => {
     );
 
     expect(result).toEqual({
+      status: "reviewed",
       passed: false,
       summary: "The product is not visually dominant.",
       repairInstruction: "Increase product scale and simplify the background.",
+      criteriaEvidence: [
+        {
+          criterion: "product is visually dominant",
+          status: "failed",
+          notes: "The product is not visually dominant.",
+        },
+      ],
     });
     expect(execute).toHaveBeenCalledWith(
       "assistant.chat",
@@ -415,8 +423,16 @@ describe("gpt-oss-120b Creative Director", () => {
     );
 
     expect(result).toEqual({
+      status: "reviewed",
       passed: true,
       summary: "Animal anatomy is accurate and lighting is realistic.",
+      criteriaEvidence: [
+        {
+          criterion: "Animal anatomy is accurate and natural",
+          status: "passed",
+          notes: "Animal anatomy is accurate and lighting is realistic.",
+        },
+      ],
     });
   });
 });

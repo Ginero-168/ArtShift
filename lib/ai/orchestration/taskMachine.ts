@@ -91,7 +91,18 @@ export type AiTaskTracePayload =
       knowledgeSkillIds: readonly string[];
       searchRequired: boolean;
     }
-  | { type: "director.reviewed"; passed: boolean; attempt: number }
+  | {
+      type: "director.reviewed";
+      passed: boolean;
+      attempt: number;
+      status?: "reviewed" | "unavailable";
+      reason?: string;
+      criteriaEvidence?: readonly {
+        criterion: string;
+        status: "passed" | "failed" | "not_checked" | "unavailable";
+        notes?: string;
+      }[];
+    }
   | { type: "task.created"; capability: string }
   | { type: "provider.requested"; attempt: number }
   | { type: "quality.checked"; passed: boolean; attempt: number }

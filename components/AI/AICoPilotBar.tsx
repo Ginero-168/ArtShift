@@ -55,6 +55,7 @@ export type StagedVariationCard = {
   height: number;
   label?: string;
   status: "staged" | "accepted" | "rejected";
+  targetSlideId?: string;
 };
 
 export default function AICoPilotBar() {
@@ -188,13 +189,17 @@ export default function AICoPilotBar() {
   };
 
   const commitVariationToCanvas = async (card: StagedVariationCard) => {
+    // ORCH-03/04: Prevent duplicate apply of already committed card
+    if (card.status === "accepted") return;
     useEngine.getState().clearGhostOverlay();
     const state = useEngine.getState();
-    const currentSlide = state.currentSlide();
-    if (!currentSlide) return;
+    const targetSlide = card.targetSlideId
+      ? state.doc.slides.find((s) => s.id === card.targetSlideId) ?? state.currentSlide()
+      : state.currentSlide();
+    if (!targetSlide) return;
     const bounds = calculateGhostBounds(
-      currentSlide.width,
-      currentSlide.height,
+      targetSlide.width,
+      targetSlide.height,
       card.width || 1024,
       card.height || 1024,
       "center",
@@ -621,29 +626,8 @@ export default function AICoPilotBar() {
                     "📐 จัดวาง Layout ให้สวยงาม",
                   ];
 
-                  // Collect variations into Staging Tray for hover ghost preview
-                  const stagedItems: StagedVariationCard[] = runResult.items
-                    .filter((i) => i.status === "succeeded")
-                    .map((i, idx) => ({
-                      id: `var-${Date.now()}-${idx + 1}`,
-                      fileId:
-                        ((i.result as Record<string, unknown> | undefined)?.fileId as string) ||
-                        `var-${idx + 1}`,
-                      url: (i.result as Record<string, unknown> | undefined)?.url as
-                        | string
-                        | undefined,
-                      width:
-                        ((i.result as Record<string, unknown> | undefined)?.width as number) ||
-                        1024,
-                      height:
-                        ((i.result as Record<string, unknown> | undefined)?.height as number) ||
-                        1024,
-                      label: `Variation ${i.outputIndex}`,
-                      status: "staged" as const,
-                    }));
-                  if (stagedItems.length > 0) {
-                    setStagedVariations((prev) => [...prev, ...stagedItems]);
-                  }
+                  // ORCH-04: Images are directly placed onto the canvas with receipt and single Undo.
+                  // Applied canvas images must NOT be duplicated into stagedVariations with dummy fallback IDs.
                 }
               }
             } catch (error) {

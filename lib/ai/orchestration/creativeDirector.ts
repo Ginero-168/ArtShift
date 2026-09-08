@@ -106,10 +106,20 @@ export type CreativeDirectorExecutor = Pick<AiRuntime, "execute"> & {
 /** Canonical executor name; provider details remain behind the runtime seam. */
 export type OrchestratorExecutor = CreativeDirectorExecutor;
 
+export type CriterionEvidenceStatus = "passed" | "failed" | "not_checked" | "unavailable";
+
+export type CriterionEvidence = {
+  criterion: string;
+  status: CriterionEvidenceStatus;
+  notes?: string;
+};
+
 export type CreativeOutputReview = {
   passed: boolean;
+  status?: "reviewed" | "unavailable";
   summary: string;
   repairInstruction?: string;
+  criteriaEvidence?: readonly CriterionEvidence[];
 };
 
 export type CreativeOutputReviewInput = {
@@ -585,7 +595,13 @@ export async function reviewCreativeOutput(
   }
   return {
     passed: value.passed,
+    status: "reviewed" as const,
     summary: value.summary.trim(),
+    criteriaEvidence: input.reviewCriteria.map((criterion) => ({
+      criterion,
+      status: (value!.passed ? "passed" : "failed") as CriterionEvidenceStatus,
+      notes: value!.summary as string,
+    })),
     ...(typeof value.repairInstruction === "string"
       ? { repairInstruction: value.repairInstruction.trim() }
       : {}),

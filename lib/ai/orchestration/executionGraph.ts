@@ -36,6 +36,12 @@ export type SequentialExecutionStep = {
     artifactKind: "image" | "text" | "mask" | "layout_commands" | "brand_tokens";
     data: unknown;
     reviewScore?: number;
+    reviewStatus?: "passed" | "failed" | "not_checked" | "unavailable";
+    criteriaEvidence?: readonly {
+      criterion: string;
+      status: "passed" | "failed" | "not_checked" | "unavailable";
+      notes?: string;
+    }[];
     notes?: string;
   };
   error?: string;
@@ -225,10 +231,22 @@ export function advancePlanStep(
     };
   }
 
-  const score = result.reviewScore ?? 1.0;
+  const score = result.reviewScore;
   const threshold = step.qualityThreshold ?? 0.7;
 
-  if (score < threshold) {
+  if (typeof score === "number" && score < threshold) {
+    step.status = "paused_on_gate";
+    step.result = result;
+    steps[stepIndex] = step;
+    return {
+      ...plan,
+      steps,
+      overallStatus: "paused",
+      updatedAt: Date.now(),
+    };
+  }
+
+  if (result.reviewStatus === "failed") {
     step.status = "paused_on_gate";
     step.result = result;
     steps[stepIndex] = step;
@@ -250,7 +268,7 @@ export function advancePlanStep(
   return {
     ...plan,
     steps,
-    currentStepIndex: isAllDone ? stepIndex : nextIndex,
+    currentStepIndex: isAllDone ? steps.length : nextIndex,
     overallStatus: isAllDone ? "completed" : "executing",
     updatedAt: Date.now(),
   };

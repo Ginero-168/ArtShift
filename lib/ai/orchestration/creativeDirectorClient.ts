@@ -21,6 +21,11 @@ export async function prepareRemoteOrchestratorTurn(
     direction?: unknown;
     error?: string;
   } | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.error || `Creative Director request failed: ${response.status}`);
+  }
+
   let rawDirection = payload?.direction;
   if (
     isRecord(rawDirection) &&
@@ -43,10 +48,12 @@ export async function prepareRemoteOrchestratorTurn(
       }
     } catch {}
   }
-  if (!response.ok || !isCreativeDirection(rawDirection, input)) {
-    throw new Error(payload?.error || `Creative Director request failed: ${response.status}`);
+
+  try {
+    return normalizeCreativeDirection(rawDirection, input);
+  } catch (err) {
+    throw new Error(payload?.error || `Invalid Creative Director response: ${(err as Error).message}`);
   }
-  return rawDirection;
 }
 
 /** @deprecated Use prepareRemoteOrchestratorTurn. */
@@ -76,22 +83,37 @@ export async function reviewRemoteOrchestratorOutput(
 /** @deprecated Use reviewRemoteOrchestratorOutput. */
 export const reviewRemoteCreativeOutput = reviewRemoteOrchestratorOutput;
 
-function isCreativeDirection(
+export function normalizeCreativeDirection(
+  value: unknown,
+  input: Omit<CreativeDirectorInput, "availableCapabilities" | "cloudConsent" | "accountId">,
+): CreativeDirection {
+  if (!isRecord(value)) {
+    throw new Error("Creative Director response must be an object");
+  }
+
+  const validationInput: CreativeDirectorInput = {
+    prompt: input.prompt || "validate response",
+    canvasSummary: input.canvasSummary ?? { objectCount: 0, selectedCount: 0, width: 1, height: 1 },
+    designContext: input.designContext,
+    conversationHistory: input.conversationHistory,
+    artworkContext: input.artworkContext,
+    referenceAnalyses: input.referenceAnalyses ?? [],
+    availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+  };
+
+  const knowledgeIds = Array.isArray(value.knowledgeSkillIds)
+    ? (value.knowledgeSkillIds as string[])
+    : [];
+
+  return parseCreativeDirection(value, validationInput, knowledgeIds);
+}
+
+export function isCreativeDirection(
   value: unknown,
   input: Omit<CreativeDirectorInput, "availableCapabilities" | "cloudConsent" | "accountId">,
 ): value is CreativeDirection {
-  if (!isRecord(value)) return false;
   try {
-    parseCreativeDirection(
-      value,
-      {
-        prompt: "validate response",
-        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1, height: 1 },
-        referenceAnalyses: input.referenceAnalyses,
-        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
-      },
-      Array.isArray(value.knowledgeSkillIds) ? value.knowledgeSkillIds : [],
-    );
+    normalizeCreativeDirection(value, input);
     return true;
   } catch {
     return false;
@@ -110,3 +132,4 @@ function isCreativeReview(value: unknown): value is CreativeOutputReview {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
