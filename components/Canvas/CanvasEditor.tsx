@@ -214,6 +214,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const activeLayerId = useEngine((s) => s.activeLayerId);
   const snapGrid = useEngine((s) => s.doc.snapGrid);
   const showHexGrid = useEngine((s) => s.showHexGrid);
+  const activeGhostOverlay = useEngine((s) => s.activeGhostOverlay);
   const layerFilter = useEngine((s) => s.layerFilter);
   const lineSubtype = useEngine((s) => s.lineSubtype);
   const setTool = useEngine((s) => s.setTool);
@@ -1598,6 +1599,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         ref={rootRef}
         slide={slideForRender}
         draftElement={draft}
+        ghostOverlay={activeGhostOverlay}
         images={images}
         snapGrid={snapGrid}
         showHexGrid={showHexGrid}

@@ -33,6 +33,7 @@ import {
   type RasterSelectionOperation,
   transformRasterSelection,
 } from "../raster/selection";
+import type { GhostVariationOverlay } from "../renderer/ghostOverlay";
 import type { TemplateResult } from "../templates";
 import { type AlignMode, alignElements, type DistributeAxis, distributeElements } from "./align";
 import { recomputeArrowBindings } from "./binding";
@@ -155,6 +156,10 @@ export type EngineState = {
   previewSmartArrange: (options?: SmartArrangeOptions) => SmartArrangePatch[];
   applySmartArrange: () => void;
   cancelSmartArrange: () => void;
+  /** Active non-destructive ghost preview overlay for AI candidate variations. */
+  activeGhostOverlay: GhostVariationOverlay | null;
+  setGhostOverlay: (overlay: GhostVariationOverlay | null) => void;
+  clearGhostOverlay: () => void;
 
   // ——— selectors (call as plain functions; they rely on getState) ———
   currentSlide: () => EngineSlide | undefined;
@@ -383,6 +388,9 @@ export const useEngine = create<EngineState>((set, get) => {
     showHexGrid: true,
     layerFilter: "all" as LayerFilter,
     smartArrangePreview: null,
+    activeGhostOverlay: null,
+    setGhostOverlay: (overlay) => set({ activeGhostOverlay: overlay }),
+    clearGhostOverlay: () => set({ activeGhostOverlay: null }),
     previewSmartArrange: (options = {}) => {
       const existing = get().smartArrangePreview;
       if (existing) {

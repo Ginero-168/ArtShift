@@ -29,6 +29,7 @@ import { createPointerGestureRouter } from "@/lib/engine/pointerGestureRouter";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
 import { recordEditorInteraction } from "@/lib/perf/editorTelemetry";
 import { renderElement, renderSlide } from "@/lib/renderer/canvas";
+import { drawGhostVariationOverlay, type GhostVariationOverlay } from "@/lib/renderer/ghostOverlay";
 
 export type WorldPoint = { x: number; y: number };
 
@@ -59,6 +60,8 @@ type Props = {
   slide: EngineSlide;
   /** Element drawn on top after the slide (tool preview). */
   draftElement?: EngineElement | null;
+  /** Non-destructive AI variation ghost overlay. */
+  ghostOverlay?: GhostVariationOverlay | null;
   /** Optional image cache. */
   images?: Map<string, HTMLImageElement>;
   /** Grid snap size for drawing the dot grid background. */
@@ -96,6 +99,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
   {
     slide,
     draftElement,
+    ghostOverlay,
     images,
     snapGrid,
     selectedIds,
@@ -236,6 +240,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
           : undefined,
     });
     if (draftElement) renderElement(draftElement, { ctx, images, deferRasterJobs: true });
+    if (ghostOverlay) drawGhostVariationOverlay(ghostOverlay, { ctx, images });
 
     if (snapGrid) {
       ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
@@ -309,6 +314,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     activeLayerId,
     showHexGrid,
     rasterMaskVersion,
+    ghostOverlay,
   ]);
 
   const setZoom = useCallback(
