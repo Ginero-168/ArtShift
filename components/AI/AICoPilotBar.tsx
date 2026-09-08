@@ -31,6 +31,8 @@ import {
   isCanvasInventoryPrompt,
   type PendingClarification,
   prepareContextAwareTurn,
+  runSequentialExecutionPlan,
+  type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
@@ -40,7 +42,20 @@ import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
 import { summarizePlanForReview } from "@/lib/designAgent/planReview";
 import { applyAiPlan } from "@/lib/engine/applyAiPlan";
+import { createImage } from "@/lib/engine/factory";
+import { preloadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
+import { calculateGhostBounds } from "@/lib/renderer/ghostOverlay";
+
+export type StagedVariationCard = {
+  id: string;
+  fileId: string;
+  url?: string;
+  width: number;
+  height: number;
+  label?: string;
+  status: "staged" | "accepted" | "rejected";
+};
 
 export default function AICoPilotBar() {
   const _currentSlideId = useEngine((s) => s.currentSlideId);
@@ -72,6 +87,10 @@ export default function AICoPilotBar() {
 
   const [currentActions, setCurrentActions] = useState<SubAgentActionLog[]>([]);
   const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
+  const [pendingSequentialPlan, setPendingSequentialPlan] =
+    useState<SequentialExecutionPlan | null>(null);
+  const [isExecutingPlan, setIsExecutingPlan] = useState(false);
+  const [stagedVariations, setStagedVariations] = useState<StagedVariationCard[]>([]);
   const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(
     null,
   );
@@ -136,7 +155,160 @@ export default function AICoPilotBar() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, currentActions, streamingText]);
+  }, [messages, currentActions, streamingText, stagedVariations, pendingSequentialPlan]);
+
+  const handleVariationHover = (card: StagedVariationCard) => {
+    const currentSlide = useEngine.getState().currentSlide();
+    if (!currentSlide) return;
+    const bounds = calculateGhostBounds(
+      currentSlide.width,
+      currentSlide.height,
+      card.width || 1024,
+      card.height || 1024,
+      "center",
+    );
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = card.url || `/api/ai/image/cache?fileId=${card.fileId}`;
+    const setOverlay = () => {
+      useEngine.getState().setGhostOverlay({
+        variationId: card.id,
+        image: img,
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        opacity: 0.85,
+        label: card.label || "Candidate Variation",
+      });
+    };
+    if (img.complete) {
+      setOverlay();
+    } else {
+      img.onload = setOverlay;
+    }
+  };
+
+  const handleVariationLeave = () => {
+    useEngine.getState().clearGhostOverlay();
+  };
+
+  const commitVariationToCanvas = async (card: StagedVariationCard) => {
+    useEngine.getState().clearGhostOverlay();
+    const state = useEngine.getState();
+    const currentSlide = state.currentSlide();
+    if (!currentSlide) return;
+    const bounds = calculateGhostBounds(
+      currentSlide.width,
+      currentSlide.height,
+      card.width || 1024,
+      card.height || 1024,
+      "center",
+    );
+    let fileId = card.fileId;
+    let naturalWidth = card.width || 1024;
+    let naturalHeight = card.height || 1024;
+    if (card.url && (!fileId || fileId.startsWith("var-"))) {
+      try {
+        const cached = await preloadDataURL(card.url);
+        fileId = cached.fileId;
+        naturalWidth = cached.width;
+        naturalHeight = cached.height;
+      } catch {
+        // fallback
+      }
+    }
+    const element = createImage({
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      fileId,
+      naturalWidth,
+      naturalHeight,
+    });
+    state.addElement(element, `Place candidate variation ${card.label || card.id}`);
+    setStagedVariations((prev) =>
+      prev.map((v) => (v.id === card.id ? { ...v, status: "accepted" as const } : v)),
+    );
+  };
+
+  const dismissVariation = (cardId: string) => {
+    useEngine.getState().clearGhostOverlay();
+    setStagedVariations((prev) => prev.filter((v) => v.id !== cardId));
+  };
+
+  const executeSequentialPlan = async () => {
+    if (!pendingSequentialPlan || isExecutingPlan) return;
+    setIsExecutingPlan(true);
+    setBusy(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const finishedPlan = await runSequentialExecutionPlan(pendingSequentialPlan, {
+        signal: controller.signal,
+        cloudConsent: true,
+        onStepProgress: (updatedPlan, step) => {
+          setPendingSequentialPlan({ ...updatedPlan });
+          const action: SubAgentActionLog = {
+            id: step.id,
+            agent: "orchestrator",
+            title: `Step: ${step.name}`,
+            description: `${step.specialist} · ${step.status}`,
+            status:
+              step.status === "completed"
+                ? "success"
+                : step.status === "failed"
+                  ? "error"
+                  : "running",
+            timestamp: Date.now(),
+          };
+          upsertCurrentAction(action);
+        },
+      });
+
+      setPendingSequentialPlan(finishedPlan);
+
+      if (finishedPlan.overallStatus === "completed") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `รันแผนงานแบบต่อเนื่อง ${finishedPlan.steps.length} ขั้นตอนเสร็จสมบูรณ์เรียบร้อยครับ! ✨`,
+            timestamp: Date.now(),
+            suggestions: ["จัด Layout เพิ่มเติม", "บันทึกและส่งออก"],
+          },
+        ]);
+      } else if (finishedPlan.overallStatus === "paused") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content:
+              "แผนงานหยุดชั่วคราวที่ Quality Gate ครับ สามารถกด Resume เพื่อรันต่อ หรือปรับแก้ไขก่อนดำเนินการ",
+            timestamp: Date.now(),
+            suggestions: ["Resume Execution", "ปรับ brief"],
+          },
+        ]);
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `เกิดข้อผิดพลาดขณะรันแผน: ${(err as Error).message}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsExecutingPlan(false);
+      setBusy(false);
+    }
+  };
 
   const handleSend = async (customPrompt?: string) => {
     const rawPrompt = (customPrompt ?? input).trim();
@@ -365,6 +537,14 @@ export default function AICoPilotBar() {
                 reply =
                   "ArtShift Orchestrator เตรียมแผนแก้ไข Canvas แล้วครับ ตรวจสอบและกด Apply plan เพื่อดำเนินงาน";
                 suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน"];
+              } else if (direction.kind === "sequential-plan") {
+                setPendingClarification(null);
+                setPendingSequentialPlan(direction.plan);
+                taskAction.status = "success";
+                taskAction.stage = "planned";
+                taskAction.description = `Creative Director เสนอแผนงาน ${direction.plan.steps.length} ขั้นตอน`;
+                reply = `ArtShift Creative Director เสนอแผนงานต่อเนื่อง ${direction.plan.steps.length} ขั้นตอน เพื่อความแม่นยำ กรุณาตรวจสอบและกด Approve & Execute เพื่อเริ่มงานครับ`;
+                suggestions = ["อนุมัติและเริ่มรันแผน", "ยกเลิกแผนนี้"];
               } else if (direction.search.required) {
                 taskAction.status = "success";
                 taskAction.stage = "analyzing";
@@ -439,6 +619,30 @@ export default function AICoPilotBar() {
                     "⚡ แปลงรูปนี้เป็น Vector Paths",
                     "📐 จัดวาง Layout ให้สวยงาม",
                   ];
+
+                  // Collect variations into Staging Tray for hover ghost preview
+                  const stagedItems: StagedVariationCard[] = runResult.items
+                    .filter((i) => i.status === "succeeded")
+                    .map((i, idx) => ({
+                      id: `var-${Date.now()}-${idx + 1}`,
+                      fileId:
+                        ((i.result as Record<string, unknown> | undefined)?.fileId as string) ||
+                        `var-${idx + 1}`,
+                      url: (i.result as Record<string, unknown> | undefined)?.url as
+                        | string
+                        | undefined,
+                      width:
+                        ((i.result as Record<string, unknown> | undefined)?.width as number) ||
+                        1024,
+                      height:
+                        ((i.result as Record<string, unknown> | undefined)?.height as number) ||
+                        1024,
+                      label: `Variation ${i.outputIndex}`,
+                      status: "staged" as const,
+                    }));
+                  if (stagedItems.length > 0) {
+                    setStagedVariations((prev) => [...prev, ...stagedItems]);
+                  }
                 }
               }
             } catch (error) {
@@ -659,6 +863,15 @@ export default function AICoPilotBar() {
               "✍️ ขอให้สร้าง direction ใหม่",
               "🧩 ใช้เครื่องมือแก้ไขเฉพาะทาง",
             ];
+          } else if (result.kind === "sequential-plan") {
+            setPendingSequentialPlan(result.plan);
+            remoteActions[0] = {
+              ...remoteActions[0],
+              status: "success",
+              description: `เตรียมแผนงานต่อเนื่อง ${result.plan.steps.length} ขั้นตอน รอการอนุมัติ`,
+            };
+            reply = `ArtShift Creative Director เสนอแผนงานต่อเนื่อง ${result.plan.steps.length} ขั้นตอน เพื่อความแม่นยำ กรุณาตรวจสอบและกด Approve & Execute เพื่อเริ่มงานครับ`;
+            suggestions = ["อนุมัติและเริ่มรันแผน", "ทิ้งแผนนี้"];
           } else {
             const directedTask = createDirectedImageTask(
               {
@@ -1069,6 +1282,299 @@ export default function AICoPilotBar() {
               </div>
             </div>
           ) : null}
+
+          {/* BUILD-04 / BUILD-03: Sequential Execution Plan proposal */}
+          {pendingSequentialPlan && (
+            <div
+              role="region"
+              aria-label="Sequential Execution Plan"
+              style={{
+                alignSelf: "stretch",
+                padding: "10px",
+                borderRadius: 8,
+                background: "#f5f3ff",
+                border: "1px solid #ddd6fe",
+                color: "#4c1d95",
+                fontSize: 10.5,
+              }}
+            >
+              <div
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+              >
+                <strong style={{ fontSize: 11.5 }}>
+                  ⚡ Multi-Specialist Plan ({pendingSequentialPlan.steps.length} steps)
+                </strong>
+                <span
+                  style={{
+                    fontSize: 9,
+                    padding: "2px 6px",
+                    borderRadius: 10,
+                    background: "#ede9fe",
+                    color: "#6d28d9",
+                    fontWeight: 700,
+                  }}
+                >
+                  {pendingSequentialPlan.overallStatus}
+                </span>
+              </div>
+              <span style={{ display: "block", marginTop: 3, color: "#5b21b6", lineHeight: 1.4 }}>
+                {pendingSequentialPlan.summary}
+              </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                {pendingSequentialPlan.steps.map((step, idx) => (
+                  <div
+                    key={step.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "5px 8px",
+                      background: "#ffffff",
+                      borderRadius: 6,
+                      border: "1px solid #e9d5ff",
+                      fontSize: 10,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 700, color: "#7c3aed" }}>#{idx + 1}</span>
+                      <strong>{step.name}</strong>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          background: "#f3e8ff",
+                          color: "#6b21a8",
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                        }}
+                      >
+                        {step.specialist}
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 600,
+                        color:
+                          step.status === "completed"
+                            ? "#059669"
+                            : step.status === "running"
+                              ? "#2563eb"
+                              : step.status === "paused_on_gate"
+                                ? "#d97706"
+                                : step.status === "failed"
+                                  ? "#dc2626"
+                                  : "#94a3b8",
+                      }}
+                    >
+                      {step.status === "completed"
+                        ? "✓ Done"
+                        : step.status === "running"
+                          ? "⏳ Running"
+                          : step.status === "paused_on_gate"
+                            ? "⚠️ Quality Gate"
+                            : step.status === "failed"
+                              ? "✕ Failed"
+                              : "Pending"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={executeSequentialPlan}
+                  disabled={busy || isExecutingPlan}
+                  style={{
+                    border: 0,
+                    borderRadius: 6,
+                    padding: "6px 12px",
+                    background: isExecutingPlan ? "#a78bfa" : "#7c3aed",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: 10.5,
+                    cursor: busy || isExecutingPlan ? "default" : "pointer",
+                  }}
+                >
+                  {isExecutingPlan
+                    ? "กำลังรันแผน..."
+                    : pendingSequentialPlan.overallStatus === "paused"
+                      ? "Resume Execution"
+                      : "Approve & Execute Plan"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingSequentialPlan(null)}
+                  disabled={isExecutingPlan}
+                  style={{
+                    border: "1px solid #ddd6fe",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    background: "#ffffff",
+                    color: "#6b21a8",
+                    fontSize: 10,
+                    cursor: "pointer",
+                  }}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* BUILD-05: Staging Tray & Hover Ghost Preview */}
+          {stagedVariations.length > 0 && (
+            <div
+              role="region"
+              aria-label="Candidate Variations Staging Tray"
+              style={{
+                alignSelf: "stretch",
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                fontSize: 10.5,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
+                <strong style={{ fontSize: 11, color: "#166534" }}>
+                  ✨ Staging Tray ({stagedVariations.length} Candidate Variations)
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => {
+                    useEngine.getState().clearGhostOverlay();
+                    setStagedVariations([]);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: 9.5,
+                    color: "#64748b",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Clear Tray
+                </button>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  overflowX: "auto",
+                  paddingBottom: 4,
+                }}
+              >
+                {stagedVariations.map((v) => (
+                  <div
+                    key={v.id}
+                    onMouseEnter={() => handleVariationHover(v)}
+                    onMouseLeave={handleVariationLeave}
+                    style={{
+                      position: "relative",
+                      flex: "0 0 110px",
+                      border: v.status === "accepted" ? "2px solid #10b981" : "1px solid #cbd5e1",
+                      borderRadius: 8,
+                      padding: 5,
+                      background: "#ffffff",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "100%",
+                        height: 64,
+                        borderRadius: 4,
+                        overflow: "hidden",
+                        background: "#f1f5f9",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {v.url ? (
+                        // biome-ignore lint/a11y/useAltText: Staged variation candidate preview
+                        // biome-ignore lint/performance/noImgElement: Direct candidate variation preview in staging tray
+                        <img
+                          src={v.url}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 20 }}>🖼️</span>
+                      )}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 600,
+                        color: "#334155",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {v.label}
+                    </span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          commitVariationToCanvas(v);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "3px 4px",
+                          borderRadius: 4,
+                          border: "none",
+                          background: v.status === "accepted" ? "#10b981" : "#6366f1",
+                          color: "#ffffff",
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {v.status === "accepted" ? "✓ Done" : "Place"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dismissVariation(v.id);
+                        }}
+                        style={{
+                          padding: "3px 5px",
+                          borderRadius: 4,
+                          border: "1px solid #e2e8f0",
+                          background: "#f8fafc",
+                          color: "#64748b",
+                          fontSize: 9,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {busy && streamingText && (
             <div

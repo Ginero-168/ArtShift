@@ -294,6 +294,18 @@ export async function executeCoPilotInstruction(
           planProposal: direction.proposal,
         };
       }
+      if (direction.kind === "sequential-plan") {
+        updateActionStatus(
+          act,
+          "success",
+          `Creative Director เสนอแผนงาน ${direction.plan.steps.length} ขั้นตอน`,
+        );
+        return {
+          reply: `Creative Director เสนอแผนงานต่อเนื่อง ${direction.plan.steps.length} ขั้นตอน (${direction.plan.summary}) กรุณาตรวจสอบและกด Approve & Execute เพื่อเริ่มงานครับ`,
+          actions,
+          suggestions: ["อนุมัติและเริ่มรันแผน", "ยกเลิกแผนนี้"],
+        };
+      }
       if (direction.search.required) {
         updateActionStatus(act, "success", "Creative Director ระบุว่าต้องค้น Context ก่อนสร้างภาพ");
         return {

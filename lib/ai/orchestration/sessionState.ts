@@ -1,3 +1,4 @@
+import { create } from "zustand";
 import type { VisualTaskClass as TaskClass } from "@/lib/ai/visualOrchestrator";
 import type { CreativeDirection } from "./creativeDirector";
 
@@ -159,3 +160,144 @@ export function createInitialSessionState(
     activeGhostVariationId: undefined,
   };
 }
+
+/**
+ * Zustand client store for managing the Creative Director Session.
+ * Strictly client-owned; provides local-first context to stateless server APIs.
+ */
+export const useDirectorSession = create<CreativeDirectorSessionState>((set, get) => ({
+  ...createInitialSessionState("default-slide"),
+
+  appendUserTurn: (prompt: string, taskClass?: TaskClass) => {
+    const turn: DirectorSessionTurn = {
+      id: `turn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: Date.now(),
+      role: "user",
+      content: prompt,
+      taskClass,
+    };
+    set((state) => ({
+      turns: [...state.turns, turn],
+    }));
+    return turn;
+  },
+
+  appendAssistantTurn: (
+    direction: CreativeDirection,
+    content: string,
+    variations?: readonly CandidateVariation[],
+  ) => {
+    const turn: DirectorSessionTurn = {
+      id: `turn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: Date.now(),
+      role: "assistant",
+      content,
+      direction,
+      stagedVariations: variations ? [...variations] : undefined,
+    };
+    set((state) => ({
+      turns: [...state.turns, turn],
+    }));
+    return turn;
+  },
+
+  captureSnapshot: (
+    slideId: string,
+    historyIndex: number,
+    width: number,
+    height: number,
+    objects: readonly ArtworkObjectSummary[],
+    selectedIds: readonly string[],
+  ) => {
+    const snapshot: CanonicalArtifactSnapshot = {
+      id: `snap_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: Date.now(),
+      historyIndex,
+      width,
+      height,
+      objects,
+      activeSelectionIds: selectedIds,
+    };
+    set((state) => ({
+      activeSlideId: slideId,
+      currentSnapshotId: snapshot.id,
+      snapshots: {
+        ...state.snapshots,
+        [snapshot.id]: snapshot,
+      },
+    }));
+    return snapshot;
+  },
+
+  setGhostPreview: (variationId: string | undefined) => {
+    set({ activeGhostVariationId: variationId });
+  },
+
+  acceptVariation: (turnId: string, variationId: string) => {
+    set((state) => {
+      const turns = state.turns.map((t) => {
+        if (t.id !== turnId) return t;
+        const updatedVariations = t.stagedVariations?.map((v) => ({
+          ...v,
+          status: v.id === variationId ? ("accepted" as const) : ("rejected" as const),
+        }));
+        return {
+          ...t,
+          acceptedVariationId: variationId,
+          stagedVariations: updatedVariations,
+        };
+      });
+      return { turns, activeGhostVariationId: undefined };
+    });
+  },
+
+  rejectVariation: (turnId: string, variationId: string) => {
+    set((state) => {
+      const turns = state.turns.map((t) => {
+        if (t.id !== turnId) return t;
+        const updatedVariations = t.stagedVariations?.map((v) =>
+          v.id === variationId ? { ...v, status: "rejected" as const } : v,
+        );
+        return {
+          ...t,
+          stagedVariations: updatedVariations,
+        };
+      });
+      return {
+        turns,
+        activeGhostVariationId:
+          state.activeGhostVariationId === variationId ? undefined : state.activeGhostVariationId,
+      };
+    });
+  },
+
+  clearSession: () => {
+    set({
+      turns: [],
+      snapshots: {},
+      currentSnapshotId: undefined,
+      activeGhostVariationId: undefined,
+    });
+  },
+
+  buildDirectorTurnContext: (maxTurns = 12) => {
+    const state = get();
+    const history = state.turns.slice(-maxTurns).map((t) => ({
+      role: t.role,
+      content: t.content,
+    }));
+    const currentSnap = state.currentSnapshotId
+      ? state.snapshots[state.currentSnapshotId]
+      : undefined;
+    return {
+      conversationHistory: history,
+      canonicalSummary: {
+        width: currentSnap?.width ?? 1920,
+        height: currentSnap?.height ?? 1080,
+        objectCount: currentSnap?.objects.length ?? 0,
+        selectedCount: currentSnap?.activeSelectionIds.length ?? 0,
+        objects: currentSnap?.objects ?? [],
+      },
+    };
+  },
+}));

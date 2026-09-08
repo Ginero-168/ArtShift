@@ -13,6 +13,7 @@ import {
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
 import { CREATING_MODEL_CATALOG, resolveCreatingModel } from "./creatingModelCatalog";
+import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from "./executionGraph";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
 import { DESIGN_PLAN_TOOL } from "./orchestratorTools";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
@@ -38,6 +39,7 @@ export type CreativeDirection =
   | { kind: "answer"; text: string }
   | { kind: "clarification"; question: string; options: string[] }
   | { kind: "design-plan"; proposal: PlanProposal }
+  | { kind: "sequential-plan"; plan: SequentialExecutionPlan }
   | {
       kind: "image-task";
       outputCount?: 1;
@@ -114,6 +116,54 @@ export type CreativeOutputReviewInput = {
   cloudConsent?: boolean;
   accountId?: string;
 };
+
+export const SEQUENTIAL_PLAN_TOOL = {
+  name: "propose_sequential_execution_plan",
+  description:
+    "Return a validated sequential multi-specialist plan for complex design requests requiring multiple chained specialists (e.g. create image then vectorize, extract subject then generate background, write copy then adjust layout). Up to 8 steps.",
+  inputSchema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: { type: "string" },
+      planToken: { type: "string" },
+      originalPrompt: { type: "string" },
+      summary: { type: "string" },
+      requiresApproval: { type: "boolean" },
+      steps: {
+        type: "array",
+        minItems: 1,
+        maxItems: 8,
+        items: {
+          type: "object",
+          additionalProperties: true,
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            specialist: {
+              type: "string",
+              enum: [
+                "image_generator",
+                "image_editor",
+                "vectorizer",
+                "layout_designer",
+                "copywriter",
+                "brand_stylist",
+              ],
+            },
+            description: { type: "string" },
+            toolOrModelAlias: { type: "string" },
+            dependsOnStepId: { type: "string" },
+            qualityThreshold: { type: "number", minimum: 0, maximum: 1 },
+            payload: { type: "object" },
+          },
+          required: ["id", "name", "specialist", "description", "toolOrModelAlias"],
+        },
+      },
+    },
+    required: ["id", "originalPrompt", "summary", "steps"],
+  },
+} as const;
 
 const CREATIVE_DIRECTION_TOOL = {
   name: "propose_creative_direction",
@@ -375,7 +425,7 @@ async function executeDirectorPass(
     {
       messages,
       system: CREATIVE_DIRECTOR_SYSTEM,
-      tools: [CREATIVE_DIRECTION_TOOL, DESIGN_PLAN_TOOL],
+      tools: [CREATIVE_DIRECTION_TOOL, DESIGN_PLAN_TOOL, SEQUENTIAL_PLAN_TOOL],
       maxTokens: 8_192,
     },
     options,
@@ -386,8 +436,17 @@ async function executeDirectorPass(
   const planCall = execution.output.toolCalls.find(
     (candidate) => candidate.name === DESIGN_PLAN_TOOL.name,
   );
-  if (call && planCall) return invalidDirection();
+  const sequentialCall = execution.output.toolCalls.find(
+    (candidate) => candidate.name === SEQUENTIAL_PLAN_TOOL.name,
+  );
+  const totalCalls = (call ? 1 : 0) + (planCall ? 1 : 0) + (sequentialCall ? 1 : 0);
+  if (totalCalls > 1) return invalidDirection();
   if (planCall) return parseDesignPlan(planCall.input, input);
+  if (sequentialCall) {
+    const val = validateSequentialExecutionPlan(sequentialCall.input);
+    if (!val.ok) return invalidDirection(val.error);
+    return { kind: "sequential-plan", plan: val.plan };
+  }
   if (!call) {
     const text = execution.output.text.trim();
     if (text && text.length <= 8_000 && !containsSensitivePayload(text)) {
@@ -518,6 +577,11 @@ export function parseCreativeDirection(
       return invalidDirection("invalid design plan proposal or missing designContext");
     }
     return { kind: "design-plan", proposal: requirePlanApproval(proposal.value) };
+  }
+  if (value.kind === "sequential-plan") {
+    const val = validateSequentialExecutionPlan(value.plan ?? value);
+    if (!val.ok) return invalidDirection(val.error);
+    return { kind: "sequential-plan", plan: val.plan };
   }
   if (value.kind === "answer") {
     if (!isBoundedString(value.text, 8_000)) {
