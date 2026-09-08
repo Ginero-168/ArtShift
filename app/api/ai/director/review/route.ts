@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
       { execute: ai.execute.bind(ai), signal: req.signal },
     );
     return NextResponse.json({ review });
-  } catch {
+  } catch (error) {
+    console.error("[api/ai/director/review] Error:", error);
     return NextResponse.json(
       { error: "Creative Director review is temporarily unavailable." },
       { status: 502 },
@@ -80,11 +81,15 @@ function parseReviewInput(
   if (!isRecord(value.outputAnalysis) || containsSensitivePayload(value.outputAnalysis))
     return null;
   const analysis = value.outputAnalysis;
+  const boundedObjects = Array.isArray(analysis.objects) ? analysis.objects.slice(0, 50) : [];
+  const boundedLimitations = Array.isArray(analysis.limitations)
+    ? analysis.limitations.slice(0, 20)
+    : [];
   if (
     !isString(analysis.caption, 2_000) ||
-    !isStringArray(analysis.objects, 50, 200) ||
+    !isStringArray(boundedObjects, 50, 200) ||
     !isString(analysis.visibleText, 2_000) ||
-    !isStringArray(analysis.limitations, 20, 300)
+    !isStringArray(boundedLimitations, 20, 300)
   ) {
     return null;
   }
@@ -93,9 +98,9 @@ function parseReviewInput(
     reviewCriteria: value.reviewCriteria,
     outputAnalysis: {
       caption: analysis.caption,
-      objects: analysis.objects,
+      objects: boundedObjects,
       visibleText: analysis.visibleText,
-      limitations: analysis.limitations,
+      limitations: boundedLimitations,
     },
   };
 }

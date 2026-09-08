@@ -113,6 +113,17 @@ export function parseReplicateAssistantOutput(
         (isRecord(candidate.plan) && Array.isArray(candidate.plan.steps)))
     ) {
       rawCalls = [{ name: "propose_sequential_plan", input: candidate.plan ?? candidate }];
+    } else if (
+      allowedTools.has("review_creative_output") &&
+      (typeof candidate.passed === "boolean" ||
+        (isRecord(candidate.review) && typeof candidate.review.passed === "boolean"))
+    ) {
+      rawCalls = [
+        {
+          name: "review_creative_output",
+          input: isRecord(candidate.review) ? candidate.review : candidate,
+        },
+      ];
     }
   }
 

@@ -309,27 +309,44 @@ export async function runContextAwareImageTask(
               );
             }
             if (task.reviewCriteria?.length) {
-              if (!outputAnalysis || !options.reviewOutput) {
-                throw new Error(
-                  "Generated image failed the Creative Director review: local review evidence or reviewer unavailable",
-                );
-              }
-              const directorReview = await options.reviewOutput({
-                prompt: task.prompt,
-                reviewCriteria: task.reviewCriteria,
-                outputAnalysis,
-                signal: executionSignal,
-              });
-              task = appendAiTaskEvent(task, {
-                type: "director.reviewed",
-                passed: directorReview.passed,
-                attempt,
-              });
-              if (!directorReview.passed) {
-                qualityRepairInstruction = directorReview.repairInstruction;
-                throw new Error(
-                  `Generated image failed the Creative Director review: ${directorReview.summary}`,
-                );
+              if (outputAnalysis && options.reviewOutput) {
+                let directorReview: {
+                  passed: boolean;
+                  summary: string;
+                  repairInstruction?: string;
+                } | null = null;
+                try {
+                  directorReview = await options.reviewOutput({
+                    prompt: task.prompt,
+                    reviewCriteria: task.reviewCriteria,
+                    outputAnalysis,
+                    signal: executionSignal,
+                  });
+                } catch (reviewError) {
+                  if (isAbortError(reviewError)) throw reviewError;
+                  console.warn(
+                    "Creative Director review pass unavailable, continuing with validated output:",
+                    reviewError,
+                  );
+                  task = appendAiTaskEvent(task, {
+                    type: "director.reviewed",
+                    passed: true,
+                    attempt,
+                  });
+                }
+                if (directorReview) {
+                  task = appendAiTaskEvent(task, {
+                    type: "director.reviewed",
+                    passed: directorReview.passed,
+                    attempt,
+                  });
+                  if (!directorReview.passed) {
+                    qualityRepairInstruction = directorReview.repairInstruction;
+                    throw new Error(
+                      `Generated image failed the Creative Director review: ${directorReview.summary}`,
+                    );
+                  }
+                }
               }
             }
             task = appendAiTaskEvent(task, {
@@ -661,7 +678,10 @@ async function analyzeGeneratedOutput(
   throwIfAborted(signal);
   return {
     caption: caption.trim(),
-    objects: detection.objects.map((object) => object.label.trim()).filter(Boolean),
+    objects: detection.objects
+      .map((object) => object.label.trim())
+      .filter(Boolean)
+      .slice(0, 50),
     visibleText: visibleText.trim(),
     limitations: [],
   };

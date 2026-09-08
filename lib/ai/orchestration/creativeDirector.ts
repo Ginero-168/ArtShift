@@ -553,10 +553,27 @@ export async function reviewCreativeOutput(
   const call = execution.output.toolCalls.find(
     (candidate) => candidate.name === CREATIVE_REVIEW_TOOL.name,
   );
-  if (!call || !isRecord(call.input) || containsSensitivePayload(call.input)) {
+  let value: Record<string, unknown> | null = null;
+  if (call && isRecord(call.input) && !containsSensitivePayload(call.input)) {
+    value = call.input;
+  } else {
+    const text = execution.output.text.trim();
+    if (text && !containsSensitivePayload(text)) {
+      const candidate = parseJsonCandidate(text);
+      if (isRecord(candidate)) {
+        const reviewCandidate = isRecord(candidate.review) ? candidate.review : candidate;
+        if (
+          typeof reviewCandidate.passed === "boolean" &&
+          isBoundedString(reviewCandidate.summary, 2_000)
+        ) {
+          value = reviewCandidate;
+        }
+      }
+    }
+  }
+  if (!value) {
     throw new Error("Creative Director returned no valid review");
   }
-  const value = call.input;
   if (typeof value.passed !== "boolean" || !isBoundedString(value.summary, 2_000)) {
     throw new Error("Creative Director returned an invalid review");
   }

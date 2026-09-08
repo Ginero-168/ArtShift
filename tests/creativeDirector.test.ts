@@ -386,4 +386,37 @@ describe("gpt-oss-120b Creative Director", () => {
       expect(result.modelAlias).toBe("image-gpt-2");
     }
   });
+
+  it("recovers a review decision when the remote assistant returns JSON in text without tool calls", async () => {
+    const reviewJson = JSON.stringify({
+      passed: true,
+      summary: "Animal anatomy is accurate and lighting is realistic.",
+    });
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: reviewJson,
+        toolCalls: [],
+      },
+    });
+
+    const result = await reviewCreativeOutput(
+      {
+        prompt: "Create three separate realistic photographs of a pig",
+        reviewCriteria: ["Animal anatomy is accurate and natural"],
+        outputAnalysis: {
+          caption: "a pig standing in a field",
+          objects: ["pig", "grass"],
+          visibleText: "",
+          limitations: [],
+        },
+        cloudConsent: true,
+      },
+      { execute },
+    );
+
+    expect(result).toEqual({
+      passed: true,
+      summary: "Animal anatomy is accurate and lighting is realistic.",
+    });
+  });
 });
