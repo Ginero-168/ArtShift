@@ -4,6 +4,8 @@ import {
   ARTSHIFT_HARNESS_VERSION,
 } from "@/lib/ai/orchestration/harnessPolicy";
 import {
+  type ContextAwareTurnInput,
+  createDirectedImageTask,
   isCanvasInventoryPrompt,
   prepareContextAwareTurn,
 } from "@/lib/ai/orchestration/turnOrchestrator";
@@ -20,8 +22,24 @@ const slide = {
   elements: [createRect({ x: 10, y: 10, width: 100, height: 100 })],
 };
 
+function directed(input: ContextAwareTurnInput) {
+  const task = createDirectedImageTask(input, {
+    kind: "image-task",
+    outputCount: 1,
+    summary: "Approved image",
+    refinedPrompt: input.prompt,
+    specialist: input.refs.length ? "image_editor" : "image_generator",
+    capability: input.refs.length ? "IMAGE_EDIT" : "IMAGE_DEFAULT",
+    modelAlias: "image-gpt-2",
+    knowledgeSkillIds: [],
+    reviewCriteria: ["Preserve the supplied brief"],
+    search: { required: false, queries: [], sources: [] },
+  });
+  return { kind: "task" as const, task };
+}
+
 describe("context-aware turn orchestrator", () => {
-  it("refuses an explicitly requested unavailable image model instead of silently substituting", () => {
+  it("defers requested model decisions to the Director", () => {
     const result = prepareContextAwareTurn({
       prompt: "สร้างโปสเตอร์คอนเสิร์ตสีแดงจัดจ้าน ใช้ Flux",
       refs: [],
@@ -29,8 +47,7 @@ describe("context-aware turn orchestrator", () => {
     });
 
     expect(result).toMatchObject({
-      kind: "capability-unavailable",
-      capability: "flux-2-max",
+      kind: "director-ready",
     });
   });
 
@@ -60,7 +77,7 @@ describe("context-aware turn orchestrator", () => {
       height: 100,
       angle: 0,
     };
-    const result = prepareContextAwareTurn({
+    const result = directed({
       prompt: "สร้างภาพโฆษณา product photo แบบสตูดิโอ สำหรับ Instagram อัตราส่วน 1:1",
       refs: [ref],
       analyses: [
@@ -91,6 +108,7 @@ describe("context-aware turn orchestrator", () => {
       "clarification.requested",
       "intent.assessed",
       "task.created",
+      "director.planned",
     ]);
     for (const event of result.task.history) {
       expect(event).toMatchObject({
@@ -103,20 +121,16 @@ describe("context-aware turn orchestrator", () => {
     }
   });
 
-  it("returns clarification for an ambiguous image request", async () => {
+  it("defers ambiguous image requests to the Director", async () => {
     const result = prepareContextAwareTurn({ prompt: "สร้างภาพแมว", refs: [], analyses: [] });
-    expect(result.kind).toBe("clarification");
-    if (result.kind !== "clarification") return;
-    expect(result.pending.options.map((option) => option.id)).toEqual(["A", "B", "C", "OTHER"]);
+    expect(result.kind).toBe("director-ready");
+    expect(result).not.toHaveProperty("task");
   });
 
-  it.each(["ขอภาพแมว", "ทำภาพแมว", "draw a cat"])(
-    "keeps %s behind the context-aware clarification gate",
-    (prompt) => {
-      const result = prepareContextAwareTurn({ prompt, refs: [], analyses: [] });
-      expect(result.kind).toBe("clarification");
-    },
-  );
+  it.each(["ขอภาพแมว", "ทำภาพแมว", "draw a cat"])("keeps %s behind the Director gate", (prompt) => {
+    const result = prepareContextAwareTurn({ prompt, refs: [], analyses: [] });
+    expect(result.kind).toBe("director-ready");
+  });
 
   it("refuses to plan a selected-image task before analysis completes", () => {
     const ref = {
@@ -136,7 +150,7 @@ describe("context-aware turn orchestrator", () => {
   });
 
   it("creates an image task with exact text requirements from the brief", () => {
-    const result = prepareContextAwareTurn({
+    const result = directed({
       prompt:
         'สร้างภาพป้ายสินค้า product photo ในสตูดิโอ แบบ centered สำหรับ Instagram อัตราส่วน 1:1 พร้อมข้อความ "SALE 50%"',
       refs: [],
@@ -152,13 +166,13 @@ describe("context-aware turn orchestrator", () => {
     });
   });
 
-  it("does not create a task for unavailable vector output", () => {
+  it("defers vector requests without creating a task", () => {
     const result = prepareContextAwareTurn({
       prompt: "สร้างภาพโลโก้เวกเตอร์แบบ minimal สำหรับแบรนด์สินค้า บนพื้นขาว อัตราส่วน 1:1 สำหรับ Instagram",
       refs: [],
       analyses: [],
     });
-    expect(result).toMatchObject({ kind: "capability-unavailable", capability: "IMAGE_VECTOR" });
+    expect(result).toMatchObject({ kind: "director-ready" });
   });
 
   it("creates an image task with automatic high quality for a selected reference", () => {
@@ -173,7 +187,7 @@ describe("context-aware turn orchestrator", () => {
       height: 100,
       angle: 0,
     };
-    const result = prepareContextAwareTurn({
+    const result = directed({
       prompt: "สร้างภาพโฆษณา product photo แบบสตูดิโอ สำหรับ Instagram อัตราส่วน 1:1",
       refs: [ref],
       analyses: [

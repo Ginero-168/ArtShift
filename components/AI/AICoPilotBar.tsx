@@ -9,7 +9,6 @@ import {
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
-import { applyCreativeDirectionToTask } from "@/lib/ai/orchestration/creativeDirector";
 import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
@@ -26,6 +25,7 @@ import {
 } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
   type ContextAwareTurnResult,
+  createDirectedImageTask,
   isCanvasInventoryPrompt,
   type PendingClarification,
   prepareContextAwareTurn,
@@ -147,14 +147,11 @@ export default function AICoPilotBar() {
     const pending = pendingClarification;
     const selectedOption =
       pending && customPrompt ? findClarificationOption(pending, customPrompt) : undefined;
-    if (selectedOption?.id === "OTHER") {
-      inputRef.current?.focus();
-      return;
-    }
     const promptToSend = pending
       ? composeClarifiedImagePrompt(
           pending.originalPrompt,
-          selectedOption?.label ?? `Other: ${rawPrompt}`,
+          selectedOption?.label ?? rawPrompt,
+          pending.question,
         )
       : rawPrompt;
     if (!pending && selectedImageSelection.omittedCount > 0) {
@@ -191,7 +188,7 @@ export default function AICoPilotBar() {
     const userMsg: CoPilotMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      content: selectedOption ? `${selectedOption.id}. ${selectedOption.label}` : rawPrompt,
+      content: selectedOption?.label ?? rawPrompt,
       timestamp: Date.now(),
     };
 
@@ -222,6 +219,7 @@ export default function AICoPilotBar() {
           canvas: { slide, selectedIds },
         });
       } else if (
+        pending ||
         isImageGenerationPrompt(promptToSend) ||
         (hasImageContext && isImageContextRequest && !isBuiltInImageAction)
       ) {
@@ -266,105 +264,53 @@ export default function AICoPilotBar() {
             return;
           }
         }
-
-        if (
-          hasImageContext &&
-          analysesForTurn.length > 0 &&
-          /(?:อธิบาย|describe|what\s+is|ภาพนี้คือ|รูปนี้คือ)/iu.test(promptToSend)
-        ) {
-          const first = analysesForTurn[0];
-          contextDecision = {
-            kind: "answer",
-            source: "canvas-local",
-            reply: `ภาพที่เลือกน่าจะเป็น ${first.caption || first.objects.join(", ") || "ภาพที่ระบบยังระบุรายละเอียดไม่ได้"}ครับ${first.visibleText ? `\nข้อความที่อ่านได้: ${first.visibleText}` : ""}`,
-          };
-        } else if (
-          isImageGenerationPrompt(promptToSend) ||
-          (hasImageContext && isImageContextRequest && !isBuiltInImageAction)
-        ) {
-          contextDecision = prepareContextAwareTurn({
-            prompt: promptToSend,
-            refs: refsForTurn,
-            analyses: analysesForTurn,
-            selectedIds,
-            canvas: slide ? { slide, selectedIds } : undefined,
-            clarification: pending
-              ? {
-                  originalPrompt: pending.originalPrompt,
-                  question: pending.question,
-                  optionIds: pending.options.map((option) => option.id),
-                }
-              : undefined,
-            clarificationRound: pending?.round ?? 0,
-          });
-        }
+        contextDecision = prepareContextAwareTurn({
+          prompt: promptToSend,
+          refs: refsForTurn,
+          analyses: analysesForTurn,
+          selectedIds,
+          canvas: slide ? { slide, selectedIds } : undefined,
+          clarification: pending
+            ? {
+                originalPrompt: pending.originalPrompt,
+                question: pending.question,
+                optionIds: pending.options.map((option) => option.id),
+              }
+            : undefined,
+          clarificationRound: pending?.round ?? 0,
+        });
       }
 
-      if (contextDecision && contextDecision.kind !== "continue") {
+      if (contextDecision) {
         let reply = "";
         let actions = [...analysisActions];
         let suggestions: string[] = [];
         if (contextDecision.kind === "answer") {
           reply = contextDecision.reply;
           suggestions = ["ถามเกี่ยวกับ Object บน Canvas", "วิเคราะห์ภาพนี้ละเอียดขึ้น"];
-        } else if (contextDecision.kind === "clarification") {
-          setPendingClarification(contextDecision.pending);
-          reply = contextDecision.pending.question;
-          suggestions = contextDecision.pending.options.map(
-            (option) => `${option.id === "OTHER" ? "Other" : `${option.id}.`} ${option.label}`,
-          );
-          actions = [
-            ...actions,
-            {
-              id: crypto.randomUUID(),
-              agent: "orchestrator",
-              title: "🧭 Intent Clarification",
-              description: `ต้องการคำตอบเพิ่มก่อนสร้าง Task (รอบ ${contextDecision.pending.round}/2)`,
-              status: "success",
-              timestamp: Date.now(),
-            },
-          ];
-        } else if (contextDecision.kind === "capability-unavailable") {
-          setPendingClarification(null);
-          reply = contextDecision.reply;
-          suggestions = ["ปรับคำขอให้ใช้ความสามารถที่พร้อมใช้งาน", "ถามเกี่ยวกับ Canvas แบบ local"];
-          actions = [
-            ...actions,
-            {
-              id: crypto.randomUUID(),
-              agent: "orchestrator",
-              title: `🧭 Capability · ${contextDecision.capability}`,
-              description: contextDecision.reason,
-              status: "error",
-              timestamp: Date.now(),
-            },
-          ];
         } else {
-          setPendingClarification(null);
-          const initialTask = contextDecision.task;
           const taskAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
-            agent: initialTask.subAgent === "image_editor" ? "image_edit" : "image_gen",
-            title: `🧩 Task · ${initialTask.subAgent}`,
+            agent: "orchestrator",
+            title: "🧠 Creative Director",
             description: "กำลังส่ง brief ให้ Creative Director วางแผน…",
             status: "running",
             timestamp: Date.now(),
-            taskId: initialTask.id,
             stage: "analyzing",
             attempt: 0,
-            quality: initialTask.quality,
           };
           actions = [...actions, taskAction];
+          upsertCurrentAction({ ...taskAction });
           const consent =
             typeof window === "undefined" ||
             window.confirm(
-              `งานนี้จะส่ง ${refsForTurn.length ? "สรุปภาพที่วิเคราะห์แล้วและ" : ""}คำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์ (คุณภาพอัตโนมัติ: ${initialTask.quality}, สูงสุด ${initialTask.maxAttempts} ครั้ง) ดำเนินการต่อหรือไม่?`,
+              `งานนี้จะส่ง ${refsForTurn.length ? "สรุปภาพที่วิเคราะห์แล้วและ" : ""}คำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์ ดำเนินการต่อหรือไม่?`,
             );
           if (!consent) {
             taskAction.status = "error";
             taskAction.stage = "cancelled";
             taskAction.description = "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
-            reply = "ยกเลิก Task แล้วครับ ยังไม่มีการส่ง prompt, ภาพ หรือการเรียก AI provider";
+            reply = "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider";
           } else {
             try {
               const direction = await prepareRemoteCreativeDirection(
@@ -382,6 +328,7 @@ export default function AICoPilotBar() {
               );
 
               if (direction.kind === "answer") {
+                setPendingClarification(null);
                 taskAction.status = "success";
                 taskAction.stage = "succeeded";
                 taskAction.description = "Creative Director ตอบโดยไม่เรียก Image Model";
@@ -393,6 +340,15 @@ export default function AICoPilotBar() {
                 taskAction.description = "Creative Director ต้องการรายละเอียดเพิ่มก่อนเลือก Specialist";
                 reply = direction.question;
                 suggestions = direction.options;
+                setPendingClarification({
+                  id: crypto.randomUUID(),
+                  originalPrompt: promptToSend,
+                  selectedImages: refsForTurn,
+                  analyses: analysesForTurn,
+                  question: direction.question,
+                  options: direction.options.map((label, index) => ({ id: String(index), label })),
+                  round: (pending?.round ?? 0) + 1,
+                });
               } else if (direction.search.required) {
                 taskAction.status = "success";
                 taskAction.stage = "analyzing";
@@ -400,7 +356,10 @@ export default function AICoPilotBar() {
                 reply = `ยังไม่เรียก Image Model ครับ Creative Director ต้องค้นข้อมูลเพิ่มก่อน: ${direction.search.queries.join(", ")}`;
                 suggestions = ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"];
               } else {
-                const directedTask = applyCreativeDirectionToTask(initialTask, direction);
+                const directedTask = createDirectedImageTask(contextDecision.input, direction);
+                setPendingClarification(null);
+                taskAction.taskId = directedTask.id;
+                taskAction.quality = directedTask.quality;
                 taskAction.agent =
                   directedTask.subAgent === "image_editor" ? "image_edit" : "image_gen";
                 taskAction.title = `🧠 Creative Director → ${directedTask.subAgent}`;
@@ -1221,13 +1180,5 @@ function findClarificationOption(
   pending: PendingClarification,
   value: string,
 ): PendingClarification["options"][number] | undefined {
-  const normalized = value.trim().toLocaleLowerCase();
-  return pending.options.find((option) => {
-    const id = option.id.toLocaleLowerCase();
-    return (
-      normalized === option.label.toLocaleLowerCase() ||
-      normalized.startsWith(`${id}.`) ||
-      (id === "other" && normalized.startsWith("other"))
-    );
-  });
+  return pending.options.find((option) => option.label === value);
 }

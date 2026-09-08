@@ -1,23 +1,17 @@
 import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
-  isImageGenerationPrompt,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
-import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import {
-  CREATING_MODEL_CATALOG,
-  detectRequestedCreatingModel,
-  resolveCreatingModel,
-} from "./creatingModelCatalog";
+  applyCreativeDirectionToTask,
+  type CreativeDirection,
+  parseCreativeDirection,
+} from "./creativeDirector";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
 import { chooseImageQuality } from "./imageQualityPolicy";
 import type { ComposerImageRef } from "./imageReferences";
-import {
-  assessImageIntent,
-  type ClarificationOption,
-  type IntentAnalysis,
-} from "./intentCompleteness";
+import type { ClarificationOption } from "./intentCompleteness";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
 import { type AiTask, type AiTaskPlan, createAiTask } from "./taskMachine";
 
@@ -47,10 +41,7 @@ export type ContextAwareTurnInput = {
 
 export type ContextAwareTurnResult =
   | { kind: "answer"; reply: string; source: "canvas-local" }
-  | { kind: "continue"; analyses: ImageReferenceAnalysis[] }
-  | { kind: "clarification"; pending: PendingClarification }
-  | { kind: "capability-unavailable"; capability: string; reason: string; reply: string }
-  | { kind: "task"; task: AiTask };
+  | { kind: "director-ready"; input: ContextAwareTurnInput };
 
 export function isCanvasInventoryPrompt(prompt: string): boolean {
   const value = prompt.trim().toLocaleLowerCase();
@@ -70,74 +61,35 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     return { kind: "answer", reply: inspection.reply, source: "canvas-local" };
   }
 
-  const requestedModel = detectRequestedCreatingModel(input.prompt);
-  const requestsModelExecution =
-    requestedModel !== undefined &&
-    /(?:สร้าง|วาด|ออกแบบ|generate|create|edit|แก้(?:ไข)?(?:ภาพ|รูป)?)/iu.test(input.prompt);
-  if (requestedModel && requestsModelExecution) {
-    const requestedCapability = input.refs.length > 0 ? "edit" : "generate";
-    const modelResolution = resolveCreatingModel(requestedCapability, requestedModel);
-    if (!modelResolution.ok) {
-      const model = CREATING_MODEL_CATALOG.find((entry) => entry.alias === requestedModel);
-      return {
-        kind: "capability-unavailable",
-        capability: requestedModel,
-        reason: model?.notes ?? modelResolution.reason,
-        reply: `ยังไม่สร้าง Task ครับ เพราะ Model ${requestedModel} ยังไม่พร้อมสำหรับงานนี้ และ ArtShift จะไม่เปลี่ยนไปใช้ Model อื่นโดยไม่บอก`,
-      };
-    }
-  }
-
-  if (!isImageGenerationPrompt(input.prompt) && input.refs.length === 0) {
-    return { kind: "continue", analyses: [] };
-  }
-  if (input.refs.length > 0 && input.analyses.length !== input.refs.length) {
+  if (input.refs.length !== input.analyses.length) {
     throw new Error("selected image analysis must complete before planning the task");
   }
+  return { kind: "director-ready", input };
+}
 
-  const analyses: IntentAnalysis[] = input.analyses.map((analysis) => ({
-    caption: analysis.caption,
-    objects: analysis.objects,
-    visibleText: analysis.visibleText,
-  }));
+// Only the validated Director decision may cross the task-creation boundary.
+export function createDirectedImageTask(
+  input: ContextAwareTurnInput,
+  direction: Extract<CreativeDirection, { kind: "image-task" }>,
+): AiTask {
+  const validated = parseCreativeDirection(
+    direction,
+    {
+      prompt: input.prompt,
+      canvasSummary: { objectCount: 0, selectedCount: input.refs.length, width: 1, height: 1 },
+      referenceAnalyses: input.analyses,
+      availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+    },
+    direction.knowledgeSkillIds,
+  );
+  if (validated.kind !== "image-task" || validated.search.required) {
+    throw new Error("Creative Director context search must complete before task creation");
+  }
+  if (input.refs.length !== input.analyses.length) {
+    throw new Error("selected image analysis must complete before planning the task");
+  }
   const canvasInspection = input.canvas ? inspectCanvas(input.canvas) : undefined;
-  const assessment = assessImageIntent({
-    prompt: input.prompt,
-    analyses,
-    hasSelection: input.refs.length > 0 || Boolean(input.selectedIds?.size),
-  });
-  const round = input.clarificationRound ?? 0;
-  if (assessment.kind === "clarification" && round < 2) {
-    return {
-      kind: "clarification",
-      pending: {
-        id: crypto.randomUUID(),
-        originalPrompt: input.prompt,
-        selectedImages: input.refs.map((ref) => ({ ...ref })),
-        analyses: input.analyses.map((analysis) => ({ ...analysis, ref: { ...analysis.ref } })),
-        question: assessment.question,
-        options: assessment.options,
-        round: round + 1,
-      },
-    };
-  }
-
-  const visualPlan = planVisualRequest(input.prompt, {
-    hasSelection: input.refs.length > 0,
-    selectedObjectCount: input.refs.length,
-    hasReference: input.refs.length > 0,
-  });
-  if (!visualPlan.capabilityAvailable) {
-    return {
-      kind: "capability-unavailable",
-      capability: visualPlan.capabilityAlias,
-      reason: visualPlan.reason,
-      reply: `ยังไม่สร้าง Task ครับ เพราะความสามารถ ${visualPlan.capabilityAlias} ยังไม่พร้อมใช้งานใน runtime นี้`,
-    };
-  }
-
-  const taskBriefPrompt = input.clarification?.originalPrompt ?? input.prompt;
-  const taskClass = input.refs.length > 0 || taskBriefPrompt.length > 100 ? "complex" : "simple";
+  const taskClass = input.refs.length > 0 ? "complex" : "simple";
   const quality = chooseImageQuality({
     prompt: input.prompt,
     taskClass,
@@ -154,7 +106,7 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     id: crypto.randomUUID(),
     prompt: input.prompt,
     subAgent: input.refs.length > 0 ? "image_editor" : "image_generator",
-    capability: visualPlan.capabilityAlias,
+    capability: direction.capability,
     quality: quality.quality,
     qualityRationale: quality.rationale,
     maxAttempts: quality.maxAttempts,
@@ -214,7 +166,7 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
       { type: "intent.assessed" as const, complete: true },
     ],
   });
-  return { kind: "task", task };
+  return applyCreativeDirectionToTask(task, validated);
 }
 
 function extractRequiredText(prompt: string): string | undefined {

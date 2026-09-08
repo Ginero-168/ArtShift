@@ -1,7 +1,6 @@
 import type { DesignIntentKind } from "@/lib/designAgent/policy";
 import { classifyDesignIntent } from "@/lib/designAgent/policy";
-import { cleanImagePrompt, isImageGenerationPrompt } from "./imageGeneration";
-import { assessImageIntent } from "./orchestration/intentCompleteness";
+import { isImageGenerationPrompt } from "./imageGeneration";
 
 export type VisualTaskClass = "simple" | "complex";
 export type VisualRoute = "direct" | "orchestrator" | "clarify";
@@ -143,18 +142,20 @@ export function planVisualRequest(
     context.hasImageAsset === true ||
     (context.hasSelection && intent !== "generation");
 
-  const imageAssessment = imageRequest
-    ? assessImageIntent({
-        prompt: normalizedPrompt,
-        analyses: [],
-        hasSelection: context.hasSelection,
-      })
-    : undefined;
-  if (
-    intent === "clarification" ||
-    (imageRequest &&
-      (!cleanImagePrompt(normalizedPrompt) || imageAssessment?.kind === "clarification"))
-  ) {
+  if (imageRequest) {
+    return {
+      prompt: normalizedPrompt,
+      intent: "generation",
+      taskClass: "simple",
+      capabilityAlias: "ORCHESTRATOR_DEFAULT",
+      route: "orchestrator",
+      capabilityAvailable: true,
+      requiresApproval: true,
+      needsVisualAnalysis,
+      reason: "Creative Director must decide the next image conversation turn.",
+    };
+  }
+  if (intent === "clarification") {
     return {
       prompt: normalizedPrompt,
       intent: "clarification",
@@ -165,12 +166,9 @@ export function planVisualRequest(
       requiresApproval: false,
       needsVisualAnalysis: false,
       reason: "The request does not identify a concrete visual subject or change.",
-      clarification:
-        imageAssessment?.kind === "clarification"
-          ? imageAssessment.question
-          : context.hasSelection
-            ? "ต้องการให้สร้างหรือปรับอะไรจาก Object ที่เลือกครับ?"
-            : "ต้องการสร้างภาพอะไรครับ? ระบุ subject, style หรือการใช้งานเพิ่มอีกนิดได้เลยครับ",
+      clarification: context.hasSelection
+        ? "ต้องการให้สร้างหรือปรับอะไรจาก Object ที่เลือกครับ?"
+        : "ต้องการสร้างภาพอะไรครับ? ระบุ subject, style หรือการใช้งานเพิ่มอีกนิดได้เลยครับ",
     };
   }
 

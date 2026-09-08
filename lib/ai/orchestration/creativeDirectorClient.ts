@@ -4,6 +4,7 @@ import type {
   CreativeOutputReview,
   CreativeOutputReviewInput,
 } from "@/lib/ai/orchestration/creativeDirector";
+import { parseCreativeDirection } from "@/lib/ai/orchestration/creativeDirector";
 
 export async function prepareRemoteCreativeDirection(
   input: Omit<CreativeDirectorInput, "availableCapabilities" | "cloudConsent" | "accountId">,
@@ -20,7 +21,7 @@ export async function prepareRemoteCreativeDirection(
     direction?: unknown;
     error?: string;
   } | null;
-  if (!response.ok || !isCreativeDirection(payload?.direction)) {
+  if (!response.ok || !isCreativeDirection(payload?.direction, input)) {
     throw new Error(payload?.error || `Creative Director request failed: ${response.status}`);
   }
   return payload.direction;
@@ -47,30 +48,26 @@ export async function reviewRemoteCreativeOutput(
   return payload.review;
 }
 
-function isCreativeDirection(value: unknown): value is CreativeDirection {
+function isCreativeDirection(
+  value: unknown,
+  input: Omit<CreativeDirectorInput, "availableCapabilities" | "cloudConsent" | "accountId">,
+): value is CreativeDirection {
   if (!isRecord(value)) return false;
-  if (value.kind === "answer") return typeof value.text === "string";
-  if (value.kind === "clarification") {
-    return (
-      typeof value.question === "string" &&
-      Array.isArray(value.options) &&
-      value.options.every((option) => typeof option === "string")
+  try {
+    parseCreativeDirection(
+      value,
+      {
+        prompt: "validate response",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1, height: 1 },
+        referenceAnalyses: input.referenceAnalyses,
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+      },
+      Array.isArray(value.knowledgeSkillIds) ? value.knowledgeSkillIds : [],
     );
+    return true;
+  } catch {
+    return false;
   }
-  if (value.kind !== "image-task") return false;
-  return (
-    typeof value.summary === "string" &&
-    typeof value.refinedPrompt === "string" &&
-    (value.specialist === "image_generator" || value.specialist === "image_editor") &&
-    (value.capability === "IMAGE_DEFAULT" || value.capability === "IMAGE_EDIT") &&
-    value.modelAlias === "image-gpt-2" &&
-    Array.isArray(value.knowledgeSkillIds) &&
-    Array.isArray(value.reviewCriteria) &&
-    isRecord(value.search) &&
-    typeof value.search.required === "boolean" &&
-    Array.isArray(value.search.queries) &&
-    Array.isArray(value.search.sources)
-  );
 }
 
 function isCreativeReview(value: unknown): value is CreativeOutputReview {

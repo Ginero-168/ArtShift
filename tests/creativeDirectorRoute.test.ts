@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CreativeDirectorValidationError } from "@/lib/ai/orchestration/creativeDirector";
 
 const prepareMock = vi.hoisted(() => vi.fn());
 const reviewMock = vi.hoisted(() => vi.fn());
@@ -50,6 +51,7 @@ describe("Creative Director route", () => {
     reviewMock.mockReset();
     prepareMock.mockResolvedValue({
       kind: "image-task",
+      outputCount: 1,
       summary: "Premium serum",
       refinedPrompt: "Premium serum bottle product photograph",
       specialist: "image_generator",
@@ -102,6 +104,16 @@ describe("Creative Director route", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("distinguishes a rejected Director plan from provider unavailability safely", async () => {
+    prepareMock.mockRejectedValue(new CreativeDirectorValidationError());
+    const response = await POST(request(body));
+    const payload = await response.json();
+    expect(response.status).toBe(502);
+    expect(payload.code).toBe("DIRECTOR_INVALID_PLAN");
+    expect(payload.error).toContain("ยังไม่ได้สร้าง Task");
+    expect(payload.error).not.toContain("temporarily unavailable");
   });
 
   it("redacts provider errors", async () => {

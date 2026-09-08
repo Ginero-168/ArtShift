@@ -5,11 +5,11 @@ import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
 import {
   ASPECT_RATIOS,
   type AspectRatioOption,
-  enrichPrompt,
   GPT_IMAGE_2_MODEL,
   GPT_IMAGE_2_QUALITY,
   INSPIRATION_PROMPTS,
 } from "@/lib/ai/imageGeneration";
+import type { PendingClarification } from "@/lib/ai/orchestration/turnOrchestrator";
 
 type ImageStyleId = "photorealistic" | "digital-art" | "3d-render" | "anime";
 
@@ -59,9 +59,11 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
   const generationAbortRef = useRef<AbortController | null>(null);
 
   const [prompt, setPrompt] = useState("");
-  const [selectedStyle, setSelectedStyle] = useState<ImageStyleId>("photorealistic");
+  const [selectedStyle, setSelectedStyle] = useState<ImageStyleId | null>(null);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatioOption>(ASPECT_RATIOS[0]);
-  const [enhance, setEnhance] = useState(true);
+  const [enhance, setEnhance] = useState(false);
+  const [pending, setPending] = useState<PendingClarification>();
+  const [directorReply, setDirectorReply] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,8 +88,8 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
     setPrompt(random);
   }
 
-  async function handleGenerate() {
-    if (!prompt.trim()) {
+  async function handleGenerate(reply?: string) {
+    if (!(reply ?? prompt).trim()) {
       setError("Please describe what image you want to create.");
       return;
     }
@@ -105,24 +107,33 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
 
     try {
       const style = STYLE_PRESETS.find((preset) => preset.id === selectedStyle);
-      const basePrompt = enhance ? enrichPrompt(prompt.trim()) : prompt.trim();
+      const basePrompt = (reply ?? prompt).trim();
       const generationPrompt = [
         basePrompt,
         style?.promptSuffix,
+        enhance ? "Please refine the brief without changing explicit requirements." : undefined,
         `สำหรับอัตราส่วน ${selectedRatio.ratio}`,
       ]
         .filter(Boolean)
         .join("\n\nVisual direction: ");
-      const result = await executeCoPilotInstruction(`สร้างภาพ ${generationPrompt}`, undefined, {
-        contextAwareValidated: true,
-        cloudConsent: true,
-        signal: controller.signal,
-      });
+      const result = await executeCoPilotInstruction(
+        pending ? basePrompt : `สร้างภาพ ${generationPrompt}`,
+        undefined,
+        {
+          imageConversation: true,
+          pendingClarification: pending,
+          cloudConsent: true,
+          signal: controller.signal,
+        },
+      );
       if (result.actions.some((action) => action.status === "error")) {
         setError(result.reply);
         return;
       }
-      onClose();
+      setPending(result.pendingClarification);
+      setDirectorReply(result.reply);
+      if (result.pendingClarification) setPrompt("");
+      if (result.imageCreated) onClose();
     } catch (err) {
       if (controller.signal.aborted || (err as Error).name === "AbortError") return;
       setError((err as Error).message || "Failed to generate image.");
@@ -234,6 +245,22 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
             overflowY: "auto",
           }}
         >
+          {/* Director replies remain visible; only an actual image completion closes the modal. */}
+          {directorReply && (
+            <div role="status">
+              <p>{directorReply}</p>
+              {pending?.options.map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  disabled={loading}
+                  onClick={() => handleGenerate(option.label)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
           {/* Left Column: Prompt & Controls */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Prompt Input Box */}
@@ -435,7 +462,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
             <button
               type="button"
               disabled={loading}
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               style={{
                 padding: "11px 16px",
                 borderRadius: 8,

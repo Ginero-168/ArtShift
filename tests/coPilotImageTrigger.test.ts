@@ -33,6 +33,7 @@ vi.mock("@/lib/vision/visionEngine", async (importOriginal) => {
 });
 
 import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
+import * as taskMachine from "@/lib/ai/orchestration/taskMachine";
 import { createText } from "@/lib/engine/factory";
 import { createEngineLayer } from "@/lib/engine/layers";
 import { useEngine } from "@/lib/engine/store";
@@ -61,6 +62,7 @@ describe("AI Co-Pilot image commands", () => {
     reviewOutputMock.mockReset();
     prepareDirectionMock.mockResolvedValue({
       kind: "image-task",
+      outputCount: 1,
       summary: "Studio profile image",
       refinedPrompt: "Studio portrait of a cat for a square profile image",
       specialist: "image_generator",
@@ -105,7 +107,8 @@ describe("AI Co-Pilot image commands", () => {
     });
   });
 
-  it("returns the explicit unavailable-model reason without calling the Director or image provider", async () => {
+  it("lets the Director explain an unavailable model without image execution", async () => {
+    prepareDirectionMock.mockResolvedValue({ kind: "answer", text: "Model flux-2-max ยังไม่พร้อม" });
     const result = await executeCoPilotInstruction(
       "สร้างภาพโปสเตอร์คอนเสิร์ตสีแดงจัดจ้าน ใช้ Flux",
       undefined,
@@ -113,15 +116,54 @@ describe("AI Co-Pilot image commands", () => {
     );
 
     expect(result.reply).toContain("Model flux-2-max ยังไม่พร้อม");
+    expect(prepareDirectionMock).toHaveBeenCalledTimes(1);
+    expect(generateImageMock).not.toHaveBeenCalled();
+  });
+
+  it("requires consent before asking the Director about a short request", async () => {
+    const result = await executeCoPilotInstruction("ขอภาพแมว");
+
+    expect(result.actions[0]?.agent).toBe("orchestrator");
+    expect(result.reply).toContain("ต้องได้รับอนุญาต");
     expect(prepareDirectionMock).not.toHaveBeenCalled();
     expect(generateImageMock).not.toHaveBeenCalled();
   });
 
-  it("clarifies a short Thai image request before generation", async () => {
-    const result = await executeCoPilotInstruction("ขอภาพแมว");
+  it("creates no task while the Director is pending or after an invalid plan", async () => {
+    const created = vi.spyOn(taskMachine, "createAiTask");
+    let finish: (value: unknown) => void = () => {};
+    prepareDirectionMock.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const running = executeCoPilotInstruction("สร้างภาพแมว", undefined, { cloudConsent: true });
+    await vi.waitFor(() => expect(prepareDirectionMock).toHaveBeenCalledTimes(1));
+    expect(created).not.toHaveBeenCalled();
+    finish({ kind: "image-task", refinedPrompt: "A cat image without required plan fields" });
+    const result = await running;
+    expect(created).not.toHaveBeenCalled();
+    expect(generateImageMock).not.toHaveBeenCalled();
+    expect(result.actions[0]).not.toHaveProperty("taskId");
+    expect(result.actions[0].status).toBe("error");
+    created.mockRestore();
+  });
 
-    expect(result.actions[0]?.agent).toBe("orchestrator");
-    expect(result.reply).toContain("direction");
+  it("passes model questions and free text literally across repeated coPilot turns", async () => {
+    prepareDirectionMock.mockResolvedValue({
+      kind: "clarification",
+      question: "ถั่วชนิดใด?",
+      options: ["ถั่วแดง"],
+    });
+    const first = await executeCoPilotInstruction("สร้างภาพถั่ว", undefined, { cloudConsent: true });
+    const second = await executeCoPilotInstruction("ไม่เอาตัวหนังสือ", undefined, {
+      cloudConsent: true,
+      pendingClarification: first.pendingClarification,
+    });
+    expect(second.pendingClarification?.originalPrompt).toBe(
+      "สร้างภาพถั่ว\n\nDirector question: ถั่วชนิดใด?\nUser reply: ไม่เอาตัวหนังสือ",
+    );
+    expect(second.suggestions).toEqual(["ถั่วแดง"]);
     expect(generateImageMock).not.toHaveBeenCalled();
   });
 

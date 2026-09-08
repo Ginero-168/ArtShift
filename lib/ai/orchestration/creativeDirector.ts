@@ -31,6 +31,7 @@ export type CreativeDirection =
   | { kind: "clarification"; question: string; options: string[] }
   | {
       kind: "image-task";
+      outputCount: 1;
       summary: string;
       refinedPrompt: string;
       specialist: "image_generator" | "image_editor";
@@ -106,11 +107,12 @@ const CREATIVE_DIRECTION_TOOL = {
     additionalProperties: false,
     properties: {
       kind: { type: "string", enum: ["answer", "clarification", "image-task"] },
-      text: { type: "string", maxLength: 8_000 },
-      question: { type: "string", maxLength: 1_000 },
+      text: { type: "string", minLength: 1, maxLength: 8_000 },
+      question: { type: "string", minLength: 1, maxLength: 1_000 },
       options: { type: "array", maxItems: 4, items: { type: "string", maxLength: 500 } },
-      summary: { type: "string", maxLength: 2_000 },
-      refinedPrompt: { type: "string", maxLength: 20_000 },
+      outputCount: { type: "integer", const: 1 },
+      summary: { type: "string", minLength: 1, maxLength: 2_000 },
+      refinedPrompt: { type: "string", minLength: 8, maxLength: 20_000 },
       specialist: { type: "string", enum: ["image_generator", "image_editor"] },
       capability: { type: "string", enum: ["IMAGE_DEFAULT", "IMAGE_EDIT"] },
       modelAlias: { type: "string", enum: ["image-gpt-2"] },
@@ -144,9 +146,46 @@ const CREATIVE_DIRECTION_TOOL = {
           },
         },
         required: ["required", "queries", "sources"],
+        allOf: [
+          {
+            if: { properties: { required: { const: true } } },
+            // biome-ignore lint/suspicious/noThenProperty: JSON Schema conditional keyword, not a promise.
+            then: { properties: { queries: { minItems: 1 }, sources: { minItems: 1 } } },
+            else: { properties: { queries: { maxItems: 0 }, sources: { maxItems: 0 } } },
+          },
+        ],
       },
     },
     required: ["kind"],
+    allOf: [
+      {
+        if: { properties: { kind: { const: "answer" } } },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema conditional keyword, not a promise.
+        then: { required: ["text"] },
+      },
+      {
+        if: { properties: { kind: { const: "clarification" } } },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema conditional keyword, not a promise.
+        then: { required: ["question", "options"] },
+      },
+      {
+        if: { properties: { kind: { const: "image-task" } } },
+        // biome-ignore lint/suspicious/noThenProperty: JSON Schema conditional keyword, not a promise.
+        then: {
+          required: [
+            "summary",
+            "refinedPrompt",
+            "specialist",
+            "capability",
+            "modelAlias",
+            "knowledgeSkillIds",
+            "reviewCriteria",
+            "search",
+            "outputCount",
+          ],
+        },
+      },
+    ],
   },
 } as const;
 
@@ -176,6 +215,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Use retrieved Knowledge guidance to improve the plan, but derive the actual direction from the user's prompt and context rather than a preset template.",
   "Request Search only when current facts or external references materially affect correctness. Provide narrow queries and sources; ArtShift performs search outside the model after consent.",
   "Choose one allowlisted specialist and capability. Respect an explicit user model preference only when that model is listed as available.",
+  "Execution supports exactly one output artifact per task (outputCount=1). If the user requires multiple separate images, return an answer explaining this limitation or ask which single image to start with. Never flatten separate deliverables into a collage or claim a multi-output task is executable.",
   "For image creation, produce a precise refinedPrompt that preserves subjects, quantities, exact text, relationships, brand constraints and intended use.",
   "Define observable Review criteria for the generated result. Do not reveal chain-of-thought; return only the structured direction tool call.",
   "If a high-impact fact is missing, return one focused clarification with useful prompt-specific options. Never invent it.",
@@ -213,6 +253,7 @@ export async function prepareCreativeDirection(
             canvas: normalizeCanvasSummary(input.canvasSummary),
             vision: normalizeReferenceAnalyses(input.referenceAnalyses),
             knowledge,
+            executionLimits: { maxOutputCount: 1, separateBatchOutputs: false },
             availableCapabilities: [...new Set(input.availableCapabilities)].slice(0, 32),
             availableSearchSources: searchImagesAvailable ? ["images"] : [],
             unavailableSearchSources: ["web", "website"],
@@ -309,7 +350,7 @@ async function executeDirectorPass(
     if (text && text.length <= 8_000 && !containsSensitivePayload(text)) {
       return { kind: "answer", text };
     }
-    throw new Error("Creative Director returned no valid direction");
+    return invalidDirection();
   }
   return parseCreativeDirection(call.input, input, knowledgeIds);
 }
@@ -420,12 +461,32 @@ export function applyCreativeDirectionToTask(
   });
 }
 
-function parseCreativeDirection(
+export function parseCreativeDirection(
   value: unknown,
   input: CreativeDirectorInput,
   allowedKnowledgeIds: readonly string[],
 ): CreativeDirection {
   if (!isRecord(value) || containsSensitivePayload(value)) return invalidDirection();
+  const fields =
+    value.kind === "answer"
+      ? ["kind", "text"]
+      : value.kind === "clarification"
+        ? ["kind", "question", "options"]
+        : [
+            "kind",
+            "outputCount",
+            "summary",
+            "refinedPrompt",
+            "specialist",
+            "capability",
+            "modelAlias",
+            "knowledgeSkillIds",
+            "reviewCriteria",
+            "search",
+            "requiredSubjects",
+            "requiredText",
+          ];
+  if (Object.keys(value).some((key) => !fields.includes(key))) return invalidDirection();
   if (value.kind === "answer") {
     if (!isBoundedString(value.text, 8_000)) return invalidDirection();
     return { kind: "answer", text: value.text.trim() };
@@ -438,6 +499,7 @@ function parseCreativeDirection(
   }
   if (value.kind !== "image-task") return invalidDirection();
   if (
+    value.outputCount !== 1 ||
     !isBoundedString(value.summary, 2_000) ||
     !isBoundedString(value.refinedPrompt, 20_000, 8) ||
     (value.specialist !== "image_generator" && value.specialist !== "image_editor") ||
@@ -474,6 +536,7 @@ function parseCreativeDirection(
   }
   return {
     kind: "image-task",
+    outputCount: 1,
     summary: value.summary.trim(),
     refinedPrompt: value.refinedPrompt.trim(),
     specialist: value.specialist,
@@ -555,7 +618,12 @@ function normalizeReferenceAnalyses(values: CreativeDirectorInput["referenceAnal
 }
 
 function isSearchPlan(value: unknown): value is CreativeSearchPlan {
-  if (!isRecord(value) || typeof value.required !== "boolean") return false;
+  if (
+    !isRecord(value) ||
+    typeof value.required !== "boolean" ||
+    Object.keys(value).some((key) => !["required", "queries", "sources"].includes(key))
+  )
+    return false;
   if (!isStringArray(value.queries, 3, 300)) return false;
   if (
     !Array.isArray(value.sources) ||
@@ -616,6 +684,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export class CreativeDirectorValidationError extends Error {
+  readonly code = "DIRECTOR_INVALID_PLAN";
+  constructor() {
+    super("invalid Creative Director plan");
+    this.name = "CreativeDirectorValidationError";
+  }
+}
 function invalidDirection(): never {
-  throw new Error("invalid Creative Director plan");
+  throw new CreativeDirectorValidationError();
 }

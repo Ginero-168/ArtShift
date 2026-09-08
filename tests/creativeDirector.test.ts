@@ -42,6 +42,7 @@ const toolResult = {
         name: "propose_creative_direction",
         input: {
           kind: "image-task",
+          outputCount: 1,
           summary: "Premium serum product key visual",
           refinedPrompt:
             "Premium studio product photograph of a serum bottle, restrained luxury lighting, generous negative space, square social composition",
@@ -102,7 +103,7 @@ describe("gpt-oss-120b Creative Director", () => {
         signal,
       }),
     );
-    expect(result).toMatchObject({ kind: "image-task", modelAlias: "image-gpt-2" });
+    expect(result).toMatchObject({ kind: "image-task", outputCount: 1, modelAlias: "image-gpt-2" });
   });
 
   it("rejects a model or capability that is not available", async () => {
@@ -171,7 +172,11 @@ describe("gpt-oss-120b Creative Director", () => {
     expect(searchImages).toHaveBeenCalledWith("premium serum studio advertising", 3, signal);
     expect(execute).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(execute.mock.calls[1]?.[1])).toContain("Amber serum bottle on stone");
-    expect(result).toMatchObject({ kind: "image-task", search: { required: false } });
+    expect(result).toMatchObject({
+      kind: "image-task",
+      outputCount: 1,
+      search: { required: false },
+    });
   });
 
   it("does not advertise or execute image search when its provider is unconfigured", async () => {
@@ -199,13 +204,18 @@ describe("gpt-oss-120b Creative Director", () => {
 
     expect(searchImages).not.toHaveBeenCalled();
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ kind: "image-task", search: { required: true } });
+    expect(result).toMatchObject({
+      kind: "image-task",
+      outputCount: 1,
+      search: { required: true },
+    });
   });
 
   it("applies a validated direction while preserving server-owned execution policy", () => {
     const task = baseTask();
     const directed = applyCreativeDirectionToTask(task, {
       kind: "image-task",
+      outputCount: 1,
       summary: "Premium serum visual",
       refinedPrompt: "Premium serum bottle studio key visual for Instagram, square composition",
       specialist: "image_generator",

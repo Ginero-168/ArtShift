@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   type CreativeDirectorInput,
+  CreativeDirectorValidationError,
   prepareCreativeDirection,
 } from "@/lib/ai/orchestration/creativeDirector";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
@@ -77,7 +78,17 @@ export async function POST(req: NextRequest) {
       },
     );
     return NextResponse.json({ direction });
-  } catch {
+  } catch (error) {
+    if (error instanceof CreativeDirectorValidationError) {
+      return NextResponse.json(
+        {
+          code: error.code,
+          error:
+            "Creative Director ส่งแผนไม่ครบตามรูปแบบที่กำหนด ยังไม่ได้สร้าง Task หรือเรียก Image Model กรุณาลองใหม่",
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
       { error: "Creative Director is temporarily unavailable." },
       { status: 502 },

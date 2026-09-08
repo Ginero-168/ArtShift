@@ -5,14 +5,18 @@
  */
 
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
-import { applyCreativeDirectionToTask } from "@/lib/ai/orchestration/creativeDirector";
 import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
-import { buildComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
+import { buildComposerImageSelection } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
-import { prepareContextAwareTurn } from "@/lib/ai/orchestration/turnOrchestrator";
+import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
+import { analyzeImageReferences } from "@/lib/ai/orchestration/referenceAnalysis";
+import {
+  createDirectedImageTask,
+  type PendingClarification,
+} from "@/lib/ai/orchestration/turnOrchestrator";
 import { removeBackground } from "@/lib/ai/removeBg";
 import type { VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
@@ -79,7 +83,9 @@ export type CoPilotOptions = {
   signal?: AbortSignal;
   cloudConsent?: boolean;
   visualPlan?: VisualRoutePlan;
-  contextAwareValidated?: boolean;
+  contextAwareValidated?: boolean; // Legacy caller hint; never bypasses the Director.
+  pendingClarification?: PendingClarification;
+  imageConversation?: boolean;
   imageQuality?: "low" | "medium" | "high";
 };
 
@@ -153,8 +159,13 @@ export async function executeCoPilotInstruction(
   reply: string;
   actions: SubAgentActionLog[];
   suggestions: string[];
+  pendingClarification?: PendingClarification;
+  imageCreated?: boolean;
 }> {
-  const prompt = userPrompt.trim();
+  const pending = options.pendingClarification;
+  const prompt = pending
+    ? composeClarifiedImagePrompt(pending.originalPrompt, userPrompt.trim(), pending.question)
+    : userPrompt.trim();
   const lower = prompt.toLowerCase();
   const context = getWorkspaceContext();
   const actions: SubAgentActionLog[] = [];
@@ -193,88 +204,29 @@ export async function executeCoPilotInstruction(
   // 1. SUB-AGENT: CONTEXT-AWARE IMAGE SPECIALIST
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
   // -------------------------------------------------------------
-  if (isImageGenerationPrompt(prompt)) {
-    const selectedRefs = buildComposerImageRefs(
+  if (pending || options.imageConversation || isImageGenerationPrompt(prompt)) {
+    const selection = buildComposerImageSelection(
       st.doc.slides.find((slide) => slide.id === st.currentSlideId)?.elements ?? [],
       st.selectedIds,
     );
-    if (selectedRefs.length > 0) {
+    if (!pending && selection.omittedCount > 0) {
       const act = logAction(
         "orchestrator",
         "🧭 Context-aware image task",
-        "คำขอที่มีภาพเลือกต้องเริ่มจาก AI Assistance เพื่อวิเคราะห์ reference ก่อน",
+        "เลือกภาพเกินขีดจำกัด 4 ภาพ",
         "error",
       );
       return {
-        reply:
-          "ยังไม่สร้างภาพครับ กรุณาส่งคำขอนี้จาก AI Assistance โดยคงภาพที่เลือกไว้ เพื่อให้วิเคราะห์ reference ก่อน",
+        reply: "ยังไม่สร้างภาพครับ กรุณาลด selection เหลือไม่เกิน 4 ภาพ",
         actions: [act],
         suggestions: ["เปิด AI Assistance", "ตรวจสอบภาพที่เลือก"],
       };
     }
 
+    const selectedRefs = pending?.selectedImages ?? selection.refs;
     const workspaceSlide = st.currentSlide();
-    const decision = prepareContextAwareTurn({
-      prompt,
-      refs: [],
-      analyses: [],
-      selectedIds: st.selectedIds,
-      canvas: workspaceSlide ? { slide: workspaceSlide, selectedIds: st.selectedIds } : undefined,
-      clarificationRound: options.contextAwareValidated ? 2 : 0,
-    });
-    if (decision.kind === "clarification") {
-      const act = logAction(
-        "orchestrator",
-        "🧭 Intent Clarification",
-        "ยังไม่ส่งคำสั่งสร้างภาพ เพราะ brief ยังไม่ครบ",
-        "success",
-      );
-      return {
-        reply: decision.pending.question,
-        actions: [act],
-        suggestions: decision.pending.options.map(
-          (option) => `${option.id === "OTHER" ? "Other" : `${option.id}.`} ${option.label}`,
-        ),
-      };
-    }
-    if (decision.kind === "capability-unavailable") {
-      const act = logAction(
-        "orchestrator",
-        `🧭 Model · ${decision.capability}`,
-        decision.reason,
-        "error",
-      );
-      return {
-        reply: decision.reply,
-        actions: [act],
-        suggestions: ["เลือก GPT Image 2", "ตรวจสอบ Model ที่พร้อมใช้งาน"],
-      };
-    }
-    if (decision.kind !== "task") {
-      const act = logAction(
-        "orchestrator",
-        "🧭 Context-aware image task",
-        "ยังไม่สามารถสร้าง Task จาก brief นี้ได้",
-        "error",
-      );
-      return {
-        reply: "ยังไม่สร้างภาพครับ เพราะยังเตรียม Task จาก brief นี้ไม่ได้",
-        actions: [act],
-        suggestions: ["เพิ่มรายละเอียดของ brief"],
-      };
-    }
-
-    const task = decision.task;
-    const act = logAction(
-      "image_gen",
-      `🧩 Task · ${task.subAgent}`,
-      `พร้อมทำงานด้วยคุณภาพอัตโนมัติ: ${task.quality}`,
-    );
-    act.taskId = task.id;
-    act.stage = "planned";
-    act.attempt = 0;
-    act.quality = task.quality;
-    if (task.cloudConsentRequired && options.cloudConsent !== true) {
+    const act = logAction("orchestrator", "🧠 Creative Director", "กำลังเตรียมบริบทก่อนส่งให้ Director");
+    if (options.cloudConsent !== true) {
       updateActionStatus(act, "error", "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง AI provider");
       return {
         reply: "ยังไม่ได้สร้างภาพครับ ต้องได้รับอนุญาตก่อนส่งงานไปยัง AI provider",
@@ -284,6 +236,12 @@ export async function executeCoPilotInstruction(
     }
 
     try {
+      const analyses =
+        pending?.analyses ??
+        (await analyzeImageReferences(
+          selectedRefs,
+          options.signal ?? new AbortController().signal,
+        ));
       act.stage = "analyzing";
       act.description = "กำลังส่ง brief ให้ gpt-oss-120b Creative Director วางแผน…";
       onActionUpdate?.({ ...act });
@@ -296,7 +254,7 @@ export async function executeCoPilotInstruction(
             width: context.width,
             height: context.height,
           },
-          referenceAnalyses: [],
+          referenceAnalyses: analyses,
         },
         { signal: options.signal, cloudConsent: true },
       );
@@ -306,7 +264,20 @@ export async function executeCoPilotInstruction(
       }
       if (direction.kind === "clarification") {
         updateActionStatus(act, "success", "Creative Director ต้องการรายละเอียดเพิ่มก่อนสร้างภาพ");
-        return { reply: direction.question, actions, suggestions: direction.options };
+        return {
+          reply: direction.question,
+          actions,
+          suggestions: direction.options,
+          pendingClarification: {
+            id: crypto.randomUUID(),
+            originalPrompt: prompt,
+            selectedImages: selectedRefs,
+            analyses,
+            question: direction.question,
+            options: direction.options.map((label, index) => ({ id: String(index), label })),
+            round: (pending?.round ?? 0) + 1,
+          },
+        };
       }
       if (direction.search.required) {
         updateActionStatus(act, "success", "Creative Director ระบุว่าต้องค้น Context ก่อนสร้างภาพ");
@@ -316,12 +287,23 @@ export async function executeCoPilotInstruction(
           suggestions: ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"],
         };
       }
-      const directedTask = applyCreativeDirectionToTask(task, direction);
+      const directedTask = createDirectedImageTask(
+        {
+          prompt,
+          refs: selectedRefs,
+          analyses,
+          canvas: workspaceSlide
+            ? { slide: workspaceSlide, selectedIds: st.selectedIds }
+            : undefined,
+        },
+        direction,
+      );
+      act.taskId = directedTask.id;
       act.title = `🧠 Creative Director → ${directedTask.subAgent}`;
       act.stage = "planned";
       act.description = `เลือก ${direction.modelAlias} · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
       onActionUpdate?.({ ...act });
-      const result = await runContextAwareImageTask(directedTask, [], {
+      const result = await runContextAwareImageTask(directedTask, selectedRefs, {
         signal: options.signal,
         cloudConsent: true,
         reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
@@ -344,6 +326,7 @@ export async function executeCoPilotInstruction(
       );
       return {
         reply: `สร้างภาพตามแผนของ Creative Director และวางบน Canvas เรียบร้อยแล้วครับ ใช้ ${direction.modelAlias} ด้วยคุณภาพอัตโนมัติ: ${result.task.quality}`,
+        imageCreated: true,
         actions,
         suggestions: ["🪄 ลบพื้นหลังของรูปนี้", "⚡ แปลงรูปนี้เป็น Vector Paths", "📐 จัดวาง Layout ให้สวยงาม"],
       };

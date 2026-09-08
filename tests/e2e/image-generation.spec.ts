@@ -4,6 +4,7 @@ const TEST_IMAGE_PNG_256 =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAACYUlEQVR42u3UMQEAAAQAQXFEFFYXCmjghivww0dWD/BTiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABiAAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABCAEGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAYABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABAAYAGABgAIABgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAEABgAYAGAAgAGAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQAGABgAYACAAQCXBWNwJTbzQ1x7AAAAAElFTkSuQmCC";
 
 test.beforeEach(async ({ page }) => {
+  page.on("dialog", (dialog) => dialog.accept());
   await page.addInitScript(() => {
     class MockVisionWorker {
       onmessage: ((event: MessageEvent) => void) | null = null;
@@ -42,12 +43,31 @@ test.beforeEach(async ({ page }) => {
       prompt?: string;
       referenceAnalyses?: unknown[];
     };
+    if (request.prompt?.includes("Flux")) {
+      await route.fulfill({
+        json: { direction: { kind: "answer", text: "Model flux-2-max ยังไม่พร้อม" } },
+      });
+      return;
+    }
+    if (["ขอภาพแมว", "สร้างภาพแมว"].includes(request.prompt ?? "")) {
+      await route.fulfill({
+        json: {
+          direction: {
+            kind: "clarification",
+            question: "แมวควรอยู่ที่ไหน?",
+            options: ["ริมหน้าต่าง", "ในสวน"],
+          },
+        },
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         direction: {
           kind: "image-task",
+          outputCount: 1,
           summary: "Validated E2E creative direction",
           refinedPrompt: request.prompt || "Validated E2E image brief",
           specialist: request.referenceAnalyses?.length ? "image_editor" : "image_generator",
@@ -71,7 +91,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("refuses an explicitly requested unavailable model before any paid call", async ({ page }) => {
+test("lets the Director answer an unavailable model without image execution", async ({ page }) => {
   let directorRequests = 0;
   let imageRequests = 0;
   page.on("request", (request) => {
@@ -85,7 +105,7 @@ test("refuses an explicitly requested unavailable model before any paid call", a
   await page.getByTitle("Send to AI Assistance").click();
 
   await expect(page.getByText(/Model flux-2-max ยังไม่พร้อม/)).toBeVisible();
-  expect(directorRequests).toBe(0);
+  expect(directorRequests).toBe(1);
   expect(imageRequests).toBe(0);
 });
 
@@ -120,7 +140,6 @@ test("uses the automatic Replicate GPT Image 2 generation contract", async ({ pa
   await expect(modal.getByText(/100% Free|FLUX|Pollinations/)).toHaveCount(0);
 
   await modal.getByLabel("Prompt (คำอธิบายภาพ)").fill("a warm editorial portrait");
-  page.once("dialog", async (dialog) => dialog.accept());
   await modal.getByRole("button", { name: /Generate Image/ }).click();
   await expect(modal).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Image", exact: true })).toBeVisible({
@@ -132,7 +151,7 @@ test("uses the automatic Replicate GPT Image 2 generation contract", async ({ pa
     aspectRatio: "1:1",
     width: 1024,
     height: 1024,
-    quality: "high",
+    quality: "medium",
     enhance: false,
   });
   expect(requestBody).not.toHaveProperty("model");
@@ -169,7 +188,7 @@ test("does not send an ambiguous chat image request before clarification", async
   await chatInput.fill("ขอภาพแมว");
   await chatInput.press("Enter");
 
-  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible({
+  await expect(page.getByText("แมวควรอยู่ที่ไหน?", { exact: false }).first()).toBeVisible({
     timeout: 60_000,
   });
   expect(requestCount).toBe(0);
@@ -204,13 +223,12 @@ test("does not call the provider until the user chooses a clarification directio
   await chatInput.fill("สร้างภาพแมว");
   await chatInput.press("Enter");
 
-  await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible({
+  await expect(page.getByText("แมวควรอยู่ที่ไหน?", { exact: false }).first()).toBeVisible({
     timeout: 10_000,
   });
-  await expect(page.getByRole("button", { name: /^A\./ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^B\./ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^C\./ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Other/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ริมหน้าต่าง", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ในสวน", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^A\.|^B\.|^C\.|^Other/ })).toHaveCount(0);
   expect(requestCount).toBe(0);
 });
 
@@ -238,16 +256,13 @@ test("creates the task only after a clarification answer and consent", async ({ 
       }),
     });
   });
-  page.on("dialog", async (dialog) => {
-    await dialog.accept();
-  });
 
   await page.goto("/");
   await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
   const chatInput = page.getByPlaceholder("บอกสิ่งที่ต้องการออกแบบ...");
   await chatInput.fill("สร้างภาพแมว");
   await chatInput.press("Enter");
-  await page.getByRole("button", { name: /^A\./ }).click();
+  await page.getByRole("button", { name: "ริมหน้าต่าง", exact: true }).click();
 
   await expect.poll(() => requestBody).toBeTruthy();
   await expect(page.getByTestId("processing-preview")).toBeVisible({ timeout: 10_000 });
@@ -292,9 +307,6 @@ test("runs a complete image task only after consent and shows the Canvas preload
     });
   });
 
-  page.on("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.goto("/");
   await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
   const chatInput = page.getByPlaceholder("บอกสิ่งที่ต้องการออกแบบ...");
@@ -345,9 +357,6 @@ test("cancels a running image task without leaving a preview", async ({ page }) 
     });
   });
 
-  page.on("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.goto("/");
   await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
   const chatInput = page.getByPlaceholder("บอกสิ่งที่ต้องการออกแบบ...");
@@ -428,9 +437,6 @@ test("analyzes the visible selected image before the generation request", async 
       }),
     });
   });
-  page.on("dialog", async (dialog) => {
-    await dialog.accept();
-  });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Photo", exact: true }).click();
@@ -493,4 +499,106 @@ test("shows a selected-image name tag and local hover preview", async ({ page })
     .click();
   await expect(tags.locator("button")).toHaveCount(0);
   expect(providerRequests).toBe(0);
+});
+
+test("Director keeps selected references and literal free-text followups across three questions", async ({
+  page,
+}) => {
+  const requests: Array<{ prompt: string; referenceAnalyses: unknown[] }> = [];
+  let images = 0;
+  await page.route("**/api/ai/image", async (route) => {
+    images++;
+    await route.abort();
+  });
+  await page.route("**/api/ai/director", async (route) => {
+    requests.push(route.request().postDataJSON());
+    const n = requests.length;
+    await route.fulfill({
+      json: {
+        direction:
+          n < 4
+            ? { kind: "clarification", question: `คำถามเฉพาะ ${n}`, options: [`ตัวเลือกเฉพาะ ${n}`] }
+            : { kind: "answer", text: "ขณะนี้สร้างได้หนึ่งภาพต่องาน ไม่ใช่สามภาพแยก" },
+      },
+    });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Photo", exact: true }).click();
+  await page
+    .locator("label")
+    .filter({ hasText: "Choose image" })
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "beans.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(TEST_IMAGE_PNG_256.split(",")[1], "base64"),
+    });
+  await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
+  const input = page.getByLabel("AI Assistance prompt");
+  await input.fill("สร้างภาพถั่วสามภาพแยก");
+  await input.press("Enter");
+  await expect(page.getByRole("button", { name: "ตัวเลือกเฉพาะ 1", exact: true })).toBeVisible();
+  expect(images).toBe(0);
+  await page.getByRole("button", { name: "Remove selected image beans.png", exact: true }).click();
+  await page.getByRole("button", { name: "ตัวเลือกเฉพาะ 1", exact: true }).click();
+  await expect(page.getByText("คำถามเฉพาะ 2", { exact: true })).toBeVisible();
+  await input.fill("ไม่เอาตัวหนังสือ");
+  await input.press("Enter");
+  await expect(page.getByText("คำถามเฉพาะ 3", { exact: true })).toBeVisible();
+  await input.fill("พื้นโปร่งใส");
+  await input.press("Enter");
+  await expect(
+    page.getByText("ขณะนี้สร้างได้หนึ่งภาพต่องาน ไม่ใช่สามภาพแยก", { exact: true }),
+  ).toBeVisible();
+  expect(requests).toHaveLength(4);
+  expect(images).toBe(0);
+  for (const request of requests)
+    expect(request.referenceAnalyses).toEqual(requests[0].referenceAnalyses);
+  expect(requests[0].referenceAnalyses).toHaveLength(1);
+  for (const text of [
+    "สร้างภาพถั่วสามภาพแยก",
+    "คำถามเฉพาะ 1",
+    "ตัวเลือกเฉพาะ 1",
+    "คำถามเฉพาะ 2",
+    "ไม่เอาตัวหนังสือ",
+    "คำถามเฉพาะ 3",
+    "พื้นโปร่งใส",
+  ])
+    expect(requests[3].prompt).toContain(text);
+  expect(requests[3].prompt).not.toContain("สไตล์ภาพที่เลือก");
+  await expect(page.getByTestId("processing-preview")).toHaveCount(0);
+});
+
+test("modal keeps Director clarification and answer open instead of claiming image success", async ({
+  page,
+}) => {
+  const prompts: string[] = [];
+  let images = 0;
+  await page.route("**/api/ai/image", async (route) => {
+    images++;
+    await route.abort();
+  });
+  await page.route("**/api/ai/director", async (route) => {
+    prompts.push(route.request().postDataJSON().prompt);
+    await route.fulfill({
+      json: {
+        direction:
+          prompts.length === 1
+            ? { kind: "clarification", question: "ต้องการเริ่มที่ภาพใด?", options: ["ถั่วแดง"] }
+            : { kind: "answer", text: "รับทราบ ยังไม่ได้สร้างภาพ" },
+      },
+    });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "AI Image Studio", exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "AI Image Studio" });
+  await modal.getByLabel("Prompt (คำอธิบายภาพ)").fill("ภาพถั่วสามภาพแยก");
+  await modal.getByRole("button", { name: /Generate Image/ }).click();
+  await expect(modal.getByText("ต้องการเริ่มที่ภาพใด?", { exact: true })).toBeVisible();
+  await modal.getByRole("button", { name: "ถั่วแดง", exact: true }).click();
+  await expect(modal.getByText("รับทราบ ยังไม่ได้สร้างภาพ", { exact: true })).toBeVisible();
+  expect(prompts[1]).toContain("ภาพถั่วสามภาพแยก");
+  expect(prompts[1]).toContain("User reply: ถั่วแดง");
+  expect(prompts[0]).not.toContain("photorealistic");
+  expect(images).toBe(0);
 });

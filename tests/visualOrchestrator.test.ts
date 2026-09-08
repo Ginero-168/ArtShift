@@ -6,29 +6,29 @@ import {
 } from "@/lib/ai/visualOrchestrator";
 
 describe("Visual Orchestrator Kernel", () => {
-  it("clarifies a short image request before the IMAGE_DEFAULT alias", () => {
+  it("defers short image requests to the Director", () => {
     const plan = planVisualRequest("ขอภาพแมว", {
       hasSelection: false,
       elementCount: 0,
     });
 
     expect(plan).toMatchObject({
-      intent: "clarification",
-      route: "clarify",
-      requiresApproval: false,
+      intent: "generation",
+      route: "orchestrator",
+      requiresApproval: true,
     });
-    expect(plan.clarification).toContain("direction");
+    expect(plan.clarification).toBeUndefined();
   });
 
-  it("keeps a vague generation request in clarification instead of generating a default image", () => {
+  it("defers vague requests rather than inventing a question", () => {
     const plan = planVisualRequest("สร้างรูป", { hasSelection: false, elementCount: 0 });
 
     expect(plan).toMatchObject({
-      intent: "clarification",
-      route: "clarify",
-      requiresApproval: false,
+      intent: "generation",
+      route: "orchestrator",
+      requiresApproval: true,
     });
-    expect(plan.clarification).toBeTruthy();
+    expect(plan.clarification).toBeUndefined();
   });
 
   it("routes complex text work through the current image generation alias with high-quality policy", () => {
