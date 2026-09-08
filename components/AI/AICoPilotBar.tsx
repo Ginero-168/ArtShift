@@ -1740,50 +1740,6 @@ export default function AICoPilotBar() {
             {busy ? "■" : "➔"}
           </button>
         </div>
-
-        {/* Quick-Action Chips (When input is empty and not busy) */}
-        {!input && !busy && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-            <button
-              type="button"
-              onClick={() => handleSend("📐 จัด Layout สไลด์นี้แบบ 60-30-10")}
-              title="Apply 60-30-10 Auto Layout"
-              style={{
-                background: "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                borderRadius: 5,
-                padding: "3px 6px",
-                fontSize: 9.5,
-                fontWeight: 600,
-                color: "#475569",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              📐 Layout
-            </button>
-            {hasSelection && (
-              <button
-                type="button"
-                onClick={() => handleSend("✂️ ลบพื้นหลังของรูปที่เลือก")}
-                title="Remove background from selected image"
-                style={{
-                  background: "#eef2ff",
-                  border: "1px solid #c7d2fe",
-                  borderRadius: 5,
-                  padding: "3px 6px",
-                  fontSize: 9.5,
-                  fontWeight: 600,
-                  color: "#4338ca",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                🪄 Remove BG
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
