@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   type CreativeDirectorInput,
   CreativeDirectorValidationError,
-  prepareCreativeDirection,
+  prepareOrchestratorTurn,
 } from "@/lib/ai/orchestration/creativeDirector";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { isImageSearchConfigured, searchImageReferences } from "@/lib/server/ai/contextImageSearch";
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       replicateToken: getSessionReplicateToken(req),
       accountId: account.id,
     });
-    const direction = await prepareCreativeDirection(
+    const direction = await prepareOrchestratorTurn(
       {
         ...input,
         availableCapabilities: [...AVAILABLE_DIRECTOR_CAPABILITIES],

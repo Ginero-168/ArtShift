@@ -1,7 +1,14 @@
 import {
+  generateAIImage,
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
+import { getActiveBrandKit } from "@/lib/brand/brandKit";
+import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
+import { createText } from "@/lib/engine/factory";
+import { getCached } from "@/lib/engine/imageCache";
+import { useEngine } from "@/lib/engine/store";
+import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import {
   applyCreativeDirectionToTask,
@@ -244,6 +251,198 @@ export type SequentialPlanExecutionOptions = {
   onStepProgress?: (plan: SequentialExecutionPlan, step: SequentialExecutionStep) => void;
 };
 
+type SequentialStepResult = NonNullable<SequentialExecutionStep["result"]>;
+
+/**
+ * Execute a specialist using the real ArtShift capability seams.
+ *
+ * The sequential runner is intentionally provider agnostic, but it still needs
+ * a safe default for the client-owned execution path. Returning fabricated
+ * artifacts here would make the plan look complete while leaving the Artwork
+ * untouched, so every supported specialist either performs a real operation or
+ * fails with a repairable error.
+ */
+async function executeDefaultSpecialistStep(
+  plan: SequentialExecutionPlan,
+  step: SequentialExecutionStep,
+  dependencyOutput: unknown,
+  options: { signal?: AbortSignal; cloudConsent?: boolean },
+): Promise<SequentialStepResult> {
+  const signal = options.signal;
+  const payload = step.payload;
+
+  switch (step.specialist) {
+    case "image_generator":
+    case "image_editor": {
+      if (options.cloudConsent !== true) {
+        throw new Error("Cloud consent is required before running an image specialist step");
+      }
+      const prompt = readStepText(payload, "prompt") || `${step.description}\n${plan.originalPrompt}`;
+      if (!prompt.trim()) throw new Error("Image specialist step has no executable prompt");
+      const dimensions = resolveImageGenerationDimensions(prompt);
+      const dependencyImage = extractImageDataUrl(dependencyOutput);
+      const generated = await generateAIImage(
+        {
+          prompt,
+          width: dimensions.width,
+          height: dimensions.height,
+          aspectRatio: dimensions.aspectRatio,
+          quality: "high",
+          cloudConsent: true,
+          ...(step.specialist === "image_editor" && dependencyImage
+            ? { inputImages: [{ dataUrl: dependencyImage }] }
+            : {}),
+        },
+        signal,
+      );
+      return {
+        artifactKind: "image",
+        data: generated,
+        reviewScore: 1,
+        notes: `${step.specialist} completed through the ArtShift image route`,
+      };
+    }
+    case "vectorizer": {
+      const imageDataUrl = extractImageDataUrl(dependencyOutput);
+      if (!imageDataUrl) {
+        throw new Error("Vectorizer step requires an image output from an earlier step");
+      }
+      const state = useEngine.getState();
+      const slide = state.currentSlide();
+      if (!slide) throw new Error("Vectorizer step could not find the active Artwork");
+      const result = await vectorizeImage(
+        imageDataUrl,
+        {
+          x: Number(payload.x ?? slide.width * 0.1),
+          y: Number(payload.y ?? slide.height * 0.1),
+          width: Number(payload.width ?? slide.width * 0.8),
+          height: Number(payload.height ?? slide.height * 0.8),
+        },
+        {
+          preset: "highFidelity",
+          colors: boundedNumber(payload.colors, 16, 2, 32),
+          detailLevel: boundedDetailLevel(payload.detailLevel),
+        },
+        { signal },
+      );
+      if (result.elements.length === 0) {
+        throw new Error("Vectorizer returned no editable paths");
+      }
+      state.addElements(result.elements, `orchestrator vectorizer: ${step.id}`);
+      state.selectOnly(result.elements.map((element) => element.id));
+      return {
+        artifactKind: "mask",
+        data: { elements: result.elements, totalNodes: result.totalNodes, backend: result.backend },
+        reviewScore: 1,
+        notes: `Vectorizer produced ${result.elements.length} editable paths`,
+      };
+    }
+    case "copywriter": {
+      const state = useEngine.getState();
+      const slide = state.currentSlide();
+      if (!slide) throw new Error("Copywriter step could not find the active Artwork");
+      const headline = readStepText(payload, "headline", "text", "copy");
+      if (!headline) {
+        throw new Error("Copywriter step requires payload.headline or payload.text");
+      }
+      const subheading = readStepText(payload, "subheading", "body");
+      const elements = [
+        createText({
+          x: Number(payload.x ?? slide.width * 0.08),
+          y: Number(payload.y ?? slide.height * 0.14),
+          width: Number(payload.width ?? slide.width * 0.84),
+          height: Number(payload.height ?? 96),
+          text: headline,
+          fontSize: Number(payload.fontSize ?? 52),
+          fontFamily: String(payload.fontFamily ?? "Noto Sans Thai, sans-serif"),
+        }),
+        ...(subheading
+          ? [
+              createText({
+                x: Number(payload.x ?? slide.width * 0.1),
+                y: Number(payload.subheadingY ?? slide.height * 0.28),
+                width: Number(payload.width ?? slide.width * 0.8),
+                height: Number(payload.subheadingHeight ?? 56),
+                text: subheading,
+                fontSize: Number(payload.subheadingFontSize ?? 24),
+                fontFamily: String(payload.fontFamily ?? "Noto Sans Thai, sans-serif"),
+              }),
+            ]
+          : []),
+      ];
+      state.addElements(elements, `orchestrator copywriter: ${step.id}`);
+      state.selectOnly(elements.map((element) => element.id));
+      return {
+        artifactKind: "text",
+        data: { headline, ...(subheading ? { subheading } : {}), elementIds: elements.map((e) => e.id) },
+        reviewScore: 1,
+        notes: "Copywriter text committed to the active Artwork",
+      };
+    }
+    case "layout_designer": {
+      const state = useEngine.getState();
+      const slide = state.currentSlide();
+      if (!slide || slide.elements.length === 0) {
+        throw new Error("Layout step requires at least one Object on the active Artwork");
+      }
+      const patches = compute603010AutoLayout(slide);
+      if (patches.length > 0) state.updateElements(patches, `orchestrator layout: ${step.id}`);
+      return {
+        artifactKind: "layout_commands",
+        data: { patches, updatedCount: patches.length },
+        reviewScore: 1,
+        notes: `Layout applied to ${patches.length} Objects`,
+      };
+    }
+    case "brand_stylist": {
+      const brand = getActiveBrandKit();
+      return {
+        artifactKind: "brand_tokens",
+        data: {
+          brandId: brand.id,
+          brandName: brand.name,
+          colors: brand.colors,
+          typography: brand.typography,
+          rules: brand.rules,
+        },
+        reviewScore: 1,
+        notes: `Brand Kit ${brand.name} validated for the plan`,
+      };
+    }
+    default:
+      throw new Error(`No executable specialist is registered for ${String(step.specialist)}`);
+  }
+}
+
+function readStepText(payload: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function boundedDetailLevel(value: unknown): 1 | 2 | 3 | 4 | 5 {
+  return boundedNumber(value, 3, 1, 5) as 1 | 2 | 3 | 4 | 5;
+}
+
+function extractImageDataUrl(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.dataUrl === "string" && record.dataUrl.startsWith("data:image/")) {
+    return record.dataUrl;
+  }
+  if (typeof record.fileId === "string") {
+    return getCached(record.fileId)?.dataURL;
+  }
+  return undefined;
+}
+
 /**
  * Runs a SequentialExecutionPlan through its specialist steps sequentially.
  * Handled directly on the client (Local-First Data Bus) with Exception Gating.
@@ -292,89 +491,11 @@ export async function runSequentialExecutionPlan(
     try {
       let stepResult: NonNullable<SequentialExecutionStep["result"]>;
 
-      if (options.executeSpecialistStep) {
-        stepResult = await options.executeSpecialistStep(currentStep, dependencyOutput, {
-          signal: options.signal,
-        });
-      } else {
-        // Built-in specialist dispatch
-        switch (currentStep.specialist) {
-          case "image_generator":
-            stepResult = {
-              artifactKind: "image",
-              data: {
-                url: `https://asset.artshift.io/gen-${currentStep.id}.png`,
-                width: 1024,
-                height: 1024,
-              },
-              reviewScore: 0.95,
-              notes: "Generated by image specialist",
-            };
-            break;
-          case "image_editor":
-            stepResult = {
-              artifactKind: "image",
-              data: {
-                url: `https://asset.artshift.io/edit-${currentStep.id}.png`,
-                source: dependencyOutput,
-              },
-              reviewScore: 0.92,
-              notes: "Edited by image specialist",
-            };
-            break;
-          case "vectorizer":
-            stepResult = {
-              artifactKind: "mask",
-              data: {
-                svg: '<svg viewBox="0 0 100 100"><path d="M0 0 H100 V100 H0 Z" fill="#8b5cf6"/></svg>',
-                pathsCount: 16,
-              },
-              reviewScore: 0.98,
-              notes: "Vectorized into paths",
-            };
-            break;
-          case "copywriter":
-            stepResult = {
-              artifactKind: "text",
-              data: {
-                headline: "นวัตกรรมดีไซน์แห่งอนาคต",
-                subheading: "สร้างสรรค์อย่างไร้ขีดจำกัดด้วย AI",
-              },
-              reviewScore: 0.96,
-              notes: "Thai localized copy",
-            };
-            break;
-          case "layout_designer":
-            stepResult = {
-              artifactKind: "layout_commands",
-              data: {
-                alignment: "center",
-                distribution: "golden-ratio",
-              },
-              reviewScore: 0.94,
-              notes: "Balanced composition layout",
-            };
-            break;
-          case "brand_stylist":
-            stepResult = {
-              artifactKind: "brand_tokens",
-              data: {
-                primary: "#8b5cf6",
-                accent: "#6366f1",
-                fontHeading: "Outfit",
-              },
-              reviewScore: 0.99,
-              notes: "Validated against brand kit",
-            };
-            break;
-          default:
-            stepResult = {
-              artifactKind: "text",
-              data: { output: "Step completed" },
-              reviewScore: 1.0,
-            };
-        }
-      }
+      stepResult = options.executeSpecialistStep
+        ? await options.executeSpecialistStep(currentStep, dependencyOutput, {
+            signal: options.signal,
+          })
+        : await executeDefaultSpecialistStep(currentPlan, currentStep, dependencyOutput, options);
 
       currentPlan = advancePlanStep(currentPlan, i, stepResult);
       options.onStepProgress?.(currentPlan, currentPlan.steps[i]);

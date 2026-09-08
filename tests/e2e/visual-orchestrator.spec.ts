@@ -7,6 +7,7 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
   test("keeps a simple image request in clarification before the image API", async ({ page }) => {
     let imageRequestCount = 0;
     let requestBody: Record<string, unknown> | undefined;
+    page.on("dialog", (dialog) => dialog.accept());
     await page.route("**/api/ai/image", async (route) => {
       imageRequestCount += 1;
       requestBody = JSON.parse(route.request().postData() ?? "{}") as Record<string, unknown>;
@@ -20,6 +21,17 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
         }),
       });
     });
+    await page.route("**/api/ai/director", async (route) => {
+      await route.fulfill({
+        json: {
+          direction: {
+            kind: "clarification",
+            question: "แมวควรอยู่ที่ไหน?",
+            options: ["ริมหน้าต่าง", "ในสวน"],
+          },
+        },
+      });
+    });
 
     await page.goto("/");
     await page.getByRole("tab", { name: "AI Assistance" }).click();
@@ -27,28 +39,29 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
     await input.fill("ขอภาพแมว");
     await input.press("Enter");
 
-    await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("แมวควรอยู่ที่ไหน?", { exact: false }).first()).toBeVisible();
     expect(imageRequestCount).toBe(0);
     expect(requestBody).toBeUndefined();
   });
 
   test("clarifies complex typography work before calling any execution route", async ({ page }) => {
     let imageRequestCount = 0;
-    let designAgentRequestCount = 0;
+    let directorRequestCount = 0;
+    page.on("dialog", (dialog) => dialog.accept());
     await page.route("**/api/ai/image", async (route) => {
       imageRequestCount += 1;
       await route.abort();
     });
-    await page.route("**/api/design-agent", async (route) => {
-      designAgentRequestCount += 1;
+    await page.route("**/api/ai/director", async (route) => {
+      directorRequestCount += 1;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          result: {
-            type: "question",
-            id: "need-brief",
-            text: "ระบุข้อความและขนาดโปสเตอร์ก่อนเริ่มงานครับ",
+          direction: {
+            kind: "clarification",
+            question: "ระบุข้อความและขนาดโปสเตอร์ก่อนเริ่มงานครับ",
+            options: ["ระบุข้อความ", "ระบุขนาด"],
           },
         }),
       });
@@ -60,8 +73,10 @@ test.describe("Visual Orchestrator Kernel UI routing", () => {
     await input.fill("สร้างภาพโปสเตอร์ 3 แบบ พร้อมข้อความภาษาไทย");
     await input.press("Enter");
 
-    await expect(page.getByText("ช่วยเลือก direction", { exact: false }).first()).toBeVisible();
-    expect(designAgentRequestCount).toBe(0);
+    await expect(
+      page.getByText("ระบุข้อความและขนาดโปสเตอร์ก่อนเริ่มงานครับ", { exact: false }).first(),
+    ).toBeVisible();
+    expect(directorRequestCount).toBe(1);
     expect(imageRequestCount).toBe(0);
   });
 });

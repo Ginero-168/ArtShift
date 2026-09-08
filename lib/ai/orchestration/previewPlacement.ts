@@ -25,7 +25,7 @@ export type PlacedImagePreview = {
 
 const SAFE_PADDING = 12;
 const ANCHOR_GAP = 8;
-export const IMAGE_REFERENCE_PREVIEW_MAX_SIZE = 75;
+export const IMAGE_REFERENCE_PREVIEW_MAX_SIZE = 98;
 
 export function placeImagePreview(
   anchor: AnchorRect,

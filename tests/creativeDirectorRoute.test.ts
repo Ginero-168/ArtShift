@@ -15,7 +15,9 @@ vi.mock("@/lib/ai/orchestration/creativeDirector", async () => {
   return {
     ...actual,
     prepareCreativeDirection: prepareMock,
+    prepareOrchestratorTurn: prepareMock,
     reviewCreativeOutput: reviewMock,
+    reviewOrchestratorOutput: reviewMock,
   };
 });
 vi.mock("@/lib/server/ai/runtime", () => ({ getServerAiRuntime: () => runtimeMock }));

@@ -89,10 +89,10 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
               display: "inline-flex",
               alignItems: "center",
               gap: 4,
-              maxWidth: "min(100%, 160px)",
-              minHeight: 26,
+              maxWidth: "min(100%, 105px)",
+              minHeight: 28,
               boxSizing: "border-box",
-              padding: "3px 6px 3px 4px",
+              padding: "2px 6px 2px 3px",
               borderRadius: 8,
               border: "1px solid #c7d2fe",
               background: "#eef2ff",
@@ -111,8 +111,8 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
                 alt=""
                 draggable={false}
                 style={{
-                  width: 18,
-                  height: 18,
+                  width: 24,
+                  height: 24,
                   borderRadius: 4,
                   objectFit: "cover",
                   flex: "0 0 auto",
@@ -122,15 +122,23 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
               <span
                 aria-hidden="true"
                 style={{
-                  width: 18,
-                  height: 18,
+                  width: 24,
+                  height: 24,
                   borderRadius: 4,
                   background: "#c7d2fe",
                   flex: "0 0 auto",
                 }}
               />
             )}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span
+              style={{
+                display: "inline-block",
+                maxWidth: 62,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               @{ref.displayName}
             </span>
           </button>

@@ -300,6 +300,12 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Reply in the user's latest language for answer or clarification text.",
 ].join("\n");
 
+// Canonical public names for the single ArtShift reasoning module. The older
+// Creative Director names remain as source-compatible aliases for callers that
+// have not migrated yet.
+export const ARTSHIFT_ORCHESTRATOR_SYSTEM = CREATIVE_DIRECTOR_SYSTEM;
+export const ARTSHIFT_ORCHESTRATOR_MODEL_ALIAS = CREATIVE_DIRECTOR_MODEL_ALIAS;
+
 const CREATIVE_REVIEW_SYSTEM = [
   CREATIVE_DIRECTOR_SYSTEM,
   "",
@@ -337,7 +343,7 @@ export async function prepareCreativeDirection(
             vision: normalizeReferenceAnalyses(input.referenceAnalyses),
             knowledge,
             executionLimits: {
-              maxOutputCount: 1,
+              maxOutputCount: 5,
               maxBatchSize: 5,
               maxRequestedOutputCount: 5,
               separateBatchOutputs: true,
@@ -553,6 +559,10 @@ export async function reviewCreativeOutput(
       : {}),
   };
 }
+
+/** Canonical interface for the one ArtShift planning and review module. */
+export const prepareOrchestratorTurn = prepareCreativeDirection;
+export const reviewOrchestratorOutput = reviewCreativeOutput;
 
 export function applyCreativeDirectionToTask(
   task: AiTask,
