@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ direction });
   } catch (error) {
+    console.error("[Creative Director Route Error]:", error);
     if (error instanceof CreativeDirectorValidationError) {
       return NextResponse.json(
         {

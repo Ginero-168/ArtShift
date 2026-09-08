@@ -11,7 +11,7 @@ import {
   requirePlanApproval,
 } from "@/lib/designAgent/contracts";
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
-import { retrieveDesignKnowledge } from "../knowledge/designKnowledge";
+import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
 import { CREATING_MODEL_CATALOG, resolveCreatingModel } from "./creatingModelCatalog";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
 import { DESIGN_PLAN_TOOL } from "./orchestratorTools";
@@ -509,50 +509,36 @@ export function parseCreativeDirection(
   input: CreativeDirectorInput,
   allowedKnowledgeIds: readonly string[],
 ): CreativeDirection {
-  if (!isRecord(value) || containsSensitivePayload(value)) return invalidDirection();
+  if (!isRecord(value) || containsSensitivePayload(value)) {
+    return invalidDirection("not a record or contains sensitive payload");
+  }
   if (value.kind === "design-plan") {
     const proposal = parsePlanProposal(value.proposal);
-    if (!proposal.ok || !input.designContext) return invalidDirection();
+    if (!proposal.ok || !input.designContext) {
+      return invalidDirection("invalid design plan proposal or missing designContext");
+    }
     return { kind: "design-plan", proposal: requirePlanApproval(proposal.value) };
   }
-  const fields =
-    value.kind === "answer"
-      ? ["kind", "text"]
-      : value.kind === "clarification"
-        ? ["kind", "question", "options"]
-        : [
-            "kind",
-            "outputCount",
-            "requestedOutputCount",
-            "outputBriefs",
-            "summary",
-            "refinedPrompt",
-            "specialist",
-            "capability",
-            "modelAlias",
-            "knowledgeSkillIds",
-            "reviewCriteria",
-            "search",
-            "requiredSubjects",
-            "requiredText",
-          ];
-  if (Object.keys(value).some((key) => !fields.includes(key))) return invalidDirection();
   if (value.kind === "answer") {
-    if (!isBoundedString(value.text, 8_000)) return invalidDirection();
+    if (!isBoundedString(value.text, 8_000)) {
+      return invalidDirection("answer text is invalid or exceeds 8000 chars");
+    }
     return { kind: "answer", text: value.text.trim() };
   }
   if (value.kind === "clarification") {
     if (!isBoundedString(value.question, 1_000) || !isStringArray(value.options, 4, 500)) {
-      return invalidDirection();
+      return invalidDirection("clarification question or options invalid");
     }
     return { kind: "clarification", question: value.question.trim(), options: value.options };
   }
-  if (value.kind !== "image-task") return invalidDirection();
+  if (value.kind !== "image-task") {
+    return invalidDirection("unknown direction kind: " + String(value.kind));
+  }
   if (value.outputCount === undefined && value.requestedOutputCount === undefined) {
-    return invalidDirection();
+    return invalidDirection("missing outputCount and requestedOutputCount");
   }
   if (value.outputCount !== undefined && value.outputCount !== 1) {
-    return invalidDirection();
+    return invalidDirection("outputCount must be 1 when specified");
   }
   const rawCount = value.requestedOutputCount ?? value.outputCount;
   const requestedOutputCount = Number(rawCount);
@@ -561,64 +547,92 @@ export function parseCreativeDirection(
     requestedOutputCount < 1 ||
     requestedOutputCount > 100
   ) {
-    return invalidDirection();
+    return invalidDirection("requestedOutputCount is not an integer between 1 and 100");
   }
-  const rawBriefs = Array.isArray(value.outputBriefs)
+  if (!isBoundedString(value.summary, 2_000)) {
+    return invalidDirection("summary is missing or exceeds 2000 chars");
+  }
+  if (!isBoundedString(value.refinedPrompt, 20_000, 1)) {
+    return invalidDirection("refinedPrompt is missing or exceeds 20000 chars");
+  }
+  if (value.specialist !== "image_generator" && value.specialist !== "image_editor") {
+    return invalidDirection("specialist must be image_generator or image_editor");
+  }
+  if (value.capability !== "IMAGE_DEFAULT" && value.capability !== "IMAGE_EDIT") {
+    return invalidDirection("capability must be IMAGE_DEFAULT or IMAGE_EDIT");
+  }
+  if (!input.availableCapabilities.includes(value.capability)) {
+    return invalidDirection(`capability ${value.capability} is not available`);
+  }
+  if (!isStringArray(value.knowledgeSkillIds, 8, 100)) {
+    return invalidDirection("knowledgeSkillIds is missing or not a string array");
+  }
+  if (!isStringArray(value.reviewCriteria, 8, 500, 1)) {
+    return invalidDirection("reviewCriteria is missing or empty or invalid");
+  }
+  if (!isSearchPlan(value.search)) {
+    return invalidDirection("search plan is missing or invalid");
+  }
+
+  const rawBriefs = Array.isArray(value.outputBriefs) && value.outputBriefs.length > 0
     ? value.outputBriefs
     : Array.from({ length: requestedOutputCount }, (_, idx) =>
         idx === 0
           ? String(value.refinedPrompt ?? "").trim()
           : `${String(value.refinedPrompt ?? "").trim()} (variation ${idx + 1})`,
       );
-  if (!isStringArray(rawBriefs, 100, 20_000, 1) || rawBriefs.length !== requestedOutputCount) {
-    return invalidDirection();
+  const normalizedBriefs: string[] = [...rawBriefs];
+  while (normalizedBriefs.length < requestedOutputCount) {
+    normalizedBriefs.push(
+      `${String(value.refinedPrompt ?? "").trim()} (variation ${normalizedBriefs.length + 1})`,
+    );
   }
-  if (
-    !isBoundedString(value.summary, 2_000) ||
-    !isBoundedString(value.refinedPrompt, 20_000, 8) ||
-    (value.specialist !== "image_generator" && value.specialist !== "image_editor") ||
-    (value.capability !== "IMAGE_DEFAULT" && value.capability !== "IMAGE_EDIT") ||
-    value.modelAlias !== "image-gpt-2" ||
-    !input.availableCapabilities.includes(value.capability) ||
-    !isStringArray(value.knowledgeSkillIds, 4, 100) ||
-    value.knowledgeSkillIds.some((id) => !allowedKnowledgeIds.includes(id)) ||
-    !isStringArray(value.reviewCriteria, 8, 500, 1) ||
-    !isSearchPlan(value.search)
-  ) {
-    return invalidDirection();
+  const finalBriefs = normalizedBriefs.slice(0, requestedOutputCount);
+  if (!isStringArray(finalBriefs, 100, 20_000, 1)) {
+    return invalidDirection("outputBriefs contain invalid strings");
   }
+
+  const rawModelAlias = typeof value.modelAlias === "string" ? value.modelAlias : "image-gpt-2";
   const modelResolution = resolveCreatingModel(
     value.capability === "IMAGE_EDIT" ? "edit" : "generate",
-    typeof value.modelAlias === "string" ? value.modelAlias : undefined,
+    rawModelAlias,
   );
   if (!modelResolution.ok || modelResolution.model.alias !== "image-gpt-2") {
-    return invalidDirection();
+    return invalidDirection("modelAlias cannot resolve to image-gpt-2");
   }
+
   const expectsEditor = input.referenceAnalyses.length > 0;
   if (
     (expectsEditor && (value.specialist !== "image_editor" || value.capability !== "IMAGE_EDIT")) ||
     (!expectsEditor &&
       (value.specialist !== "image_generator" || value.capability !== "IMAGE_DEFAULT"))
   ) {
-    return invalidDirection();
+    return invalidDirection("specialist or capability does not match referenceAnalyses presence");
   }
   if (value.requiredSubjects !== undefined && !isStringArray(value.requiredSubjects, 8, 200)) {
-    return invalidDirection();
+    return invalidDirection("requiredSubjects is invalid");
   }
   if (value.requiredText !== undefined && !isBoundedString(value.requiredText, 500)) {
-    return invalidDirection();
+    return invalidDirection("requiredText is invalid");
   }
+
+  const validSkills = new Set<string>([
+    ...allowedKnowledgeIds,
+    ...DESIGN_KNOWLEDGE_SKILLS.map((skill) => skill.id),
+  ]);
+  const finalKnowledgeIds = value.knowledgeSkillIds.filter((id) => validSkills.has(id));
+
   return {
     kind: "image-task",
     outputCount: 1,
     requestedOutputCount,
-    outputBriefs: rawBriefs.map((brief) => brief.trim()),
+    outputBriefs: finalBriefs.map((brief) => brief.trim()),
     summary: value.summary.trim(),
     refinedPrompt: value.refinedPrompt.trim(),
     specialist: value.specialist,
     capability: value.capability,
     modelAlias: "image-gpt-2",
-    knowledgeSkillIds: [...new Set(value.knowledgeSkillIds)],
+    knowledgeSkillIds: [...new Set(finalKnowledgeIds)],
     reviewCriteria: value.reviewCriteria.map((criterion) => criterion.trim()),
     search: {
       required: value.search.required,
@@ -779,12 +793,9 @@ function normalizeReferenceAnalyses(values: CreativeDirectorInput["referenceAnal
 }
 
 function isSearchPlan(value: unknown): value is CreativeSearchPlan {
-  if (
-    !isRecord(value) ||
-    typeof value.required !== "boolean" ||
-    Object.keys(value).some((key) => !["required", "queries", "sources"].includes(key))
-  )
+  if (!isRecord(value) || typeof value.required !== "boolean") {
     return false;
+  }
   if (!isStringArray(value.queries, 3, 300)) return false;
   if (
     !Array.isArray(value.sources) ||
@@ -847,11 +858,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export class CreativeDirectorValidationError extends Error {
   readonly code = "DIRECTOR_INVALID_PLAN";
-  constructor() {
-    super("invalid Creative Director plan");
+  constructor(message = "invalid Creative Director plan") {
+    super(message);
     this.name = "CreativeDirectorValidationError";
   }
 }
-function invalidDirection(): never {
-  throw new CreativeDirectorValidationError();
+function invalidDirection(reason?: string): never {
+  if (reason) {
+    console.warn(`[CreativeDirector] Validation rejected: ${reason}`);
+  }
+  throw new CreativeDirectorValidationError(
+    reason ? `invalid Creative Director plan: ${reason}` : "invalid Creative Director plan",
+  );
 }
