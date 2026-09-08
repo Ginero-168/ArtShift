@@ -288,4 +288,87 @@ describe("gpt-oss-120b Creative Director", () => {
       }),
     );
   });
+
+  it("recovers a clarification direction when the remote assistant returns JSON in text without tool calls", async () => {
+    const clarificationJson = JSON.stringify({
+      kind: "clarification",
+      question: "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
+      options: ["การ์ตูน (Cartoon)", "ภาพถ่ายจริง (Realistic)", "สไตล์มินิมอล (Minimalist)", "อื่น ๆ (Other)"],
+    });
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: clarificationJson,
+        toolCalls: [],
+      },
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "สร้างรูปหมู 3 รูป",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+
+    expect(result).toEqual({
+      kind: "clarification",
+      question: "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
+      options: ["การ์ตูน (Cartoon)", "ภาพถ่ายจริง (Realistic)", "สไตล์มินิมอล (Minimalist)", "อื่น ๆ (Other)"],
+    });
+  });
+
+  it("recovers an image-task and tolerates outputCount: 3 alongside requestedOutputCount: 3 when returned as JSON text", async () => {
+    const imageTaskJson = JSON.stringify({
+      kind: "image-task",
+      summary: "Generate three realistic photographic images of a pig with distinct compositions and lighting",
+      refinedPrompt: "Create three separate realistic photographs of a pig. Image 1: in a grassy field...",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Animal anatomy is accurate and natural", "Fur texture and lighting appear realistic"],
+      search: { required: false, queries: [], sources: [] },
+      outputCount: 3,
+      requestedOutputCount: 3,
+      outputBriefs: [
+        "Realistic photo of a domestic pig standing in a grassy field",
+        "Realistic close-up photo of a pig sitting on a wooden floor",
+        "Realistic top-down photo of a pig lying on a pile of hay",
+      ],
+    });
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: imageTaskJson,
+        toolCalls: [],
+      },
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "ภาพถ่ายสมจริง",
+        conversationHistory: [
+          { role: "user", content: "สร้างรูปหมู 3 รูป" },
+          { role: "assistant", content: "คุณต้องการสไตล์ของรูปหมูอย่างไร?" },
+        ],
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+
+    expect(result.kind).toBe("image-task");
+    if (result.kind === "image-task") {
+      expect(result.outputCount).toBe(1);
+      expect(result.requestedOutputCount).toBe(3);
+      expect(result.outputBriefs).toHaveLength(3);
+      expect(result.specialist).toBe("image_generator");
+      expect(result.capability).toBe("IMAGE_DEFAULT");
+      expect(result.modelAlias).toBe("image-gpt-2");
+    }
+  });
 });

@@ -75,6 +75,61 @@ export function parseReplicateAssistantOutput(
       rawCalls = candidate.calls;
     } else if (candidate.kind === "tool_call" && isRecord(candidate.call)) {
       rawCalls = [candidate.call];
+    } else if (typeof candidate.name === "string" && allowedTools.has(candidate.name)) {
+      rawCalls = [candidate];
+    } else if (
+      isRecord(candidate.function) &&
+      typeof candidate.function.name === "string" &&
+      allowedTools.has(candidate.function.name)
+    ) {
+      rawCalls = [
+        {
+          name: candidate.function.name,
+          input: candidate.function.arguments ?? candidate.function.input ?? {},
+        },
+      ];
+    } else if (
+      allowedTools.has("propose_creative_direction") &&
+      (candidate.kind === "image-task" || candidate.kind === "clarification")
+    ) {
+      rawCalls = [{ name: "propose_creative_direction", input: candidate }];
+    } else if (
+      allowedTools.has("propose_creative_direction") &&
+      candidate.kind === "answer" &&
+      typeof candidate.text === "string"
+    ) {
+      rawCalls = [{ name: "propose_creative_direction", input: candidate }];
+    } else if (
+      allowedTools.has("propose_design_plan") &&
+      (candidate.kind === "design-plan" ||
+        Array.isArray(candidate.commands) ||
+        (isRecord(candidate.proposal) && Array.isArray(candidate.proposal.commands)))
+    ) {
+      rawCalls = [{ name: "propose_design_plan", input: candidate.proposal ?? candidate }];
+    } else if (
+      allowedTools.has("propose_sequential_plan") &&
+      (candidate.kind === "sequential-plan" ||
+        Array.isArray(candidate.steps) ||
+        (isRecord(candidate.plan) && Array.isArray(candidate.plan.steps)))
+    ) {
+      rawCalls = [{ name: "propose_sequential_plan", input: candidate.plan ?? candidate }];
+    }
+  }
+
+  if (rawCalls.length === 0 && raw.includes(HARMONY_CALL)) {
+    const callPattern =
+      /<｜call｜>([a-zA-Z0-9_-]+)(?::([a-zA-Z0-9_-]+))?([\s\S]*?)(?:<｜(?:return|call|end)｜>|$)/g;
+    let match: RegExpExecArray | null;
+    while ((match = callPattern.exec(raw)) !== null) {
+      const toolName = match[1]?.trim();
+      const callId = match[2]?.trim();
+      const jsonText = match[3]?.trim();
+      if (toolName && allowedTools.has(toolName) && jsonText) {
+        const parsedInput = parseJsonCandidate(jsonText);
+        if (isRecord(parsedInput)) {
+          rawCalls.push({ id: callId, name: toolName, input: parsedInput });
+        }
+      }
     }
   }
 
@@ -90,7 +145,12 @@ export function parseReplicateAssistantOutput(
       warnings.push("Provider returned a tool that is not enabled for this request.");
       return;
     }
-    if (!isRecord(value.input)) {
+    const callInput = isRecord(value.input)
+      ? value.input
+      : isRecord(value.arguments)
+        ? value.arguments
+        : null;
+    if (!callInput) {
       warnings.push(`Provider tool ${name} did not include an object input.`);
       return;
     }
@@ -98,7 +158,7 @@ export function parseReplicateAssistantOutput(
       typeof value.id === "string" && value.id.length > 0 && value.id.length <= 200
         ? value.id
         : `replicate-call-${index + 1}`;
-    toolCalls.push({ type: "tool_call", id, name, input: value.input });
+    toolCalls.push({ type: "tool_call", id, name, input: callInput });
   });
 
   const content: AiChatContent[] = [];

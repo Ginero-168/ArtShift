@@ -449,7 +449,33 @@ async function executeDirectorPass(
   }
   if (!call) {
     const text = execution.output.text.trim();
-    if (text && text.length <= 8_000 && !containsSensitivePayload(text)) {
+    if (containsSensitivePayload(text)) return invalidDirection();
+    const candidate = parseJsonCandidate(text);
+    if (isRecord(candidate)) {
+      if (candidate.kind === "image-task" || candidate.kind === "clarification") {
+        return parseCreativeDirection(candidate, input, knowledgeIds);
+      }
+      if (candidate.kind === "answer" && typeof candidate.text === "string") {
+        return parseCreativeDirection(candidate, input, knowledgeIds);
+      }
+      if (
+        candidate.kind === "design-plan" ||
+        Array.isArray(candidate.commands) ||
+        (isRecord(candidate.proposal) && Array.isArray(candidate.proposal.commands))
+      ) {
+        return parseDesignPlan(candidate.proposal ?? candidate, input);
+      }
+      if (
+        candidate.kind === "sequential-plan" ||
+        Array.isArray(candidate.steps) ||
+        (isRecord(candidate.plan) && Array.isArray(candidate.plan.steps))
+      ) {
+        const val = validateSequentialExecutionPlan(candidate.plan ?? candidate);
+        if (!val.ok) return invalidDirection(val.error);
+        return { kind: "sequential-plan", plan: val.plan };
+      }
+    }
+    if (text && text.length <= 8_000) {
       return { kind: "answer", text };
     }
     return invalidDirection();
@@ -598,13 +624,18 @@ export function parseCreativeDirection(
   if (value.kind !== "image-task") {
     return invalidDirection("unknown direction kind: " + String(value.kind));
   }
-  if (value.outputCount === undefined && value.requestedOutputCount === undefined) {
+  const rawRequested =
+    value.requestedOutputCount ??
+    (Array.isArray(value.outputBriefs) && value.outputBriefs.length > 1
+      ? value.outputBriefs.length
+      : undefined);
+  if (value.outputCount === undefined && rawRequested === undefined) {
     return invalidDirection("missing outputCount and requestedOutputCount");
   }
-  if (value.outputCount !== undefined && value.outputCount !== 1) {
+  if (value.outputCount !== undefined && value.outputCount !== 1 && rawRequested === undefined) {
     return invalidDirection("outputCount must be 1 when specified");
   }
-  const rawCount = value.requestedOutputCount ?? value.outputCount;
+  const rawCount = rawRequested ?? value.outputCount;
   const requestedOutputCount = Number(rawCount);
   if (
     !Number.isInteger(requestedOutputCount) ||
@@ -935,4 +966,25 @@ function invalidDirection(reason?: string): never {
   throw new CreativeDirectorValidationError(
     reason ? `invalid Creative Director plan: ${reason}` : "invalid Creative Director plan",
   );
+}
+
+function parseJsonCandidate(text: string): unknown {
+  const trimmed = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = Math.min(
+      ...[trimmed.indexOf("{"), trimmed.indexOf("[")].filter((index) => index >= 0),
+    );
+    const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+    if (!Number.isFinite(start) || start < 0 || end <= start) return null;
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
 }

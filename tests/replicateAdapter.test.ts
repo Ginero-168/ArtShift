@@ -197,6 +197,54 @@ describe("Replicate AI adapter", () => {
     expect(body.input.max_tokens).toBeGreaterThanOrEqual(4_096);
   });
 
+  it("normalizes a direct JSON tool payload without tool_calls envelope", async () => {
+    const directPayload = JSON.stringify({
+      kind: "clarification",
+      question: "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
+      options: ["การ์ตูน", "ภาพถ่ายจริง", "มินิมอล"],
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-chat-direct",
+          model: "openai/gpt-oss-120b",
+          status: "succeeded",
+          output: [directPayload],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "assistant.chat",
+      input: {
+        messages: [{ role: "user", content: "สร้างรูปหมู 3 รูป" }],
+        tools: [
+          {
+            name: "propose_creative_direction",
+            description: "Propose creative direction.",
+            inputSchema: { type: "object" },
+          },
+        ],
+      },
+      model: "openai/gpt-oss-120b",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output.stopReason).toBe("tool_use");
+    expect(result.output.text).toBe("");
+    expect(result.output.toolCalls).toEqual([
+      {
+        type: "tool_call",
+        id: "replicate-call-1",
+        name: "propose_creative_direction",
+        input: JSON.parse(directPayload),
+      },
+    ]);
+  });
+
   it("returns prompt enhancement text through the same Replicate provider", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

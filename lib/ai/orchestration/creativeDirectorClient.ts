@@ -21,10 +21,28 @@ export async function prepareRemoteCreativeDirection(
     direction?: unknown;
     error?: string;
   } | null;
-  if (!response.ok || !isCreativeDirection(payload?.direction, input)) {
+  let rawDirection = payload?.direction;
+  if (isRecord(rawDirection) && rawDirection.kind === "answer" && typeof rawDirection.text === "string") {
+    try {
+      const trimmed = rawDirection.text.trim();
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        const parsed = JSON.parse(trimmed);
+        if (
+          isRecord(parsed) &&
+          (parsed.kind === "image-task" ||
+            parsed.kind === "clarification" ||
+            parsed.kind === "design-plan" ||
+            parsed.kind === "sequential-plan")
+        ) {
+          rawDirection = parsed;
+        }
+      }
+    } catch {}
+  }
+  if (!response.ok || !isCreativeDirection(rawDirection, input)) {
     throw new Error(payload?.error || `Creative Director request failed: ${response.status}`);
   }
-  return payload.direction;
+  return rawDirection;
 }
 
 export async function reviewRemoteCreativeOutput(
