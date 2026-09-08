@@ -574,13 +574,14 @@ export function parseCreativeDirection(
     return invalidDirection("search plan is missing or invalid");
   }
 
-  const rawBriefs = Array.isArray(value.outputBriefs) && value.outputBriefs.length > 0
-    ? value.outputBriefs
-    : Array.from({ length: requestedOutputCount }, (_, idx) =>
-        idx === 0
-          ? String(value.refinedPrompt ?? "").trim()
-          : `${String(value.refinedPrompt ?? "").trim()} (variation ${idx + 1})`,
-      );
+  const rawBriefs =
+    Array.isArray(value.outputBriefs) && value.outputBriefs.length > 0
+      ? value.outputBriefs
+      : Array.from({ length: requestedOutputCount }, (_, idx) =>
+          idx === 0
+            ? String(value.refinedPrompt ?? "").trim()
+            : `${String(value.refinedPrompt ?? "").trim()} (variation ${idx + 1})`,
+        );
   const normalizedBriefs: string[] = [...rawBriefs];
   while (normalizedBriefs.length < requestedOutputCount) {
     normalizedBriefs.push(
