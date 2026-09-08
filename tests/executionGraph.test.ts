@@ -66,11 +66,13 @@ describe("Sequential Execution Plan & Pipeline Gating", () => {
         {
           id: "step-1",
           specialist: "image_generator",
+          toolOrModelAlias: "image-gpt-2",
           qualityThreshold: 0.7,
         },
         {
           id: "step-2",
           specialist: "copywriter",
+          toolOrModelAlias: "local-copywriter",
         },
       ],
     };
@@ -96,11 +98,13 @@ describe("Sequential Execution Plan & Pipeline Gating", () => {
         {
           id: "step-1",
           specialist: "image_generator",
+          toolOrModelAlias: "image-gpt-2",
           qualityThreshold: 0.8,
         },
         {
           id: "step-2",
           specialist: "copywriter",
+          toolOrModelAlias: "local-copywriter",
         },
       ],
     };
@@ -117,5 +121,27 @@ describe("Sequential Execution Plan & Pipeline Gating", () => {
     expect(paused.steps[0].status).toBe("paused_on_gate");
     expect(paused.overallStatus).toBe("paused");
     expect(paused.currentStepIndex).toBe(0);
+  });
+
+  it("pauses when a specialist returns no artifact", () => {
+    const parsed = validateSequentialExecutionPlan({
+      id: "plan-empty-result",
+      steps: [
+        {
+          id: "step-1",
+          specialist: "layout_designer",
+          toolOrModelAlias: "local-layout",
+        },
+      ],
+    });
+    if (!parsed.ok) throw new Error("Should parse");
+
+    const paused = advancePlanStep(parsed.plan, 0, undefined);
+
+    expect(paused.overallStatus).toBe("paused");
+    expect(paused.steps[0]).toMatchObject({
+      status: "failed",
+      error: "Specialist returned no result",
+    });
   });
 });

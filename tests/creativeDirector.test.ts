@@ -293,7 +293,12 @@ describe("gpt-oss-120b Creative Director", () => {
     const clarificationJson = JSON.stringify({
       kind: "clarification",
       question: "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
-      options: ["การ์ตูน (Cartoon)", "ภาพถ่ายจริง (Realistic)", "สไตล์มินิมอล (Minimalist)", "อื่น ๆ (Other)"],
+      options: [
+        "การ์ตูน (Cartoon)",
+        "ภาพถ่ายจริง (Realistic)",
+        "สไตล์มินิมอล (Minimalist)",
+        "อื่น ๆ (Other)",
+      ],
     });
     const execute = vi.fn().mockResolvedValue({
       output: {
@@ -316,20 +321,30 @@ describe("gpt-oss-120b Creative Director", () => {
     expect(result).toEqual({
       kind: "clarification",
       question: "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
-      options: ["การ์ตูน (Cartoon)", "ภาพถ่ายจริง (Realistic)", "สไตล์มินิมอล (Minimalist)", "อื่น ๆ (Other)"],
+      options: [
+        "การ์ตูน (Cartoon)",
+        "ภาพถ่ายจริง (Realistic)",
+        "สไตล์มินิมอล (Minimalist)",
+        "อื่น ๆ (Other)",
+      ],
     });
   });
 
   it("recovers an image-task and tolerates outputCount: 3 alongside requestedOutputCount: 3 when returned as JSON text", async () => {
     const imageTaskJson = JSON.stringify({
       kind: "image-task",
-      summary: "Generate three realistic photographic images of a pig with distinct compositions and lighting",
-      refinedPrompt: "Create three separate realistic photographs of a pig. Image 1: in a grassy field...",
+      summary:
+        "Generate three realistic photographic images of a pig with distinct compositions and lighting",
+      refinedPrompt:
+        "Create three separate realistic photographs of a pig. Image 1: in a grassy field...",
       specialist: "image_generator",
       capability: "IMAGE_DEFAULT",
       modelAlias: "image-gpt-2",
       knowledgeSkillIds: [],
-      reviewCriteria: ["Animal anatomy is accurate and natural", "Fur texture and lighting appear realistic"],
+      reviewCriteria: [
+        "Animal anatomy is accurate and natural",
+        "Fur texture and lighting appear realistic",
+      ],
       search: { required: false, queries: [], sources: [] },
       outputCount: 3,
       requestedOutputCount: 3,

@@ -12,6 +12,7 @@ import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL, preloadDataURL } from "@/lib/engine/imageCache";
 import {
   getProcessingPreviewBounds,
+  getProcessingPreviewPlacement,
   updateProcessingPreview,
 } from "@/lib/engine/processingPreview";
 import {
@@ -423,7 +424,7 @@ export function VisionObjectIsolator({
       const isMonochrome = isMonochromeTrace;
       const res = await vectorizeImage(
         url,
-        getProcessingPreviewBounds(element),
+        getProcessingPreviewPlacement(previewId, getProcessingPreviewBounds(element)),
         {
           backend,
           preset,
@@ -592,7 +593,7 @@ export function VisionObjectIsolator({
       });
       const viewport = getSvgViewport(svg);
       const result = parseVTracerSvgResult(svg, {
-        targetBounds: getProcessingPreviewBounds(element),
+        targetBounds: getProcessingPreviewPlacement(previewId, getProcessingPreviewBounds(element)),
         sourceWidth: viewport.width,
         sourceHeight: viewport.height,
         ...RECRAFT_SVG_LIMITS,
@@ -732,7 +733,10 @@ export function VisionObjectIsolator({
       });
       const resultCached = await loadDataURL(resultDataUrl);
       if (signal.aborted) return;
-      const duplicateBounds = getProcessingPreviewBounds(element);
+      const duplicateBounds = getProcessingPreviewPlacement(
+        previewId,
+        getProcessingPreviewBounds(element),
+      );
       const resultImage = {
         ...createImage({
           ...duplicateBounds,
@@ -833,8 +837,12 @@ export function VisionObjectIsolator({
         onRuntime: setLastRmbgRuntime,
       });
       const newCached = await loadDataURL(resultUrl);
+      const duplicateBounds = getProcessingPreviewPlacement(
+        previewId,
+        getProcessingPreviewBounds(element),
+      );
       const resultImage = createImage({
-        ...getProcessingPreviewBounds(element),
+        ...duplicateBounds,
         ...createCachedImageAsset(newCached),
       });
       updateProcessingPreview(previewId, {
@@ -1026,7 +1034,12 @@ export function VisionObjectIsolator({
         foregroundUrl,
         objects,
         (value) => setExtractProgress(74 + value * 25, "กำลังสร้าง Object ที่แก้ไขได้…"),
-        { targetBounds: getProcessingPreviewBounds(element) },
+        {
+          targetBounds: getProcessingPreviewPlacement(
+            previewId,
+            getProcessingPreviewBounds(element),
+          ),
+        },
       );
       if (newElements.length === 0) {
         setStatusMessage("No visible foreground objects were found");

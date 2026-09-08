@@ -25,6 +25,8 @@ export type SequentialExecutionStep = {
    * Reference to output of an earlier step in the linear pipeline.
    */
   dependsOnStepId?: string;
+  /** Number of times this step has been started, including resumed attempts. */
+  attempt: number;
   /**
    * Quality gate threshold score (0.0 - 1.0). If evaluation drops below, execution pauses.
    */
@@ -56,6 +58,15 @@ export type SequentialExecutionPlan = {
   createdAt: number;
   updatedAt: number;
 };
+
+const ALLOWED_SPECIALISTS: ReadonlySet<CreativeSpecialist> = new Set([
+  "image_generator",
+  "image_editor",
+  "vectorizer",
+  "layout_designer",
+  "copywriter",
+  "brand_stylist",
+]);
 
 /**
  * Validates a proposed sequential execution plan from the Creative Director.
@@ -99,15 +110,44 @@ export function validateSequentialExecutionPlan(
         error: `Step ${stepId} references forward or non-existent dependency: ${String(s.dependsOnStepId)}`,
       };
     }
+    if (
+      typeof s.specialist !== "string" ||
+      !ALLOWED_SPECIALISTS.has(s.specialist as CreativeSpecialist)
+    ) {
+      return {
+        ok: false,
+        error: `Step ${stepId} references an unsupported specialist: ${String(s.specialist)}`,
+      };
+    }
+    if (typeof s.toolOrModelAlias !== "string" || !s.toolOrModelAlias.trim()) {
+      return { ok: false, error: `Step ${stepId} is missing toolOrModelAlias` };
+    }
+    if (s.payload !== undefined && !isRecord(s.payload)) {
+      return { ok: false, error: `Step ${stepId} payload must be an object` };
+    }
+    const payload = isRecord(s.payload) ? s.payload : {};
+    if (containsUnsafePayload(payload)) {
+      return { ok: false, error: `Step ${stepId} payload contains unsafe provider data` };
+    }
+    if (
+      s.qualityThreshold !== undefined &&
+      (typeof s.qualityThreshold !== "number" ||
+        !Number.isFinite(s.qualityThreshold) ||
+        s.qualityThreshold < 0 ||
+        s.qualityThreshold > 1)
+    ) {
+      return { ok: false, error: `Step ${stepId} qualityThreshold must be between 0 and 1` };
+    }
 
     validatedSteps.push({
       id: stepId,
       name: String(s.name ?? `Step ${i + 1}`),
       specialist: s.specialist as CreativeSpecialist,
       description: String(s.description ?? ""),
-      toolOrModelAlias: String(s.toolOrModelAlias ?? ""),
-      payload: (s.payload as Record<string, unknown>) ?? {},
+      toolOrModelAlias: s.toolOrModelAlias.trim(),
+      payload,
       dependsOnStepId: s.dependsOnStepId ? String(s.dependsOnStepId) : undefined,
+      attempt: 0,
       qualityThreshold: typeof s.qualityThreshold === "number" ? s.qualityThreshold : 0.7,
       status: "pending",
     });
@@ -129,6 +169,24 @@ export function validateSequentialExecutionPlan(
       updatedAt: Date.now(),
     },
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function containsUnsafePayload(value: unknown, seen = new Set<object>()): boolean {
+  if (typeof value === "string") {
+    return /data:image\/|replicate\.delivery|api[_-]?key|bearer\s+\S+|(?:secret|token|credential)\s*[:=]/iu.test(
+      value,
+    );
+  }
+  if (!value || typeof value !== "object" || seen.has(value as object)) return false;
+  seen.add(value as object);
+  if (Array.isArray(value)) return value.some((item) => containsUnsafePayload(item, seen));
+  return Object.values(value as Record<string, unknown>).some((item) =>
+    containsUnsafePayload(item, seen),
+  );
 }
 
 /**
@@ -155,7 +213,19 @@ export function advancePlanStep(
     };
   }
 
-  const score = result?.reviewScore ?? 1.0;
+  if (!result) {
+    step.status = "failed";
+    step.error = "Specialist returned no result";
+    steps[stepIndex] = step;
+    return {
+      ...plan,
+      steps,
+      overallStatus: "paused",
+      updatedAt: Date.now(),
+    };
+  }
+
+  const score = result.reviewScore ?? 1.0;
   const threshold = step.qualityThreshold ?? 0.7;
 
   if (score < threshold) {

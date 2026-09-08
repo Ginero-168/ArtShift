@@ -47,6 +47,27 @@ describe("Sequential Multi-Specialist Execution Pipeline (BUILD-03)", () => {
 
     const onProgress = vi.fn();
     const finalPlan = await runSequentialExecutionPlan(validated.plan, {
+      executeSpecialistStep: async (step, dependencyOutput) => {
+        if (step.specialist === "image_generator") {
+          return {
+            artifactKind: "image",
+            data: { dataUrl: "data:image/png;base64,AA==", fileId: "coffee-image" },
+            reviewScore: 0.95,
+          };
+        }
+        if (step.specialist === "vectorizer") {
+          return {
+            artifactKind: "mask",
+            data: { paths: 16, source: dependencyOutput },
+            reviewScore: 0.9,
+          };
+        }
+        return {
+          artifactKind: "text",
+          data: { headline: "กาแฟเพื่อวันใหม่" },
+          reviewScore: 0.9,
+        };
+      },
       onStepProgress: onProgress,
     });
 
@@ -55,6 +76,7 @@ describe("Sequential Multi-Specialist Execution Pipeline (BUILD-03)", () => {
     expect(finalPlan.steps[0].status).toBe("completed");
     expect(finalPlan.steps[1].status).toBe("completed");
     expect(finalPlan.steps[2].status).toBe("completed");
+    expect(finalPlan.steps[0].attempt).toBe(1);
 
     // Verify artifact outputs
     expect(finalPlan.steps[0].result?.artifactKind).toBe("image");
@@ -168,5 +190,22 @@ describe("Sequential Multi-Specialist Execution Pipeline (BUILD-03)", () => {
     expect(finalPlan.steps[0].status).toBe("failed");
     expect(finalPlan.steps[0].error).toBe("Provider rate limit reached");
     expect(finalPlan.steps[1].status).toBe("pending");
+  });
+
+  it("rejects an unknown specialist instead of fabricating a completed artifact", () => {
+    const invalid = structuredClone(samplePlanRaw) as typeof samplePlanRaw;
+    invalid.steps = [
+      {
+        ...invalid.steps[0],
+        specialist: "unknown_model" as never,
+      },
+    ];
+
+    const result = validateSequentialExecutionPlan(invalid);
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Step step-gen-1 references an unsupported specialist: unknown_model",
+    });
   });
 });

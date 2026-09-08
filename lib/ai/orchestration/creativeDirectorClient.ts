@@ -6,7 +6,7 @@ import type {
 } from "@/lib/ai/orchestration/creativeDirector";
 import { parseCreativeDirection } from "@/lib/ai/orchestration/creativeDirector";
 
-export async function prepareRemoteCreativeDirection(
+export async function prepareRemoteOrchestratorTurn(
   input: Omit<CreativeDirectorInput, "availableCapabilities" | "cloudConsent" | "accountId">,
   options: { signal?: AbortSignal; cloudConsent?: boolean } = {},
 ): Promise<CreativeDirection> {
@@ -22,7 +22,11 @@ export async function prepareRemoteCreativeDirection(
     error?: string;
   } | null;
   let rawDirection = payload?.direction;
-  if (isRecord(rawDirection) && rawDirection.kind === "answer" && typeof rawDirection.text === "string") {
+  if (
+    isRecord(rawDirection) &&
+    rawDirection.kind === "answer" &&
+    typeof rawDirection.text === "string"
+  ) {
     try {
       const trimmed = rawDirection.text.trim();
       if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
@@ -45,7 +49,10 @@ export async function prepareRemoteCreativeDirection(
   return rawDirection;
 }
 
-export async function reviewRemoteCreativeOutput(
+/** @deprecated Use prepareRemoteOrchestratorTurn. */
+export const prepareRemoteCreativeDirection = prepareRemoteOrchestratorTurn;
+
+export async function reviewRemoteOrchestratorOutput(
   input: Omit<CreativeOutputReviewInput, "cloudConsent" | "accountId">,
   options: { signal?: AbortSignal; cloudConsent?: boolean } = {},
 ): Promise<CreativeOutputReview> {
@@ -65,6 +72,9 @@ export async function reviewRemoteCreativeOutput(
   }
   return payload.review;
 }
+
+/** @deprecated Use reviewRemoteOrchestratorOutput. */
+export const reviewRemoteCreativeOutput = reviewRemoteOrchestratorOutput;
 
 function isCreativeDirection(
   value: unknown,

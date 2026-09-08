@@ -4,6 +4,8 @@ import {
   clearProcessingPreview,
   getProcessingPreview,
   getProcessingPreviewBounds,
+  getProcessingPreviewById,
+  getProcessingPreviewPlacement,
   getProcessingPreviews,
   updateProcessingPreview,
 } from "@/lib/engine/processingPreview";
@@ -184,5 +186,70 @@ describe("transient processing preview", () => {
     expect(getProcessingPreview()?.id).toBe(secondId);
     clearProcessingPreview(secondId);
     expect(getProcessingPreview()).toBeNull();
+  });
+
+  it("updates coordinates and userDragged flag when preview is moved", () => {
+    const id = beginProcessingPreview({
+      kind: "remove-bg",
+      label: "RemoveBG",
+      x: 200,
+      y: 150,
+      width: 300,
+      height: 250,
+      progress: 0.2,
+    });
+
+    expect(getProcessingPreviewById(id)).toMatchObject({
+      x: 200,
+      y: 150,
+    });
+    expect(getProcessingPreviewById(id)?.userDragged).toBeUndefined();
+
+    // Simulate drag movement
+    updateProcessingPreview(id, {
+      x: 450,
+      y: 320,
+      userDragged: true,
+    });
+
+    expect(getProcessingPreviewById(id)).toMatchObject({
+      x: 450,
+      y: 320,
+      userDragged: true,
+    });
+
+    // Placement helper returns moved coordinates
+    const placement = getProcessingPreviewPlacement(id, {
+      x: 200,
+      y: 150,
+      width: 300,
+      height: 250,
+    });
+    expect(placement).toEqual({
+      x: 450,
+      y: 320,
+      width: 300,
+      height: 250,
+    });
+
+    // Background progress update preserves dragged coordinates
+    updateProcessingPreview(id, {
+      progress: 0.79,
+      message: "Refining foreground edges...",
+    });
+
+    expect(getProcessingPreviewById(id)).toMatchObject({
+      x: 450,
+      y: 320,
+      userDragged: true,
+      progress: 0.79,
+      message: "Refining foreground edges...",
+    });
+  });
+
+  it("returns fallback placement when preview id does not exist", () => {
+    const fallback = { x: 100, y: 100, width: 200, height: 200 };
+    expect(getProcessingPreviewPlacement("non-existent-id", fallback)).toBe(fallback);
+    expect(getProcessingPreviewPlacement(undefined, fallback)).toBe(fallback);
   });
 });

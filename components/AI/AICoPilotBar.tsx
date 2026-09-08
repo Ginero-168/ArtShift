@@ -257,6 +257,7 @@ export default function AICoPilotBar() {
                   ? "error"
                   : "running",
             timestamp: Date.now(),
+            attempt: step.attempt,
           };
           upsertCurrentAction(action);
         },
@@ -276,15 +277,21 @@ export default function AICoPilotBar() {
           },
         ]);
       } else if (finishedPlan.overallStatus === "paused") {
+        const pausedStep = finishedPlan.steps[finishedPlan.currentStepIndex];
+        const failed = pausedStep?.status === "failed";
+        const pauseReason = failed
+          ? `ขั้น ${pausedStep.name} หยุดเพราะ ${(pausedStep.error ?? "ไม่ทราบสาเหตุ").trim()}`
+          : `ขั้น ${pausedStep?.name ?? "ล่าสุด"} ยังไม่ผ่าน Quality Gate`;
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content:
-              "แผนงานหยุดชั่วคราวที่ Quality Gate ครับ สามารถกด Resume เพื่อรันต่อ หรือปรับแก้ไขก่อนดำเนินการ",
+            content: `${pauseReason} ครับ แก้ brief หรือกด Resume เพื่อให้ Orchestrator ดำเนินการต่อได้`,
             timestamp: Date.now(),
-            suggestions: ["Resume Execution", "ปรับ brief"],
+            suggestions: failed
+              ? ["Resume Execution", "ปรับ brief", "ทิ้งแผนนี้"]
+              : ["Resume Execution", "ปรับ brief"],
           },
         ]);
       }

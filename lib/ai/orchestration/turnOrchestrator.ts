@@ -1,11 +1,11 @@
 import {
-  generateAIImage,
   GPT_IMAGE_2_ESTIMATED_COST_USD,
+  generateAIImage,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
-import { createText } from "@/lib/engine/factory";
+import { createImage, createText } from "@/lib/engine/factory";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
@@ -277,7 +277,8 @@ async function executeDefaultSpecialistStep(
       if (options.cloudConsent !== true) {
         throw new Error("Cloud consent is required before running an image specialist step");
       }
-      const prompt = readStepText(payload, "prompt") || `${step.description}\n${plan.originalPrompt}`;
+      const prompt =
+        readStepText(payload, "prompt") || `${step.description}\n${plan.originalPrompt}`;
       if (!prompt.trim()) throw new Error("Image specialist step has no executable prompt");
       const dimensions = resolveImageGenerationDimensions(prompt);
       const dependencyImage = extractImageDataUrl(dependencyOutput);
@@ -295,9 +296,29 @@ async function executeDefaultSpecialistStep(
         },
         signal,
       );
+      const state = useEngine.getState();
+      const slide = state.currentSlide();
+      if (!slide) throw new Error("Image specialist step could not find the active Artwork");
+      const placement = nextArtifactPlacement(
+        slide.width,
+        slide.height,
+        generated.width,
+        generated.height,
+      );
+      const element = createImage({
+        x: placement.x,
+        y: placement.y,
+        width: placement.width,
+        height: placement.height,
+        fileId: generated.fileId,
+        naturalWidth: generated.width,
+        naturalHeight: generated.height,
+      });
+      state.addElement(element, `orchestrator ${step.specialist}: ${step.id}`);
+      state.selectOnly([element.id]);
       return {
         artifactKind: "image",
-        data: generated,
+        data: { ...generated, elementId: element.id },
         reviewScore: 1,
         notes: `${step.specialist} completed through the ArtShift image route`,
       };
@@ -374,7 +395,11 @@ async function executeDefaultSpecialistStep(
       state.selectOnly(elements.map((element) => element.id));
       return {
         artifactKind: "text",
-        data: { headline, ...(subheading ? { subheading } : {}), elementIds: elements.map((e) => e.id) },
+        data: {
+          headline,
+          ...(subheading ? { subheading } : {}),
+          elementIds: elements.map((e) => e.id),
+        },
         reviewScore: 1,
         notes: "Copywriter text committed to the active Artwork",
       };
@@ -396,6 +421,22 @@ async function executeDefaultSpecialistStep(
     }
     case "brand_stylist": {
       const brand = getActiveBrandKit();
+      const state = useEngine.getState();
+      const slide = state.currentSlide();
+      if (!slide) throw new Error("Brand stylist step could not find the active Artwork");
+      const targets = slide.elements.filter(
+        (element) =>
+          !element.isDeleted && (state.selectedIds.size === 0 || state.selectedIds.has(element.id)),
+      );
+      const patches = targets.map((element) => ({
+        id: element.id,
+        patch:
+          element.type === "text"
+            ? { strokeColor: brand.colors.text, fontFamily: brand.typography.headerFont }
+            : { backgroundColor: brand.colors.surface, strokeColor: brand.colors.primary },
+      }));
+      if (patches.length > 0)
+        state.updateElements(patches, `orchestrator brand stylist: ${step.id}`);
       return {
         artifactKind: "brand_tokens",
         data: {
@@ -404,9 +445,10 @@ async function executeDefaultSpecialistStep(
           colors: brand.colors,
           typography: brand.typography,
           rules: brand.rules,
+          appliedTo: patches.map((patch) => patch.id),
         },
         reviewScore: 1,
-        notes: `Brand Kit ${brand.name} validated for the plan`,
+        notes: `Brand Kit ${brand.name} applied to ${patches.length} Objects`,
       };
     }
     default:
@@ -443,6 +485,25 @@ function extractImageDataUrl(value: unknown): string | undefined {
   return undefined;
 }
 
+function nextArtifactPlacement(
+  slideWidth: number,
+  slideHeight: number,
+  naturalWidth: number,
+  naturalHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  const maxWidth = Math.max(160, slideWidth * 0.7);
+  const maxHeight = Math.max(160, slideHeight * 0.7);
+  const scale = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight);
+  const width = Math.max(1, Math.round(naturalWidth * scale));
+  const height = Math.max(1, Math.round(naturalHeight * scale));
+  return {
+    x: Math.max(0, Math.round((slideWidth - width) / 2)),
+    y: Math.max(0, Math.round((slideHeight - height) / 2)),
+    width,
+    height,
+  };
+}
+
 /**
  * Runs a SequentialExecutionPlan through its specialist steps sequentially.
  * Handled directly on the client (Local-First Data Bus) with Exception Gating.
@@ -470,7 +531,13 @@ export async function runSequentialExecutionPlan(
       return currentPlan;
     }
 
-    const currentStep = { ...currentPlan.steps[i], status: "running" as const };
+    const currentStep = {
+      ...currentPlan.steps[i],
+      status: "running" as const,
+      attempt: (currentPlan.steps[i].attempt ?? 0) + 1,
+      error: undefined,
+      result: undefined,
+    };
     const updatedSteps = [...currentPlan.steps];
     updatedSteps[i] = currentStep;
     currentPlan = {
@@ -486,12 +553,20 @@ export async function runSequentialExecutionPlan(
     if (currentStep.dependsOnStepId) {
       const depStep = currentPlan.steps.find((s) => s.id === currentStep.dependsOnStepId);
       dependencyOutput = depStep?.result?.data;
+      if (dependencyOutput === undefined) {
+        currentPlan = advancePlanStep(
+          currentPlan,
+          i,
+          undefined,
+          `Dependency ${currentStep.dependsOnStepId} has no completed output`,
+        );
+        options.onStepProgress?.(currentPlan, currentPlan.steps[i]);
+        return currentPlan;
+      }
     }
 
     try {
-      let stepResult: NonNullable<SequentialExecutionStep["result"]>;
-
-      stepResult = options.executeSpecialistStep
+      const stepResult = options.executeSpecialistStep
         ? await options.executeSpecialistStep(currentStep, dependencyOutput, {
             signal: options.signal,
           })

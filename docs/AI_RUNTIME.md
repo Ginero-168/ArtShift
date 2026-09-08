@@ -7,15 +7,15 @@ ArtShift exposes one task-level `AiRuntime` seam to the application and one user
 - `lib/ai-runtime/` owns public contracts, locality policy, routing behavior, result caching and usage normalization.
 - `lib/server/ai/modelManifest.ts` owns stable aliases, provider/model mapping, pinned Replicate wrapper versions, price estimates and preflight cost ceilings.
 - `lib/server/ai/adapters/` contains one adapter per external provider. Provider-native fields stop at this directory.
-- `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. The single assistant system prompt and planning tools remain private to `app/api/ai/director`; `/api/design-agent` is a compatibility adapter and `/api/chat` is a 410 tombstone.
+- `app/api/ai/execute` validates public task payloads and exposes Vision, Recraft vectorization, prompt enhancement and image generation. The single assistant system prompt and planning tools remain private to `/api/ai/director`; `/api/design-agent` is a compatibility adapter with no independent model or planning logic, and `/api/chat` is a 410 tombstone.
 - `app/api/ai/status` exposes readiness, model aliases, usage/budget estimates and cache control without returning secrets.
 - `RasterProcessor` remains a separate deep module. Remove BG and Extract Objects start in the browser; an explicit VPS-local RMBG fallback is available when the browser RMBG model is not ready. Extraction geometry comes from alpha components with SAM 2 mask refinement, not from a vision-language detector. Selection and pixel masks remain browser-local and are intentionally absent from the cloud route table.
-- `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then Design Agent. Image prompts additionally pass through `lib/ai/visualOrchestrator.ts` and the context-aware orchestration modules, which own capability-alias planning without exposing provider selection to the UI.
+- `components/AI/AICoPilotBar.tsx` owns the single chat surface. `lib/ai/unifiedSystem.ts` keeps its routing seam small: deterministic plan, local tool, then the ArtShift Orchestrator. Image prompts additionally pass through `lib/ai/visualOrchestrator.ts` and the context-aware orchestration modules, which own capability-alias planning without exposing provider selection to the UI.
 - Built-in tool commands are explicit user actions and commit through their existing atomic editor operations; remote Design Agent proposals are always reviewable before Apply.
 
 ## Visual Orchestrator Kernel
 
-`planVisualRequest(prompt, context)` is the narrow planning seam for image requests. It derives a user intent and task class, selects a capability alias, records whether visual analysis is required, and returns a route plan. It never accepts a provider URL, API key, or arbitrary model id.
+`planVisualRequest(prompt, context)` is the narrow routing seam for image requests. It derives a user intent and task class, selects a capability alias, records whether visual analysis is required, and returns a route plan for the ArtShift Orchestrator. It never accepts a provider URL, API key, or arbitrary model id.
 
 The current registry deliberately exposes availability:
 

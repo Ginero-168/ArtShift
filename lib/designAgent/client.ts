@@ -1,3 +1,4 @@
+import { prepareRemoteOrchestratorTurn } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { type EngineState, useEngine } from "@/lib/engine/store";
 import type { ArtworkExecutionContext, PlanProposal } from "./contracts";
@@ -64,32 +65,62 @@ export function buildDesignAgentContext(
   };
 }
 
+/** @deprecated Use prepareRemoteOrchestratorTurn directly. */
 export async function prepareRemoteDesignTurn(
   messages: ClientChatMessage[],
   context: ArtworkExecutionContext,
   options: { signal?: AbortSignal; cloudConsent?: boolean } = {},
 ): Promise<PreparedDesignResult> {
-  const response = await fetch("/api/design-agent", {
-    method: "POST",
-    cache: "no-store",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ messages, context, cloudConsent: options.cloudConsent === true }),
-    signal: options.signal,
-  });
-  const payload = (await response.json().catch(() => null)) as {
-    result?: PreparedDesignResult;
-    error?: string;
-  } | null;
-  if (!response.ok || !payload?.result) {
-    throw new Error(payload?.error || `Design agent request failed: ${response.status}`);
+  const prompt = latestUserText(messages);
+  if (!prompt) {
+    return { type: "question", id: "missing-prompt", text: "ต้องการให้ช่วยปรับอะไรใน Artwork นี้ครับ?" };
   }
-  if (payload.result.type === "proposal") {
-    const proposal = payload.result.proposal;
+  const direction = await prepareRemoteOrchestratorTurn(
+    {
+      prompt,
+      conversationHistory: messages.slice(-12),
+      designContext: context,
+      canvasSummary: {
+        objectCount: countSnapshotObjects(context.snapshot),
+        selectedCount: context.selectedObjectIds.length,
+        width: context.artworkWidth,
+        height: context.artworkHeight,
+      },
+      referenceAnalyses: [],
+    },
+    options,
+  );
+  if (direction.kind === "design-plan") {
+    const proposal = direction.proposal;
     if (proposal?.protocolVersion !== 1 || !Array.isArray(proposal.commands)) {
       throw new Error("Design agent returned an invalid plan.");
     }
+    return { type: "proposal", proposal };
   }
-  return payload.result;
+  if (direction.kind === "clarification") {
+    return {
+      type: "question",
+      id: `question-${crypto.randomUUID()}`,
+      text: direction.question,
+      options: direction.options,
+    };
+  }
+  if (direction.kind === "answer") return { type: "text", text: direction.text };
+  return {
+    type: "text",
+    text: "ArtShift Orchestrator เลือกงานสร้างภาพ กรุณาดำเนินงานต่อผ่าน AI Assistance ครับ",
+  };
+}
+
+function latestUserText(messages: readonly ClientChatMessage[]): string {
+  const latest = [...messages].reverse().find((message) => message.role === "user");
+  return latest?.content.trim().slice(0, 20_000) ?? "";
+}
+
+function countSnapshotObjects(snapshot: unknown): number {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return 0;
+  const objects = (snapshot as Record<string, unknown>).objects;
+  return Array.isArray(objects) ? objects.length : 0;
 }
 
 function summarizeElement(element: EngineState["doc"]["slides"][number]["elements"][number]) {

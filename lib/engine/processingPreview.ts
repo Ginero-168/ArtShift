@@ -43,6 +43,7 @@ export type ProcessingPreview = {
   phase: ProcessingPreviewPhase;
   queuePosition?: number;
   sourceDataUrl?: string;
+  userDragged?: boolean;
 };
 
 export type ProcessingPreviewInput = Omit<ProcessingPreview, "id" | "phase"> & {
@@ -101,6 +102,25 @@ export function clearProcessingPreview(id: string): void {
 /** Backward-compatible single-item accessor; returns the newest preview. */
 export function getProcessingPreview(): ProcessingPreview | null {
   return previews.at(-1) ?? null;
+}
+
+export function getProcessingPreviewById(id: string): ProcessingPreview | undefined {
+  return previews.find((item) => item.id === id);
+}
+
+export function getProcessingPreviewPlacement(
+  id: string | undefined,
+  fallback: ProcessingPreviewSourceBounds,
+): ProcessingPreviewSourceBounds {
+  if (!id) return fallback;
+  const current = previews.find((item) => item.id === id);
+  if (!current) return fallback;
+  return {
+    x: current.x,
+    y: current.y,
+    width: current.width,
+    height: current.height,
+  };
 }
 
 export function getProcessingPreviews(): readonly ProcessingPreview[] {

@@ -119,8 +119,8 @@ export function parseReplicateAssistantOutput(
   if (rawCalls.length === 0 && raw.includes(HARMONY_CALL)) {
     const callPattern =
       /<｜call｜>([a-zA-Z0-9_-]+)(?::([a-zA-Z0-9_-]+))?([\s\S]*?)(?:<｜(?:return|call|end)｜>|$)/g;
-    let match: RegExpExecArray | null;
-    while ((match = callPattern.exec(raw)) !== null) {
+    let match = callPattern.exec(raw);
+    while (match !== null) {
       const toolName = match[1]?.trim();
       const callId = match[2]?.trim();
       const jsonText = match[3]?.trim();
@@ -130,6 +130,7 @@ export function parseReplicateAssistantOutput(
           rawCalls.push({ id: callId, name: toolName, input: parsedInput });
         }
       }
+      match = callPattern.exec(raw);
     }
   }
 

@@ -4,6 +4,7 @@ import { getCanvasViewport, subscribeCanvasViewport } from "@/lib/engine/canvasV
 import { createImage } from "@/lib/engine/factory";
 import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
 import { preloadDataURL } from "@/lib/engine/imageCache";
+import { getProcessingPreviewById } from "@/lib/engine/processingPreview";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
@@ -163,6 +164,8 @@ export async function runContextAwareImageTask(
     run: async (context) => {
       const executionSignal = context.signal;
       const unsubscribeViewport = subscribeCanvasViewport(() => {
+        const currentPreview = getProcessingPreviewById(context.id);
+        if (currentPreview?.userDragged) return;
         const currentViewport = getCanvasViewport();
         if (!currentViewport) return;
         const currentSlide = useEngine.getState().currentSlide();
@@ -360,12 +363,21 @@ export async function runContextAwareImageTask(
               { ...currentViewport, slideWidth: slide.width, slideHeight: slide.height },
               { width: preloaded.width, height: preloaded.height },
             );
-            const finalBounds = computeMultiImagePlacement(
+            const computedBounds = computeMultiImagePlacement(
               baseBounds,
               options.placement,
               slide.width,
               slide.height,
             );
+            const currentPreview = getProcessingPreviewById(context.id);
+            const finalBounds = currentPreview?.userDragged
+              ? {
+                  x: currentPreview.x,
+                  y: currentPreview.y,
+                  width: computedBounds.width,
+                  height: computedBounds.height,
+                }
+              : computedBounds;
             task = appendAiTaskEvent(task, { type: "commit.started", attempt });
             task = transition(task, { type: "committing" }, options, {
               stage: "committing",

@@ -1,6 +1,6 @@
 import {
-  CREATIVE_DIRECTOR_SYSTEM,
-  prepareCreativeDirection,
+  ARTSHIFT_ORCHESTRATOR_SYSTEM,
+  prepareOrchestratorTurn,
 } from "@/lib/ai/orchestration/creativeDirector";
 import type { AiChatMessage } from "@/lib/ai-runtime/contracts";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
@@ -9,7 +9,7 @@ import type { ArtworkExecutionContext, PlanProposal } from "./contracts";
 /** @deprecated Use the ArtShift Orchestrator route. Kept as a compatibility adapter. */
 export type DesignAgentContext = ArtworkExecutionContext;
 /** @deprecated The ArtShift Orchestrator owns the only remote system prompt. */
-export const DESIGN_AGENT_SYSTEM = CREATIVE_DIRECTOR_SYSTEM;
+export const DESIGN_AGENT_SYSTEM = ARTSHIFT_ORCHESTRATOR_SYSTEM;
 
 export type PrepareDesignTurnOptions = {
   replicateToken?: string;
@@ -49,7 +49,7 @@ export async function prepareDesignTurn(
     replicateToken: options.replicateToken,
     accountId: options.accountId,
   });
-  const direction = await prepareCreativeDirection(
+  const direction = await prepareOrchestratorTurn(
     {
       prompt,
       conversationHistory: normalizeHistory(messages),

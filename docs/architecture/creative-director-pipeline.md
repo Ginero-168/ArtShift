@@ -4,6 +4,11 @@
 
 ArtShift's **Creative Director & AI Studio Pipeline** is a local-first, multi-specialist creative orchestration system. It transforms complex human design intent into coordinated visual outputs across the Artwork canvas, incorporating generative AI, vectorization, typography, and publisher brand governance.
 
+The canonical reasoning surface is the **ArtShift Orchestrator** (`/api/ai/director`).
+“Creative Director” remains a source-compatible name for the model alias and older
+imports, while the deprecated Design Agent route delegates to this same planning
+and review implementation. There is one remote brain and one tool protocol.
+
 ```mermaid
 flowchart TD
     User["User Prompt (AI CoPilot Bar)"] --> Director["Creative Director (/api/ai/director)"]
@@ -44,6 +49,7 @@ flowchart TD
 - **File**: [`lib/ai/orchestration/executionGraph.ts`](file:///root/ArtShift/lib/ai/orchestration/executionGraph.ts)
 - **Pipeline Topology**: Strictly sequential linear pipeline (up to 8 steps) where any step references previous step outputs via `dependsOnStepId`.
 - **Exception Gating**: `advancePlanStep()` evaluates step outputs against `qualityThreshold` (default 0.70). Drops below threshold transition the plan into `paused_on_gate` to allow user correction without losing completed step work.
+- **Execution truth**: the runner uses real image, vectorizer, layout, copywriter and brand-kit seams. Unsupported specialists, missing dependencies, empty outputs and malformed step payloads pause the plan with an actionable error; it never returns sample URLs or fabricated artifacts.
 
 ### 2.3 Non-Destructive Canvas Ghost Overlay
 - **File**: [`lib/renderer/ghostOverlay.ts`](file:///root/ArtShift/lib/renderer/ghostOverlay.ts)
