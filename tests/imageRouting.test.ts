@@ -219,7 +219,7 @@ describe("deterministic image routing policy v1", () => {
   });
 
   describe("catalog fallback behavior", () => {
-    it("safely falls back unavailable fast route to baseline image-general when resolveAvailable is true", () => {
+    it("resolves available fast route directly to image-fast when resolveAvailable is true", () => {
       const route = chooseImageRoute(
         {
           operation: "generate",
@@ -233,9 +233,9 @@ describe("deterministic image routing policy v1", () => {
         { resolveAvailable: true },
       );
 
-      // Flare is unavailable in catalog -> falls back to image-general
-      expect(route.modelAlias).toBe("image-general");
-      expect(route.reasonCodes).toContain("FALLBACK_BASELINE");
+      // Flare is available in catalog -> resolves to image-fast
+      expect(route.modelAlias).toBe("image-fast");
+      expect(route.reasonCodes).toContain("FAST_COMPLEX");
     });
   });
 

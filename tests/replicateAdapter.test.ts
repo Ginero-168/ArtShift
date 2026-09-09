@@ -289,6 +289,63 @@ describe("Replicate AI adapter", () => {
     ]);
   });
 
+  it("normalizes tool envelopes with calls array or OpenAI tool_calls with string arguments", async () => {
+    const rawEnvelope = JSON.stringify({
+      tool_calls: [
+        {
+          id: "call-gemini-test",
+          type: "function",
+          function: {
+            name: "propose_creative_direction",
+            arguments: JSON.stringify({
+              kind: "image-task",
+              summary: "A cute panda",
+              outputCount: 1,
+            }),
+          },
+        },
+      ],
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-chat-openai-style",
+          model: "google/gemini-2.5-flash",
+          status: "succeeded",
+          output: [rawEnvelope],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "assistant.chat",
+      input: {
+        messages: [{ role: "user", content: "สร้างรูปแพนด้า" }],
+        tools: [
+          {
+            name: "propose_creative_direction",
+            description: "Propose creative direction.",
+            inputSchema: { type: "object" },
+          },
+        ],
+      },
+      model: "google/gemini-2.5-flash",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output.stopReason).toBe("tool_use");
+    expect(result.output.toolCalls).toHaveLength(1);
+    expect(result.output.toolCalls[0].name).toBe("propose_creative_direction");
+    expect(result.output.toolCalls[0].input).toMatchObject({
+      kind: "image-task",
+      summary: "A cute panda",
+      outputCount: 1,
+    });
+  });
+
   it("returns prompt enhancement text through the same Replicate provider", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

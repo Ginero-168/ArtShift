@@ -517,21 +517,42 @@ async function executeDirectorPass(
     if (containsSensitivePayload(text)) return invalidDirection();
     const candidate = parseJsonCandidate(text);
     if (isRecord(candidate)) {
-      if (
-        (candidate.kind === "tool_calls" || candidate.kind === "tool_call") &&
-        (Array.isArray(candidate.calls) || isRecord(candidate.call))
-      ) {
-        const extractedCalls = Array.isArray(candidate.calls)
-          ? candidate.calls
-          : [candidate.call];
+      const extractedCalls: unknown[] = Array.isArray(candidate.calls)
+        ? candidate.calls
+        : Array.isArray(candidate.tool_calls)
+          ? candidate.tool_calls
+          : isRecord(candidate.call)
+            ? [candidate.call]
+            : isRecord(candidate.tool_call)
+              ? [candidate.tool_call]
+              : typeof candidate.name === "string" || isRecord(candidate.function)
+                ? [candidate]
+                : [];
+      if (extractedCalls.length > 0) {
         for (const rawCall of extractedCalls) {
           if (!isRecord(rawCall)) continue;
-          const callName = typeof rawCall.name === "string" ? rawCall.name : "";
-          const callInput = isRecord(rawCall.input)
-            ? rawCall.input
-            : isRecord(rawCall.arguments)
-              ? rawCall.arguments
-              : null;
+          let callName = typeof rawCall.name === "string" ? rawCall.name : "";
+          if (!callName && isRecord(rawCall.function) && typeof rawCall.function.name === "string") {
+            callName = rawCall.function.name;
+          }
+          let callInput: Record<string, unknown> | null = null;
+          if (isRecord(rawCall.input)) {
+            callInput = rawCall.input;
+          } else if (isRecord(rawCall.arguments)) {
+            callInput = rawCall.arguments;
+          } else if (typeof rawCall.arguments === "string") {
+            const parsed = parseJsonCandidate(rawCall.arguments);
+            if (isRecord(parsed)) callInput = parsed;
+          } else if (isRecord(rawCall.function)) {
+            if (isRecord(rawCall.function.input)) {
+              callInput = rawCall.function.input;
+            } else if (isRecord(rawCall.function.arguments)) {
+              callInput = rawCall.function.arguments;
+            } else if (typeof rawCall.function.arguments === "string") {
+              const parsed = parseJsonCandidate(rawCall.function.arguments);
+              if (isRecord(parsed)) callInput = parsed;
+            }
+          }
           if (!callInput) continue;
           if (callName === CREATIVE_DIRECTION_TOOL.name) {
             return parseCreativeDirection(callInput, input, knowledgeIds);
@@ -642,7 +663,17 @@ export async function reviewCreativeOutput(
     if (text && !containsSensitivePayload(text)) {
       const candidate = parseJsonCandidate(text);
       if (isRecord(candidate)) {
-        const reviewCandidate = isRecord(candidate.review) ? candidate.review : candidate;
+        let reviewCandidate = isRecord(candidate.review) ? candidate.review : candidate;
+        const candidateCalls = Array.isArray(candidate.calls)
+          ? candidate.calls
+          : Array.isArray(candidate.tool_calls)
+            ? candidate.tool_calls
+            : null;
+        if (candidateCalls && candidateCalls.length > 0 && isRecord(candidateCalls[0])) {
+          const first = candidateCalls[0];
+          if (isRecord(first.input)) reviewCandidate = first.input;
+          else if (isRecord(first.arguments)) reviewCandidate = first.arguments;
+        }
         if (
           typeof reviewCandidate.passed === "boolean" &&
           isBoundedString(reviewCandidate.summary, 2_000)

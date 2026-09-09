@@ -73,25 +73,23 @@ export const CREATING_MODEL_CATALOG: readonly CreatingModelEntry[] = [
     alias: "image-fast",
     provider: "replicate",
     modelId: "openai/gpt-image-2.5-flare",
-    // Unavailable until IMAGE_FAST_MODEL_ENABLED feature flag is set.
-    status: "unavailable",
+    status: "available",
     capabilities: ["generate", "edit"],
     supportedQualities: GPT_IMAGE_25_QUALITIES,
     role: "creating",
     notes:
-      "Fast lane for everyday generation/editing, dense-text, and multi-variant tasks. Requires IMAGE_FAST_MODEL_ENABLED flag and passing ArtShift benchmark.",
+      "Fast lane for everyday generation/editing, dense-text, and multi-variant tasks. Active in live routing.",
   },
   {
     alias: "image-precision",
     provider: "replicate",
     modelId: "openai/gpt-image-2.5-sunburst",
-    // Unavailable until IMAGE_PRECISION_MODEL_ENABLED feature flag is set.
-    status: "unavailable",
+    status: "available",
     capabilities: ["generate", "edit"],
     supportedQualities: GPT_IMAGE_25_QUALITIES,
     role: "creating",
     notes:
-      "Precision lane for edits requiring high identity/logo/composition preservation fidelity. Requires IMAGE_PRECISION_MODEL_ENABLED flag and passing blinded preservation benchmark.",
+      "Precision lane for edits requiring high identity/logo/composition preservation fidelity. Active in live routing.",
   },
   {
     alias: "local-vtracer",

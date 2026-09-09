@@ -245,6 +245,107 @@ describe("gpt-oss-120b Creative Director", () => {
     });
   });
 
+  it("unwraps calls envelope without kind: 'tool_calls'", async () => {
+    const rawEnvelope = JSON.stringify({
+      calls: [
+        {
+          name: "propose_creative_direction",
+          input: {
+            kind: "image-task",
+            summary: "Cat on a surfboard",
+            refinedPrompt: "A sleek cat riding an ocean wave",
+            specialist: "image_generator",
+            capability: "IMAGE_DEFAULT",
+            modelAlias: "image-general",
+            knowledgeSkillIds: [],
+            reviewCriteria: ["Cat is balanced on surfboard"],
+            search: { required: false, queries: [], sources: [] },
+            outputCount: 1,
+          },
+        },
+      ],
+    });
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: rawEnvelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: rawEnvelope },
+      },
+      metadata: toolResult.metadata,
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "แมวเล่นเซิร์ฟบอร์ด",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "Cat on a surfboard",
+      modelAlias: "image-general",
+    });
+  });
+
+  it("unwraps OpenAI-style tool_calls with stringified function arguments", async () => {
+    const rawEnvelope = JSON.stringify({
+      tool_calls: [
+        {
+          type: "function",
+          function: {
+            name: "propose_creative_direction",
+            arguments: JSON.stringify({
+              kind: "image-task",
+              summary: "Cyberpunk cityscape",
+              refinedPrompt: "Futuristic city with neon signs and flying cars",
+              specialist: "image_generator",
+              capability: "IMAGE_DEFAULT",
+              modelAlias: "image-fast",
+              knowledgeSkillIds: [],
+              reviewCriteria: ["Neon reflections on wet pavement"],
+              search: { required: false, queries: [], sources: [] },
+              outputCount: 1,
+            }),
+          },
+        },
+      ],
+    });
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: rawEnvelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: rawEnvelope },
+      },
+      metadata: toolResult.metadata,
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "เมืองไซเบอร์พังก์",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "Cyberpunk cityscape",
+      modelAlias: "image-fast",
+    });
+  });
+
   it("applies a validated direction while preserving server-owned execution policy", () => {
     const task = baseTask();
     const directed = applyCreativeDirectionToTask(task, {

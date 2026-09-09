@@ -26,13 +26,13 @@ describe("Creating model capability catalog", () => {
     });
   });
 
-  it("keeps Flare and Sunburst unavailable until feature flags are set", () => {
+  it("makes Flare and Sunburst available in the catalog", () => {
     for (const alias of ["image-fast", "image-precision"]) {
       const entry = CREATING_MODEL_CATALOG.find((model) => model.alias === alias);
-      expect(entry).toMatchObject({ status: "unavailable" });
+      expect(entry).toMatchObject({ status: "available" });
       expect(resolveCreatingModel("generate", alias)).toMatchObject({
-        ok: false,
-        reason: "model-unavailable",
+        ok: true,
+        model: { alias, status: "available" },
       });
     }
   });

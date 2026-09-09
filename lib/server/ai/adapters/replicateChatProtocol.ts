@@ -99,10 +99,14 @@ export function parseReplicateAssistantOutput(
 
   if (isRecord(candidate)) {
     if (typeof candidate.text === "string") text = candidate.text.trim();
-    if (candidate.kind === "tool_calls" && Array.isArray(candidate.calls)) {
+    if (Array.isArray(candidate.calls)) {
       rawCalls = candidate.calls;
-    } else if (candidate.kind === "tool_call" && isRecord(candidate.call)) {
+    } else if (Array.isArray(candidate.tool_calls)) {
+      rawCalls = candidate.tool_calls;
+    } else if (isRecord(candidate.call)) {
       rawCalls = [candidate.call];
+    } else if (isRecord(candidate.tool_call)) {
+      rawCalls = [candidate.tool_call];
     } else if (typeof candidate.name === "string" && allowedTools.has(candidate.name)) {
       rawCalls = [candidate];
     } else if (
@@ -180,16 +184,32 @@ export function parseReplicateAssistantOutput(
       warnings.push("Provider returned a malformed tool call.");
       return;
     }
-    const name = typeof value.name === "string" ? value.name.trim() : "";
+    let name = typeof value.name === "string" ? value.name.trim() : "";
+    if (!name && isRecord(value.function) && typeof value.function.name === "string") {
+      name = value.function.name.trim();
+    }
     if (!name || !allowedTools.has(name)) {
       warnings.push("Provider returned a tool that is not enabled for this request.");
       return;
     }
-    const callInput = isRecord(value.input)
-      ? value.input
-      : isRecord(value.arguments)
-        ? value.arguments
-        : null;
+    let callInput: Record<string, unknown> | null = null;
+    if (isRecord(value.input)) {
+      callInput = value.input;
+    } else if (isRecord(value.arguments)) {
+      callInput = value.arguments;
+    } else if (typeof value.arguments === "string") {
+      const parsed = parseJsonCandidate(value.arguments);
+      if (isRecord(parsed)) callInput = parsed;
+    } else if (isRecord(value.function)) {
+      if (isRecord(value.function.input)) {
+        callInput = value.function.input;
+      } else if (isRecord(value.function.arguments)) {
+        callInput = value.function.arguments;
+      } else if (typeof value.function.arguments === "string") {
+        const parsed = parseJsonCandidate(value.function.arguments);
+        if (isRecord(parsed)) callInput = parsed;
+      }
+    }
     if (!callInput) {
       warnings.push(`Provider tool ${name} did not include an object input.`);
       return;
