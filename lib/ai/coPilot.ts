@@ -53,6 +53,13 @@ export interface SubAgentActionLog {
   quality?: "low" | "medium" | "high";
 }
 
+export interface CoPilotMessageImage {
+  url: string;
+  fileId?: string;
+  label?: string;
+  prompt?: string;
+}
+
 export interface CoPilotMessage {
   id: string;
   role: CoPilotRole;
@@ -61,6 +68,10 @@ export interface CoPilotMessage {
   kind?: "message" | "progress";
   actions?: SubAgentActionLog[];
   suggestions?: string[];
+  thought?: string;
+  toolLabel?: string;
+  images?: CoPilotMessageImage[];
+  requestedCount?: number;
 }
 
 export interface WorkspaceContext {
