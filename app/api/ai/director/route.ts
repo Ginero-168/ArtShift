@@ -135,7 +135,16 @@ function parseDirectorInput(
     ) {
       return null;
     }
+    const rawDisplayName =
+      typeof candidate.displayName === "string"
+        ? candidate.displayName
+        : isRecord(candidate.ref) && typeof candidate.ref.displayName === "string"
+          ? candidate.ref.displayName
+          : undefined;
+    const displayName =
+      rawDisplayName && isSafeString(rawDisplayName, 500) ? rawDisplayName.trim() : undefined;
     referenceAnalyses.push({
+      ...(displayName ? { displayName } : {}),
       caption: candidate.caption,
       objects: candidate.objects,
       visibleText: candidate.visibleText,

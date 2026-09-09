@@ -336,10 +336,12 @@ function CollapsibleThought({
   thought,
   isLive = false,
   defaultOpen = true,
+  onCancel,
 }: {
   thought: string;
   isLive?: boolean;
   defaultOpen?: boolean;
+  onCancel?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -348,93 +350,130 @@ function CollapsibleThought({
       style={{
         display: "flex",
         flexDirection: "column",
-        borderRadius: 10,
-        background: "#f8fafc",
-        border: "1px solid #e2e8f0",
-        overflow: "hidden",
         width: "100%",
-        marginBottom: 8,
-        transition: "border-color 0.15s ease",
+        marginBottom: 6,
       }}
     >
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
+      <div
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          padding: "8px 12px",
-          background: isOpen ? "#f1f5f9" : "transparent",
-          border: "none",
-          cursor: "pointer",
-          width: "100%",
-          textAlign: "left",
-          transition: "background-color 0.15s ease",
-        }}
-        onMouseEnter={(e) => {
-          if (!isOpen) e.currentTarget.style.background = "#f1f5f9";
-        }}
-        onMouseLeave={(e) => {
-          if (!isOpen) e.currentTarget.style.background = "transparent";
+          flexWrap: "wrap",
+          gap: 6,
+          padding: "2px 0",
         }}
       >
         <div
           style={{
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
-            gap: 7,
-            color: "#334155",
+            gap: 6,
+            color: "#1e293b",
             fontSize: 12.5,
             fontWeight: 600,
           }}
         >
-          <ThoughtBrainIcon style={{ color: "#4f46e5", width: 15, height: 15 }} />
+          <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
           <span>{isLive ? "กำลังคิดอยู่..." : "ความคิดของ AI (Thought)"}</span>
           {isLive && (
             <span
               style={{
                 display: "inline-block",
-                width: 6,
-                height: 6,
+                width: 5,
+                height: 5,
                 borderRadius: "50%",
-                background: "#4f46e5",
+                background: "#6366f1",
                 animation: "artshiftPulse 1.2s ease-in-out infinite",
               }}
             />
           )}
         </div>
-        <div
+
+        <span style={{ color: "#cbd5e1", fontSize: 11 }}>•</span>
+
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
           style={{
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
-            gap: 4,
+            gap: 3,
+            background: "transparent",
+            border: "none",
+            padding: "2px 4px",
             color: "#64748b",
-            fontSize: 11,
+            fontSize: 11.5,
             fontWeight: 500,
+            cursor: "pointer",
+            borderRadius: 4,
+            transition: "color 0.15s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "#4f46e5";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "#64748b";
           }}
         >
           <span>{isOpen ? "ย่อ" : "ดูรายละเอียด"}</span>
           <ChevronDownIcon
             style={{
               transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-              width: 13,
-              height: 13,
+              width: 12,
+              height: 12,
+              transition: "transform 0.15s ease",
             }}
           />
-        </div>
-      </button>
+        </button>
+
+        {isLive && onCancel && (
+          <>
+            <span style={{ color: "#cbd5e1", fontSize: 11 }}>•</span>
+            <button
+              type="button"
+              data-testid="cancel-ai-task"
+              aria-label="ยกเลิก Task"
+              onClick={onCancel}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                background: "transparent",
+                border: "none",
+                padding: "2px 4px",
+                color: "#94a3b8",
+                fontSize: 11.5,
+                fontWeight: 500,
+                cursor: "pointer",
+                borderRadius: 4,
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#ef4444";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "#94a3b8";
+              }}
+            >
+              <CloseIcon style={{ width: 10, height: 10 }} />
+              <span>ยกเลิก</span>
+            </button>
+          </>
+        )}
+      </div>
 
       {isOpen && (
         <div
           style={{
-            padding: "8px 12px 10px 14px",
-            borderTop: "1px solid #e2e8f0",
-            borderLeft: "3px solid #4f46e5",
-            color: "#334155",
-            fontSize: 12.5,
-            lineHeight: 1.55,
-            background: "#ffffff",
+            marginTop: 6,
+            marginLeft: 2,
+            padding: "7px 12px 7px 12px",
+            borderLeft: "2px solid #818cf8",
+            color: "#475569",
+            fontSize: 12,
+            lineHeight: 1.6,
+            background: "rgba(248, 250, 252, 0.7)",
+            borderRadius: "0 8px 8px 0",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
           }}
@@ -2275,7 +2314,8 @@ export default function AICoPilotBar() {
                     : "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ...")
                 }
                 isLive={true}
-                defaultOpen={true}
+                defaultOpen={false}
+                onCancel={() => abortRef.current?.abort()}
               />
 
               {/* Tool Step (if generating) */}
@@ -2328,42 +2368,6 @@ export default function AICoPilotBar() {
                   </div>
                 </>
               )}
-
-              {/* Cancel Button */}
-              <div style={{ marginTop: 4 }}>
-                <button
-                  type="button"
-                  data-testid="cancel-ai-task"
-                  aria-label="ยกเลิก Task"
-                  onClick={() => abortRef.current?.abort()}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    background: "#ffffff",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 6,
-                    padding: "4px 9px",
-                    color: "#64748b",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "#dc2626";
-                    e.currentTarget.style.borderColor = "#fca5a5";
-                    e.currentTarget.style.background = "#fef2f2";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "#64748b";
-                    e.currentTarget.style.borderColor = "#e2e8f0";
-                    e.currentTarget.style.background = "#ffffff";
-                  }}
-                >
-                  <CloseIcon style={{ width: 11, height: 11 }} />
-                  <span>ยกเลิก Task</span>
-                </button>
-              </div>
             </div>
           )}
 
@@ -2402,18 +2406,25 @@ export default function AICoPilotBar() {
                   alignSelf: "flex-start",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 4,
-                  border: "1px solid #fecaca",
-                  borderRadius: 6,
-                  padding: "4px 9px",
-                  background: "#fef2f2",
-                  color: "#dc2626",
+                  gap: 3,
+                  border: "none",
+                  borderRadius: 4,
+                  padding: "2px 6px",
+                  background: "transparent",
+                  color: "#94a3b8",
                   cursor: "pointer",
-                  fontSize: 10.5,
-                  fontWeight: 600,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  transition: "color 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "#dc2626";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "#94a3b8";
                 }}
               >
-                <CloseIcon style={{ width: 11, height: 11 }} />
+                <CloseIcon style={{ width: 10, height: 10 }} />
                 <span>ยกเลิก Task</span>
               </button>
             </div>

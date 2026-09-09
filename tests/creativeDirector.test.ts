@@ -435,4 +435,75 @@ describe("gpt-oss-120b Creative Director", () => {
       ],
     });
   });
+
+  it("accepts image_generator when referenceAnalyses are attached (e.g. ad for book cover)", async () => {
+    const execute = vi.fn().mockResolvedValue(toolResult);
+    const reference = {
+      displayName: "ทฤษฎีปล่อยเขา (The Let Them Theory).jpg",
+      caption: "green book cover titled The Let Them Theory",
+      objects: ["book"],
+      visibleText: "THE LET THEM THEORY กฎปล่อยเขา Mel Robbins",
+      dimensions: { width: 1000, height: 1393, aspectRatio: 1000 / 1393 },
+      appearanceNotes: ["clean modern typography"],
+      limitations: [],
+    };
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "สร้างรูป Ad ขายหนังสือชื่อว่า The Let Them ให้หน่อย",
+        canvasSummary: { objectCount: 1, selectedCount: 1, width: 1920, height: 1080 },
+        referenceAnalyses: [reference],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+
+    expect(result.kind).toBe("image-task");
+    if (result.kind === "image-task") {
+      expect(result.specialist).toBe("image_generator");
+      expect(result.capability).toBe("IMAGE_DEFAULT");
+    }
+
+    // Verify prompt payload sent to execute contains formatted reference information
+    const calledMessages = execute.mock.calls[0]?.[1];
+    const userMessageContent = JSON.stringify(calledMessages);
+    expect(userMessageContent).toContain("ทฤษฎีปล่อยเขา (The Let Them Theory).jpg");
+    expect(userMessageContent).toContain("THE LET THEM THEORY กฎปล่อยเขา Mel Robbins");
+    expect(userMessageContent).toContain("green book cover titled The Let Them Theory");
+  });
+
+  it("accepts image_editor when referenceAnalyses are attached for editing", async () => {
+    const editToolResult = structuredClone(toolResult);
+    editToolResult.output.toolCalls[0].input.specialist = "image_editor";
+    editToolResult.output.toolCalls[0].input.capability = "IMAGE_EDIT";
+    const execute = vi.fn().mockResolvedValue(editToolResult);
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "แก้ไขภาพนี้ให้พื้นหลังเป็นสีส้ม",
+        canvasSummary: { objectCount: 1, selectedCount: 1, width: 1920, height: 1080 },
+        referenceAnalyses: [
+          {
+            displayName: "photo.jpg",
+            caption: "portrait photo",
+            objects: ["person"],
+            visibleText: "",
+            dimensions: { width: 800, height: 800, aspectRatio: 1 },
+            appearanceNotes: [],
+            limitations: [],
+          },
+        ],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+
+    expect(result.kind).toBe("image-task");
+    if (result.kind === "image-task") {
+      expect(result.specialist).toBe("image_editor");
+      expect(result.capability).toBe("IMAGE_EDIT");
+    }
+  });
 });

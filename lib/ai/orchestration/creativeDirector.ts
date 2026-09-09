@@ -74,10 +74,10 @@ export type CreativeDirectorInput = {
     height: number;
     brandName?: string;
   };
-  referenceAnalyses: readonly Pick<
+  referenceAnalyses: readonly (Pick<
     ImageReferenceAnalysis,
     "caption" | "objects" | "visibleText" | "dimensions" | "appearanceNotes" | "limitations"
-  >[];
+  > & { displayName?: string })[];
   availableCapabilities: readonly string[];
   cloudConsent?: boolean;
   accountId?: string;
@@ -315,6 +315,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Choose one allowlisted specialist and capability. Respect an explicit user model preference only when that model is listed as available.",
   "For supported Canvas edits, call propose_design_plan with exact current ids and a complete atomic command plan. Ask one focused clarification only when a missing fact materially changes the result.",
   "For image creation or image editing, call propose_creative_direction. For an answer that needs no execution, return answer. Never return competing plans or call both planning tools in one turn.",
+  "When the user attaches reference images or name tags, analyze their visual details, detected titles, OCR text, and objects to guide the design. If the user asks to create an ad, poster, or new image referencing the tagged subject, choose image_generator and incorporate the title, key messaging, and visual theme into refinedPrompt.",
   "For a sequential plan, every step must be executable from its payload and earlier outputs: image_generator/image_editor require payload.prompt, vectorizer requires an earlier image dependency, copywriter requires payload.headline or payload.text, and layout_designer/brand_stylist must describe the exact local operation. Never use placeholder URLs, sample copy or fabricated quality scores.",
   "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested (1 to 5). A clear requested quantity (e.g. '3 รูป', '5 แบบ', '2 images') is authoritative and is not by itself a reason to ask a clarification.",
   "Return exactly one concise outputBrief in outputBriefs per requested output. Each outputBrief must describe one standalone image and preserve requested differences such as color, subject, angle, or composition. Never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
@@ -351,12 +352,20 @@ export async function prepareCreativeDirection(
   const knowledge = retrieveDesignKnowledge(input.prompt, 3);
   const searchImagesAvailable =
     Boolean(runtime.searchImages) && (runtime.searchImagesAvailable ?? true);
+  const formattedReferences = formatReferenceAnalysesForPrompt(input.referenceAnalyses);
   const messages: AiAssistantChatInput["messages"] = [
     ...normalizeConversationHistory(input.conversationHistory, input.prompt),
     {
       role: "user",
       content: [
-        { type: "text", text: `User request:\n${input.prompt.slice(0, 20_000)}` },
+        {
+          type: "text",
+          text: `User request:\n${input.prompt.slice(0, 20_000)}${
+            formattedReferences
+              ? `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Analyze and incorporate their visual style, context, detected title, and OCR text into your creative direction, refinedPrompt, and reviewCriteria:\n${formattedReferences}`
+              : ""
+          }`,
+        },
         {
           type: "text",
           text: `\n=== UNTRUSTED LOCAL CONTEXT ===\n${JSON.stringify({
@@ -755,13 +764,18 @@ export function parseCreativeDirection(
     return invalidDirection("modelAlias cannot resolve to image-gpt-2");
   }
 
-  const expectsEditor = input.referenceAnalyses.length > 0;
+  if (value.specialist === "image_editor" && value.capability !== "IMAGE_EDIT") {
+    return invalidDirection("image_editor requires IMAGE_EDIT capability");
+  }
+  if (value.specialist === "image_generator" && value.capability !== "IMAGE_DEFAULT") {
+    return invalidDirection("image_generator requires IMAGE_DEFAULT capability");
+  }
   if (
-    (expectsEditor && (value.specialist !== "image_editor" || value.capability !== "IMAGE_EDIT")) ||
-    (!expectsEditor &&
-      (value.specialist !== "image_generator" || value.capability !== "IMAGE_DEFAULT"))
+    input.referenceAnalyses.length === 0 &&
+    value.specialist === "image_editor" &&
+    !input.canvasSummary?.selectedCount
   ) {
-    return invalidDirection("specialist or capability does not match referenceAnalyses presence");
+    return invalidDirection("image_editor requires referenceAnalyses or selected canvas element");
   }
   if (value.requiredSubjects !== undefined && !isStringArray(value.requiredSubjects, 8, 200)) {
     return invalidDirection("requiredSubjects is invalid");
@@ -935,8 +949,27 @@ function normalizeArtworkContext(value: unknown): unknown {
   return JSON.parse(serialized) as unknown;
 }
 
+function formatReferenceAnalysesForPrompt(
+  values: CreativeDirectorInput["referenceAnalyses"],
+): string {
+  if (!values.length) return "";
+  return values
+    .map((val, idx) => {
+      const title = val.displayName ? `"${val.displayName}"` : `Image ${idx + 1}`;
+      const lines = [`- Reference ${idx + 1} (${title}):`];
+      if (val.caption) lines.push(`  • Visual Summary: ${val.caption}`);
+      if (val.visibleText) lines.push(`  • Text on Image (OCR): "${val.visibleText}"`);
+      if (val.objects?.length) lines.push(`  • Detected Objects: ${val.objects.join(", ")}`);
+      if (val.dimensions) lines.push(`  • Dimensions: ${val.dimensions.width}×${val.dimensions.height}`);
+      if (val.appearanceNotes?.length) lines.push(`  • Appearance: ${val.appearanceNotes.join("; ")}`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
 function normalizeReferenceAnalyses(values: CreativeDirectorInput["referenceAnalyses"]) {
   return values.slice(0, 4).map((value) => ({
+    ...(value.displayName ? { displayName: value.displayName.slice(0, 500) } : {}),
     caption: value.caption.slice(0, 2_000),
     objects: value.objects.slice(0, 50).map((item) => item.slice(0, 200)),
     visibleText: value.visibleText.slice(0, 2_000),

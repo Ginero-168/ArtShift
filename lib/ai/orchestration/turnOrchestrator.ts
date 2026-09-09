@@ -135,7 +135,7 @@ export function createDirectedImageTask(
   const plan: AiTaskPlan = {
     id: crypto.randomUUID(),
     prompt: input.prompt,
-    subAgent: input.refs.length > 0 ? "image_editor" : "image_generator",
+    subAgent: direction.specialist,
     capability: direction.capability,
     quality: quality.quality,
     qualityRationale: quality.rationale,
