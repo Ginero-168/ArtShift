@@ -552,7 +552,9 @@ export default function AICoPilotBar() {
       const isResult = event.presentation === "result";
       const progressLabel = typeof event.progress === "number" ? ` (${event.progress}%)` : "";
       setMessages((previous) => {
-        const messageId = `progress-${event.taskId}-${event.stage}`;
+        const messageId = isResult
+          ? `result-${event.taskId}-${event.timestamp}`
+          : `progress-${event.taskId}`;
         const nextMessage: CoPilotMessage = {
           id: messageId,
           role: isResult ? "assistant" : "system",
@@ -1512,64 +1514,53 @@ export default function AICoPilotBar() {
         {/* Thread Header */}
         <div
           style={{
-            padding: "11px 14px",
-            borderBottom: "1px solid #e2e8f0",
+            padding: "8px 14px",
+            borderBottom: "1px solid #f1f5f9",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             background: "#ffffff",
+            minHeight: 38,
           }}
         >
           <div
             title={UNIFIED_AI_SYSTEM.description}
-            style={{ display: "flex", alignItems: "center", gap: 8 }}
+            style={{ display: "flex", alignItems: "center", gap: 7 }}
           >
-            <ThoughtBrainIcon style={{ color: "#4f46e5", width: 17, height: 17 }} />
-            <strong style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+            <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
+            <strong style={{ fontSize: 12.5, color: "#334155", fontWeight: 600, letterSpacing: "-0.01em" }}>
               {UNIFIED_AI_SYSTEM.label}
             </strong>
-            <span
-              style={{
-                fontSize: 10.5,
-                padding: "2px 8px",
-                borderRadius: 12,
-                background: "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                color: "#64748b",
-                fontWeight: 500,
-              }}
-            >
-              {elementCount} objects · auto
-            </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <button
               type="button"
               onClick={() => setMessages([])}
+              title="Clear chat history"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
-                background: "none",
+                background: "transparent",
                 border: "none",
-                fontSize: 11.5,
-                color: "#64748b",
+                fontSize: 11,
+                color: "#94a3b8",
                 cursor: "pointer",
-                padding: "4px 8px",
-                borderRadius: 5,
+                padding: "3px 6px",
+                borderRadius: 4,
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#0f172a";
-                e.currentTarget.style.background = "#f1f5f9";
+                e.currentTarget.style.color = "#475569";
+                e.currentTarget.style.background = "#f8fafc";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = "#64748b";
+                e.currentTarget.style.color = "#94a3b8";
                 e.currentTarget.style.background = "transparent";
               }}
             >
-              <TrashIcon style={{ width: 12, height: 12 }} />
+              <TrashIcon style={{ width: 11, height: 11, opacity: 0.8 }} />
               <span>Clear</span>
             </button>
           </div>
@@ -1583,10 +1574,10 @@ export default function AICoPilotBar() {
             flex: 1,
             overflowY: "auto",
             minHeight: 0,
-            padding: "16px 14px",
+            padding: "12px 14px",
             display: "flex",
             flexDirection: "column",
-            gap: 16,
+            gap: 10,
             background: "#ffffff",
           }}
         >
@@ -1597,19 +1588,50 @@ export default function AICoPilotBar() {
                   key={msg.id}
                   style={{
                     alignSelf: "flex-end",
-                    maxWidth: "85%",
-                    padding: "8px 14px",
-                    borderRadius: "16px 16px 4px 16px",
+                    maxWidth: "88%",
+                    padding: "7px 12px",
+                    borderRadius: "14px 14px 3px 14px",
                     background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
                     color: "#ffffff",
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: 500,
                     lineHeight: 1.45,
                     wordBreak: "break-word",
-                    boxShadow: "0 2px 4px rgba(79, 70, 229, 0.15)",
+                    boxShadow: "0 1px 3px rgba(79, 70, 229, 0.12)",
                   }}
                 >
                   {msg.content}
+                </div>
+              );
+            }
+
+            if (msg.kind === "progress") {
+              return (
+                <div
+                  key={msg.id}
+                  style={{
+                    alignSelf: "flex-start",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    color: "#475569",
+                    fontSize: 11,
+                    lineHeight: 1.4,
+                    padding: "2px 0",
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: "50%",
+                      backgroundColor: "#94a3b8",
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>{msg.content}</span>
                 </div>
               );
             }
@@ -1706,9 +1728,9 @@ export default function AICoPilotBar() {
                   <div
                     style={{
                       marginTop: msg.images && msg.images.length > 0 ? 4 : 2,
-                      color: "#1e293b",
-                      fontSize: 13,
-                      lineHeight: 1.6,
+                      color: "#334155",
+                      fontSize: 12.5,
+                      lineHeight: 1.55,
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
                     }}
