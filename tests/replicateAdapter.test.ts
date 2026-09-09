@@ -197,6 +197,50 @@ describe("Replicate AI adapter", () => {
     expect(body.input.max_tokens).toBeGreaterThanOrEqual(4_096);
   });
 
+  it("normalizes a tool call envelope containing escaped single quotes (e.g. Cat\\'s) and trailing commas", async () => {
+    const rawEnvelope =
+      '{"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"propose_creative_direction","input":{"kind":"image-task","summary":"Fierce cat","reviewCriteria":["Cat\\\'s front paw is raised showing two fingers clearly",],"outputCount":1,}}]}';
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-chat-escaped",
+          model: "openai/gpt-oss-120b",
+          status: "succeeded",
+          output: [rawEnvelope],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "assistant.chat",
+      input: {
+        messages: [{ role: "user", content: "อยากให้มันชู 2 นิ้วด้วย" }],
+        tools: [
+          {
+            name: "propose_creative_direction",
+            description: "Propose creative direction",
+            inputSchema: { type: "object" },
+          },
+        ],
+      },
+      model: "openai/gpt-oss-120b",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output.stopReason).toBe("tool_use");
+    expect(result.output.toolCalls).toHaveLength(1);
+    expect(result.output.toolCalls[0].name).toBe("propose_creative_direction");
+    expect(result.output.toolCalls[0].input).toMatchObject({
+      kind: "image-task",
+      summary: "Fierce cat",
+      reviewCriteria: ["Cat's front paw is raised showing two fingers clearly"],
+      outputCount: 1,
+    });
+  });
+
   it("normalizes a direct JSON tool payload without tool_calls envelope", async () => {
     const directPayload = JSON.stringify({
       kind: "clarification",

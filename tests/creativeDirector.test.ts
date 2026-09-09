@@ -211,6 +211,40 @@ describe("gpt-oss-120b Creative Director", () => {
     });
   });
 
+  it("unwraps a tool_calls JSON envelope from execution.output.text with escaped single quotes", async () => {
+    const rawEnvelope =
+      '{"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"propose_creative_direction","input":{"kind":"image-task","summary":"Fierce cat with lightning","refinedPrompt":"A powerful electric cat","specialist":"image_generator","capability":"IMAGE_DEFAULT","modelAlias":"image-gpt-2","knowledgeSkillIds":[],"reviewCriteria":["Cat\\\'s front paw is raised showing two fingers clearly"],"search":{"required":false,"queries":[],"sources":[]},"outputCount":1}}]}';
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: rawEnvelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: rawEnvelope },
+      },
+      metadata: toolResult.metadata,
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "อยากให้มันชู 2 นิ้วด้วย",
+        canvasSummary: { objectCount: 1, selectedCount: 0, width: 1920, height: 1080 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "Fierce cat with lightning",
+      modelAlias: "image-gpt-2",
+      reviewCriteria: ["Cat's front paw is raised showing two fingers clearly"],
+      outputCount: 1,
+    });
+  });
+
   it("applies a validated direction while preserving server-owned execution policy", () => {
     const task = baseTask();
     const directed = applyCreativeDirectionToTask(task, {

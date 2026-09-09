@@ -492,6 +492,35 @@ async function executeDirectorPass(
     if (containsSensitivePayload(text)) return invalidDirection();
     const candidate = parseJsonCandidate(text);
     if (isRecord(candidate)) {
+      if (
+        (candidate.kind === "tool_calls" || candidate.kind === "tool_call") &&
+        (Array.isArray(candidate.calls) || isRecord(candidate.call))
+      ) {
+        const extractedCalls = Array.isArray(candidate.calls)
+          ? candidate.calls
+          : [candidate.call];
+        for (const rawCall of extractedCalls) {
+          if (!isRecord(rawCall)) continue;
+          const callName = typeof rawCall.name === "string" ? rawCall.name : "";
+          const callInput = isRecord(rawCall.input)
+            ? rawCall.input
+            : isRecord(rawCall.arguments)
+              ? rawCall.arguments
+              : null;
+          if (!callInput) continue;
+          if (callName === CREATIVE_DIRECTION_TOOL.name) {
+            return parseCreativeDirection(callInput, input, knowledgeIds);
+          }
+          if (callName === DESIGN_PLAN_TOOL.name) {
+            return parseDesignPlan(callInput, input);
+          }
+          if (callName === SEQUENTIAL_PLAN_TOOL.name) {
+            const val = validateSequentialExecutionPlan(callInput);
+            if (!val.ok) return invalidDirection(val.error);
+            return { kind: "sequential-plan", plan: val.plan };
+          }
+        }
+      }
       if (candidate.kind === "image-task" || candidate.kind === "clarification") {
         return parseCreativeDirection(candidate, input, knowledgeIds);
       }
@@ -514,6 +543,14 @@ async function executeDirectorPass(
         if (!val.ok) return invalidDirection(val.error);
         return { kind: "sequential-plan", plan: val.plan };
       }
+    }
+    if (
+      text.startsWith("{") &&
+      (text.includes('"calls"') ||
+        text.includes('"propose_creative_direction"') ||
+        text.includes('"propose_design_plan"'))
+    ) {
+      return invalidDirection("Unparsed tool call envelope in model text");
     }
     if (text && text.length <= 8_000) {
       return { kind: "answer", text };
@@ -1065,6 +1102,16 @@ function invalidDirection(reason?: string): never {
   );
 }
 
+function sanitizeJsonString(text: string): string {
+  return text
+    // Replace invalid escaped single quotes \' with '
+    .replace(/\\'/g, "'")
+    // Remove trailing commas before } or ]
+    .replace(/,\s*([}\]])/g, "$1")
+    // Replace unescaped control characters (except newline, cr, tab) with space
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
+}
+
 function parseJsonCandidate(text: string): unknown {
   const trimmed = text
     .trim()
@@ -1072,16 +1119,26 @@ function parseJsonCandidate(text: string): unknown {
     .replace(/\s*```$/, "");
   try {
     return JSON.parse(trimmed);
+  } catch {}
+
+  try {
+    return JSON.parse(sanitizeJsonString(trimmed));
+  } catch {}
+
+  const start = Math.min(
+    ...[trimmed.indexOf("{"), trimmed.indexOf("[")].filter((index) => index >= 0),
+  );
+  const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+  if (!Number.isFinite(start) || start < 0 || end <= start) return null;
+
+  const sliced = trimmed.slice(start, end + 1);
+  try {
+    return JSON.parse(sliced);
+  } catch {}
+
+  try {
+    return JSON.parse(sanitizeJsonString(sliced));
   } catch {
-    const start = Math.min(
-      ...[trimmed.indexOf("{"), trimmed.indexOf("[")].filter((index) => index >= 0),
-    );
-    const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
-    if (!Number.isFinite(start) || start < 0 || end <= start) return null;
-    try {
-      return JSON.parse(trimmed.slice(start, end + 1));
-    } catch {
-      return null;
-    }
+    return null;
   }
 }

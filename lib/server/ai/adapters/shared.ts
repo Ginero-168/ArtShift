@@ -55,6 +55,16 @@ export function parseObjectProposals(text: string): AiObjectProposal[] {
   return deduplicateProposals(objects);
 }
 
+export function sanitizeJsonString(text: string): string {
+  return text
+    // Replace invalid escaped single quotes \' with '
+    .replace(/\\'/g, "'")
+    // Remove trailing commas before } or ]
+    .replace(/,\s*([}\]])/g, "$1")
+    // Replace unescaped control characters (except newline, cr, tab) with space
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
+}
+
 export function parseJsonCandidate(text: string): unknown {
   const trimmed = text
     .trim()
@@ -62,17 +72,27 @@ export function parseJsonCandidate(text: string): unknown {
     .replace(/\s*```$/, "");
   try {
     return JSON.parse(trimmed);
+  } catch {}
+
+  try {
+    return JSON.parse(sanitizeJsonString(trimmed));
+  } catch {}
+
+  const start = Math.min(
+    ...[trimmed.indexOf("{"), trimmed.indexOf("[")].filter((index) => index >= 0),
+  );
+  const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+  if (!Number.isFinite(start) || start < 0 || end <= start) return null;
+
+  const sliced = trimmed.slice(start, end + 1);
+  try {
+    return JSON.parse(sliced);
+  } catch {}
+
+  try {
+    return JSON.parse(sanitizeJsonString(sliced));
   } catch {
-    const start = Math.min(
-      ...[trimmed.indexOf("{"), trimmed.indexOf("[")].filter((index) => index >= 0),
-    );
-    const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
-    if (!Number.isFinite(start) || start < 0 || end <= start) return null;
-    try {
-      return JSON.parse(trimmed.slice(start, end + 1));
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 

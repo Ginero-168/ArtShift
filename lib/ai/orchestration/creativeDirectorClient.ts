@@ -35,15 +35,35 @@ export async function prepareRemoteOrchestratorTurn(
     try {
       const trimmed = rawDirection.text.trim();
       if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-        const parsed = JSON.parse(trimmed);
-        if (
-          isRecord(parsed) &&
-          (parsed.kind === "image-task" ||
+        const sanitized = trimmed
+          .replace(/\\'/g, "'")
+          .replace(/,\s*([}\]])/g, "$1")
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
+        let parsed: unknown = null;
+        try {
+          parsed = JSON.parse(trimmed);
+        } catch {
+          parsed = JSON.parse(sanitized);
+        }
+        if (isRecord(parsed)) {
+          if (
+            parsed.kind === "image-task" ||
             parsed.kind === "clarification" ||
             parsed.kind === "design-plan" ||
-            parsed.kind === "sequential-plan")
-        ) {
-          rawDirection = parsed;
+            parsed.kind === "sequential-plan"
+          ) {
+            rawDirection = parsed;
+          } else if (
+            (parsed.kind === "tool_calls" || parsed.kind === "tool_call") &&
+            Array.isArray(parsed.calls)
+          ) {
+            const firstCall = parsed.calls.find(
+              (c: unknown) => isRecord(c) && isRecord(c.input),
+            ) as { input: unknown } | undefined;
+            if (firstCall && isRecord(firstCall.input)) {
+              rawDirection = firstCall.input;
+            }
+          }
         }
       }
     } catch {}

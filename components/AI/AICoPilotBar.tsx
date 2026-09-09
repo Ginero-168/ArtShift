@@ -839,6 +839,17 @@ export default function AICoPilotBar() {
         /(?:ลบพื้นหลัง|remove\s*bg|remove\s*background|vectorize|แปลงเป็น(?:\s+)?vector|แปลงเป็นเวกเตอร์)/iu.test(
           promptToSend,
         );
+      const lastAssistantMsg = [...messages]
+        .reverse()
+        .find((m) => m.role === "assistant" && m.kind !== "progress");
+      const isImageFollowUp = Boolean(
+        lastAssistantMsg &&
+          ((lastAssistantMsg.images && lastAssistantMsg.images.length > 0) ||
+            lastAssistantMsg.toolLabel === "GPT Image 2" ||
+            lastAssistantMsg.toolLabel?.toLowerCase().includes("image")) &&
+          !isCanvasInventoryPrompt(promptToSend) &&
+          !isBuiltInImageAction,
+      );
 
       if (isCanvasInventoryPrompt(promptToSend) && slide) {
         contextDecision = prepareContextAwareTurn({
@@ -850,6 +861,7 @@ export default function AICoPilotBar() {
       } else if (
         pending ||
         isImageGenerationPrompt(promptToSend) ||
+        isImageFollowUp ||
         (hasImageContext && !isBuiltInImageAction)
       ) {
         if (hasImageContext && analysesForTurn.length === 0) {
@@ -968,7 +980,19 @@ export default function AICoPilotBar() {
                 taskAction.status = "success";
                 taskAction.stage = "succeeded";
                 taskAction.description = "Creative Director ตอบโดยไม่เรียก Image Model";
-                reply = direction.text;
+                const trimmed = direction.text.trim();
+                let cleanAnswer = direction.text;
+                if (trimmed.startsWith("{") && (trimmed.includes('"kind"') || trimmed.includes('"calls"'))) {
+                  try {
+                    const parsed = JSON.parse(
+                      trimmed.replace(/\\'/g, "'").replace(/,\s*([}\]])/g, "$1"),
+                    );
+                    if (parsed && typeof parsed.text === "string" && parsed.text) {
+                      cleanAnswer = parsed.text;
+                    }
+                  } catch {}
+                }
+                reply = cleanAnswer;
                 suggestions = ["ระบุงานออกแบบที่ต้องการ", "เลือกภาพบน Canvas แล้วขอให้วิเคราะห์"];
               } else if (direction.kind === "clarification") {
                 taskAction.status = "success";
@@ -1177,6 +1201,7 @@ export default function AICoPilotBar() {
       let reply = "";
       let actions: SubAgentActionLog[] = [];
       let suggestions: string[] = [];
+      let remoteGeneratedImages: Array<{ url: string; fileId: string; label: string }> | undefined;
 
       if (localPlan) {
         const localAction: SubAgentActionLog = {
@@ -1321,7 +1346,19 @@ export default function AICoPilotBar() {
               status: "success",
               description: "ArtShift Orchestrator ตอบโดยไม่ต้องเรียก executor",
             };
-            reply = result.text;
+            const trimmed = result.text.trim();
+            let cleanAnswer = result.text;
+            if (trimmed.startsWith("{") && (trimmed.includes('"kind"') || trimmed.includes('"calls"'))) {
+              try {
+                const parsed = JSON.parse(
+                  trimmed.replace(/\\'/g, "'").replace(/,\s*([}\]])/g, "$1"),
+                );
+                if (parsed && typeof parsed.text === "string" && parsed.text) {
+                  cleanAnswer = parsed.text;
+                }
+              } catch {}
+            }
+            reply = cleanAnswer;
             suggestions = [
               "📐 ขอให้จัด Layout ต่อ",
               "✍️ ขอให้สร้าง direction ใหม่",
@@ -1382,7 +1419,14 @@ export default function AICoPilotBar() {
               status: "success",
               description: `ตรวจและวางผลลัพธ์บน Canvas แล้ว (${generated.width} × ${generated.height}px)`,
             };
-            reply = "ArtShift Orchestrator สร้าง ตรวจ และวางผลลัพธ์บน Canvas เรียบร้อยแล้วครับ";
+            reply = `สร้างรูปตามที่ขอเรียบร้อยแล้วครับ: ${result.summary}`;
+            remoteGeneratedImages = [
+              {
+                url: generated.dataUrl || "",
+                fileId: generated.fileId,
+                label: result.summary,
+              },
+            ];
             suggestions = ["ปรับรายละเอียดต่อ", "ตรวจสอบ Layout", "↶ Undo ผลลัพธ์ล่าสุด"];
           }
         }
@@ -1394,6 +1438,8 @@ export default function AICoPilotBar() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: reply,
+        toolLabel: remoteGeneratedImages ? "GPT Image 2" : undefined,
+        images: remoteGeneratedImages,
         timestamp: Date.now(),
         actions,
         suggestions,
