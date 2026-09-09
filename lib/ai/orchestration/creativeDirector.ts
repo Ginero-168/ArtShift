@@ -208,6 +208,8 @@ const CREATIVE_DIRECTION_TOOL = {
         minItems: 1,
         maxItems: 5,
         items: { type: "string", maxLength: 2000 },
+        description:
+          "Concise, natural descriptive titles in the user's language for each generated image (e.g. 'หมูน่ารัก', 'หมูตัวน้อยสีชมพู', 'หมูในฟาร์มสีเขียว')",
       },
       summary: { type: "string", minLength: 1, maxLength: 2_000 },
       refinedPrompt: { type: "string", minLength: 8, maxLength: 20_000 },
@@ -318,7 +320,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "When the user attaches reference images or name tags, analyze their visual details, detected titles, OCR text, and objects to guide the design. If the user asks to create an ad, poster, or new image referencing the tagged subject, choose image_generator and incorporate the title, key messaging, and visual theme into refinedPrompt.",
   "For a sequential plan, every step must be executable from its payload and earlier outputs: image_generator/image_editor require payload.prompt, vectorizer requires an earlier image dependency, copywriter requires payload.headline or payload.text, and layout_designer/brand_stylist must describe the exact local operation. Never use placeholder URLs, sample copy or fabricated quality scores.",
   "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested (1 to 5). A clear requested quantity (e.g. '3 รูป', '5 แบบ', '2 images') is authoritative and is not by itself a reason to ask a clarification.",
-  "Return exactly one concise outputBrief in outputBriefs per requested output. Each outputBrief must describe one standalone image and preserve requested differences such as color, subject, angle, or composition. Never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
+  "For image creation, return exactly one concise outputBrief in outputBriefs per requested output, written in the user's language (e.g. Thai if user asked in Thai). Each outputBrief must be a short, natural descriptive title (2-6 words) characterizing that standalone image (e.g. 'หมูน่ารัก', 'หมูตัวน้อยสีชมพู', 'หมูในฟาร์มสีเขียว', 'แมวยกสองนิ้วร่าเริง') so the user clearly sees what was created in each picture. Never output full English diffusion prompts in outputBriefs, never use generic labels like 'แบบที่ 1', and never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
   "Execution creates up to 5 separate outputs concurrently. Do not ask the user which single image to start with when 1 to 5 images are requested.",
   "For image creation, produce a precise refinedPrompt that preserves subjects, quantities, exact text, relationships, brand constraints and intended use.",
   "Define observable Review criteria for the generated result. Do not reveal chain-of-thought; return only the structured direction tool call.",
@@ -773,18 +775,22 @@ export function parseCreativeDirection(
     return invalidDirection("search plan is missing or invalid");
   }
 
+  const fallbackBrief =
+    typeof value.summary === "string" && value.summary.trim().length > 0
+      ? value.summary.trim()
+      : typeof value.refinedPrompt === "string" && value.refinedPrompt.trim().length > 0
+        ? value.refinedPrompt.trim()
+        : "ภาพ";
   const rawBriefs =
     Array.isArray(value.outputBriefs) && value.outputBriefs.length > 0
       ? value.outputBriefs
       : Array.from({ length: requestedOutputCount }, (_, idx) =>
-          idx === 0
-            ? String(value.refinedPrompt ?? "").trim()
-            : `${String(value.refinedPrompt ?? "").trim()} (variation ${idx + 1})`,
+          idx === 0 ? fallbackBrief : `${fallbackBrief} (variation ${idx + 1})`,
         );
   const normalizedBriefs: string[] = [...rawBriefs];
   while (normalizedBriefs.length < requestedOutputCount) {
     normalizedBriefs.push(
-      `${String(value.refinedPrompt ?? "").trim()} (variation ${normalizedBriefs.length + 1})`,
+      `${fallbackBrief} (variation ${normalizedBriefs.length + 1})`,
     );
   }
   const finalBriefs = normalizedBriefs.slice(0, requestedOutputCount);

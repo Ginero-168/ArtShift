@@ -431,12 +431,22 @@ function CollapsibleThought({
   );
 }
 
-function extractSubject(prompt: string): string {
+function extractSubject(prompt: string, summary?: string): string {
+  if (summary && summary.trim().length > 0 && summary.length < 60) {
+    const cleanFromSummary = summary
+      .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu, "")
+      .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
+      .replace(/^(?:ภาพ|รูป)\s*/iu, "")
+      .trim();
+    if (cleanFromSummary.length > 0 && cleanFromSummary.length < 30) {
+      return cleanFromSummary;
+    }
+  }
   let cleaned = prompt
-    .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu, "")
+    .replace(/^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu, "")
     .trim();
   cleaned = cleaned.replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "").trim();
-  cleaned = cleaned.replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง)\s*$/iu, "").trim();
+  cleaned = cleaned.replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง|ด้วยนะ|ด้วยครับ|ด้วยค่ะ|ด้วย)\s*$/iu, "").trim();
   return cleaned || "ภาพ";
 }
 
@@ -454,7 +464,7 @@ function formatThoughtText(rawPrompt: string, directionSummary?: string, count =
   if (directionSummary && directionSummary.length > 5 && !directionSummary.startsWith("สร้างภาพ")) {
     return `ได้เลยค่ะ คิด concept เป็น ${directionSummary} สร้างให้เลย`;
   }
-  const subject = extractSubject(rawPrompt);
+  const subject = extractSubject(rawPrompt, directionSummary);
   return `สร้างรูป${subject} ${count} รูปให้เลยค่ะ`;
 }
 
@@ -467,17 +477,15 @@ function formatImageCompletionReply(
   const lines: string[] = [`สร้างรูป${cleanSubject}เสร็จแล้ว ${count} รูปค่ะ`, ""];
   if (outputBriefs && outputBriefs.length > 0) {
     outputBriefs.slice(0, count).forEach((brief, idx) => {
-      lines.push(`• รูปที่ ${idx + 1}: ${brief.replace(/^รูปที่\s*\d+:\s*/iu, "").trim()}`);
+      const cleanBrief = brief
+        .replace(/^รูปที่\s*\d+:\s*/iu, "")
+        .replace(/^(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*/iu, "")
+        .trim();
+      lines.push(`• รูปที่ ${idx + 1}: ${cleanBrief || `${cleanSubject} แบบที่ ${idx + 1}`}`);
     });
   } else {
-    if (count === 3 && cleanSubject === "หมู") {
-      lines.push("• รูปที่ 1: หมูน่ารัก");
-      lines.push("• รูปที่ 2: หมูตัวน้อยสีชมพู");
-      lines.push("• รูปที่ 3: หมูในฟาร์มสีเขียว");
-    } else {
-      for (let i = 1; i <= count; i++) {
-        lines.push(`• รูปที่ ${i}: ${cleanSubject} แบบที่ ${i}`);
-      }
+    for (let i = 1; i <= count; i++) {
+      lines.push(`• รูปที่ ${i}: ${cleanSubject} แบบที่ ${i}`);
     }
   }
   lines.push("");
@@ -1112,7 +1120,7 @@ export default function AICoPilotBar() {
                       label: direction.outputBriefs?.[idx] || `รูปที่ ${idx + 1}`,
                     }));
 
-                  const subject = extractSubject(promptToSend);
+                  const subject = extractSubject(promptToSend, direction.summary);
                   reply = formatImageCompletionReply(
                     subject,
                     runResult.completedCount,
@@ -1419,12 +1427,17 @@ export default function AICoPilotBar() {
               status: "success",
               description: `ตรวจและวางผลลัพธ์บน Canvas แล้ว (${generated.width} × ${generated.height}px)`,
             };
-            reply = `สร้างรูปตามที่ขอเรียบร้อยแล้วครับ: ${result.summary}`;
+            const subject = extractSubject(promptToSend, result.summary);
+            const briefs =
+              result.outputBriefs && result.outputBriefs.length > 0
+                ? result.outputBriefs
+                : [result.summary];
+            reply = formatImageCompletionReply(subject, 1, briefs);
             remoteGeneratedImages = [
               {
                 url: generated.dataUrl || "",
                 fileId: generated.fileId,
-                label: result.summary,
+                label: briefs[0] || result.summary,
               },
             ];
             suggestions = ["ปรับรายละเอียดต่อ", "ตรวจสอบ Layout", "↶ Undo ผลลัพธ์ล่าสุด"];
