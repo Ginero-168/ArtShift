@@ -3,6 +3,7 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { getCached } from "@/lib/engine/imageCache";
+import ImageReferencePreview from "./ImageReferencePreview";
 
 export type InlineTagEditorHandle = {
   insertTag: (ref: ComposerImageRef) => void;
@@ -16,6 +17,7 @@ type Props = {
   placeholder?: string;
   disabled?: boolean;
   rows?: number;
+  omittedCount?: number;
   availableImages?: readonly ComposerImageRef[];
   onSend?: () => void;
   onChange?: (val: string) => void;
@@ -30,6 +32,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     placeholder = "บอกสิ่งที่ต้องการออกแบบ...",
     disabled = false,
     rows = 4,
+    omittedCount = 0,
     availableImages = [],
     onSend,
     onChange,
@@ -45,6 +48,24 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
   const [isEmpty, setIsEmpty] = useState(true);
+  const [hasTags, setHasTags] = useState(false);
+  const [activePreview, setActivePreview] = useState<{
+    anchor: HTMLElement;
+    ref: ComposerImageRef;
+  } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => {
+      setActivePreview(null);
+    }, 140);
+  }, [cancelClose]);
 
   // Serializes DOM nodes inside editor to tokenized string: text + @[displayName:objectId]
   const serializeDOM = useCallback((): string => {
@@ -85,75 +106,113 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
   const handleContentChange = useCallback(() => {
     const val = serializeDOM();
     setIsEmpty(!val.trim());
+    setHasTags(val.includes("@["));
     onChange?.(val);
   }, [serializeDOM, onChange]);
 
   // Creates DOM element for inline tag pill
-  const createTagPillElement = useCallback((imgRef: ComposerImageRef): HTMLElement => {
-    const pill = document.createElement("span");
-    pill.contentEditable = "false";
-    pill.dataset.tagObjectId = imgRef.objectId;
-    pill.dataset.tagDisplayName = imgRef.displayName;
-    pill.className = "artshift-inline-tag-pill";
+  const createTagPillElement = useCallback(
+    (imgRef: ComposerImageRef): HTMLElement => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.tabIndex = -1;
+      pill.contentEditable = "false";
+      pill.dataset.tagObjectId = imgRef.objectId;
+      pill.dataset.tagDisplayName = imgRef.displayName;
+      pill.dataset.testid = `selected-image-tag-${imgRef.objectId}`;
+      pill.setAttribute("data-testid", `selected-image-tag-${imgRef.objectId}`);
+      pill.setAttribute("aria-label", `Selected image ${imgRef.displayName}`);
+      pill.className = "artshift-inline-tag-pill";
 
-    // Compact inline style matching character status
-    pill.style.display = "inline-flex";
-    pill.style.alignItems = "center";
-    pill.style.gap = "3.5px";
-    pill.style.verticalAlign = "middle";
-    pill.style.padding = "1px 6px 1px 2px";
-    pill.style.margin = "0 2px";
-    pill.style.borderRadius = "9999px";
-    pill.style.background = "#eef2ff";
-    pill.style.border = "1px solid #c7d2fe";
-    pill.style.color = "#3730a3";
-    pill.style.fontSize = "11px";
-    pill.style.fontWeight = "600";
-    pill.style.lineHeight = "1";
-    pill.style.height = "20px";
-    pill.style.userSelect = "none";
-    pill.style.cursor = "default";
-    pill.style.boxSizing = "border-box";
+      // Compact inline style matching character status
+      pill.style.display = "inline-flex";
+      pill.style.alignItems = "center";
+      pill.style.gap = "3.5px";
+      pill.style.verticalAlign = "middle";
+      pill.style.padding = "1px 6px 1px 2px";
+      pill.style.margin = "0 2px";
+      pill.style.borderRadius = "9999px";
+      pill.style.background = "#eef2ff";
+      pill.style.border = "1px solid #c7d2fe";
+      pill.style.color = "#3730a3";
+      pill.style.fontSize = "11px";
+      pill.style.fontWeight = "600";
+      pill.style.lineHeight = "1";
+      pill.style.height = "20px";
+      pill.style.userSelect = "none";
+      pill.style.cursor = "pointer";
+      pill.style.boxSizing = "border-box";
 
-    // Thumbnail
-    const dataUrl = getCached(imgRef.fileId)?.dataURL;
-    if (dataUrl) {
-      const img = document.createElement("img");
-      img.src = dataUrl;
-      img.alt = "";
-      img.draggable = false;
-      img.style.width = "16px";
-      img.style.height = "16px";
-      img.style.borderRadius = "3px";
-      img.style.objectFit = "cover";
-      img.style.flexShrink = "0";
-      pill.appendChild(img);
-    } else {
-      const fallback = document.createElement("span");
-      fallback.style.width = "16px";
-      fallback.style.height = "16px";
-      fallback.style.borderRadius = "3px";
-      fallback.style.background = "#c7d2fe";
-      fallback.style.flexShrink = "0";
-      pill.appendChild(fallback);
-    }
+      pill.onpointerenter = () => {
+        cancelClose();
+        setActivePreview({ anchor: pill, ref: imgRef });
+      };
+      pill.onpointerleave = scheduleClose;
+      pill.onfocus = () => {
+        cancelClose();
+        setActivePreview({ anchor: pill, ref: imgRef });
+      };
+      pill.onblur = scheduleClose;
+      pill.onpointerdown = (e) => {
+        e.stopPropagation();
+      };
+      pill.onkeydown = (e) => {
+        if (e.key === "Backspace" || e.key === "Delete") {
+          e.preventDefault();
+          setActivePreview(null);
+          pill.remove();
+          handleContentChange();
+          editorRef.current?.focus();
+        }
+      };
 
-    // Label
-    const textSpan = document.createElement("span");
-    textSpan.style.maxWidth = "80px";
-    textSpan.style.overflow = "hidden";
-    textSpan.style.textOverflow = "ellipsis";
-    textSpan.style.whiteSpace = "nowrap";
-    textSpan.textContent = `@${imgRef.displayName}`;
-    pill.appendChild(textSpan);
+      // Thumbnail
+      const dataUrl = getCached(imgRef.fileId)?.dataURL;
+      if (dataUrl) {
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.alt = "";
+        img.draggable = false;
+        img.style.width = "16px";
+        img.style.height = "16px";
+        img.style.borderRadius = "3px";
+        img.style.objectFit = "cover";
+        img.style.flexShrink = "0";
+        pill.appendChild(img);
+      } else {
+        const fallback = document.createElement("span");
+        fallback.style.width = "16px";
+        fallback.style.height = "16px";
+        fallback.style.borderRadius = "3px";
+        fallback.style.background = "#c7d2fe";
+        fallback.style.flexShrink = "0";
+        pill.appendChild(fallback);
+      }
 
-    return pill;
-  }, []);
+      // Label
+      const textSpan = document.createElement("span");
+      textSpan.style.maxWidth = "80px";
+      textSpan.style.overflow = "hidden";
+      textSpan.style.textOverflow = "ellipsis";
+      textSpan.style.whiteSpace = "nowrap";
+      textSpan.textContent = `@${imgRef.displayName}`;
+      pill.appendChild(textSpan);
+
+      return pill;
+    },
+    [cancelClose, scheduleClose, handleContentChange],
+  );
 
   const insertTagAtCaret = useCallback(
     (imgRef: ComposerImageRef) => {
       const editor = editorRef.current;
       if (!editor) return;
+
+      // Deduplication: prevent duplicate tag for the same object
+      const existing = editor.querySelector(`[data-tag-object-id="${imgRef.objectId}"]`);
+      if (existing) {
+        return;
+      }
 
       const pill = createTagPillElement(imgRef);
       const space = document.createTextNode("\u00A0"); // Non-breaking space for comfortable typing after tag
@@ -207,11 +266,14 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         if (!editorRef.current) return;
         editorRef.current.textContent = val;
         setIsEmpty(!val.trim());
+        setHasTags(val.includes("@["));
       },
       clear: () => {
         if (!editorRef.current) return;
         editorRef.current.innerHTML = "";
         setIsEmpty(true);
+        setHasTags(false);
+        setActivePreview(null);
         onChange?.("");
       },
       focus: () => {
@@ -463,6 +525,14 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
       }
     }
 
+    if (e.key === "Escape") {
+      if (activePreview) {
+        e.preventDefault();
+        setActivePreview(null);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       onSend?.();
@@ -495,8 +565,11 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     }
   };
 
+  const showTagsContainer = hasTags || omittedCount > 0;
+
   return (
     <div
+      data-testid={showTagsContainer ? "selected-image-tags" : undefined}
       style={{
         position: "relative",
         width: "100%",
@@ -515,8 +588,8 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         aria-label="AI Assistance prompt"
         data-testid="ai-copilot-input"
         data-placeholder={placeholder}
-        // HTML attribute for compatibility with tests checking rows
-        {...({ rows } as Record<string, unknown>)}
+        // HTML attribute for compatibility with tests checking placeholder and rows
+        {...({ placeholder, rows } as Record<string, unknown>)}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onFocus={onFocus}
@@ -562,6 +635,51 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         >
           {placeholder}
         </div>
+      )}
+
+      {/* Hover preview portal */}
+      {activePreview && (
+        <ImageReferencePreview
+          anchor={activePreview.anchor}
+          dataUrl={getCached(activePreview.ref.fileId)?.dataURL}
+          displayName={activePreview.ref.displayName}
+          width={activePreview.ref.sourceWidth}
+          height={activePreview.ref.sourceHeight}
+          onPointerEnter={cancelClose}
+          onPointerLeave={scheduleClose}
+          onClose={() => setActivePreview(null)}
+        />
+      )}
+
+      {/* Overflow badge if too many images selected */}
+      {omittedCount > 0 && (
+        <span
+          role="status"
+          data-testid="selected-image-overflow"
+          aria-label={`${omittedCount} more selected Canvas images`}
+          title="ลด selection เหลือไม่เกิน 4 ภาพก่อนส่งงาน"
+          style={{
+            position: "absolute",
+            top: 2,
+            right: 2,
+            display: "inline-flex",
+            alignItems: "center",
+            minHeight: 20,
+            height: 20,
+            boxSizing: "border-box",
+            padding: "0 6px",
+            borderRadius: 9999,
+            background: "#f1f5f9",
+            border: "1px solid #cbd5e1",
+            color: "#475569",
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: 1,
+            pointerEvents: "none",
+          }}
+        >
+          +{omittedCount}
+        </span>
       )}
 
       {/* Autocomplete mention popover when typing @ */}

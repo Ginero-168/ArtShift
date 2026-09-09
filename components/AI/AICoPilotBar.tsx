@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ComposerImageTags from "@/components/AI/ComposerImageTags";
 import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/InlineTagEditor";
 import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
@@ -560,6 +560,30 @@ export default function AICoPilotBar() {
       imageElements.map((el) => el.id),
     ).refs;
   }, [slide]);
+
+  const setEditorRef = useCallback(
+    (handle: InlineTagEditorHandle | null) => {
+      editorRef.current = handle;
+      if (!handle || !slide) return;
+      if (selectedIds && selectedIds.size > 0) {
+        for (const id of selectedIds) {
+          const el = slide.elements.find(
+            (item) =>
+              !item.isDeleted &&
+              item.id === id &&
+              (item.type === "image" || item.type === "bookMockup"),
+          );
+          if (el) {
+            const match = allSlideImageRefs.find((r) => r.objectId === id);
+            if (match) {
+              handle.insertTag(match);
+            }
+          }
+        }
+      }
+    },
+    [selectedIds, slide, allSlideImageRefs],
+  );
 
   // Synchronize canvas selection: when an image is newly selected, add it to attached tags and inline editor
   // When deselected, the tag remains in the composer (not removed)
@@ -2650,17 +2674,10 @@ export default function AICoPilotBar() {
               e.currentTarget.style.boxShadow = "none";
             }}
           >
-            <ComposerImageTags
-              refs={snapshotComposerImageRefs(composerImageRefs)}
-              omittedCount={composerImageSelection.omittedCount}
-              onRemove={(ref) =>
-                setAttachedImageIds((prev) => prev.filter((id) => id !== ref.objectId))
-              }
-              onSelect={(ref) => editorRef.current?.insertTag(ref)}
-            />
             <InlineTagEditor
-              ref={editorRef}
-              rows={4}
+              ref={setEditorRef}
+              rows={3}
+              omittedCount={composerImageSelection.omittedCount}
               placeholder={
                 hasSelection || composerImageRefs.length > 0
                   ? "แก้ไขภาพหรือวัตถุที่เลือก..."
@@ -2674,9 +2691,7 @@ export default function AICoPilotBar() {
               onChange={(val) => {
                 setInput(val);
                 const inlineIds = extractInlineTagObjectIds(val);
-                if (inlineIds.length > 0) {
-                  setAttachedImageIds(inlineIds);
-                }
+                setAttachedImageIds(inlineIds);
               }}
             />
           </div>
