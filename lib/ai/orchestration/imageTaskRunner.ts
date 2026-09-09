@@ -62,6 +62,7 @@ export type ContextAwareImageTaskOptions = {
     width: number,
     height: number,
     signal: AbortSignal,
+    context?: { needDetection?: boolean; needOcr?: boolean },
   ) => Promise<GeneratedOutputAnalysis | undefined>;
   reviewOutput?: (input: {
     prompt: string;
@@ -276,6 +277,12 @@ export async function runContextAwareImageTask(
                   generated.width,
                   generated.height,
                   executionSignal,
+                  {
+                    needDetection: Boolean(
+                      task.requiredSubjects?.length || task.selectedImages.length > 0,
+                    ),
+                    needOcr: Boolean(task.requiredText?.trim()),
+                  },
                 );
               } catch (error) {
                 if (isAbortError(error)) throw error;
@@ -316,12 +323,32 @@ export async function runContextAwareImageTask(
                 const criteria = task.reviewCriteria ?? [];
                 let directorReview: CreativeOutputReview | null = null;
                 try {
-                  directorReview = await options.reviewOutput({
-                    prompt: task.prompt,
-                    reviewCriteria: criteria,
-                    outputAnalysis,
-                    signal: executionSignal,
+                  const REVIEW_TIMEOUT_MS = 8_000;
+                  let reviewTimer: ReturnType<typeof setTimeout> | undefined;
+                  const reviewTimeoutPromise = new Promise<never>((_, reject) => {
+                    reviewTimer = setTimeout(() => {
+                      reject(new Error("Creative Director review pass timed out"));
+                    }, REVIEW_TIMEOUT_MS);
+                    executionSignal.addEventListener("abort", () => clearTimeout(reviewTimer), {
+                      once: true,
+                    });
                   });
+                  const reviewExecutionPromise = (async () => {
+                    try {
+                      return await options.reviewOutput!({
+                        prompt: task.prompt,
+                        reviewCriteria: criteria,
+                        outputAnalysis,
+                        signal: executionSignal,
+                      });
+                    } finally {
+                      if (reviewTimer) clearTimeout(reviewTimer);
+                    }
+                  })();
+                  directorReview = await Promise.race([
+                    reviewExecutionPromise,
+                    reviewTimeoutPromise,
+                  ]);
                 } catch (reviewError) {
                   if (isAbortError(reviewError)) throw reviewError;
                   console.warn(
@@ -332,7 +359,8 @@ export async function runContextAwareImageTask(
                     type: "director.reviewed",
                     passed: false,
                     status: "unavailable",
-                    reason: (reviewError as Error).message || "Creative Director review pass unavailable",
+                    reason:
+                      (reviewError as Error).message || "Creative Director review pass unavailable",
                     criteriaEvidence: criteria.map((criterion) => ({
                       criterion,
                       status: "unavailable" as CriterionEvidenceStatus,
@@ -346,11 +374,15 @@ export async function runContextAwareImageTask(
                     type: "director.reviewed",
                     passed: directorReview.passed,
                     status: directorReview.status ?? "reviewed",
-                    criteriaEvidence: directorReview.criteriaEvidence ?? criteria.map((criterion) => ({
-                      criterion,
-                      status: (directorReview!.passed ? "passed" : "failed") as CriterionEvidenceStatus,
-                      notes: directorReview!.summary,
-                    })),
+                    criteriaEvidence:
+                      directorReview.criteriaEvidence ??
+                      criteria.map((criterion) => ({
+                        criterion,
+                        status: (directorReview!.passed
+                          ? "passed"
+                          : "failed") as CriterionEvidenceStatus,
+                        notes: directorReview!.summary,
+                      })),
                     attempt,
                   });
                   if (!directorReview.passed) {
@@ -683,23 +715,49 @@ async function analyzeGeneratedOutput(
   _width: number,
   _height: number,
   signal: AbortSignal,
+  taskContext?: {
+    needDetection?: boolean;
+    needOcr?: boolean;
+  },
 ): Promise<GeneratedOutputAnalysis> {
   throwIfAborted(signal);
-  const [caption, detection, visibleText] = await Promise.all([
-    visionCaption(dataURL, "detailed"),
-    visionDetect(dataURL),
-    visionOcr(dataURL),
-  ]);
-  throwIfAborted(signal);
-  return {
-    caption: caption.trim(),
-    objects: detection.objects
-      .map((object) => object.label.trim())
-      .filter(Boolean)
-      .slice(0, 50),
-    visibleText: visibleText.trim(),
-    limitations: [],
-  };
+
+  const LOCAL_VISION_TIMEOUT_MS = 6_000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("Local vision output analysis timed out"));
+    }, LOCAL_VISION_TIMEOUT_MS);
+    signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+  });
+
+  const analysisPromise = (async () => {
+    try {
+      const needDetection = taskContext?.needDetection ?? true;
+      const needOcr = taskContext?.needOcr ?? true;
+
+      const [caption, detection, visibleText] = await Promise.all([
+        visionCaption(dataURL, "normal"),
+        needDetection ? visionDetect(dataURL) : Promise.resolve({ objects: [] }),
+        needOcr ? visionOcr(dataURL) : Promise.resolve(""),
+      ]);
+      throwIfAborted(signal);
+      return {
+        caption: caption.trim(),
+        objects: detection.objects
+          .map((object) => object.label.trim())
+          .filter(Boolean)
+          .slice(0, 50),
+        visibleText: visibleText.trim(),
+        limitations: [],
+      };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  })();
+
+  return Promise.race([analysisPromise, timeoutPromise]);
 }
 
 function throwIfAborted(signal: AbortSignal): void {
