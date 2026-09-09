@@ -550,4 +550,51 @@ describe("context-aware image task runner", () => {
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
     expect(useEngine.getState().history.past).toHaveLength(0);
   });
+
+  it("falls back to technical dimensions and aspect ratio when local vision output analysis times out or fails", async () => {
+    const taskWithSubject = createAiTask({
+      ...plan,
+      id: "timeout-guard-task",
+      requiredSubjects: ["pig"],
+    });
+
+    const result = await runContextAwareImageTask(taskWithSubject, [], {
+      cloudConsent: true,
+      analyzeOutput: async () => {
+        throw new Error("Local vision output analysis timed out");
+      },
+    });
+
+    expect(result.dataUrl).toBe("data:image/png;base64,AA==");
+    expect(result.width).toBe(1024);
+    expect(result.height).toBe(1024);
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+  });
+
+  it("continues with validated output to canvas when Creative Director review times out", async () => {
+    const directorTask = createAiTask({
+      ...plan,
+      id: "director-timeout-task",
+      reviewCriteria: ["mood is energetic"],
+    });
+
+    const result = await runContextAwareImageTask(directorTask, [], {
+      cloudConsent: true,
+      analyzeOutput: async () => ({
+        caption: "a vibrant energetic poster",
+        objects: ["poster"],
+        visibleText: "",
+        limitations: [],
+      }),
+      reviewOutput: async () => {
+        throw new Error("Creative Director review pass timed out");
+      },
+    });
+
+    expect(result.dataUrl).toBe("data:image/png;base64,AA==");
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+    const reviewEvent = result.task.history.find((e) => e.type === "director.reviewed");
+    expect(reviewEvent).toBeDefined();
+    expect(reviewEvent?.status).toBe("unavailable");
+  });
 });

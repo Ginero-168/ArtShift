@@ -86,4 +86,33 @@ describe("generated image quality gate", () => {
     expect(result.passed).toBe(false);
     expect(result.checks.find((check) => check.id === "reference")?.passed).toBe(false);
   });
+
+  it("passes technical dimensions and aspect ratio check when technicalFallback is active", () => {
+    const result = runGeneratedImageQualityGate({
+      outputWidth: 1024,
+      outputHeight: 1024,
+      requestedAspectRatio: "1:1",
+      requiredSubjects: ["pig"],
+      requiredText: "SALE",
+      referenceRequired: true,
+      technicalFallback: true,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.review).toBe("deterministic");
+    expect(result.blockers).toEqual([]);
+  });
+
+  it("still blocks aspect ratio mismatch even when technicalFallback is active", () => {
+    const result = runGeneratedImageQualityGate({
+      outputWidth: 1024,
+      outputHeight: 768,
+      requestedAspectRatio: "1:1",
+      requiredSubjects: ["pig"],
+      technicalFallback: true,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.checks.find((check) => check.id === "dimensions")?.passed).toBe(false);
+  });
 });

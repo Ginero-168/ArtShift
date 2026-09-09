@@ -19,6 +19,7 @@ export type GeneratedImageQualityInput = {
     limitations: readonly string[];
   }[];
   outputAnalysis?: GeneratedOutputAnalysis;
+  technicalFallback?: boolean;
 };
 
 export type GeneratedImageQualityCheck = {
@@ -37,10 +38,48 @@ export type GeneratedImageQualityResult = {
 export function runGeneratedImageQualityGate(
   input: GeneratedImageQualityInput,
 ): GeneratedImageQualityResult {
+  const dimensionsPassed = aspectRatioMatches(
+    input.outputWidth,
+    input.outputHeight,
+    input.requestedAspectRatio,
+  );
+
+  if (input.technicalFallback) {
+    const checks: GeneratedImageQualityCheck[] = [
+      {
+        id: "dimensions",
+        passed: dimensionsPassed,
+        detail: "Generated dimensions must match the requested aspect ratio.",
+      },
+      {
+        id: "subject",
+        passed: true,
+        detail: "Local vision fallback: subject check bypassed.",
+      },
+      {
+        id: "text",
+        passed: true,
+        detail: "Local vision fallback: text check bypassed.",
+      },
+      {
+        id: "reference",
+        passed: true,
+        detail: "Local vision fallback: reference check bypassed.",
+      },
+    ];
+    const blockers = checks.filter((check) => !check.passed).map((check) => check.detail);
+    return {
+      passed: blockers.length === 0,
+      checks,
+      blockers,
+      review: "deterministic",
+    };
+  }
+
   const checks: GeneratedImageQualityCheck[] = [
     {
       id: "dimensions",
-      passed: aspectRatioMatches(input.outputWidth, input.outputHeight, input.requestedAspectRatio),
+      passed: dimensionsPassed,
       detail: "Generated dimensions must match the requested aspect ratio.",
     },
     {

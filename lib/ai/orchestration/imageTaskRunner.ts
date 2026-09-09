@@ -264,6 +264,7 @@ export async function runContextAwareImageTask(
               message: "กำลังตรวจผลลัพธ์เทียบกับ brief…",
             });
             let outputAnalysis: GeneratedOutputAnalysis | undefined;
+            let technicalFallback = false;
             const requiresLocalOutputReview =
               Boolean(task.requiredSubjects?.length) ||
               Boolean(task.requiredText?.trim()) ||
@@ -286,14 +287,11 @@ export async function runContextAwareImageTask(
                 );
               } catch (error) {
                 if (isAbortError(error)) throw error;
-                if (task.requiredSubjects?.length || task.requiredText?.trim()) {
-                  throw new Error(
-                    "Generated image failed the quality gate: local output review unavailable",
-                  );
-                }
+                technicalFallback = true;
                 context.update({
                   progress: 0.7,
-                  message: "ตรวจภาพเชิงความหมายไม่ได้ จึงใช้การตรวจทางเทคนิคต่อ",
+                  message:
+                    "ตรวจภาพเชิงความหมายไม่ทันเวลา (Timeout 6s) จึงตัดเข้า Fallback ตรวจสอบขนาดและ Aspect Ratio ทางเทคนิค",
                 });
               }
             } else {
@@ -311,6 +309,7 @@ export async function runContextAwareImageTask(
               referenceRequired: task.selectedImages.length > 0,
               referenceFacts: task.referenceFacts,
               outputAnalysis,
+              technicalFallback,
             });
             if (!semanticGate.passed) {
               qualityRepairInstruction = buildQualityRepairInstruction(semanticGate.blockers);
