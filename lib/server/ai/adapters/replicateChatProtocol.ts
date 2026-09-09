@@ -59,6 +59,32 @@ export function renderHarmonyPrompt(input: AiAssistantChatInput): string {
   return `${messages.join("")}${HARMONY_START}assistant`;
 }
 
+export function renderGeminiSystemInstruction(input: AiAssistantChatInput): string {
+  return [
+    input.system?.trim() || "You are the ArtShift in-app design assistant.",
+    renderToolSection(input.tools ?? []),
+    [
+      "# ArtShift response contract",
+      "Return exactly one JSON object in the final response and no markdown.",
+      'For a normal reply use {"kind":"text","text":"..."}.',
+      'For tool calls use {"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"exact_tool_name","input":{}}]}.',
+      "Only call a tool listed in the ArtShift tools section.",
+      "Never mutate the document yourself; return a proposal/tool call for ArtShift to validate.",
+    ].join("\n"),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function renderConversationPrompt(messages: AiChatMessage[]): string {
+  return messages
+    .map((message) => {
+      const role = message.role === "user" ? "User" : message.role === "assistant" ? "Assistant" : "System";
+      return `${role}: ${renderContent(message.content)}`;
+    })
+    .join("\n\n");
+}
+
 export function parseReplicateAssistantOutput(
   raw: string,
   tools: AiToolDefinition[],

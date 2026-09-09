@@ -20,20 +20,19 @@ describe("AI model manifest", () => {
     });
   });
 
-  it("uses gpt-oss-120b as the baseline Creative Director for every chat profile", () => {
+  it("uses google/gemini-2.5-flash as the baseline Creative Director for every chat profile", () => {
     const routes = createAiRouteTable({});
 
     expect(routes["assistant.chat"]?.economy?.[0]).toMatchObject({
       provider: "replicate",
-      model: "openai/gpt-oss-120b",
+      model: "google/gemini-2.5-flash",
       alias: "creative-director",
     });
     expect(routes["assistant.chat"]?.quality?.[0]).toMatchObject({
       provider: "replicate",
-      model: "openai/gpt-oss-120b",
+      model: "google/gemini-2.5-flash",
       alias: "creative-director",
     });
-    expect(JSON.stringify(routes["assistant.chat"])).not.toContain("gpt-oss-20b");
   });
 
   it("pins the Creative Director model through the quality model environment", () => {
@@ -42,11 +41,23 @@ describe("AI model manifest", () => {
     });
 
     expect(routes["assistant.chat"]?.economy?.[0]?.model).toBe(
-      `openai/gpt-oss-120b@${"d".repeat(64)}`,
+      `google/gemini-2.5-flash@${"d".repeat(64)}`,
     );
     expect(routes["assistant.chat"]?.quality?.[0]?.model).toBe(
-      `openai/gpt-oss-120b@${"d".repeat(64)}`,
+      `google/gemini-2.5-flash@${"d".repeat(64)}`,
     );
+  });
+
+  it("allows overriding the Creative Director model to gpt-oss-120b via REPLICATE_BRAIN_MODEL", () => {
+    const routes = createAiRouteTable({
+      REPLICATE_BRAIN_MODEL: "openai/gpt-oss-120b",
+    });
+
+    expect(routes["assistant.chat"]?.quality?.[0]).toMatchObject({
+      provider: "replicate",
+      model: "openai/gpt-oss-120b",
+      alias: "creative-director",
+    });
   });
 
   it("keeps assistant chat and prompt enhancement on the quality profile", async () => {

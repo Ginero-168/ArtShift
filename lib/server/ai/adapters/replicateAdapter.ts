@@ -17,7 +17,12 @@ import type {
   AiProviderRequest,
   AiProviderResult,
 } from "@/lib/ai-runtime/runtime";
-import { parseReplicateAssistantOutput, renderHarmonyPrompt } from "./replicateChatProtocol";
+import {
+  parseReplicateAssistantOutput,
+  renderConversationPrompt,
+  renderGeminiSystemInstruction,
+  renderHarmonyPrompt,
+} from "./replicateChatProtocol";
 import { assertProviderResponse, parseObjectProposals, textFromUnknownOutput } from "./shared";
 
 const SUPPORTED_TASKS: AiTaskKind[] = [
@@ -33,6 +38,7 @@ const SUPPORTED_TASKS: AiTaskKind[] = [
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
 const CHAT_MODEL = "openai/gpt-oss-120b";
+const GEMINI_CHAT_MODEL = "google/gemini-2.5-flash";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
@@ -68,8 +74,14 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       tasks: SUPPORTED_TASKS,
       models: [
         {
-          id: CHAT_MODEL,
+          id: GEMINI_CHAT_MODEL,
           alias: "creative-director",
+          profile: "quality",
+          pricing: { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 },
+        },
+        {
+          id: CHAT_MODEL,
+          alias: "chat-gpt-oss",
           profile: "quality",
           pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
         },
@@ -201,14 +213,34 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const input = request.input as AiAssistantChatInput;
     const model = parseReplicateModel(request.model);
     assertSupportedChatModel(model.slug);
+    const isGemini = model.slug === GEMINI_CHAT_MODEL || model.slug.includes("gemini");
+    const options = request.options;
+    const dynamicThinking = options?.reasoning?.mode !== "off";
+    const thinkingBudget =
+      options?.reasoning?.mode === "fixed" ? options.reasoning.budgetTokens : undefined;
+
+    const predictionInput = isGemini
+      ? {
+          prompt: renderConversationPrompt(input.messages),
+          system_instruction: renderGeminiSystemInstruction(input),
+          dynamic_thinking: dynamicThinking,
+          ...(thinkingBudget !== undefined ? { thinking_budget: thinkingBudget } : {}),
+          max_output_tokens: Math.min(
+            MAX_CHAT_OUTPUT_TOKENS,
+            Math.max(256, input.maxTokens ?? 4_096),
+          ),
+          temperature: 0.1,
+        }
+      : {
+          prompt: renderHarmonyPrompt(input),
+          max_tokens: Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 4_096)),
+          temperature: 0.1,
+          top_p: 1,
+        };
+
     const prediction = await this.createPrediction(
       model,
-      {
-        prompt: renderHarmonyPrompt(input),
-        max_tokens: Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 4_096)),
-        temperature: 0.1,
-        top_p: 1,
-      },
+      predictionInput,
       request.signal,
     );
     const completed = await this.waitForPrediction(prediction, request.signal);
@@ -244,20 +276,34 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const input = request.input as AiPromptEnhanceInput;
     const model = parseReplicateModel(request.model);
     assertSupportedChatModel(model.slug);
-    const prediction = await this.createPrediction(
-      model,
-      {
-        prompt: renderHarmonyPrompt({
-          messages: [{ role: "user", content: input.prompt }],
-          system:
+    const isGemini = model.slug === GEMINI_CHAT_MODEL || model.slug.includes("gemini");
+    const predictionInput = isGemini
+      ? {
+          prompt: input.prompt,
+          system_instruction:
             input.purpose === "image"
               ? "Rewrite the user's request as one precise image-generation prompt. Return only the rewritten prompt."
               : "Rewrite the user's request to be precise and actionable. Return only the rewritten prompt.",
-        }),
-        max_tokens: 512,
-        temperature: 0.1,
-        top_p: 1,
-      },
+          dynamic_thinking: false,
+          thinking_budget: 0,
+          max_output_tokens: 512,
+          temperature: 0.1,
+        }
+      : {
+          prompt: renderHarmonyPrompt({
+            messages: [{ role: "user", content: input.prompt }],
+            system:
+              input.purpose === "image"
+                ? "Rewrite the user's request as one precise image-generation prompt. Return only the rewritten prompt."
+                : "Rewrite the user's request to be precise and actionable. Return only the rewritten prompt.",
+          }),
+          max_tokens: 512,
+          temperature: 0.1,
+          top_p: 1,
+        };
+    const prediction = await this.createPrediction(
+      model,
+      predictionInput,
       request.signal,
     );
     const completed = await this.waitForPrediction(prediction, request.signal);
@@ -862,7 +908,13 @@ function parseReplicateModel(model: string): { slug: string; version?: string } 
 }
 
 function assertSupportedChatModel(model: string): void {
-  if (model === CHAT_MODEL) return;
+  if (
+    model === CHAT_MODEL ||
+    model === GEMINI_CHAT_MODEL ||
+    model.startsWith("google/gemini-2.5-flash")
+  ) {
+    return;
+  }
   throw new AiRuntimeError("INVALID_INPUT", `Unsupported Replicate chat model ${model}.`, {
     provider: "replicate",
   });

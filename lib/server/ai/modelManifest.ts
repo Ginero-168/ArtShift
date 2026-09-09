@@ -30,7 +30,7 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
   const creativeDirectorModel = withVersion(
     environment.REPLICATE_BRAIN_MODEL ||
       environment.REPLICATE_CHAT_QUALITY_MODEL ||
-      "openai/gpt-oss-120b",
+      "google/gemini-2.5-flash",
     environment.REPLICATE_BRAIN_MODEL_VERSION || environment.REPLICATE_CHAT_QUALITY_MODEL_VERSION,
   );
   const replicateGpt = `openai/gpt-4o-mini@${environment.REPLICATE_GPT4O_MINI_VERSION || DEFAULT_REPLICATE_GPT4O_MINI_VERSION}`;
@@ -125,12 +125,15 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 }
 
 function creativeDirectorRoute(model: string, alias = "creative-director"): AiRouteTarget {
+  const isGemini = model.includes("gemini");
   return {
     provider: "replicate",
     model,
     alias,
     expectedMaxUsd: 0.01,
-    pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
+    pricing: isGemini
+      ? { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 }
+      : { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
   };
 }
 

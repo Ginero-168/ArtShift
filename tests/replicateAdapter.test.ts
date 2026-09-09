@@ -314,6 +314,97 @@ describe("Replicate AI adapter", () => {
     expect(result.output).toEqual({ prompt: "A refined design prompt" });
   });
 
+  it("executes google/gemini-2.5-flash chat with system_instruction and conversation prompt", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-gemini-chat-1",
+          model: "google/gemini-2.5-flash",
+          status: "succeeded",
+          output: [
+            '{"kind":"tool_calls","text":"","calls":[{"id":"call-gemini-1","name":"propose_creative_direction","input":{"kind":"image-task","summary":"Cat with peace sign","outputCount":1}}]}',
+          ],
+          metrics: { input_token_count: 500, output_token_count: 150, predict_time: 1.1 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "assistant.chat",
+      input: {
+        system: "You are the ArtShift Creative Director.",
+        messages: [{ role: "user", content: "อยากให้มันชู 2 นิ้วด้วย" }],
+        tools: [
+          {
+            name: "propose_creative_direction",
+            description: "Propose creative direction",
+            inputSchema: { type: "object" },
+          },
+        ],
+      },
+      model: "google/gemini-2.5-flash",
+      options: {
+        reasoning: { mode: "dynamic" },
+      },
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output.stopReason).toBe("tool_use");
+    expect(result.output.toolCalls).toEqual([
+      {
+        type: "tool_call",
+        id: "call-gemini-1",
+        name: "propose_creative_direction",
+        input: { kind: "image-task", summary: "Cat with peace sign", outputCount: 1 },
+      },
+    ]);
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.input.system_instruction).toContain("You are the ArtShift Creative Director.");
+    expect(body.input.system_instruction).toContain("ArtShift response contract");
+    expect(body.input.prompt).toBe("User: อยากให้มันชู 2 นิ้วด้วย");
+    expect(body.input.dynamic_thinking).toBe(true);
+    expect(body.input.max_output_tokens).toBeGreaterThanOrEqual(4_096);
+  });
+
+  it("executes google/gemini-2.5-flash prompt enhancement", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-gemini-prompt-1",
+          model: "google/gemini-2.5-flash",
+          status: "succeeded",
+          output: ["A photorealistic cat raising two fingers in a peace sign"],
+          metrics: { input_token_count: 40, output_token_count: 20, predict_time: 0.5 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "prompt.enhance",
+      input: { prompt: "รูปแมวชู 2 นิ้ว", purpose: "image" },
+      model: "google/gemini-2.5-flash",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toEqual({
+      prompt: "A photorealistic cat raising two fingers in a peace sign",
+    });
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.input.system_instruction).toContain("Rewrite the user's request as one precise image-generation prompt");
+    expect(body.input.prompt).toBe("รูปแมวชู 2 นิ้ว");
+    expect(body.input.dynamic_thinking).toBe(false);
+  });
+
   it("forwards automatic quality and reference images to GPT Image 2", async () => {
     const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi
