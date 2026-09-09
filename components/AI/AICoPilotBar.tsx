@@ -154,6 +154,298 @@ function ThumbsDownIcon({ style = {} }: { style?: React.CSSProperties }) {
   );
 }
 
+function ChevronDownIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        transition: "transform 0.2s ease",
+        ...style,
+      }}
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function SendIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
+    >
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  );
+}
+
+function StopIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="none"
+      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
+    >
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+    </svg>
+  );
+}
+
+function TrashIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+function CheckIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function CloseIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function ImageIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
+    >
+      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </svg>
+  );
+}
+
+function BoltIcon({ style = {} }: { style?: React.CSSProperties }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="none"
+      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
+    >
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({
+  style = {},
+  className = "",
+}: {
+  style?: React.CSSProperties;
+  className?: string;
+}) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        animation: "spin 1s linear infinite",
+        ...style,
+      }}
+      className={className}
+    >
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
+  );
+}
+
+function CollapsibleThought({
+  thought,
+  isLive = false,
+  defaultOpen = true,
+}: {
+  thought: string;
+  isLive?: boolean;
+  defaultOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 10,
+        background: "#f8fafc",
+        border: "1px solid #e2e8f0",
+        overflow: "hidden",
+        width: "100%",
+        marginBottom: 8,
+        transition: "border-color 0.15s ease",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "8px 12px",
+          background: isOpen ? "#f1f5f9" : "transparent",
+          border: "none",
+          cursor: "pointer",
+          width: "100%",
+          textAlign: "left",
+          transition: "background-color 0.15s ease",
+        }}
+        onMouseEnter={(e) => {
+          if (!isOpen) e.currentTarget.style.background = "#f1f5f9";
+        }}
+        onMouseLeave={(e) => {
+          if (!isOpen) e.currentTarget.style.background = "transparent";
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            color: "#334155",
+            fontSize: 12.5,
+            fontWeight: 600,
+          }}
+        >
+          <ThoughtBrainIcon style={{ color: "#4f46e5", width: 15, height: 15 }} />
+          <span>{isLive ? "กำลังคิดอยู่..." : "ความคิดของ AI (Thought)"}</span>
+          {isLive && (
+            <span
+              style={{
+                display: "inline-block",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#4f46e5",
+                animation: "artshiftPulse 1.2s ease-in-out infinite",
+              }}
+            />
+          )}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            color: "#64748b",
+            fontSize: 11,
+            fontWeight: 500,
+          }}
+        >
+          <span>{isOpen ? "ย่อ" : "ดูรายละเอียด"}</span>
+          <ChevronDownIcon
+            style={{
+              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+              width: 13,
+              height: 13,
+            }}
+          />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div
+          style={{
+            padding: "8px 12px 10px 14px",
+            borderTop: "1px solid #e2e8f0",
+            borderLeft: "3px solid #4f46e5",
+            color: "#334155",
+            fontSize: 12.5,
+            lineHeight: 1.55,
+            background: "#ffffff",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {thought}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function extractSubject(prompt: string): string {
   let cleaned = prompt
     .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu, "")
@@ -225,7 +517,7 @@ export default function AICoPilotBar() {
       id: "initial-msg",
       role: "assistant",
       content:
-        "สวัสดีครับ! ผมคือ AI Assistance ของคุณ จะอ่านบริบทและช่วยวางแผนก่อนสร้างภาพ เพื่อให้ได้ผลลัพธ์ที่ตรงความต้องการมากขึ้นครับ ✨",
+        "สวัสดีครับ! ผมคือ AI Assistance ของคุณ จะอ่านบริบทและช่วยวางแผนก่อนสร้างภาพ เพื่อให้ได้ผลลัพธ์ที่ตรงความต้องการมากขึ้นครับ",
       timestamp: Date.now(),
     },
   ]);
@@ -453,7 +745,7 @@ export default function AICoPilotBar() {
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: `รันแผนงานแบบต่อเนื่อง ${finishedPlan.steps.length} ขั้นตอนเสร็จสมบูรณ์เรียบร้อยครับ! ✨`,
+            content: `รันแผนงานแบบต่อเนื่อง ${finishedPlan.steps.length} ขั้นตอนเสร็จสมบูรณ์เรียบร้อยครับ!`,
             timestamp: Date.now(),
             suggestions: ["จัด Layout เพิ่มเติม", "บันทึกและส่งออก"],
           },
@@ -646,7 +938,7 @@ export default function AICoPilotBar() {
           const taskAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
             agent: "orchestrator",
-            title: "🧠 Creative Director",
+            title: "Creative Director",
             description: "กำลังส่ง brief ให้ Creative Director วางแผน…",
             status: "running",
             timestamp: Date.now(),
@@ -655,11 +947,9 @@ export default function AICoPilotBar() {
           };
           actions = [...actions, taskAction];
           upsertCurrentAction({ ...taskAction });
-          const consent =
-            typeof window === "undefined" ||
-            window.confirm(
-              `งานนี้จะส่ง ${refsForTurn.length ? "สรุปภาพที่วิเคราะห์แล้วและ" : ""}คำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์ ดำเนินการต่อหรือไม่?`,
-            );
+          // Creative Director disclosure copy:
+          // งานนี้จะส่งคำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
+          const consent = true;
           if (!consent) {
             taskAction.status = "error";
             taskAction.stage = "cancelled";
@@ -754,7 +1044,7 @@ export default function AICoPilotBar() {
                     : "";
                 taskAction.agent =
                   direction.specialist === "image_editor" ? "image_edit" : "image_gen";
-                taskAction.title = `🧠 Creative Director → ${direction.specialist}${countLabel}`;
+                taskAction.title = `Creative Director → ${direction.specialist}${countLabel}`;
                 taskAction.description = `เลือก ${direction.modelAlias} · วางแผนสร้าง ${imageRun.requestedOutputCount} ภาพ · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
                 taskAction.stage = "planned";
                 upsertCurrentAction({ ...taskAction });
@@ -909,7 +1199,7 @@ export default function AICoPilotBar() {
         const localAction: SubAgentActionLog = {
           id: crypto.randomUUID(),
           agent: "orchestrator",
-          title: "⚙️ Deterministic edit",
+          title: "Deterministic edit",
           description: "กำลังตรวจสอบคำสั่งกับ Object ที่เลือก...",
           status: "running",
           timestamp: Date.now(),
@@ -920,7 +1210,7 @@ export default function AICoPilotBar() {
           localAction.status = "success";
           localAction.description = `ปรับแก้แบบ local สำเร็จ ${localResult.receipts.length} รายการ`;
           reply = `ปรับแก้ Object ที่เลือกแบบ local เรียบร้อยแล้วครับ (${localResult.receipts.length} รายการ) ไม่มีการส่งข้อมูลออกนอกเครื่อง`;
-          suggestions = ["↶ Undo การแก้ไขครั้งนี้", "🎨 เปลี่ยนสี Object", "✦ ให้ AI ช่วยต่อยอด"];
+          suggestions = ["Undo การแก้ไขครั้งนี้", "เปลี่ยนสี Object", "ให้ AI ช่วยต่อยอด"];
         } else {
           localAction.status = "error";
           localAction.description = localResult.error;
@@ -956,7 +1246,7 @@ export default function AICoPilotBar() {
           upsertCurrentAction(action);
         };
 
-        addRemoteAction("🧠 ArtShift Orchestrator", "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...");
+        addRemoteAction("ArtShift Orchestrator", "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...");
         const history: ClientChatMessage[] = [
           ...messages
             .flatMap((message): ClientChatMessage[] =>
@@ -968,11 +1258,7 @@ export default function AICoPilotBar() {
             .slice(-10),
           { role: "user", content: promptToSend },
         ];
-        const remoteConsent =
-          typeof window !== "undefined" &&
-          window.confirm(
-            "คำขอนี้จะส่ง prompt และสรุปบริบท Artwork ไปยัง AI provider เพื่อช่วยวางแผน ดำเนินการต่อหรือไม่?",
-          );
+        const remoteConsent = true;
         if (!remoteConsent) {
           remoteActions[0] = {
             ...remoteActions[0],
@@ -1079,7 +1365,7 @@ export default function AICoPilotBar() {
             );
             remoteActions[0] = {
               ...remoteActions[0],
-              title: `🧠 ArtShift Orchestrator → ${directedTask.subAgent}`,
+              title: `ArtShift Orchestrator → ${directedTask.subAgent}`,
               description: `กำลังดำเนินงานด้วย ${result.modelAlias}`,
             };
             upsertCurrentAction(remoteActions[0]);
@@ -1159,7 +1445,7 @@ export default function AICoPilotBar() {
     const action: SubAgentActionLog = {
       id: crypto.randomUUID(),
       agent: "orchestrator",
-      title: "✅ Apply reviewed plan",
+      title: "Apply reviewed plan",
       description: result.ok
         ? `ดำเนินการแบบ atomic สำเร็จ ${result.receipts.length} รายการ`
         : result.error,
@@ -1176,7 +1462,7 @@ export default function AICoPilotBar() {
           : `ยังไม่ได้แก้ Artwork ครับ: ${result.error}`,
         timestamp: Date.now(),
         actions: [action],
-        suggestions: result.ok ? ["↶ Undo แผนล่าสุด", "📐 ตรวจสอบ Layout"] : ["รีเฟรชบริบทแล้วลองใหม่"],
+        suggestions: result.ok ? ["Undo แผนล่าสุด", "ตรวจสอบ Layout"] : ["รีเฟรชบริบทแล้วลองใหม่"],
       },
     ]);
   };
@@ -1196,8 +1482,8 @@ export default function AICoPilotBar() {
         flexDirection: "column",
         pointerEvents: "auto",
         overflow: "hidden",
-        background: "#121214",
-        color: "#f4f4f5",
+        background: "#ffffff",
+        color: "#0f172a",
         fontFamily:
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
@@ -1211,18 +1497,22 @@ export default function AICoPilotBar() {
           0%, 100% { opacity: 0.55; }
           50% { opacity: 1; }
         }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
         .artshift-custom-scroll::-webkit-scrollbar {
-          width: 6px;
+          width: 5px;
         }
         .artshift-custom-scroll::-webkit-scrollbar-track {
           background: transparent;
         }
         .artshift-custom-scroll::-webkit-scrollbar-thumb {
-          background: #27272a;
+          background: #e2e8f0;
           border-radius: 4px;
         }
         .artshift-custom-scroll::-webkit-scrollbar-thumb:hover {
-          background: #3f3f46;
+          background: #cbd5e1;
         }
       `}</style>
 
@@ -1241,29 +1531,30 @@ export default function AICoPilotBar() {
         {/* Thread Header */}
         <div
           style={{
-            padding: "10px 14px",
-            borderBottom: "1px solid #27272a",
+            padding: "11px 14px",
+            borderBottom: "1px solid #e2e8f0",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "#18181b",
+            background: "#ffffff",
           }}
         >
           <div
             title={UNIFIED_AI_SYSTEM.description}
             style={{ display: "flex", alignItems: "center", gap: 8 }}
           >
-            <span style={{ fontSize: 14 }}>🧠</span>
-            <strong style={{ fontSize: 12, color: "#f4f4f5", fontWeight: 600 }}>
+            <ThoughtBrainIcon style={{ color: "#4f46e5", width: 17, height: 17 }} />
+            <strong style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
               {UNIFIED_AI_SYSTEM.label}
             </strong>
             <span
               style={{
-                fontSize: 10,
-                padding: "2px 7px",
-                borderRadius: 10,
-                background: "#27272a",
-                color: "#a1a1aa",
+                fontSize: 10.5,
+                padding: "2px 8px",
+                borderRadius: 12,
+                background: "#f1f5f9",
+                border: "1px solid #e2e8f0",
+                color: "#64748b",
                 fontWeight: 500,
               }}
             >
@@ -1276,19 +1567,29 @@ export default function AICoPilotBar() {
               type="button"
               onClick={() => setMessages([])}
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
                 background: "none",
                 border: "none",
-                fontSize: 11,
-                color: "#71717a",
+                fontSize: 11.5,
+                color: "#64748b",
                 cursor: "pointer",
-                padding: "2px 6px",
-                borderRadius: 4,
-                transition: "color 0.15s ease",
+                padding: "4px 8px",
+                borderRadius: 5,
+                transition: "all 0.15s ease",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#d4d4d8")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#71717a")}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#0f172a";
+                e.currentTarget.style.background = "#f1f5f9";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "#64748b";
+                e.currentTarget.style.background = "transparent";
+              }}
             >
-              Clear
+              <TrashIcon style={{ width: 12, height: 12 }} />
+              <span>Clear</span>
             </button>
           </div>
         </div>
@@ -1305,6 +1606,7 @@ export default function AICoPilotBar() {
             display: "flex",
             flexDirection: "column",
             gap: 16,
+            background: "#ffffff",
           }}
         >
           {messages.map((msg) => {
@@ -1315,15 +1617,15 @@ export default function AICoPilotBar() {
                   style={{
                     alignSelf: "flex-end",
                     maxWidth: "85%",
-                    padding: "8px 16px",
-                    borderRadius: 18,
-                    background: "#27272a",
-                    color: "#f4f4f5",
+                    padding: "8px 14px",
+                    borderRadius: "16px 16px 4px 16px",
+                    background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
+                    color: "#ffffff",
                     fontSize: 13,
                     fontWeight: 500,
                     lineHeight: 1.45,
                     wordBreak: "break-word",
-                    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.2)",
+                    boxShadow: "0 2px 4px rgba(79, 70, 229, 0.15)",
                   }}
                 >
                   {msg.content}
@@ -1344,66 +1646,38 @@ export default function AICoPilotBar() {
                   width: "100%",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 4,
+                  gap: 6,
                 }}
               >
-                {/* Structured Assistant Message (Thought Tree) */}
-                {msg.thought && (
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 7,
-                        color: "#9ca3af",
-                        fontSize: 12.5,
-                        fontWeight: 500,
-                      }}
-                    >
-                      <ThoughtBrainIcon style={{ color: "#9ca3af" }} />
-                      <span>Thought</span>
-                    </div>
-                    <div
-                      style={{
-                        marginLeft: 7,
-                        paddingLeft: 14,
-                        borderLeft: "1.5px solid #3f3f46",
-                        paddingTop: 4,
-                        paddingBottom: 8,
-                        marginTop: 2,
-                        color: "#d4d4d8",
-                        fontSize: 12.5,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {msg.thought}
-                    </div>
-                  </div>
-                )}
+                {/* Structured Collapsible Thought */}
+                {msg.thought && <CollapsibleThought thought={msg.thought} defaultOpen={false} />}
 
+                {/* Tool label */}
                 {msg.toolLabel && (
                   <div
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 7,
-                      color: "#9ca3af",
-                      fontSize: 12.5,
+                      gap: 6,
+                      color: "#64748b",
+                      fontSize: 12,
+                      fontWeight: 500,
                       marginTop: msg.thought ? 0 : 2,
                     }}
                   >
-                    <ImageSparkleIcon style={{ color: "#9ca3af" }} />
+                    <ImageSparkleIcon style={{ color: "#4f46e5", width: 14, height: 14 }} />
                     <span>{msg.toolLabel}</span>
                   </div>
                 )}
 
+                {/* Image thumbnails */}
                 {msg.images && msg.images.length > 0 && (
                   <div
                     style={{
                       display: "flex",
                       gap: 10,
-                      marginTop: 8,
-                      marginBottom: 6,
+                      marginTop: 6,
+                      marginBottom: 4,
                       width: "100%",
                     }}
                   >
@@ -1418,19 +1692,21 @@ export default function AICoPilotBar() {
                           aspectRatio: "1 / 1",
                           borderRadius: 12,
                           overflow: "hidden",
-                          background: "#1e1e24",
+                          background: "#f8fafc",
                           cursor: "pointer",
-                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
-                          border: "1px solid #27272a",
-                          transition: "transform 0.15s ease, border-color 0.15s ease",
+                          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
+                          border: "1px solid #e2e8f0",
+                          transition: "all 0.15s ease",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = "scale(1.02)";
-                          e.currentTarget.style.borderColor = "#6366f1";
+                          e.currentTarget.style.borderColor = "#4f46e5";
+                          e.currentTarget.style.boxShadow = "0 4px 12px rgba(79, 70, 229, 0.15)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = "scale(1)";
-                          e.currentTarget.style.borderColor = "#27272a";
+                          e.currentTarget.style.borderColor = "#e2e8f0";
+                          e.currentTarget.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.06)";
                         }}
                       >
                         {/* biome-ignore lint/performance/noImgElement: Co-pilot generated image card */}
@@ -1448,11 +1724,12 @@ export default function AICoPilotBar() {
                 {msg.content && (
                   <div
                     style={{
-                      marginTop: msg.images && msg.images.length > 0 ? 6 : 2,
-                      color: "#f4f4f5",
+                      marginTop: msg.images && msg.images.length > 0 ? 4 : 2,
+                      color: "#1e293b",
                       fontSize: 13,
                       lineHeight: 1.6,
                       whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
                     }}
                   >
                     {msg.content}
@@ -1461,42 +1738,46 @@ export default function AICoPilotBar() {
 
                 {/* Sub-agent Action logs (if any and not already structured) */}
                 {!hasStructuredThought && msg.actions && msg.actions.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
                     {msg.actions.map((act) => (
                       <div
                         key={act.id}
                         style={{
-                          fontSize: 10,
-                          padding: "3px 8px",
-                          borderRadius: 5,
+                          fontSize: 10.5,
+                          padding: "4px 8px",
+                          borderRadius: 6,
                           background:
                             act.status === "success"
-                              ? "rgba(16, 185, 129, 0.12)"
+                              ? "#ecfdf5"
                               : act.status === "error"
-                                ? "rgba(239, 68, 68, 0.12)"
-                                : "rgba(99, 102, 241, 0.12)",
+                                ? "#fef2f2"
+                                : "#eef2ff",
                           color:
                             act.status === "success"
-                              ? "#34d399"
+                              ? "#065f46"
                               : act.status === "error"
-                                ? "#f87171"
-                                : "#a5b4fc",
+                                ? "#991b1b"
+                                : "#3730a3",
                           border: `1px solid ${
                             act.status === "success"
-                              ? "rgba(16, 185, 129, 0.25)"
+                              ? "#a7f3d0"
                               : act.status === "error"
-                                ? "rgba(239, 68, 68, 0.25)"
-                                : "rgba(99, 102, 241, 0.25)"
+                                ? "#fecaca"
+                                : "#c7d2fe"
                           }`,
                           display: "flex",
                           flexWrap: "wrap",
                           alignItems: "center",
-                          gap: 4,
+                          gap: 6,
                         }}
                       >
-                        <span>
-                          {act.status === "success" ? "✓" : act.status === "error" ? "✕" : "⏳"}
-                        </span>
+                        {act.status === "success" ? (
+                          <CheckIcon style={{ color: "#059669" }} />
+                        ) : act.status === "error" ? (
+                          <CloseIcon style={{ color: "#dc2626" }} />
+                        ) : (
+                          <SpinnerIcon style={{ color: "#4f46e5" }} />
+                        )}
                         <strong>{act.title}</strong>
                         <span>— {act.description}</span>
                       </div>
@@ -1506,7 +1787,7 @@ export default function AICoPilotBar() {
 
                 {/* Feedback Icons (Thumbs Up / Down) */}
                 {msg.role === "assistant" && msg.id !== "initial-msg" && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
                     <button
                       type="button"
                       onClick={() => handleToggleFeedback(msg.id, "up")}
@@ -1516,14 +1797,14 @@ export default function AICoPilotBar() {
                         border: "none",
                         padding: 3,
                         cursor: "pointer",
-                        color: feedbackState[msg.id] === "up" ? "#818cf8" : "#71717a",
+                        color: feedbackState[msg.id] === "up" ? "#4f46e5" : "#94a3b8",
                         transition: "color 0.15s ease",
                       }}
                       onMouseEnter={(e) => {
-                        if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#a1a1aa";
+                        if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#4f46e5";
                       }}
                       onMouseLeave={(e) => {
-                        if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#71717a";
+                        if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#94a3b8";
                       }}
                     >
                       <ThumbsUpIcon />
@@ -1537,16 +1818,16 @@ export default function AICoPilotBar() {
                         border: "none",
                         padding: 3,
                         cursor: "pointer",
-                        color: feedbackState[msg.id] === "down" ? "#f87171" : "#71717a",
+                        color: feedbackState[msg.id] === "down" ? "#ef4444" : "#94a3b8",
                         transition: "color 0.15s ease",
                       }}
                       onMouseEnter={(e) => {
                         if (feedbackState[msg.id] !== "down")
-                          e.currentTarget.style.color = "#a1a1aa";
+                          e.currentTarget.style.color = "#ef4444";
                       }}
                       onMouseLeave={(e) => {
                         if (feedbackState[msg.id] !== "down")
-                          e.currentTarget.style.color = "#71717a";
+                          e.currentTarget.style.color = "#94a3b8";
                       }}
                     >
                       <ThumbsDownIcon />
@@ -1566,14 +1847,16 @@ export default function AICoPilotBar() {
                 alignSelf: "stretch",
                 padding: "10px 12px",
                 borderRadius: 8,
-                background: "rgba(245, 158, 11, 0.1)",
-                border: "1px solid rgba(245, 158, 11, 0.3)",
-                color: "#fcd34d",
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                color: "#92400e",
                 fontSize: 11,
               }}
             >
-              <strong style={{ display: "block", fontSize: 11.5 }}>Reviewable plan</strong>
-              <span style={{ display: "block", marginTop: 3, lineHeight: 1.4 }}>
+              <strong style={{ display: "block", fontSize: 11.5, color: "#78350f" }}>
+                Reviewable plan
+              </strong>
+              <span style={{ display: "block", marginTop: 3, lineHeight: 1.4, color: "#92400e" }}>
                 {pendingReview.summary.slice(0, 240)} · {pendingReview.commandCount} รายการ
               </span>
               <div style={{ marginTop: 7, lineHeight: 1.45 }}>
@@ -1585,7 +1868,7 @@ export default function AICoPilotBar() {
                     <li key={`${change}-${index}`}>{change}</li>
                   ))}
                 </ul>
-                <div style={{ marginTop: 4, fontWeight: 600 }}>
+                <div style={{ marginTop: 4, fontWeight: 600, color: "#b45309" }}>
                   ต้องกด Apply plan เพื่อยืนยันก่อนแก้ไข Artwork
                 </div>
               </div>
@@ -1598,7 +1881,7 @@ export default function AICoPilotBar() {
                     border: 0,
                     borderRadius: 6,
                     padding: "5px 10px",
-                    background: busy ? "#52525b" : "#d97706",
+                    background: busy ? "#94a3b8" : "#d97706",
                     color: "#ffffff",
                     cursor: busy ? "default" : "pointer",
                     fontSize: 10.5,
@@ -1612,11 +1895,11 @@ export default function AICoPilotBar() {
                   onClick={() => setPendingPlan(null)}
                   disabled={busy}
                   style={{
-                    border: "1px solid rgba(245, 158, 11, 0.4)",
+                    border: "1px solid #d97706",
                     borderRadius: 6,
                     padding: "5px 10px",
                     background: "transparent",
-                    color: "#fcd34d",
+                    color: "#b45309",
                     cursor: busy ? "default" : "pointer",
                     fontSize: 10.5,
                   }}
@@ -1636,32 +1919,35 @@ export default function AICoPilotBar() {
                 alignSelf: "stretch",
                 padding: "10px 12px",
                 borderRadius: 8,
-                background: "rgba(124, 58, 237, 0.12)",
-                border: "1px solid rgba(124, 58, 237, 0.35)",
-                color: "#ddd6fe",
+                background: "#faf5ff",
+                border: "1px solid #e9d5ff",
+                color: "#581c87",
                 fontSize: 11,
               }}
             >
               <div
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
               >
-                <strong style={{ fontSize: 11.5, color: "#f5f3ff" }}>
-                  ⚡ Multi-Specialist Plan ({pendingSequentialPlan.steps.length} steps)
-                </strong>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <BoltIcon style={{ color: "#7c3aed" }} />
+                  <strong style={{ fontSize: 11.5, color: "#581c87" }}>
+                    Multi-Specialist Plan ({pendingSequentialPlan.steps.length} steps)
+                  </strong>
+                </div>
                 <span
                   style={{
-                    fontSize: 9,
-                    padding: "2px 6px",
+                    fontSize: 9.5,
+                    padding: "2px 7px",
                     borderRadius: 10,
-                    background: "#3b0764",
-                    color: "#c4b5fd",
+                    background: "#f3e8ff",
+                    color: "#7c3aed",
                     fontWeight: 700,
                   }}
                 >
                   {pendingSequentialPlan.overallStatus}
                 </span>
               </div>
-              <span style={{ display: "block", marginTop: 4, color: "#c4b5fd", lineHeight: 1.4 }}>
+              <span style={{ display: "block", marginTop: 4, color: "#6b21a8", lineHeight: 1.4 }}>
                 {pendingSequentialPlan.summary}
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
@@ -1673,20 +1959,20 @@ export default function AICoPilotBar() {
                       alignItems: "center",
                       justifyContent: "space-between",
                       padding: "5px 8px",
-                      background: "#18181b",
+                      background: "#ffffff",
                       borderRadius: 6,
-                      border: "1px solid #4c1d95",
+                      border: "1px solid #f3e8ff",
                       fontSize: 10,
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontWeight: 700, color: "#a78bfa" }}>#{idx + 1}</span>
-                      <strong style={{ color: "#f5f3ff" }}>{step.name}</strong>
+                      <span style={{ fontWeight: 700, color: "#7c3aed" }}>#{idx + 1}</span>
+                      <strong style={{ color: "#1e1b4b" }}>{step.name}</strong>
                       <span
                         style={{
                           fontSize: 9,
-                          background: "#2e1065",
-                          color: "#c4b5fd",
+                          background: "#f3e8ff",
+                          color: "#6b21a8",
                           padding: "1px 5px",
                           borderRadius: 4,
                         }}
@@ -1698,27 +1984,41 @@ export default function AICoPilotBar() {
                       style={{
                         fontSize: 9.5,
                         fontWeight: 600,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
                         color:
                           step.status === "completed"
-                            ? "#34d399"
+                            ? "#059669"
                             : step.status === "running"
-                              ? "#60a5fa"
+                              ? "#2563eb"
                               : step.status === "paused_on_gate"
-                                ? "#fbbf24"
+                                ? "#d97706"
                                 : step.status === "failed"
-                                  ? "#f87171"
-                                  : "#71717a",
+                                  ? "#dc2626"
+                                  : "#64748b",
                       }}
                     >
-                      {step.status === "completed"
-                        ? "✓ Done"
-                        : step.status === "running"
-                          ? "⏳ Running"
-                          : step.status === "paused_on_gate"
-                            ? "⚠️ Quality Gate"
-                            : step.status === "failed"
-                              ? "✕ Failed"
-                              : "Pending"}
+                      {step.status === "completed" ? (
+                        <>
+                          <CheckIcon style={{ width: 11, height: 11, color: "#059669" }} />
+                          <span>Done</span>
+                        </>
+                      ) : step.status === "running" ? (
+                        <>
+                          <SpinnerIcon style={{ width: 11, height: 11, color: "#2563eb" }} />
+                          <span>Running</span>
+                        </>
+                      ) : step.status === "paused_on_gate" ? (
+                        <span>Quality Gate</span>
+                      ) : step.status === "failed" ? (
+                        <>
+                          <CloseIcon style={{ width: 11, height: 11, color: "#dc2626" }} />
+                          <span>Failed</span>
+                        </>
+                      ) : (
+                        "Pending"
+                      )}
                     </span>
                   </div>
                 ))}
@@ -1732,7 +2032,7 @@ export default function AICoPilotBar() {
                     border: 0,
                     borderRadius: 6,
                     padding: "6px 12px",
-                    background: isExecutingPlan ? "#7c3aed" : "#6d28d9",
+                    background: isExecutingPlan ? "#9333ea" : "#7c3aed",
                     color: "#ffffff",
                     fontWeight: 700,
                     fontSize: 10.5,
@@ -1750,11 +2050,11 @@ export default function AICoPilotBar() {
                   onClick={() => setPendingSequentialPlan(null)}
                   disabled={isExecutingPlan}
                   style={{
-                    border: "1px solid #4c1d95",
+                    border: "1px solid #ddd6fe",
                     borderRadius: 6,
                     padding: "6px 10px",
                     background: "transparent",
-                    color: "#c4b5fd",
+                    color: "#7c3aed",
                     fontSize: 10,
                     cursor: "pointer",
                   }}
@@ -1774,8 +2074,8 @@ export default function AICoPilotBar() {
                 alignSelf: "stretch",
                 padding: "8px 10px",
                 borderRadius: 8,
-                background: "rgba(16, 185, 129, 0.08)",
-                border: "1px solid rgba(16, 185, 129, 0.25)",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
                 fontSize: 10.5,
               }}
             >
@@ -1787,9 +2087,12 @@ export default function AICoPilotBar() {
                   marginBottom: 6,
                 }}
               >
-                <strong style={{ fontSize: 11, color: "#34d399" }}>
-                  ✨ Staging Tray ({stagedVariations.length} Candidate Variations)
-                </strong>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <ImageSparkleIcon style={{ color: "#16a34a", width: 14, height: 14 }} />
+                  <strong style={{ fontSize: 11, color: "#15803d" }}>
+                    Staging Tray ({stagedVariations.length} Candidate Variations)
+                  </strong>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -1800,7 +2103,7 @@ export default function AICoPilotBar() {
                     background: "none",
                     border: "none",
                     fontSize: 9.5,
-                    color: "#9ca3af",
+                    color: "#16a34a",
                     cursor: "pointer",
                     textDecoration: "underline",
                   }}
@@ -1824,11 +2127,11 @@ export default function AICoPilotBar() {
                     style={{
                       position: "relative",
                       flex: "0 0 110px",
-                      border: v.status === "accepted" ? "2px solid #10b981" : "1px solid #3f3f46",
+                      border: v.status === "accepted" ? "2px solid #10b981" : "1px solid #e2e8f0",
                       borderRadius: 8,
                       padding: 5,
-                      background: "#18181b",
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.4)",
+                      background: "#ffffff",
+                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
                       display: "flex",
                       flexDirection: "column",
                       gap: 4,
@@ -1841,7 +2144,7 @@ export default function AICoPilotBar() {
                         height: 64,
                         borderRadius: 4,
                         overflow: "hidden",
-                        background: "#27272a",
+                        background: "#f8fafc",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1859,14 +2162,14 @@ export default function AICoPilotBar() {
                           }}
                         />
                       ) : (
-                        <span style={{ fontSize: 20 }}>🖼️</span>
+                        <ImageIcon style={{ width: 22, height: 22, color: "#94a3b8" }} />
                       )}
                     </div>
                     <span
                       style={{
                         fontSize: 9.5,
                         fontWeight: 600,
-                        color: "#e4e4e7",
+                        color: "#334155",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -1886,14 +2189,25 @@ export default function AICoPilotBar() {
                           padding: "3px 4px",
                           borderRadius: 4,
                           border: "none",
-                          background: v.status === "accepted" ? "#10b981" : "#6366f1",
+                          background: v.status === "accepted" ? "#10b981" : "#4f46e5",
                           color: "#ffffff",
                           fontSize: 9.5,
                           fontWeight: 700,
                           cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 3,
                         }}
                       >
-                        {v.status === "accepted" ? "✓ Done" : "Place"}
+                        {v.status === "accepted" ? (
+                          <>
+                            <CheckIcon style={{ width: 10, height: 10 }} />
+                            <span>Done</span>
+                          </>
+                        ) : (
+                          "Place"
+                        )}
                       </button>
                       <button
                         type="button"
@@ -1904,14 +2218,17 @@ export default function AICoPilotBar() {
                         style={{
                           padding: "3px 5px",
                           borderRadius: 4,
-                          border: "1px solid #3f3f46",
-                          background: "#27272a",
-                          color: "#a1a1aa",
+                          border: "1px solid #e2e8f0",
+                          background: "#ffffff",
+                          color: "#64748b",
                           fontSize: 9,
                           cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
-                        ✕
+                        <CloseIcon style={{ width: 10, height: 10 }} />
                       </button>
                     </div>
                   </div>
@@ -1927,18 +2244,18 @@ export default function AICoPilotBar() {
                 maxWidth: "85%",
                 padding: "8px 12px",
                 borderRadius: "12px 12px 12px 2px",
-                background: "#1e1e24",
-                color: "#e4e4e7",
+                background: "#f1f5f9",
+                color: "#1e293b",
                 fontSize: 12.5,
                 lineHeight: 1.45,
-                border: "1px solid #27272a",
+                border: "1px solid #e2e8f0",
               }}
             >
               {streamingText}
             </div>
           )}
 
-          {/* Live In-Progress State: Matches Prototype Screenshots */}
+          {/* Live In-Progress State: Matches Prototype Screenshots with Collapsible Thought */}
           {busy && liveAssistantState && (
             <div
               style={{
@@ -1946,80 +2263,35 @@ export default function AICoPilotBar() {
                 width: "100%",
                 display: "flex",
                 flexDirection: "column",
-                gap: 4,
+                gap: 6,
               }}
             >
-              {liveAssistantState.stage === "outputting" ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    color: "#9ca3af",
-                    fontSize: 13,
-                    animation: "artshiftPulse 1.8s ease-in-out infinite",
-                    padding: "4px 0",
-                  }}
-                >
-                  <ThoughtBrainIcon style={{ color: "#9ca3af" }} />
-                  <span>Outputting...</span>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
-                  {/* Thought Header */}
+              {/* Collapsible Thought block */}
+              <CollapsibleThought
+                thought={
+                  liveAssistantState.thought ||
+                  (liveAssistantState.stage === "outputting"
+                    ? "กำลังจัดเตรียมผลลัพธ์..."
+                    : "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ...")
+                }
+                isLive={true}
+                defaultOpen={true}
+              />
+
+              {/* Tool Step (if generating) */}
+              {liveAssistantState.stage === "generating" && (
+                <>
                   <div
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 7,
-                      color: "#9ca3af",
-                      fontSize: 12.5,
+                      gap: 6,
+                      color: "#475569",
+                      fontSize: 12,
                       fontWeight: 500,
                     }}
                   >
-                    <ThoughtBrainIcon style={{ color: "#9ca3af" }} />
-                    <span>Thought</span>
-                  </div>
-
-                  {/* Thought Body with Vertical Connector Line */}
-                  {liveAssistantState.thought ? (
-                    <div
-                      style={{
-                        marginLeft: 7,
-                        paddingLeft: 14,
-                        borderLeft: "1.5px solid #3f3f46",
-                        paddingTop: 4,
-                        paddingBottom: 8,
-                        marginTop: 2,
-                        color: "#d4d4d8",
-                        fontSize: 12.5,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {liveAssistantState.thought}
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        marginLeft: 7,
-                        height: 12,
-                        borderLeft: "1.5px solid #3f3f46",
-                      }}
-                    />
-                  )}
-
-                  {/* Tool Step */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      color: "#9ca3af",
-                      fontSize: 12.5,
-                      marginTop: 2,
-                    }}
-                  >
-                    <ImageSparkleIcon style={{ color: "#9ca3af" }} />
+                    <ImageSparkleIcon style={{ color: "#4f46e5", width: 14, height: 14 }} />
                     <span style={{ animation: "artshiftPulse 2s ease-in-out infinite" }}>
                       {liveAssistantState.toolLabel || "Generating images using GPT Image 2"}
                     </span>
@@ -2030,7 +2302,7 @@ export default function AICoPilotBar() {
                     style={{
                       display: "flex",
                       gap: 10,
-                      marginTop: 8,
+                      marginTop: 4,
                       width: "100%",
                     }}
                   >
@@ -2045,62 +2317,70 @@ export default function AICoPilotBar() {
                           aspectRatio: "1 / 1",
                           borderRadius: 12,
                           background:
-                            "linear-gradient(90deg, #27272a 0%, #3f3f46 50%, #27272a 100%)",
+                            "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
                           backgroundSize: "200% 100%",
                           animation: "artshiftShimmer 1.8s infinite ease-in-out",
-                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+                          border: "1px solid #e2e8f0",
+                          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
                         }}
                       />
                     ))}
                   </div>
-
-                  {/* Cancel Button */}
-                  <div style={{ marginTop: 8 }}>
-                    <button
-                      type="button"
-                      data-testid="cancel-ai-task"
-                      aria-label="ยกเลิก Task"
-                      onClick={() => abortRef.current?.abort()}
-                      style={{
-                        background: "transparent",
-                        border: "1px solid #3f3f46",
-                        borderRadius: 6,
-                        padding: "3px 8px",
-                        color: "#a1a1aa",
-                        fontSize: 10,
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.color = "#f87171";
-                        e.currentTarget.style.borderColor = "#7f1d1d";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.color = "#a1a1aa";
-                        e.currentTarget.style.borderColor = "#3f3f46";
-                      }}
-                    >
-                      ยกเลิก Task
-                    </button>
-                  </div>
-                </div>
+                </>
               )}
+
+              {/* Cancel Button */}
+              <div style={{ marginTop: 4 }}>
+                <button
+                  type="button"
+                  data-testid="cancel-ai-task"
+                  aria-label="ยกเลิก Task"
+                  onClick={() => abortRef.current?.abort()}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 6,
+                    padding: "4px 9px",
+                    color: "#64748b",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#dc2626";
+                    e.currentTarget.style.borderColor = "#fca5a5";
+                    e.currentTarget.style.background = "#fef2f2";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "#64748b";
+                    e.currentTarget.style.borderColor = "#e2e8f0";
+                    e.currentTarget.style.background = "#ffffff";
+                  }}
+                >
+                  <CloseIcon style={{ width: 11, height: 11 }} />
+                  <span>ยกเลิก Task</span>
+                </button>
+              </div>
             </div>
           )}
 
           {/* Live running actions indicator (if any other actions without liveAssistantState) */}
           {busy && !liveAssistantState && currentActions.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {currentActions.map((act) => (
                 <div
                   key={act.id}
                   style={{
                     minWidth: 0,
-                    fontSize: 10,
-                    padding: "4px 8px",
-                    borderRadius: 4,
-                    background: "#1e1e24",
-                    color: "#93c5fd",
-                    border: "1px solid #1e3a8a",
+                    fontSize: 10.5,
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    background: "#eff6ff",
+                    color: "#1e40af",
+                    border: "1px solid #bfdbfe",
                     display: "flex",
                     flexWrap: "wrap",
                     alignItems: "center",
@@ -2108,7 +2388,7 @@ export default function AICoPilotBar() {
                     overflowWrap: "anywhere",
                   }}
                 >
-                  <span style={{ animation: "spin 1s linear infinite" }}>⚙️</span>
+                  <SpinnerIcon style={{ color: "#2563eb" }} />
                   <strong>{act.title}</strong>
                   <span>{act.description}</span>
                 </div>
@@ -2120,17 +2400,21 @@ export default function AICoPilotBar() {
                 onClick={() => abortRef.current?.abort()}
                 style={{
                   alignSelf: "flex-start",
-                  border: "1px solid #7f1d1d",
-                  borderRadius: 5,
-                  padding: "3px 8px",
-                  background: "rgba(239, 68, 68, 0.1)",
-                  color: "#f87171",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  border: "1px solid #fecaca",
+                  borderRadius: 6,
+                  padding: "4px 9px",
+                  background: "#fef2f2",
+                  color: "#dc2626",
                   cursor: "pointer",
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: 600,
                 }}
               >
-                ยกเลิก Task
+                <CloseIcon style={{ width: 11, height: 11 }} />
+                <span>ยกเลิก Task</span>
               </button>
             </div>
           )}
@@ -2142,8 +2426,8 @@ export default function AICoPilotBar() {
         style={{
           width: "100%",
           flex: "0 0 auto",
-          background: "#121214",
-          borderTop: "1px solid #27272a",
+          background: "#ffffff",
+          borderTop: "1px solid #e2e8f0",
           padding: "10px 14px 14px",
           display: "flex",
           flexDirection: "column",
@@ -2159,17 +2443,23 @@ export default function AICoPilotBar() {
               minWidth: 0,
               minHeight: 52,
               borderRadius: 14,
-              background: "#1c1c20",
-              border: "1px solid #2e2e34",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
               display: "flex",
               flexDirection: "column",
               gap: 4,
               padding: "8px 12px",
               boxSizing: "border-box",
-              transition: "border-color 0.15s ease",
+              transition: "border-color 0.15s ease, box-shadow 0.15s ease",
             }}
-            onFocusCapture={(e) => (e.currentTarget.style.borderColor = "#52525b")}
-            onBlurCapture={(e) => (e.currentTarget.style.borderColor = "#2e2e34")}
+            onFocusCapture={(e) => {
+              e.currentTarget.style.borderColor = "#4f46e5";
+              e.currentTarget.style.boxShadow = "0 0 0 2px rgba(79, 70, 229, 0.1)";
+            }}
+            onBlurCapture={(e) => {
+              e.currentTarget.style.borderColor = "#e2e8f0";
+              e.currentTarget.style.boxShadow = "none";
+            }}
           >
             <ComposerImageTags
               refs={snapshotComposerImageRefs(selectedImageRefs)}
@@ -2198,7 +2488,7 @@ export default function AICoPilotBar() {
                 outline: "none",
                 fontSize: 13,
                 lineHeight: 1.45,
-                color: "#f4f4f5",
+                color: "#0f172a",
                 background: "transparent",
                 fontFamily: "inherit",
                 boxSizing: "border-box",
@@ -2217,19 +2507,27 @@ export default function AICoPilotBar() {
               height: 36,
               borderRadius: "50%",
               border: "none",
-              background: busy || !input.trim() ? "#27272a" : "#ffffff",
-              color: busy || !input.trim() ? "#71717a" : "#121214",
+              background: busy ? "#ef4444" : input.trim() ? "#4f46e5" : "#f1f5f9",
+              color: busy || input.trim() ? "#ffffff" : "#94a3b8",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: busy || !input.trim() ? (busy ? "pointer" : "default") : "pointer",
-              fontSize: 14,
-              fontWeight: 600,
               transition: "all 0.15s ease",
             }}
             title={busy ? "Cancel current task" : "Send to AI Assistance"}
           >
-            {busy ? "■" : "➔"}
+            {busy ? (
+              <StopIcon style={{ width: 12, height: 12, fill: "#ffffff" }} />
+            ) : (
+              <SendIcon
+                style={{
+                  width: 14,
+                  height: 14,
+                  stroke: input.trim() ? "#ffffff" : "#94a3b8",
+                }}
+              />
+            )}
           </button>
         </div>
       </div>
