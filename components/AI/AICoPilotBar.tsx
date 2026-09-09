@@ -837,10 +837,6 @@ export default function AICoPilotBar() {
         /(?:ลบพื้นหลัง|remove\s*bg|remove\s*background|vectorize|แปลงเป็น(?:\s+)?vector|แปลงเป็นเวกเตอร์)/iu.test(
           promptToSend,
         );
-      const isImageContextRequest =
-        /(?:ภาพ|รูป|image|photo|สร้าง|วาด|generate|create|พื้นหลัง|background|อธิบาย|describe|แก้ภาพ|edit\s+image)/iu.test(
-          promptToSend,
-        );
 
       if (isCanvasInventoryPrompt(promptToSend) && slide) {
         contextDecision = prepareContextAwareTurn({
@@ -852,13 +848,13 @@ export default function AICoPilotBar() {
       } else if (
         pending ||
         isImageGenerationPrompt(promptToSend) ||
-        (hasImageContext && isImageContextRequest && !isBuiltInImageAction)
+        (hasImageContext && !isBuiltInImageAction)
       ) {
         if (hasImageContext && analysesForTurn.length === 0) {
           const analysisAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
             agent: "orchestrator",
-            title: "🔎 Image Analysis",
+            title: "Image Analysis",
             description: "กำลังวิเคราะห์ภาพที่เลือกก่อนวางแผนงาน…",
             status: "running",
             timestamp: Date.now(),
@@ -1265,7 +1261,7 @@ export default function AICoPilotBar() {
                 width: slide?.width ?? 1920,
                 height: slide?.height ?? 1080,
               },
-              referenceAnalyses: [],
+              referenceAnalyses: analysesForTurn,
             },
             { signal: controller.signal, cloudConsent: true },
           );
@@ -1311,8 +1307,8 @@ export default function AICoPilotBar() {
             setPendingClarification({
               id: crypto.randomUUID(),
               originalPrompt: promptToSend,
-              selectedImages: [],
-              analyses: [],
+              selectedImages: refsForTurn,
+              analyses: analysesForTurn,
               question: result.question,
               options: result.options.map((label, index) => ({ id: String(index), label })),
               round: (pending?.round ?? 0) + 1,
@@ -1342,8 +1338,8 @@ export default function AICoPilotBar() {
             const directedTask = createDirectedImageTask(
               {
                 prompt: promptToSend,
-                refs: [],
-                analyses: [],
+                refs: refsForTurn,
+                analyses: analysesForTurn,
                 canvas: slide ? { slide, selectedIds } : undefined,
               },
               result,
@@ -1354,7 +1350,7 @@ export default function AICoPilotBar() {
               description: `กำลังดำเนินงานด้วย ${result.modelAlias}`,
             };
             upsertCurrentAction(remoteActions[0]);
-            const generated = await runContextAwareImageTask(directedTask, [], {
+            const generated = await runContextAwareImageTask(directedTask, refsForTurn, {
               signal: controller.signal,
               cloudConsent: true,
               reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>

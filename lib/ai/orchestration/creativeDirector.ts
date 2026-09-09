@@ -755,27 +755,33 @@ export function parseCreativeDirection(
     return invalidDirection("outputBriefs contain invalid strings");
   }
 
+  let specialist: "image_generator" | "image_editor" =
+    value.specialist as "image_generator" | "image_editor";
+  let capability: "IMAGE_DEFAULT" | "IMAGE_EDIT" =
+    value.capability as "IMAGE_DEFAULT" | "IMAGE_EDIT";
+  if (
+    input.referenceAnalyses.length === 0 &&
+    specialist === "image_editor" &&
+    !input.canvasSummary?.selectedCount
+  ) {
+    specialist = "image_generator";
+    capability = "IMAGE_DEFAULT";
+  }
+
   const rawModelAlias = typeof value.modelAlias === "string" ? value.modelAlias : "image-gpt-2";
   const modelResolution = resolveCreatingModel(
-    value.capability === "IMAGE_EDIT" ? "edit" : "generate",
+    capability === "IMAGE_EDIT" ? "edit" : "generate",
     rawModelAlias,
   );
   if (!modelResolution.ok || modelResolution.model.alias !== "image-gpt-2") {
     return invalidDirection("modelAlias cannot resolve to image-gpt-2");
   }
 
-  if (value.specialist === "image_editor" && value.capability !== "IMAGE_EDIT") {
+  if (specialist === "image_editor" && capability !== "IMAGE_EDIT") {
     return invalidDirection("image_editor requires IMAGE_EDIT capability");
   }
-  if (value.specialist === "image_generator" && value.capability !== "IMAGE_DEFAULT") {
+  if (specialist === "image_generator" && capability !== "IMAGE_DEFAULT") {
     return invalidDirection("image_generator requires IMAGE_DEFAULT capability");
-  }
-  if (
-    input.referenceAnalyses.length === 0 &&
-    value.specialist === "image_editor" &&
-    !input.canvasSummary?.selectedCount
-  ) {
-    return invalidDirection("image_editor requires referenceAnalyses or selected canvas element");
   }
   if (value.requiredSubjects !== undefined && !isStringArray(value.requiredSubjects, 8, 200)) {
     return invalidDirection("requiredSubjects is invalid");
@@ -797,8 +803,8 @@ export function parseCreativeDirection(
     outputBriefs: finalBriefs.map((brief) => brief.trim()),
     summary: value.summary.trim(),
     refinedPrompt: value.refinedPrompt.trim(),
-    specialist: value.specialist,
-    capability: value.capability,
+    specialist,
+    capability,
     modelAlias: "image-gpt-2",
     knowledgeSkillIds: [...new Set(finalKnowledgeIds)],
     reviewCriteria: value.reviewCriteria.map((criterion) => criterion.trim()),
