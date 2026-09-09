@@ -346,6 +346,39 @@ describe("gpt-oss-120b Creative Director", () => {
     });
   });
 
+  it("handles model response with unescaped literal newlines in strings and null optional fields", async () => {
+    const rawEnvelope =
+      '{\n  "calls": [{\n    "name": "propose_creative_direction",\n    "input": {\n      "kind": "image-task",\n      "summary": "Spider-Man hero shot",\n      "refinedPrompt": "Spider-Man standing atop a skyscraper\\nwith dramatic night lighting",\n      "specialist": "image_generator",\n      "capability": "IMAGE_DEFAULT",\n      "modelAlias": "image-gpt-2",\n      "knowledgeSkillIds": [],\n      "reviewCriteria": ["Spider-Man suit details\\nare crisp and clear"],\n      "search": { "required": false },\n      "requiredText": null,\n      "requiredSubjects": null,\n      "outputCount": 1\n    }\n  }]\n}';
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: rawEnvelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: rawEnvelope },
+      },
+      metadata: toolResult.metadata,
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "สร้างรูปสไปเดอร์แมน",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "Spider-Man hero shot",
+      modelAlias: "image-gpt-2",
+      outputCount: 1,
+    });
+  });
+
   it("applies a validated direction while preserving server-owned execution policy", () => {
     const task = baseTask();
     const directed = applyCreativeDirectionToTask(task, {

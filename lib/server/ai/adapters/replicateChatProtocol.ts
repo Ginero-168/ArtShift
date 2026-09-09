@@ -108,7 +108,13 @@ export function parseReplicateAssistantOutput(
       rawCalls = [candidate.call];
     } else if (isRecord(candidate.tool_call)) {
       rawCalls = [candidate.tool_call];
+    } else if (isRecord(candidate.calls)) {
+      rawCalls = [candidate.calls];
     } else if (typeof candidate.name === "string" && allowedTools.has(candidate.name)) {
+      rawCalls = [candidate];
+    } else if (typeof candidate.tool === "string" && allowedTools.has(candidate.tool)) {
+      rawCalls = [candidate];
+    } else if (typeof candidate.action === "string" && allowedTools.has(candidate.action)) {
       rawCalls = [candidate];
     } else if (
       isRecord(candidate.function) &&
@@ -118,9 +124,22 @@ export function parseReplicateAssistantOutput(
       rawCalls = [
         {
           name: candidate.function.name,
-          input: candidate.function.arguments ?? candidate.function.input ?? {},
+          input:
+            candidate.function.arguments ??
+            candidate.function.input ??
+            candidate.function.parameters ??
+            candidate.function.args ??
+            {},
         },
       ];
+    } else if (isRecord(candidate.propose_creative_direction)) {
+      rawCalls = [
+        { name: "propose_creative_direction", input: candidate.propose_creative_direction },
+      ];
+    } else if (isRecord(candidate.propose_design_plan)) {
+      rawCalls = [{ name: "propose_design_plan", input: candidate.propose_design_plan }];
+    } else if (isRecord(candidate.propose_sequential_plan)) {
+      rawCalls = [{ name: "propose_sequential_plan", input: candidate.propose_sequential_plan }];
     } else if (
       allowedTools.has("propose_creative_direction") &&
       (candidate.kind === "image-task" || candidate.kind === "clarification")
@@ -189,27 +208,38 @@ export function parseReplicateAssistantOutput(
     if (!name && isRecord(value.function) && typeof value.function.name === "string") {
       name = value.function.name.trim();
     }
+    if (!name && typeof value.tool === "string") {
+      name = value.tool.trim();
+    }
+    if (!name && typeof value.action === "string") {
+      name = value.action.trim();
+    }
+    if (!name && allowedTools.size === 1) {
+      name = Array.from(allowedTools)[0];
+    }
     if (!name || !allowedTools.has(name)) {
       warnings.push("Provider returned a tool that is not enabled for this request.");
       return;
     }
     let callInput: Record<string, unknown> | null = null;
-    if (isRecord(value.input)) {
-      callInput = value.input;
-    } else if (isRecord(value.arguments)) {
-      callInput = value.arguments;
-    } else if (typeof value.arguments === "string") {
-      const parsed = parseJsonCandidate(value.arguments);
+    const rawInput =
+      value.input ??
+      value.arguments ??
+      value.parameters ??
+      value.args ??
+      (isRecord(value.function)
+        ? (value.function.input ??
+          value.function.arguments ??
+          value.function.parameters ??
+          value.function.args)
+        : undefined) ??
+      value.action_input;
+
+    if (isRecord(rawInput)) {
+      callInput = rawInput;
+    } else if (typeof rawInput === "string") {
+      const parsed = parseJsonCandidate(rawInput);
       if (isRecord(parsed)) callInput = parsed;
-    } else if (isRecord(value.function)) {
-      if (isRecord(value.function.input)) {
-        callInput = value.function.input;
-      } else if (isRecord(value.function.arguments)) {
-        callInput = value.function.arguments;
-      } else if (typeof value.function.arguments === "string") {
-        const parsed = parseJsonCandidate(value.function.arguments);
-        if (isRecord(parsed)) callInput = parsed;
-      }
     }
     if (!callInput) {
       warnings.push(`Provider tool ${name} did not include an object input.`);

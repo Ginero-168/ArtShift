@@ -528,90 +528,136 @@ async function executeDirectorPass(
     const text = execution.output.text.trim();
     if (containsSensitivePayload(text)) return invalidDirection();
     const candidate = parseJsonCandidate(text);
-    if (isRecord(candidate)) {
-      const extractedCalls: unknown[] = Array.isArray(candidate.calls)
-        ? candidate.calls
-        : Array.isArray(candidate.tool_calls)
-          ? candidate.tool_calls
-          : isRecord(candidate.call)
-            ? [candidate.call]
-            : isRecord(candidate.tool_call)
-              ? [candidate.tool_call]
-              : typeof candidate.name === "string" || isRecord(candidate.function)
-                ? [candidate]
-                : [];
-      if (extractedCalls.length > 0) {
-        for (const rawCall of extractedCalls) {
-          if (!isRecord(rawCall)) continue;
-          let callName = typeof rawCall.name === "string" ? rawCall.name : "";
-          if (
-            !callName &&
-            isRecord(rawCall.function) &&
-            typeof rawCall.function.name === "string"
-          ) {
-            callName = rawCall.function.name;
-          }
-          let callInput: Record<string, unknown> | null = null;
-          if (isRecord(rawCall.input)) {
-            callInput = rawCall.input;
-          } else if (isRecord(rawCall.arguments)) {
-            callInput = rawCall.arguments;
-          } else if (typeof rawCall.arguments === "string") {
-            const parsed = parseJsonCandidate(rawCall.arguments);
-            if (isRecord(parsed)) callInput = parsed;
-          } else if (isRecord(rawCall.function)) {
-            if (isRecord(rawCall.function.input)) {
-              callInput = rawCall.function.input;
-            } else if (isRecord(rawCall.function.arguments)) {
-              callInput = rawCall.function.arguments;
-            } else if (typeof rawCall.function.arguments === "string") {
-              const parsed = parseJsonCandidate(rawCall.function.arguments);
-              if (isRecord(parsed)) callInput = parsed;
-            }
-          }
-          if (!callInput) continue;
-          if (callName === CREATIVE_DIRECTION_TOOL.name) {
-            return parseCreativeDirection(callInput, input, knowledgeIds);
-          }
-          if (callName === DESIGN_PLAN_TOOL.name) {
-            return parseDesignPlan(callInput, input);
-          }
-          if (callName === SEQUENTIAL_PLAN_TOOL.name) {
-            const val = validateSequentialExecutionPlan(callInput);
-            if (!val.ok) return invalidDirection(val.error);
-            return { kind: "sequential-plan", plan: val.plan };
-          }
+    const candidateRecord = isRecord(candidate) ? candidate : null;
+    const extractedCalls: unknown[] = Array.isArray(candidate)
+      ? candidate
+      : candidateRecord
+        ? Array.isArray(candidateRecord.calls)
+          ? candidateRecord.calls
+          : Array.isArray(candidateRecord.tool_calls)
+            ? candidateRecord.tool_calls
+            : isRecord(candidateRecord.call)
+              ? [candidateRecord.call]
+              : isRecord(candidateRecord.tool_call)
+                ? [candidateRecord.tool_call]
+                : isRecord(candidateRecord.calls)
+                  ? [candidateRecord.calls]
+                  : typeof candidateRecord.name === "string" || isRecord(candidateRecord.function)
+                    ? [candidateRecord]
+                    : typeof candidateRecord.tool === "string" ||
+                        typeof candidateRecord.action === "string"
+                      ? [candidateRecord]
+                      : isRecord(candidateRecord.propose_creative_direction)
+                        ? [
+                            {
+                              name: "propose_creative_direction",
+                              input: candidateRecord.propose_creative_direction,
+                            },
+                          ]
+                        : isRecord(candidateRecord.propose_design_plan)
+                          ? [
+                              {
+                                name: "propose_design_plan",
+                                input: candidateRecord.propose_design_plan,
+                              },
+                            ]
+                          : isRecord(candidateRecord.propose_sequential_plan)
+                            ? [
+                                {
+                                  name: "propose_sequential_plan",
+                                  input: candidateRecord.propose_sequential_plan,
+                                },
+                              ]
+                            : []
+        : [];
+    if (extractedCalls.length > 0) {
+      for (const rawCall of extractedCalls) {
+        if (!isRecord(rawCall)) continue;
+        let callName = typeof rawCall.name === "string" ? rawCall.name.trim() : "";
+        if (!callName && isRecord(rawCall.function) && typeof rawCall.function.name === "string") {
+          callName = rawCall.function.name.trim();
+        }
+        if (!callName && typeof rawCall.tool === "string") {
+          callName = rawCall.tool.trim();
+        }
+        if (!callName && typeof rawCall.action === "string") {
+          callName = rawCall.action.trim();
+        }
+        let callInput: Record<string, unknown> | null = null;
+        const rawInput =
+          rawCall.input ??
+          rawCall.arguments ??
+          rawCall.parameters ??
+          rawCall.args ??
+          (isRecord(rawCall.function)
+            ? (rawCall.function.input ??
+              rawCall.function.arguments ??
+              rawCall.function.parameters ??
+              rawCall.function.args)
+            : undefined) ??
+          rawCall.action_input;
+
+        if (isRecord(rawInput)) {
+          callInput = rawInput;
+        } else if (typeof rawInput === "string") {
+          const parsed = parseJsonCandidate(rawInput);
+          if (isRecord(parsed)) callInput = parsed;
+        }
+        if (!callInput) continue;
+        if (
+          callName === CREATIVE_DIRECTION_TOOL.name ||
+          (!callName &&
+            (callInput.kind === "image-task" ||
+              callInput.kind === "clarification" ||
+              callInput.kind === "answer"))
+        ) {
+          return parseCreativeDirection(callInput, input, knowledgeIds);
+        }
+        if (callName === DESIGN_PLAN_TOOL.name) {
+          return parseDesignPlan(callInput, input);
+        }
+        if (callName === SEQUENTIAL_PLAN_TOOL.name) {
+          const val = validateSequentialExecutionPlan(callInput);
+          if (!val.ok) return invalidDirection(val.error);
+          return { kind: "sequential-plan", plan: val.plan };
         }
       }
-      if (candidate.kind === "image-task" || candidate.kind === "clarification") {
-        return parseCreativeDirection(candidate, input, knowledgeIds);
+    }
+    if (candidateRecord) {
+      if (candidateRecord.kind === "image-task" || candidateRecord.kind === "clarification") {
+        return parseCreativeDirection(candidateRecord, input, knowledgeIds);
       }
-      if (candidate.kind === "answer" && typeof candidate.text === "string") {
-        return parseCreativeDirection(candidate, input, knowledgeIds);
-      }
-      if (
-        candidate.kind === "design-plan" ||
-        Array.isArray(candidate.commands) ||
-        (isRecord(candidate.proposal) && Array.isArray(candidate.proposal.commands))
-      ) {
-        return parseDesignPlan(candidate.proposal ?? candidate, input);
+      if (candidateRecord.kind === "answer" && typeof candidateRecord.text === "string") {
+        return parseCreativeDirection(candidateRecord, input, knowledgeIds);
       }
       if (
-        candidate.kind === "sequential-plan" ||
-        Array.isArray(candidate.steps) ||
-        (isRecord(candidate.plan) && Array.isArray(candidate.plan.steps))
+        candidateRecord.kind === "design-plan" ||
+        Array.isArray(candidateRecord.commands) ||
+        (isRecord(candidateRecord.proposal) && Array.isArray(candidateRecord.proposal.commands))
       ) {
-        const val = validateSequentialExecutionPlan(candidate.plan ?? candidate);
+        return parseDesignPlan(candidateRecord.proposal ?? candidateRecord, input);
+      }
+      if (
+        candidateRecord.kind === "sequential-plan" ||
+        Array.isArray(candidateRecord.steps) ||
+        (isRecord(candidateRecord.plan) && Array.isArray(candidateRecord.plan.steps))
+      ) {
+        const val = validateSequentialExecutionPlan(candidateRecord.plan ?? candidateRecord);
         if (!val.ok) return invalidDirection(val.error);
         return { kind: "sequential-plan", plan: val.plan };
       }
     }
+    const trimmed = text.trim();
     if (
-      text.startsWith("{") &&
-      (text.includes('"calls"') ||
-        text.includes('"propose_creative_direction"') ||
-        text.includes('"propose_design_plan"'))
+      (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith("```")) &&
+      (trimmed.includes('"calls"') ||
+        trimmed.includes('"tool_calls"') ||
+        trimmed.includes('"propose_creative_direction"') ||
+        trimmed.includes('"propose_design_plan"'))
     ) {
+      console.warn(
+        `[CreativeDirector] Unparsed tool call envelope in model text: ${text.slice(0, 500)}`,
+      );
       return invalidDirection("Unparsed tool call envelope in model text");
     }
     if (text && text.length <= 8_000) {
@@ -841,7 +887,14 @@ export function parseCreativeDirection(
   if (!isStringArray(value.reviewCriteria, 8, 500, 1)) {
     return invalidDirection("reviewCriteria is missing or empty or invalid");
   }
-  if (!isSearchPlan(value.search)) {
+  const searchInput = isRecord(value.search)
+    ? {
+        required: value.search.required === true,
+        queries: Array.isArray(value.search.queries) ? value.search.queries : [],
+        sources: Array.isArray(value.search.sources) ? value.search.sources : [],
+      }
+    : value.search;
+  if (!isSearchPlan(searchInput)) {
     return invalidDirection("search plan is missing or invalid");
   }
 
@@ -905,10 +958,19 @@ export function parseCreativeDirection(
   if (specialist === "image_generator" && capability !== "IMAGE_DEFAULT") {
     return invalidDirection("image_generator requires IMAGE_DEFAULT capability");
   }
-  if (value.requiredSubjects !== undefined && !isStringArray(value.requiredSubjects, 8, 200)) {
+  if (
+    value.requiredSubjects !== undefined &&
+    value.requiredSubjects !== null &&
+    !isStringArray(value.requiredSubjects, 8, 200)
+  ) {
     return invalidDirection("requiredSubjects is invalid");
   }
-  if (value.requiredText !== undefined && !isBoundedString(value.requiredText, 500)) {
+  if (
+    value.requiredText !== undefined &&
+    value.requiredText !== null &&
+    value.requiredText !== "" &&
+    !isBoundedString(value.requiredText, 500)
+  ) {
     return invalidDirection("requiredText is invalid");
   }
 
@@ -931,14 +993,16 @@ export function parseCreativeDirection(
     knowledgeSkillIds: [...new Set(finalKnowledgeIds)],
     reviewCriteria: value.reviewCriteria.map((criterion) => criterion.trim()),
     search: {
-      required: value.search.required,
-      queries: value.search.queries.map((query) => query.trim()),
-      sources: [...new Set(value.search.sources)],
+      required: searchInput.required,
+      queries: searchInput.queries.map((query) => query.trim()),
+      sources: [...new Set(searchInput.sources)],
     },
-    ...(value.requiredSubjects
+    ...(Array.isArray(value.requiredSubjects) && value.requiredSubjects.length > 0
       ? { requiredSubjects: value.requiredSubjects.map((subject) => subject.trim()) }
       : {}),
-    ...(typeof value.requiredText === "string" ? { requiredText: value.requiredText.trim() } : {}),
+    ...(typeof value.requiredText === "string" && value.requiredText.trim().length > 0
+      ? { requiredText: value.requiredText.trim() }
+      : {}),
   };
 }
 
@@ -1190,23 +1254,60 @@ function invalidDirection(reason?: string): never {
 }
 
 function sanitizeJsonString(text: string): string {
-  return (
-    text
-      // Replace invalid escaped single quotes \' with '
-      .replace(/\\'/g, "'")
-      // Remove trailing commas before } or ]
-      .replace(/,\s*([}\]])/g, "$1")
-      // Replace unescaped control characters (except newline, cr, tab) with space
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: sanitize control characters
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ")
-  );
+  // Replace invalid escaped single quotes \' with '
+  let sanitized = text.replace(/\\'/g, "'");
+
+  // Remove trailing commas before } or ]
+  sanitized = sanitized.replace(/,\s*([}\]])/g, "$1");
+
+  // Safely escape unescaped control characters and newlines inside string literals
+  let inString = false;
+  let escaped = false;
+  let result = "";
+  for (let i = 0; i < sanitized.length; i++) {
+    const c = sanitized[i];
+    if (escaped) {
+      result += c;
+      escaped = false;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      result += c;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      result += c;
+      continue;
+    }
+    if (inString) {
+      if (c === "\n") {
+        result += "\\n";
+        continue;
+      }
+      if (c === "\r") {
+        result += "\\r";
+        continue;
+      }
+      if (c === "\t") {
+        result += "\\t";
+        continue;
+      }
+      if (c.charCodeAt(0) < 32) {
+        result += " ";
+        continue;
+      }
+    }
+    result += c;
+  }
+  return result;
 }
 
 function parseJsonCandidate(text: string): unknown {
-  const trimmed = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "");
+  if (!text || typeof text !== "string") return null;
+  const trimmed = text.trim();
+
   try {
     return JSON.parse(trimmed);
   } catch {}
@@ -1215,20 +1316,30 @@ function parseJsonCandidate(text: string): unknown {
     return JSON.parse(sanitizeJsonString(trimmed));
   } catch {}
 
-  const start = Math.min(
-    ...[trimmed.indexOf("{"), trimmed.indexOf("[")].filter((index) => index >= 0),
-  );
-  const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
-  if (!Number.isFinite(start) || start < 0 || end <= start) return null;
-
-  const sliced = trimmed.slice(start, end + 1);
-  try {
-    return JSON.parse(sliced);
-  } catch {}
-
-  try {
-    return JSON.parse(sanitizeJsonString(sliced));
-  } catch {
-    return null;
+  const codeBlockMatch = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
+  if (codeBlockMatch?.[1]) {
+    const inner = codeBlockMatch[1].trim();
+    try {
+      return JSON.parse(inner);
+    } catch {}
+    try {
+      return JSON.parse(sanitizeJsonString(inner));
+    } catch {}
   }
+
+  const firstBrace = trimmed.indexOf("{");
+  const firstBracket = trimmed.indexOf("[");
+  const start = Math.min(...[firstBrace, firstBracket].filter((index) => index >= 0));
+  const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+  if (Number.isFinite(start) && start >= 0 && end > start) {
+    const sliced = trimmed.slice(start, end + 1);
+    try {
+      return JSON.parse(sliced);
+    } catch {}
+    try {
+      return JSON.parse(sanitizeJsonString(sliced));
+    } catch {}
+  }
+
+  return null;
 }

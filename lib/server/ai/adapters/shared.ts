@@ -56,23 +56,60 @@ export function parseObjectProposals(text: string): AiObjectProposal[] {
 }
 
 export function sanitizeJsonString(text: string): string {
-  return (
-    text
-      // Replace invalid escaped single quotes \' with '
-      .replace(/\\'/g, "'")
-      // Remove trailing commas before } or ]
-      .replace(/,\s*([}\]])/g, "$1")
-      // Replace unescaped control characters (except newline, cr, tab) with space
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: sanitize control characters
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ")
-  );
+  // Replace invalid escaped single quotes \' with '
+  let sanitized = text.replace(/\\'/g, "'");
+
+  // Remove trailing commas before } or ]
+  sanitized = sanitized.replace(/,\s*([}\]])/g, "$1");
+
+  // Safely escape unescaped control characters and newlines inside string literals
+  let inString = false;
+  let escaped = false;
+  let result = "";
+  for (let i = 0; i < sanitized.length; i++) {
+    const c = sanitized[i];
+    if (escaped) {
+      result += c;
+      escaped = false;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      result += c;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      result += c;
+      continue;
+    }
+    if (inString) {
+      if (c === "\n") {
+        result += "\\n";
+        continue;
+      }
+      if (c === "\r") {
+        result += "\\r";
+        continue;
+      }
+      if (c === "\t") {
+        result += "\\t";
+        continue;
+      }
+      if (c.charCodeAt(0) < 32) {
+        result += " ";
+        continue;
+      }
+    }
+    result += c;
+  }
+  return result;
 }
 
 export function parseJsonCandidate(text: string): unknown {
-  const trimmed = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "");
+  if (!text || typeof text !== "string") return null;
+  const trimmed = text.trim();
+
   try {
     return JSON.parse(trimmed);
   } catch {}
@@ -81,22 +118,32 @@ export function parseJsonCandidate(text: string): unknown {
     return JSON.parse(sanitizeJsonString(trimmed));
   } catch {}
 
-  const start = Math.min(
-    ...[trimmed.indexOf("{"), trimmed.indexOf("[")].filter((index) => index >= 0),
-  );
-  const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
-  if (!Number.isFinite(start) || start < 0 || end <= start) return null;
-
-  const sliced = trimmed.slice(start, end + 1);
-  try {
-    return JSON.parse(sliced);
-  } catch {}
-
-  try {
-    return JSON.parse(sanitizeJsonString(sliced));
-  } catch {
-    return null;
+  const codeBlockMatch = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed);
+  if (codeBlockMatch?.[1]) {
+    const inner = codeBlockMatch[1].trim();
+    try {
+      return JSON.parse(inner);
+    } catch {}
+    try {
+      return JSON.parse(sanitizeJsonString(inner));
+    } catch {}
   }
+
+  const firstBrace = trimmed.indexOf("{");
+  const firstBracket = trimmed.indexOf("[");
+  const start = Math.min(...[firstBrace, firstBracket].filter((index) => index >= 0));
+  const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+  if (Number.isFinite(start) && start >= 0 && end > start) {
+    const sliced = trimmed.slice(start, end + 1);
+    try {
+      return JSON.parse(sliced);
+    } catch {}
+    try {
+      return JSON.parse(sanitizeJsonString(sliced));
+    } catch {}
+  }
+
+  return null;
 }
 
 function normalizeBox(value: unknown): AiObjectProposal["box"] | null {
