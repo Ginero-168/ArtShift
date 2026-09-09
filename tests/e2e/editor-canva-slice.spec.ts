@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("inserts an editable composition and exposes the smart editor controls", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("tab", { name: /Composition Blocks/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Block/ })).toBeVisible();
 
   await page.getByRole("button", { name: "Insert Hero composition" }).click();
   await expect(page.getByRole("toolbar", { name: "Multiple options" })).toBeVisible();

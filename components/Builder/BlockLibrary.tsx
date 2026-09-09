@@ -146,7 +146,7 @@ export default function BlockLibrary() {
           onClick={() => setActiveTab("blocks")}
         >
           <span aria-hidden="true">▦</span>
-          <span>Composition Blocks</span>
+          <span>Block</span>
         </button>
         <button
           type="button"

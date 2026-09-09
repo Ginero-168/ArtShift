@@ -201,7 +201,7 @@ test("changing the Canvas target while generation is blocked fails without a suc
   await chat.fill("สร้างภาพแมวในสตูดิโอสำหรับ Instagram อัตราส่วน 1:1");
   await chat.press("Enter");
   await expect(page.getByTestId("processing-preview")).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("tab", { name: "Composition Blocks", exact: true }).click();
+  await page.getByRole("tab", { name: /Block/ }).click();
   await uploadImage(page, "target-change.png");
   await page.getByRole("tab", { name: "AI Assistance", exact: true }).click();
   generation.release();
@@ -340,7 +340,7 @@ async function openAssistant(page: import("@playwright/test").Page) {
 async function uploadImage(page: import("@playwright/test").Page, name: string) {
   const photoButton = page.getByRole("button", { name: "Photo", exact: true });
   if ((await photoButton.count()) === 0) {
-    await page.getByRole("tab", { name: "Composition Blocks", exact: true }).click();
+    await page.getByRole("tab", { name: /Block/ }).click();
   }
   await page.getByRole("button", { name: "Photo", exact: true }).click();
   const imageBuffer = Buffer.from(TEST_IMAGE_PNG_256.split(",")[1] ?? "", "base64");

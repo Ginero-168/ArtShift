@@ -4,6 +4,7 @@ import type {
   AiExecutionOptions,
   AiRuntime,
 } from "@/lib/ai-runtime/contracts";
+import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import {
   type ArtworkExecutionContext,
   type PlanProposal,
@@ -455,23 +456,45 @@ export async function prepareCreativeDirection(
   return finalDirection;
 }
 
+/** Detect transient empty-output errors from Replicate (Gemini 2.5 Flash). */
+function isTransientEmptyOutputError(error: unknown): boolean {
+  if (!(error instanceof AiRuntimeError)) return false;
+  if (error.code !== "PROVIDER_UNAVAILABLE" && error.code !== "PROVIDER_SCHEMA") return false;
+  const msg = error.message?.toLowerCase() ?? "";
+  return (
+    msg.includes("model output must contain") ||
+    msg.includes("empty chat output") ||
+    msg.includes("empty model output")
+  );
+}
+
 async function executeDirectorPass(
   runtime: CreativeDirectorExecutor,
   messages: AiAssistantChatInput["messages"],
   options: AiExecutionOptions,
   input: CreativeDirectorInput,
   knowledgeIds: readonly string[],
+  retryCount = 0,
 ): Promise<CreativeDirection> {
-  const execution = (await runtime.execute(
-    "assistant.chat",
-    {
-      messages,
-      system: CREATIVE_DIRECTOR_SYSTEM,
-      tools: [CREATIVE_DIRECTION_TOOL, DESIGN_PLAN_TOOL, SEQUENTIAL_PLAN_TOOL],
-      maxTokens: 8_192,
-    },
-    options,
-  )) as AiExecution<import("@/lib/ai-runtime/contracts").AiAssistantChatOutput>;
+  let execution: AiExecution<import("@/lib/ai-runtime/contracts").AiAssistantChatOutput>;
+  try {
+    execution = (await runtime.execute(
+      "assistant.chat",
+      {
+        messages,
+        system: CREATIVE_DIRECTOR_SYSTEM,
+        tools: [CREATIVE_DIRECTION_TOOL, DESIGN_PLAN_TOOL, SEQUENTIAL_PLAN_TOOL],
+        maxTokens: 8_192,
+      },
+      options,
+    )) as AiExecution<import("@/lib/ai-runtime/contracts").AiAssistantChatOutput>;
+  } catch (error) {
+    if (isTransientEmptyOutputError(error) && retryCount < 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      return executeDirectorPass(runtime, messages, options, input, knowledgeIds, retryCount + 1);
+    }
+    throw error;
+  }
   const call = execution.output.toolCalls.find(
     (candidate) => candidate.name === CREATIVE_DIRECTION_TOOL.name,
   );
