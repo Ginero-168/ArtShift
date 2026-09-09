@@ -72,18 +72,21 @@ function ThoughtBrainIcon({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
       className={className}
     >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 3v18" />
-      <path d="M12 8a3 3 0 0 0-3 3c0 1.5 1 2.5 3 3" />
-      <path d="M12 8a3 3 0 0 1 3 3c0 1.5-1 2.5-3 3" />
-      <path d="M6 12h3" />
-      <path d="M15 12h3" />
+      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+      <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+      <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
+      <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+      <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+      <path d="M19.938 10.5a4 4 0 0 1 .585.396" />
+      <path d="M6 18a4 4 0 0 1-1.967-.516" />
+      <path d="M19.967 17.484A4 4 0 0 1 18 18" />
     </svg>
   );
 }
@@ -335,13 +338,11 @@ function SpinnerIcon({
 function CollapsibleThought({
   thought,
   isLive = false,
-  defaultOpen = true,
-  onCancel,
+  defaultOpen = false,
 }: {
   thought: string;
   isLive?: boolean;
   defaultOpen?: boolean;
-  onCancel?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -354,118 +355,63 @@ function CollapsibleThought({
         marginBottom: 6,
       }}
     >
-      <div
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         style={{
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
-          flexWrap: "wrap",
           gap: 6,
-          padding: "2px 0",
+          background: "transparent",
+          border: "none",
+          outline: "none",
+          padding: "3px 0",
+          cursor: "pointer",
+          textAlign: "left",
+          color: "#334155",
+          transition: "color 0.15s ease",
+          width: "fit-content",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "#4f46e5";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = "#334155";
         }}
       >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            color: "#1e293b",
-            fontSize: 12.5,
-            fontWeight: 600,
-          }}
-        >
-          <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
-          <span>{isLive ? "กำลังคิดอยู่..." : "ความคิดของ AI (Thought)"}</span>
-          {isLive && (
-            <span
-              style={{
-                display: "inline-block",
-                width: 5,
-                height: 5,
-                borderRadius: "50%",
-                background: "#6366f1",
-                animation: "artshiftPulse 1.2s ease-in-out infinite",
-              }}
-            />
-          )}
-        </div>
-
-        <span style={{ color: "#cbd5e1", fontSize: 11 }}>•</span>
-
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 3,
-            background: "transparent",
-            border: "none",
-            padding: "2px 4px",
-            color: "#64748b",
-            fontSize: 11.5,
-            fontWeight: 500,
-            cursor: "pointer",
-            borderRadius: 4,
-            transition: "color 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "#4f46e5";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "#64748b";
-          }}
-        >
-          <span>{isOpen ? "ย่อ" : "ดูรายละเอียด"}</span>
-          <ChevronDownIcon
+        <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
+        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em" }}>
+          {isLive ? "กำลังคิดอยู่..." : "ความคิดของ AI (Thought)"}
+        </span>
+        {isLive && (
+          <span
             style={{
-              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-              width: 12,
-              height: 12,
-              transition: "transform 0.15s ease",
+              display: "inline-block",
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: "#6366f1",
+              animation: "artshiftPulse 1.2s ease-in-out infinite",
             }}
           />
-        </button>
-
-        {isLive && onCancel && (
-          <>
-            <span style={{ color: "#cbd5e1", fontSize: 11 }}>•</span>
-            <button
-              type="button"
-              data-testid="cancel-ai-task"
-              aria-label="ยกเลิก Task"
-              onClick={onCancel}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 3,
-                background: "transparent",
-                border: "none",
-                padding: "2px 4px",
-                color: "#94a3b8",
-                fontSize: 11.5,
-                fontWeight: 500,
-                cursor: "pointer",
-                borderRadius: 4,
-                transition: "color 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#ef4444";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "#94a3b8";
-              }}
-            >
-              <CloseIcon style={{ width: 10, height: 10 }} />
-              <span>ยกเลิก</span>
-            </button>
-          </>
         )}
-      </div>
+        <ChevronDownIcon
+          style={{
+            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+            width: 12,
+            height: 12,
+            color: "#94a3b8",
+            transition: "transform 0.2s ease, color 0.15s ease",
+            marginLeft: 2,
+          }}
+        />
+      </button>
 
       {isOpen && (
         <div
           style={{
-            marginTop: 6,
+            marginTop: 4,
             marginLeft: 2,
             padding: "7px 12px 7px 12px",
             borderLeft: "2px solid #818cf8",
@@ -2315,7 +2261,6 @@ export default function AICoPilotBar() {
                 }
                 isLive={true}
                 defaultOpen={false}
-                onCancel={() => abortRef.current?.abort()}
               />
 
               {/* Tool Step (if generating) */}
