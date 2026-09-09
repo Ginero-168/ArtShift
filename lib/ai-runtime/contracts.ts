@@ -119,12 +119,23 @@ export type AiImageAspectRatio =
   | "3840x2160"
   | "2160x3840";
 
+/**
+ * Render quality for image generation — distinct from AiExecutionProfile.
+ * xhigh and max are only supported by GPT Image 2.5 models (Flare, Sunburst).
+ */
+export type AiImageRenderQuality = "low" | "medium" | "high" | "xhigh" | "max" | "auto";
+
 export type AiImageGenerateInput = {
   prompt: string;
   width: number;
   height: number;
   aspectRatio?: AiImageAspectRatio;
-  quality?: "low" | "medium" | "high";
+  /** Render quality sent to the image model. Defaults to "medium" for general generation. */
+  quality?: AiImageRenderQuality;
+  /** Semantic model alias resolved server-side. Client must not send raw model slugs. */
+  modelAlias?: string;
+  /** Background mode. Defaults to "opaque". */
+  background?: "auto" | "opaque" | "transparent";
   inputImages?: AiImageInput[];
   cloudConsent?: boolean;
   enhance?: boolean;

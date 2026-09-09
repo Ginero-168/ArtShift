@@ -9,9 +9,21 @@ const DEFAULT_REPLICATE_GPT4O_MINI_VERSION =
 const DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION =
   "e27b7b83f67f5865920667591a2a08a41cdc82906bd29306fe79581ab0646b8b";
 const REPLICATE_GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
+const REPLICATE_GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-flare";
+const REPLICATE_GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
 const REPLICATE_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
   "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf";
+
+/**
+ * Pricing per image at the quality tiers available from the provider.
+ * Updated 2026-09-09. Re-verify before any production rollout.
+ */
+const IMAGE_PRICING_PER_RUN = {
+  general: GPT_IMAGE_2_MAX_COST_USD, // medium=$0.047, high=$0.128; ceiling covers high
+  fast: 0.13, // Flare: same tier pricing as GPT Image 2; xhigh=$0.250
+  precision: 0.13, // Sunburst: same tier pricing as GPT Image 2; xhigh=$0.250
+} as const;
 
 export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>> = {
   "assistant.chat": "quality",
@@ -39,15 +51,37 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     environment.REPLICATE_RECRAFT_VECTORIZE_MODEL || "recraft-ai/recraft-vectorize",
     environment.REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION,
   );
-  const replicateGptImage2 = pinnedModel(
-    REPLICATE_GPT_IMAGE_2_MODEL,
-    environment.REPLICATE_GPT_IMAGE_2_VERSION,
-  );
   const replicatePImageUpscale = withVersion(
     REPLICATE_P_IMAGE_UPSCALE_MODEL,
     environment.REPLICATE_P_IMAGE_UPSCALE_MODEL_VERSION ||
       DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION,
   );
+
+  // GPT Image 2 — requires pinned 64-char version hash for production stability.
+  const replicateGptImage2 = pinnedModel(
+    REPLICATE_GPT_IMAGE_2_MODEL,
+    environment.REPLICATE_GPT_IMAGE_2_VERSION,
+  );
+
+  // GPT Image 2.5 Flare — latest official model; version pinning optional until stable API.
+  // Enabled when IMAGE_FAST_MODEL_ENABLED=true and a version hash is configured.
+  const fastModelEnabled = environment.IMAGE_FAST_MODEL_ENABLED === "true";
+  const replicateGptImage25Flare = fastModelEnabled
+    ? withVersion(
+        REPLICATE_GPT_IMAGE_25_FLARE_MODEL,
+        environment.REPLICATE_GPT_IMAGE_25_FLARE_VERSION,
+      )
+    : undefined;
+
+  // GPT Image 2.5 Sunburst — precision lane.
+  // Enabled when IMAGE_PRECISION_MODEL_ENABLED=true.
+  const precisionModelEnabled = environment.IMAGE_PRECISION_MODEL_ENABLED === "true";
+  const replicateGptImage25Sunburst = precisionModelEnabled
+    ? withVersion(
+        REPLICATE_GPT_IMAGE_25_SUNBURST_MODEL,
+        environment.REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION,
+      )
+    : undefined;
 
   const orchestratorProvider = (environment.AI_ORCHESTRATOR_PROVIDER || "replicate").toLowerCase();
   const orchestratorModel = environment.AI_ORCHESTRATOR_MODEL || googleModel;
@@ -82,6 +116,27 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     { provider: "google", model: googleModel, alias: "google-direct" },
   ];
 
+  // Build image generation route table.
+  // Route aliases map to semantic image model aliases used by the routing policy.
+  const imageGenerateRoutes: AiRouteTarget[] = [];
+
+  // image-general (GPT Image 2) — always the baseline route.
+  if (replicateGptImage2) {
+    imageGenerateRoutes.push(imageModelRoute(replicateGptImage2, "image-general", IMAGE_PRICING_PER_RUN.general));
+    // Keep legacy alias for compatibility until all callers migrate.
+    imageGenerateRoutes.push(imageModelRoute(replicateGptImage2, "image-gpt-2", IMAGE_PRICING_PER_RUN.general));
+  }
+
+  // image-fast (GPT Image 2.5 Flare) — enabled by feature flag.
+  if (replicateGptImage25Flare) {
+    imageGenerateRoutes.push(imageModelRoute(replicateGptImage25Flare, "image-fast", IMAGE_PRICING_PER_RUN.fast));
+  }
+
+  // image-precision (GPT Image 2.5 Sunburst) — enabled by feature flag.
+  if (replicateGptImage25Sunburst) {
+    imageGenerateRoutes.push(imageModelRoute(replicateGptImage25Sunburst, "image-precision", IMAGE_PRICING_PER_RUN.precision));
+  }
+
   return {
     "assistant.chat": {
       economy: [chatRoute],
@@ -115,12 +170,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
       ],
     },
 
-    "image.generate": replicateGptImage2
-      ? {
-          economy: [imageGptRoute(replicateGptImage2)],
-          quality: [imageGptRoute(replicateGptImage2)],
-        }
-      : { economy: [], quality: [] },
+    "image.generate":
+      imageGenerateRoutes.length > 0
+        ? { economy: imageGenerateRoutes, quality: imageGenerateRoutes }
+        : { economy: [], quality: [] },
   };
 }
 
@@ -147,13 +200,13 @@ function googleCreativeDirectorRoute(model: string, alias = "creative-director")
   };
 }
 
-function imageGptRoute(model: string): AiRouteTarget {
+function imageModelRoute(model: string, alias: string, expectedMaxUsd: number): AiRouteTarget {
   return {
     provider: "replicate",
     model,
-    alias: "image-gpt-2",
-    expectedMaxUsd: GPT_IMAGE_2_MAX_COST_USD,
-    pricing: { currency: "USD", perRunUsd: GPT_IMAGE_2_MAX_COST_USD },
+    alias,
+    expectedMaxUsd,
+    pricing: { currency: "USD", perRunUsd: expectedMaxUsd },
   };
 }
 

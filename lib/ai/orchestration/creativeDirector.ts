@@ -50,7 +50,7 @@ export type CreativeDirection =
       refinedPrompt: string;
       specialist: "image_generator" | "image_editor";
       capability: "IMAGE_DEFAULT" | "IMAGE_EDIT";
-      modelAlias: "image-gpt-2";
+      modelAlias: "image-general" | "image-fast" | "image-precision" | "image-gpt-2";
       knowledgeSkillIds: string[];
       reviewCriteria: string[];
       search: CreativeSearchPlan;
@@ -216,7 +216,7 @@ const CREATIVE_DIRECTION_TOOL = {
       refinedPrompt: { type: "string", minLength: 8, maxLength: 20_000 },
       specialist: { type: "string", enum: ["image_generator", "image_editor"] },
       capability: { type: "string", enum: ["IMAGE_DEFAULT", "IMAGE_EDIT"] },
-      modelAlias: { type: "string", enum: ["image-gpt-2"] },
+      modelAlias: { type: "string", enum: ["image-general", "image-fast", "image-precision", "image-gpt-2"] },
       knowledgeSkillIds: {
         type: "array",
         maxItems: 4,
@@ -834,13 +834,17 @@ export function parseCreativeDirection(
     capability = "IMAGE_DEFAULT";
   }
 
+  const ALLOWED_IMAGE_ALIASES = new Set(["image-general", "image-fast", "image-precision", "image-gpt-2"]);
   const rawModelAlias = typeof value.modelAlias === "string" ? value.modelAlias : "image-gpt-2";
+  if (!ALLOWED_IMAGE_ALIASES.has(rawModelAlias)) {
+    return invalidDirection(`model ${rawModelAlias} is not available`);
+  }
   const modelResolution = resolveCreatingModel(
     capability === "IMAGE_EDIT" ? "edit" : "generate",
     rawModelAlias,
   );
-  if (!modelResolution.ok || modelResolution.model.alias !== "image-gpt-2") {
-    return invalidDirection("modelAlias cannot resolve to image-gpt-2");
+  if (!modelResolution.ok) {
+    return invalidDirection(`model ${rawModelAlias} is not available: ${modelResolution.reason}`);
   }
 
   if (specialist === "image_editor" && capability !== "IMAGE_EDIT") {
@@ -871,7 +875,7 @@ export function parseCreativeDirection(
     refinedPrompt: value.refinedPrompt.trim(),
     specialist,
     capability,
-    modelAlias: "image-gpt-2",
+    modelAlias: rawModelAlias as "image-general" | "image-fast" | "image-precision" | "image-gpt-2",
     knowledgeSkillIds: [...new Set(finalKnowledgeIds)],
     reviewCriteria: value.reviewCriteria.map((criterion) => criterion.trim()),
     search: {

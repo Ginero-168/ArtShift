@@ -1,6 +1,7 @@
+import type { AiImageRenderQuality } from "../../ai-runtime/contracts";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
 
-export type AiImageQuality = "low" | "medium" | "high";
+export type AiImageQuality = AiImageRenderQuality;
 
 export type AiTaskDimensions = {
   width: number;
@@ -32,6 +33,8 @@ export type AiTaskPlan = {
   quality: AiImageQuality;
   qualityRationale: string;
   maxAttempts: number;
+  modelAlias?: string;
+  reasonCodes?: readonly string[];
   selectedImages: readonly {
     objectId: string;
     elementVersion: number;

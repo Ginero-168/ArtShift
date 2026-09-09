@@ -217,6 +217,7 @@ export async function runContextAwareImageTask(
                 height: dimensions.height,
                 aspectRatio: dimensions.aspectRatio,
                 quality: task.quality,
+                modelAlias: task.modelAlias,
                 inputImages,
                 cloudConsent: options.cloudConsent === true,
                 enhance: false,

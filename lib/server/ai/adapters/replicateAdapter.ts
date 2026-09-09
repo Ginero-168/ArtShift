@@ -42,6 +42,21 @@ const GEMINI_CHAT_MODEL = "google/gemini-2.5-flash";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
+const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-flare";
+const GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
+
+/** Models that support xhigh and max quality tiers. */
+const EXTENDED_QUALITY_MODELS = new Set([GPT_IMAGE_25_FLARE_MODEL, GPT_IMAGE_25_SUNBURST_MODEL]);
+
+/** Allowlisted image generation model slugs. Client-side aliases must resolve server-side. */
+const ALLOWED_IMAGE_MODEL_SLUGS = new Set([
+  GPT_IMAGE_2_MODEL,
+  GPT_IMAGE_25_FLARE_MODEL,
+  GPT_IMAGE_25_SUNBURST_MODEL,
+]);
+
+/** Quality values only valid on GPT Image 2.5 models. */
+const EXTENDED_QUALITY_VALUES = new Set(["xhigh", "max"]);
 const MAX_CHAT_OUTPUT_TOKENS = 8_192;
 const MAX_RECRAFT_INPUT_BYTES = 5 * 1024 * 1024;
 const MAX_RECRAFT_PIXELS = 16_000_000;
@@ -119,9 +134,28 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         },
         {
           id: GPT_IMAGE_2_MODEL,
+          alias: "image-general",
+          profile: "quality",
+          pricing: { currency: "USD", perRunUsd: 0.13, note: "Ceiling covers high quality tier." },
+        },
+        {
+          // Legacy alias kept for migration compatibility.
+          id: GPT_IMAGE_2_MODEL,
           alias: "image-gpt-2",
           profile: "quality",
-          pricing: { currency: "USD", perRunUsd: 0.05 },
+          pricing: { currency: "USD", perRunUsd: 0.13 },
+        },
+        {
+          id: GPT_IMAGE_25_FLARE_MODEL,
+          alias: "image-fast",
+          profile: "quality",
+          pricing: { currency: "USD", perRunUsd: 0.25, note: "Ceiling covers xhigh tier." },
+        },
+        {
+          id: GPT_IMAGE_25_SUNBURST_MODEL,
+          alias: "image-precision",
+          profile: "quality",
+          pricing: { currency: "USD", perRunUsd: 0.25, note: "Ceiling covers xhigh tier." },
         },
       ],
       message: this.apiToken
@@ -219,7 +253,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     // dynamic_thinking must be false. Previously `mode !== "off"` evaluated
     // to `true` when mode was undefined, causing Gemini to emit thinking tokens
     // with no final text — Replicate then returns the empty-output error.
-    const dynamicThinking = options?.reasoning?.mode === "enabled" || options?.reasoning?.mode === "fixed";
+    const dynamicThinking = options?.reasoning?.mode === "dynamic" || options?.reasoning?.mode === "fixed";
     const thinkingBudget =
       options?.reasoning?.mode === "fixed" ? options.reasoning.budgetTokens : undefined;
 
@@ -349,17 +383,33 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
   ): Promise<AiProviderResult<AiTaskOutput<"image.generate">>> {
     const input = request.input as AiImageGenerateInput;
     const model = parseReplicateModel(request.model);
-    if (model.slug !== GPT_IMAGE_2_MODEL) {
-      throw new AiRuntimeError("INVALID_INPUT", "Unsupported Replicate image generation model.", {
-        provider: this.id,
-      });
+
+    if (!ALLOWED_IMAGE_MODEL_SLUGS.has(model.slug)) {
+      throw new AiRuntimeError(
+        "INVALID_INPUT",
+        `Replicate image generation does not support model: ${model.slug}. Only allowlisted GPT Image models are permitted.`,
+        { provider: this.id },
+      );
     }
+
+    const requestedQuality = input.quality ?? "medium";
+
+    // xhigh and max are only valid for GPT Image 2.5 models.
+    if (EXTENDED_QUALITY_VALUES.has(requestedQuality) && !EXTENDED_QUALITY_MODELS.has(model.slug)) {
+      throw new AiRuntimeError(
+        "INVALID_INPUT",
+        `Quality "${requestedQuality}" is not supported by ${model.slug}. Use low, medium, or high.`,
+        { provider: this.id },
+      );
+    }
+
+    const background = input.background ?? "opaque";
 
     const prediction = await this.createPrediction(
       model,
       {
         prompt: input.prompt,
-        quality: input.quality ?? "medium",
+        quality: requestedQuality,
         aspect_ratio: input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
         ...(input.inputImages?.length
           ? { input_images: input.inputImages.map((image) => image.dataUrl) }
@@ -367,7 +417,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         number_of_images: 1,
         output_format: "webp",
         output_compression: 90,
-        background: "opaque",
+        background,
         moderation: "auto",
       },
       request.signal,
@@ -400,11 +450,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
       },
       warnings:
-        input.seed === undefined
-          ? []
-          : [
-              "GPT Image 2 does not expose deterministic seed control; the seed was not sent upstream.",
-            ],
+        input.seed !== undefined
+          ? [
+              `${model.slug} does not expose deterministic seed control; the seed parameter was not sent upstream.`,
+            ]
+          : [],
     };
   }
 

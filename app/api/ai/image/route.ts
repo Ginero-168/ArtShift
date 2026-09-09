@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/imageGeneration";
 import { GPT_IMAGE_2_EXECUTION_TIMEOUT_MS } from "@/lib/ai/runtimeLimits";
-import type { AiImageGenerateInput } from "@/lib/ai-runtime/contracts";
+import type { AiImageGenerateInput, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
@@ -105,14 +105,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const requestedModelAlias =
+    typeof body.modelAlias === "string" && body.modelAlias.trim()
+      ? body.modelAlias.trim()
+      : "image-gpt-2";
+
   try {
     const execution = await ai.execute(
       "image.generate",
-      { prompt, width, height, aspectRatio, quality: quality.value, inputImages, enhance: false },
+      { prompt, width, height, aspectRatio, quality: quality.value, inputImages, enhance: false, modelAlias: requestedModelAlias },
       {
         profile: "quality",
         provider: "replicate",
-        modelAlias: "image-gpt-2",
+        modelAlias: requestedModelAlias,
         cloudConsent: true,
         allowFallback: false,
         timeoutMs: GPT_IMAGE_2_EXECUTION_TIMEOUT_MS,
@@ -180,10 +185,17 @@ function boundedDimension(value: unknown): number {
     : 1_024;
 }
 
-type ParsedQuality = { ok: true; value: "low" | "medium" | "high" } | { ok: false };
+type ParsedQuality = { ok: true; value: AiImageRenderQuality } | { ok: false };
 
 function parseQuality(value: unknown): ParsedQuality {
-  if (value === "low" || value === "medium" || value === "high") {
+  if (
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "xhigh" ||
+    value === "max" ||
+    value === "auto"
+  ) {
     return { ok: true, value };
   }
   return { ok: false };

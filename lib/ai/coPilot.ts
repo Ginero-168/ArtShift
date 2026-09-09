@@ -4,6 +4,7 @@
  * edits visuals (RemoveBG, Vectorize), and arranges layouts (60-30-10).
  */
 
+import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import {
   prepareRemoteCreativeDirection,
@@ -50,7 +51,7 @@ export interface SubAgentActionLog {
   taskId?: string;
   stage?: string;
   attempt?: number;
-  quality?: "low" | "medium" | "high";
+  quality?: AiImageRenderQuality;
 }
 
 export interface CoPilotMessageImage {

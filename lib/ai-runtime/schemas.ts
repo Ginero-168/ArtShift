@@ -59,7 +59,9 @@ const ImageGenerateInputSchema = v.strictObject({
   prompt: PromptSchema,
   width: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(2_048)),
   height: v.pipe(v.number(), v.integer(), v.minValue(256), v.maxValue(2_048)),
-  quality: v.optional(v.picklist(["low", "medium", "high"])),
+  quality: v.optional(v.picklist(["low", "medium", "high", "xhigh", "max", "auto"])),
+  modelAlias: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(80))),
+  background: v.optional(v.picklist(["auto", "opaque", "transparent"])),
   inputImages: v.optional(
     v.pipe(
       v.array(

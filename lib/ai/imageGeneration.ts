@@ -3,7 +3,7 @@
  * The server routes every generation request to the server-owned GPT Image 2 route.
  */
 
-import type { AiImageAspectRatio } from "@/lib/ai-runtime/contracts";
+import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { loadDataURL } from "@/lib/engine/imageCache";
 import { GPT_IMAGE_2_MAX_COST_USD } from "./pricing";
 import { runVisualQualityGate } from "./visualQualityGate";
@@ -11,7 +11,7 @@ import { runVisualQualityGate } from "./visualQualityGate";
 export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
 export const GPT_IMAGE_2_QUALITY = "high" as const;
 export const GPT_IMAGE_2_ESTIMATED_COST_USD = GPT_IMAGE_2_MAX_COST_USD;
-export type GptImageQuality = "low" | "medium" | "high";
+export type GptImageQuality = AiImageRenderQuality;
 
 export interface AspectRatioOption {
   id: AiImageAspectRatio;
@@ -49,6 +49,7 @@ export interface ImageGenerationOptions {
   width?: number;
   height?: number;
   quality?: GptImageQuality;
+  modelAlias?: string;
   inputImages?: Array<{
     dataUrl: string;
     mimeType?: "image/jpeg" | "image/png" | "image/webp";

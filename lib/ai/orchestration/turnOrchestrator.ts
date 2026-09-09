@@ -140,6 +140,8 @@ export function createDirectedImageTask(
     quality: quality.quality,
     qualityRationale: quality.rationale,
     maxAttempts: quality.maxAttempts,
+    modelAlias: direction.modelAlias,
+    reasonCodes: quality.reasonCodes,
     selectedImages: input.refs.map((ref) => ({
       objectId: ref.objectId,
       elementVersion: ref.elementVersion,
