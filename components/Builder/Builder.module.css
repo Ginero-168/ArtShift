@@ -14,14 +14,19 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid #dfe3ea;
+  transition: width 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.libraryAssistantActive {
+  width: 476px;
 }
 
 .libraryTabs {
   flex: 0 0 auto;
   padding: 8px 9px 7px;
   display: grid;
-  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
   border-bottom: 1px solid #dfe3ea;
   background: #ffffff;
 }
@@ -29,16 +34,16 @@
 .libraryTab {
   min-width: 0;
   min-height: 32px;
-  padding: 0 6px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: #7b8495;
-  font: 700 9px/1 "Sarabun", system-ui, sans-serif;
+  font: 600 11px/1 "Sarabun", system-ui, sans-serif;
   cursor: pointer;
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
@@ -805,6 +810,7 @@
   padding: 0;
   outline: none;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .compactNumberField input::-webkit-outer-spin-button,
@@ -1373,6 +1379,7 @@
   outline: none;
   transition: border-color 120ms ease, box-shadow 120ms ease;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .strictnessInput::-webkit-outer-spin-button,
@@ -1650,6 +1657,10 @@
 @media (max-width: 1180px) {
   .library {
     width: 204px;
+  }
+
+  .libraryAssistantActive {
+    width: 408px;
   }
 
   .inspector {

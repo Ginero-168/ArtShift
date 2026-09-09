@@ -133,7 +133,10 @@ export default function BlockLibrary() {
   }
 
   return (
-    <aside className={styles.library} aria-label="Blocks and AI Assistance">
+    <aside
+      className={`${styles.library} ${activeTab === "assistant" ? styles.libraryAssistantActive : ""}`}
+      aria-label="Blocks and AI Assistance"
+    >
       <div className={styles.libraryTabs} role="tablist" aria-label="Workspace tools">
         <button
           type="button"

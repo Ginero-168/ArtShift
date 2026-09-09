@@ -432,21 +432,39 @@ function CollapsibleThought({
 }
 
 function extractSubject(prompt: string, summary?: string): string {
-  if (summary && summary.trim().length > 0 && summary.length < 60) {
-    const cleanFromSummary = summary
+  // If prompt contains clarification history, extract only the user's latest reply
+  let effectivePrompt = prompt;
+  if (effectivePrompt.includes("User reply:")) {
+    effectivePrompt = effectivePrompt.slice(effectivePrompt.lastIndexOf("User reply:") + 11).trim();
+  } else if (effectivePrompt.includes("\n\n")) {
+    const segments = effectivePrompt.split("\n\n").map((s) => s.trim()).filter(Boolean);
+    effectivePrompt = segments[segments.length - 1] || effectivePrompt;
+  }
+
+  if (summary && summary.trim().length > 0 && !summary.includes("Director question:")) {
+    let cleanFromSummary = summary.trim();
+    if (cleanFromSummary.includes("User reply:")) {
+      cleanFromSummary = cleanFromSummary.slice(cleanFromSummary.lastIndexOf("User reply:") + 11).trim();
+    }
+    cleanFromSummary = cleanFromSummary
       .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu, "")
       .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
-      .replace(/^(?:ภาพ|รูป)\s*/iu, "")
+      .replace(/^(?:รูปภาพ|ภาพ|รูป)\s*/iu, "")
+      .replace(/\s*(?:ตามที่ขอ|เรียบร้อยแล้ว|สมจริง|สวยๆ|สไตล์.*|ในฉาก.*)\s*$/iu, "")
       .trim();
-    if (cleanFromSummary.length > 0 && cleanFromSummary.length < 30) {
+    if (cleanFromSummary.length > 0 && cleanFromSummary.length < 60 && !cleanFromSummary.includes("\n")) {
       return cleanFromSummary;
     }
   }
-  let cleaned = prompt
+
+  let cleaned = effectivePrompt
     .replace(/^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu, "")
     .trim();
   cleaned = cleaned.replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "").trim();
   cleaned = cleaned.replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง|ด้วยนะ|ด้วยครับ|ด้วยค่ะ|ด้วย)\s*$/iu, "").trim();
+  if (cleaned.includes("\n")) {
+    cleaned = cleaned.split("\n")[0].trim();
+  }
   return cleaned || "ภาพ";
 }
 
@@ -1750,7 +1768,7 @@ export default function AICoPilotBar() {
                         title="คลิกเพื่อเลือกภาพบน Canvas"
                         style={{
                           flex: 1,
-                          maxWidth: msg.images!.length === 1 ? 240 : 140,
+                          maxWidth: msg.images!.length === 1 ? 380 : 190,
                           aspectRatio: "1 / 1",
                           borderRadius: 12,
                           overflow: "hidden",
@@ -2375,7 +2393,7 @@ export default function AICoPilotBar() {
                         key={i}
                         style={{
                           flex: 1,
-                          maxWidth: (liveAssistantState.requestedCount || 1) === 1 ? 240 : 140,
+                          maxWidth: (liveAssistantState.requestedCount || 1) === 1 ? 380 : 190,
                           aspectRatio: "1 / 1",
                           borderRadius: 12,
                           background:
