@@ -19,8 +19,16 @@ describe("automatic image quality policy", () => {
   });
 
   it("allows more attempts for high quality than draft", () => {
-    const med = chooseImageQuality({ prompt: "a cat in a room", taskClass: "simple", hasReference: false });
-    const low = chooseImageQuality({ prompt: "quick draft sketch of a cat", taskClass: "simple", hasReference: false });
+    const med = chooseImageQuality({
+      prompt: "a cat in a room",
+      taskClass: "simple",
+      hasReference: false,
+    });
+    const low = chooseImageQuality({
+      prompt: "quick draft sketch of a cat",
+      taskClass: "simple",
+      hasReference: false,
+    });
     expect(med.maxAttempts).toBeGreaterThan(low.maxAttempts);
   });
 

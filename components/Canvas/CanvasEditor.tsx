@@ -115,7 +115,6 @@ import PenLiveOverlay from "./PenLiveOverlay";
 import ProcessingPreviewOverlay from "./ProcessingPreviewOverlay";
 import RasterPerformanceOverlay from "./RasterPerformanceOverlay";
 import RasterSelectionOverlay from "./RasterSelectionOverlay";
-import SafeAreaOverlay, { type SafeAreaMode } from "./SafeAreaOverlay";
 import TextOverlay from "./TextOverlay";
 import Transformer from "./Transformer";
 import { usePasteDrop } from "./usePasteDrop";
@@ -341,7 +340,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const [penHoverFirst, setPenHoverFirst] = useState(false);
   const penDraggingRef = useRef<{ start: WorldPoint; nodeIndex: number } | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
-  const [safeAreaMode, setSafeAreaMode] = useState<SafeAreaMode>("none");
   const dragRef = useRef<DragState>(null);
   const quickSelectionRequestRef = useRef(0);
   const quickSelectionAbortRef = useRef<AbortController | null>(null);
@@ -1749,12 +1747,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             onClose={() => setEditingFrameId(null)}
           />
         )}
-        <SafeAreaOverlay
-          mode={safeAreaMode}
-          slideWidth={slide.width}
-          slideHeight={slide.height}
-          worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
-        />
         {tool === "rasterMagicWand" ? (
           <div
             ref={magicWandCursorRef}
@@ -1819,56 +1811,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       </CanvasRoot>
       <RasterPerformanceOverlay />
       {ctxMenu && <ContextMenu position={ctxMenu} onClose={() => setCtxMenu(null)} />}
-
-      {/* Floating Safe Area Guide Widget */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 16,
-          right: 16,
-          zIndex: 15,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          background: "var(--surface-solid, rgba(30, 30, 36, 0.9))",
-          backdropFilter: "blur(6px)",
-          border: "1px solid var(--stroke, rgba(255, 255, 255, 0.12))",
-          borderRadius: 8,
-          padding: "4px 8px",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-        }}
-      >
-        <span style={{ fontSize: 10, color: "var(--ink-muted, #9ca3af)", fontWeight: 600 }}>
-          Safe Area:
-        </span>
-        <select
-          value={safeAreaMode}
-          onChange={(e) => setSafeAreaMode(e.target.value as SafeAreaMode)}
-          style={{
-            fontSize: 10,
-            padding: "2px 6px",
-            borderRadius: 4,
-            border: "1px solid var(--stroke, rgba(255, 255, 255, 0.15))",
-            background: "transparent",
-            color: "var(--ink, #f4f4f5)",
-            cursor: "pointer",
-            outline: "none",
-          }}
-        >
-          <option value="none" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
-            Off
-          </option>
-          <option value="tiktok-reels" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
-            TikTok / Reels (9:16)
-          </option>
-          <option value="ig-story" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
-            Instagram Story
-          </option>
-          <option value="print-bleed" style={{ background: "#1e1e24", color: "#f4f4f5" }}>
-            Print & Bleed (3mm)
-          </option>
-        </select>
-      </div>
     </div>
   );
 });

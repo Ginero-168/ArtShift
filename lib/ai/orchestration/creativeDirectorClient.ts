@@ -38,6 +38,7 @@ export async function prepareRemoteOrchestratorTurn(
         const sanitized = trimmed
           .replace(/\\'/g, "'")
           .replace(/,\s*([}\]])/g, "$1")
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: sanitize control characters
           .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
         let parsed: unknown = null;
         try {
@@ -57,9 +58,9 @@ export async function prepareRemoteOrchestratorTurn(
             (parsed.kind === "tool_calls" || parsed.kind === "tool_call") &&
             Array.isArray(parsed.calls)
           ) {
-            const firstCall = parsed.calls.find(
-              (c: unknown) => isRecord(c) && isRecord(c.input),
-            ) as { input: unknown } | undefined;
+            const firstCall = parsed.calls.find((c: unknown) => isRecord(c) && isRecord(c.input)) as
+              | { input: unknown }
+              | undefined;
             if (firstCall && isRecord(firstCall.input)) {
               rawDirection = firstCall.input;
             }
@@ -72,7 +73,9 @@ export async function prepareRemoteOrchestratorTurn(
   try {
     return normalizeCreativeDirection(rawDirection, input);
   } catch (err) {
-    throw new Error(payload?.error || `Invalid Creative Director response: ${(err as Error).message}`);
+    throw new Error(
+      payload?.error || `Invalid Creative Director response: ${(err as Error).message}`,
+    );
   }
 }
 
@@ -152,4 +155,3 @@ function isCreativeReview(value: unknown): value is CreativeOutputReview {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-

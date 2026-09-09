@@ -253,7 +253,8 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     // dynamic_thinking must be false. Previously `mode !== "off"` evaluated
     // to `true` when mode was undefined, causing Gemini to emit thinking tokens
     // with no final text — Replicate then returns the empty-output error.
-    const dynamicThinking = options?.reasoning?.mode === "dynamic" || options?.reasoning?.mode === "fixed";
+    const dynamicThinking =
+      options?.reasoning?.mode === "dynamic" || options?.reasoning?.mode === "fixed";
     const thinkingBudget =
       options?.reasoning?.mode === "fixed" ? options.reasoning.budgetTokens : undefined;
 
@@ -282,11 +283,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           top_p: 1,
         };
 
-    const prediction = await this.createPrediction(
-      model,
-      predictionInput,
-      request.signal,
-    );
+    const prediction = await this.createPrediction(model, predictionInput, request.signal);
     const completed = await this.waitForPrediction(prediction, request.signal);
     const raw = textFromUnknownOutput(completed.output).trim();
     if (!raw) {
@@ -345,11 +342,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           temperature: 0.1,
           top_p: 1,
         };
-    const prediction = await this.createPrediction(
-      model,
-      predictionInput,
-      request.signal,
-    );
+    const prediction = await this.createPrediction(model, predictionInput, request.signal);
     const completed = await this.waitForPrediction(prediction, request.signal);
     const raw = textFromUnknownOutput(completed.output).trim();
     if (!raw) {

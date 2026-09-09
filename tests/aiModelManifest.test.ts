@@ -127,7 +127,9 @@ describe("AI model manifest", () => {
     const pinned = `openai/gpt-image-2@${"1".repeat(64)}`;
 
     // Primary semantic alias
-    const generalRoute = routes["image.generate"]?.quality?.find((r) => r.alias === "image-general");
+    const generalRoute = routes["image.generate"]?.quality?.find(
+      (r) => r.alias === "image-general",
+    );
     expect(generalRoute).toMatchObject({
       provider: "replicate",
       model: pinned,
@@ -168,7 +170,9 @@ describe("AI model manifest", () => {
       REPLICATE_GPT_IMAGE_2_VERSION: "1".repeat(64),
       IMAGE_PRECISION_MODEL_ENABLED: "true",
     });
-    const precisionRoute = routes["image.generate"]?.quality?.find((r) => r.alias === "image-precision");
+    const precisionRoute = routes["image.generate"]?.quality?.find(
+      (r) => r.alias === "image-precision",
+    );
     expect(precisionRoute).toMatchObject({
       provider: "replicate",
       model: "openai/gpt-image-2.5-sunburst",
@@ -180,7 +184,9 @@ describe("AI model manifest", () => {
     const version = "f".repeat(64);
     const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_2_VERSION: version });
 
-    expect(routes["image.generate"]?.economy?.find((r) => r.alias === "image-general")).toMatchObject({
+    expect(
+      routes["image.generate"]?.economy?.find((r) => r.alias === "image-general"),
+    ).toMatchObject({
       provider: "replicate",
       model: `openai/gpt-image-2@${version}`,
       alias: "image-general",

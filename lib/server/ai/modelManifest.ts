@@ -122,19 +122,31 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 
   // image-general (GPT Image 2) — always the baseline route.
   if (replicateGptImage2) {
-    imageGenerateRoutes.push(imageModelRoute(replicateGptImage2, "image-general", IMAGE_PRICING_PER_RUN.general));
+    imageGenerateRoutes.push(
+      imageModelRoute(replicateGptImage2, "image-general", IMAGE_PRICING_PER_RUN.general),
+    );
     // Keep legacy alias for compatibility until all callers migrate.
-    imageGenerateRoutes.push(imageModelRoute(replicateGptImage2, "image-gpt-2", IMAGE_PRICING_PER_RUN.general));
+    imageGenerateRoutes.push(
+      imageModelRoute(replicateGptImage2, "image-gpt-2", IMAGE_PRICING_PER_RUN.general),
+    );
   }
 
   // image-fast (GPT Image 2.5 Flare) — enabled by feature flag.
   if (replicateGptImage25Flare) {
-    imageGenerateRoutes.push(imageModelRoute(replicateGptImage25Flare, "image-fast", IMAGE_PRICING_PER_RUN.fast));
+    imageGenerateRoutes.push(
+      imageModelRoute(replicateGptImage25Flare, "image-fast", IMAGE_PRICING_PER_RUN.fast),
+    );
   }
 
   // image-precision (GPT Image 2.5 Sunburst) — enabled by feature flag.
   if (replicateGptImage25Sunburst) {
-    imageGenerateRoutes.push(imageModelRoute(replicateGptImage25Sunburst, "image-precision", IMAGE_PRICING_PER_RUN.precision));
+    imageGenerateRoutes.push(
+      imageModelRoute(
+        replicateGptImage25Sunburst,
+        "image-precision",
+        IMAGE_PRICING_PER_RUN.precision,
+      ),
+    );
   }
 
   return {

@@ -81,7 +81,8 @@ export function renderGeminiSystemInstruction(input: AiAssistantChatInput): stri
 export function renderConversationPrompt(messages: AiChatMessage[]): string {
   return messages
     .map((message) => {
-      const role = message.role === "user" ? "User" : message.role === "assistant" ? "Assistant" : "System";
+      const role =
+        message.role === "user" ? "User" : message.role === "assistant" ? "Assistant" : "System";
       return `${role}: ${renderContent(message.content)}`;
     })
     .join("\n\n");

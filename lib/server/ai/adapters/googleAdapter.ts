@@ -190,7 +190,12 @@ export class GoogleAiAdapter implements AiProviderAdapter {
     let payload: GeminiResponse;
     if (request.onTextDelta) {
       try {
-        payload = await this.streamGenerateContent(model, body, request.signal, request.onTextDelta);
+        payload = await this.streamGenerateContent(
+          model,
+          body,
+          request.signal,
+          request.onTextDelta,
+        );
       } catch (streamErr) {
         // Fallback to standard request if SSE stream fails or is aborted/unsupported
         if (request.signal?.aborted) throw streamErr;
@@ -509,7 +514,7 @@ function createGeminiChatBody(
     }
   }
 
-  let thinkingBudget: number | undefined = undefined;
+  let thinkingBudget: number | undefined;
   if (options?.reasoning) {
     const { mode, budgetTokens } = options.reasoning;
     if (mode === "off") {

@@ -128,7 +128,12 @@ export type CreatingModelResolution =
   | { ok: true; model: CreatingModelEntry }
   | {
       ok: false;
-      reason: "model-unknown" | "model-unavailable" | "capability-mismatch" | "no-route" | "quality-unsupported";
+      reason:
+        | "model-unknown"
+        | "model-unavailable"
+        | "capability-mismatch"
+        | "no-route"
+        | "quality-unsupported";
       requestedAlias?: string;
       requestedQuality?: AiImageRenderQuality;
     };

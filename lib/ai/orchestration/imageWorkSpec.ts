@@ -110,7 +110,9 @@ export type ImageIntentFeatures = {
 /**
  * Derives normalized intent features from an ImageWorkSpec or input object.
  */
-export function extractIntentFeatures(spec: Partial<ImageWorkSpec> & { prompt?: string }): ImageIntentFeatures {
+export function extractIntentFeatures(
+  spec: Partial<ImageWorkSpec> & { prompt?: string },
+): ImageIntentFeatures {
   const prompt = (spec.refinedPrompt || spec.userPrompt || spec.prompt || "").trim();
   const invariants = spec.invariants ?? [];
   const requestedChanges = spec.requestedChanges ?? [];
@@ -135,11 +137,7 @@ export function extractIntentFeatures(spec: Partial<ImageWorkSpec> & { prompt?: 
     (/(?:small|color only|recolor|เปลี่ยนเฉพาะ|จุดเล็ก|แก้แค่|เปลี่ยนสี)/iu.test(prompt) ||
       requestedChanges.length === 1);
   const editLocality =
-    spec.operation !== "edit"
-      ? "none"
-      : isSmallTarget
-        ? "small-target"
-        : "regional";
+    spec.operation !== "edit" ? "none" : isSmallTarget ? "small-target" : "regional";
 
   const compositionLock =
     invariants.some((inv) => /(?:composition|angle|layout|มุมกล้อง|ตำแหน่ง)/iu.test(inv)) ||

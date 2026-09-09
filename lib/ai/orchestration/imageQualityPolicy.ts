@@ -1,5 +1,7 @@
 import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
+import { resolveCreatingModel } from "./creatingModelCatalog";
 import {
+  extractIntentFeatures,
   type ImageFailureReason,
   type ImageIntentFeatures,
   type ImageOperation,
@@ -7,9 +9,7 @@ import {
   type ImageRouteDecision,
   type ImageRouteReason,
   type ImageWorkSpec,
-  extractIntentFeatures,
 } from "./imageWorkSpec";
-import { resolveCreatingModel } from "./creatingModelCatalog";
 
 export type {
   ImageFailureReason,
@@ -391,10 +391,7 @@ export function escalateRoute(
   }
 
   // 3. GPT2 high or Flare high
-  if (
-    (modelAlias === "image-general" || modelAlias === "image-fast") &&
-    renderQuality === "high"
-  ) {
+  if ((modelAlias === "image-general" || modelAlias === "image-fast") && renderQuality === "high") {
     if (failureReason === "preservation-miss") {
       return {
         capabilityAlias: "IMAGE_PRECISION",
@@ -463,7 +460,7 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
     !input.hasReference &&
     !input.requiresExactText &&
     !input.finalUse &&
-    !(input.features?.finalUse) &&
+    !input.features?.finalUse &&
     /(?:quick|draft|ร่าง|ทดลอง|เร็ว|ด่วน)/iu.test(input.prompt);
 
   if (isDraftRequest) {

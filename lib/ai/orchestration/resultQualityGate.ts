@@ -305,10 +305,9 @@ export function runEditPreservationGate(
       });
       blockers.push("Awaiting visual analysis to verify requested modifications.");
     } else {
-      const outputText = [
-        input.outputAnalysis.caption,
-        ...input.outputAnalysis.objects,
-      ].join(" ").toLowerCase();
+      const outputText = [input.outputAnalysis.caption, ...input.outputAnalysis.objects]
+        .join(" ")
+        .toLowerCase();
       // Check if any requested change seems contradicted or failed
       const hasContradiction = input.outputAnalysis.limitations.some((lim) =>
         /(?:failed to edit|unmodified|blur)/iu.test(lim),
@@ -406,13 +405,23 @@ export function runEditPreservationGate(
           input.outputAnalysis.caption,
           ...input.outputAnalysis.objects,
           ...input.outputAnalysis.limitations,
-        ].join(" ").toLowerCase();
+        ]
+          .join(" ")
+          .toLowerCase();
 
         let violated = false;
-        if (isLogoOrBrand && /(?:logo removed|logo altered|logo distorted|missing logo|โลโก้เปลี่ยน)/iu.test(outputEvidence)) {
+        if (
+          isLogoOrBrand &&
+          /(?:logo removed|logo altered|logo distorted|missing logo|โลโก้เปลี่ยน)/iu.test(
+            outputEvidence,
+          )
+        ) {
           violated = true;
         }
-        if (isIdentity && /(?:face distorted|different person|face replaced|ใบหน้าเปลี่ยน)/iu.test(outputEvidence)) {
+        if (
+          isIdentity &&
+          /(?:face distorted|different person|face replaced|ใบหน้าเปลี่ยน)/iu.test(outputEvidence)
+        ) {
           violated = true;
         }
 
@@ -456,4 +465,3 @@ export function runEditPreservationGate(
     failureReasons: Array.from(failureReasons),
   };
 }
-

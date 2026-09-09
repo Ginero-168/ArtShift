@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ComposerImageTags from "@/components/AI/ComposerImageTags";
+import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/InlineTagEditor";
+import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
 import {
   type CoPilotMessage,
   executeCoPilotInstruction,
@@ -15,10 +17,11 @@ import {
 } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import {
-  buildComposerImageSelection,
+  buildComposerImageSelectionFromIds,
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
+import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import {
   analyzeImageReferences,
@@ -437,14 +440,19 @@ function extractSubject(prompt: string, summary?: string): string {
   if (effectivePrompt.includes("User reply:")) {
     effectivePrompt = effectivePrompt.slice(effectivePrompt.lastIndexOf("User reply:") + 11).trim();
   } else if (effectivePrompt.includes("\n\n")) {
-    const segments = effectivePrompt.split("\n\n").map((s) => s.trim()).filter(Boolean);
+    const segments = effectivePrompt
+      .split("\n\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
     effectivePrompt = segments[segments.length - 1] || effectivePrompt;
   }
 
   if (summary && summary.trim().length > 0 && !summary.includes("Director question:")) {
     let cleanFromSummary = summary.trim();
     if (cleanFromSummary.includes("User reply:")) {
-      cleanFromSummary = cleanFromSummary.slice(cleanFromSummary.lastIndexOf("User reply:") + 11).trim();
+      cleanFromSummary = cleanFromSummary
+        .slice(cleanFromSummary.lastIndexOf("User reply:") + 11)
+        .trim();
     }
     cleanFromSummary = cleanFromSummary
       .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu, "")
@@ -452,16 +460,25 @@ function extractSubject(prompt: string, summary?: string): string {
       .replace(/^(?:รูปภาพ|ภาพ|รูป)\s*/iu, "")
       .replace(/\s*(?:ตามที่ขอ|เรียบร้อยแล้ว|สมจริง|สวยๆ|สไตล์.*|ในฉาก.*)\s*$/iu, "")
       .trim();
-    if (cleanFromSummary.length > 0 && cleanFromSummary.length < 60 && !cleanFromSummary.includes("\n")) {
+    if (
+      cleanFromSummary.length > 0 &&
+      cleanFromSummary.length < 60 &&
+      !cleanFromSummary.includes("\n")
+    ) {
       return cleanFromSummary;
     }
   }
 
   let cleaned = effectivePrompt
-    .replace(/^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu, "")
+    .replace(
+      /^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu,
+      "",
+    )
     .trim();
   cleaned = cleaned.replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "").trim();
-  cleaned = cleaned.replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง|ด้วยนะ|ด้วยครับ|ด้วยค่ะ|ด้วย)\s*$/iu, "").trim();
+  cleaned = cleaned
+    .replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง|ด้วยนะ|ด้วยครับ|ด้วยค่ะ|ด้วย)\s*$/iu, "")
+    .trim();
   if (cleaned.includes("\n")) {
     cleaned = cleaned.split("\n")[0].trim();
   }
@@ -512,13 +529,81 @@ function formatImageCompletionReply(
 }
 
 export default function AICoPilotBar() {
-  const _currentSlideId = useEngine((s) => s.currentSlideId);
+  const currentSlideId = useEngine((s) => s.currentSlideId);
   const slide = useEngine((s) =>
     s.doc.slides.find((candidate) => candidate.id === s.currentSlideId),
   );
   const selectedIds = useEngine((s) => s.selectedIds);
-  const selectedImageSelection = buildComposerImageSelection(slide?.elements ?? [], selectedIds);
-  const selectedImageRefs = selectedImageSelection.refs;
+
+  const [attachedImageIds, setAttachedImageIds] = useState<string[]>([]);
+  const prevSelectedIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const prevSlideIdRef = useRef(currentSlideId);
+
+  // Clear composer image tags if slide changes
+  useEffect(() => {
+    if (prevSlideIdRef.current !== currentSlideId) {
+      prevSlideIdRef.current = currentSlideId;
+      setAttachedImageIds([]);
+      prevSelectedIdsRef.current = new Set();
+    }
+  }, [currentSlideId]);
+
+  const editorRef = useRef<InlineTagEditorHandle | null>(null);
+
+  const allSlideImageRefs = useMemo(() => {
+    if (!slide) return [];
+    const imageElements = slide.elements.filter(
+      (el) => !el.isDeleted && (el.type === "image" || el.type === "bookMockup"),
+    );
+    return buildComposerImageSelectionFromIds(
+      slide.elements,
+      imageElements.map((el) => el.id),
+    ).refs;
+  }, [slide]);
+
+  // Synchronize canvas selection: when an image is newly selected, add it to attached tags and inline editor
+  // When deselected, the tag remains in the composer (not removed)
+  useEffect(() => {
+    const prev = prevSelectedIdsRef.current;
+    const current = selectedIds;
+    prevSelectedIdsRef.current = current;
+
+    if (!slide) return;
+    const newlySelectedIds: string[] = [];
+    for (const id of current) {
+      if (!prev.has(id)) {
+        const el = slide.elements.find(
+          (item) =>
+            !item.isDeleted &&
+            item.id === id &&
+            (item.type === "image" || item.type === "bookMockup"),
+        );
+        if (el) {
+          newlySelectedIds.push(id);
+        }
+      }
+    }
+
+    if (newlySelectedIds.length > 0) {
+      setAttachedImageIds((existing) => {
+        const set = new Set(existing);
+        const toAdd = newlySelectedIds.filter((id) => !set.has(id));
+        return toAdd.length > 0 ? [...existing, ...toAdd] : existing;
+      });
+
+      for (const id of newlySelectedIds) {
+        const match = allSlideImageRefs.find((r) => r.objectId === id);
+        if (match) {
+          editorRef.current?.insertTag(match);
+        }
+      }
+    }
+  }, [selectedIds, slide, allSlideImageRefs]);
+
+  const composerImageSelection = useMemo(() => {
+    return buildComposerImageSelectionFromIds(slide?.elements ?? [], attachedImageIds);
+  }, [slide?.elements, attachedImageIds]);
+  const composerImageRefs = composerImageSelection.refs;
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -570,7 +655,6 @@ export default function AICoPilotBar() {
     }));
   };
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -799,7 +883,7 @@ export default function AICoPilotBar() {
   };
 
   const handleSend = async (customPrompt?: string) => {
-    const rawPrompt = (customPrompt ?? input).trim();
+    const rawPrompt = (customPrompt ?? editorRef.current?.getValue() ?? input).trim();
     if (!rawPrompt || busy) return;
 
     const pending = pendingClarification;
@@ -812,9 +896,18 @@ export default function AICoPilotBar() {
           pending.question,
         )
       : rawPrompt;
-    if (!pending && selectedImageSelection.omittedCount > 0) {
-      const omittedCount = selectedImageSelection.omittedCount;
+
+    const inlineObjectIds = extractInlineTagObjectIds(rawPrompt);
+    const combinedObjectIds = Array.from(new Set([...inlineObjectIds, ...attachedImageIds]));
+    const effectiveSelection = buildComposerImageSelectionFromIds(
+      slide?.elements ?? [],
+      combinedObjectIds.length > 0 ? combinedObjectIds : attachedImageIds,
+    );
+
+    if (!pending && effectiveSelection.omittedCount > 0) {
+      const omittedCount = effectiveSelection.omittedCount;
       setInput("");
+      editorRef.current?.clear();
       setMessages((previous) => [
         ...previous,
         {
@@ -826,7 +919,7 @@ export default function AICoPilotBar() {
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `ตอนนี้เลือกภาพสำหรับ AI มากเกินไปครับ (${selectedImageSelection.totalCount} ภาพ) กรุณาลด selection เหลือไม่เกิน 4 ภาพก่อนส่งงาน (+${omittedCount})`,
+          content: `ตอนนี้เลือกภาพสำหรับ AI มากเกินไปครับ (${effectiveSelection.totalCount} ภาพ) กรุณาลด selection เหลือไม่เกิน 4 ภาพก่อนส่งงาน (+${omittedCount})`,
           timestamp: Date.now(),
           suggestions: ["ลด selection เหลือไม่เกิน 4 ภาพ", "ถามเกี่ยวกับ Canvas แบบ local"],
         },
@@ -834,10 +927,12 @@ export default function AICoPilotBar() {
       return;
     }
     const refsForTurn = snapshotComposerImageRefs(
-      pending ? pending.selectedImages : selectedImageRefs,
+      pending ? pending.selectedImages : effectiveSelection.refs,
     );
 
     setInput("");
+    editorRef.current?.clear();
+    setAttachedImageIds([]);
     setBusy(true);
     setStreamingText("");
     const controller = new AbortController();
@@ -848,6 +943,7 @@ export default function AICoPilotBar() {
       role: "user",
       content: selectedOption?.label ?? rawPrompt,
       timestamp: Date.now(),
+      imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -1008,7 +1104,10 @@ export default function AICoPilotBar() {
                 taskAction.description = "Creative Director ตอบโดยไม่เรียก Image Model";
                 const trimmed = direction.text.trim();
                 let cleanAnswer = direction.text;
-                if (trimmed.startsWith("{") && (trimmed.includes('"kind"') || trimmed.includes('"calls"'))) {
+                if (
+                  trimmed.startsWith("{") &&
+                  (trimmed.includes('"kind"') || trimmed.includes('"calls"'))
+                ) {
                   try {
                     const parsed = JSON.parse(
                       trimmed.replace(/\\'/g, "'").replace(/,\s*([}\]])/g, "$1"),
@@ -1374,7 +1473,10 @@ export default function AICoPilotBar() {
             };
             const trimmed = result.text.trim();
             let cleanAnswer = result.text;
-            if (trimmed.startsWith("{") && (trimmed.includes('"kind"') || trimmed.includes('"calls"'))) {
+            if (
+              trimmed.startsWith("{") &&
+              (trimmed.includes('"kind"') || trimmed.includes('"calls"'))
+            ) {
               try {
                 const parsed = JSON.parse(
                   trimmed.replace(/\\'/g, "'").replace(/,\s*([}\]])/g, "$1"),
@@ -1605,7 +1707,14 @@ export default function AICoPilotBar() {
             style={{ display: "flex", alignItems: "center", gap: 7 }}
           >
             <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
-            <strong style={{ fontSize: 12.5, color: "#334155", fontWeight: 600, letterSpacing: "-0.01em" }}>
+            <strong
+              style={{
+                fontSize: 12.5,
+                color: "#334155",
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+              }}
+            >
               {UNIFIED_AI_SYSTEM.label}
             </strong>
           </div>
@@ -1666,18 +1775,47 @@ export default function AICoPilotBar() {
                   style={{
                     alignSelf: "flex-end",
                     maxWidth: "88%",
-                    padding: "7px 12px",
-                    borderRadius: "14px 14px 3px 14px",
-                    background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
-                    color: "#ffffff",
-                    fontSize: 12.5,
-                    fontWeight: 500,
-                    lineHeight: 1.45,
-                    wordBreak: "break-word",
-                    boxShadow: "0 1px 3px rgba(79, 70, 229, 0.12)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: 4,
                   }}
                 >
-                  {msg.content}
+                  {msg.imageRefs && msg.imageRefs.length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        width: "100%",
+                        marginBottom: 2,
+                      }}
+                    >
+                      <ComposerImageTags
+                        refs={msg.imageRefs}
+                        testId={`message-image-tags-${msg.id}`}
+                        onSelect={(ref) => handleSelectCanvasImage(ref.fileId)}
+                      />
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: "14px 14px 3px 14px",
+                      background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
+                      color: "#ffffff",
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                      lineHeight: 1.45,
+                      wordBreak: "break-word",
+                      boxShadow: "0 1px 3px rgba(79, 70, 229, 0.12)",
+                    }}
+                  >
+                    <InlineTagRenderer
+                      content={msg.content}
+                      imageRefs={msg.imageRefs}
+                      onSelect={(fileId) => handleSelectCanvasImage(fileId)}
+                    />
+                  </div>
                 </div>
               );
             }
@@ -2492,7 +2630,7 @@ export default function AICoPilotBar() {
             style={{
               flex: 1,
               minWidth: 0,
-              minHeight: 52,
+              minHeight: 90,
               borderRadius: 14,
               background: "#f8fafc",
               border: "1px solid #e2e8f0",
@@ -2513,36 +2651,32 @@ export default function AICoPilotBar() {
             }}
           >
             <ComposerImageTags
-              refs={snapshotComposerImageRefs(selectedImageRefs)}
-              omittedCount={selectedImageSelection.omittedCount}
-              onRemove={(ref) => useEngine.getState().toggleSelect(ref.objectId)}
+              refs={snapshotComposerImageRefs(composerImageRefs)}
+              omittedCount={composerImageSelection.omittedCount}
+              onRemove={(ref) =>
+                setAttachedImageIds((prev) => prev.filter((id) => id !== ref.objectId))
+              }
+              onSelect={(ref) => editorRef.current?.insertTag(ref)}
             />
-            <textarea
-              ref={inputRef}
-              rows={2}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  handleSend();
-                }
+            <InlineTagEditor
+              ref={editorRef}
+              rows={4}
+              placeholder={
+                hasSelection || composerImageRefs.length > 0
+                  ? "แก้ไขภาพหรือวัตถุที่เลือก..."
+                  : "บอกสิ่งที่ต้องการออกแบบ..."
+              }
+              availableImages={allSlideImageRefs}
+              onSend={() => handleSend()}
+              onBackspaceAtStart={() => {
+                setAttachedImageIds((prev) => prev.slice(0, -1));
               }}
-              placeholder={hasSelection ? "แก้ไขภาพหรือวัตถุที่เลือก..." : "บอกสิ่งที่ต้องการออกแบบ..."}
-              aria-label="AI Assistance prompt"
-              style={{
-                flex: 1,
-                width: "100%",
-                minHeight: 36,
-                resize: "none",
-                border: 0,
-                outline: "none",
-                fontSize: 13,
-                lineHeight: 1.45,
-                color: "#0f172a",
-                background: "transparent",
-                fontFamily: "inherit",
-                boxSizing: "border-box",
+              onChange={(val) => {
+                setInput(val);
+                const inlineIds = extractInlineTagObjectIds(val);
+                if (inlineIds.length > 0) {
+                  setAttachedImageIds(inlineIds);
+                }
               }}
             />
           </div>

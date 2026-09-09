@@ -1,4 +1,4 @@
-import type { EngineElement } from "@/lib/engine/types";
+import type { BookMockupElement, EngineElement, ImageElement } from "@/lib/engine/types";
 
 export type ComposerImageRef = {
   objectId: string;
@@ -47,6 +47,49 @@ export function buildComposerImageSelection(
   });
   const refs = allRefs.slice(0, 4);
   return { refs, omittedCount: allRefs.length - refs.length, totalCount: allRefs.length };
+}
+
+export function buildComposerImageSelectionFromIds(
+  elements: readonly EngineElement[],
+  attachedIds: readonly string[],
+): ComposerImageSelection {
+  type SupportedImageElement = ImageElement | BookMockupElement;
+  const elementMap = new Map<string, { element: SupportedImageElement; originalIndex: number }>();
+  elements.forEach((element, index) => {
+    if (!element.isDeleted && (element.type === "image" || element.type === "bookMockup")) {
+      elementMap.set(element.id, { element, originalIndex: index });
+    }
+  });
+
+  const allRefs: ComposerImageRef[] = [];
+  const seenIds = new Set<string>();
+
+  for (const id of attachedIds) {
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    const entry = elementMap.get(id);
+    if (!entry) continue;
+    const { element, originalIndex } = entry;
+    const sourceName = element.type === "image" ? element.sourceName : undefined;
+    allRefs.push({
+      objectId: element.id,
+      elementVersion: element.version,
+      fileId: element.fileId,
+      displayName: sourceName || element.name || `Image ${originalIndex + 1}`,
+      sourceWidth: element.naturalWidth,
+      sourceHeight: element.naturalHeight,
+      width: element.width,
+      height: element.height,
+      angle: element.angle,
+    });
+  }
+
+  const refs = allRefs.slice(0, 4);
+  return {
+    refs,
+    omittedCount: Math.max(0, allRefs.length - refs.length),
+    totalCount: allRefs.length,
+  };
 }
 
 export function buildComposerImageRefs(

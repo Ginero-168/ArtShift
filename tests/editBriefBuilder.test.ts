@@ -18,10 +18,7 @@ describe("editBriefBuilder", () => {
       { assetRef: "asset://palette-emerald", role: "palette" },
     ],
     requestedChanges: ["เปลี่ยนสีแก้วเซรามิกเป็นเขียวมรกต"],
-    invariants: [
-      "ห้ามเปลี่ยนโลโก้และตัวอักษรทุกจุด",
-      "รักษามุมกล้องและแสงเงาเดิม",
-    ],
+    invariants: ["ห้ามเปลี่ยนโลโก้และตัวอักษรทุกจุด", "รักษามุมกล้องและแสงเงาเดิม"],
     exactText: ["ArtShift Cafe"],
     finalUse: true,
     speedPreference: "normal",
@@ -38,7 +35,9 @@ describe("editBriefBuilder", () => {
 
     expect(brief).toContain("CHANGE:\n- เปลี่ยนสีแก้วเซรามิกเป็นเขียวมรกต");
     expect(brief).toContain("PRESERVE:\n- ห้ามเปลี่ยนโลโก้และตัวอักษรทุกจุด\n- รักษามุมกล้องและแสงเงาเดิม");
-    expect(brief).toContain("REFERENCE ROLES:\n- image 1 (asset://layer-1) = base image to edit\n- image 2 (asset://palette-emerald) = color reference only");
+    expect(brief).toContain(
+      "REFERENCE ROLES:\n- image 1 (asset://layer-1) = base image to edit\n- image 2 (asset://palette-emerald) = color reference only",
+    );
     expect(brief).toContain("SUCCESS CRITERIA:");
     expect(brief).toContain('Exact text must be preserved or rendered accurately: "ArtShift Cafe"');
   });

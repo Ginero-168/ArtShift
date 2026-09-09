@@ -113,7 +113,16 @@ export async function POST(req: NextRequest) {
   try {
     const execution = await ai.execute(
       "image.generate",
-      { prompt, width, height, aspectRatio, quality: quality.value, inputImages, enhance: false, modelAlias: requestedModelAlias },
+      {
+        prompt,
+        width,
+        height,
+        aspectRatio,
+        quality: quality.value,
+        inputImages,
+        enhance: false,
+        modelAlias: requestedModelAlias,
+      },
       {
         profile: "quality",
         provider: "replicate",

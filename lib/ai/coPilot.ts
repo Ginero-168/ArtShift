@@ -4,14 +4,16 @@
  * edits visuals (RemoveBG, Vectorize), and arranges layouts (60-30-10).
  */
 
-import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
-import { buildComposerImageSelection } from "@/lib/ai/orchestration/imageReferences";
+import {
+  buildComposerImageSelection,
+  type ComposerImageRef,
+} from "@/lib/ai/orchestration/imageReferences";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { analyzeImageReferences } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
@@ -20,6 +22,7 @@ import {
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { removeBackground } from "@/lib/ai/removeBg";
 import type { VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
+import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { buildDesignAgentContext } from "@/lib/designAgent/client";
 import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
@@ -72,6 +75,7 @@ export interface CoPilotMessage {
   thought?: string;
   toolLabel?: string;
   images?: CoPilotMessageImage[];
+  imageRefs?: ComposerImageRef[];
   requestedCount?: number;
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildComposerImageRefs,
   buildComposerImageSelection,
+  buildComposerImageSelectionFromIds,
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
 import { createImage, createText } from "@/lib/engine/factory";
@@ -75,5 +76,63 @@ describe("selected image references", () => {
     const refs = snapshotComposerImageRefs(buildComposerImageRefs([image], new Set([image.id])));
     expect(refs).not.toBe(buildComposerImageRefs([image], new Set([image.id])));
     expect(refs[0]?.objectId).toBe("image-a");
+  });
+
+  it("builds composer selection from attached IDs regardless of canvas selection state", () => {
+    const image1 = {
+      ...createImage({
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        fileId: "file-1",
+        naturalWidth: 200,
+        naturalHeight: 200,
+      }),
+      id: "img-1",
+      sourceName: "photo-1.png",
+      version: 1,
+    };
+    const image2 = {
+      ...createImage({
+        x: 10,
+        y: 10,
+        width: 100,
+        height: 100,
+        fileId: "file-2",
+        naturalWidth: 200,
+        naturalHeight: 200,
+      }),
+      id: "img-2",
+      name: "Custom Name",
+      version: 2,
+    };
+    const deletedImage = {
+      ...createImage({
+        x: 20,
+        y: 20,
+        width: 100,
+        height: 100,
+        fileId: "file-3",
+        naturalWidth: 200,
+        naturalHeight: 200,
+      }),
+      id: "img-3",
+      isDeleted: true,
+      version: 1,
+    };
+
+    const selection = buildComposerImageSelectionFromIds(
+      [image1, image2, deletedImage],
+      ["img-2", "img-1", "img-3", "img-nonexistent", "img-2"],
+    );
+
+    expect(selection.refs).toHaveLength(2);
+    expect(selection.refs[0]?.objectId).toBe("img-2");
+    expect(selection.refs[0]?.displayName).toBe("Custom Name");
+    expect(selection.refs[1]?.objectId).toBe("img-1");
+    expect(selection.refs[1]?.displayName).toBe("photo-1.png");
+    expect(selection.omittedCount).toBe(0);
+    expect(selection.totalCount).toBe(2);
   });
 });

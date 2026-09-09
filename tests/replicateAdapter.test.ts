@@ -457,7 +457,9 @@ describe("Replicate AI adapter", () => {
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(request.body));
-    expect(body.input.system_instruction).toContain("Rewrite the user's request as one precise image-generation prompt");
+    expect(body.input.system_instruction).toContain(
+      "Rewrite the user's request as one precise image-generation prompt",
+    );
     expect(body.input.prompt).toBe("รูปแมวชู 2 นิ้ว");
     expect(body.input.dynamic_thinking).toBe(false);
   });

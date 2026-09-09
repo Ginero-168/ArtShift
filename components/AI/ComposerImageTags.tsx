@@ -9,9 +9,17 @@ type Props = {
   refs: readonly ComposerImageRef[];
   omittedCount?: number;
   onRemove?: (ref: ComposerImageRef) => void;
+  testId?: string;
+  onSelect?: (ref: ComposerImageRef) => void;
 };
 
-export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: Props) {
+export default function ComposerImageTags({
+  refs,
+  omittedCount = 0,
+  onRemove,
+  testId,
+  onSelect,
+}: Props) {
   const [, rerender] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
@@ -54,7 +62,7 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
   return (
     <div
       role="list"
-      data-testid="selected-image-tags"
+      data-testid={testId ?? "selected-image-tags"}
       aria-label="Selected Canvas images"
       style={{
         display: "flex",
@@ -72,9 +80,12 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
         >
           <button
             type="button"
-            data-testid={`selected-image-tag-${ref.objectId}`}
+            data-testid={
+              testId ? `${testId}-tag-${ref.objectId}` : `selected-image-tag-${ref.objectId}`
+            }
             aria-label={`Selected image ${ref.displayName}`}
             title={`${ref.displayName} · ${ref.sourceWidth} × ${ref.sourceHeight}px`}
+            onClick={() => onSelect?.(ref)}
             onPointerEnter={(event) => openPreview(event.currentTarget, ref.objectId)}
             onPointerLeave={scheduleClose}
             onFocus={(event) => openPreview(event.currentTarget, ref.objectId)}
@@ -83,24 +94,30 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
               if (event.key === "Escape") {
                 setActiveId(null);
                 setAnchor(null);
+              } else if (event.key === "Backspace" || event.key === "Delete") {
+                event.preventDefault();
+                onRemove?.(ref);
+                setActiveId(null);
+                setAnchor(null);
               }
             }}
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 4,
-              maxWidth: "min(100%, 105px)",
-              minHeight: 28,
+              gap: 3.5,
+              maxWidth: "min(100%, 120px)",
+              minHeight: 22,
+              height: 22,
               boxSizing: "border-box",
-              padding: "2px 6px 2px 3px",
-              borderRadius: 8,
+              padding: "1px 7px 1px 2.5px",
+              borderRadius: 9999,
               border: "1px solid #c7d2fe",
               background: "#eef2ff",
               color: "#3730a3",
-              cursor: "default",
-              fontSize: 10,
+              cursor: onSelect ? "pointer" : "default",
+              fontSize: 11,
               fontWeight: 600,
-              lineHeight: 1.2,
+              lineHeight: 1,
               textAlign: "left",
             }}
           >
@@ -111,9 +128,9 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
                 alt=""
                 draggable={false}
                 style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 4,
+                  width: 16,
+                  height: 16,
+                  borderRadius: 3,
                   objectFit: "cover",
                   flex: "0 0 auto",
                 }}
@@ -122,9 +139,9 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
               <span
                 aria-hidden="true"
                 style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 4,
+                  width: 16,
+                  height: 16,
+                  borderRadius: 3,
                   background: "#c7d2fe",
                   flex: "0 0 auto",
                 }}
@@ -133,7 +150,7 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
             <span
               style={{
                 display: "inline-block",
-                maxWidth: 62,
+                maxWidth: 75,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -142,31 +159,6 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
               @{ref.displayName}
             </span>
           </button>
-          {onRemove ? (
-            <button
-              type="button"
-              data-testid={`remove-selected-image-tag-${ref.objectId}`}
-              aria-label={`Remove selected image ${ref.displayName}`}
-              title="นำภาพออกจากบริบท AI"
-              onClick={() => onRemove(ref)}
-              style={{
-                width: 20,
-                height: 20,
-                boxSizing: "border-box",
-                padding: 0,
-                border: "1px solid #c7d2fe",
-                borderRadius: 5,
-                background: "#ffffffaa",
-                color: "#3730a3",
-                cursor: "pointer",
-                fontSize: 14,
-                fontWeight: 700,
-                lineHeight: 1,
-              }}
-            >
-              ×
-            </button>
-          ) : null}
         </span>
       ))}
       {omittedCount > 0 ? (
@@ -178,10 +170,11 @@ export default function ComposerImageTags({ refs, omittedCount = 0, onRemove }: 
           style={{
             display: "inline-flex",
             alignItems: "center",
-            minHeight: 26,
+            minHeight: 22,
+            height: 22,
             boxSizing: "border-box",
             padding: "0 6px",
-            borderRadius: 7,
+            borderRadius: 9999,
             background: "#f1f5f9",
             border: "1px solid #cbd5e1",
             color: "#475569",

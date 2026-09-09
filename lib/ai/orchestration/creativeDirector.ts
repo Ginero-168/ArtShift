@@ -16,6 +16,7 @@ import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/d
 import { CREATING_MODEL_CATALOG, resolveCreatingModel } from "./creatingModelCatalog";
 import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from "./executionGraph";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
+import { synthesizePromptWithInlineTags } from "./inlineTagSynthesis";
 import { DESIGN_PLAN_TOOL } from "./orchestratorTools";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
 import { type AiTask, appendAiTaskEvent } from "./taskMachine";
@@ -216,7 +217,10 @@ const CREATIVE_DIRECTION_TOOL = {
       refinedPrompt: { type: "string", minLength: 8, maxLength: 20_000 },
       specialist: { type: "string", enum: ["image_generator", "image_editor"] },
       capability: { type: "string", enum: ["IMAGE_DEFAULT", "IMAGE_EDIT"] },
-      modelAlias: { type: "string", enum: ["image-general", "image-fast", "image-precision", "image-gpt-2"] },
+      modelAlias: {
+        type: "string",
+        enum: ["image-general", "image-fast", "image-precision", "image-gpt-2"],
+      },
       knowledgeSkillIds: {
         type: "array",
         maxItems: 4,
@@ -356,6 +360,12 @@ export async function prepareCreativeDirection(
   const searchImagesAvailable =
     Boolean(runtime.searchImages) && (runtime.searchImagesAvailable ?? true);
   const formattedReferences = formatReferenceAnalysesForPrompt(input.referenceAnalyses);
+  const inlineSynthesis = input.referenceAnalyses?.length
+    ? synthesizePromptWithInlineTags(
+        input.prompt,
+        input.referenceAnalyses as unknown as ImageReferenceAnalysis[],
+      )
+    : null;
   const messages: AiAssistantChatInput["messages"] = [
     ...normalizeConversationHistory(input.conversationHistory, input.prompt),
     {
@@ -364,6 +374,8 @@ export async function prepareCreativeDirection(
         {
           type: "text",
           text: `User request:\n${input.prompt.slice(0, 20_000)}${
+            inlineSynthesis?.semanticMappingText ? `\n\n${inlineSynthesis.semanticMappingText}` : ""
+          }${
             formattedReferences
               ? `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Analyze and incorporate their visual style, context, detected title, and OCR text into your creative direction, refinedPrompt, and reviewCriteria:\n${formattedReferences}`
               : ""
@@ -532,7 +544,11 @@ async function executeDirectorPass(
         for (const rawCall of extractedCalls) {
           if (!isRecord(rawCall)) continue;
           let callName = typeof rawCall.name === "string" ? rawCall.name : "";
-          if (!callName && isRecord(rawCall.function) && typeof rawCall.function.name === "string") {
+          if (
+            !callName &&
+            isRecord(rawCall.function) &&
+            typeof rawCall.function.name === "string"
+          ) {
             callName = rawCall.function.name;
           }
           let callInput: Record<string, unknown> | null = null;
@@ -843,19 +859,19 @@ export function parseCreativeDirection(
         );
   const normalizedBriefs: string[] = [...rawBriefs];
   while (normalizedBriefs.length < requestedOutputCount) {
-    normalizedBriefs.push(
-      `${fallbackBrief} (variation ${normalizedBriefs.length + 1})`,
-    );
+    normalizedBriefs.push(`${fallbackBrief} (variation ${normalizedBriefs.length + 1})`);
   }
   const finalBriefs = normalizedBriefs.slice(0, requestedOutputCount);
   if (!isStringArray(finalBriefs, 100, 20_000, 1)) {
     return invalidDirection("outputBriefs contain invalid strings");
   }
 
-  let specialist: "image_generator" | "image_editor" =
-    value.specialist as "image_generator" | "image_editor";
-  let capability: "IMAGE_DEFAULT" | "IMAGE_EDIT" =
-    value.capability as "IMAGE_DEFAULT" | "IMAGE_EDIT";
+  let specialist: "image_generator" | "image_editor" = value.specialist as
+    | "image_generator"
+    | "image_editor";
+  let capability: "IMAGE_DEFAULT" | "IMAGE_EDIT" = value.capability as
+    | "IMAGE_DEFAULT"
+    | "IMAGE_EDIT";
   if (
     input.referenceAnalyses.length === 0 &&
     specialist === "image_editor" &&
@@ -865,7 +881,12 @@ export function parseCreativeDirection(
     capability = "IMAGE_DEFAULT";
   }
 
-  const ALLOWED_IMAGE_ALIASES = new Set(["image-general", "image-fast", "image-precision", "image-gpt-2"]);
+  const ALLOWED_IMAGE_ALIASES = new Set([
+    "image-general",
+    "image-fast",
+    "image-precision",
+    "image-gpt-2",
+  ]);
   const rawModelAlias = typeof value.modelAlias === "string" ? value.modelAlias : "image-gpt-2";
   if (!ALLOWED_IMAGE_ALIASES.has(rawModelAlias)) {
     return invalidDirection(`model ${rawModelAlias} is not available`);
@@ -1067,8 +1088,10 @@ function formatReferenceAnalysesForPrompt(
       if (val.caption) lines.push(`  • Visual Summary: ${val.caption}`);
       if (val.visibleText) lines.push(`  • Text on Image (OCR): "${val.visibleText}"`);
       if (val.objects?.length) lines.push(`  • Detected Objects: ${val.objects.join(", ")}`);
-      if (val.dimensions) lines.push(`  • Dimensions: ${val.dimensions.width}×${val.dimensions.height}`);
-      if (val.appearanceNotes?.length) lines.push(`  • Appearance: ${val.appearanceNotes.join("; ")}`);
+      if (val.dimensions)
+        lines.push(`  • Dimensions: ${val.dimensions.width}×${val.dimensions.height}`);
+      if (val.appearanceNotes?.length)
+        lines.push(`  • Appearance: ${val.appearanceNotes.join("; ")}`);
       return lines.join("\n");
     })
     .join("\n\n");
@@ -1167,13 +1190,16 @@ function invalidDirection(reason?: string): never {
 }
 
 function sanitizeJsonString(text: string): string {
-  return text
-    // Replace invalid escaped single quotes \' with '
-    .replace(/\\'/g, "'")
-    // Remove trailing commas before } or ]
-    .replace(/,\s*([}\]])/g, "$1")
-    // Replace unescaped control characters (except newline, cr, tab) with space
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
+  return (
+    text
+      // Replace invalid escaped single quotes \' with '
+      .replace(/\\'/g, "'")
+      // Remove trailing commas before } or ]
+      .replace(/,\s*([}\]])/g, "$1")
+      // Replace unescaped control characters (except newline, cr, tab) with space
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: sanitize control characters
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ")
+  );
 }
 
 function parseJsonCandidate(text: string): unknown {

@@ -56,13 +56,16 @@ export function parseObjectProposals(text: string): AiObjectProposal[] {
 }
 
 export function sanitizeJsonString(text: string): string {
-  return text
-    // Replace invalid escaped single quotes \' with '
-    .replace(/\\'/g, "'")
-    // Remove trailing commas before } or ]
-    .replace(/,\s*([}\]])/g, "$1")
-    // Replace unescaped control characters (except newline, cr, tab) with space
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ");
+  return (
+    text
+      // Replace invalid escaped single quotes \' with '
+      .replace(/\\'/g, "'")
+      // Remove trailing commas before } or ]
+      .replace(/,\s*([}\]])/g, "$1")
+      // Replace unescaped control characters (except newline, cr, tab) with space
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: sanitize control characters
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, " ")
+  );
 }
 
 export function parseJsonCandidate(text: string): unknown {

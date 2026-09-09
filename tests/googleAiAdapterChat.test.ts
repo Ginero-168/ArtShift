@@ -1,7 +1,7 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { GoogleAiAdapter, compileGeminiSchema } from "@/lib/server/ai/adapters/googleAdapter";
-import { AiRuntimeError } from "@/lib/ai-runtime/errors";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiAssistantChatInput } from "@/lib/ai-runtime/contracts";
+import { AiRuntimeError } from "@/lib/ai-runtime/errors";
+import { compileGeminiSchema, GoogleAiAdapter } from "@/lib/server/ai/adapters/googleAdapter";
 
 describe("GoogleAiAdapter assistant.chat & schema compiler", () => {
   const originalFetch = globalThis.fetch;
@@ -364,9 +364,9 @@ describe("GoogleAiAdapter assistant.chat & schema compiler", () => {
         input: { messages: [{ role: "user", content: "test" }] },
         options: { reasoning: { mode: "off" } },
       });
-      expect(
-        (sentBody.generationConfig as Record<string, unknown>).thinkingConfig,
-      ).toEqual({ thinkingBudget: 0 });
+      expect((sentBody.generationConfig as Record<string, unknown>).thinkingConfig).toEqual({
+        thinkingBudget: 0,
+      });
 
       // Test mode: fixed -> thinkingBudget: 1024
       await adapter.execute({
@@ -376,9 +376,9 @@ describe("GoogleAiAdapter assistant.chat & schema compiler", () => {
         input: { messages: [{ role: "user", content: "test" }] },
         options: { reasoning: { mode: "fixed", budgetTokens: 1024 } },
       });
-      expect(
-        (sentBody.generationConfig as Record<string, unknown>).thinkingConfig,
-      ).toEqual({ thinkingBudget: 1024 });
+      expect((sentBody.generationConfig as Record<string, unknown>).thinkingConfig).toEqual({
+        thinkingBudget: 1024,
+      });
 
       // Test mode: dynamic -> thinkingBudget: -1
       await adapter.execute({
@@ -388,9 +388,9 @@ describe("GoogleAiAdapter assistant.chat & schema compiler", () => {
         input: { messages: [{ role: "user", content: "test" }] },
         options: { reasoning: { mode: "dynamic" } },
       });
-      expect(
-        (sentBody.generationConfig as Record<string, unknown>).thinkingConfig,
-      ).toEqual({ thinkingBudget: -1 });
+      expect((sentBody.generationConfig as Record<string, unknown>).thinkingConfig).toEqual({
+        thinkingBudget: -1,
+      });
     });
 
     it("throws POLICY_DENIED when candidate finishReason is SAFETY", async () => {
