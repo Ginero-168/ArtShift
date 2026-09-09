@@ -235,6 +235,10 @@ export type AiExecutionOptions = {
   accountId?: string;
   signal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
+  reasoning?: {
+    mode?: "off" | "fixed" | "dynamic";
+    budgetTokens?: number;
+  };
 };
 
 export type AiProviderStatus = {

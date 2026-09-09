@@ -55,6 +55,30 @@ describe("AI model manifest", () => {
     expect(manifest.AI_DEFAULT_PROFILES["prompt.enhance"]).toBe("quality");
   });
 
+  it("routes assistant.chat and prompt.enhance to Google Gemini when AI_ORCHESTRATOR_PROVIDER is google", () => {
+    const routes = createAiRouteTable({
+      AI_ORCHESTRATOR_PROVIDER: "google",
+      AI_ORCHESTRATOR_MODEL: "gemini-2.5-flash",
+    });
+
+    expect(routes["assistant.chat"]?.quality?.[0]).toMatchObject({
+      provider: "google",
+      model: "gemini-2.5-flash",
+      alias: "creative-director",
+      pricing: { inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 },
+    });
+    expect(routes["assistant.chat"]?.economy?.[0]).toMatchObject({
+      provider: "google",
+      model: "gemini-2.5-flash",
+      alias: "creative-director",
+    });
+    expect(routes["prompt.enhance"]?.quality?.[0]).toMatchObject({
+      provider: "google",
+      model: "gemini-2.5-flash",
+      alias: "prompt-director",
+    });
+  });
+
   it("routes Recraft vectorization to the requested Replicate model", () => {
     const routes = createAiRouteTable({});
 

@@ -49,6 +49,17 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
       DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION,
   );
 
+  const orchestratorProvider = (environment.AI_ORCHESTRATOR_PROVIDER || "replicate").toLowerCase();
+  const orchestratorModel = environment.AI_ORCHESTRATOR_MODEL || googleModel;
+  const chatRoute =
+    orchestratorProvider === "google"
+      ? googleCreativeDirectorRoute(orchestratorModel)
+      : creativeDirectorRoute(creativeDirectorModel);
+  const promptRoute =
+    orchestratorProvider === "google"
+      ? googleCreativeDirectorRoute(orchestratorModel, "prompt-director")
+      : creativeDirectorRoute(creativeDirectorModel, "prompt-director");
+
   const visionEconomy: AiRouteTarget[] = [
     {
       provider: "replicate",
@@ -73,12 +84,12 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 
   return {
     "assistant.chat": {
-      economy: [creativeDirectorRoute(creativeDirectorModel)],
-      quality: [creativeDirectorRoute(creativeDirectorModel)],
+      economy: [chatRoute],
+      quality: [chatRoute],
     },
     "prompt.enhance": {
-      economy: [creativeDirectorRoute(creativeDirectorModel, "prompt-director")],
-      quality: [creativeDirectorRoute(creativeDirectorModel, "prompt-director")],
+      economy: [promptRoute],
+      quality: [promptRoute],
     },
     "vision.describe": { economy: visionEconomy, quality: visionQuality },
     "vision.propose": { economy: visionEconomy, quality: visionQuality },
@@ -120,6 +131,16 @@ function creativeDirectorRoute(model: string, alias = "creative-director"): AiRo
     alias,
     expectedMaxUsd: 0.01,
     pricing: { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
+  };
+}
+
+function googleCreativeDirectorRoute(model: string, alias = "creative-director"): AiRouteTarget {
+  return {
+    provider: "google",
+    model,
+    alias,
+    expectedMaxUsd: 0.01,
+    pricing: { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 },
   };
 }
 

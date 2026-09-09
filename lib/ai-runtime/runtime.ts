@@ -22,6 +22,7 @@ export type AiProviderRequest<K extends AiTaskKind = AiTaskKind> = {
   model: string;
   signal: AbortSignal;
   onTextDelta?: (delta: string) => void;
+  options?: AiExecutionOptions;
 };
 
 export type AiProviderResult<T> = {
@@ -171,6 +172,7 @@ export class RoutedAiRuntime implements AiRuntime {
           model: target.model,
           signal,
           onTextDelta: executionOptions.onTextDelta,
+          options: executionOptions,
         });
         const durationMs = Math.round(performance.now() - startedAt);
         const usage: AiUsage = {
