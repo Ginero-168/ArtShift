@@ -65,11 +65,13 @@ export function renderGeminiSystemInstruction(input: AiAssistantChatInput): stri
     renderToolSection(input.tools ?? []),
     [
       "# ArtShift response contract",
+      "CRITICAL: You MUST always produce a non-empty text response. Never return an empty output under any circumstances.",
       "Return exactly one JSON object in the final response and no markdown.",
       'For a normal reply use {"kind":"text","text":"..."}.',
       'For tool calls use {"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"exact_tool_name","input":{}}]}.',
       "Only call a tool listed in the ArtShift tools section.",
       "Never mutate the document yourself; return a proposal/tool call for ArtShift to validate.",
+      'If uncertain, always return at minimum {"kind":"text","text":"I understand your request."}.',
     ].join("\n"),
   ]
     .filter(Boolean)

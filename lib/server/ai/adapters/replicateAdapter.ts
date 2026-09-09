@@ -215,7 +215,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     assertSupportedChatModel(model.slug);
     const isGemini = model.slug === GEMINI_CHAT_MODEL || model.slug.includes("gemini");
     const options = request.options;
-    const dynamicThinking = options?.reasoning?.mode !== "off";
+    // Default thinking to OFF: when `reasoning` is not explicitly set,
+    // dynamic_thinking must be false. Previously `mode !== "off"` evaluated
+    // to `true` when mode was undefined, causing Gemini to emit thinking tokens
+    // with no final text — Replicate then returns the empty-output error.
+    const dynamicThinking = options?.reasoning?.mode === "enabled" || options?.reasoning?.mode === "fixed";
     const thinkingBudget =
       options?.reasoning?.mode === "fixed" ? options.reasoning.budgetTokens : undefined;
 
@@ -224,7 +228,13 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           prompt: renderConversationPrompt(input.messages),
           system_instruction: renderGeminiSystemInstruction(input),
           dynamic_thinking: dynamicThinking,
-          ...(thinkingBudget !== undefined ? { thinking_budget: thinkingBudget } : {}),
+          // Always send thinking_budget: 0 when not using thinking to avoid
+          // partial thinking-only outputs that Replicate rejects as empty.
+          ...(!dynamicThinking
+            ? { thinking_budget: 0 }
+            : thinkingBudget !== undefined
+              ? { thinking_budget: thinkingBudget }
+              : {}),
           max_output_tokens: Math.min(
             MAX_CHAT_OUTPUT_TOKENS,
             Math.max(256, input.maxTokens ?? 4_096),
