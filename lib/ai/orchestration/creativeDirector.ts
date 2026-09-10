@@ -326,6 +326,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "For a sequential plan, every step must be executable from its payload and earlier outputs: image_generator/image_editor require payload.prompt, vectorizer requires an earlier image dependency, copywriter requires payload.headline or payload.text, and layout_designer/brand_stylist must describe the exact local operation. Never use placeholder URLs, sample copy or fabricated quality scores.",
   "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested (1 to 5). A clear requested quantity (e.g. '3 รูป', '5 แบบ', '2 images') is authoritative and is not by itself a reason to ask a clarification.",
   "For image creation, return exactly one concise outputBrief in outputBriefs per requested output, written in the user's language (e.g. Thai if user asked in Thai). Each outputBrief must be a short, natural descriptive title (2-6 words) characterizing that standalone image (e.g. 'หมูน่ารัก', 'หมูตัวน้อยสีชมพู', 'หมูในฟาร์มสีเขียว', 'แมวยกสองนิ้วร่าเริง') so the user clearly sees what was created in each picture. Never output full English diffusion prompts in outputBriefs, never use generic labels like 'แบบที่ 1', and never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
+  "For summary, write a concise, elegant, and professional Thai summary (1-2 sentences) of your creative direction and thought process. If editing an image, describe what is being modified or added in natural Thai without technical prefixes (e.g. 'ปรับแต่งภาพโดยเพิ่มมังกรบินเหนือเทือกเขา พร้อมคุมโทนแสงยามเย็นให้กลมกลืน'). If generating new images, describe the theme, composition, and mood in natural Thai. Never output raw command strings like 'Edit ภาพ... ด้วย Prompt :...' or unparsed JSON.",
   "Execution creates up to 5 separate outputs concurrently. Do not ask the user which single image to start with when 1 to 5 images are requested.",
   "For image creation, produce a structured, complete, and richly detailed English refinedPrompt tailored for high-end text-to-image models. Follow this Structured Prompt Architecture:",
   "  - Subject & Specifics: Explicitly determine species/breed, appearance, distinctive colors, textures, size, and expressions (e.g. for 'สร้างรูปแมว', choose an endearing domestic cat or Scottish Fold with soft tabby fur and expressive eyes).",
@@ -529,7 +530,7 @@ function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<stri
       normalized.specialist === "image_editor" ? "IMAGE_EDIT" : "IMAGE_DEFAULT";
   }
   if (typeof normalized.modelAlias !== "string" || !normalized.modelAlias.trim()) {
-    normalized.modelAlias = "image-general";
+    normalized.modelAlias = "image-gpt-2";
   }
   const fallbackSummary =
     typeof normalized.summary === "string" && normalized.summary.trim()
@@ -539,20 +540,9 @@ function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<stri
         : "สร้างรูปภาพตามคำขอ";
   if (!Array.isArray(normalized.reviewCriteria) || normalized.reviewCriteria.length === 0) {
     normalized.reviewCriteria = [`ภาพต้องตรงกับคำอธิบาย: ${fallbackSummary}`];
-  } else {
-    const cleanedCriteria = normalized.reviewCriteria
-      .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
-      .map((c) => c.trim());
-    normalized.reviewCriteria =
-      cleanedCriteria.length > 0 ? cleanedCriteria : [`ภาพต้องตรงกับคำอธิบาย: ${fallbackSummary}`];
   }
   if (normalized.search === undefined || !isRecord(normalized.search)) {
     normalized.search = { required: false, queries: [], sources: [] };
-  } else {
-    const s = normalized.search as Record<string, unknown>;
-    if (typeof s.required !== "boolean") {
-      normalized.search = { required: false, queries: [], sources: [] };
-    }
   }
   if (!Array.isArray(normalized.knowledgeSkillIds)) {
     normalized.knowledgeSkillIds = [];
@@ -711,7 +701,11 @@ async function executeDirectorPass(
         Boolean(candidateRecord.refinedPrompt) ||
         candidateRecord.specialist === "image_generator"
       ) {
-        return parseCreativeDirection(normalizeModelImageTaskInput(candidateRecord), input, knowledgeIds);
+        try {
+          return parseCreativeDirection(normalizeModelImageTaskInput(candidateRecord), input, knowledgeIds);
+        } catch {
+          // Fall through to unparsed text extraction
+        }
       }
       if (candidateRecord.kind === "answer" && typeof candidateRecord.text === "string") {
         return parseCreativeDirection(candidateRecord, input, knowledgeIds);
@@ -913,7 +907,14 @@ export function parseCreativeDirection(
   if (!isRecord(rawValue) || containsSensitivePayload(rawValue)) {
     return invalidDirection("not a record or contains sensitive payload");
   }
-  const value = normalizeModelImageTaskInput(rawValue);
+  const value: Record<string, unknown> = { ...rawValue };
+  if (!value.kind) {
+    if (value.proposal || Array.isArray(value.commands)) value.kind = "design-plan";
+    else if (value.plan || Array.isArray(value.steps)) value.kind = "sequential-plan";
+    else if (value.text) value.kind = "answer";
+    else if (value.question) value.kind = "clarification";
+    else if (value.refinedPrompt || value.specialist || value.outputCount) value.kind = "image-task";
+  }
   if (value.kind === "design-plan") {
     const proposal = parsePlanProposal(value.proposal);
     if (!proposal.ok || !input.designContext) {

@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
+import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
+import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import type { CoPilotErrorCard } from "@/lib/ai/coPilot";
 import ComposerImageTags from "@/components/AI/ComposerImageTags";
 import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
@@ -36,6 +38,119 @@ export interface ChatThreadProps {
   onClearHistory: () => void;
   onEditPromptFromError?: (prompt: string) => void;
   children?: React.ReactNode;
+}
+
+export function UserMessageImagePreviews({
+  refs,
+  onSelect,
+}: {
+  refs: readonly ComposerImageRef[];
+  onSelect: (fileId: string) => void;
+}) {
+  const [, rerender] = useState(0);
+  useEffect(() => subscribeImageCache(() => rerender((v) => v + 1)), []);
+
+  if (refs.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
+        gap: 8,
+        width: "100%",
+        marginBottom: 6,
+      }}
+    >
+      {refs.map((ref) => {
+        const dataUrl = getCached(ref.fileId)?.dataURL;
+        return (
+          <div
+            key={`${ref.objectId}:${ref.elementVersion}`}
+            onClick={() => onSelect(ref.fileId)}
+            title={`คลิกเพื่อเลือกภาพ ${ref.displayName} บน Canvas`}
+            style={{
+              position: "relative",
+              maxWidth: refs.length === 1 ? 240 : 150,
+              width: refs.length === 1 ? "auto" : 140,
+              minWidth: 110,
+              borderRadius: 12,
+              overflow: "hidden",
+              background: "#f8fafc",
+              border: "1.5px solid #e2e8f0",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+              cursor: "pointer",
+              transition: "transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.02)";
+              e.currentTarget.style.borderColor = "#6366f1";
+              e.currentTarget.style.boxShadow = "0 4px 14px rgba(99, 102, 241, 0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.borderColor = "#e2e8f0";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.08)";
+            }}
+          >
+            {dataUrl ? (
+              // biome-ignore lint/performance/noImgElement: user message referenced image preview
+              <img
+                src={dataUrl}
+                alt={ref.displayName}
+                style={{
+                  width: "100%",
+                  maxHeight: 200,
+                  display: "block",
+                  objectFit: "cover",
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  height: 100,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "#e2e8f0",
+                  color: "#64748b",
+                  fontSize: 11,
+                }}
+              >
+                กำลังโหลดภาพ...
+              </div>
+            )}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: "4px 8px",
+                background: "linear-gradient(to top, rgba(15, 23, 42, 0.8) 0%, transparent 100%)",
+                color: "#ffffff",
+                fontSize: 11,
+                fontWeight: 600,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span style={{ fontSize: 10 }}>📷</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                @{ref.displayName}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function CollapsibleThought({
@@ -258,20 +373,10 @@ export default function ChatThread({
                 }}
               >
                 {msg.imageRefs && msg.imageRefs.length > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "flex-end",
-                      width: "100%",
-                      marginBottom: 2,
-                    }}
-                  >
-                    <ComposerImageTags
-                      refs={msg.imageRefs}
-                      testId={`message-image-tags-${msg.id}`}
-                      onSelect={(ref) => onSelectCanvasImage(ref.fileId)}
-                    />
-                  </div>
+                  <UserMessageImagePreviews
+                    refs={msg.imageRefs}
+                    onSelect={(fileId) => onSelectCanvasImage(fileId)}
+                  />
                 )}
                 <div
                   style={{
@@ -287,6 +392,7 @@ export default function ChatThread({
                   }}
                 >
                   <InlineTagRenderer
+                    theme="dark"
                     content={msg.content}
                     imageRefs={msg.imageRefs}
                     onSelect={(fileId) => onSelectCanvasImage(fileId)}
@@ -455,6 +561,7 @@ export default function ChatThread({
                 }}
               >
                 <InlineTagRenderer
+                  theme="light"
                   content={msg.content}
                   onSelect={(fileId) => onSelectCanvasImage(fileId)}
                 />

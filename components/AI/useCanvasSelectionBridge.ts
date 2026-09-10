@@ -38,12 +38,17 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
   const prevSlideIdRef = useRef(currentSlideId);
   const editorRef = useRef<InlineTagEditorHandle | null>(null);
 
-  // Clear composer tags when switching slides
+  // Track element IDs that the user explicitly deleted from composer input,
+  // so the selection bridge does not re-insert them while the element remains selected on canvas.
+  const dismissedObjectIdsRef = useRef<Set<string>>(new Set());
+
+  // Clear composer tags and dismissed IDs when switching slides
   useEffect(() => {
     if (prevSlideIdRef.current !== currentSlideId) {
       prevSlideIdRef.current = currentSlideId;
       setAttachedImageIds([]);
       prevSelectedIdsRef.current = new Set();
+      dismissedObjectIdsRef.current.clear();
     }
   }, [currentSlideId]);
 
@@ -53,21 +58,10 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
     return buildAllSlideImageRefs(slide.elements);
   }, [slide]);
 
-  const setEditorRef = useCallback(
-    (handle: InlineTagEditorHandle | null) => {
-      editorRef.current = handle;
-      if (!handle || !slide) return;
-      if (selectedIds && selectedIds.size > 0) {
-        for (const id of selectedIds) {
-          const match = allSlideImageRefs.find((r: any) => r.objectId === id);
-          if (match) {
-            handle.insertTag(match);
-          }
-        }
-      }
-    },
-    [slide, selectedIds, allSlideImageRefs],
-  );
+  // Stable ref callback: strictly attaches the handle without re-inserting tags on every render
+  const setEditorRef = useCallback((handle: InlineTagEditorHandle | null) => {
+    editorRef.current = handle;
+  }, []);
 
   // Synchronize canvas element selection into attached tags
   useEffect(() => {
@@ -76,9 +70,17 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
     prevSelectedIdsRef.current = current;
 
     if (!slide) return;
+
+    // Reset dismissed state for elements that have been deselected on canvas
+    for (const id of prev) {
+      if (!current.has(id)) {
+        dismissedObjectIdsRef.current.delete(id);
+      }
+    }
+
     const newlySelectedIds: string[] = [];
     for (const id of current) {
-      if (!prev.has(id)) {
+      if (!prev.has(id) && !dismissedObjectIdsRef.current.has(id)) {
         const el = slide.elements.find(
           (item: any) =>
             !item.isDeleted &&
@@ -140,6 +142,8 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
           item.fileId === fileId,
       );
       if (el) {
+        // User explicitly re-selected this image: un-dismiss it
+        dismissedObjectIdsRef.current.delete(el.id);
         useEngine.getState().selectOnly([el.id]);
         setAttachedImageIds((existing) =>
           existing.includes(el.id) ? existing : [...existing, el.id],
@@ -175,6 +179,7 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
             item.fileId === fileId,
         );
         if (!el) return prev;
+        dismissedObjectIdsRef.current.add(el.id);
         return prev.filter((id) => id !== el.id);
       });
     },
@@ -186,15 +191,32 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
     editorRef.current?.clear();
   }, []);
 
-  const handleInlineTagsChange = useCallback((inlineIds: string[]) => {
-    setAttachedImageIds(inlineIds);
-  }, []);
+  const handleInlineTagsChange = useCallback(
+    (inlineIds: string[]) => {
+      // Any ID that was previously attached but is missing from inlineIds was deleted by the user
+      setAttachedImageIds((prev) => {
+        for (const id of prev) {
+          if (!inlineIds.includes(id)) {
+            dismissedObjectIdsRef.current.add(id);
+          }
+        }
+        return inlineIds;
+      });
+    },
+    [],
+  );
 
   const removeLastAttachedImage = useCallback(() => {
-    setAttachedImageIds((prev) => prev.slice(0, -1));
+    setAttachedImageIds((prev) => {
+      if (prev.length > 0) {
+        dismissedObjectIdsRef.current.add(prev[prev.length - 1]);
+      }
+      return prev.slice(0, -1);
+    });
   }, []);
 
   const insertTagForRef = useCallback((ref: ComposerImageRef) => {
+    dismissedObjectIdsRef.current.delete(ref.objectId);
     editorRef.current?.insertTag(ref);
   }, []);
 

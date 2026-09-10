@@ -61,8 +61,17 @@ import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatA
 
 export type { StagedVariationCard };
 
+function cleanTechnicalPromptText(text: string): string {
+  let s = text.trim();
+  s = s.replace(/^Edit\s+(?:ภาพ|รูป)?\s*(@\[[^\]]+\]|@[^\s]+|[^\s]+)?\s*ด้วย\s*Prompt\s*:\s*/iu, "");
+  s = s.replace(/^Edit\s+image\s+.*?with\s+prompt\s*:\s*/iu, "");
+  s = s.replace(/^propose_creative_direction\s*:\s*/iu, "");
+  s = s.replace(/^propose_design_plan\s*:\s*/iu, "");
+  s = s.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "@$1");
+  return s.trim();
+}
+
 function extractSubject(prompt: string, summary?: string): string {
-  // If prompt contains clarification history, extract only the user's latest reply
   let effectivePrompt = prompt;
   if (effectivePrompt.includes("User reply:")) {
     effectivePrompt = effectivePrompt.slice(effectivePrompt.lastIndexOf("User reply:") + 11).trim();
@@ -74,15 +83,19 @@ function extractSubject(prompt: string, summary?: string): string {
     effectivePrompt = segments[segments.length - 1] || effectivePrompt;
   }
 
+  // Strip all tag syntax @[...] and @tags from effectivePrompt
+  effectivePrompt = effectivePrompt.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim();
+
   if (summary && summary.trim().length > 0 && !summary.includes("Director question:")) {
-    let cleanFromSummary = summary.trim();
+    let cleanFromSummary = cleanTechnicalPromptText(summary);
     if (cleanFromSummary.includes("User reply:")) {
       cleanFromSummary = cleanFromSummary
         .slice(cleanFromSummary.lastIndexOf("User reply:") + 11)
         .trim();
     }
+    cleanFromSummary = cleanFromSummary.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim();
     cleanFromSummary = cleanFromSummary
-      .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu, "")
+      .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu, "")
       .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
       .replace(/^(?:รูปภาพ|ภาพ|รูป)\s*/iu, "")
       .replace(/\s*(?:ตามที่ขอ|เรียบร้อยแล้ว|สมจริง|สวยๆ|สไตล์.*|ในฉาก.*)\s*$/iu, "")
@@ -98,7 +111,7 @@ function extractSubject(prompt: string, summary?: string): string {
 
   let cleaned = effectivePrompt
     .replace(
-      /^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu,
+      /^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu,
       "",
     )
     .trim();
@@ -112,7 +125,26 @@ function extractSubject(prompt: string, summary?: string): string {
   return cleaned || "ภาพ";
 }
 
-function formatThoughtText(rawPrompt: string, directionSummary?: string, count = 1): string {
+function formatThoughtText(
+  rawPrompt: string,
+  directionSummary?: string,
+  count = 1,
+  isEdit = false,
+): string {
+  const cleanPrompt = cleanTechnicalPromptText(rawPrompt);
+  const cleanSummary = directionSummary ? cleanTechnicalPromptText(directionSummary) : "";
+
+  if (isEdit) {
+    if (cleanSummary && cleanSummary.length > 5 && !cleanSummary.startsWith("สร้างภาพ")) {
+      const actionText = cleanSummary.startsWith("ปรับ") || cleanSummary.startsWith("แก้ไข")
+        ? cleanSummary
+        : `ปรับแต่ง: ${cleanSummary}`;
+      return `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผน${actionText} โดยรักษาความกลมกลืนของแสง เงา และบรรยากาศโดยรวมให้เป็นธรรมชาติ`;
+    }
+    const editInstruction = cleanPrompt.replace(/@[^\s]+\s*/g, "").trim() || "ตามคำขอ";
+    return `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งภาพโดย ${editInstruction} พร้อมคุมโทนสีและแสงเงาเดิมให้ลงตัว`;
+  }
+
   const isConceptPrompt =
     rawPrompt.includes("คิดให้หน่อย") ||
     rawPrompt.includes("concept") ||
@@ -120,34 +152,57 @@ function formatThoughtText(rawPrompt: string, directionSummary?: string, count =
     rawPrompt.includes("เจ๋งๆ") ||
     rawPrompt.includes("ไอเดีย");
 
-  if (isConceptPrompt && directionSummary) {
-    return `ได้เลยค่ะ คิด concept เป็น ${directionSummary} สร้างให้เลย`;
+  if (isConceptPrompt && cleanSummary) {
+    return `คิดคอนเซปต์เป็น "${cleanSummary}" โดยวางแผนจัดองค์ประกอบ แสงเงา มุมกล้อง และรายละเอียดให้สวยงามสมจริง`;
   }
-  if (directionSummary && directionSummary.length > 5 && !directionSummary.startsWith("สร้างภาพ")) {
-    return `ได้เลยค่ะ คิด concept เป็น ${directionSummary} สร้างให้เลย`;
+
+  if (cleanSummary && cleanSummary.length > 5 && !cleanSummary.startsWith("สร้างภาพ")) {
+    return `วางแผนออกแบบ: "${cleanSummary}" (${count} ภาพ) โดยกำหนดสไตล์ โทนสี แสงเงา และความคมชัดระดับสูง`;
   }
-  const subject = extractSubject(rawPrompt, directionSummary);
-  return `สร้างรูป${subject} ${count} รูปให้เลยค่ะ`;
+
+  const subject = extractSubject(rawPrompt, cleanSummary);
+  return `กำลังวางแผนสร้างรูปภาพ "${subject}" (${count} ภาพ) โดยจัดองค์ประกอบ แสงเงา และรายละเอียดระดับสูงให้สมบูรณ์แบบค่ะ`;
 }
 
 function formatImageCompletionReply(
   subject: string,
   count: number,
   outputBriefs?: readonly string[],
+  isEdit = false,
 ): string {
-  const cleanSubject = subject.trim() || "ภาพ";
-  const lines: string[] = [`สร้างรูป${cleanSubject}เสร็จแล้ว ${count} รูปค่ะ`, ""];
+  let cleanSubject = subject
+    .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
+    .replace(/@[^\s]+/g, "")
+    .trim();
+
+  const firstBrief = outputBriefs?.[0]
+    ?.replace(/^รูปที่\s*\d+:\s*/iu, "")
+    ?.replace(/^(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*/iu, "")
+    ?.trim();
+
+  let headerLine = "";
+  if (isEdit) {
+    const editName = firstBrief || (cleanSubject && !cleanSubject.startsWith("ปรับ") ? cleanSubject : "");
+    headerLine = editName
+      ? `ปรับแต่งภาพ "${editName}" เสร็จแล้ว ${count} รูปค่ะ`
+      : `ปรับแต่งภาพเรียบร้อยแล้วค่ะ (${count} รูป)`;
+  } else {
+    const genName = firstBrief || cleanSubject || "ภาพ";
+    headerLine = `สร้างรูป${genName}เสร็จแล้ว ${count} รูปค่ะ`;
+  }
+
+  const lines: string[] = [headerLine, ""];
   if (outputBriefs && outputBriefs.length > 0) {
     outputBriefs.slice(0, count).forEach((brief, idx) => {
       const cleanBrief = brief
         .replace(/^รูปที่\s*\d+:\s*/iu, "")
         .replace(/^(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*/iu, "")
         .trim();
-      lines.push(`• รูปที่ ${idx + 1}: ${cleanBrief || `${cleanSubject} แบบที่ ${idx + 1}`}`);
+      lines.push(`• รูปที่ ${idx + 1}: ${cleanBrief || `${cleanSubject || "ภาพ"} แบบที่ ${idx + 1}`}`);
     });
   } else {
     for (let i = 1; i <= count; i++) {
-      lines.push(`• รูปที่ ${i}: ${cleanSubject} แบบที่ ${i}`);
+      lines.push(`• รูปที่ ${i}: ${cleanSubject || "ภาพ"} แบบที่ ${i}`);
     }
   }
   lines.push("");
@@ -766,7 +821,8 @@ export default function AICoPilotBar() {
                 const imageRun = createDirectedImageRun(contextDecision.input, direction);
                 setPendingClarification(null);
                 const count = imageRun.requestedOutputCount;
-                const thoughtText = formatThoughtText(rawPrompt, direction.summary, count);
+                const isEditTurn = direction.specialist === "image_editor" || refsForTurn.length > 0;
+                const thoughtText = formatThoughtText(rawPrompt, direction.summary, count, isEditTurn);
                 setLiveAssistantState({
                   stage: "generating",
                   thought: thoughtText,
@@ -871,10 +927,12 @@ export default function AICoPilotBar() {
                     }));
 
                   const subject = extractSubject(promptToSend, direction.summary);
+                  const isEditTurn = direction.specialist === "image_editor" || refsForTurn.length > 0;
                   reply = formatImageCompletionReply(
                     subject,
                     runResult.completedCount,
                     direction.outputBriefs,
+                    isEditTurn,
                   );
 
                   setMessages((previous) => [

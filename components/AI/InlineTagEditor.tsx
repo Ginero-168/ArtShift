@@ -198,6 +198,46 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
       textSpan.textContent = `@${imgRef.displayName}`;
       pill.appendChild(textSpan);
 
+      // Dedicated remove button (×)
+      const removeBtn = document.createElement("span");
+      removeBtn.role = "button";
+      removeBtn.setAttribute("aria-label", `Remove ${imgRef.displayName}`);
+      removeBtn.title = `ลบ @${imgRef.displayName}`;
+      removeBtn.dataset.testid = `remove-tag-${imgRef.objectId}`;
+      removeBtn.textContent = "×";
+      removeBtn.style.display = "inline-flex";
+      removeBtn.style.alignItems = "center";
+      removeBtn.style.justifyContent = "center";
+      removeBtn.style.width = "14px";
+      removeBtn.style.height = "14px";
+      removeBtn.style.marginLeft = "2px";
+      removeBtn.style.borderRadius = "50%";
+      removeBtn.style.color = "#818cf8";
+      removeBtn.style.fontSize = "13px";
+      removeBtn.style.lineHeight = "1";
+      removeBtn.style.fontWeight = "bold";
+      removeBtn.style.cursor = "pointer";
+      removeBtn.style.transition = "all 0.15s ease";
+
+      removeBtn.onmouseenter = () => {
+        removeBtn.style.background = "#c7d2fe";
+        removeBtn.style.color = "#1e1b4b";
+      };
+      removeBtn.onmouseleave = () => {
+        removeBtn.style.background = "transparent";
+        removeBtn.style.color = "#818cf8";
+      };
+      removeBtn.onpointerdown = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        cancelClose();
+        setActivePreview(null);
+        pill.remove();
+        handleContentChange();
+        editorRef.current?.focus();
+      };
+      pill.appendChild(removeBtn);
+
       return pill;
     },
     [cancelClose, scheduleClose, handleContentChange],
@@ -319,15 +359,13 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     // 1. Caret directly in editor container
     if (node === editor) {
       if (offset > 0) {
-        const prev = editor.childNodes[offset - 1];
-        if (prev instanceof HTMLElement && prev.dataset.tagObjectId) {
-          return prev;
-        }
-        if (prev?.nodeType === Node.TEXT_NODE && !prev.textContent?.trim() && offset > 1) {
-          const prevPrev = editor.childNodes[offset - 2];
-          if (prevPrev instanceof HTMLElement && prevPrev.dataset.tagObjectId) {
-            prev.remove();
-            return prevPrev;
+        for (let i = offset - 1; i >= 0; i--) {
+          const child = editor.childNodes[i];
+          if (child instanceof HTMLElement && child.dataset.tagObjectId) {
+            return child;
+          }
+          if (child.nodeType === Node.TEXT_NODE && child.textContent?.replace(/[\s\u00A0]/g, "")) {
+            break;
           }
         }
       }
@@ -337,22 +375,17 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     // 2. Caret inside a text node
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent || "";
-      if (offset === 0) {
+      const textBefore = text.slice(0, offset);
+      if (!textBefore.replace(/[\s\u00A0]/g, "")) {
         let prev = node.previousSibling;
-        while (prev && prev.nodeType === Node.TEXT_NODE && !prev.textContent?.trim()) {
+        while (prev) {
+          if (prev instanceof HTMLElement && prev.dataset.tagObjectId) {
+            return prev;
+          }
+          if (prev.nodeType === Node.TEXT_NODE && prev.textContent?.replace(/[\s\u00A0]/g, "")) {
+            break;
+          }
           prev = prev.previousSibling;
-        }
-        if (prev instanceof HTMLElement && prev.dataset.tagObjectId) {
-          return prev;
-        }
-      } else if (offset === 1 && (text[0] === " " || text[0] === "\u00A0")) {
-        let prev = node.previousSibling;
-        while (prev && prev.nodeType === Node.TEXT_NODE && !prev.textContent?.trim()) {
-          prev = prev.previousSibling;
-        }
-        if (prev instanceof HTMLElement && prev.dataset.tagObjectId) {
-          node.textContent = text.slice(1);
-          return prev;
         }
       }
     }
@@ -373,19 +406,13 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     // 1. Caret directly in editor container
     if (node === editor) {
       if (offset < editor.childNodes.length) {
-        const next = editor.childNodes[offset];
-        if (next instanceof HTMLElement && next.dataset.tagObjectId) {
-          return next;
-        }
-        if (
-          next?.nodeType === Node.TEXT_NODE &&
-          !next.textContent?.trim() &&
-          offset + 1 < editor.childNodes.length
-        ) {
-          const nextNext = editor.childNodes[offset + 1];
-          if (nextNext instanceof HTMLElement && nextNext.dataset.tagObjectId) {
-            next.remove();
-            return nextNext;
+        for (let i = offset; i < editor.childNodes.length; i++) {
+          const child = editor.childNodes[i];
+          if (child instanceof HTMLElement && child.dataset.tagObjectId) {
+            return child;
+          }
+          if (child.nodeType === Node.TEXT_NODE && child.textContent?.replace(/[\s\u00A0]/g, "")) {
+            break;
           }
         }
       }
@@ -395,25 +422,17 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     // 2. Caret inside a text node
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent || "";
-      if (offset === text.length) {
+      const textAfter = text.slice(offset);
+      if (!textAfter.replace(/[\s\u00A0]/g, "")) {
         let next = node.nextSibling;
-        while (next && next.nodeType === Node.TEXT_NODE && !next.textContent?.trim()) {
+        while (next) {
+          if (next instanceof HTMLElement && next.dataset.tagObjectId) {
+            return next;
+          }
+          if (next.nodeType === Node.TEXT_NODE && next.textContent?.replace(/[\s\u00A0]/g, "")) {
+            break;
+          }
           next = next.nextSibling;
-        }
-        if (next instanceof HTMLElement && next.dataset.tagObjectId) {
-          return next;
-        }
-      } else if (
-        offset === text.length - 1 &&
-        (text[offset] === " " || text[offset] === "\u00A0")
-      ) {
-        let next = node.nextSibling;
-        while (next && next.nodeType === Node.TEXT_NODE && !next.textContent?.trim()) {
-          next = next.nextSibling;
-        }
-        if (next instanceof HTMLElement && next.dataset.tagObjectId) {
-          node.textContent = text.slice(0, -1);
-          return next;
         }
       }
     }

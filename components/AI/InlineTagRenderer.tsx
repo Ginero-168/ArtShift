@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { parseInlineTagTokens } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
+import { useEngine } from "@/lib/engine/store";
 import ImageReferencePreview from "./ImageReferencePreview";
 
 type Props = {
@@ -11,9 +12,16 @@ type Props = {
   imageRefs?: readonly ComposerImageRef[];
   onSelect?: (fileId?: string) => void;
   style?: React.CSSProperties;
+  theme?: "light" | "dark";
 };
 
-export default function InlineTagRenderer({ content, imageRefs = [], onSelect, style }: Props) {
+export default function InlineTagRenderer({
+  content,
+  imageRefs = [],
+  onSelect,
+  style,
+  theme = "light",
+}: Props) {
   const [, rerender] = useState(0);
   const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -52,8 +60,7 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
     setAnchor(el);
   };
 
-  const activeRef = imageRefs.find((r) => r.objectId === activePreviewId);
-  const activeDataUrl = activeRef ? getCached(activeRef.fileId)?.dataURL : undefined;
+  const isLight = theme === "light";
 
   return (
     <span style={{ display: "inline", ...style }}>
@@ -63,12 +70,44 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
         }
 
         // Tag segment
-        const matchedRef = imageRefs.find(
+        let matchedRef = imageRefs.find(
           (r) =>
             r.objectId === seg.objectId ||
             r.displayName.toLowerCase() === seg.displayName.toLowerCase(),
         );
-        const dataUrl = matchedRef ? getCached(matchedRef.fileId)?.dataURL : undefined;
+
+        let dataUrl = matchedRef ? getCached(matchedRef.fileId)?.dataURL : undefined;
+        let effectiveFileId = matchedRef?.fileId;
+
+        // Fallback: search current slide elements if not in passed imageRefs
+        if (!dataUrl) {
+          const slide = useEngine.getState().currentSlide();
+          const el = slide?.elements.find(
+            (candidate) =>
+              !candidate.isDeleted &&
+              (candidate.id === seg.objectId || candidate.name === seg.displayName),
+          );
+          if (el && "fileId" in el && typeof (el as any).fileId === "string") {
+            effectiveFileId = (el as any).fileId;
+            dataUrl = getCached(effectiveFileId!)?.dataURL;
+            if (!matchedRef) {
+              matchedRef = {
+                objectId: el.id,
+                elementVersion: el.version,
+                fileId: effectiveFileId!,
+                displayName: (el as any).sourceName || el.name || seg.displayName,
+                sourceWidth: (el as any).naturalWidth || el.width,
+                sourceHeight: (el as any).naturalHeight || el.height,
+                width: el.width,
+                height: el.height,
+                angle: el.angle,
+              };
+            }
+          }
+        }
+
+        const activeRef = activePreviewId === seg.objectId ? matchedRef : null;
+        const activeDataUrl = activeRef ? getCached(activeRef.fileId)?.dataURL : undefined;
 
         return (
           <span
@@ -77,10 +116,10 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
             tabIndex={0}
             data-testid={`inline-tag-pill-${seg.objectId}`}
             title={`@${seg.displayName} · คลิกเพื่อเลือกบน Canvas`}
-            onClick={() => onSelect?.(matchedRef?.fileId)}
+            onClick={() => onSelect?.(effectiveFileId)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
-                onSelect?.(matchedRef?.fileId);
+                onSelect?.(effectiveFileId);
               }
             }}
             onPointerEnter={(e) => openPreview(e.currentTarget, seg.objectId)}
@@ -92,28 +131,28 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
               alignItems: "center",
               gap: 3.5,
               verticalAlign: "middle",
-              padding: "1px 6px 1px 2px",
+              padding: "1px 6px 1px 2.5px",
               margin: "0 2px",
               borderRadius: 9999,
-              height: 20,
+              height: 21,
               boxSizing: "border-box",
-              background: "rgba(255, 255, 255, 0.22)",
-              border: "1px solid rgba(255, 255, 255, 0.4)",
-              color: "#ffffff",
+              background: isLight ? "#eef2ff" : "rgba(255, 255, 255, 0.22)",
+              border: isLight ? "1px solid #c7d2fe" : "1px solid rgba(255, 255, 255, 0.4)",
+              color: isLight ? "#3730a3" : "#ffffff",
               fontSize: 11,
               fontWeight: 600,
               lineHeight: 1,
               cursor: "pointer",
               userSelect: "none",
-              transition: "background 0.15s ease, border-color 0.15s ease",
+              transition: "all 0.15s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.32)";
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.6)";
+              e.currentTarget.style.background = isLight ? "#e0e7ff" : "rgba(255, 255, 255, 0.32)";
+              e.currentTarget.style.borderColor = isLight ? "#a5b4fc" : "rgba(255, 255, 255, 0.6)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.22)";
-              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.4)";
+              e.currentTarget.style.background = isLight ? "#eef2ff" : "rgba(255, 255, 255, 0.22)";
+              e.currentTarget.style.borderColor = isLight ? "#c7d2fe" : "rgba(255, 255, 255, 0.4)";
             }}
           >
             {dataUrl ? (
@@ -136,7 +175,7 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
                   width: 16,
                   height: 16,
                   borderRadius: 3,
-                  background: "rgba(255, 255, 255, 0.3)",
+                  background: isLight ? "#c7d2fe" : "rgba(255, 255, 255, 0.3)",
                   display: "inline-block",
                   flexShrink: 0,
                 }}
@@ -144,7 +183,7 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
             )}
             <span
               style={{
-                maxWidth: 110,
+                maxWidth: 120,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -156,13 +195,13 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
         );
       })}
 
-      {activeRef && anchor ? (
+      {activePreviewId && anchor && (
         <ImageReferencePreview
           anchor={anchor}
-          dataUrl={activeDataUrl}
-          displayName={activeRef.displayName}
-          width={activeRef.sourceWidth}
-          height={activeRef.sourceHeight}
+          dataUrl={getCached(imageRefs.find((r) => r.objectId === activePreviewId)?.fileId || "")?.dataURL}
+          displayName={imageRefs.find((r) => r.objectId === activePreviewId)?.displayName || ""}
+          width={imageRefs.find((r) => r.objectId === activePreviewId)?.sourceWidth || 800}
+          height={imageRefs.find((r) => r.objectId === activePreviewId)?.sourceHeight || 600}
           onPointerEnter={cancelClose}
           onPointerLeave={scheduleClose}
           onClose={() => {
@@ -170,7 +209,7 @@ export default function InlineTagRenderer({ content, imageRefs = [], onSelect, s
             setAnchor(null);
           }}
         />
-      ) : null}
+      )}
     </span>
   );
 }
