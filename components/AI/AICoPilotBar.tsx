@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ComposerImageTags from "@/components/AI/ComposerImageTags";
-import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/InlineTagEditor";
-import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
 import {
   type CoPilotMessage,
   diagnoseOrchestratorError,
@@ -18,7 +15,6 @@ import {
 } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import {
-  buildAllSlideImageRefs,
   buildComposerImageSelectionFromIds,
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
@@ -40,6 +36,11 @@ import {
   runSequentialExecutionPlan,
   type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
+import {
+  isBroadImagePrompt,
+  createPromptRefinement,
+  type PromptRefinementCardData,
+} from "@/lib/ai/orchestration/promptRefinement";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
@@ -53,389 +54,12 @@ import { preloadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import { calculateGhostBounds } from "@/lib/renderer/ghostOverlay";
 
-export type StagedVariationCard = {
-  id: string;
-  fileId: string;
-  url?: string;
-  width: number;
-  height: number;
-  label?: string;
-  status: "staged" | "accepted" | "rejected";
-  targetSlideId?: string;
-};
+import { useCanvasSelectionBridge } from "@/components/AI/useCanvasSelectionBridge";
+import ChatThread from "@/components/AI/ChatThread";
+import ChatComposer from "@/components/AI/ChatComposer";
+import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatActionCards";
 
-function ThoughtBrainIcon({
-  className = "",
-  style = {},
-}: {
-  className?: string;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
-      className={className}
-    >
-      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
-      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
-      <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
-      <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
-      <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
-      <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
-      <path d="M19.938 10.5a4 4 0 0 1 .585.396" />
-      <path d="M6 18a4 4 0 0 1-1.967-.516" />
-      <path d="M19.967 17.484A4 4 0 0 1 18 18" />
-    </svg>
-  );
-}
-
-function ImageSparkleIcon({
-  className = "",
-  style = {},
-}: {
-  className?: string;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
-      className={className}
-    >
-      <rect width="18" height="16" x="3" y="5" rx="3" />
-      <circle cx="8.5" cy="10.5" r="1.5" />
-      <path d="m21 16-5.5-5.5a1.5 1.5 0 0 0-2.12 0L4 20" />
-      <path d="M2 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ThumbsUpIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <path d="M7 10v12" />
-      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h3l4-7.12a2 2 0 0 1 3.5 1z" />
-    </svg>
-  );
-}
-
-function ThumbsDownIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <path d="M17 14V2" />
-      <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3l-4 7.12a2 2 0 0 1-3.5-1z" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        display: "inline-block",
-        verticalAlign: "middle",
-        transition: "transform 0.2s ease",
-        ...style,
-      }}
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
-function SendIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-    </svg>
-  );
-}
-
-function StopIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      stroke="none"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <rect x="4" y="4" width="16" height="16" rx="2" />
-    </svg>
-  );
-}
-
-function TrashIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
-  );
-}
-
-function CheckIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function CloseIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
-function ImageIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-      <circle cx="9" cy="9" r="2" />
-      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-    </svg>
-  );
-}
-
-function BoltIcon({ style = {} }: { style?: React.CSSProperties }) {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      stroke="none"
-      style={{ display: "inline-block", verticalAlign: "middle", ...style }}
-    >
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({
-  style = {},
-  className = "",
-}: {
-  style?: React.CSSProperties;
-  className?: string;
-}) {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        display: "inline-block",
-        verticalAlign: "middle",
-        animation: "spin 1s linear infinite",
-        ...style,
-      }}
-      className={className}
-    >
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-  );
-}
-
-function CollapsibleThought({
-  thought,
-  isLive = false,
-  defaultOpen = false,
-}: {
-  thought: string;
-  isLive?: boolean;
-  defaultOpen?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        marginBottom: 6,
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          background: "transparent",
-          border: "none",
-          outline: "none",
-          padding: "3px 0",
-          cursor: "pointer",
-          textAlign: "left",
-          color: "#334155",
-          transition: "color 0.15s ease",
-          width: "fit-content",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = "#4f46e5";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = "#334155";
-        }}
-      >
-        <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
-        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em" }}>
-          {isLive ? "กำลังคิดอยู่..." : "ความคิดของ AI (Thought)"}
-        </span>
-        {isLive && (
-          <span
-            style={{
-              display: "inline-block",
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: "#6366f1",
-              animation: "artshiftPulse 1.2s ease-in-out infinite",
-            }}
-          />
-        )}
-        <ChevronDownIcon
-          style={{
-            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-            width: 12,
-            height: 12,
-            color: "#94a3b8",
-            transition: "transform 0.2s ease, color 0.15s ease",
-            marginLeft: 2,
-          }}
-        />
-      </button>
-
-      {isOpen && (
-        <div
-          style={{
-            marginTop: 4,
-            marginLeft: 2,
-            padding: "7px 12px 7px 12px",
-            borderLeft: "2px solid #818cf8",
-            color: "#475569",
-            fontSize: 12,
-            lineHeight: 1.6,
-            background: "rgba(248, 250, 252, 0.7)",
-            borderRadius: "0 8px 8px 0",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {thought}
-        </div>
-      )}
-    </div>
-  );
-}
+export type { StagedVariationCard };
 
 function extractSubject(prompt: string, summary?: string): string {
   // If prompt contains clarification history, extract only the user's latest reply
@@ -531,6 +155,8 @@ function formatImageCompletionReply(
   return lines.join("\n");
 }
 
+
+
 export default function AICoPilotBar() {
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const slide = useEngine((s) =>
@@ -538,104 +164,23 @@ export default function AICoPilotBar() {
   );
   const selectedIds = useEngine((s) => s.selectedIds);
 
-  const [attachedImageIds, setAttachedImageIds] = useState<string[]>([]);
-  const prevSelectedIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const prevSlideIdRef = useRef(currentSlideId);
-
-  // Clear composer image tags if slide changes
-  useEffect(() => {
-    if (prevSlideIdRef.current !== currentSlideId) {
-      prevSlideIdRef.current = currentSlideId;
-      setAttachedImageIds([]);
-      prevSelectedIdsRef.current = new Set();
-    }
-  }, [currentSlideId]);
-
-  const editorRef = useRef<InlineTagEditorHandle | null>(null);
-
-  const allSlideImageRefs = useMemo(() => {
-    if (!slide) return [];
-    return buildAllSlideImageRefs(slide.elements);
-  }, [slide]);
-
-  const setEditorRef = useCallback(
-    (handle: InlineTagEditorHandle | null) => {
-      editorRef.current = handle;
-      if (!handle || !slide) return;
-      if (selectedIds && selectedIds.size > 0) {
-        for (const id of selectedIds) {
-          const el = slide.elements.find(
-            (item) =>
-              !item.isDeleted &&
-              item.id === id &&
-              (item.type === "image" || item.type === "bookMockup"),
-          );
-          if (el) {
-            const match = allSlideImageRefs.find((r) => r.objectId === id);
-            if (match) {
-              handle.insertTag(match);
-            }
-          }
-        }
-      }
-    },
-    [selectedIds, slide, allSlideImageRefs],
-  );
-
-  // Synchronize canvas selection: when an image is newly selected, add it to attached tags and inline editor
-  // When deselected, the tag remains in the composer (not removed)
-  useEffect(() => {
-    const prev = prevSelectedIdsRef.current;
-    const current = selectedIds;
-    prevSelectedIdsRef.current = current;
-
-    if (!slide) return;
-    const newlySelectedIds: string[] = [];
-    for (const id of current) {
-      if (!prev.has(id)) {
-        const el = slide.elements.find(
-          (item) =>
-            !item.isDeleted &&
-            item.id === id &&
-            (item.type === "image" || item.type === "bookMockup"),
-        );
-        if (el) {
-          newlySelectedIds.push(id);
-        }
-      }
-    }
-
-    if (newlySelectedIds.length > 0) {
-      setAttachedImageIds((existing) => {
-        const set = new Set(existing);
-        const toAdd = newlySelectedIds.filter((id) => !set.has(id));
-        return toAdd.length > 0 ? [...existing, ...toAdd] : existing;
-      });
-
-      for (const id of newlySelectedIds) {
-        const el = slide.elements.find((item) => item.id === id);
-        const match = allSlideImageRefs.find((r) => r.objectId === id) || (el ? {
-          objectId: el.id,
-          elementVersion: el.version,
-          fileId: (el as any).fileId,
-          displayName: (el as any).sourceName || el.name || "Image",
-          sourceWidth: (el as any).naturalWidth || el.width,
-          sourceHeight: (el as any).naturalHeight || el.height,
-          width: el.width,
-          height: el.height,
-          angle: el.angle,
-        } : null);
-        if (match) {
-          editorRef.current?.insertTag(match);
-        }
-      }
-    }
-  }, [selectedIds, slide, allSlideImageRefs]);
+  const {
+    attachedImageIds,
+    setAttachedImageIds,
+    allSlideImageRefs,
+    composerImageRefs,
+    editorRef,
+    setEditorRef,
+    handleSelectCanvasImage,
+    handleRemoveAttachedImage,
+    clearAttachedImages,
+    handleInlineTagsChange,
+    removeLastAttachedImage,
+  } = useCanvasSelectionBridge();
 
   const composerImageSelection = useMemo(() => {
     return buildComposerImageSelectionFromIds(slide?.elements ?? [], attachedImageIds);
   }, [slide?.elements, attachedImageIds]);
-  const composerImageRefs = composerImageSelection.refs;
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -656,9 +201,8 @@ export default function AICoPilotBar() {
     useState<SequentialExecutionPlan | null>(null);
   const [isExecutingPlan, setIsExecutingPlan] = useState(false);
   const [stagedVariations, setStagedVariations] = useState<StagedVariationCard[]>([]);
-  const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(
-    null,
-  );
+  const [pendingClarification, setPendingClarification] =
+    useState<PendingClarification | null>(null);
   const [liveAssistantState, setLiveAssistantState] = useState<{
     stage: "outputting" | "generating";
     thought?: string;
@@ -666,35 +210,10 @@ export default function AICoPilotBar() {
     requestedCount?: number;
   } | null>(null);
   const [feedbackState, setFeedbackState] = useState<Record<string, "up" | "down">>({});
+  const [promptRefinementData, setPromptRefinementData] =
+    useState<PromptRefinementCardData | null>(null);
 
-  const handleSelectCanvasImage = (fileId?: string) => {
-    if (!fileId) return;
-    const currentSlide = useEngine.getState().currentSlide();
-    if (!currentSlide) return;
-    const el = currentSlide.elements.find(
-      (item) =>
-        !item.isDeleted &&
-        (item.type === "image" || item.type === "bookMockup") &&
-        "fileId" in item &&
-        item.fileId === fileId,
-    );
-    if (el) {
-      useEngine.getState().selectOnly([el.id]);
-      setAttachedImageIds((existing) => (existing.includes(el.id) ? existing : [...existing, el.id]));
-      const match = allSlideImageRefs.find((r) => r.objectId === el.id) || {
-        objectId: el.id,
-        elementVersion: el.version,
-        fileId: (el as any).fileId,
-        displayName: (el as any).sourceName || el.name || "Image",
-        sourceWidth: (el as any).naturalWidth || el.width,
-        sourceHeight: (el as any).naturalHeight || el.height,
-        width: el.width,
-        height: el.height,
-        angle: el.angle,
-      };
-      editorRef.current?.insertTag(match);
-    }
-  };
+  const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
 
   const handleToggleFeedback = (messageId: string, type: "up" | "down") => {
     setFeedbackState((prev) => ({
@@ -702,6 +221,11 @@ export default function AICoPilotBar() {
       [messageId]: prev[messageId] === type ? undefined! : type,
     }));
   };
+
+  const handleClearHistory = () => {
+    setMessages([]);
+  };
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastAlternativePromptRef = useRef<string | null>(null);
@@ -934,9 +458,32 @@ export default function AICoPilotBar() {
     }
   };
 
-  const handleSend = async (customPrompt?: string) => {
+  const handleSend = async (customPrompt?: string, skipRefinementCheck = false) => {
     const rawPrompt = (customPrompt ?? editorRef.current?.getValue() ?? input).trim();
     if (!rawPrompt || busy) return;
+
+    if (!skipRefinementCheck && isBroadImagePrompt(rawPrompt)) {
+      const refinement = createPromptRefinement(rawPrompt);
+      setPromptRefinementData(refinement);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: rawPrompt,
+          timestamp: Date.now(),
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `กำลังวิเคราะห์ความต้องการสร้าง ${refinement.baseSubject} ให้คุณครับ! คุณสามารถเลือกปรับแต่งคุณลักษณะต่างๆ (เช่น สี, สายพันธุ์, พื้นหลัง, มุมกล้อง) ผ่านการ์ดด้านล่าง เพื่อให้ได้ภาพที่ตรงตามจินตนาการมากที่สุดครับ ✨`,
+          timestamp: Date.now(),
+        },
+      ]);
+      setInput("");
+      editorRef.current?.clear();
+      return;
+    }
 
     const pending = pendingClarification;
     const selectedOption =
@@ -1742,9 +1289,8 @@ export default function AICoPilotBar() {
     ]);
   };
 
-  const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
+
   const hasSelection = selectedIds.size > 0;
-  const pendingReview = pendingPlan ? summarizePlanForReview(pendingPlan) : null;
 
   return (
     <div
@@ -1764,10 +1310,6 @@ export default function AICoPilotBar() {
       }}
     >
       <style>{`
-        @keyframes artshiftShimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
         @keyframes artshiftPulse {
           0%, 100% { opacity: 0.55; }
           50% { opacity: 1; }
@@ -1791,1178 +1333,80 @@ export default function AICoPilotBar() {
         }
       `}</style>
 
-      {/* 1. Chat history */}
-      <div
-        style={{
-          width: "100%",
-          flex: 1,
-          minHeight: 0,
-          background: "transparent",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
+      {/* 1. Thread Header and Messages Area */}
+      <ChatThread
+        messages={messages}
+        busy={busy}
+        liveAssistantState={liveAssistantState}
+        streamingText={streamingText}
+        currentActions={currentActions}
+        feedbackState={feedbackState}
+        scrollRef={scrollRef}
+        onSelectCanvasImage={handleSelectCanvasImage}
+        onSelectSuggestion={(sug, errorCard) => {
+          if (sug.startsWith("✏️") && errorCard?.promptToEdit) {
+            setInput(errorCard.promptToEdit);
+            editorRef.current?.setValue(errorCard.promptToEdit);
+            editorRef.current?.focus();
+          } else {
+            handleSend(sug);
+          }
+        }}
+        onToggleFeedback={handleToggleFeedback}
+        onClearHistory={handleClearHistory}
+        onEditPromptFromError={(prompt) => {
+          setInput(prompt);
+          editorRef.current?.setValue(prompt);
+          editorRef.current?.focus();
         }}
       >
-        {/* Thread Header */}
-        <div
-          style={{
-            padding: "8px 14px",
-            borderBottom: "1px solid #f1f5f9",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "#ffffff",
-            minHeight: 38,
+        <ChatActionCards
+          promptRefinementData={promptRefinementData}
+          onGenerateFromRefinement={(refined) => {
+            setPromptRefinementData(null);
+            handleSend(refined, true);
           }}
-        >
-          <div
-            title={UNIFIED_AI_SYSTEM.description}
-            style={{ display: "flex", alignItems: "center", gap: 7 }}
-          >
-            <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
-            <strong
-              style={{
-                fontSize: 12.5,
-                color: "#334155",
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {UNIFIED_AI_SYSTEM.label}
-            </strong>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <button
-              type="button"
-              onClick={() => setMessages([])}
-              title="Clear chat history"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                background: "transparent",
-                border: "none",
-                fontSize: 11,
-                color: "#94a3b8",
-                cursor: "pointer",
-                padding: "3px 6px",
-                borderRadius: 4,
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#475569";
-                e.currentTarget.style.background = "#f8fafc";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "#94a3b8";
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <TrashIcon style={{ width: 11, height: 11, opacity: 0.8 }} />
-              <span>Clear</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Messages Container */}
-        <div
-          ref={scrollRef}
-          className="artshift-custom-scroll"
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            minHeight: 0,
-            padding: "12px 14px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            background: "#ffffff",
+          onApplyRefinementToComposer={(refined) => {
+            setInput(refined);
+            editorRef.current?.setValue(refined);
+            editorRef.current?.focus();
           }}
-        >
-          {messages.map((msg) => {
-            if (msg.role === "user") {
-              return (
-                <div
-                  key={msg.id}
-                  style={{
-                    alignSelf: "flex-end",
-                    maxWidth: "88%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: 4,
-                  }}
-                >
-                  {msg.imageRefs && msg.imageRefs.length > 0 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        width: "100%",
-                        marginBottom: 2,
-                      }}
-                    >
-                      <ComposerImageTags
-                        refs={msg.imageRefs}
-                        testId={`message-image-tags-${msg.id}`}
-                        onSelect={(ref) => handleSelectCanvasImage(ref.fileId)}
-                      />
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      padding: "7px 12px",
-                      borderRadius: "14px 14px 3px 14px",
-                      background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
-                      color: "#ffffff",
-                      fontSize: 12.5,
-                      fontWeight: 500,
-                      lineHeight: 1.45,
-                      wordBreak: "break-word",
-                      boxShadow: "0 1px 3px rgba(79, 70, 229, 0.12)",
-                    }}
-                  >
-                    <InlineTagRenderer
-                      content={msg.content}
-                      imageRefs={msg.imageRefs}
-                      onSelect={(fileId) => handleSelectCanvasImage(fileId)}
-                    />
-                  </div>
-                </div>
-              );
-            }
+          onDismissRefinement={() => setPromptRefinementData(null)}
+          pendingPlan={pendingPlan}
+          busy={busy}
+          onApplyPendingPlan={applyPendingPlan}
+          onDiscardPendingPlan={() => setPendingPlan(null)}
+          pendingSequentialPlan={pendingSequentialPlan}
+          isExecutingPlan={isExecutingPlan}
+          onExecuteSequentialPlan={executeSequentialPlan}
+          onDiscardSequentialPlan={() => setPendingSequentialPlan(null)}
+          stagedVariations={stagedVariations}
+          onVariationHover={handleVariationHover}
+          onVariationLeave={handleVariationLeave}
+          onCommitVariation={commitVariationToCanvas}
+          onDismissVariation={dismissVariation}
+          onClearVariationsTray={() => {
+            useEngine.getState().clearGhostOverlay();
+            setStagedVariations([]);
+          }}
+        />
+      </ChatThread>
 
-            if (msg.kind === "progress") {
-              return (
-                <div
-                  key={msg.id}
-                  style={{
-                    alignSelf: "flex-start",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    color: "#475569",
-                    fontSize: 11,
-                    lineHeight: 1.4,
-                    padding: "2px 0",
-                    letterSpacing: "-0.01em",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: "50%",
-                      backgroundColor: "#94a3b8",
-                      display: "inline-block",
-                      flexShrink: 0,
-                    }}
-                  />
-                  <span>{msg.content}</span>
-                </div>
-              );
-            }
-
-            const hasStructuredThought =
-              Boolean(msg.thought) ||
-              Boolean(msg.toolLabel) ||
-              (msg.images && msg.images.length > 0);
-
-            return (
-              <div
-                key={msg.id}
-                style={{
-                  alignSelf: "flex-start",
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                }}
-              >
-                {/* Structured Collapsible Thought */}
-                {msg.thought && <CollapsibleThought thought={msg.thought} defaultOpen={false} />}
-
-                {/* Tool label */}
-                {msg.toolLabel && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      color: "#64748b",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      marginTop: msg.thought ? 0 : 2,
-                    }}
-                  >
-                    <ImageSparkleIcon style={{ color: "#4f46e5", width: 14, height: 14 }} />
-                    <span>{msg.toolLabel}</span>
-                  </div>
-                )}
-
-                {/* Content Policy / Error Card */}
-                {msg.errorCard && (
-                  <div
-                    data-testid={`error-card-${msg.id}`}
-                    style={{
-                      background: "#18181b",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                      borderRadius: 12,
-                      padding: "16px 18px",
-                      marginTop: 6,
-                      marginBottom: 6,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: "#f8fafc",
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      {msg.errorCard.title}
-                    </div>
-                    <div
-                      style={{
-                        color: "#cbd5e1",
-                        fontSize: 12,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {msg.errorCard.description}
-                    </div>
-                    {msg.errorCard.actionText && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const promptToEdit = msg.errorCard?.promptToEdit || "";
-                          if (promptToEdit) {
-                            setInput(promptToEdit);
-                            editorRef.current?.setValue(promptToEdit);
-                            editorRef.current?.focus();
-                          }
-                        }}
-                        style={{
-                          marginTop: 6,
-                          background: "#ffffff",
-                          color: "#18181b",
-                          border: "none",
-                          borderRadius: 8,
-                          padding: "8px 14px",
-                          fontSize: 12.5,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          transition: "background 0.15s ease",
-                          width: "100%",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "#f1f5f9";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "#ffffff";
-                        }}
-                      >
-                        {msg.errorCard.actionText}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Image thumbnails */}
-                {msg.images && msg.images.length > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      marginTop: 6,
-                      marginBottom: 4,
-                      width: "100%",
-                    }}
-                  >
-                    {msg.images.map((img, idx) => (
-                      <div
-                        key={img.fileId || idx}
-                        onClick={() => handleSelectCanvasImage(img.fileId)}
-                        title="คลิกเพื่อเลือกภาพบน Canvas"
-                        style={{
-                          flex: 1,
-                          maxWidth: msg.images!.length === 1 ? 380 : 190,
-                          aspectRatio: "1 / 1",
-                          borderRadius: 12,
-                          overflow: "hidden",
-                          background: "#f8fafc",
-                          cursor: "pointer",
-                          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
-                          border: "1px solid #e2e8f0",
-                          transition: "all 0.15s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "scale(1.02)";
-                          e.currentTarget.style.borderColor = "#4f46e5";
-                          e.currentTarget.style.boxShadow = "0 4px 12px rgba(79, 70, 229, 0.15)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "scale(1)";
-                          e.currentTarget.style.borderColor = "#e2e8f0";
-                          e.currentTarget.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.06)";
-                        }}
-                      >
-                        {/* biome-ignore lint/performance/noImgElement: Co-pilot generated image card */}
-                        <img
-                          src={img.url}
-                          alt={img.label || `Image ${idx + 1}`}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Text Content */}
-                {msg.content && (
-                  <div
-                    style={{
-                      marginTop: msg.images && msg.images.length > 0 ? 4 : 2,
-                      color: "#334155",
-                      fontSize: 12.5,
-                      lineHeight: 1.55,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {msg.content}
-                  </div>
-                )}
-
-                {/* Suggestion Chips */}
-                {msg.suggestions && msg.suggestions.length > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      marginTop: 8,
-                      marginBottom: 4,
-                    }}
-                  >
-                    {msg.suggestions.map((sug, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          if (sug.startsWith("✏️") && msg.errorCard?.promptToEdit) {
-                            setInput(msg.errorCard.promptToEdit);
-                            editorRef.current?.setValue(msg.errorCard.promptToEdit);
-                            editorRef.current?.focus();
-                          } else {
-                            handleSend(sug);
-                          }
-                        }}
-                        disabled={busy}
-                        style={{
-                          background: sug.startsWith("✨") ? "#eef2ff" : "#f8fafc",
-                          border: `1px solid ${sug.startsWith("✨") ? "#c7d2fe" : "#e2e8f0"}`,
-                          borderRadius: 20,
-                          padding: "5px 12px",
-                          fontSize: 11.5,
-                          fontWeight: sug.startsWith("✨") ? 600 : 500,
-                          color: sug.startsWith("✨") ? "#4338ca" : "#334155",
-                          cursor: busy ? "default" : "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          transition: "all 0.15s ease",
-                          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!busy) {
-                            e.currentTarget.style.background = sug.startsWith("✨")
-                              ? "#e0e7ff"
-                              : "#f1f5f9";
-                            e.currentTarget.style.borderColor = sug.startsWith("✨")
-                              ? "#a5b4fc"
-                              : "#cbd5e1";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!busy) {
-                            e.currentTarget.style.background = sug.startsWith("✨")
-                              ? "#eef2ff"
-                              : "#f8fafc";
-                            e.currentTarget.style.borderColor = sug.startsWith("✨")
-                              ? "#c7d2fe"
-                              : "#e2e8f0";
-                          }
-                        }}
-                      >
-                        <span>{sug}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Sub-agent Action logs (if any and not already structured) */}
-                {!hasStructuredThought && msg.actions && msg.actions.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-                    {msg.actions.map((act) => (
-                      <div
-                        key={act.id}
-                        style={{
-                          fontSize: 10.5,
-                          padding: "4px 8px",
-                          borderRadius: 6,
-                          background:
-                            act.status === "success"
-                              ? "#ecfdf5"
-                              : act.status === "error"
-                                ? "#fef2f2"
-                                : "#eef2ff",
-                          color:
-                            act.status === "success"
-                              ? "#065f46"
-                              : act.status === "error"
-                                ? "#991b1b"
-                                : "#3730a3",
-                          border: `1px solid ${
-                            act.status === "success"
-                              ? "#a7f3d0"
-                              : act.status === "error"
-                                ? "#fecaca"
-                                : "#c7d2fe"
-                          }`,
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        {act.status === "success" ? (
-                          <CheckIcon style={{ color: "#059669" }} />
-                        ) : act.status === "error" ? (
-                          <CloseIcon style={{ color: "#dc2626" }} />
-                        ) : (
-                          <SpinnerIcon style={{ color: "#4f46e5" }} />
-                        )}
-                        <strong>{act.title}</strong>
-                        <span>— {act.description}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Feedback Icons (Thumbs Up / Down) */}
-                {msg.role === "assistant" && msg.id !== "initial-msg" && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleFeedback(msg.id, "up")}
-                      title="มีประโยชน์"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 3,
-                        cursor: "pointer",
-                        color: feedbackState[msg.id] === "up" ? "#4f46e5" : "#94a3b8",
-                        transition: "color 0.15s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#4f46e5";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#94a3b8";
-                      }}
-                    >
-                      <ThumbsUpIcon />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleFeedback(msg.id, "down")}
-                      title="ปรับปรุง"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 3,
-                        cursor: "pointer",
-                        color: feedbackState[msg.id] === "down" ? "#ef4444" : "#94a3b8",
-                        transition: "color 0.15s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (feedbackState[msg.id] !== "down")
-                          e.currentTarget.style.color = "#ef4444";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (feedbackState[msg.id] !== "down")
-                          e.currentTarget.style.color = "#94a3b8";
-                      }}
-                    >
-                      <ThumbsDownIcon />
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Pending Review Plan */}
-          {pendingReview ? (
-            <div
-              role="region"
-              aria-label="Pending AI plan review"
-              style={{
-                alignSelf: "stretch",
-                padding: "10px 12px",
-                borderRadius: 8,
-                background: "#fffbeb",
-                border: "1px solid #fde68a",
-                color: "#92400e",
-                fontSize: 11,
-              }}
-            >
-              <strong style={{ display: "block", fontSize: 11.5, color: "#78350f" }}>
-                Reviewable plan
-              </strong>
-              <span style={{ display: "block", marginTop: 3, lineHeight: 1.4, color: "#92400e" }}>
-                {pendingReview.summary.slice(0, 240)} · {pendingReview.commandCount} รายการ
-              </span>
-              <div style={{ marginTop: 7, lineHeight: 1.45 }}>
-                <div>
-                  <strong>กระทบ:</strong> {pendingReview.targets.join(", ")}
-                </div>
-                <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
-                  {pendingReview.changes.map((change, index) => (
-                    <li key={`${change}-${index}`}>{change}</li>
-                  ))}
-                </ul>
-                <div style={{ marginTop: 4, fontWeight: 600, color: "#b45309" }}>
-                  ต้องกด Apply plan เพื่อยืนยันก่อนแก้ไข Artwork
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                <button
-                  type="button"
-                  onClick={applyPendingPlan}
-                  disabled={busy}
-                  style={{
-                    border: 0,
-                    borderRadius: 6,
-                    padding: "5px 10px",
-                    background: busy ? "#94a3b8" : "#d97706",
-                    color: "#ffffff",
-                    cursor: busy ? "default" : "pointer",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                  }}
-                >
-                  Apply plan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingPlan(null)}
-                  disabled={busy}
-                  style={{
-                    border: "1px solid #d97706",
-                    borderRadius: 6,
-                    padding: "5px 10px",
-                    background: "transparent",
-                    color: "#b45309",
-                    cursor: busy ? "default" : "pointer",
-                    fontSize: 10.5,
-                  }}
-                >
-                  Discard
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Sequential Execution Plan proposal */}
-          {pendingSequentialPlan && (
-            <div
-              role="region"
-              aria-label="Sequential Execution Plan"
-              style={{
-                alignSelf: "stretch",
-                padding: "10px 12px",
-                borderRadius: 8,
-                background: "#faf5ff",
-                border: "1px solid #e9d5ff",
-                color: "#581c87",
-                fontSize: 11,
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <BoltIcon style={{ color: "#7c3aed" }} />
-                  <strong style={{ fontSize: 11.5, color: "#581c87" }}>
-                    Multi-Specialist Plan ({pendingSequentialPlan.steps.length} steps)
-                  </strong>
-                </div>
-                <span
-                  style={{
-                    fontSize: 9.5,
-                    padding: "2px 7px",
-                    borderRadius: 10,
-                    background: "#f3e8ff",
-                    color: "#7c3aed",
-                    fontWeight: 700,
-                  }}
-                >
-                  {pendingSequentialPlan.overallStatus}
-                </span>
-              </div>
-              <span style={{ display: "block", marginTop: 4, color: "#6b21a8", lineHeight: 1.4 }}>
-                {pendingSequentialPlan.summary}
-              </span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-                {pendingSequentialPlan.steps.map((step, idx) => (
-                  <div
-                    key={step.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "5px 8px",
-                      background: "#ffffff",
-                      borderRadius: 6,
-                      border: "1px solid #f3e8ff",
-                      fontSize: 10,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontWeight: 700, color: "#7c3aed" }}>#{idx + 1}</span>
-                      <strong style={{ color: "#1e1b4b" }}>{step.name}</strong>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          background: "#f3e8ff",
-                          color: "#6b21a8",
-                          padding: "1px 5px",
-                          borderRadius: 4,
-                        }}
-                      >
-                        {step.specialist}
-                      </span>
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 9.5,
-                        fontWeight: 600,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        color:
-                          step.status === "completed"
-                            ? "#059669"
-                            : step.status === "running"
-                              ? "#2563eb"
-                              : step.status === "paused_on_gate"
-                                ? "#d97706"
-                                : step.status === "failed"
-                                  ? "#dc2626"
-                                  : "#64748b",
-                      }}
-                    >
-                      {step.status === "completed" ? (
-                        <>
-                          <CheckIcon style={{ width: 11, height: 11, color: "#059669" }} />
-                          <span>Done</span>
-                        </>
-                      ) : step.status === "running" ? (
-                        <>
-                          <SpinnerIcon style={{ width: 11, height: 11, color: "#2563eb" }} />
-                          <span>Running</span>
-                        </>
-                      ) : step.status === "paused_on_gate" ? (
-                        <span>Quality Gate</span>
-                      ) : step.status === "failed" ? (
-                        <>
-                          <CloseIcon style={{ width: 11, height: 11, color: "#dc2626" }} />
-                          <span>Failed</span>
-                        </>
-                      ) : (
-                        "Pending"
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                <button
-                  type="button"
-                  onClick={executeSequentialPlan}
-                  disabled={busy || isExecutingPlan}
-                  style={{
-                    border: 0,
-                    borderRadius: 6,
-                    padding: "6px 12px",
-                    background: isExecutingPlan ? "#9333ea" : "#7c3aed",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: 10.5,
-                    cursor: busy || isExecutingPlan ? "default" : "pointer",
-                  }}
-                >
-                  {isExecutingPlan
-                    ? "กำลังรันแผน..."
-                    : pendingSequentialPlan.overallStatus === "paused"
-                      ? "Resume Execution"
-                      : "Approve & Execute Plan"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingSequentialPlan(null)}
-                  disabled={isExecutingPlan}
-                  style={{
-                    border: "1px solid #ddd6fe",
-                    borderRadius: 6,
-                    padding: "6px 10px",
-                    background: "transparent",
-                    color: "#7c3aed",
-                    fontSize: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  Discard
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Staging Tray & Hover Ghost Preview */}
-          {stagedVariations.length > 0 && (
-            <div
-              role="region"
-              aria-label="Candidate Variations Staging Tray"
-              style={{
-                alignSelf: "stretch",
-                padding: "8px 10px",
-                borderRadius: 8,
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                fontSize: 10.5,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 6,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <ImageSparkleIcon style={{ color: "#16a34a", width: 14, height: 14 }} />
-                  <strong style={{ fontSize: 11, color: "#15803d" }}>
-                    Staging Tray ({stagedVariations.length} Candidate Variations)
-                  </strong>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    useEngine.getState().clearGhostOverlay();
-                    setStagedVariations([]);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    fontSize: 9.5,
-                    color: "#16a34a",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                  }}
-                >
-                  Clear Tray
-                </button>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  overflowX: "auto",
-                  paddingBottom: 4,
-                }}
-              >
-                {stagedVariations.map((v) => (
-                  <div
-                    key={v.id}
-                    onMouseEnter={() => handleVariationHover(v)}
-                    onMouseLeave={handleVariationLeave}
-                    style={{
-                      position: "relative",
-                      flex: "0 0 110px",
-                      border: v.status === "accepted" ? "2px solid #10b981" : "1px solid #e2e8f0",
-                      borderRadius: 8,
-                      padding: 5,
-                      background: "#ffffff",
-                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "100%",
-                        height: 64,
-                        borderRadius: 4,
-                        overflow: "hidden",
-                        background: "#f8fafc",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {v.url ? (
-                        // biome-ignore lint/a11y/useAltText: Staged variation candidate preview
-                        // biome-ignore lint/performance/noImgElement: Direct candidate variation preview in staging tray
-                        <img
-                          src={v.url}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <ImageIcon style={{ width: 22, height: 22, color: "#94a3b8" }} />
-                      )}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 9.5,
-                        fontWeight: 600,
-                        color: "#334155",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {v.label}
-                    </span>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          commitVariationToCanvas(v);
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: "3px 4px",
-                          borderRadius: 4,
-                          border: "none",
-                          background: v.status === "accepted" ? "#10b981" : "#4f46e5",
-                          color: "#ffffff",
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 3,
-                        }}
-                      >
-                        {v.status === "accepted" ? (
-                          <>
-                            <CheckIcon style={{ width: 10, height: 10 }} />
-                            <span>Done</span>
-                          </>
-                        ) : (
-                          "Place"
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          dismissVariation(v.id);
-                        }}
-                        style={{
-                          padding: "3px 5px",
-                          borderRadius: 4,
-                          border: "1px solid #e2e8f0",
-                          background: "#ffffff",
-                          color: "#64748b",
-                          fontSize: 9,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <CloseIcon style={{ width: 10, height: 10 }} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {busy && streamingText && (
-            <div
-              style={{
-                alignSelf: "flex-start",
-                maxWidth: "85%",
-                padding: "8px 12px",
-                borderRadius: "12px 12px 12px 2px",
-                background: "#f1f5f9",
-                color: "#1e293b",
-                fontSize: 12.5,
-                lineHeight: 1.45,
-                border: "1px solid #e2e8f0",
-              }}
-            >
-              {streamingText}
-            </div>
-          )}
-
-          {/* Live In-Progress State: Matches Prototype Screenshots with Collapsible Thought */}
-          {busy && liveAssistantState && (
-            <div
-              style={{
-                alignSelf: "flex-start",
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-              }}
-            >
-              {/* Collapsible Thought block */}
-              <CollapsibleThought
-                thought={
-                  liveAssistantState.thought ||
-                  (liveAssistantState.stage === "outputting"
-                    ? "กำลังจัดเตรียมผลลัพธ์..."
-                    : "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ...")
-                }
-                isLive={true}
-                defaultOpen={false}
-              />
-
-              {/* Tool Step (if generating) */}
-              {liveAssistantState.stage === "generating" && (
-                <>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      color: "#475569",
-                      fontSize: 12,
-                      fontWeight: 500,
-                    }}
-                  >
-                    <ImageSparkleIcon style={{ color: "#4f46e5", width: 14, height: 14 }} />
-                    <span style={{ animation: "artshiftPulse 2s ease-in-out infinite" }}>
-                      {liveAssistantState.toolLabel || "Generating images using GPT Image 2"}
-                    </span>
-                  </div>
-
-                  {/* Shimmer Skeleton Cards */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      marginTop: 4,
-                      width: "100%",
-                    }}
-                  >
-                    {Array.from({
-                      length: Math.max(1, Math.min(3, liveAssistantState.requestedCount || 1)),
-                    }).map((_, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          flex: 1,
-                          maxWidth: (liveAssistantState.requestedCount || 1) === 1 ? 380 : 190,
-                          aspectRatio: "1 / 1",
-                          borderRadius: 12,
-                          background:
-                            "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
-                          backgroundSize: "200% 100%",
-                          animation: "artshiftShimmer 1.8s infinite ease-in-out",
-                          border: "1px solid #e2e8f0",
-                          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Live running actions indicator (if any other actions without liveAssistantState) */}
-          {busy && !liveAssistantState && currentActions.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {currentActions.map((act) => (
-                <div
-                  key={act.id}
-                  style={{
-                    minWidth: 0,
-                    fontSize: 10.5,
-                    padding: "5px 10px",
-                    borderRadius: 6,
-                    background: "#eff6ff",
-                    color: "#1e40af",
-                    border: "1px solid #bfdbfe",
-                    display: "flex",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: 6,
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  <SpinnerIcon style={{ color: "#2563eb" }} />
-                  <strong>{act.title}</strong>
-                  <span>{act.description}</span>
-                </div>
-              ))}
-              <button
-                type="button"
-                data-testid="cancel-ai-task"
-                aria-label="ยกเลิก Task"
-                onClick={() => abortRef.current?.abort()}
-                style={{
-                  alignSelf: "flex-start",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                  border: "none",
-                  borderRadius: 4,
-                  padding: "2px 6px",
-                  background: "transparent",
-                  color: "#94a3b8",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  transition: "color 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "#dc2626";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "#94a3b8";
-                }}
-              >
-                <CloseIcon style={{ width: 10, height: 10 }} />
-                <span>ยกเลิก Task</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. Assistant composer */}
-      <div
-        style={{
-          width: "100%",
-          flex: "0 0 auto",
-          background: "#ffffff",
-          borderTop: "1px solid #e2e8f0",
-          padding: "10px 14px 14px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "stretch",
-          gap: 8,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, width: "100%" }}>
-          {/* Input Field */}
-          <div
-            style={{
-              flex: 1,
-              minWidth: 0,
-              minHeight: 90,
-              borderRadius: 14,
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-              padding: "8px 12px",
-              boxSizing: "border-box",
-              transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-            }}
-            onFocusCapture={(e) => {
-              e.currentTarget.style.borderColor = "#4f46e5";
-              e.currentTarget.style.boxShadow = "0 0 0 2px rgba(79, 70, 229, 0.1)";
-            }}
-            onBlurCapture={(e) => {
-              e.currentTarget.style.borderColor = "#e2e8f0";
-              e.currentTarget.style.boxShadow = "none";
-            }}
-          >
-            <InlineTagEditor
-              ref={setEditorRef}
-              rows={3}
-              omittedCount={composerImageSelection.omittedCount}
-              placeholder={
-                hasSelection || composerImageRefs.length > 0
-                  ? "แก้ไขภาพหรือวัตถุที่เลือก..."
-                  : "บอกสิ่งที่ต้องการออกแบบ..."
-              }
-              availableImages={allSlideImageRefs}
-              onSend={() => handleSend()}
-              onBackspaceAtStart={() => {
-                setAttachedImageIds((prev) => prev.slice(0, -1));
-              }}
-              onChange={(val) => {
-                setInput(val);
-                const inlineIds = extractInlineTagObjectIds(val);
-                setAttachedImageIds(inlineIds);
-              }}
-            />
-          </div>
-
-          {/* Send / stop action */}
-          <button
-            type="button"
-            disabled={!busy && !input.trim()}
-            onClick={() => (busy ? abortRef.current?.abort() : handleSend())}
-            style={{
-              flex: "0 0 36px",
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              border: "none",
-              background: busy ? "#ef4444" : input.trim() ? "#4f46e5" : "#f1f5f9",
-              color: busy || input.trim() ? "#ffffff" : "#94a3b8",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: busy || !input.trim() ? (busy ? "pointer" : "default") : "pointer",
-              transition: "all 0.15s ease",
-            }}
-            title={busy ? "Cancel current task" : "Send to AI Assistance"}
-          >
-            {busy ? (
-              <StopIcon style={{ width: 12, height: 12, fill: "#ffffff" }} />
-            ) : (
-              <SendIcon
-                style={{
-                  width: 14,
-                  height: 14,
-                  stroke: input.trim() ? "#ffffff" : "#94a3b8",
-                }}
-              />
-            )}
-          </button>
-        </div>
-      </div>
+      {/* 2. Composer */}
+      <ChatComposer
+        input={input}
+        setInput={setInput}
+        busy={busy}
+        hasSelection={hasSelection}
+        omittedCount={composerImageSelection.omittedCount}
+        composerImageRefs={composerImageRefs}
+        allSlideImageRefs={allSlideImageRefs}
+        setEditorRef={setEditorRef}
+        onSend={(text) => handleSend(text)}
+        onStop={() => abortRef.current?.abort()}
+        onBackspaceAtStart={removeLastAttachedImage}
+        onInlineTagsChange={handleInlineTagsChange}
+      />
     </div>
   );
 }
