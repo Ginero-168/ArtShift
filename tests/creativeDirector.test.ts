@@ -825,4 +825,49 @@ describe("gpt-oss-120b Creative Director", () => {
       expect(result.reviewCriteria).toContain("แสงจันทร์สวยงาม");
     }
   });
+  it("auto-infers kind: image-task when model omits kind in tool call", async () => {
+    const runtime = {
+      execute: vi.fn().mockResolvedValue({
+        output: {
+          text: "",
+          stopReason: "tool_use",
+          assistantMessage: { role: "assistant", content: "" },
+          toolCalls: [
+            {
+              type: "tool_call",
+              id: "call-omit-kind",
+              name: "propose_creative_direction",
+              input: {
+                // Notice kind is omitted!
+                summary: "สร้างรูปสุนัขโกลเด้น",
+                refinedPrompt: "A happy golden retriever dog in eye-level camera angle",
+                specialist: "image_generator",
+                capability: "IMAGE_DEFAULT",
+                modelAlias: "image-gpt-2",
+                outputCount: 1,
+              },
+            },
+          ],
+        },
+      }),
+    };
+
+    const direction = await prepareCreativeDirection(
+      {
+        prompt: "สร้างรูปหมา สายพันธุ์โกลเด้นรีทรีฟเวอร์ ร่าเริง",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1920, height: 1080 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+        referenceAnalyses: [],
+      },
+      runtime as any,
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.summary).toBe("สร้างรูปสุนัขโกลเด้น");
+      expect(direction.specialist).toBe("image_generator");
+      expect(direction.refinedPrompt).toContain("golden retriever");
+    }
+  });
 });

@@ -491,8 +491,29 @@ function isTransientEmptyOutputError(error: unknown): boolean {
 }
 
 function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<string, unknown> {
-  if (raw.kind !== "image-task") return raw;
   const normalized = { ...raw };
+  if (!normalized.kind || typeof normalized.kind !== "string") {
+    if (normalized.question && Array.isArray(normalized.options)) {
+      normalized.kind = "clarification";
+    } else if (normalized.text && !normalized.refinedPrompt) {
+      normalized.kind = "answer";
+    } else if (
+      normalized.proposal ||
+      Array.isArray(normalized.commands) ||
+      normalized.kind === "design-plan"
+    ) {
+      normalized.kind = "design-plan";
+    } else if (
+      normalized.plan ||
+      Array.isArray(normalized.steps) ||
+      normalized.kind === "sequential-plan"
+    ) {
+      normalized.kind = "sequential-plan";
+    } else {
+      normalized.kind = "image-task";
+    }
+  }
+  if (normalized.kind !== "image-task") return normalized;
   if (
     normalized.outputCount === undefined &&
     normalized.requestedOutputCount === undefined &&
@@ -668,7 +689,8 @@ async function executeDirectorPass(
           (!callName &&
             (callInput.kind === "image-task" ||
               callInput.kind === "clarification" ||
-              callInput.kind === "answer"))
+              callInput.kind === "answer" ||
+              Boolean(callInput.refinedPrompt)))
         ) {
           return parseCreativeDirection(normalizeModelImageTaskInput(callInput), input, knowledgeIds);
         }
@@ -683,7 +705,12 @@ async function executeDirectorPass(
       }
     }
     if (candidateRecord) {
-      if (candidateRecord.kind === "image-task" || candidateRecord.kind === "clarification") {
+      if (
+        candidateRecord.kind === "image-task" ||
+        candidateRecord.kind === "clarification" ||
+        Boolean(candidateRecord.refinedPrompt) ||
+        candidateRecord.specialist === "image_generator"
+      ) {
         return parseCreativeDirection(normalizeModelImageTaskInput(candidateRecord), input, knowledgeIds);
       }
       if (candidateRecord.kind === "answer" && typeof candidateRecord.text === "string") {
@@ -879,13 +906,14 @@ export function applyCreativeDirectionToTask(
 }
 
 export function parseCreativeDirection(
-  value: unknown,
+  rawValue: unknown,
   input: CreativeDirectorInput,
   allowedKnowledgeIds: readonly string[],
 ): CreativeDirection {
-  if (!isRecord(value) || containsSensitivePayload(value)) {
+  if (!isRecord(rawValue) || containsSensitivePayload(rawValue)) {
     return invalidDirection("not a record or contains sensitive payload");
   }
+  const value = normalizeModelImageTaskInput(rawValue);
   if (value.kind === "design-plan") {
     const proposal = parsePlanProposal(value.proposal);
     if (!proposal.ok || !input.designContext) {
@@ -937,7 +965,11 @@ export function parseCreativeDirection(
     return invalidDirection("summary is missing or exceeds 2000 chars");
   }
   if (!isBoundedString(value.refinedPrompt, 20_000, 1)) {
-    return invalidDirection("refinedPrompt is missing or exceeds 20000 chars");
+    if (typeof input.prompt === "string" && input.prompt.trim()) {
+      value.refinedPrompt = input.prompt.trim();
+    } else {
+      return invalidDirection("refinedPrompt is missing or exceeds 20000 chars");
+    }
   }
   if (value.specialist !== "image_generator" && value.specialist !== "image_editor") {
     return invalidDirection("specialist must be image_generator or image_editor");
@@ -1053,7 +1085,7 @@ export function parseCreativeDirection(
     requestedOutputCount,
     outputBriefs: finalBriefs.map((brief) => brief.trim()),
     summary: value.summary.trim(),
-    refinedPrompt: value.refinedPrompt.trim(),
+    refinedPrompt: (value.refinedPrompt as string).trim(),
     specialist,
     capability,
     modelAlias: rawModelAlias as "image-general" | "image-fast" | "image-precision" | "image-gpt-2",
