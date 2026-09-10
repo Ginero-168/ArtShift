@@ -52,6 +52,7 @@ export function buildComposerImageSelection(
 export function buildComposerImageSelectionFromIds(
   elements: readonly EngineElement[],
   attachedIds: readonly string[],
+  options?: { limit?: number },
 ): ComposerImageSelection {
   type SupportedImageElement = ImageElement | BookMockupElement;
   const elementMap = new Map<string, { element: SupportedImageElement; originalIndex: number }>();
@@ -84,12 +85,26 @@ export function buildComposerImageSelectionFromIds(
     });
   }
 
-  const refs = allRefs.slice(0, 4);
+  const limit = options?.limit ?? 4;
+  const refs = Number.isFinite(limit) ? allRefs.slice(0, limit) : allRefs;
   return {
     refs,
     omittedCount: Math.max(0, allRefs.length - refs.length),
     totalCount: allRefs.length,
   };
+}
+
+export function buildAllSlideImageRefs(
+  elements: readonly EngineElement[],
+): ComposerImageRef[] {
+  const imageElements = elements.filter(
+    (element) => !element.isDeleted && (element.type === "image" || element.type === "bookMockup"),
+  );
+  return buildComposerImageSelectionFromIds(
+    elements,
+    imageElements.map((el) => el.id),
+    { limit: Infinity },
+  ).refs;
 }
 
 export function buildComposerImageRefs(

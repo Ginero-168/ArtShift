@@ -18,9 +18,11 @@ import {
 } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import {
+  buildAllSlideImageRefs,
   buildComposerImageSelectionFromIds,
   snapshotComposerImageRefs,
 } from "@/lib/ai/orchestration/imageReferences";
+import { deriveGeneratedImageName } from "@/lib/ai/orchestration/imageNaming";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
@@ -553,13 +555,7 @@ export default function AICoPilotBar() {
 
   const allSlideImageRefs = useMemo(() => {
     if (!slide) return [];
-    const imageElements = slide.elements.filter(
-      (el) => !el.isDeleted && (el.type === "image" || el.type === "bookMockup"),
-    );
-    return buildComposerImageSelectionFromIds(
-      slide.elements,
-      imageElements.map((el) => el.id),
-    ).refs;
+    return buildAllSlideImageRefs(slide.elements);
   }, [slide]);
 
   const setEditorRef = useCallback(
@@ -617,7 +613,18 @@ export default function AICoPilotBar() {
       });
 
       for (const id of newlySelectedIds) {
-        const match = allSlideImageRefs.find((r) => r.objectId === id);
+        const el = slide.elements.find((item) => item.id === id);
+        const match = allSlideImageRefs.find((r) => r.objectId === id) || (el ? {
+          objectId: el.id,
+          elementVersion: el.version,
+          fileId: (el as any).fileId,
+          displayName: (el as any).sourceName || el.name || "Image",
+          sourceWidth: (el as any).naturalWidth || el.width,
+          sourceHeight: (el as any).naturalHeight || el.height,
+          width: el.width,
+          height: el.height,
+          angle: el.angle,
+        } : null);
         if (match) {
           editorRef.current?.insertTag(match);
         }
@@ -666,10 +673,26 @@ export default function AICoPilotBar() {
     if (!currentSlide) return;
     const el = currentSlide.elements.find(
       (item) =>
-        !item.isDeleted && item.type === "image" && "fileId" in item && item.fileId === fileId,
+        !item.isDeleted &&
+        (item.type === "image" || item.type === "bookMockup") &&
+        "fileId" in item &&
+        item.fileId === fileId,
     );
     if (el) {
       useEngine.getState().selectOnly([el.id]);
+      setAttachedImageIds((existing) => (existing.includes(el.id) ? existing : [...existing, el.id]));
+      const match = allSlideImageRefs.find((r) => r.objectId === el.id) || {
+        objectId: el.id,
+        elementVersion: el.version,
+        fileId: (el as any).fileId,
+        displayName: (el as any).sourceName || el.name || "Image",
+        sourceWidth: (el as any).naturalWidth || el.width,
+        sourceHeight: (el as any).naturalHeight || el.height,
+        width: el.width,
+        height: el.height,
+        angle: el.angle,
+      };
+      editorRef.current?.insertTag(match);
     }
   };
 
@@ -809,6 +832,7 @@ export default function AICoPilotBar() {
         // fallback
       }
     }
+    const elementName = deriveGeneratedImageName(card.label);
     const element = createImage({
       x: bounds.x,
       y: bounds.y,
@@ -817,6 +841,8 @@ export default function AICoPilotBar() {
       fileId,
       naturalWidth,
       naturalHeight,
+      name: elementName,
+      sourceName: elementName,
     });
     state.addElement(element, `Place candidate variation ${card.label || card.id}`);
     setStagedVariations((prev) =>

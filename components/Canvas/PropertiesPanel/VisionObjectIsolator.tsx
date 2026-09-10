@@ -478,6 +478,7 @@ export function VisionObjectIsolator({
       if (res.elements.length === 0) {
         setStatusMessage("No distinct vector paths detected");
         report("complete", "ไม่พบเส้น Vector ที่แยกได้", "fallback", 100);
+        window.alert("ไม่พบเส้น Vector ที่สามารถแปลงได้จากภาพนี้ กรุณาลองปรับ Preset หรือ Detail Level");
       } else {
         addElements(res.elements, "vectorize image to paths");
         selectOnly(res.elements.map((el) => el.id));
@@ -495,9 +496,11 @@ export function VisionObjectIsolator({
       if (err instanceof VectorizeCancelledError || (err as Error).name === "AbortError") {
         setStatusMessage("Vectorization cancelled.");
       } else {
+        const message = (err as Error).message || "Unknown error";
         console.warn("Vectorize failed:", err);
-        setStatusMessage("Vectorize error: " + (err as Error).message);
-        report("error", `แปลง Vector ไม่สำเร็จ: ${(err as Error).message}`, "error");
+        setStatusMessage("Vectorize error: " + message);
+        report("error", `แปลง Vector ไม่สำเร็จ: ${message}`, "error");
+        window.alert(`แปลงภาพเป็น Vector ไม่สำเร็จ: ${message}`);
       }
     } finally {
       setBusy(false);
@@ -620,6 +623,7 @@ export function VisionObjectIsolator({
         console.warn("Recraft Vectorize failed:", error);
         setStatusMessage(`Recraft Vectorize error: ${message}`);
         report("error", `Recraft Vectorize ไม่สำเร็จ: ${message}`, "error");
+        window.alert(`Recraft Vectorize ไม่สำเร็จ: ${message}`);
       }
     } finally {
       setBusy(false);
@@ -762,6 +766,7 @@ export function VisionObjectIsolator({
         const message = error instanceof Error ? error.message : "Unknown P-Image-Upscale error.";
         setStatusMessage(`P-Image-Upscale error: ${message}`);
         report("error", `P-Image-Upscale ไม่สำเร็จ: ${message}`, "error");
+        window.alert(`Upscale ภาพไม่สำเร็จ: ${message}`);
       }
     } finally {
       setBusy(false);

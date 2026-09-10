@@ -23,6 +23,7 @@ import {
 } from "./executionGraph";
 
 export { useDirectorSession } from "./sessionState";
+import { deriveGeneratedImageName } from "./imageNaming";
 
 import type { ArtworkExecutionContext, PlanProposal } from "@/lib/designAgent/contracts";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
@@ -322,6 +323,7 @@ async function executeDefaultSpecialistStep(
         generated.width,
         generated.height,
       );
+      const elementName = deriveGeneratedImageName(step.name, prompt);
       const element = createImage({
         x: placement.x,
         y: placement.y,
@@ -330,6 +332,8 @@ async function executeDefaultSpecialistStep(
         fileId: generated.fileId,
         naturalWidth: generated.width,
         naturalHeight: generated.height,
+        name: elementName,
+        sourceName: elementName,
       });
       state.addElement(element, `orchestrator ${step.specialist}: ${step.id}`);
       state.selectOnly([element.id]);

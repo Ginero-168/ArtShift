@@ -27,6 +27,7 @@ export type AiTaskStatus =
 
 export type AiTaskPlan = {
   id: string;
+  summary?: string;
   prompt: string;
   subAgent: string;
   capability: string;

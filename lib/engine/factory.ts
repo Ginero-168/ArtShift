@@ -312,6 +312,8 @@ export function createImage(opts: {
   fileId: string;
   naturalWidth: number;
   naturalHeight: number;
+  name?: string;
+  sourceName?: string;
 }): ImageElement {
   return {
     ...baseDefaults(),
@@ -325,6 +327,8 @@ export function createImage(opts: {
     naturalWidth: opts.naturalWidth,
     naturalHeight: opts.naturalHeight,
     status: "loaded",
+    ...(opts.name ? { name: opts.name } : {}),
+    ...(opts.sourceName ? { sourceName: opts.sourceName } : {}),
   };
 }
 

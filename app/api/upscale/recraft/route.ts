@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       allowFallback: false,
       timeoutMs: 120_000,
       maxCostUsd: 0.25,
-      accountId: account.id,
+      accountId: account?.id,
       signal: req.signal,
     });
     return jsonNoStore({ execution });

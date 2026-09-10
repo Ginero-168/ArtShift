@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAllSlideImageRefs,
   buildComposerImageRefs,
   buildComposerImageSelection,
   buildComposerImageSelectionFromIds,
@@ -134,5 +135,21 @@ describe("selected image references", () => {
     expect(selection.refs[1]?.displayName).toBe("photo-1.png");
     expect(selection.omittedCount).toBe(0);
     expect(selection.totalCount).toBe(2);
+  });
+  it("unlocks quota and returns all images on the slide without 4-item cap", () => {
+    const images = Array.from({ length: 8 }, (_, index) => ({
+      ...createImage({
+        x: index * 10,
+        y: 0,
+        width: 100,
+        height: 100,
+        fileId: `file-${index}`,
+        naturalWidth: 100,
+        naturalHeight: 100,
+      }),
+      id: `image-${index}`,
+    }));
+    const refs = buildAllSlideImageRefs(images);
+    expect(refs).toHaveLength(8);
   });
 });

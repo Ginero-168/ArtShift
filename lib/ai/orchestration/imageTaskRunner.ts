@@ -22,6 +22,7 @@ import {
   registerAiTask,
 } from "./taskMachine";
 import { renderVisibleReference } from "./visibleReferenceRenderer";
+import { deriveGeneratedImageName } from "./imageNaming";
 
 export type ContextAwareTaskStage =
   | "queued"
@@ -452,6 +453,7 @@ export async function runContextAwareImageTask(
               progress: 0.98,
               message: "กำลังเพิ่มผลลัพธ์ลง Canvas…",
             });
+            const elementName = deriveGeneratedImageName(task.summary, task.prompt);
             const element = createImage({
               x: finalBounds.x,
               y: finalBounds.y,
@@ -460,6 +462,8 @@ export async function runContextAwareImageTask(
               fileId: preloaded.fileId,
               naturalWidth: preloaded.width,
               naturalHeight: preloaded.height,
+              name: elementName,
+              sourceName: elementName,
             });
             state.addElement(element, `AI task ${task.id} generate image`);
             const afterCommit = useEngine.getState();
