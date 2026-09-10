@@ -480,6 +480,30 @@ function isTransientEmptyOutputError(error: unknown): boolean {
   );
 }
 
+function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<string, unknown> {
+  if (raw.kind !== "image-task") return raw;
+  const normalized = { ...raw };
+  if (
+    normalized.outputCount === undefined &&
+    normalized.requestedOutputCount === undefined &&
+    (!Array.isArray(normalized.outputBriefs) || normalized.outputBriefs.length <= 1)
+  ) {
+    normalized.outputCount = 1;
+  }
+  if (normalized.search === undefined || !isRecord(normalized.search)) {
+    normalized.search = { required: false, queries: [], sources: [] };
+  } else {
+    const s = normalized.search as Record<string, unknown>;
+    if (typeof s.required !== "boolean") {
+      normalized.search = { required: false, queries: [], sources: [] };
+    }
+  }
+  if (!Array.isArray(normalized.knowledgeSkillIds)) {
+    normalized.knowledgeSkillIds = [];
+  }
+  return normalized;
+}
+
 async function executeDirectorPass(
   runtime: CreativeDirectorExecutor,
   messages: AiAssistantChatInput["messages"],
@@ -611,7 +635,7 @@ async function executeDirectorPass(
               callInput.kind === "clarification" ||
               callInput.kind === "answer"))
         ) {
-          return parseCreativeDirection(callInput, input, knowledgeIds);
+          return parseCreativeDirection(normalizeModelImageTaskInput(callInput), input, knowledgeIds);
         }
         if (callName === DESIGN_PLAN_TOOL.name) {
           return parseDesignPlan(callInput, input);
@@ -625,7 +649,7 @@ async function executeDirectorPass(
     }
     if (candidateRecord) {
       if (candidateRecord.kind === "image-task" || candidateRecord.kind === "clarification") {
-        return parseCreativeDirection(candidateRecord, input, knowledgeIds);
+        return parseCreativeDirection(normalizeModelImageTaskInput(candidateRecord), input, knowledgeIds);
       }
       if (candidateRecord.kind === "answer" && typeof candidateRecord.text === "string") {
         return parseCreativeDirection(candidateRecord, input, knowledgeIds);
@@ -665,7 +689,7 @@ async function executeDirectorPass(
     }
     return invalidDirection();
   }
-  return parseCreativeDirection(call.input, input, knowledgeIds);
+  return parseCreativeDirection(normalizeModelImageTaskInput(call.input), input, knowledgeIds);
 }
 
 export async function reviewCreativeOutput(
@@ -1304,6 +1328,66 @@ function sanitizeJsonString(text: string): string {
   return result;
 }
 
+function repairTruncatedJson(str: string): string {
+  if (!str || typeof str !== "string") return str;
+  const firstBrace = str.indexOf("{");
+  const firstBracket = str.indexOf("[");
+  const startIdx = Math.min(...[firstBrace, firstBracket].filter((i) => i >= 0));
+  if (!Number.isFinite(startIdx) || startIdx < 0) return str;
+
+  const target = str.slice(startIdx);
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < target.length; i++) {
+    const c = target[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (c === "{" || c === "[") {
+        stack.push(c);
+      } else if (c === "}" && stack[stack.length - 1] === "{") {
+        stack.pop();
+      } else if (c === "]" && stack[stack.length - 1] === "[") {
+        stack.pop();
+      }
+    }
+  }
+
+  let repaired = target;
+  if (inString) {
+    if (repaired.endsWith("\\")) {
+      repaired = repaired.slice(0, -1);
+    }
+    repaired += '"';
+  }
+
+  if (/:\s*$/.test(repaired)) {
+    repaired += "null";
+  }
+
+  repaired = repaired.replace(/,\s*$/, "");
+
+  while (stack.length > 0) {
+    const last = stack.pop();
+    if (last === "{") repaired += "}";
+    else if (last === "[") repaired += "]";
+  }
+
+  return repaired;
+}
+
 function parseJsonCandidate(text: string): unknown {
   if (!text || typeof text !== "string") return null;
   const trimmed = text.trim();
@@ -1338,6 +1422,19 @@ function parseJsonCandidate(text: string): unknown {
     } catch {}
     try {
       return JSON.parse(sanitizeJsonString(sliced));
+    } catch {}
+  }
+
+  const candidateToRepair =
+    codeBlockMatch?.[1]?.trim() ??
+    (Number.isFinite(start) && start >= 0 ? trimmed.slice(start) : trimmed);
+  const repaired = repairTruncatedJson(candidateToRepair);
+  if (repaired && repaired !== candidateToRepair) {
+    try {
+      return JSON.parse(repaired);
+    } catch {}
+    try {
+      return JSON.parse(sanitizeJsonString(repaired));
     } catch {}
   }
 

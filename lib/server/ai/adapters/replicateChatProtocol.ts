@@ -45,6 +45,7 @@ export function renderHarmonyPrompt(input: AiAssistantChatInput): string {
       "Return exactly one JSON object in the final response and no markdown.",
       'For a normal reply use {"kind":"text","text":"..."}.',
       'For tool calls use {"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"exact_tool_name","input":{}}]}.',
+      "When calling propose_creative_direction with image-task, include: summary, refinedPrompt, specialist, capability, modelAlias, knowledgeSkillIds, reviewCriteria, search, outputCount.",
       "Only call a tool listed in the ArtShift tools section.",
       "Never mutate the document yourself; return a proposal/tool call for ArtShift to validate.",
     ].join("\n"),

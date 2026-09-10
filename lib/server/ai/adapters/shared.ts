@@ -106,6 +106,66 @@ export function sanitizeJsonString(text: string): string {
   return result;
 }
 
+export function repairTruncatedJson(str: string): string {
+  if (!str || typeof str !== "string") return str;
+  const firstBrace = str.indexOf("{");
+  const firstBracket = str.indexOf("[");
+  const startIdx = Math.min(...[firstBrace, firstBracket].filter((i) => i >= 0));
+  if (!Number.isFinite(startIdx) || startIdx < 0) return str;
+
+  const target = str.slice(startIdx);
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < target.length; i++) {
+    const c = target[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (c === "{" || c === "[") {
+        stack.push(c);
+      } else if (c === "}" && stack[stack.length - 1] === "{") {
+        stack.pop();
+      } else if (c === "]" && stack[stack.length - 1] === "[") {
+        stack.pop();
+      }
+    }
+  }
+
+  let repaired = target;
+  if (inString) {
+    if (repaired.endsWith("\\")) {
+      repaired = repaired.slice(0, -1);
+    }
+    repaired += '"';
+  }
+
+  if (/:\s*$/.test(repaired)) {
+    repaired += "null";
+  }
+
+  repaired = repaired.replace(/,\s*$/, "");
+
+  while (stack.length > 0) {
+    const last = stack.pop();
+    if (last === "{") repaired += "}";
+    else if (last === "[") repaired += "]";
+  }
+
+  return repaired;
+}
+
 export function parseJsonCandidate(text: string): unknown {
   if (!text || typeof text !== "string") return null;
   const trimmed = text.trim();
@@ -140,6 +200,19 @@ export function parseJsonCandidate(text: string): unknown {
     } catch {}
     try {
       return JSON.parse(sanitizeJsonString(sliced));
+    } catch {}
+  }
+
+  const candidateToRepair =
+    codeBlockMatch?.[1]?.trim() ??
+    (Number.isFinite(start) && start >= 0 ? trimmed.slice(start) : trimmed);
+  const repaired = repairTruncatedJson(candidateToRepair);
+  if (repaired && repaired !== candidateToRepair) {
+    try {
+      return JSON.parse(repaired);
+    } catch {}
+    try {
+      return JSON.parse(sanitizeJsonString(repaired));
     } catch {}
   }
 

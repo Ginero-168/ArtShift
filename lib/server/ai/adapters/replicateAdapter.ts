@@ -258,6 +258,10 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const thinkingBudget =
       options?.reasoning?.mode === "fixed" ? options.reasoning.budgetTokens : undefined;
 
+    const chatMaxTokens = Math.min(
+      MAX_CHAT_OUTPUT_TOKENS,
+      Math.max(256, input.maxTokens ?? 4_096),
+    );
     const predictionInput = isGemini
       ? {
           prompt: renderConversationPrompt(input.messages),
@@ -270,15 +274,13 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
             : thinkingBudget !== undefined
               ? { thinking_budget: thinkingBudget }
               : {}),
-          max_output_tokens: Math.min(
-            MAX_CHAT_OUTPUT_TOKENS,
-            Math.max(256, input.maxTokens ?? 4_096),
-          ),
+          max_output_tokens: chatMaxTokens,
+          max_tokens: chatMaxTokens,
           temperature: 0.1,
         }
       : {
           prompt: renderHarmonyPrompt(input),
-          max_tokens: Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 4_096)),
+          max_tokens: chatMaxTokens,
           temperature: 0.1,
           top_p: 1,
         };
@@ -328,6 +330,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           dynamic_thinking: false,
           thinking_budget: 0,
           max_output_tokens: 512,
+          max_tokens: 512,
           temperature: 0.1,
         }
       : {

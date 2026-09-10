@@ -674,4 +674,39 @@ describe("gpt-oss-120b Creative Director", () => {
       expect(result.capability).toBe("IMAGE_EDIT");
     }
   });
+
+  it("recovers truncated model tool call envelope and normalizes missing trailing fields", async () => {
+    const truncatedEnvelope =
+      '{"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"propose_creative_direction","input":{"kind":"image-task","summary":"สร้างรูปแมวน่ารัก ขนปุย","refinedPrompt":"A cute, fluffy cat, sitting, looking at the camera, soft lighting, detailed fur, realistic, high resolution, studio lighting, bokeh background","specialist":"image_generator","capability":"IMAGE_DEFAULT","modelAlias":"image-general","knowledgeSkillIds":[],"reviewCriteria":["ภาพต้องเป็นแมว","แมวต้องดูน่ารักและมีขนปุย","แมวอยู่';
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: truncatedEnvelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: truncatedEnvelope },
+      },
+      metadata: {},
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "คิดให้หน่อย",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "สร้างรูปแมวน่ารัก ขนปุย",
+      modelAlias: "image-general",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      outputCount: 1,
+    });
+  });
 });
