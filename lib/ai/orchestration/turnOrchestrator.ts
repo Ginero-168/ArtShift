@@ -227,10 +227,14 @@ export function createDirectedImageRun(
   const tasks: AiTask[] = briefs.map((brief, index) => {
     const baseTask = createDirectedImageTask(input, direction);
     const batchIndex = batches.findIndex((b) => b.itemIndexes.includes(index)) + 1;
-    const taskPrompt = `${brief}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+    const taskPrompt =
+      count === 1
+        ? `${direction.refinedPrompt}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
+        : `${direction.refinedPrompt}\nVariation ${index + 1} (${brief}). Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
     return {
       ...baseTask,
       id: `${runId}-task-${index + 1}`,
+      summary: brief,
       prompt: taskPrompt,
       imageRun: {
         runId,

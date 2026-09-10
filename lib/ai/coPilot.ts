@@ -381,11 +381,12 @@ export async function executeCoPilotInstruction(
 
       if (runResult.status === "partial" && runResult.completedCount === 0) {
         const firstError = runResult.items.find((i) => i.error)?.error || "การสร้างภาพไม่สำเร็จ";
-        updateActionStatus(act, "error", `Task ไม่สำเร็จ: ${firstError}`);
+        const diagnosis = diagnoseOrchestratorError(firstError, prompt);
+        updateActionStatus(act, "error", `Task ไม่สำเร็จ: ${diagnosis.shortReason}`);
         return {
-          reply: `การสร้างภาพไม่สำเร็จครับ: ${firstError}`,
+          reply: diagnosis.reply,
           actions,
-          suggestions: ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"],
+          suggestions: diagnosis.suggestions,
         };
       }
 
@@ -407,28 +408,35 @@ export async function executeCoPilotInstruction(
     } catch (error) {
       const wasCancelled = (error as Error).name === "AbortError" || options.signal?.aborted;
       const outcomeUnknown = (error as Error).name === "OutcomeUnknownError";
-      act.stage = outcomeUnknown ? "outcome-unknown" : wasCancelled ? "cancelled" : "failed";
-      updateActionStatus(
-        act,
-        "error",
-        outcomeUnknown
-          ? "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ"
-          : wasCancelled
-            ? "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas"
-            : `Task ไม่สำเร็จ: ${(error as Error).message}`,
-      );
+      if (outcomeUnknown) {
+        act.stage = "outcome-unknown";
+        updateActionStatus(act, "error", "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ");
+        return {
+          reply:
+            "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้",
+          actions,
+          suggestions: [
+            "ตรวจสอบสถานะ provider ก่อนลองใหม่",
+            "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่",
+          ],
+        };
+      }
+      if (wasCancelled) {
+        act.stage = "cancelled";
+        updateActionStatus(act, "error", "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas");
+        return {
+          reply: "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas",
+          actions,
+          suggestions: ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"],
+        };
+      }
+      act.stage = "failed";
+      const diagnosis = diagnoseOrchestratorError((error as Error).message, prompt);
+      updateActionStatus(act, "error", `Task ไม่สำเร็จ: ${diagnosis.shortReason}`);
       return {
-        reply: outcomeUnknown
-          ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้"
-          : wasCancelled
-            ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
-            : `Task ไม่สำเร็จครับ: ${(error as Error).message}`,
+        reply: diagnosis.reply,
         actions,
-        suggestions: outcomeUnknown
-          ? ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"]
-          : wasCancelled
-            ? ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"]
-            : ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"],
+        suggestions: diagnosis.suggestions,
       };
     }
   }
@@ -751,4 +759,139 @@ export async function executeCoPilotInstruction(
       suggestions: ["✨ ลองสร้างรูปภาพด้วย AI", "📐 จัด Layout ใหม่อีกครั้ง"],
     };
   }
+}
+
+export type OrchestratorDiagnosis = {
+  shortReason: string;
+  reply: string;
+  suggestions: string[];
+};
+
+export function diagnoseOrchestratorError(
+  rawError: string,
+  userPrompt: string,
+): OrchestratorDiagnosis {
+  const errorLower = (rawError || "").toLowerCase();
+  const promptLower = (userPrompt || "").toLowerCase();
+
+  // 1. Safety / Content Policy / Sensitive / Copyright / Trademark
+  const isPolicyViolation =
+    /safety|nsfw|sensitive|policy|flagged|copyright|trademark|content filter|violated|violation|policy_denied/i.test(
+      errorLower,
+    );
+
+  const characterPattern =
+    /(?:สไปเดอร์แมน|spider[- ]?man|ไอรอนแมน|iron[- ]?man|แบทแมน|batman|ซูเปอร์แมน|superman|มิกกี้|mickey|เอลซ่า|elsa|โดราเอมอน|doraemon|นารูโตะ|naruto|ลูฟี่|luffy|วันพีซ|one piece|โปเกมอน|pokemon|ปิกาจู|pikachu|มาริโอ้|mario|ดิสนีย์|disney|มาร์เวล|marvel)/iu;
+  const detectedCharacterMatch = characterPattern.exec(userPrompt);
+  const detectedCharacter = detectedCharacterMatch ? detectedCharacterMatch[0] : null;
+
+  if (isPolicyViolation || detectedCharacter) {
+    let reply = `ไม่สามารถสร้างภาพตามคำขอนี้ได้ครับ เนื่องจากระบบ AI ตรวจพบว่าคำขอเข้าข่ายเนื้อหาที่มีลิขสิทธิ์หรือนโยบายความปลอดภัย (Content Safety & Copyright Policy)`;
+    if (detectedCharacter) {
+      reply += ` เกี่ยวกับตัวละครลิขสิทธิ์ "${detectedCharacter}" ซึ่งโมเดล AI ไม่อนุญาตให้สร้างภาพเลียนแบบตัวละครหรือเครื่องหมายการค้าที่มีลิขสิทธิ์โดยตรง`;
+    } else {
+      reply += ` ซึ่งอาจมีคำหรือเนื้อหาที่ตรงกับตัวกรองความปลอดภัยของโมเดล`;
+    }
+
+    reply += `\n\n💡 **คำแนะนำในการแก้ไข:**\n`;
+    reply += `1. **หลีกเลี่ยงการระบุชื่อตัวละครหรือแบรนด์ที่มีลิขสิทธิ์โดยตรง**\n`;
+    reply += `2. **ใช้การบรรยายลักษณะ รูปร่าง โทนสี และสไตล์แทน** เช่น: `;
+
+    let samplePrompt = "";
+    let suggestions: string[] = [];
+
+    if (detectedCharacter && /สไปเดอร์แมน|spider/i.test(detectedCharacter)) {
+      samplePrompt =
+        "ซูเปอร์ฮีโร่ในชุดบอดี้สูทโทนสีแดง-น้ำเงิน สไตล์คอมิกส์โมเดิร์น กำลังโหนตัวระหว่างตึกสูงในมหานคร";
+      reply += `\n   > *"${samplePrompt}"*\n\nคุณสามารถกดปุ่มด้านล่างเพื่อให้ผมสร้างภาพตามแนวทางนี้ได้ทันทีครับ`;
+      suggestions = [
+        "🦸 สร้างฮีโร่ชุดแดงน้ำเงิน (เลี่ยงลิขสิทธิ์)",
+        "🎨 สร้างฮีโร่สไตล์ออริจินัล",
+        "✏️ ปรับคำอธิบายใหม่",
+      ];
+    } else if (detectedCharacter && /ไอรอนแมน|iron/i.test(detectedCharacter)) {
+      samplePrompt =
+        "ซูเปอร์ฮีโร่ในชุดเกราะไฮเทคสีแดงและทอง มีแสงพลังงานสีฟ้าเรืองรองที่หน้าอก สไตล์ไซไฟแห่งอนาคต";
+      reply += `\n   > *"${samplePrompt}"*\n\nคุณสามารถกดปุ่มด้านล่างเพื่อให้ผมสร้างภาพตามแนวทางนี้ได้ทันทีครับ`;
+      suggestions = [
+        "🤖 สร้างเกราะไฮเทคแดงทอง (เลี่ยงลิขสิทธิ์)",
+        "🎨 สร้างเกราะสไตล์ออริจินัล",
+        "✏️ ปรับคำอธิบายใหม่",
+      ];
+    } else if (detectedCharacter && /แบทแมน|batman/i.test(detectedCharacter)) {
+      samplePrompt =
+        "อัศวินรัตติกาลในชุดเกราะสีดำทมิฬ ผ้าคลุมยาว กำลังยืนตรวจตราบนยอดตึกสูงในเมืองโกธิคยามค่ำคืน";
+      reply += `\n   > *"${samplePrompt}"*\n\nคุณสามารถกดปุ่มด้านล่างเพื่อให้ผมสร้างภาพตามแนวทางนี้ได้ทันทีครับ`;
+      suggestions = [
+        "🦇 สร้างอัศวินรัตติกาล (เลี่ยงลิขสิทธิ์)",
+        "🎨 สร้างฮีโร่สไตล์ออริจินัล",
+        "✏️ ปรับคำอธิบายใหม่",
+      ];
+    } else {
+      samplePrompt = "ตัวละครสไตล์ออริจินัล พร้อมเครื่องแต่งกายและโทนสีที่เป็นเอกลักษณ์";
+      reply += `\n   > *"${samplePrompt}"*\n\nลองเปลี่ยนคำอธิบายโดยใช้ลักษณะท่าทางแทนชื่อเฉพาะได้เลยครับ`;
+      suggestions = ["🎨 สร้างสไตล์ออริจินัล", "✏️ ปรับคำอธิบายใหม่"];
+    }
+
+    return {
+      shortReason: detectedCharacter
+        ? `ติดนโยบายลิขสิทธิ์ตัวละคร (${detectedCharacter})`
+        : "ติดนโยบายความปลอดภัยของโมเดล",
+      reply,
+      suggestions,
+    };
+  }
+
+  // 2. Authentication / API Key
+  if (
+    errorLower.includes("auth") ||
+    errorLower.includes("credential") ||
+    errorLower.includes("api key") ||
+    errorLower.includes("token") ||
+    errorLower.includes("provider_auth") ||
+    errorLower.includes("503")
+  ) {
+    return {
+      shortReason: "ไม่พบการตั้งค่า API Token",
+      reply:
+        "ไม่สามารถเชื่อมต่อกับ AI Provider ได้ครับ เนื่องจากระบบไม่พบ API Token หรือ Token หมดอายุ กรุณาไปที่หน้า Settings เพื่อตรวจสอบและบันทึก Replicate หรือ Google API Key ของคุณครับ",
+      suggestions: ["⚙️ ตรวจสอบการตั้งค่า API Token", "ลองใหม่อีกครั้ง"],
+    };
+  }
+
+  // 3. Rate Limit / Quota
+  if (
+    errorLower.includes("rate limit") ||
+    errorLower.includes("429") ||
+    errorLower.includes("quota") ||
+    errorLower.includes("too many requests")
+  ) {
+    return {
+      shortReason: "คำขอเกินขีดจำกัดชั่วคราว (Rate limit)",
+      reply:
+        "ระบบ AI มีการเรียกใช้งานถี่เกินไปชั่วคราว (Rate limit) หรือเครดิตการใช้งานหมด กรุณารอสักครู่ (ประมาณ 30-60 วินาที) แล้วลองใหม่อีกครั้งครับ",
+      suggestions: ["ลองใหม่อีกครั้ง"],
+    };
+  }
+
+  // 4. Creative Director Plan Validation Error
+  if (
+    errorLower.includes("director") ||
+    errorLower.includes("invalid creative director plan") ||
+    errorLower.includes("แผนไม่ครบ")
+  ) {
+    return {
+      shortReason: "การวางแผนงานไม่สมบูรณ์",
+      reply:
+        "Creative Director ไม่สามารถสรุปแผนงานภาพที่ชัดเจนได้จากข้อความนี้ครับ กรุณาระบุรายละเอียดเพิ่มเติม เช่น สไตล์ภาพที่ต้องการ โทนสี หรือสิ่งที่ต้องการให้เด่นในภาพ เพื่อให้ระบบเริ่มสร้างงานได้ถูกต้องครับ",
+      suggestions: ["ระบุสไตล์ภาพที่ต้องการ", "เพิ่มรายละเอียดของภาพ", "ลองใหม่อีกครั้ง"],
+    };
+  }
+
+  // 5. General Fallback
+  return {
+    shortReason: rawError || "เกิดข้อผิดพลาดในการประมวลผล",
+    reply: `การสร้างภาพไม่สำเร็จครับ: ${rawError || "เกิดข้อผิดพลาดในการประมวลผล"}\n\nคุณสามารถลองปรับคำอธิบายให้กระชับ ชัดเจนขึ้น หรือระบุสิ่งที่ต้องการเห็นในภาพเพิ่มเติมได้ครับ`,
+    suggestions: ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"],
+  };
 }

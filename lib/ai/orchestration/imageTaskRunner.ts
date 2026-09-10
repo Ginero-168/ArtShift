@@ -673,6 +673,18 @@ function assertCommitTarget(
 function classifyFailure(error: unknown): RecoveryFailureKind {
   if (isOutcomeUnknownError(error)) return "polling";
   const message = errorMessage(error).toLocaleLowerCase();
+  const errorCode =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code).toUpperCase()
+      : "";
+  if (
+    errorCode === "POLICY_DENIED" ||
+    errorCode === "CONTENT_POLICY_VIOLATION" ||
+    /safety|nsfw|sensitive|policy|flagged|copyright|trademark|content filter|violated|violation/i.test(
+      message,
+    )
+  )
+    return "safety";
   if (
     message.includes("provider") &&
     (message.includes("credential") || message.includes("auth") || message.includes("key"))

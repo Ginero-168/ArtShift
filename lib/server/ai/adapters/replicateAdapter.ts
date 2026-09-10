@@ -655,11 +655,19 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         }
       }
       if (current.status !== "succeeded") {
+        const errorMsg =
+          typeof current.error === "string" ? current.error : "Replicate prediction failed.";
+        const isPolicyDenied =
+          /safety|nsfw|sensitive|policy|flagged|copyright|trademark|content filter|violated|violation/i.test(
+            errorMsg,
+          );
         throw new AiRuntimeError(
           current.status === "canceled" || current.status === "aborted"
             ? "ABORTED"
-            : "PROVIDER_UNAVAILABLE",
-          typeof current.error === "string" ? current.error : "Replicate prediction failed.",
+            : isPolicyDenied
+              ? "POLICY_DENIED"
+              : "PROVIDER_UNAVAILABLE",
+          errorMsg,
           { provider: this.id },
         );
       }

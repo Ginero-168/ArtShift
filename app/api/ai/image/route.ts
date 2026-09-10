@@ -144,17 +144,36 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     const outcomeUnknown = error instanceof AiRuntimeError && error.outcomeUnknown;
-    const status = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH" ? 503 : 502;
+    const isAuth = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH";
+    const isPolicy = error instanceof AiRuntimeError && error.code === "POLICY_DENIED";
+    const rawError = error instanceof Error ? error.message : "";
+    const isSafety =
+      isPolicy ||
+      /safety|nsfw|sensitive|policy|flagged|copyright|trademark|content filter|violated|violation/i.test(
+        rawError,
+      );
+    const status = isAuth ? 503 : isSafety ? 422 : 502;
     const predictionId =
       outcomeUnknown && error instanceof AiRuntimeError ? error.predictionId : undefined;
+    const code = outcomeUnknown
+      ? "OUTCOME_UNKNOWN"
+      : isSafety
+        ? "POLICY_DENIED"
+        : isAuth
+          ? "PROVIDER_AUTH"
+          : "PROVIDER_UNAVAILABLE";
+    const errorMessage = outcomeUnknown
+      ? "AI provider result is uncertain; no duplicate request was created."
+      : isAuth
+        ? "AI provider is not configured for this session."
+        : isSafety
+          ? rawError || "Content policy violation: prompt violates safety or copyright guidelines."
+          : "Image generation failed. Please try again.";
+
     return NextResponse.json(
       {
-        code: outcomeUnknown ? "OUTCOME_UNKNOWN" : "PROVIDER_UNAVAILABLE",
-        error: outcomeUnknown
-          ? "AI provider result is uncertain; no duplicate request was created."
-          : status === 503
-            ? "AI provider is not configured for this session."
-            : "Image generation failed. Please try again.",
+        code,
+        error: errorMessage,
         ...(predictionId ? { predictionId } : {}),
       },
       { status },
