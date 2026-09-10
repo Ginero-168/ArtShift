@@ -57,6 +57,13 @@ export interface SubAgentActionLog {
   quality?: AiImageRenderQuality;
 }
 
+export interface CoPilotErrorCard {
+  title: string;
+  description: string;
+  actionText?: string;
+  promptToEdit?: string;
+}
+
 export interface CoPilotMessageImage {
   url: string;
   fileId?: string;
@@ -74,6 +81,7 @@ export interface CoPilotMessage {
   suggestions?: string[];
   thought?: string;
   toolLabel?: string;
+  errorCard?: CoPilotErrorCard;
   images?: CoPilotMessageImage[];
   imageRefs?: ComposerImageRef[];
   requestedCount?: number;
@@ -765,11 +773,17 @@ export type OrchestratorDiagnosis = {
   shortReason: string;
   reply: string;
   suggestions: string[];
+  errorCard?: CoPilotErrorCard;
+  alternativePrompt?: string;
 };
 
 export function diagnoseOrchestratorError(
   rawError: string,
   userPrompt: string,
+  context?: {
+    conversationHistory?: Array<{ role: string; content: string }>;
+    canvasSummary?: { objectCount?: number };
+  },
 ): OrchestratorDiagnosis {
   const errorLower = (rawError || "").toLowerCase();
   const promptLower = (userPrompt || "").toLowerCase();
@@ -781,56 +795,156 @@ export function diagnoseOrchestratorError(
     );
 
   const characterPattern =
-    /(?:สไปเดอร์แมน|spider[- ]?man|ไอรอนแมน|iron[- ]?man|แบทแมน|batman|ซูเปอร์แมน|superman|มิกกี้|mickey|เอลซ่า|elsa|โดราเอมอน|doraemon|นารูโตะ|naruto|ลูฟี่|luffy|วันพีซ|one piece|โปเกมอน|pokemon|ปิกาจู|pikachu|มาริโอ้|mario|ดิสนีย์|disney|มาร์เวล|marvel)/iu;
+    /(?:สไปเดอร์แมน|spider[- ]?man|spiderman|ไอรอนแมน|iron[- ]?man|ironman|แบทแมน|batman|ซูเปอร์แมน|superman|มิกกี้|mickey|เอลซ่า|elsa|โดราเอมอน|doraemon|นารูโตะ|naruto|ลูฟี่|luffy|วันพีซ|one piece|โปเกมอน|pokemon|ปิกาจู|pikachu|มาริโอ้|mario|ดิสนีย์|disney|มาร์เวล|marvel|avenger|endgame|end game|อเวนเจอร์|star wars|สตาร์วอร์ส|harry potter|แฮร์รี่)/iu;
   const detectedCharacterMatch = characterPattern.exec(userPrompt);
   const detectedCharacter = detectedCharacterMatch ? detectedCharacterMatch[0] : null;
 
   if (isPolicyViolation || detectedCharacter) {
-    let reply = `ไม่สามารถสร้างภาพตามคำขอนี้ได้ครับ เนื่องจากระบบ AI ตรวจพบว่าคำขอเข้าข่ายเนื้อหาที่มีลิขสิทธิ์หรือนโยบายความปลอดภัย (Content Safety & Copyright Policy)`;
-    if (detectedCharacter) {
-      reply += ` เกี่ยวกับตัวละครลิขสิทธิ์ "${detectedCharacter}" ซึ่งโมเดล AI ไม่อนุญาตให้สร้างภาพเลียนแบบตัวละครหรือเครื่องหมายการค้าที่มีลิขสิทธิ์โดยตรง`;
-    } else {
-      reply += ` ซึ่งอาจมีคำหรือเนื้อหาที่ตรงกับตัวกรองความปลอดภัยของโมเดล`;
+    let detectedSubjectEn = "subject";
+    let detectedSubjectTh = "ภาพหลักของคุณ";
+
+    const allContextText = [
+      userPrompt,
+      ...(context?.conversationHistory?.map((m) => m.content) ?? []),
+    ].join(" ");
+
+    if (/cat|kitten|feline|แมว|น้องแมว/i.test(allContextText)) {
+      detectedSubjectEn = "cat";
+      detectedSubjectTh = "แมว";
+    } else if (/dog|puppy|canine|หมา|สุนัข/i.test(allContextText)) {
+      detectedSubjectEn = "dog";
+      detectedSubjectTh = "สุนัข";
+    } else if (/car|vehicle|รถ|ยานยนต์/i.test(allContextText)) {
+      detectedSubjectEn = "car";
+      detectedSubjectTh = "รถ";
+    } else if (/person|character|portrait|man|woman|คน|ตัวละคร|ผู้หญิง|ผู้ชาย/i.test(allContextText)) {
+      detectedSubjectEn = "character";
+      detectedSubjectTh = "ตัวละคร";
     }
 
-    reply += `\n\n💡 **คำแนะนำในการแก้ไข:**\n`;
-    reply += `1. **หลีกเลี่ยงการระบุชื่อตัวละครหรือแบรนด์ที่มีลิขสิทธิ์โดยตรง**\n`;
-    reply += `2. **ใช้การบรรยายลักษณะ รูปร่าง โทนสี และสไตล์แทน** เช่น: `;
+    const isBackgroundRequest =
+      /ฉากหลัง|scene|background|ฉาก|วิว|environment|setting/i.test(userPrompt);
 
-    let samplePrompt = "";
+    const errorCard: CoPilotErrorCard = {
+      title: "Request violates content policy",
+      description:
+        "Your request violates the AI provider's content policy. This request will not consume any credits.",
+      actionText: "Edit my prompt",
+      promptToEdit: userPrompt,
+    };
+
+    let entityName = "copyrighted content";
+    let alternativeEn = "";
+    let alternativePrompt = "";
+    let samplePromptTh = "";
     let suggestions: string[] = [];
 
-    if (detectedCharacter && /สไปเดอร์แมน|spider/i.test(detectedCharacter)) {
-      samplePrompt =
+    if (/avenger|endgame|end game|อเวนเจอร์/i.test(userPrompt)) {
+      entityName = "Avengers: Endgame";
+      if (isBackgroundRequest) {
+        alternativeEn = `an epic final-battlefield background — stormy sky, ruins, heroic cinematic atmosphere — while keeping the same ${detectedSubjectEn} in front`;
+        alternativePrompt = `An epic cinematic final-battlefield background with stormy dark sky, ruins, dramatic smoke, heroic cinematic atmosphere behind a ${detectedSubjectEn}`;
+        samplePromptTh = `ฉากหลังสมรภูมิรบครั้งสุดท้ายสุดยิ่งใหญ่ บรรยากาศท้องฟ้าพายุ ซากปรักหักพัง และแสงสีอันน่าเกรงขาม โดยมี${detectedSubjectTh}อยู่ด้านหน้า`;
+        suggestions = [
+          "✨ Yes, go ahead with that",
+          "⚡ สร้างฉากหลังสมรภูมิรบ (เลี่ยงลิขสิทธิ์)",
+          "✏️ Edit prompt",
+        ];
+      } else {
+        alternativeEn = "an original ensemble of heroic warriors in futuristic tactical battle suits";
+        alternativePrompt = "A team of original heroic superheroes in advanced high-tech battle armor and tactical suits";
+        samplePromptTh = "กลุ่มซูเปอร์ฮีโร่สไตล์ออริจินัลในชุดเกราะและสูทไฮเทคเพื่อการต่อสู้สุดอลังการ";
+        suggestions = [
+          "✨ Yes, go ahead with that",
+          "🦸 สร้างทีมฮีโร่ออริจินัล",
+          "✏️ Edit prompt",
+        ];
+      }
+    } else if (/spider[- ]?man|spiderman|สไปเดอร์แมน/i.test(userPrompt)) {
+      entityName = "Spider-Man";
+      alternativeEn =
+        "an original superhero in a modern red-and-blue bodysuit with web-pattern accents, swinging between skyscrapers in a dramatic metropolis";
+      alternativePrompt =
+        "An original acrobatic superhero in a sleek red and dark blue athletic suit with subtle geometric webbing, swinging between sunlit skyscrapers in a sprawling modern city";
+      samplePromptTh =
         "ซูเปอร์ฮีโร่ในชุดบอดี้สูทโทนสีแดง-น้ำเงิน สไตล์คอมิกส์โมเดิร์น กำลังโหนตัวระหว่างตึกสูงในมหานคร";
-      reply += `\n   > *"${samplePrompt}"*\n\nคุณสามารถกดปุ่มด้านล่างเพื่อให้ผมสร้างภาพตามแนวทางนี้ได้ทันทีครับ`;
       suggestions = [
+        "✨ Yes, go ahead with that",
         "🦸 สร้างฮีโร่ชุดแดงน้ำเงิน (เลี่ยงลิขสิทธิ์)",
         "🎨 สร้างฮีโร่สไตล์ออริจินัล",
-        "✏️ ปรับคำอธิบายใหม่",
+        "✏️ Edit prompt",
       ];
-    } else if (detectedCharacter && /ไอรอนแมน|iron/i.test(detectedCharacter)) {
-      samplePrompt =
+    } else if (/iron[- ]?man|ironman|ไอรอนแมน/i.test(userPrompt)) {
+      entityName = "Iron Man";
+      alternativeEn =
+        "an original armored superhero in a crimson-and-gold high-tech mechanical suit with a glowing energy reactor on the chest";
+      alternativePrompt =
+        "An original superhero in a crimson red and gold powered exoskeleton armor with glowing blue arc reactor chest piece";
+      samplePromptTh =
         "ซูเปอร์ฮีโร่ในชุดเกราะไฮเทคสีแดงและทอง มีแสงพลังงานสีฟ้าเรืองรองที่หน้าอก สไตล์ไซไฟแห่งอนาคต";
-      reply += `\n   > *"${samplePrompt}"*\n\nคุณสามารถกดปุ่มด้านล่างเพื่อให้ผมสร้างภาพตามแนวทางนี้ได้ทันทีครับ`;
       suggestions = [
+        "✨ Yes, go ahead with that",
         "🤖 สร้างเกราะไฮเทคแดงทอง (เลี่ยงลิขสิทธิ์)",
         "🎨 สร้างเกราะสไตล์ออริจินัล",
-        "✏️ ปรับคำอธิบายใหม่",
+        "✏️ Edit prompt",
       ];
-    } else if (detectedCharacter && /แบทแมน|batman/i.test(detectedCharacter)) {
-      samplePrompt =
+    } else if (/batman|แบทแมน/i.test(userPrompt)) {
+      entityName = "Batman";
+      alternativeEn =
+        "an original dark vigilante in tactical black armor with a flowing cape, standing atop a gothic skyscraper at night";
+      alternativePrompt =
+        "An original nocturnal vigilante in matte black tactical armor with a flowing practical cape, standing atop a gargoyle on a gothic cathedral at night";
+      samplePromptTh =
         "อัศวินรัตติกาลในชุดเกราะสีดำทมิฬ ผ้าคลุมยาว กำลังยืนตรวจตราบนยอดตึกสูงในเมืองโกธิคยามค่ำคืน";
-      reply += `\n   > *"${samplePrompt}"*\n\nคุณสามารถกดปุ่มด้านล่างเพื่อให้ผมสร้างภาพตามแนวทางนี้ได้ทันทีครับ`;
       suggestions = [
+        "✨ Yes, go ahead with that",
         "🦇 สร้างอัศวินรัตติกาล (เลี่ยงลิขสิทธิ์)",
         "🎨 สร้างฮีโร่สไตล์ออริจินัล",
-        "✏️ ปรับคำอธิบายใหม่",
+        "✏️ Edit prompt",
       ];
     } else {
-      samplePrompt = "ตัวละครสไตล์ออริจินัล พร้อมเครื่องแต่งกายและโทนสีที่เป็นเอกลักษณ์";
-      reply += `\n   > *"${samplePrompt}"*\n\nลองเปลี่ยนคำอธิบายโดยใช้ลักษณะท่าทางแทนชื่อเฉพาะได้เลยครับ`;
-      suggestions = ["🎨 สร้างสไตล์ออริจินัล", "✏️ ปรับคำอธิบายใหม่"];
+      entityName = detectedCharacter || "copyrighted content";
+      if (isBackgroundRequest) {
+        alternativeEn = `an epic cinematic and atmospheric background inspired by this aesthetic — while keeping the same ${detectedSubjectEn} in front`;
+        alternativePrompt = `A stunning cinematic atmospheric background inspired by this aesthetic behind a ${detectedSubjectEn}`;
+        samplePromptTh = `ฉากหลังบรรยากาศอลังการสไตล์ออริจินัล โดยมี${detectedSubjectTh}อยู่ด้านหน้า`;
+      } else {
+        alternativeEn = "an original character with distinctive styling, detailed costume, and heroic atmosphere";
+        alternativePrompt = "An original character with detailed creative costume, artistic lighting, and distinct visual personality";
+        samplePromptTh = "ตัวละครสไตล์ออริจินัล พร้อมเครื่องแต่งกายและโทนสีที่เป็นเอกลักษณ์";
+      }
+      suggestions = [
+        "✨ Yes, go ahead with that",
+        "🎨 สร้างสไตล์ออริจินัล",
+        "✏️ Edit prompt",
+      ];
+    }
+
+    let reply = "";
+    if (detectedCharacter || /avenger|endgame|spider|iron|batman/i.test(userPrompt)) {
+      if (isBackgroundRequest) {
+        reply = `The system blocked the direct reference to *${entityName}* because of copyright/IP policy. I can still give your ${detectedSubjectEn} ${alternativeEn}. Shall I go ahead with that?`;
+      } else {
+        reply = `The system blocked the direct reference to *${entityName}* because of copyright/IP policy. I can create ${alternativeEn}. Shall I go ahead with that?`;
+      }
+      reply += `
+
+💡 **คำแนะนำในการแก้ไข:**
+1. **หลีกเลี่ยงการระบุชื่อตัวละครหรือแบรนด์ที่มีลิขสิทธิ์โดยตรง**
+2. **ใช้การบรรยายลักษณะ รูปร่าง โทนสี และสไตล์แทน** เช่น:
+   > *"${samplePromptTh}"*
+
+(ระบบ AI ตรวจพบว่าคำขอเข้าข่ายเนื้อหาที่มีลิขสิทธิ์หรือนโยบายความปลอดภัย (Content Safety & Copyright Policy) เกี่ยวกับตัวละครลิขสิทธิ์ "${detectedCharacter || entityName}")`;
+    } else {
+      reply = `The system blocked this request because of content safety guidelines. I can create a creative original artwork focusing on aesthetic composition, artistic lighting, and mood. Shall I go ahead with that?`;
+      reply += `
+
+💡 **คำแนะนำในการแก้ไข:**
+1. **หลีกเลี่ยงการระบุชื่อตัวละครหรือคำที่ติดตัวกรองความปลอดภัย**
+2. **ใช้การบรรยายลักษณะ รูปร่าง โทนสี และสไตล์แทน** เช่น:
+   > *"${samplePromptTh}"*
+
+(ระบบ AI ตรวจพบว่าคำขอเข้าข่ายเนื้อหาที่มีลิขสิทธิ์หรือนโยบายความปลอดภัย (Content Safety & Copyright Policy) ซึ่งอาจมีคำหรือเนื้อหาที่ตรงกับตัวกรองความปลอดภัยของโมเดล)`;
     }
 
     return {
@@ -839,6 +953,8 @@ export function diagnoseOrchestratorError(
         : "ติดนโยบายความปลอดภัยของโมเดล",
       reply,
       suggestions,
+      errorCard,
+      alternativePrompt,
     };
   }
 
@@ -869,29 +985,17 @@ export function diagnoseOrchestratorError(
     return {
       shortReason: "คำขอเกินขีดจำกัดชั่วคราว (Rate limit)",
       reply:
-        "ระบบ AI มีการเรียกใช้งานถี่เกินไปชั่วคราว (Rate limit) หรือเครดิตการใช้งานหมด กรุณารอสักครู่ (ประมาณ 30-60 วินาที) แล้วลองใหม่อีกครั้งครับ",
-      suggestions: ["ลองใหม่อีกครั้ง"],
+        "ขณะนี้ระบบถูกเรียกใช้งานถี่เกินไปจนติดข้อจำกัดอัตราการเรียก (Rate Limit) กรุณารอสักครู่แล้วลองส่งคำขอใหม่อีกครั้งครับ",
+      suggestions: ["⏳ ลองใหม่อีกครั้งใน 10 วินาที", "✏️ ปรับปรุงคำขอก่อนส่ง"],
     };
   }
 
-  // 4. Creative Director Plan Validation Error
-  if (
-    errorLower.includes("director") ||
-    errorLower.includes("invalid creative director plan") ||
-    errorLower.includes("แผนไม่ครบ")
-  ) {
-    return {
-      shortReason: "การวางแผนงานไม่สมบูรณ์",
-      reply:
-        "Creative Director ไม่สามารถสรุปแผนงานภาพที่ชัดเจนได้จากข้อความนี้ครับ กรุณาระบุรายละเอียดเพิ่มเติม เช่น สไตล์ภาพที่ต้องการ โทนสี หรือสิ่งที่ต้องการให้เด่นในภาพ เพื่อให้ระบบเริ่มสร้างงานได้ถูกต้องครับ",
-      suggestions: ["ระบุสไตล์ภาพที่ต้องการ", "เพิ่มรายละเอียดของภาพ", "ลองใหม่อีกครั้ง"],
-    };
-  }
-
-  // 5. General Fallback
+  // 4. Fallback / General Error
   return {
-    shortReason: rawError || "เกิดข้อผิดพลาดในการประมวลผล",
-    reply: `การสร้างภาพไม่สำเร็จครับ: ${rawError || "เกิดข้อผิดพลาดในการประมวลผล"}\n\nคุณสามารถลองปรับคำอธิบายให้กระชับ ชัดเจนขึ้น หรือระบุสิ่งที่ต้องการเห็นในภาพเพิ่มเติมได้ครับ`,
-    suggestions: ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"],
+    shortReason: "การสร้างภาพไม่สำเร็จ",
+    reply: `ไม่สามารถสร้างภาพได้สำเร็จครับ: ${rawError || "เกิดข้อผิดพลาดในการประมวลผลจากโมเดล AI"}
+
+💡 ลองปรับคำบรรยายให้กระชับ ชัดเจนขึ้น หรือตรวจสอบภาพอ้างอิงที่เลือกบน Canvas ครับ`,
+    suggestions: ["✏️ ปรับแต่งคำขอใหม่", "🔍 ตรวจสอบภาพที่เลือกบน Canvas"],
   };
 }

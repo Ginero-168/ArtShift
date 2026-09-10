@@ -6,6 +6,7 @@ import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/Inl
 import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
 import {
   type CoPilotMessage,
+  diagnoseOrchestratorError,
   executeCoPilotInstruction,
   isToolCoPilotPrompt,
   type SubAgentActionLog,
@@ -680,6 +681,7 @@ export default function AICoPilotBar() {
   };
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lastAlternativePromptRef = useRef<string | null>(null);
 
   useEffect(() => {
     return subscribeAIProgress((event) => {
@@ -913,13 +915,19 @@ export default function AICoPilotBar() {
     const pending = pendingClarification;
     const selectedOption =
       pending && customPrompt ? findClarificationOption(pending, customPrompt) : undefined;
-    const promptToSend = pending
+    let promptToSend = pending
       ? composeClarifiedImagePrompt(
           pending.originalPrompt,
           selectedOption?.label ?? rawPrompt,
           pending.question,
         )
       : rawPrompt;
+
+    if (customPrompt && (customPrompt.startsWith("✨") || customPrompt.includes("Yes, go ahead"))) {
+      if (lastAlternativePromptRef.current) {
+        promptToSend = lastAlternativePromptRef.current;
+      }
+    }
 
     const inlineObjectIds = extractInlineTagObjectIds(rawPrompt);
     const combinedObjectIds = Array.from(new Set([...inlineObjectIds, ...attachedImageIds]));
@@ -1238,12 +1246,40 @@ export default function AICoPilotBar() {
                 } else if (runResult.status === "partial" && runResult.completedCount === 0) {
                   const firstError =
                     runResult.items.find((i) => i.error)?.error || "การสร้างภาพไม่สำเร็จ";
+                  const diagnosis = diagnoseOrchestratorError(firstError, promptToSend, {
+                    conversationHistory: messages
+                      .flatMap((m) =>
+                        (m.role === "user" || m.role === "assistant") && m.kind !== "progress"
+                          ? [{ role: m.role, content: m.content }]
+                          : [],
+                      )
+                      .slice(-10),
+                  });
+                  if (diagnosis.alternativePrompt) {
+                    lastAlternativePromptRef.current = diagnosis.alternativePrompt;
+                  }
                   taskAction.status = "error";
                   taskAction.stage = "failed";
-                  taskAction.description = `Task ไม่สำเร็จ: ${firstError}`;
-                  reply = `การสร้างภาพไม่สำเร็จครับ: ${firstError}`;
-                  suggestions = ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก"];
+                  taskAction.description = `Task ไม่สำเร็จ: ${diagnosis.shortReason}`;
+                  reply = diagnosis.reply;
+                  suggestions = diagnosis.suggestions;
                   setLiveAssistantState(null);
+
+                  setMessages((previous) => [
+                    ...previous,
+                    {
+                      id: crypto.randomUUID(),
+                      role: "assistant",
+                      content: reply,
+                      toolLabel: "GPT Image 2",
+                      errorCard: diagnosis.errorCard,
+                      timestamp: Date.now(),
+                      actions,
+                      suggestions,
+                    },
+                  ]);
+                  setBusy(false);
+                  return;
                 } else {
                   taskAction.status = "success";
                   taskAction.stage = "succeeded";
@@ -1296,21 +1332,48 @@ export default function AICoPilotBar() {
                 : wasCancelled
                   ? "cancelled"
                   : "failed";
-              taskAction.description = outcomeUnknown
-                ? "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ"
-                : wasCancelled
-                  ? "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas"
-                  : `Task ไม่สำเร็จ: ${(error as Error).message}`;
-              reply = outcomeUnknown
-                ? "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้"
-                : wasCancelled
-                  ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas"
-                  : `Task ไม่สำเร็จครับ: ${(error as Error).message}`;
-              suggestions = outcomeUnknown
-                ? ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"]
-                : wasCancelled
-                  ? ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"]
-                  : ["ปรับ brief แล้วลองใหม่", "ตรวจสอบภาพที่เลือก", "ยกเลิก Task นี้"];
+              if (outcomeUnknown) {
+                taskAction.description = "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ";
+                reply = "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้";
+                suggestions = ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"];
+              } else if (wasCancelled) {
+                taskAction.description = "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
+                reply = "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas";
+                suggestions = ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"];
+              } else {
+                const diagnosis = diagnoseOrchestratorError((error as Error).message, promptToSend, {
+                  conversationHistory: messages
+                    .flatMap((m) =>
+                      (m.role === "user" || m.role === "assistant") && m.kind !== "progress"
+                        ? [{ role: m.role, content: m.content }]
+                        : [],
+                    )
+                    .slice(-10),
+                });
+                if (diagnosis.alternativePrompt) {
+                  lastAlternativePromptRef.current = diagnosis.alternativePrompt;
+                }
+                taskAction.description = `Task ไม่สำเร็จ: ${diagnosis.shortReason}`;
+                reply = diagnosis.reply;
+                suggestions = diagnosis.suggestions;
+
+                setMessages((previous) => [
+                  ...previous,
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    content: reply,
+                    toolLabel: diagnosis.errorCard ? "GPT Image 2" : undefined,
+                    errorCard: diagnosis.errorCard,
+                    timestamp: Date.now(),
+                    actions,
+                    suggestions,
+                  },
+                ]);
+                setLiveAssistantState(null);
+                setBusy(false);
+                return;
+              }
             }
           }
           upsertCurrentAction({ ...taskAction });
@@ -1912,6 +1975,82 @@ export default function AICoPilotBar() {
                   </div>
                 )}
 
+                {/* Content Policy / Error Card */}
+                {msg.errorCard && (
+                  <div
+                    data-testid={`error-card-${msg.id}`}
+                    style={{
+                      background: "#18181b",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      borderRadius: 12,
+                      padding: "16px 18px",
+                      marginTop: 6,
+                      marginBottom: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: "#f8fafc",
+                        fontSize: 13.5,
+                        fontWeight: 600,
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      {msg.errorCard.title}
+                    </div>
+                    <div
+                      style={{
+                        color: "#cbd5e1",
+                        fontSize: 12,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {msg.errorCard.description}
+                    </div>
+                    {msg.errorCard.actionText && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const promptToEdit = msg.errorCard?.promptToEdit || "";
+                          if (promptToEdit) {
+                            setInput(promptToEdit);
+                            editorRef.current?.setValue(promptToEdit);
+                            editorRef.current?.focus();
+                          }
+                        }}
+                        style={{
+                          marginTop: 6,
+                          background: "#ffffff",
+                          color: "#18181b",
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "8px 14px",
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transition: "background 0.15s ease",
+                          width: "100%",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#f1f5f9";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#ffffff";
+                        }}
+                      >
+                        {msg.errorCard.actionText}
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Image thumbnails */}
                 {msg.images && msg.images.length > 0 && (
                   <div
@@ -1975,6 +2114,73 @@ export default function AICoPilotBar() {
                     }}
                   >
                     {msg.content}
+                  </div>
+                )}
+
+                {/* Suggestion Chips */}
+                {msg.suggestions && msg.suggestions.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      marginTop: 8,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {msg.suggestions.map((sug, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          if (sug.startsWith("✏️") && msg.errorCard?.promptToEdit) {
+                            setInput(msg.errorCard.promptToEdit);
+                            editorRef.current?.setValue(msg.errorCard.promptToEdit);
+                            editorRef.current?.focus();
+                          } else {
+                            handleSend(sug);
+                          }
+                        }}
+                        disabled={busy}
+                        style={{
+                          background: sug.startsWith("✨") ? "#eef2ff" : "#f8fafc",
+                          border: `1px solid ${sug.startsWith("✨") ? "#c7d2fe" : "#e2e8f0"}`,
+                          borderRadius: 20,
+                          padding: "5px 12px",
+                          fontSize: 11.5,
+                          fontWeight: sug.startsWith("✨") ? 600 : 500,
+                          color: sug.startsWith("✨") ? "#4338ca" : "#334155",
+                          cursor: busy ? "default" : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          transition: "all 0.15s ease",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!busy) {
+                            e.currentTarget.style.background = sug.startsWith("✨")
+                              ? "#e0e7ff"
+                              : "#f1f5f9";
+                            e.currentTarget.style.borderColor = sug.startsWith("✨")
+                              ? "#a5b4fc"
+                              : "#cbd5e1";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!busy) {
+                            e.currentTarget.style.background = sug.startsWith("✨")
+                              ? "#eef2ff"
+                              : "#f8fafc";
+                            e.currentTarget.style.borderColor = sug.startsWith("✨")
+                              ? "#c7d2fe"
+                              : "#e2e8f0";
+                          }
+                        }}
+                      >
+                        <span>{sug}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
 

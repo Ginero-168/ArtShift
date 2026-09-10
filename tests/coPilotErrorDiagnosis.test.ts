@@ -50,6 +50,26 @@ describe("CoPilot Error Diagnosis", () => {
     expect(diagnosis.shortReason).toContain("Rate limit");
     expect(diagnosis.reply).toContain("เรียกใช้งานถี่เกินไป");
   });
+  it("diagnoses Avengers: Endgame background request matching prototype screenshot", () => {
+    const diagnosis = diagnoseOrchestratorError(
+      "Safety filter triggered: prompt contains copyrighted character",
+      "ขอฉากหลังเป็น Scene ใน Avenger End game",
+      {
+        conversationHistory: [
+          { role: "user", content: "สร้างรูปแมว" },
+          { role: "assistant", content: "สร้างภาพแมวส้มพักผ่อนเรียบร้อยแล้วครับ" },
+        ],
+      },
+    );
+
+    expect(diagnosis.errorCard).toBeDefined();
+    expect(diagnosis.errorCard?.title).toBe("Request violates content policy");
+    expect(diagnosis.errorCard?.description).toContain("Your request violates the AI provider's content policy.");
+    expect(diagnosis.errorCard?.actionText).toBe("Edit my prompt");
+    expect(diagnosis.reply).toContain("The system blocked the direct reference to *Avengers: Endgame* because of copyright/IP policy.");
+    expect(diagnosis.reply).toContain("I can still give your cat an epic final-battlefield background — stormy sky, ruins, heroic cinematic atmosphere — while keeping the same cat in front. Shall I go ahead with that?");
+    expect(diagnosis.suggestions).toContain("✨ Yes, go ahead with that");
+  });
 });
 
 describe("turnOrchestrator prompt preservation", () => {
