@@ -490,6 +490,31 @@ function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<stri
   ) {
     normalized.outputCount = 1;
   }
+  if (normalized.specialist !== "image_generator" && normalized.specialist !== "image_editor") {
+    normalized.specialist = "image_generator";
+  }
+  if (normalized.capability !== "IMAGE_DEFAULT" && normalized.capability !== "IMAGE_EDIT") {
+    normalized.capability =
+      normalized.specialist === "image_editor" ? "IMAGE_EDIT" : "IMAGE_DEFAULT";
+  }
+  if (typeof normalized.modelAlias !== "string" || !normalized.modelAlias.trim()) {
+    normalized.modelAlias = "image-general";
+  }
+  const fallbackSummary =
+    typeof normalized.summary === "string" && normalized.summary.trim()
+      ? normalized.summary.trim()
+      : typeof normalized.refinedPrompt === "string" && normalized.refinedPrompt.trim()
+        ? normalized.refinedPrompt.trim().slice(0, 200)
+        : "สร้างรูปภาพตามคำขอ";
+  if (!Array.isArray(normalized.reviewCriteria) || normalized.reviewCriteria.length === 0) {
+    normalized.reviewCriteria = [`ภาพต้องตรงกับคำอธิบาย: ${fallbackSummary}`];
+  } else {
+    const cleanedCriteria = normalized.reviewCriteria
+      .filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+      .map((c) => c.trim());
+    normalized.reviewCriteria =
+      cleanedCriteria.length > 0 ? cleanedCriteria : [`ภาพต้องตรงกับคำอธิบาย: ${fallbackSummary}`];
+  }
   if (normalized.search === undefined || !isRecord(normalized.search)) {
     normalized.search = { required: false, queries: [], sources: [] };
   } else {
@@ -671,6 +696,14 @@ async function executeDirectorPass(
         return { kind: "sequential-plan", plan: val.plan };
       }
     }
+    const fallbackDirection = extractDirectionFromUnparsedText(text, input, knowledgeIds);
+    if (fallbackDirection) {
+      console.log(
+        `[CreativeDirector] Recovered ${fallbackDirection.kind} direction from raw model text envelope`,
+      );
+      return fallbackDirection;
+    }
+
     const trimmed = text.trim();
     if (
       (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith("```")) &&
@@ -680,7 +713,7 @@ async function executeDirectorPass(
         trimmed.includes('"propose_design_plan"'))
     ) {
       console.warn(
-        `[CreativeDirector] Unparsed tool call envelope in model text: ${text.slice(0, 500)}`,
+        `[CreativeDirector] Unparsed tool call envelope in model text: ${text.slice(0, 4_000)}`,
       );
       return invalidDirection("Unparsed tool call envelope in model text");
     }
@@ -1436,6 +1469,149 @@ function parseJsonCandidate(text: string): unknown {
     try {
       return JSON.parse(sanitizeJsonString(repaired));
     } catch {}
+  }
+
+  return null;
+}
+
+export function extractDirectionFromUnparsedText(
+  text: string,
+  input: CreativeDirectorInput,
+  knowledgeIds: readonly string[],
+): CreativeDirection | null {
+  if (!text || typeof text !== "string") return null;
+
+  if (
+    text.includes("propose_creative_direction") ||
+    text.includes("image-task") ||
+    text.includes("refinedPrompt")
+  ) {
+    let refinedPrompt: string | null = null;
+    const standardMatch = /"refinedPrompt"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text);
+    if (standardMatch?.[1]) {
+      refinedPrompt = standardMatch[1];
+    } else {
+      const openMatch =
+        /"refinedPrompt"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+      if (openMatch?.[1]) {
+        refinedPrompt = openMatch[1];
+      }
+    }
+    if (refinedPrompt) {
+      refinedPrompt = refinedPrompt
+        .replace(/\\n/g, "\n")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\")
+        .trim();
+    }
+    if (refinedPrompt) {
+      let summary = input.prompt ? input.prompt.slice(0, 200).trim() : "สร้างรูปภาพตามคำขอ";
+      const sumMatch =
+        /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text) ??
+        /"summary"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+      if (sumMatch?.[1]) {
+        const cleaned = sumMatch[1]
+          .replace(/\\n/g, " ")
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, "\\")
+          .trim();
+        if (cleaned) summary = cleaned;
+      }
+
+      const specialist = text.includes('"image_editor"') ? "image_editor" : "image_generator";
+      let capability: "IMAGE_DEFAULT" | "IMAGE_EDIT" =
+        specialist === "image_editor" ? "IMAGE_EDIT" : "IMAGE_DEFAULT";
+      if (!input.availableCapabilities.includes(capability)) {
+        capability = "IMAGE_DEFAULT";
+      }
+
+      let modelAlias = "image-general";
+      if (text.includes('"image-precision"')) modelAlias = "image-precision";
+      else if (text.includes('"image-fast"')) modelAlias = "image-fast";
+      else if (text.includes('"image-gpt-2"')) modelAlias = "image-gpt-2";
+
+      const criteria: string[] = [];
+      const criteriaBlock =
+        /"reviewCriteria"\s*:\s*\[(.*?)\]/s.exec(text) ??
+        /"reviewCriteria"\s*:\s*\[([\s\S]*)$/.exec(text);
+      if (criteriaBlock?.[1]) {
+        const itemRegex = /"((?:[^"\\]|\\.)*)"/g;
+        let m = itemRegex.exec(criteriaBlock[1]);
+        while (m !== null) {
+          if (m[1] && m[1].trim()) {
+            criteria.push(m[1].replace(/\\"/g, '"').trim());
+          }
+          m = itemRegex.exec(criteriaBlock[1]);
+        }
+      }
+      if (criteria.length === 0) {
+        criteria.push(`ภาพต้องตรงกับคำอธิบาย: ${summary}`);
+      }
+
+      const candidate: Record<string, unknown> = {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 1,
+        outputBriefs: [summary],
+        summary,
+        refinedPrompt,
+        specialist,
+        capability,
+        modelAlias,
+        knowledgeSkillIds: [],
+        reviewCriteria: criteria,
+        search: { required: false, queries: [], sources: [] },
+      };
+      try {
+        return parseCreativeDirection(candidate, input, knowledgeIds);
+      } catch (err) {
+        console.warn("[CreativeDirector] Fallback parseCreativeDirection failed:", err);
+      }
+    }
+  }
+
+  // Clarification fallback
+  if (text.includes('"kind":"clarification"') || text.includes('"question"')) {
+    const qMatch =
+      /"question"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text) ??
+      /"question"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+    if (qMatch?.[1]) {
+      const question = qMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+      const options: string[] = [];
+      const optBlock =
+        /"options"\s*:\s*\[(.*?)\]/s.exec(text) ??
+        /"options"\s*:\s*\[([\s\S]*)$/.exec(text);
+      if (optBlock?.[1]) {
+        const itemRegex = /"((?:[^"\\]|\\.)*)"/g;
+        let m = itemRegex.exec(optBlock[1]);
+        while (m !== null) {
+          if (m[1] && m[1].trim()) options.push(m[1].replace(/\\"/g, '"').trim());
+          m = itemRegex.exec(optBlock[1]);
+        }
+      }
+      if (question) {
+        try {
+          return parseCreativeDirection(
+            { kind: "clarification", question, options: options.slice(0, 4) },
+            input,
+            knowledgeIds,
+          );
+        } catch {}
+      }
+    }
+  }
+
+  // Answer fallback
+  if (text.includes('"kind":"answer"') || text.includes('"kind":"text"')) {
+    const textMatch =
+      /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text) ??
+      /"text"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+    if (textMatch?.[1]) {
+      const ans = textMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+      if (ans && ans.length <= 8000) {
+        return { kind: "answer", text: ans };
+      }
+    }
   }
 
   return null;

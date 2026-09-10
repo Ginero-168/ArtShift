@@ -198,6 +198,24 @@ export function parseReplicateAssistantOutput(
     }
   }
 
+  if (
+    rawCalls.length === 0 &&
+    allowedTools.has("propose_creative_direction") &&
+    (raw.includes("propose_creative_direction") ||
+      raw.includes("image-task") ||
+      raw.includes("refinedPrompt"))
+  ) {
+    const recovered = extractCreativeDirectionCallInput(raw);
+    if (recovered) {
+      rawCalls.push({
+        id: "call-replicate-recovered",
+        name: "propose_creative_direction",
+        input: recovered,
+      });
+      text = "";
+    }
+  }
+
   if (!text && rawCalls.length === 0) text = extractFallbackText(raw);
   const toolCalls: AiToolCallContent[] = [];
   rawCalls.slice(0, 12).forEach((value, index) => {
@@ -324,6 +342,90 @@ function extractFallbackText(raw: string): string {
     .replaceAll(HARMONY_CALL, "")
     .replaceAll(HARMONY_CONSTRAIN, "")
     .trim();
+}
+
+export function extractCreativeDirectionCallInput(text: string): Record<string, unknown> | null {
+  if (!text || typeof text !== "string") return null;
+  if (
+    !text.includes("propose_creative_direction") &&
+    !text.includes("image-task") &&
+    !text.includes("refinedPrompt")
+  ) {
+    return null;
+  }
+
+  let refinedPrompt: string | null = null;
+  const standardMatch = /"refinedPrompt"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text);
+  if (standardMatch?.[1]) {
+    refinedPrompt = standardMatch[1];
+  } else {
+    const openMatch =
+      /"refinedPrompt"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+    if (openMatch?.[1]) {
+      refinedPrompt = openMatch[1];
+    }
+  }
+  if (!refinedPrompt) return null;
+  refinedPrompt = refinedPrompt
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\")
+    .trim();
+  if (!refinedPrompt) return null;
+
+  let summary = "สร้างรูปภาพตามคำขอ";
+  const sumMatch =
+    /"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/s.exec(text) ??
+    /"summary"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+  if (sumMatch?.[1]) {
+    const cleaned = sumMatch[1]
+      .replace(/\\n/g, " ")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\")
+      .trim();
+    if (cleaned) summary = cleaned;
+  }
+
+  const specialist = text.includes('"image_editor"') ? "image_editor" : "image_generator";
+  const capability = specialist === "image_editor" ? "IMAGE_EDIT" : "IMAGE_DEFAULT";
+
+  let modelAlias = "image-general";
+  if (text.includes('"image-precision"')) modelAlias = "image-precision";
+  else if (text.includes('"image-fast"')) modelAlias = "image-fast";
+  else if (text.includes('"image-gpt-2"')) modelAlias = "image-gpt-2";
+
+  const criteria: string[] = [];
+  const criteriaBlock =
+    /"reviewCriteria"\s*:\s*\[(.*?)\]/s.exec(text) ??
+    /"reviewCriteria"\s*:\s*\[([\s\S]*)$/.exec(text);
+  if (criteriaBlock?.[1]) {
+    const itemRegex = /"((?:[^"\\]|\\.)*)"/g;
+    let m = itemRegex.exec(criteriaBlock[1]);
+    while (m !== null) {
+      if (m[1] && m[1].trim()) {
+        criteria.push(m[1].replace(/\\"/g, '"').trim());
+      }
+      m = itemRegex.exec(criteriaBlock[1]);
+    }
+  }
+  if (criteria.length === 0) {
+    criteria.push(`ภาพต้องตรงกับคำอธิบาย: ${summary}`);
+  }
+
+  return {
+    kind: "image-task",
+    outputCount: 1,
+    requestedOutputCount: 1,
+    outputBriefs: [summary],
+    summary,
+    refinedPrompt,
+    specialist,
+    capability,
+    modelAlias,
+    knowledgeSkillIds: [],
+    reviewCriteria: criteria,
+    search: { required: false, queries: [], sources: [] },
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -709,4 +709,120 @@ describe("gpt-oss-120b Creative Director", () => {
       outputCount: 1,
     });
   });
+
+  it("recovers unparsed truncated envelope ending mid-word in reviewCriteria (production issue)", async () => {
+    const prodEnvelope =
+      '{"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"propose_creative_direction","input":{"kind":"image-task","summary":"สร้างรูปแมว","refinedPrompt":"A cute cat, highly detailed, realistic, studio lighting, natural pose, soft fur texture, expressive eyes, clean background.","specialist":"image_generator","capability":"IMAGE_DEFAULT","modelAlias":"image-general","knowledgeSkillIds":[],"reviewCriteria":["ภาพแมวมีความชัดเจนและมีรายละเอียดสูง","องค์ประกอบของแมวสมจริงและดูเป็นธรรมชาติ","แส';
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: prodEnvelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: prodEnvelope },
+      },
+      metadata: {},
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "สร้างรูปแมว",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "สร้างรูปแมว",
+      modelAlias: "image-general",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      refinedPrompt:
+        "A cute cat, highly detailed, realistic, studio lighting, natural pose, soft fur texture, expressive eyes, clean background.",
+      outputCount: 1,
+    });
+    if (result.kind === "image-task") {
+      expect(result.reviewCriteria).toContain("ภาพแมวมีความชัดเจนและมีรายละเอียดสูง");
+      expect(result.reviewCriteria).toContain("องค์ประกอบของแมวสมจริงและดูเป็นธรรมชาติ");
+    }
+  });
+
+  it("recovers unparsed tool envelope truncated inside refinedPrompt", async () => {
+    const truncatedPromptEnvelope =
+      '{"kind":"tool_calls","calls":[{"name":"propose_creative_direction","input":{"kind":"image-task","summary":"แมวน่ารัก","refinedPrompt":"A fluffy white cat running in the garden';
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: truncatedPromptEnvelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: truncatedPromptEnvelope },
+      },
+      metadata: {},
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "แมวน่ารัก",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "แมวน่ารัก",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      refinedPrompt: "A fluffy white cat running in the garden",
+      outputCount: 1,
+    });
+  });
+
+  it("recovers direction via extractDirectionFromUnparsedText when JSON parsing completely fails", async () => {
+    // Unparseable JSON due to unquoted key, invalid characters, but containing tool call fields
+    const corruptedText =
+      '{"kind":"tool_calls", corrupted_syntax::: {"name":"propose_creative_direction","input":{"kind":"image-task","summary":"แมวดำ","refinedPrompt":"A sleek black cat under the moonlight","reviewCriteria":["ภาพเป็นแมวดำ","แสงจันทร์สวยงาม"]';
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: corruptedText,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: corruptedText },
+      },
+      metadata: {},
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "แมวดำ",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "image-task",
+      summary: "แมวดำ",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      refinedPrompt: "A sleek black cat under the moonlight",
+      outputCount: 1,
+    });
+    if (result.kind === "image-task") {
+      expect(result.reviewCriteria).toContain("ภาพเป็นแมวดำ");
+      expect(result.reviewCriteria).toContain("แสงจันทร์สวยงาม");
+    }
+  });
 });
