@@ -98,19 +98,17 @@ export async function analyzeImageReferences(
   onProgress?: (completed: number, total: number, stage: string) => void,
   analyzers: ImageReferenceAnalyzers = defaultAnalyzers,
 ): Promise<ImageReferenceAnalysis[]> {
-  const results: ImageReferenceAnalysis[] = [];
-  for (const [index, ref] of refs.entries()) {
-    throwIfAborted(signal);
-    results.push(
-      await analyzeImageReference(
+  throwIfAborted(signal);
+  return Promise.all(
+    refs.map((ref, index) =>
+      analyzeImageReference(
         ref,
         signal,
         (stage, progress) => onProgress?.(index + progress, refs.length, stage),
         analyzers,
       ),
-    );
-  }
-  return results;
+    ),
+  );
 }
 
 function throwIfAborted(signal: AbortSignal): void {

@@ -32,10 +32,45 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
 
 export function resolveImageGenerationDimensions(prompt: string) {
   const value = prompt.toLocaleLowerCase();
+
+  // Check for explicit physical/custom dimensions e.g. "60x20cm", "60x20", "120x40", "30x10"
+  const dimMatch =
+    /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|mm|m|in|นิ้ว)?/iu.exec(
+      value,
+    );
+  if (dimMatch) {
+    const w = parseFloat(dimMatch[1]);
+    const h = parseFloat(dimMatch[2]);
+    if (w > 0 && h > 0) {
+      const ratio = w / h;
+      if (ratio >= 2.4) {
+        // Wide panoramic banner (e.g. 60x20cm, 3:1)
+        return { width: 1536, height: 512, aspectRatio: "16:9" as const };
+      }
+      if (ratio >= 1.6) {
+        return { width: 1280, height: 720, aspectRatio: "16:9" as const };
+      }
+      if (ratio >= 1.2) {
+        return { width: 1024, height: 768, aspectRatio: "4:3" as const };
+      }
+      if (ratio <= 0.42) {
+        // Vertical skyscraper banner 1:3
+        return { width: 512, height: 1536, aspectRatio: "9:16" as const };
+      }
+      if (ratio <= 0.65) {
+        return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+      }
+      if (ratio <= 0.85) {
+        return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+      }
+      return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
+    }
+  }
+
   if (/(?:9:16|แนวตั้ง|story|reel)/iu.test(value)) {
     return { width: 720, height: 1280, aspectRatio: "9:16" as const };
   }
-  if (/(?:16:9|แนวนอน|banner|cover)/iu.test(value)) {
+  if (/(?:16:9|แนวนอน|banner|แบนเนอร์|cover)/iu.test(value)) {
     return { width: 1280, height: 720, aspectRatio: "16:9" as const };
   }
   if (/(?:4:3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" as const };
@@ -206,9 +241,33 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
 
   const visualComponents: string[] = [];
 
-  // Poster / Advertisement
-  if (/โปสเตอร์|แบนเนอร์|poster|banner|โฆษณา|advertising/i.test(rawPrompt)) {
+  // Signage / Banner / Shelf Header (Anti-Mockup Rule)
+  const isSignage = /ป้าย|ป้ายหมวด|ป้ายติด|แบนเนอร์|signage|banner|shelf sign|artwork\s*ป้าย/i.test(
+    rawPrompt,
+  );
+  const isExplicitMockup =
+    /mockup|ม็อกอัป|ถ่ายภาพจำลอง|วางบนโต๊ะ|3d render|physical stand/i.test(rawPrompt);
+
+  if (isSignage && !isExplicitMockup) {
+    visualComponents.push(
+      "flat 2D graphic design artwork, direct front-facing 90-degree orthogonal view, full-bleed rectangular banner layout, modern corporate graphic design, sharp digital vector illustration and typography, pristine flat surface, completely flat composition, no 3D mockup, no room environment, no bookshelf, no wooden shelf, no books underneath, no table, no physical acrylic stand, no angled perspective, isolated 2D graphic artwork file for printing",
+    );
+  } else if (/โปสเตอร์|แบนเนอร์|poster|banner|โฆษณา|advertising/i.test(rawPrompt)) {
     visualComponents.push("commercial advertising poster design, vibrant professional layout");
+  }
+
+  // Manifest Book Theme
+  if (/manifest|คิดมาก/i.test(rawPrompt)) {
+    visualComponents.push(
+      "Manifest book aesthetic theme, deep obsidian matte black and crimson red glowing aura, radiant golden and red circular light halo, manifestation energy ring, elegant glowing circular motif, cinematic ambient glow",
+    );
+  }
+
+  // Welearn Publishing Brand
+  if (/welearn|วีเลิร์น/i.test(rawPrompt)) {
+    visualComponents.push(
+      'Welearn publishing brand identity, bold clean white modern typography reading "Welearn" and "สำนักพิมพ์ Welearn", stylized geometric "W" brand logo mark, high contrast, pristine publishing corporate graphic design',
+    );
   }
 
   // Thai Food / Cuisine
@@ -274,12 +333,15 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
 
 /**
  * Pre-flight sanitization for prompts before sending to image generation.
- * Strips conversational constructs that fail diffusion models (like Thai text in bubbles).
+ * Strips conversational constructs that fail diffusion models (like Thai text in bubbles),
+ * and enforces flat 2D graphic design for signage and artwork requests.
  */
 export function sanitizeAndPrepareImagePrompt(rawPrompt: string): string {
   const containsProblematicBubble =
     /(?:bubble|บอลลูน|กล่องคำพูด)/i.test(rawPrompt) && /[\u0E00-\u0E7F]/.test(rawPrompt);
-  if (containsProblematicBubble) {
+  const isSignageOrArtwork =
+    /(?:ออกแบบป้าย|ป้ายหมวด|ป้ายติด|ป้ายขนาด|artwork\s*ป้าย|ป้ายแบนเนอร์)/iu.test(rawPrompt);
+  if (containsProblematicBubble || isSignageOrArtwork) {
     return streamlinePromptForImageGen(rawPrompt);
   }
   return cleanImagePrompt(rawPrompt) || rawPrompt.trim();

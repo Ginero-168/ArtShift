@@ -6,7 +6,8 @@ export type DesignKnowledgeSkill = {
     | "product-image"
     | "character-design"
     | "brochure-design"
-    | "ui-design";
+    | "ui-design"
+    | "signage-banner";
   title: string;
   keywords: readonly string[];
   summary: string;
@@ -112,6 +113,30 @@ export const DESIGN_KNOWLEDGE_SKILLS: readonly DesignKnowledgeSkill[] = Object.f
       "Start from the primary task, information hierarchy and interaction states.",
       "Reuse a compact spacing, typography and component system rather than one-off decoration.",
       "Review keyboard access, contrast, empty/error/loading states and responsive behavior.",
+    ],
+  },
+  {
+    id: "signage-banner",
+    title: "Signage and Banner Design",
+    keywords: [
+      "signage",
+      "banner",
+      "ป้าย",
+      "ป้ายหมวด",
+      "ป้ายติดชั้น",
+      "ป้ายร้าน",
+      "แบนเนอร์",
+      "header",
+      "shelf sign",
+      "artwork",
+      "60x20",
+    ],
+    summary:
+      "Design flat, production-ready 2D graphic signage and shelf category banners with exact aspect ratios, clear typography, and brand logo placement without 3D environmental mockup scenes.",
+    guidance: [
+      "Output must be direct, full-bleed flat 2D graphic design artwork (front-facing orthogonal view), NEVER a 3D environmental mockup of a sign sitting on a shelf, table, or wall.",
+      "Match exact physical dimensions and aspect ratio (e.g. 60x20cm is a 3:1 wide panoramic banner) so the artwork fills the full frame cleanly.",
+      "Place brand logo prominently, prioritize high-contrast legibility for distance reading, and incorporate themed aesthetics (such as glowing halo rings or color motifs) directly onto the flat 2D graphic surface.",
     ],
   },
 ]);

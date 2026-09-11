@@ -14,6 +14,7 @@ describe("local design knowledge retrieval", () => {
       "character-design",
       "brochure-design",
       "ui-design",
+      "signage-banner",
     ]);
   });
 

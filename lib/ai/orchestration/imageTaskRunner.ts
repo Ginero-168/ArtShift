@@ -331,7 +331,7 @@ export async function runContextAwareImageTask(
                 const criteria = task.reviewCriteria ?? [];
                 let directorReview: CreativeOutputReview | null = null;
                 try {
-                  const REVIEW_TIMEOUT_MS = 8_000;
+                  const REVIEW_TIMEOUT_MS = 3_500;
                   let reviewTimer: ReturnType<typeof setTimeout> | undefined;
                   const reviewTimeoutPromise = new Promise<never>((_, reject) => {
                     reviewTimer = setTimeout(() => {
