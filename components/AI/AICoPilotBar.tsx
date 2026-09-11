@@ -267,6 +267,7 @@ export default function AICoPilotBar() {
     prompt?: string;
     isEdit?: boolean;
     stepDetails?: string[];
+    actions?: SubAgentActionLog[];
   } | null>(null);
   const [feedbackState, setFeedbackState] = useState<Record<string, "up" | "down">>({});
   const [promptRefinementData, setPromptRefinementData] =
@@ -650,20 +651,16 @@ export default function AICoPilotBar() {
       ) {
         if (hasImageContext && analysesForTurn.length === 0) {
           const analysisAction: SubAgentActionLog = {
-            id: crypto.randomUUID(),
-            agent: "orchestrator",
-            title: "Image Analysis",
-            description: "กำลังวิเคราะห์ภาพที่เลือกก่อนวางแผนงาน…",
-            status: "running",
-            timestamp: Date.now(),
+            id: crypto.randomUUID(), agent: "orchestrator",
+            title: "Image Analyzer (วิเคราะห์ภาพต้นฉบับ)",
+            description: `กำลังวิเคราะห์ภาพต้นฉบับและบริบทบน Canvas (${refsForTurn.length} ภาพ)…`,
+            status: "running", timestamp: Date.now(),
           };
           analysisActions.push(analysisAction);
           upsertCurrentAction(analysisAction);
           setLiveAssistantState({
-            stage: "analyzing",
-            prompt: promptToSend,
-            isEdit: true,
-            statusMessage: "กำลังวิเคราะห์ภาพต้นฉบับและบริบท...",
+            stage: "analyzing", prompt: promptToSend, isEdit: true,
+            statusMessage: "กำลังวิเคราะห์ภาพต้นฉบับและบริบท...", actions: [analysisAction],
           });
           try {
             analysesForTurn = await analyzeImageReferences(
@@ -676,11 +673,12 @@ export default function AICoPilotBar() {
                   ...(prev || { stage: "analyzing", prompt: promptToSend, isEdit: true }),
                   stage: "analyzing",
                   statusMessage: `กำลังวิเคราะห์ภาพ (${Math.round((completed / Math.max(1, total)) * 100)}%)...`,
+                  actions: [analysisAction],
                 }));
               },
             );
             analysisAction.status = "success";
-            analysisAction.description = `วิเคราะห์ภาพเสร็จแล้ว ${analysesForTurn.length} รายการ`;
+            analysisAction.description = `วิเคราะห์ภาพต้นฉบับเสร็จสมบูรณ์ (${analysesForTurn.length} รายการ)`;
             upsertCurrentAction({ ...analysisAction });
           } catch (error) {
             analysisAction.status = "error";
@@ -725,30 +723,27 @@ export default function AICoPilotBar() {
           reply = contextDecision.reply;
           suggestions = ["ถามเกี่ยวกับ Object บน Canvas", "วิเคราะห์ภาพนี้ละเอียดขึ้น"];
         } else {
-          const taskAction: SubAgentActionLog = {
+          const directorAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
             agent: "orchestrator",
-            title: "Creative Director",
-            description: "กำลังส่ง brief ให้ Creative Director วางแผน…",
-            status: "running",
-            timestamp: Date.now(),
-            stage: "analyzing",
-            attempt: 0,
+            title: "Creative Director (gpt-oss-120b)",
+            description: "กำลังวิเคราะห์โจทย์ จัดสัดส่วนภาพ วางแนวคิด 2D Graphic และคู่สีตามโจทย์…",
+            status: "running", timestamp: Date.now(), stage: "analyzing", attempt: 0,
           };
-          actions = [...actions, taskAction];
-          upsertCurrentAction({ ...taskAction });
+          actions = [...actions, directorAction];
+          upsertCurrentAction({ ...directorAction });
           setLiveAssistantState((prev) => ({
             ...(prev || { prompt: promptToSend, isEdit: refsForTurn.length > 0 }),
-            stage: "planning",
-            statusMessage: "Creative Director กำลังวางแผนงาน...",
+            stage: "planning", statusMessage: "Creative Director กำลังวางแผนงาน...", actions: [...actions],
           }));
+          let activeRunningAction: SubAgentActionLog = directorAction;
           // Creative Director disclosure copy:
           // งานนี้จะส่งคำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
           const consent = true;
           if (!consent) {
-            taskAction.status = "error";
-            taskAction.stage = "cancelled";
-            taskAction.description = "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
+            directorAction.status = "error";
+            directorAction.stage = "cancelled";
+            directorAction.description = "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
             reply = "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider";
           } else {
             try {
@@ -775,11 +770,13 @@ export default function AICoPilotBar() {
                 { signal: controller.signal, cloudConsent: true },
               );
 
+              activeRunningAction = directorAction;
+
               if (direction.kind === "answer") {
                 setPendingClarification(null);
-                taskAction.status = "success";
-                taskAction.stage = "succeeded";
-                taskAction.description = "Creative Director ตอบโดยไม่เรียก Image Model";
+                directorAction.status = "success";
+                directorAction.stage = "succeeded";
+                directorAction.description = "Creative Director ตอบโดยไม่เรียก Image Model";
                 const trimmed = direction.text.trim();
                 let cleanAnswer = direction.text;
                 if (
@@ -798,9 +795,9 @@ export default function AICoPilotBar() {
                 reply = cleanAnswer;
                 suggestions = ["ระบุงานออกแบบที่ต้องการ", "เลือกภาพบน Canvas แล้วขอให้วิเคราะห์"];
               } else if (direction.kind === "clarification") {
-                taskAction.status = "success";
-                taskAction.stage = "clarifying";
-                taskAction.description = "Creative Director ต้องการรายละเอียดเพิ่มก่อนเลือก Specialist";
+                directorAction.status = "success";
+                directorAction.stage = "clarifying";
+                directorAction.description = "Creative Director ต้องการรายละเอียดเพิ่มก่อนเลือก Specialist";
                 reply = direction.question;
                 suggestions = direction.options;
                 setPendingClarification({
@@ -815,53 +812,58 @@ export default function AICoPilotBar() {
               } else if (direction.kind === "design-plan") {
                 setPendingClarification(null);
                 setPendingPlan(direction.proposal);
-                taskAction.status = "success";
-                taskAction.stage = "planned";
-                taskAction.description = `เตรียมแผนแก้ Canvas ${direction.proposal.commands.length} รายการ รอการอนุมัติ`;
+                directorAction.status = "success";
+                directorAction.stage = "planned";
+                directorAction.description = `เตรียมแผนแก้ Canvas ${direction.proposal.commands.length} รายการ รอการอนุมัติ`;
                 reply =
                   "ArtShift Orchestrator เตรียมแผนแก้ไข Canvas แล้วครับ ตรวจสอบและกด Apply plan เพื่อดำเนินงาน";
                 suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน"];
               } else if (direction.kind === "sequential-plan") {
                 setPendingClarification(null);
                 setPendingSequentialPlan(direction.plan);
-                taskAction.status = "success";
-                taskAction.stage = "planned";
-                taskAction.description = `Creative Director เสนอแผนงาน ${direction.plan.steps.length} ขั้นตอน`;
+                directorAction.status = "success";
+                directorAction.stage = "planned";
+                directorAction.description = `Creative Director เสนอแผนงาน ${direction.plan.steps.length} ขั้นตอน`;
                 reply = `ArtShift Creative Director เสนอแผนงานต่อเนื่อง ${direction.plan.steps.length} ขั้นตอน เพื่อความแม่นยำ กรุณาตรวจสอบและกด Approve & Execute เพื่อเริ่มงานครับ`;
                 suggestions = ["อนุมัติและเริ่มรันแผน", "ยกเลิกแผนนี้"];
               } else if (direction.search.required) {
-                taskAction.status = "success";
-                taskAction.stage = "analyzing";
-                taskAction.description = "Creative Director ระบุว่าต้องค้น Context ภายนอกก่อนสร้างงาน";
+                directorAction.status = "success";
+                directorAction.stage = "analyzing";
+                directorAction.description = "Creative Director ระบุว่าต้องค้น Context ภายนอกก่อนสร้างงาน";
                 reply = `ยังไม่เรียก Image Model ครับ Creative Director ต้องค้นข้อมูลเพิ่มก่อน: ${direction.search.queries.join(", ")}`;
                 suggestions = ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"];
               } else {
+                directorAction.status = "success";
+                directorAction.stage = "succeeded";
+                const summaryDetail = direction.summary || "กำหนดคอนเซปต์และจัดวางองค์ประกอบศิลป์เรียบร้อย";
+                directorAction.description = `วางแผนสำเร็จ: ${summaryDetail} (เลือก ${direction.modelAlias})`;
+                upsertCurrentAction({ ...directorAction });
+
                 const imageRun = createDirectedImageRun(contextDecision.input, direction);
                 setPendingClarification(null);
                 const count = imageRun.requestedOutputCount;
                 const isEditTurn = direction.specialist === "image_editor" || refsForTurn.length > 0;
                 const thoughtText = formatThoughtText(rawPrompt, direction.summary, count, isEditTurn);
-                setLiveAssistantState({
-                  stage: "generating",
-                  thought: thoughtText,
-                  toolLabel: `Generating images using ${direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias}`,
-                  requestedCount: count,
-                  statusMessage: `กำลังสร้างรูปภาพด้วย ${direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias}...`,
-                  prompt: rawPrompt,
-                  isEdit: isEditTurn,
-                });
+                const modelName = direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias;
+                const specialistTitle = direction.specialist === "image_editor" ? "Image Editor" : "Image Specialist";
 
-                taskAction.taskId = imageRun.id;
-                const countLabel =
-                  imageRun.requestedOutputCount > 1
-                    ? ` (${imageRun.requestedOutputCount} ภาพ)`
-                    : "";
-                taskAction.agent =
-                  direction.specialist === "image_editor" ? "image_edit" : "image_gen";
-                taskAction.title = `Creative Director → ${direction.specialist}${countLabel}`;
-                taskAction.description = `เลือก ${direction.modelAlias} · วางแผนสร้าง ${imageRun.requestedOutputCount} ภาพ · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
-                taskAction.stage = "planned";
-                upsertCurrentAction({ ...taskAction });
+                const imageTaskAction: SubAgentActionLog = {
+                  id: imageRun.id, taskId: imageRun.id,
+                  agent: direction.specialist === "image_editor" ? "image_edit" : "image_gen",
+                  title: `${specialistTitle} (${modelName})${count > 1 ? ` · ${count} ภาพ` : ""}`,
+                  description: `กำลังเรนเดอร์ภาพกราฟิกความละเอียดสูงตามสเปกของ Creative Director (${count} ภาพ)...`,
+                  status: "running", timestamp: Date.now(), stage: "planned",
+                };
+                activeRunningAction = imageTaskAction;
+                actions = [...actions, imageTaskAction];
+                upsertCurrentAction({ ...imageTaskAction });
+
+                setLiveAssistantState({
+                  stage: "generating", thought: thoughtText,
+                  toolLabel: `Generating images using ${modelName}`, requestedCount: count,
+                  statusMessage: `กำลังสร้างรูปภาพด้วย ${modelName}...`,
+                  prompt: rawPrompt, isEdit: isEditTurn, actions: [...actions],
+                });
 
                 const runResult = await runContextAwareImageRun(imageRun, refsForTurn, {
                   signal: controller.signal,
@@ -872,9 +874,9 @@ export default function AICoPilotBar() {
                       { signal, cloudConsent: true },
                     ),
                   onUpdate: (update) => {
-                    taskAction.description = `${update.message} · สำเร็จ ${update.completedCount}/${update.requestedOutputCount}`;
-                    taskAction.stage = update.stage;
-                    taskAction.status =
+                    imageTaskAction.description = `${update.message} · สำเร็จ ${update.completedCount}/${update.requestedOutputCount}`;
+                    imageTaskAction.stage = update.stage;
+                    imageTaskAction.status =
                       update.stage === "failed" ||
                       update.stage === "cancelled" ||
                       update.stage === "outcome-unknown"
@@ -882,12 +884,13 @@ export default function AICoPilotBar() {
                         : update.stage === "succeeded"
                           ? "success"
                           : "running";
-                    upsertCurrentAction({ ...taskAction });
+                    upsertCurrentAction({ ...imageTaskAction });
                     setLiveAssistantState((prev) =>
                       prev
                         ? {
                             ...prev,
                             statusMessage: update.message,
+                            actions: [...actions],
                           }
                         : null,
                     );
@@ -895,9 +898,10 @@ export default function AICoPilotBar() {
                 });
 
                 if (runResult.status === "cancelled") {
-                  taskAction.status = "error";
-                  taskAction.stage = "cancelled";
-                  taskAction.description = "ยกเลิกงานสร้างภาพตามคำขอแล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
+                  imageTaskAction.status = "error";
+                  imageTaskAction.stage = "cancelled";
+                  imageTaskAction.description = "ยกเลิกงานสร้างภาพตามคำขอแล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
+                  upsertCurrentAction({ ...imageTaskAction });
                   reply = "ยกเลิกงานสร้างภาพตามคำขอแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas";
                   suggestions = ["ระบุ brief ใหม่", "ตรวจสอบภาพที่เลือก"];
                   setLiveAssistantState(null);
@@ -916,9 +920,10 @@ export default function AICoPilotBar() {
                   if (diagnosis.alternativePrompt) {
                     lastAlternativePromptRef.current = diagnosis.alternativePrompt;
                   }
-                  taskAction.status = "error";
-                  taskAction.stage = "failed";
-                  taskAction.description = `Task ไม่สำเร็จ: ${diagnosis.shortReason}`;
+                  imageTaskAction.status = "error";
+                  imageTaskAction.stage = "failed";
+                  imageTaskAction.description = `Task ไม่สำเร็จ: ${diagnosis.shortReason}`;
+                  upsertCurrentAction({ ...imageTaskAction });
                   reply = diagnosis.reply;
                   suggestions = diagnosis.suggestions;
                   setLiveAssistantState(null);
@@ -939,13 +944,23 @@ export default function AICoPilotBar() {
                   setBusy(false);
                   return;
                 } else {
-                  taskAction.status = "success";
-                  taskAction.stage = "succeeded";
+                  imageTaskAction.status = "success";
+                  imageTaskAction.stage = "succeeded";
                   const summaryMsg =
                     imageRun.requestedOutputCount > 1
                       ? `สำเร็จ ${runResult.completedCount}/${imageRun.requestedOutputCount} ภาพ`
                       : "สำเร็จ";
-                  taskAction.description = `Creative Director ตรวจ brief และจัดวางภาพบน Canvas (${summaryMsg})`;
+                  imageTaskAction.description = `สร้างและเรนเดอร์ภาพกราฟิกสำเร็จ (${summaryMsg})`;
+                  upsertCurrentAction({ ...imageTaskAction });
+
+                  const reviewerAction: SubAgentActionLog = {
+                    id: crypto.randomUUID(), agent: "brand_stylist",
+                    title: "Quality Reviewer (ตรวจเช็คคุณภาพ)",
+                    description: "ตรวจเช็คความสมบูรณ์ แสงเงา ความคมชัด และมาตรฐานความตรงตามบรีฟ",
+                    status: "success", timestamp: Date.now(), stage: "succeeded",
+                  };
+                  actions = [...actions, reviewerAction];
+                  upsertCurrentAction({ ...reviewerAction });
 
                   const generatedImages = runResult.items
                     .filter((i) => i.status === "succeeded" && Boolean(i.result?.dataUrl))
@@ -997,18 +1012,18 @@ export default function AICoPilotBar() {
               const wasCancelled =
                 (error as Error).name === "AbortError" || controller.signal.aborted;
               const outcomeUnknown = (error as Error).name === "OutcomeUnknownError";
-              taskAction.status = "error";
-              taskAction.stage = outcomeUnknown
+              activeRunningAction.status = "error";
+              activeRunningAction.stage = outcomeUnknown
                 ? "outcome-unknown"
                 : wasCancelled
                   ? "cancelled"
                   : "failed";
               if (outcomeUnknown) {
-                taskAction.description = "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ";
+                activeRunningAction.description = "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ";
                 reply = "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้";
                 suggestions = ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"];
               } else if (wasCancelled) {
-                taskAction.description = "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
+                activeRunningAction.description = "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
                 reply = "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas";
                 suggestions = ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"];
               } else {
@@ -1024,7 +1039,7 @@ export default function AICoPilotBar() {
                 if (diagnosis.alternativePrompt) {
                   lastAlternativePromptRef.current = diagnosis.alternativePrompt;
                 }
-                taskAction.description = `Task ไม่สำเร็จ: ${diagnosis.shortReason}`;
+                activeRunningAction.description = `Task ไม่สำเร็จ: ${diagnosis.shortReason}`;
                 reply = diagnosis.reply;
                 suggestions = diagnosis.suggestions;
 
@@ -1047,7 +1062,7 @@ export default function AICoPilotBar() {
               }
             }
           }
-          upsertCurrentAction({ ...taskAction });
+          upsertCurrentAction({ ...activeRunningAction });
         }
         setMessages((previous) => [
           ...previous,

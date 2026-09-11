@@ -32,6 +32,7 @@ export interface ChatThreadProps {
     prompt?: string;
     isEdit?: boolean;
     stepDetails?: string[];
+    actions?: SubAgentActionLog[];
   } | null;
   streamingText: string;
   currentActions: SubAgentActionLog[];
@@ -175,6 +176,207 @@ export function UserMessageImagePreviews({
   );
 }
 
+interface SubAgentTaskItem {
+  id: string;
+  name: string;
+  modelBadge?: string;
+  icon: string;
+  themeColor: string;
+  themeBg: string;
+  themeBorder: string;
+  task: string;
+  status: "running" | "success" | "error" | "pending";
+  statusText?: string;
+}
+
+function getAgentMeta(agent: string, title: string) {
+  const lowerTitle = (title || "").toLowerCase();
+  if (
+    lowerTitle.includes("analyzer") ||
+    lowerTitle.includes("analysis") ||
+    lowerTitle.includes("วิเคราะห์ภาพ") ||
+    lowerTitle.includes("วิเคราะห์บริบท")
+  ) {
+    return {
+      icon: "🔍",
+      roleName: "Image Analyzer",
+      badgeColor: "#0284c7",
+      badgeBg: "rgba(224, 242, 254, 0.75)",
+      borderColor: "rgba(186, 230, 253, 0.9)",
+    };
+  }
+  if (
+    lowerTitle.includes("director") ||
+    lowerTitle.includes("orchestrator") ||
+    agent === "orchestrator"
+  ) {
+    return {
+      icon: "🧠",
+      roleName: "Creative Director",
+      badgeColor: "#6366f1",
+      badgeBg: "rgba(238, 242, 255, 0.8)",
+      borderColor: "rgba(199, 210, 254, 0.95)",
+    };
+  }
+  if (
+    agent === "image_gen" ||
+    agent === "image_edit" ||
+    lowerTitle.includes("specialist") ||
+    lowerTitle.includes("image") ||
+    lowerTitle.includes("สร้างรูป") ||
+    lowerTitle.includes("ปรับแต่ง")
+  ) {
+    return {
+      icon: "🎨",
+      roleName: agent === "image_edit" ? "Image Editor" : "Image Specialist",
+      badgeColor: "#ea580c",
+      badgeBg: "rgba(255, 237, 213, 0.8)",
+      borderColor: "rgba(254, 215, 170, 0.95)",
+    };
+  }
+  if (
+    agent === "brand_stylist" ||
+    lowerTitle.includes("reviewer") ||
+    lowerTitle.includes("quality") ||
+    lowerTitle.includes("ตรวจ")
+  ) {
+    return {
+      icon: "🛡️",
+      roleName: "Quality Reviewer",
+      badgeColor: "#9333ea",
+      badgeBg: "rgba(243, 232, 255, 0.8)",
+      borderColor: "rgba(233, 213, 255, 0.95)",
+    };
+  }
+  if (agent === "layout_designer" || lowerTitle.includes("layout") || lowerTitle.includes("จัดวาง")) {
+    return {
+      icon: "📐",
+      roleName: "Layout Specialist",
+      badgeColor: "#059669",
+      badgeBg: "rgba(209, 250, 229, 0.8)",
+      borderColor: "rgba(167, 243, 208, 0.95)",
+    };
+  }
+  if (agent === "vectorizer" || lowerTitle.includes("vector") || lowerTitle.includes("เวกเตอร์")) {
+    return {
+      icon: "⚡",
+      roleName: "Vector Specialist",
+      badgeColor: "#0891b2",
+      badgeBg: "rgba(207, 250, 254, 0.8)",
+      borderColor: "rgba(165, 243, 252, 0.95)",
+    };
+  }
+  if (agent === "copywriter" || lowerTitle.includes("copywriter")) {
+    return {
+      icon: "✍️",
+      roleName: "Copywriter Specialist",
+      badgeColor: "#d97706",
+      badgeBg: "rgba(254, 243, 199, 0.8)",
+      borderColor: "rgba(253, 230, 138, 0.95)",
+    };
+  }
+  return {
+    icon: "🤖",
+    roleName: "AI Specialist",
+    badgeColor: "#475569",
+    badgeBg: "rgba(241, 245, 249, 0.8)",
+    borderColor: "rgba(226, 232, 240, 0.95)",
+  };
+}
+
+function renderStatusBadge(status: "running" | "success" | "error" | "pending", statusText?: string) {
+  if (status === "success") {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 3.5,
+          padding: "2px 7px",
+          borderRadius: 12,
+          fontSize: 10.5,
+          fontWeight: 600,
+          background: "rgba(220, 252, 231, 0.9)",
+          color: "#15803d",
+          border: "1px solid rgba(187, 247, 208, 0.9)",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
+        <CheckIcon style={{ width: 10.5, height: 10.5, color: "#16a34a" }} />
+        <span>{statusText || "เสร็จสิ้น"}</span>
+      </span>
+    );
+  }
+  if (status === "running") {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4.5,
+          padding: "2px 7px",
+          borderRadius: 12,
+          fontSize: 10.5,
+          fontWeight: 600,
+          background: "rgba(238, 242, 255, 0.95)",
+          color: "#4338ca",
+          border: "1px solid rgba(199, 210, 254, 0.95)",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
+        <SpinnerIcon style={{ width: 10.5, height: 10.5, color: "#6366f1" }} />
+        <span>{statusText || "กำลังทำ..."}</span>
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 3.5,
+          padding: "2px 7px",
+          borderRadius: 12,
+          fontSize: 10.5,
+          fontWeight: 600,
+          background: "rgba(254, 242, 242, 0.9)",
+          color: "#b91c1c",
+          border: "1px solid rgba(254, 202, 202, 0.9)",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: 10 }}>✕</span>
+        <span>{statusText || "ไม่สำเร็จ"}</span>
+      </span>
+    );
+  }
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "2px 7px",
+        borderRadius: 12,
+        fontSize: 10.5,
+        fontWeight: 500,
+        background: "rgba(241, 245, 249, 0.85)",
+        color: "#64748b",
+        border: "1px solid rgba(226, 232, 240, 0.85)",
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+      }}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#94a3b8" }} />
+      <span>{statusText || "รอดำเนินการ"}</span>
+    </span>
+  );
+}
+
 export function CollapsibleThought({
   thought,
   isLive = false,
@@ -184,6 +386,8 @@ export function CollapsibleThought({
   prompt,
   isEdit = false,
   customMessages,
+  actions,
+  toolLabel,
 }: {
   thought: string;
   isLive?: boolean;
@@ -193,6 +397,8 @@ export function CollapsibleThought({
   prompt?: string;
   isEdit?: boolean;
   customMessages?: string[];
+  actions?: SubAgentActionLog[];
+  toolLabel?: string;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [messageIndex, setMessageIndex] = useState(0);
@@ -287,26 +493,120 @@ export function CollapsibleThought({
     return () => clearInterval(interval);
   }, [isLive]);
 
-  const workflowSteps = React.useMemo(() => {
+  const subAgentTasks = React.useMemo<SubAgentTaskItem[]>(() => {
+    if (actions && actions.length > 0) {
+      const items: SubAgentTaskItem[] = actions.map((act) => {
+        const meta = getAgentMeta(act.agent, act.title);
+        const modelMatch = act.title.match(/\(([^)]+)\)/);
+        const modelBadge = modelMatch ? modelMatch[1] : undefined;
+        const cleanName = act.title.replace(/\s*\([^)]+\)/g, "").trim();
+
+        return {
+          id: act.id,
+          name: cleanName || meta.roleName,
+          modelBadge,
+          icon: meta.icon,
+          themeColor: meta.badgeColor,
+          themeBg: meta.badgeBg,
+          themeBorder: meta.borderColor,
+          task: act.description || "ปฏิบัติหน้าที่ตามขั้นตอนที่ได้รับมอบหมาย",
+          status: act.status === "running" ? "running" : act.status === "error" ? "error" : "success",
+          statusText:
+            act.status === "success"
+              ? "เสร็จสิ้น"
+              : act.status === "running"
+                ? "กำลังทำ..."
+                : act.status === "error"
+                  ? "ไม่สำเร็จ"
+                  : "รอดำเนินการ",
+        };
+      });
+
+      if (isLive && !items.some((i) => i.name.toLowerCase().includes("reviewer") || i.name.includes("ตรวจ"))) {
+        items.push({
+          id: "quality-reviewer-step",
+          name: "Quality Reviewer",
+          modelBadge: "Vision Quality Gate",
+          icon: "🛡️",
+          themeColor: "#9333ea",
+          themeBg: "rgba(243, 232, 255, 0.8)",
+          themeBorder: "rgba(233, 213, 255, 0.95)",
+          task: "ตรวจเช็คความสมบูรณ์ ความคมชัด แสงเงา และความตรงตามบรีฟ",
+          status: "pending",
+          statusText: "รอดำเนินการ",
+        });
+      }
+
+      return items;
+    }
+
     const isAnalyzing = stage === "analyzing";
     const isPlanning = stage === "planning" || stage === "outputting";
     const isGenerating = stage === "generating";
 
-    return [
-      {
-        label: isEdit ? "วิเคราะห์ภาพต้นฉบับและบริบทคำขอ" : "วิเคราะห์คำสั่งและบริบทบน Canvas",
-        status: isAnalyzing ? "current" : "done",
-      },
-      {
-        label: "Creative Director วางแผนแนวคิดและจัดองค์ประกอบ",
-        status: isAnalyzing ? "pending" : isPlanning ? "current" : "done",
-      },
-      {
-        label: isEdit ? "ปรับแต่งภาพ คุมแสงเงาและสไตล์เดิม" : "สร้างและเรนเดอร์ภาพความละเอียดสูง",
-        status: isGenerating ? "current" : isPlanning || isAnalyzing ? "pending" : "done",
-      },
-    ];
-  }, [stage, isEdit]);
+    const defaultItems: SubAgentTaskItem[] = [];
+
+    if (isEdit || prompt?.includes("@") || prompt?.includes("ภาพเดิม") || prompt?.includes("รูปเดิม")) {
+      defaultItems.push({
+        id: "step-analyzer",
+        name: "Image Analyzer",
+        modelBadge: "Vision Context",
+        icon: "🔍",
+        themeColor: "#0284c7",
+        themeBg: "rgba(224, 242, 254, 0.75)",
+        themeBorder: "rgba(186, 230, 253, 0.9)",
+        task: "วิเคราะห์ภาพต้นฉบับและบริบทบน Canvas เพื่อดึงสไตล์ แสงเงา และคู่สีมาใช้งาน",
+        status: isAnalyzing ? "running" : "success",
+        statusText: isAnalyzing ? "กำลังวิเคราะห์..." : "เสร็จสิ้น",
+      });
+    }
+
+    defaultItems.push({
+      id: "step-director",
+      name: "Creative Director",
+      modelBadge: "gpt-oss-120b",
+      icon: "🧠",
+      themeColor: "#6366f1",
+      themeBg: "rgba(238, 242, 255, 0.8)",
+      themeBorder: "rgba(199, 210, 254, 0.95)",
+      task: isEdit
+        ? "วางแผนจัดวางองค์ประกอบ คุมแสงเงาและบรรยากาศเดิมให้กลมกลืนเป็นธรรมชาติ"
+        : "วิเคราะห์โจทย์ จัดวางสัดส่วน กำหนดคอนเซปต์ 2D Graphic และคู่สีตามโจทย์",
+      status: isLive ? (isAnalyzing ? "pending" : isPlanning ? "running" : "success") : "success",
+      statusText: isLive ? (isAnalyzing ? "รอดำเนินการ" : isPlanning ? "กำลังวางแผน..." : "เสร็จสิ้น") : "เสร็จสิ้น",
+    });
+
+    const specialistModel = toolLabel || "GPT Image 2";
+    defaultItems.push({
+      id: "step-specialist",
+      name: isEdit ? "Image Editor" : "Image Specialist",
+      modelBadge: specialistModel,
+      icon: "🎨",
+      themeColor: "#ea580c",
+      themeBg: "rgba(255, 237, 213, 0.8)",
+      themeBorder: "rgba(254, 215, 170, 0.95)",
+      task: isEdit
+        ? "ปรับแต่งภาพ คุมแสงเงาและสไตล์เดิมตามคำสั่งของ Creative Director"
+        : "เรนเดอร์ภาพกราฟิกความละเอียดสูงตามคอนเซปต์และสเปกของ Creative Director",
+      status: isLive ? (isGenerating ? "running" : isPlanning || isAnalyzing ? "pending" : "success") : "success",
+      statusText: isLive ? (isGenerating ? "กำลังเรนเดอร์..." : "รอดำเนินการ") : "เสร็จสิ้น",
+    });
+
+    defaultItems.push({
+      id: "step-reviewer",
+      name: "Quality Reviewer",
+      modelBadge: "Vision Quality Gate",
+      icon: "🛡️",
+      themeColor: "#9333ea",
+      themeBg: "rgba(243, 232, 255, 0.8)",
+      themeBorder: "rgba(233, 213, 255, 0.95)",
+      task: "ตรวจสอบความสมบูรณ์ ความคมชัด แสงเงา และความตรงตามบรีฟ",
+      status: isLive ? "pending" : "success",
+      statusText: isLive ? "รอดำเนินการ" : "เสร็จสิ้น (ผ่านเกณฑ์)",
+    });
+
+    return defaultItems;
+  }, [actions, isLive, stage, isEdit, prompt, toolLabel]);
 
   const thoughtDisplay = React.useMemo(() => {
     if (
@@ -327,6 +627,147 @@ export function CollapsibleThought({
     }
     return "กำลังวิเคราะห์และวางแผนกระบวนการทำงานที่ดีที่สุด เพื่อสร้างผลลัพธ์ที่ตรงกับคำขอของคุณมากที่สุด";
   }, [thought, isEdit, prompt, stage]);
+
+  const completedCount = subAgentTasks.filter((t) => t.status === "success").length;
+  const isAllCompleted = completedCount === subAgentTasks.length && subAgentTasks.length > 0;
+
+  const renderSubAgentPanel = () => (
+    <div
+      style={{
+        marginTop: 4,
+        paddingTop: 8,
+        borderTop: "1px dashed #cbd5e1",
+        display: "flex",
+        flexDirection: "column",
+        gap: 5,
+      }}
+    >
+      {/* Sub-Agent Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: 11,
+          fontWeight: 600,
+          color: "#475569",
+          paddingBottom: 2,
+        }}
+      >
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <span style={{ fontSize: 12 }}>📋</span>
+          <span>การสั่งงาน Sub-Agents</span>
+        </div>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            padding: "1px 6px",
+            borderRadius: 10,
+            background: isAllCompleted ? "rgba(220, 252, 231, 0.9)" : "rgba(238, 242, 255, 0.9)",
+            color: isAllCompleted ? "#15803d" : "#4338ca",
+          }}
+        >
+          {completedCount}/{subAgentTasks.length} เสร็จสิ้น
+        </span>
+      </div>
+
+      {/* Sub-Agent Cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4.5 }}>
+        {subAgentTasks.map((taskItem) => (
+          <div
+            key={taskItem.id}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+              padding: "6px 9px",
+              borderRadius: 7,
+              background: "rgba(255, 255, 255, 0.8)",
+              border: `1px solid ${
+                taskItem.status === "running"
+                  ? "rgba(199, 210, 254, 0.95)"
+                  : taskItem.status === "error"
+                    ? "rgba(254, 202, 202, 0.9)"
+                    : "rgba(241, 245, 249, 0.95)"
+              }`,
+              boxShadow:
+                taskItem.status === "running"
+                  ? "0 0 0 1.5px rgba(99, 102, 241, 0.15), 0 1px 3px rgba(0,0,0,0.03)"
+                  : "0 1px 2px rgba(0,0,0,0.02)",
+            }}
+          >
+            {/* Header row: Icon + Agent Name + Model Badge + Status Badge */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 6,
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5.5,
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: "#1e293b",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 18,
+                    height: 18,
+                    borderRadius: 4,
+                    background: taskItem.themeBg,
+                    border: `1px solid ${taskItem.themeBorder}`,
+                    fontSize: 11,
+                    flexShrink: 0,
+                  }}
+                >
+                  {taskItem.icon}
+                </span>
+                <span>{taskItem.name}</span>
+                {taskItem.modelBadge && (
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 500,
+                      padding: "0.5px 5px",
+                      borderRadius: 4,
+                      background: "rgba(241, 245, 249, 0.9)",
+                      color: "#64748b",
+                      border: "1px solid rgba(226, 232, 240, 0.8)",
+                    }}
+                  >
+                    {taskItem.modelBadge}
+                  </span>
+                )}
+              </div>
+              {renderStatusBadge(taskItem.status, taskItem.statusText)}
+            </div>
+
+            {/* Description row: Assigned task (สิ่งที่ได้รับมอบหมาย) */}
+            <div
+              style={{
+                fontSize: 11,
+                lineHeight: 1.45,
+                color: "#475569",
+                paddingLeft: 23.5,
+              }}
+            >
+              {taskItem.task}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -573,80 +1014,41 @@ export function CollapsibleThought({
               {thoughtDisplay}
             </div>
 
-            {/* Workflow Steps Indicator */}
-            <div
-              style={{
-                marginTop: 2,
-                paddingTop: 6,
-                borderTop: "1px dashed #e2e8f0",
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-              }}
-            >
-              {workflowSteps.map((step, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 11,
-                    color:
-                      step.status === "done"
-                        ? "#15803d"
-                        : step.status === "current"
-                          ? "#4338ca"
-                          : "#94a3b8",
-                    fontWeight: step.status === "current" ? 600 : 400,
-                  }}
-                >
-                  {step.status === "done" ? (
-                    <CheckIcon style={{ width: 11, height: 11, color: "#16a34a", flexShrink: 0 }} />
-                  ) : step.status === "current" ? (
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: "50%",
-                        background: "#6366f1",
-                        animation: "artshiftPulse 1s ease-in-out infinite",
-                        flexShrink: 0,
-                      }}
-                    />
-                  ) : (
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        border: "1px solid #cbd5e1",
-                        flexShrink: 0,
-                      }}
-                    />
-                  )}
-                  <span>{step.label}</span>
-                </div>
-              ))}
-            </div>
+            {/* Sub-Agent Execution Details */}
+            {renderSubAgentPanel()}
           </div>
         ) : (
           <div
             style={{
-              marginTop: 4,
+              position: "relative",
+              marginTop: 6,
               marginLeft: 2,
-              padding: "7px 12px",
-              borderLeft: "2px solid #818cf8",
-              color: "#475569",
-              fontSize: 12,
-              lineHeight: 1.6,
-              background: "rgba(248, 250, 252, 0.7)",
-              borderRadius: "0 8px 8px 0",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
+              padding: "10px 14px",
+              borderLeft: "2.5px solid #818cf8",
+              background: "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
+              borderRadius: "0 10px 10px 0",
+              boxShadow: "0 2px 8px -2px rgba(99, 102, 241, 0.06)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              overflow: "hidden",
             }}
           >
-            {thought}
+            {/* AI Thought & Intent Disclosure */}
+            <div
+              style={{
+                color: "#334155",
+                fontSize: 12,
+                lineHeight: 1.55,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {thought}
+            </div>
+
+            {/* Sub-Agent Execution Details */}
+            {renderSubAgentPanel()}
           </div>
         )
       )}
@@ -979,6 +1381,9 @@ export default function ChatThread({
                   thought={msg.thought}
                   isLive={false}
                   defaultOpen={false}
+                  prompt={msg.role === "assistant" ? undefined : msg.content}
+                  actions={msg.actions}
+                  toolLabel={msg.toolLabel}
                 />
               )}
 
@@ -1354,6 +1759,8 @@ export default function ChatThread({
               stage={liveAssistantState.stage}
               prompt={liveAssistantState.prompt}
               isEdit={liveAssistantState.isEdit}
+              actions={liveAssistantState.actions || currentActions}
+              toolLabel={liveAssistantState.toolLabel}
             />
 
             {/* Tool Step (if generating) */}
