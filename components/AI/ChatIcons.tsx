@@ -308,3 +308,32 @@ export function SpinnerIcon({
     </svg>
   );
 }
+
+export function ChatCopyIcon({
+  size = 14,
+  className = "",
+  style = {},
+}: {
+  size?: number;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
+      className={className}
+    >
+      <rect width="12.5" height="12.5" x="4" y="7.5" rx="2.5" />
+      <path d="M8 4.5h8.5a2.5 2.5 0 0 1 2.5 2.5V15" />
+    </svg>
+  );
+}
+

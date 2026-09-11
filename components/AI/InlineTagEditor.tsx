@@ -2,8 +2,11 @@
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
+import { parseInlineTagTokens } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { getCached } from "@/lib/engine/imageCache";
+import { useEngine } from "@/lib/engine/store";
 import ImageReferencePreview from "./ImageReferencePreview";
+
 
 export type InlineTagEditorHandle = {
   insertTag: (ref: ComposerImageRef) => void;
@@ -243,6 +246,48 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     [cancelClose, scheduleClose, handleContentChange],
   );
 
+  const resolveImageRef = useCallback(
+    (objectId: string, displayName: string): ComposerImageRef => {
+      const found = availableImages.find(
+        (img) => img.objectId === objectId || img.displayName.toLowerCase() === displayName.toLowerCase(),
+      );
+      if (found) return found;
+
+      const slide = useEngine.getState().currentSlide();
+      const el = slide?.elements.find(
+        (candidate) =>
+          !candidate.isDeleted &&
+          (candidate.id === objectId || candidate.name === displayName),
+      );
+      if (el && "fileId" in el && typeof (el as any).fileId === "string") {
+        return {
+          objectId: el.id,
+          elementVersion: el.version,
+          fileId: (el as any).fileId || "",
+          displayName: (el as any).sourceName || el.name || displayName,
+          sourceWidth: (el as any).naturalWidth || el.width,
+          sourceHeight: (el as any).naturalHeight || el.height,
+          width: el.width,
+          height: el.height,
+          angle: el.angle,
+        };
+      }
+
+      return {
+        objectId: objectId || `img-${Date.now()}`,
+        elementVersion: 1,
+        fileId: objectId,
+        displayName: displayName || "Image",
+        sourceWidth: 100,
+        sourceHeight: 100,
+        width: 100,
+        height: 100,
+        angle: 0,
+      };
+    },
+    [availableImages],
+  );
+
   const insertTagAtCaret = useCallback(
     (imgRef: ComposerImageRef) => {
       const editor = editorRef.current;
@@ -304,7 +349,28 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
       getValue: () => serializeDOM(),
       setValue: (val: string) => {
         if (!editorRef.current) return;
-        editorRef.current.textContent = val;
+        if (!val) {
+          editorRef.current.innerHTML = "";
+          setIsEmpty(true);
+          setHasTags(false);
+          return;
+        }
+        if (val.includes("@[")) {
+          editorRef.current.innerHTML = "";
+          const segments = parseInlineTagTokens(val);
+          for (const seg of segments) {
+            if (seg.type === "tag") {
+              const ref = resolveImageRef(seg.objectId, seg.displayName);
+              const pill = createTagPillElement(ref);
+              editorRef.current.appendChild(pill);
+              editorRef.current.appendChild(document.createTextNode("\u00A0"));
+            } else {
+              editorRef.current.appendChild(document.createTextNode(seg.text));
+            }
+          }
+        } else {
+          editorRef.current.textContent = val;
+        }
         setIsEmpty(!val.trim());
         setHasTags(val.includes("@["));
       },
@@ -320,8 +386,9 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         editorRef.current?.focus();
       },
     }),
-    [insertTagAtCaret, serializeDOM, onChange],
+    [insertTagAtCaret, serializeDOM, onChange, resolveImageRef, createTagPillElement],
   );
+
 
   // Filter available images for mention autocomplete
   const filteredMentionImages = availableImages.filter((img) =>
@@ -584,6 +651,103 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     }
   };
 
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const rawText = e.clipboardData.getData("text/plain");
+      if (!rawText) return;
+
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      const segments = parseInlineTagTokens(rawText);
+      const nodesToInsert: Node[] = [];
+
+      for (const seg of segments) {
+        if (seg.type === "tag") {
+          const existing = editor.querySelector(`[data-tag-object-id="${seg.objectId}"]`);
+          if (!existing) {
+            const ref = resolveImageRef(seg.objectId, seg.displayName);
+            const pill = createTagPillElement(ref);
+            nodesToInsert.push(pill);
+            nodesToInsert.push(document.createTextNode("\u00A0"));
+          }
+        } else {
+          const text = seg.text;
+          if (availableImages.length > 0 && text.includes("@")) {
+            const sortedImages = [...availableImages].sort(
+              (a, b) => b.displayName.length - a.displayName.length,
+            );
+            let remaining = text;
+            while (remaining.length > 0) {
+              let matched = false;
+              for (const img of sortedImages) {
+                const tagPrefix = `@${img.displayName}`;
+                const idx = remaining.indexOf(tagPrefix);
+                if (idx >= 0) {
+                  const beforeChar = idx > 0 ? remaining[idx - 1] : " ";
+                  if (/\s|^|[([{:;,]/.test(beforeChar)) {
+                    const before = remaining.slice(0, idx);
+                    if (before) nodesToInsert.push(document.createTextNode(before));
+                    const existing = editor.querySelector(`[data-tag-object-id="${img.objectId}"]`);
+                    if (!existing) {
+                      const pill = createTagPillElement(img);
+                      nodesToInsert.push(pill);
+                      nodesToInsert.push(document.createTextNode("\u00A0"));
+                    } else {
+                      nodesToInsert.push(document.createTextNode(tagPrefix));
+                    }
+                    remaining = remaining.slice(idx + tagPrefix.length);
+                    matched = true;
+                    break;
+                  }
+                }
+              }
+              if (!matched) {
+                nodesToInsert.push(document.createTextNode(remaining));
+                break;
+              }
+            }
+          } else {
+            nodesToInsert.push(document.createTextNode(text));
+          }
+        }
+      }
+
+      if (nodesToInsert.length === 0) return;
+
+      const sel = window.getSelection();
+      let range: Range | null = null;
+      if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+        range = sel.getRangeAt(0);
+        range.deleteContents();
+      } else {
+        range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+      }
+
+      const fragment = document.createDocumentFragment();
+      for (const node of nodesToInsert) {
+        fragment.appendChild(node);
+      }
+      const lastInserted = nodesToInsert[nodesToInsert.length - 1];
+      range.insertNode(fragment);
+
+      if (sel && lastInserted) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(lastInserted);
+        newRange.setEndAfter(lastInserted);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
+
+      editor.focus();
+      handleContentChange();
+    },
+    [availableImages, createTagPillElement, handleContentChange, resolveImageRef],
+  );
+
   const showTagsContainer = hasTags || omittedCount > 0;
 
   return (
@@ -597,6 +761,14 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         flexDirection: "column",
       }}
     >
+      <style>{`
+        .artshift-inline-editor * {
+          color: inherit !important;
+        }
+        .artshift-inline-editor .artshift-inline-tag-pill {
+          color: #3730a3 !important;
+        }
+      `}</style>
       {/* ContentEditable editor box */}
       <div
         ref={editorRef}
@@ -607,10 +779,12 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         aria-label="AI Assistance prompt"
         data-testid="ai-copilot-input"
         data-placeholder={placeholder}
+        className="artshift-inline-editor"
         // HTML attribute for compatibility with tests checking placeholder and rows
         {...({ placeholder, rows } as Record<string, unknown>)}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onFocus={onFocus}
         onBlur={onBlur}
         style={{

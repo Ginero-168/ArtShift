@@ -6,6 +6,7 @@ import type { CoPilotErrorCard } from "@/lib/ai/coPilot";
 import ComposerImageTags from "@/components/AI/ComposerImageTags";
 import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
 import {
+  ChatCopyIcon,
   ChevronDownIcon,
   CheckIcon,
   CloseIcon,
@@ -653,6 +654,31 @@ export function CollapsibleThought({
   );
 }
 
+export function buildPromptWithTagsForCopy(msg: CoPilotMessage): string {
+  let content = msg.content || "";
+  if (msg.imageRefs && msg.imageRefs.length > 0) {
+    const missingRefs: ComposerImageRef[] = [];
+    for (const ref of msg.imageRefs) {
+      const tagId = ref.objectId;
+      const tagName = ref.displayName;
+      const hasTag =
+        content.includes(`:${tagId}]`) ||
+        content.includes(`@[${tagName}`) ||
+        content.includes(`@${tagName}`);
+      if (!hasTag) {
+        missingRefs.push(ref);
+      }
+    }
+    if (missingRefs.length > 0) {
+      const prefix = missingRefs
+        .map((r) => `@[${r.displayName}:${r.objectId}]`)
+        .join(" ");
+      content = `${prefix} ${content}`.trim();
+    }
+  }
+  return content;
+}
+
 export default function ChatThread({
   messages,
   busy,
@@ -668,6 +694,41 @@ export default function ChatThread({
   onEditPromptFromError,
   children,
 }: ChatThreadProps) {
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  const handleCopyMessage = async (msg: CoPilotMessage) => {
+    const textToCopy = buildPromptWithTagsForCopy(msg);
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        throw new Error("Clipboard API unavailable");
+      }
+      setCopiedMessageId(msg.id);
+      setTimeout(() => {
+        setCopiedMessageId((prev) => (prev === msg.id ? null : prev));
+      }, 1800);
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = textToCopy;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopiedMessageId(msg.id);
+        setTimeout(() => {
+          setCopiedMessageId((prev) => (prev === msg.id ? null : prev));
+        }, 1800);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   return (
     <div
       style={{
@@ -764,6 +825,7 @@ export default function ChatThread({
       >
         {messages.map((msg) => {
           if (msg.role === "user") {
+            const isCopied = copiedMessageId === msg.id;
             return (
               <div
                 key={msg.id}
@@ -784,23 +846,81 @@ export default function ChatThread({
                 )}
                 <div
                   style={{
-                    padding: "7px 12px",
-                    borderRadius: "14px 14px 3px 14px",
-                    background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
-                    color: "#ffffff",
-                    fontSize: 12.5,
-                    fontWeight: 500,
-                    lineHeight: 1.45,
-                    wordBreak: "break-word",
-                    boxShadow: "0 1px 3px rgba(79, 70, 229, 0.12)",
+                    display: "flex",
+                    alignItems: "flex-end",
+                    gap: 6,
+                    maxWidth: "100%",
+                    justifyContent: "flex-end",
                   }}
                 >
-                  <InlineTagRenderer
-                    theme="dark"
-                    content={msg.content}
-                    imageRefs={msg.imageRefs}
-                    onSelect={(fileId) => onSelectCanvasImage(fileId)}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCopyMessage(msg)}
+                    title={isCopied ? "คัดลอกแล้ว!" : "คัดลอกข้อความพร้อม Name Tag"}
+                    aria-label="Copy user message"
+                    data-testid={`copy-user-message-${msg.id}`}
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 8,
+                      border: isCopied
+                        ? "1px solid #10b981"
+                        : "1px solid rgba(255, 255, 255, 0.12)",
+                      background: isCopied ? "#064e3b" : "#1e242d",
+                      color: isCopied ? "#34d399" : "#cbd5e1",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      boxShadow: "0 1.5px 4px rgba(0, 0, 0, 0.16)",
+                      flexShrink: 0,
+                      marginBottom: 2,
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isCopied) {
+                        e.currentTarget.style.background = "#2b323d";
+                        e.currentTarget.style.color = "#ffffff";
+                        e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+                        e.currentTarget.style.transform = "scale(1.04)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isCopied) {
+                        e.currentTarget.style.background = "#1e242d";
+                        e.currentTarget.style.color = "#cbd5e1";
+                        e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+                        e.currentTarget.style.transform = "scale(1)";
+                      }
+                    }}
+                  >
+                    {isCopied ? (
+                      <CheckIcon style={{ width: 12, height: 12 }} />
+                    ) : (
+                      <ChatCopyIcon size={13} />
+                    )}
+                  </button>
+
+                  <div
+                    style={{
+                      padding: "7px 12px",
+                      borderRadius: "14px 14px 3px 14px",
+                      background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
+                      color: "#ffffff",
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                      lineHeight: 1.45,
+                      wordBreak: "break-word",
+                      boxShadow: "0 1px 3px rgba(79, 70, 229, 0.12)",
+                    }}
+                  >
+                    <InlineTagRenderer
+                      theme="dark"
+                      content={msg.content}
+                      imageRefs={msg.imageRefs}
+                      onSelect={(fileId) => onSelectCanvasImage(fileId)}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -1151,6 +1271,35 @@ export default function ChatThread({
                     }}
                   >
                     <ThumbsDownIcon />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyMessage(msg)}
+                    title={copiedMessageId === msg.id ? "คัดลอกแล้ว!" : "คัดลอกข้อความ"}
+                    aria-label="Copy assistant message"
+                    data-testid={`copy-assistant-message-${msg.id}`}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: copiedMessageId === msg.id ? "#10b981" : "#94a3b8",
+                      cursor: "pointer",
+                      padding: 2,
+                      display: "flex",
+                      alignItems: "center",
+                      transition: "color 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#475569";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#94a3b8";
+                    }}
+                  >
+                    {copiedMessageId === msg.id ? (
+                      <CheckIcon style={{ width: 13, height: 13 }} />
+                    ) : (
+                      <ChatCopyIcon size={13} />
+                    )}
                   </button>
                 </div>
               )}

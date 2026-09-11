@@ -112,6 +112,39 @@ export function formatDisplayPrompt(text: string): string {
 }
 
 /**
+ * Builds a prompt string including all referenced image Name Tags suitable for copying.
+ * Preserves existing tags in text, and prepends missing tags from imageRefs.
+ */
+export function buildPromptWithTagsForCopy(
+  content: string,
+  imageRefs?: readonly { objectId: string; displayName: string }[],
+): string {
+  let result = content || "";
+  if (imageRefs && imageRefs.length > 0) {
+    const missingRefs: { objectId: string; displayName: string }[] = [];
+    for (const ref of imageRefs) {
+      const tagId = ref.objectId;
+      const tagName = ref.displayName;
+      const hasTag =
+        result.includes(`:${tagId}]`) ||
+        result.includes(`@[${tagName}`) ||
+        result.includes(`@${tagName}`);
+      if (!hasTag) {
+        missingRefs.push(ref);
+      }
+    }
+    if (missingRefs.length > 0) {
+      const prefix = missingRefs
+        .map((r) => `@[${r.displayName}:${r.objectId}]`)
+        .join(" ");
+      result = `${prefix} ${result}`.trim();
+    }
+  }
+  return result;
+}
+
+
+/**
  * Synthesizes inline tags with their full visual analyses, generating:
  * 1. Semantic mapping linking the sentence structure to visual features
  * 2. An expanded prompt for downstream image generation models

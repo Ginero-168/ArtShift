@@ -143,7 +143,7 @@ export default function InlineTagRenderer({
               fontWeight: 600,
               lineHeight: 1,
               cursor: "pointer",
-              userSelect: "none",
+              userSelect: "text",
               transition: "all 0.15s ease",
             }}
             onMouseEnter={(e) => {
