@@ -9,18 +9,22 @@ import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner
 import { createAiTask } from "@/lib/ai/orchestration/taskMachine";
 import { useEngine } from "@/lib/engine/store";
 
-vi.mock("@/lib/ai/imageGeneration", () => ({
-  generateAIImage: vi.fn().mockResolvedValue({
-    dataUrl: "data:image/png;base64,AA==",
-    fileId: "file-evidence-1",
-    width: 1024,
-    height: 1024,
-    seed: 0,
-    model: "openai/gpt-image-2",
-    prompt: "Create a realistic pig",
-  }),
-  resolveImageGenerationDimensions: vi.fn().mockReturnValue({ width: 1024, height: 1024 }),
-}));
+vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/imageGeneration")>();
+  return {
+    ...actual,
+    generateAIImage: vi.fn().mockResolvedValue({
+      dataUrl: "data:image/png;base64,AA==",
+      fileId: "file-evidence-1",
+      width: 1024,
+      height: 1024,
+      seed: 0,
+      model: "openai/gpt-image-2",
+      prompt: "Create a realistic pig",
+    }),
+    resolveImageGenerationDimensions: vi.fn().mockReturnValue({ width: 1024, height: 1024 }),
+  };
+});
 
 vi.mock("@/lib/engine/imageCache", () => ({
   preloadDataURL: vi.fn().mockResolvedValue({

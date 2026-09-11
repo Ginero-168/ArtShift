@@ -964,6 +964,16 @@ export default function AICoPilotBar() {
                     isEditTurn,
                   );
 
+                  const partialFailureCount =
+                    imageRun.requestedOutputCount > 1
+                      ? imageRun.requestedOutputCount - runResult.completedCount
+                      : 0;
+                  let completionSuggestions = ["ปรับรายละเอียดต่อ", "ตรวจสอบ Layout", "↶ Undo ผลลัพธ์ล่าสุด"];
+                  if (partialFailureCount > 0) {
+                    reply += `\n\n⚠️ หมายเหตุ: มีอีก ${partialFailureCount} ภาพที่สร้างไม่สำเร็จเนื่องจาก AI Provider ขัดข้องชั่วคราว คุณสามารถกดสร้างภาพที่เหลือใหม่ได้ครับ`;
+                    completionSuggestions = ["🔄 สร้างภาพที่เหลือใหม่", ...completionSuggestions];
+                  }
+
                   setMessages((previous) => [
                     ...previous,
                     {
@@ -975,6 +985,7 @@ export default function AICoPilotBar() {
                       images: generatedImages,
                       timestamp: Date.now(),
                       actions,
+                      suggestions: completionSuggestions,
                     },
                   ]);
                   setLiveAssistantState(null);
@@ -1431,13 +1442,67 @@ export default function AICoPilotBar() {
         scrollRef={scrollRef}
         onSelectCanvasImage={handleSelectCanvasImage}
         onSelectSuggestion={(sug, errorCard) => {
-          if (sug.startsWith("✏️") && errorCard?.promptToEdit) {
-            setInput(errorCard.promptToEdit);
-            editorRef.current?.setValue(errorCard.promptToEdit);
-            editorRef.current?.focus();
-          } else {
-            handleSend(sug);
+          const isEditAction =
+            sug.startsWith("✏️") ||
+            sug.includes("ปรับแต่ง") ||
+            sug.includes("ปรับปรุง") ||
+            sug.includes("แก้ไขคำขอ") ||
+            sug.includes("Edit prompt") ||
+            sug.includes("แก้ brief");
+
+          if (isEditAction) {
+            const promptToEdit =
+              errorCard?.promptToEdit ||
+              messages
+                .slice()
+                .reverse()
+                .find((m) => m.role === "user")?.content ||
+              editorRef.current?.getValue() ||
+              input;
+            if (promptToEdit) {
+              setInput(promptToEdit);
+              editorRef.current?.setValue(promptToEdit);
+              editorRef.current?.focus();
+              const refinement = createPromptRefinement(promptToEdit);
+              setPromptRefinementData(refinement);
+            }
+            return;
           }
+
+          const isRetryAction =
+            sug.includes("ลองสร้างใหม่อีกครั้ง") ||
+            sug.includes("ลองใหม่อีกครั้ง") ||
+            sug.includes("สร้างภาพที่เหลือใหม่") ||
+            sug.startsWith("🔄");
+
+          if (isRetryAction) {
+            const promptToRetry =
+              errorCard?.promptToEdit ||
+              messages
+                .slice()
+                .reverse()
+                .find((m) => m.role === "user")?.content ||
+              editorRef.current?.getValue() ||
+              input;
+            if (promptToRetry) {
+              handleSend(promptToRetry);
+              return;
+            }
+          }
+
+          if (
+            sug.includes("ตรวจสอบภาพที่เลือกบน Canvas") ||
+            sug.includes("ตรวจสอบภาพที่เลือก")
+          ) {
+            handleSelectCanvasImage();
+            return;
+          }
+
+          if (sug.includes("ตรวจสอบการตั้งค่า API Token") || sug.startsWith("⚙️")) {
+            return;
+          }
+
+          handleSend(sug);
         }}
         onToggleFeedback={handleToggleFeedback}
         onClearHistory={handleClearHistory}
@@ -1445,6 +1510,8 @@ export default function AICoPilotBar() {
           setInput(prompt);
           editorRef.current?.setValue(prompt);
           editorRef.current?.focus();
+          const refinement = createPromptRefinement(prompt);
+          setPromptRefinementData(refinement);
         }}
       >
         <ChatActionCards

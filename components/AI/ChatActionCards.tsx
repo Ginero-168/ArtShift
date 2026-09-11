@@ -76,6 +76,26 @@ export function ContentPolicyErrorCard({
       >
         {errorCard.description}
       </div>
+      {errorCard.promptToEdit && (
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.05)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            borderRadius: 8,
+            padding: "8px 12px",
+            fontSize: 11.5,
+            color: "#94a3b8",
+            fontFamily: "ui-monospace, monospace",
+            maxHeight: 68,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            lineHeight: 1.4,
+          }}
+        >
+          <span style={{ color: "#64748b", fontWeight: 600, marginRight: 6 }}>คำขอ:</span>
+          {errorCard.promptToEdit}
+        </div>
+      )}
       {errorCard.actionText && (
         <button
           type="button"

@@ -7,15 +7,19 @@ const visionCaptionMock = vi.hoisted(() => vi.fn());
 const visionDetectMock = vi.hoisted(() => vi.fn());
 const visionOcrMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/ai/imageGeneration", () => ({
-  generateAIImage: generateImageMock,
-  GPT_IMAGE_2_ESTIMATED_COST_USD: 0.05,
-  resolveImageGenerationDimensions: () => ({
-    width: 1024,
-    height: 1024,
-    aspectRatio: "1:1",
-  }),
-}));
+vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/imageGeneration")>();
+  return {
+    ...actual,
+    generateAIImage: generateImageMock,
+    GPT_IMAGE_2_ESTIMATED_COST_USD: 0.05,
+    resolveImageGenerationDimensions: () => ({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    }),
+  };
+});
 vi.mock("@/lib/engine/imageCache", () => ({
   getCached: getCachedMock,
   preloadDataURL: preloadDataURLMock,

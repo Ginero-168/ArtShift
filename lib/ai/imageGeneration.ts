@@ -161,6 +161,131 @@ export function enrichPrompt(rawPrompt: string): string {
 }
 
 /**
+ * Streamlines and optimizes a complex prompt for image diffusion models.
+ * - Extracts titles/headers and formats them as clean typography directives.
+ * - Detects and safely transforms speech bubbles / conversational Thai dialogue into visual atmosphere.
+ * - Enriches Thai visual concepts with descriptive visual keywords (cuisine, landscape, composition).
+ * - Strips conversational fluff and returns a concise, high-aesthetic prompt.
+ */
+export function streamlinePromptForImageGen(rawPrompt: string): string {
+  let cleaned = cleanImagePrompt(rawPrompt);
+  if (!cleaned) return "beautiful aesthetic digital art";
+
+  // 1. Extract Title
+  let titleText: string | undefined;
+  const titleMatch =
+    /(?:(?:มี|ใส่)?\s*(?:title|หัวข้อ|ชื่อเรื่อง|ข้อความหัวเรื่อง|พาดหัว|ข้อความว่า)\s*(?:ว่า|คือ)?\s*["“'「]([^"”'」]+)["”'」])/iu.exec(
+      cleaned,
+    );
+  if (titleMatch) {
+    titleText = titleMatch[1].trim();
+  }
+
+  // 2. Extract Speech Bubble / Balloon Text
+  let bubbleText: string | undefined;
+  const bubbleMatch =
+    /(?:(?:และ)?(?:มี)?\s*(?:bubble|บอลลูน|กล่องคำพูด|คำพูด|bubble\s*ข้อความ|ข้อความใน\s*bubble)\s*(?:ข้อความ)?\s*(?:เช่น|ว่า|คือ)?\s*["“'「]([^"”'」]+)["”'」])/iu.exec(
+      cleaned,
+    );
+  if (bubbleMatch) {
+    bubbleText = bubbleMatch[1].trim();
+  }
+
+  // Remove literal title/bubble clauses from base visual description to avoid diffusion text encoder choke
+  cleaned = cleaned
+    .replace(
+      /(?:(?:มี|ใส่)?\s*(?:title|หัวข้อ|ชื่อเรื่อง|ข้อความหัวเรื่อง|พาดหัว)\s*(?:ว่า|คือ)?\s*["“'「][^"”'」]+["”'」])/giu,
+      "",
+    )
+    .replace(
+      /(?:(?:และ)?(?:มี)?\s*(?:bubble|บอลลูน|กล่องคำพูด|คำพูด|bubble\s*ข้อความ|ข้อความใน\s*bubble)\s*(?:ข้อความ)?\s*(?:เช่น|ว่า|คือ)?\s*["“'「][^"”'」]+["”'」])/giu,
+      "",
+    )
+    .replace(/(?:และ)?(?:มี)?\s*(?:bubble|บอลลูน|กล่องคำพูด)\s*ข้อความ[^\s,]+/giu, "")
+    .trim();
+
+  const visualComponents: string[] = [];
+
+  // Poster / Advertisement
+  if (/โปสเตอร์|แบนเนอร์|poster|banner|โฆษณา|advertising/i.test(rawPrompt)) {
+    visualComponents.push("commercial advertising poster design, vibrant professional layout");
+  }
+
+  // Thai Food / Cuisine
+  if (/อาหารไทย/i.test(rawPrompt)) {
+    visualComponents.push(
+      "grand banquet feast of popular authentic Thai cuisine dishes, pad thai, tom yum, green curry, fresh herbs, appetizing presentation",
+    );
+  } else if (/อาหาร/i.test(rawPrompt)) {
+    visualComponents.push("delicious gourmet meal banquet, professional culinary photography");
+  }
+
+  // Wide angle / Perspective
+  if (/มุมกว้าง|พาโนรามา|wide[- ]?angle|panoramic/i.test(rawPrompt)) {
+    visualComponents.push("cinematic wide-angle perspective, grand expansive depth of field");
+  }
+
+  // Temple / Architecture
+  if (/วัดไทย|วัด|temple/i.test(rawPrompt)) {
+    visualComponents.push(
+      "majestic traditional golden Thai Buddhist temple silhouette in the distant horizon",
+    );
+  }
+
+  // People / Crowd
+  if (/ผู้คนมากมาย|คนมากมาย|ผู้คน|crowd|people/i.test(rawPrompt)) {
+    visualComponents.push(
+      "lively bustling crowd of people in atmospheric warm background with shallow depth of field",
+    );
+  }
+
+  // Cat / Dog / Animals
+  if (/แมว|น้องแมว/i.test(rawPrompt) && !visualComponents.some((c) => c.includes("cat"))) {
+    visualComponents.push("cute fluffy cat, highly detailed fur, studio lighting");
+  } else if (/หมา|สุนัข/i.test(rawPrompt) && !visualComponents.some((c) => c.includes("dog"))) {
+    visualComponents.push("cute playful dog, highly detailed, studio lighting");
+  }
+
+  // Add typography directive if title was present
+  if (titleText) {
+    visualComponents.push(`bold artistic typography header reading "${titleText}"`);
+  }
+
+  // If bubble text was requested, transform into clean typography or celebratory slogan
+  if (bubbleText) {
+    if (/^[A-Za-z0-9\s.,!'-]+$/.test(bubbleText)) {
+      visualComponents.push(`clean text badge with "${bubbleText}"`);
+    } else {
+      visualComponents.push("festive advertising ribbon badge with celebratory mood");
+    }
+  }
+
+  // Add standard quality modifiers
+  visualComponents.push(
+    "8k resolution, cinematic lighting, sharp focus, masterwork commercial art",
+  );
+
+  if (visualComponents.length > 1) {
+    return visualComponents.join(", ");
+  }
+
+  return enrichPrompt(rawPrompt);
+}
+
+/**
+ * Pre-flight sanitization for prompts before sending to image generation.
+ * Strips conversational constructs that fail diffusion models (like Thai text in bubbles).
+ */
+export function sanitizeAndPrepareImagePrompt(rawPrompt: string): string {
+  const containsProblematicBubble =
+    /(?:bubble|บอลลูน|กล่องคำพูด)/i.test(rawPrompt) && /[\u0E00-\u0E7F]/.test(rawPrompt);
+  if (containsProblematicBubble) {
+    return streamlinePromptForImageGen(rawPrompt);
+  }
+  return cleanImagePrompt(rawPrompt) || rawPrompt.trim();
+}
+
+/**
  * Generates an image through the server-owned AI Runtime and loads it into
  * the ArtShift image cache. Model/provider selection is server-owned.
  */

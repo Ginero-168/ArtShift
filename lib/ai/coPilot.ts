@@ -4,7 +4,10 @@
  * edits visuals (RemoveBG, Vectorize), and arranges layouts (60-30-10).
  */
 
-import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import {
+  isImageGenerationPrompt,
+  streamlinePromptForImageGen,
+} from "@/lib/ai/imageGeneration";
 import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
@@ -972,6 +975,12 @@ export function diagnoseOrchestratorError(
       reply:
         "ไม่สามารถเชื่อมต่อกับ AI Provider ได้ครับ เนื่องจากระบบไม่พบ API Token หรือ Token หมดอายุ กรุณาไปที่หน้า Settings เพื่อตรวจสอบและบันทึก Replicate หรือ Google API Key ของคุณครับ",
       suggestions: ["⚙️ ตรวจสอบการตั้งค่า API Token", "ลองใหม่อีกครั้ง"],
+      errorCard: {
+        title: "ไม่พบการตั้งค่า API Token",
+        description: "กรุณาไปที่หน้า Settings เพื่อตรวจสอบและบันทึก API Token ของคุณ",
+        actionText: "⚙️ ตรวจสอบการตั้งค่า API Token",
+        promptToEdit: userPrompt,
+      },
     };
   }
 
@@ -987,15 +996,58 @@ export function diagnoseOrchestratorError(
       reply:
         "ขณะนี้ระบบถูกเรียกใช้งานถี่เกินไปจนติดข้อจำกัดอัตราการเรียก (Rate Limit) กรุณารอสักครู่แล้วลองส่งคำขอใหม่อีกครั้งครับ",
       suggestions: ["⏳ ลองใหม่อีกครั้งใน 10 วินาที", "✏️ ปรับปรุงคำขอก่อนส่ง"],
+      errorCard: {
+        title: "คำขอเกินขีดจำกัดชั่วคราว (Rate limit)",
+        description:
+          "ระบบถูกเรียกใช้งานถี่เกินไป คุณสามารถปรับแต่งคำขอในช่องพิมพ์แล้วลองส่งใหม่ได้ครับ",
+        actionText: "✏️ ปรับปรุงคำขอก่อนส่ง",
+        promptToEdit: userPrompt,
+      },
     };
   }
 
-  // 4. Fallback / General Error
+  // 4. Provider 502 / Bad Gateway / Overload / Timeout
+  if (
+    errorLower.includes("502") ||
+    errorLower.includes("504") ||
+    errorLower.includes("bad gateway") ||
+    errorLower.includes("gateway timeout") ||
+    errorLower.includes("provider_unavailable") ||
+    errorLower.includes("timeout") ||
+    errorLower.includes("timed out")
+  ) {
+    const streamlined = streamlinePromptForImageGen(userPrompt);
+    return {
+      shortReason: "AI Provider ขัดข้องชั่วคราว (Status 502 / Timeout)",
+      reply: `ไม่สามารถสร้างภาพได้สำเร็จครับ: AI Image Studio failed with status 502 (AI Provider ขัดข้องชั่วคราวหรือประมวลผลไม่ทัน)
+
+💡 ระบบได้จัดเตรียมคำขอฉบับปรับปรุงที่ลดความซับซ้อนให้เรียบร้อยแล้ว คุณสามารถกด "✏️ ปรับแต่งคำขอใหม่" เพื่อแก้ไขในช่องพิมพ์ หรือกด "🔄 ลองสร้างใหม่อีกครั้ง" ได้ทันทีครับ`,
+      suggestions: ["✏️ ปรับแต่งคำขอใหม่", "🔄 ลองสร้างใหม่อีกครั้ง", "🔍 ตรวจสอบภาพที่เลือกบน Canvas"],
+      errorCard: {
+        title: "การสร้างภาพไม่สำเร็จ (Status 502)",
+        description:
+          "เซิร์ฟเวอร์ AI Provider ขัดข้องชั่วคราว หรือคำขอมีความซับซ้อนเกินไป คุณสามารถปรับแต่งคำขอในช่องพิมพ์แล้วลองใหม่อีกครั้ง",
+        actionText: "✏️ ปรับแต่งคำขอใหม่",
+        promptToEdit: streamlined || userPrompt,
+      },
+      alternativePrompt: streamlined,
+    };
+  }
+
+  // 5. Fallback / General Error
+  const fallbackStreamlined = streamlinePromptForImageGen(userPrompt);
   return {
     shortReason: "การสร้างภาพไม่สำเร็จ",
     reply: `ไม่สามารถสร้างภาพได้สำเร็จครับ: ${rawError || "เกิดข้อผิดพลาดในการประมวลผลจากโมเดล AI"}
 
 💡 ลองปรับคำบรรยายให้กระชับ ชัดเจนขึ้น หรือตรวจสอบภาพอ้างอิงที่เลือกบน Canvas ครับ`,
-    suggestions: ["✏️ ปรับแต่งคำขอใหม่", "🔍 ตรวจสอบภาพที่เลือกบน Canvas"],
+    suggestions: ["✏️ ปรับแต่งคำขอใหม่", "🔄 ลองสร้างใหม่อีกครั้ง", "🔍 ตรวจสอบภาพที่เลือกบน Canvas"],
+    errorCard: {
+      title: "การสร้างภาพไม่สำเร็จ",
+      description: `${rawError || "เกิดข้อผิดพลาดในการประมวลผลจากโมเดล AI"} คุณสามารถกดปุ่มด้านล่างเพื่อแก้ไขคำขอในช่องพิมพ์`,
+      actionText: "✏️ ปรับแต่งคำขอใหม่",
+      promptToEdit: fallbackStreamlined || userPrompt,
+    },
+    alternativePrompt: fallbackStreamlined,
   };
 }

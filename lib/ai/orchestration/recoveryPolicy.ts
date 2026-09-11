@@ -7,7 +7,8 @@ export type RecoveryFailureKind =
   | "polling"
   | "quality"
   | "network"
-  | "capability";
+  | "capability"
+  | "provider_error";
 
 export type RecoveryInput = {
   kind: RecoveryFailureKind;
@@ -45,6 +46,13 @@ export function decideRecovery(input: RecoveryInput): RecoveryDecision {
   }
   if (input.attempt >= input.maxAttempts) {
     return { action: "stop", reason: "ถึงขีดจำกัดจำนวน attempt แล้ว" };
+  }
+  if (input.kind === "provider_error") {
+    return {
+      action: "retry",
+      nextAttempt: input.attempt + 1,
+      reason: "ปรับคำขอให้อัตโนมัติ (Streamline prompt) และลองใหม่อีกครั้ง",
+    };
   }
   if (input.kind === "quality") {
     return {

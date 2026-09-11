@@ -1,4 +1,9 @@
-import { generateAIImage, resolveImageGenerationDimensions } from "@/lib/ai/imageGeneration";
+import {
+  generateAIImage,
+  resolveImageGenerationDimensions,
+  sanitizeAndPrepareImagePrompt,
+  streamlinePromptForImageGen,
+} from "@/lib/ai/imageGeneration";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport, subscribeCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
@@ -192,8 +197,10 @@ export async function runContextAwareImageTask(
         for (let attempt = 1; attempt <= task.maxAttempts; attempt++) {
           throwIfAborted(executionSignal);
           const attemptPrompt = qualityRepairInstruction
-            ? `${task.prompt}\n\nQuality repair instruction: ${qualityRepairInstruction}`
-            : task.prompt;
+            ? qualityRepairInstruction.startsWith("Streamlined prompt: ")
+              ? qualityRepairInstruction.replace(/^Streamlined prompt:\s*/, "")
+              : `${task.prompt}\n\nQuality repair instruction: ${qualityRepairInstruction}`
+            : sanitizeAndPrepareImagePrompt(task.prompt);
           task = transition(task, { type: "running" }, options, {
             stage: "generating",
             message: `กำลังสร้างภาพ (ครั้งที่ ${attempt}/${task.maxAttempts})…`,
@@ -502,6 +509,10 @@ export async function runContextAwareImageTask(
             if (kind === "quality" && !qualityRepairInstruction) {
               qualityRepairInstruction = buildQualityRepairInstruction([errorMessage(error)]);
             }
+            if (kind === "provider_error" && !qualityRepairInstruction) {
+              const streamlined = streamlinePromptForImageGen(task.prompt);
+              qualityRepairInstruction = `Streamlined prompt: ${streamlined}`;
+            }
             if (kind === "quality") {
               task = appendAiTaskEvent(task, { type: "quality.checked", passed: false, attempt });
             }
@@ -550,11 +561,20 @@ export async function runContextAwareImageTask(
               });
               task = transition(task, { type: "retry", reason: recovery.reason }, options, {
                 stage: "retrying",
-                message: `กำลังแก้ปัญหาและลองใหม่: ${recovery.reason}`,
+                message:
+                  kind === "provider_error"
+                    ? "ระบบปรับคำขอให้อัตโนมัติและกำลังลองสร้างใหม่อีกครั้ง…"
+                    : `กำลังแก้ปัญหาและลองใหม่: ${recovery.reason}`,
                 attempt,
                 quality: task.quality,
               });
-              context.update({ progress: 0, message: `กำลังแก้ปัญหาและลองใหม่…` });
+              context.update({
+                progress: 0,
+                message:
+                  kind === "provider_error"
+                    ? "ระบบปรับคำขอให้อัตโนมัติและกำลังสร้างภาพใหม่…"
+                    : `กำลังแก้ปัญหาและลองใหม่…`,
+              });
               continue;
             }
             task = appendAiTaskEvent(task, {
@@ -674,7 +694,7 @@ function assertCommitTarget(
   }
 }
 
-function classifyFailure(error: unknown): RecoveryFailureKind {
+export function classifyFailure(error: unknown): RecoveryFailureKind {
   if (isOutcomeUnknownError(error)) return "polling";
   const message = errorMessage(error).toLocaleLowerCase();
   const errorCode =
@@ -708,6 +728,18 @@ function classifyFailure(error: unknown): RecoveryFailureKind {
     message.includes("creative director review")
   )
     return "quality";
+  if (
+    message.includes("502") ||
+    message.includes("503") ||
+    message.includes("504") ||
+    message.includes("500") ||
+    message.includes("bad gateway") ||
+    message.includes("gateway timeout") ||
+    message.includes("provider_unavailable") ||
+    message.includes("failed with status 502") ||
+    message.includes("failed with status 504")
+  )
+    return "provider_error";
   if (message.includes("network") || message.includes("reach") || message.includes("timeout"))
     return "network";
   return "capability";
