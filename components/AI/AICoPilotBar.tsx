@@ -259,10 +259,14 @@ export default function AICoPilotBar() {
   const [pendingClarification, setPendingClarification] =
     useState<PendingClarification | null>(null);
   const [liveAssistantState, setLiveAssistantState] = useState<{
-    stage: "outputting" | "generating";
+    stage: "outputting" | "generating" | "analyzing" | "planning";
     thought?: string;
     toolLabel?: string;
     requestedCount?: number;
+    statusMessage?: string;
+    prompt?: string;
+    isEdit?: boolean;
+    stepDetails?: string[];
   } | null>(null);
   const [feedbackState, setFeedbackState] = useState<Record<string, "up" | "down">>({});
   const [promptRefinementData, setPromptRefinementData] =
@@ -513,31 +517,23 @@ export default function AICoPilotBar() {
     }
   };
 
-  const handleSend = async (customPrompt?: string, skipRefinementCheck = false) => {
+  const handleTogglePromptHelper = () => {
+    if (promptRefinementData) {
+      setPromptRefinementData(null);
+    } else {
+      const currentPrompt = (editorRef.current?.getValue() ?? input).trim();
+      const basePrompt = currentPrompt || "สร้างภาพ";
+      const refinement = createPromptRefinement(basePrompt);
+      setPromptRefinementData(refinement);
+    }
+  };
+
+  const handleSend = async (customPrompt?: string, _skipRefinementCheck?: boolean) => {
     const rawPrompt = (customPrompt ?? editorRef.current?.getValue() ?? input).trim();
     if (!rawPrompt || busy) return;
 
-    if (!skipRefinementCheck && isBroadImagePrompt(rawPrompt)) {
-      const refinement = createPromptRefinement(rawPrompt);
-      setPromptRefinementData(refinement);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "user",
-          content: rawPrompt,
-          timestamp: Date.now(),
-        },
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `กำลังวิเคราะห์ความต้องการสร้าง ${refinement.baseSubject} ให้คุณครับ! คุณสามารถเลือกปรับแต่งคุณลักษณะต่างๆ (เช่น สี, สายพันธุ์, พื้นหลัง, มุมกล้อง) ผ่านการ์ดด้านล่าง เพื่อให้ได้ภาพที่ตรงตามจินตนาการมากที่สุดครับ ✨`,
-          timestamp: Date.now(),
-        },
-      ]);
-      setInput("");
-      editorRef.current?.clear();
-      return;
+    if (promptRefinementData) {
+      setPromptRefinementData(null);
     }
 
     const pending = pendingClarification;
@@ -606,9 +602,15 @@ export default function AICoPilotBar() {
       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
     };
 
+    const isEditTurn = refsForTurn.length > 0;
     setMessages((prev) => [...prev, userMsg]);
     setCurrentActions([]);
-    setLiveAssistantState({ stage: "outputting" });
+    setLiveAssistantState({
+      stage: isEditTurn ? "analyzing" : "outputting",
+      prompt: promptToSend,
+      isEdit: isEditTurn,
+      statusMessage: isEditTurn ? "กำลังวิเคราะห์ภาพต้นฉบับ..." : "กำลังประมวลผลคำสั่ง...",
+    });
 
     try {
       let analysesForTurn: ImageReferenceAnalysis[] = pending
@@ -657,6 +659,12 @@ export default function AICoPilotBar() {
           };
           analysisActions.push(analysisAction);
           upsertCurrentAction(analysisAction);
+          setLiveAssistantState({
+            stage: "analyzing",
+            prompt: promptToSend,
+            isEdit: true,
+            statusMessage: "กำลังวิเคราะห์ภาพต้นฉบับและบริบท...",
+          });
           try {
             analysesForTurn = await analyzeImageReferences(
               refsForTurn,
@@ -664,6 +672,11 @@ export default function AICoPilotBar() {
               (completed, total, stage) => {
                 analysisAction.description = `${stage} · ${Math.round((completed / Math.max(1, total)) * 100)}%`;
                 upsertCurrentAction({ ...analysisAction });
+                setLiveAssistantState((prev) => ({
+                  ...(prev || { stage: "analyzing", prompt: promptToSend, isEdit: true }),
+                  stage: "analyzing",
+                  statusMessage: `กำลังวิเคราะห์ภาพ (${Math.round((completed / Math.max(1, total)) * 100)}%)...`,
+                }));
               },
             );
             analysisAction.status = "success";
@@ -724,6 +737,11 @@ export default function AICoPilotBar() {
           };
           actions = [...actions, taskAction];
           upsertCurrentAction({ ...taskAction });
+          setLiveAssistantState((prev) => ({
+            ...(prev || { prompt: promptToSend, isEdit: refsForTurn.length > 0 }),
+            stage: "planning",
+            statusMessage: "Creative Director กำลังวางแผนงาน...",
+          }));
           // Creative Director disclosure copy:
           // งานนี้จะส่งคำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
           const consent = true;
@@ -828,6 +846,9 @@ export default function AICoPilotBar() {
                   thought: thoughtText,
                   toolLabel: `Generating images using ${direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias}`,
                   requestedCount: count,
+                  statusMessage: `กำลังสร้างรูปภาพด้วย ${direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias}...`,
+                  prompt: rawPrompt,
+                  isEdit: isEditTurn,
                 });
 
                 taskAction.taskId = imageRun.id;
@@ -862,6 +883,14 @@ export default function AICoPilotBar() {
                           ? "success"
                           : "running";
                     upsertCurrentAction({ ...taskAction });
+                    setLiveAssistantState((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            statusMessage: update.message,
+                          }
+                        : null,
+                    );
                   },
                 });
 
@@ -1422,7 +1451,7 @@ export default function AICoPilotBar() {
           promptRefinementData={promptRefinementData}
           onGenerateFromRefinement={(refined) => {
             setPromptRefinementData(null);
-            handleSend(refined, true);
+            handleSend(refined);
           }}
           onApplyRefinementToComposer={(refined) => {
             setInput(refined);
@@ -1464,6 +1493,8 @@ export default function AICoPilotBar() {
         onStop={() => abortRef.current?.abort()}
         onBackspaceAtStart={removeLastAttachedImage}
         onInlineTagsChange={handleInlineTagsChange}
+        onTogglePromptHelper={handleTogglePromptHelper}
+        isPromptHelperOpen={Boolean(promptRefinementData)}
       />
     </div>
   );

@@ -61,6 +61,38 @@ export function ImageSparkleIcon({
   );
 }
 
+export function MagicWandPromptIcon({
+  className = "",
+  style = {},
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style }}
+      className={className}
+    >
+      <path d="m15 4 4 4L7.5 19.5a2.12 2.12 0 0 1-3-3L15 4Z" />
+      <path d="m13 6 4 4" />
+      <path d="M19 14v4" />
+      <path d="M21 16h-4" />
+      <path d="M7 2v3" />
+      <path d="M8.5 3.5h-3" />
+      <path d="M3 10v2" />
+      <path d="M4 11H2" />
+    </svg>
+  );
+}
+
 export function ThumbsUpIcon({ style = {} }: { style?: React.CSSProperties }) {
   return (
     <svg

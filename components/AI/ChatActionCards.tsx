@@ -455,6 +455,22 @@ export function StagedVariationsCard({
             key={v.id}
             onMouseEnter={() => onVariationHover(v)}
             onMouseLeave={onVariationLeave}
+            draggable={true}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(
+                "application/x-artshift-chat-image",
+                JSON.stringify({ fileId: v.fileId || "", url: v.url || "" }),
+              );
+              if (v.fileId) {
+                e.dataTransfer.setData("artshift/file-id", v.fileId);
+              }
+              if (v.url) {
+                e.dataTransfer.setData("text/uri-list", v.url);
+                e.dataTransfer.setData("text/plain", v.url);
+              }
+              e.dataTransfer.effectAllowed = "copy";
+            }}
+            title="คลิกเพื่อพรีวิว หรือลากไปวางบน Canvas ได้"
             style={{
               position: "relative",
               flex: "0 0 110px",
@@ -466,7 +482,7 @@ export function StagedVariationsCard({
               display: "flex",
               flexDirection: "column",
               gap: 4,
-              cursor: "pointer",
+              cursor: "grab",
             }}
           >
             <div
@@ -487,10 +503,12 @@ export function StagedVariationsCard({
                 <img
                   src={v.url}
                   alt={v.label || "Candidate preview"}
+                  draggable={false}
                   style={{
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
+                    pointerEvents: "none",
                   }}
                 />
               ) : (

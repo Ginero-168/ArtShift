@@ -23,10 +23,14 @@ export interface ChatThreadProps {
   messages: CoPilotMessage[];
   busy: boolean;
   liveAssistantState: {
-    stage: "outputting" | "generating";
+    stage: "outputting" | "generating" | "analyzing" | "planning";
     thought?: string;
     toolLabel?: string;
     requestedCount?: number;
+    statusMessage?: string;
+    prompt?: string;
+    isEdit?: boolean;
+    stepDetails?: string[];
   } | null;
   streamingText: string;
   currentActions: SubAgentActionLog[];
@@ -69,7 +73,22 @@ export function UserMessageImagePreviews({
           <div
             key={`${ref.objectId}:${ref.elementVersion}`}
             onClick={() => onSelect(ref.fileId)}
-            title={`คลิกเพื่อเลือกภาพ ${ref.displayName} บน Canvas`}
+            draggable={true}
+            onDragStart={(e) => {
+              const cachedData = getCached(ref.fileId);
+              const url = cachedData?.dataURL || "";
+              e.dataTransfer.setData(
+                "application/x-artshift-chat-image",
+                JSON.stringify({ fileId: ref.fileId, url }),
+              );
+              e.dataTransfer.setData("artshift/file-id", ref.fileId);
+              if (url) {
+                e.dataTransfer.setData("text/uri-list", url);
+                e.dataTransfer.setData("text/plain", url);
+              }
+              e.dataTransfer.effectAllowed = "copy";
+            }}
+            title={`คลิกเพื่อเลือกภาพ ${ref.displayName} หรือลากไปวางบน Canvas`}
             style={{
               position: "relative",
               maxWidth: refs.length === 1 ? 240 : 150,
@@ -80,7 +99,7 @@ export function UserMessageImagePreviews({
               background: "#f8fafc",
               border: "1.5px solid #e2e8f0",
               boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-              cursor: "pointer",
+              cursor: "grab",
               transition: "transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease",
             }}
             onMouseEnter={(e) => {
@@ -99,11 +118,13 @@ export function UserMessageImagePreviews({
               <img
                 src={dataUrl}
                 alt={ref.displayName}
+                draggable={false}
                 style={{
                   width: "100%",
                   maxHeight: 200,
                   display: "block",
                   objectFit: "cover",
+                  pointerEvents: "none",
                 }}
               />
             ) : (
@@ -157,12 +178,154 @@ export function CollapsibleThought({
   thought,
   isLive = false,
   defaultOpen = false,
+  statusMessage,
+  stage = "outputting",
+  prompt,
+  isEdit = false,
+  customMessages,
 }: {
   thought: string;
   isLive?: boolean;
   defaultOpen?: boolean;
+  statusMessage?: string;
+  stage?: "outputting" | "generating" | "analyzing" | "planning";
+  prompt?: string;
+  isEdit?: boolean;
+  customMessages?: string[];
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [elapsedSec, setElapsedSec] = useState(1);
+
+  // Rotating thought messages list tailored to context
+  const messageList = React.useMemo(() => {
+    if (customMessages && customMessages.length > 0) {
+      return customMessages;
+    }
+
+    if (isEdit) {
+      return [
+        "กำลังวิเคราะห์รายละเอียดและตัวละครในภาพต้นฉบับ...",
+        "กำลังทำความเข้าใจคำขอและวางแผนปรับแต่ง...",
+        "Creative Director กำลังออกแบบบรรยากาศ แสง และเงา...",
+        "กำลังจัดวางองค์ประกอบให้กลมกลืนกับภาพเดิม...",
+        "กำลังส่งคำสั่งเพื่อเรนเดอร์รายละเอียดภาพ...",
+        "กำลังตรวจสอบคุณภาพและความสมดุลของผลงาน...",
+      ];
+    }
+
+    if (stage === "generating") {
+      return [
+        "กำลังวิเคราะห์โจทย์และคอนเซปต์ภาพ...",
+        "Creative Director กำลังจัดวางมุมกล้องและสัดส่วนภาพ...",
+        "กำลังคัดสรรคู่สี โทนแสง และรายละเอียดพื้นผิว...",
+        "กำลังส่งคำสั่งสร้างภาพความละเอียดสูง...",
+        "กำลังเรนเดอร์และปรับแต่งความสมบูรณ์...",
+        "กำลังตรวจสอบคุณภาพงานก่อนส่งมอบ...",
+      ];
+    }
+
+    if (stage === "analyzing") {
+      return [
+        "กำลังวิเคราะห์ภาพต้นฉบับและบริบทที่เกี่ยวข้อง...",
+        "กำลังตรวจจับวัตถุและโครงสร้างบน Canvas...",
+        "กำลังประเมินจุดสำคัญเพื่อนำมาใช้ออกแบบ...",
+        "กำลังส่งต่อข้อมูลให้ Creative Director...",
+      ];
+    }
+
+    if (stage === "planning") {
+      return [
+        "Creative Director กำลังวิเคราะห์และระดมไอเดีย...",
+        "กำลังจัดวางโครงสร้างและองค์ประกอบศิลป์...",
+        "กำลังเลือกสไตล์และโมเดลที่เหมาะสมที่สุด...",
+        "กำลังจัดเตรียมแนวทางสร้างภาพที่แม่นยำ...",
+      ];
+    }
+
+    return [
+      "กำลังคิดและวิเคราะห์บริบท...",
+      "กำลังทำความเข้าใจคำสั่งอย่างละเอียด...",
+      "กำลังวางแผนขั้นตอนการทำงาน...",
+      "Creative Director กำลังจัดเตรียมผลลัพธ์...",
+      "กำลังตรวจสอบความถูกต้องและรายละเอียด...",
+    ];
+  }, [stage, isEdit, customMessages]);
+
+  const effectiveMessages = React.useMemo(() => {
+    if (
+      statusMessage &&
+      !statusMessage.startsWith("กำลังจัดเตรียม") &&
+      !statusMessage.startsWith("กำลังวิเคราะห์บริบท")
+    ) {
+      if (!messageList.includes(statusMessage)) {
+        return [statusMessage, ...messageList];
+      }
+    }
+    return messageList;
+  }, [messageList, statusMessage]);
+
+  const currentMessage = effectiveMessages[messageIndex % effectiveMessages.length];
+
+  // Rotate messages while active
+  useEffect(() => {
+    if (!isLive) return;
+    const interval = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % effectiveMessages.length);
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [isLive, effectiveMessages.length]);
+
+  // Elapsed time counter
+  useEffect(() => {
+    if (!isLive) return;
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      setElapsedSec(Math.max(1, Math.floor((Date.now() - startTime) / 1000)));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isLive]);
+
+  const workflowSteps = React.useMemo(() => {
+    const isAnalyzing = stage === "analyzing";
+    const isPlanning = stage === "planning" || stage === "outputting";
+    const isGenerating = stage === "generating";
+
+    return [
+      {
+        label: isEdit ? "วิเคราะห์ภาพต้นฉบับและบริบทคำขอ" : "วิเคราะห์คำสั่งและบริบทบน Canvas",
+        status: isAnalyzing ? "current" : "done",
+      },
+      {
+        label: "Creative Director วางแผนแนวคิดและจัดองค์ประกอบ",
+        status: isAnalyzing ? "pending" : isPlanning ? "current" : "done",
+      },
+      {
+        label: isEdit ? "ปรับแต่งภาพ คุมแสงเงาและสไตล์เดิม" : "สร้างและเรนเดอร์ภาพความละเอียดสูง",
+        status: isGenerating ? "current" : isPlanning || isAnalyzing ? "pending" : "done",
+      },
+    ];
+  }, [stage, isEdit]);
+
+  const thoughtDisplay = React.useMemo(() => {
+    if (
+      thought &&
+      thought !== "กำลังจัดเตรียมผลลัพธ์..." &&
+      thought !== "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ..."
+    ) {
+      return thought;
+    }
+    if (isEdit) {
+      const cleanPrompt = prompt ? prompt.replace(/@[^\s]+\s*/g, "").trim() : "";
+      return cleanPrompt
+        ? `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งภาพโดย ${cleanPrompt} พร้อมคุมโทนสี แสง และเงาให้กลมกลืนเป็นธรรมชาติ`
+        : "กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งตามคำขอ โดยรักษาเอกลักษณ์ของตัวละครและบรรยากาศเดิม";
+    }
+    if (stage === "generating") {
+      return "กำลังสร้างสรรค์ภาพตามคอนเซปต์ของ Creative Director โดยเน้นความคมชัด แสงเงาที่สมจริง และองค์ประกอบระดับพรีเมียม";
+    }
+    return "กำลังวิเคราะห์และวางแผนกระบวนการทำงานที่ดีที่สุด เพื่อสร้างผลลัพธ์ที่ตรงกับคำขอของคุณมากที่สุด";
+  }, [thought, isEdit, prompt, stage]);
 
   return (
     <div
@@ -173,6 +336,47 @@ export function CollapsibleThought({
         marginBottom: 6,
       }}
     >
+      <style>{`
+        @keyframes artshiftBrainPulse {
+          0%, 100% {
+            transform: scale(1);
+            filter: drop-shadow(0 0 0px rgba(99, 102, 241, 0));
+          }
+          50% {
+            transform: scale(1.12);
+            filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.55));
+          }
+        }
+        @keyframes artshiftSlideFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(3px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes artshiftWaveDot {
+          0%, 80%, 100% {
+            transform: scale(0.65);
+            opacity: 0.35;
+          }
+          40% {
+            transform: scale(1.25);
+            opacity: 1;
+          }
+        }
+        @keyframes artshiftShimmer {
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
+        }
+      `}</style>
+
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -181,15 +385,17 @@ export function CollapsibleThought({
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
-          background: "transparent",
-          border: "none",
+          background: isLive ? "rgba(238, 242, 255, 0.5)" : "transparent",
+          border: isLive ? "1px solid rgba(199, 210, 254, 0.6)" : "none",
+          borderRadius: isLive ? 18 : 0,
           outline: "none",
-          padding: "3px 0",
+          padding: isLive ? "3px 10px 3px 7px" : "3px 0",
           cursor: "pointer",
           textAlign: "left",
           color: "#334155",
-          transition: "color 0.15s ease",
+          transition: "all 0.15s ease",
           width: "fit-content",
+          maxWidth: "100%",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = "#4f46e5";
@@ -198,52 +404,250 @@ export function CollapsibleThought({
           e.currentTarget.style.color = "#334155";
         }}
       >
-        <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
-        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em" }}>
-          {isLive ? "กำลังคิดอยู่..." : "ความคิดของ AI (Thought)"}
+        <ThoughtBrainIcon
+          style={{
+            color: "#6366f1",
+            width: 15,
+            height: 15,
+            animation: isLive ? "artshiftBrainPulse 2s ease-in-out infinite" : undefined,
+          }}
+        />
+        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em", color: isLive ? "#4338ca" : "inherit" }}>
+          {isLive ? "กำลังคิดอยู่" : "ความคิดของ AI (Thought)"}
         </span>
         {isLive && (
-          <span
-            style={{
-              display: "inline-block",
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: "#6366f1",
-              animation: "artshiftPulse 1.2s ease-in-out infinite",
-            }}
-          />
+          <>
+            <span style={{ color: "#818cf8", fontSize: 12, fontWeight: 600 }}>:</span>
+            <span
+              key={currentMessage}
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: "#475569",
+                animation: "artshiftSlideFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+                maxWidth: 240,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "inline-block",
+              }}
+              title={currentMessage}
+            >
+              {currentMessage}
+            </span>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 2.5,
+                marginLeft: 2,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 3.5,
+                  height: 3.5,
+                  borderRadius: "50%",
+                  background: "#6366f1",
+                  animation: "artshiftWaveDot 1.2s ease-in-out infinite 0s",
+                }}
+              />
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 3.5,
+                  height: 3.5,
+                  borderRadius: "50%",
+                  background: "#6366f1",
+                  animation: "artshiftWaveDot 1.2s ease-in-out infinite 0.2s",
+                }}
+              />
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 3.5,
+                  height: 3.5,
+                  borderRadius: "50%",
+                  background: "#6366f1",
+                  animation: "artshiftWaveDot 1.2s ease-in-out infinite 0.4s",
+                }}
+              />
+            </span>
+          </>
         )}
         <ChevronDownIcon
           style={{
             transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
             width: 12,
             height: 12,
-            color: "#94a3b8",
+            color: isLive ? "#6366f1" : "#94a3b8",
             transition: "transform 0.2s ease, color 0.15s ease",
-            marginLeft: 2,
+            marginLeft: isLive ? 3 : 2,
           }}
         />
       </button>
 
       {isOpen && (
-        <div
-          style={{
-            marginTop: 4,
-            marginLeft: 2,
-            padding: "7px 12px",
-            borderLeft: "2px solid #818cf8",
-            color: "#475569",
-            fontSize: 12,
-            lineHeight: 1.6,
-            background: "rgba(248, 250, 252, 0.7)",
-            borderRadius: "0 8px 8px 0",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {thought}
-        </div>
+        isLive ? (
+          <div
+            style={{
+              position: "relative",
+              marginTop: 6,
+              marginLeft: 2,
+              padding: "10px 14px",
+              borderLeft: "2.5px solid #6366f1",
+              background: "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
+              borderRadius: "0 10px 10px 0",
+              boxShadow: "0 2px 8px -2px rgba(99, 102, 241, 0.08)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              overflow: "hidden",
+            }}
+          >
+            {/* Shimmer top line animation */}
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 2,
+                background: "linear-gradient(90deg, transparent 0%, #6366f1 30%, #a855f7 70%, transparent 100%)",
+                backgroundSize: "200% 100%",
+                animation: "artshiftShimmer 2s infinite linear",
+              }}
+            />
+
+            {/* Live Activity & Timer header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                fontSize: 11.5,
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  color: "#4338ca",
+                  fontWeight: 600,
+                }}
+              >
+                <SpinnerIcon style={{ width: 12, height: 12, color: "#6366f1" }} />
+                <span key={currentMessage} style={{ animation: "artshiftSlideFadeIn 0.3s ease-out" }}>
+                  {currentMessage}
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 500,
+                  color: "#64748b",
+                  background: "rgba(226, 232, 240, 0.6)",
+                  padding: "1px 6px",
+                  borderRadius: 10,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {elapsedSec}s
+              </span>
+            </div>
+
+            {/* AI Thought & Intent Disclosure */}
+            <div
+              style={{
+                color: "#334155",
+                fontSize: 12,
+                lineHeight: 1.55,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {thoughtDisplay}
+            </div>
+
+            {/* Workflow Steps Indicator */}
+            <div
+              style={{
+                marginTop: 2,
+                paddingTop: 6,
+                borderTop: "1px dashed #e2e8f0",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              {workflowSteps.map((step, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 11,
+                    color:
+                      step.status === "done"
+                        ? "#15803d"
+                        : step.status === "current"
+                          ? "#4338ca"
+                          : "#94a3b8",
+                    fontWeight: step.status === "current" ? 600 : 400,
+                  }}
+                >
+                  {step.status === "done" ? (
+                    <CheckIcon style={{ width: 11, height: 11, color: "#16a34a", flexShrink: 0 }} />
+                  ) : step.status === "current" ? (
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: "#6366f1",
+                        animation: "artshiftPulse 1s ease-in-out infinite",
+                        flexShrink: 0,
+                      }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        border: "1px solid #cbd5e1",
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  <span>{step.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              marginTop: 4,
+              marginLeft: 2,
+              padding: "7px 12px",
+              borderLeft: "2px solid #818cf8",
+              color: "#475569",
+              fontSize: 12,
+              lineHeight: 1.6,
+              background: "rgba(248, 250, 252, 0.7)",
+              borderRadius: "0 8px 8px 0",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {thought}
+          </div>
+        )
       )}
     </div>
   );
@@ -505,7 +909,20 @@ export default function ChatThread({
                     <div
                       key={img.fileId || idx}
                       onClick={() => onSelectCanvasImage(img.fileId)}
-                      title="คลิกเพื่อเลือกภาพบน Canvas"
+                      draggable={true}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(
+                          "application/x-artshift-chat-image",
+                          JSON.stringify({ fileId: img.fileId, url: img.url }),
+                        );
+                        if (img.fileId) {
+                          e.dataTransfer.setData("artshift/file-id", img.fileId);
+                        }
+                        e.dataTransfer.setData("text/uri-list", img.url);
+                        e.dataTransfer.setData("text/plain", img.url);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      title="คลิกเพื่อเลือกภาพบน Canvas หรือคลิกลากไปวางบน Canvas ได้"
                       style={{
                         flex: 1,
                         maxWidth: msg.images!.length === 1 ? 380 : 190,
@@ -513,7 +930,7 @@ export default function ChatThread({
                         borderRadius: 12,
                         overflow: "hidden",
                         background: "#f8fafc",
-                        cursor: "pointer",
+                        cursor: "grab",
                         boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
                         border: "1px solid #e2e8f0",
                         transition: "all 0.15s ease",
@@ -532,11 +949,13 @@ export default function ChatThread({
                       <img
                         src={img.url}
                         alt="AI Generation result"
+                        draggable={false}
                         style={{
                           width: "100%",
                           height: "100%",
                           objectFit: "cover",
                           display: "block",
+                          pointerEvents: "none",
                         }}
                       />
                     </div>
@@ -782,6 +1201,10 @@ export default function ChatThread({
               }
               isLive={true}
               defaultOpen={false}
+              statusMessage={liveAssistantState.statusMessage}
+              stage={liveAssistantState.stage}
+              prompt={liveAssistantState.prompt}
+              isEdit={liveAssistantState.isEdit}
             />
 
             {/* Tool Step (if generating) */}

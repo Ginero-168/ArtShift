@@ -15,6 +15,7 @@ import { BUILDER_BLOCK_MIME, createBuilderBlock, isBuilderBlockKind } from "@/li
 import { createImage } from "@/lib/engine/factory";
 import {
   fileToDataURL,
+  getCached,
   getImageCache,
   isSupportedImageFile,
   loadDataURL,
@@ -35,6 +36,55 @@ export function usePasteDrop(
       const st = useEngine.getState();
       const slide = st.doc.slides.find((sl) => sl.id === st.currentSlideId);
       return { w: slide?.width ?? 1920, h: slide?.height ?? 1080 };
+    }
+
+    async function handleImageEntry(
+      entry: { fileId: string; dataURL: string; width: number; height: number },
+      world: { x: number; y: number },
+      sourceDescription = "drop image",
+    ) {
+      enqueueAssetAnalysis({
+        fileId: entry.fileId,
+        dataURL: entry.dataURL,
+        width: entry.width,
+        height: entry.height,
+      });
+
+      const st = useEngine.getState();
+      const currentSlide = st.doc.slides.find((sl) => sl.id === st.currentSlideId);
+      const targetFrame = currentSlide?.elements.find(
+        (el) =>
+          !el.isDeleted &&
+          el.type === "frame" &&
+          world.x >= el.x &&
+          world.x <= el.x + el.width &&
+          world.y >= el.y &&
+          world.y <= el.y + el.height,
+      );
+
+      if (targetFrame) {
+        st.setFrameImage(targetFrame.id, entry.fileId);
+        st.selectOnly([targetFrame.id]);
+        return;
+      }
+
+      const { w: sw, h: sh } = currentSlideSize();
+      const maxW = sw / 2;
+      const maxH = sh / 2;
+      const ratio = Math.min(maxW / entry.width, maxH / entry.height, 1);
+      const w = entry.width * ratio;
+      const h = entry.height * ratio;
+      const element = createImage({
+        x: world.x - w / 2,
+        y: world.y - h / 2,
+        width: w,
+        height: h,
+        fileId: entry.fileId,
+        naturalWidth: entry.width,
+        naturalHeight: entry.height,
+      });
+      addElement(element, sourceDescription);
+      st.selectOnly([element.id]);
     }
 
     async function handleFiles(files: FileList | null, world: { x: number; y: number }) {
@@ -86,49 +136,7 @@ export function usePasteDrop(
         if (!isSupportedImageFile(file)) continue;
         const dataURL = await fileToDataURL(file);
         const entry = await loadDataURL(dataURL);
-        enqueueAssetAnalysis({
-          fileId: entry.fileId,
-          dataURL: entry.dataURL,
-          width: entry.width,
-          height: entry.height,
-        });
-
-        // Check if dropped directly onto an existing Frame on the current slide (both Block & Free layers)
-        const st = useEngine.getState();
-        const currentSlide = st.doc.slides.find((sl) => sl.id === st.currentSlideId);
-        const targetFrame = currentSlide?.elements.find(
-          (el) =>
-            !el.isDeleted &&
-            el.type === "frame" &&
-            world.x >= el.x &&
-            world.x <= el.x + el.width &&
-            world.y >= el.y &&
-            world.y <= el.y + el.height,
-        );
-
-        if (targetFrame) {
-          st.setFrameImage(targetFrame.id, entry.fileId);
-          st.selectOnly([targetFrame.id]);
-          continue;
-        }
-
-        const maxW = sw / 2;
-        const maxH = sh / 2;
-        const ratio = Math.min(maxW / entry.width, maxH / entry.height, 1);
-        const w = entry.width * ratio;
-        const h = entry.height * ratio;
-        addElement(
-          createImage({
-            x: world.x - w / 2,
-            y: world.y - h / 2,
-            width: w,
-            height: h,
-            fileId: entry.fileId,
-            naturalWidth: entry.width,
-            naturalHeight: entry.height,
-          }),
-          "paste image",
-        );
+        await handleImageEntry(entry, world, "paste image");
       }
     }
 
@@ -152,14 +160,17 @@ export function usePasteDrop(
       handleFiles(dt.files, { x: sw / 2, y: sh / 2 });
     }
 
-    function onDrop(e: DragEvent) {
+    async function onDrop(e: DragEvent) {
       e.preventDefault();
+      const world = clientToWorld(e.clientX, e.clientY);
+
+      // 1. Builder block drop
       const blockKind = e.dataTransfer?.getData(BUILDER_BLOCK_MIME) ?? "";
       if (isBuilderBlockKind(blockKind)) {
         const state = useEngine.getState();
         const slide = state.doc.slides.find((candidate) => candidate.id === state.currentSlideId);
         if (!slide) return;
-        const point = clientToWorld(e.clientX, e.clientY);
+        const point = world;
         const element = createBuilderBlock(blockKind, {
           width: slide.width,
           height: slide.height,
@@ -168,12 +179,65 @@ export function usePasteDrop(
         addElement(element, `drop ${blockKind}`);
         return;
       }
+
+      // 2. Chat image or in-app dragged image drop
+      const chatImageRaw =
+        e.dataTransfer?.getData("application/x-artshift-chat-image") ||
+        e.dataTransfer?.getData("application/x-artshift-image");
+      const artshiftFileId = e.dataTransfer?.getData("artshift/file-id");
+      const uriList = e.dataTransfer?.getData("text/uri-list");
+      const textPlain = e.dataTransfer?.getData("text/plain");
+
+      let fileId = artshiftFileId || "";
+      let imageUrl = "";
+
+      if (chatImageRaw) {
+        try {
+          const parsed = JSON.parse(chatImageRaw);
+          fileId = parsed.fileId || fileId;
+          imageUrl = parsed.url || imageUrl;
+        } catch {}
+      }
+
+      if (!imageUrl && uriList) {
+        imageUrl = uriList;
+      } else if (
+        !imageUrl &&
+        textPlain &&
+        (textPlain.startsWith("data:image/") ||
+          textPlain.startsWith("http://") ||
+          textPlain.startsWith("https://") ||
+          textPlain.startsWith("blob:"))
+      ) {
+        imageUrl = textPlain;
+      }
+
+      if (fileId || imageUrl) {
+        let entry = fileId ? getCached(fileId) : null;
+        if (!entry && (imageUrl || fileId)) {
+          try {
+            entry = await loadDataURL(imageUrl || fileId);
+          } catch (err) {
+            console.error("Failed to load dropped chat image:", err);
+          }
+        }
+
+        if (entry) {
+          await handleImageEntry(entry, world, "drop image from chat");
+          return;
+        }
+      }
+
+      // 3. OS file drop
       if (!e.dataTransfer?.files?.length) return;
-      const world = clientToWorld(e.clientX, e.clientY);
       handleFiles(e.dataTransfer.files, world);
     }
+
     function onDragOver(e: DragEvent) {
       e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
     }
 
     const el = container.current;
