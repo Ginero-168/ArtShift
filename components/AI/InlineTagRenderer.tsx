@@ -79,22 +79,23 @@ export default function InlineTagRenderer({
         let dataUrl = matchedRef ? getCached(matchedRef.fileId)?.dataURL : undefined;
         let effectiveFileId = matchedRef?.fileId;
 
-        // Fallback: search current slide elements if not in passed imageRefs
+        // Fallback: search current slide elements if not in passed imageRefs (supports image, bookMockup, frame)
         if (!dataUrl) {
           const slide = useEngine.getState().currentSlide();
           const el = slide?.elements.find(
-            (candidate) =>
+            (candidate: any) =>
               !candidate.isDeleted &&
               (candidate.id === seg.objectId || candidate.name === seg.displayName),
           );
-          if (el && "fileId" in el && typeof (el as any).fileId === "string") {
-            effectiveFileId = (el as any).fileId;
-            dataUrl = getCached(effectiveFileId!)?.dataURL;
+          const fid = (el as any)?.fileId || (el as any)?.imageFileId;
+          if (el && fid && typeof fid === "string") {
+            effectiveFileId = fid;
+            dataUrl = getCached(effectiveFileId)?.dataURL;
             if (!matchedRef) {
               matchedRef = {
                 objectId: el.id,
                 elementVersion: el.version,
-                fileId: effectiveFileId!,
+                fileId: effectiveFileId,
                 displayName: (el as any).sourceName || el.name || seg.displayName,
                 sourceWidth: (el as any).naturalWidth || el.width,
                 sourceHeight: (el as any).naturalHeight || el.height,
@@ -107,7 +108,11 @@ export default function InlineTagRenderer({
         }
 
         const activeRef = activePreviewId === seg.objectId ? matchedRef : null;
-        const activeDataUrl = activeRef ? getCached(activeRef.fileId)?.dataURL : undefined;
+        const activeDataUrl = activeRef
+          ? getCached(activeRef.fileId)?.dataURL
+          : effectiveFileId
+            ? getCached(effectiveFileId)?.dataURL
+            : undefined;
 
         return (
           <span
@@ -129,30 +134,31 @@ export default function InlineTagRenderer({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 3.5,
+              gap: 4,
               verticalAlign: "middle",
-              padding: "1px 6px 1px 2.5px",
+              padding: "1px 7px 1px 3px",
               margin: "0 2px",
               borderRadius: 9999,
-              height: 21,
+              height: 22,
               boxSizing: "border-box",
-              background: isLight ? "#eef2ff" : "rgba(255, 255, 255, 0.22)",
-              border: isLight ? "1px solid #c7d2fe" : "1px solid rgba(255, 255, 255, 0.4)",
-              color: isLight ? "#3730a3" : "#ffffff",
+              background: isLight ? "#e0e7ff" : "rgba(255, 255, 255, 0.22)",
+              border: isLight ? "1px solid #a5b4fc" : "1px solid rgba(255, 255, 255, 0.45)",
+              color: isLight ? "#312e81" : "#ffffff",
               fontSize: 11,
               fontWeight: 600,
               lineHeight: 1,
               cursor: "pointer",
               userSelect: "text",
+              boxShadow: isLight ? "0 1px 2px rgba(79, 70, 229, 0.08)" : "none",
               transition: "all 0.15s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = isLight ? "#e0e7ff" : "rgba(255, 255, 255, 0.32)";
-              e.currentTarget.style.borderColor = isLight ? "#a5b4fc" : "rgba(255, 255, 255, 0.6)";
+              e.currentTarget.style.background = isLight ? "#c7d2fe" : "rgba(255, 255, 255, 0.32)";
+              e.currentTarget.style.borderColor = isLight ? "#818cf8" : "rgba(255, 255, 255, 0.6)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = isLight ? "#eef2ff" : "rgba(255, 255, 255, 0.22)";
-              e.currentTarget.style.borderColor = isLight ? "#c7d2fe" : "rgba(255, 255, 255, 0.4)";
+              e.currentTarget.style.background = isLight ? "#e0e7ff" : "rgba(255, 255, 255, 0.22)";
+              e.currentTarget.style.borderColor = isLight ? "#a5b4fc" : "rgba(255, 255, 255, 0.45)";
             }}
           >
             {dataUrl ? (
@@ -176,10 +182,15 @@ export default function InlineTagRenderer({
                   height: 16,
                   borderRadius: 3,
                   background: isLight ? "#c7d2fe" : "rgba(255, 255, 255, 0.3)",
-                  display: "inline-block",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 9,
                   flexShrink: 0,
                 }}
-              />
+              >
+                📷
+              </span>
             )}
             <span
               style={{
@@ -195,21 +206,46 @@ export default function InlineTagRenderer({
         );
       })}
 
-      {activePreviewId && anchor && (
-        <ImageReferencePreview
-          anchor={anchor}
-          dataUrl={getCached(imageRefs.find((r) => r.objectId === activePreviewId)?.fileId || "")?.dataURL}
-          displayName={imageRefs.find((r) => r.objectId === activePreviewId)?.displayName || ""}
-          width={imageRefs.find((r) => r.objectId === activePreviewId)?.sourceWidth || 800}
-          height={imageRefs.find((r) => r.objectId === activePreviewId)?.sourceHeight || 600}
-          onPointerEnter={cancelClose}
-          onPointerLeave={scheduleClose}
-          onClose={() => {
-            setActivePreviewId(null);
-            setAnchor(null);
-          }}
-        />
-      )}
+      {(() => {
+        if (!activePreviewId || !anchor) return null;
+        const matchedRef = imageRefs.find((r) => r.objectId === activePreviewId);
+        let previewDataUrl = matchedRef ? getCached(matchedRef.fileId)?.dataURL : undefined;
+        let previewName = matchedRef?.displayName || "";
+        let previewWidth = matchedRef?.sourceWidth || 800;
+        let previewHeight = matchedRef?.sourceHeight || 600;
+
+        if (!previewDataUrl) {
+          const slide = useEngine.getState().currentSlide();
+          const el = slide?.elements.find(
+            (candidate: any) =>
+              !candidate.isDeleted &&
+              (candidate.id === activePreviewId || candidate.name === activePreviewId),
+          );
+          const fid = (el as any)?.fileId || (el as any)?.imageFileId;
+          if (fid && typeof fid === "string") {
+            previewDataUrl = getCached(fid)?.dataURL;
+            previewName = previewName || (el as any)?.name || "ภาพ";
+            previewWidth = (el as any)?.width || 800;
+            previewHeight = (el as any)?.height || 600;
+          }
+        }
+
+        return (
+          <ImageReferencePreview
+            anchor={anchor}
+            dataUrl={previewDataUrl}
+            displayName={previewName}
+            width={previewWidth}
+            height={previewHeight}
+            onPointerEnter={cancelClose}
+            onPointerLeave={scheduleClose}
+            onClose={() => {
+              setActivePreviewId(null);
+              setAnchor(null);
+            }}
+          />
+        );
+      })()}
     </span>
   );
 }

@@ -85,10 +85,15 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
           (item: any) =>
             !item.isDeleted &&
             item.id === id &&
-            (item.type === "image" || item.type === "bookMockup"),
+            (item.type === "image" ||
+              item.type === "bookMockup" ||
+              (item.type === "frame" && Boolean(item.imageFileId))),
         );
         if (el) {
-          newlySelectedIds.push(id);
+          const fid = (el as any).fileId || (el as any).imageFileId;
+          if (!fid || !dismissedObjectIdsRef.current.has(fid)) {
+            newlySelectedIds.push(id);
+          }
         }
       }
     }
@@ -108,7 +113,7 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
             ? {
                 objectId: el.id,
                 elementVersion: el.version,
-                fileId: (el as any).fileId,
+                fileId: (el as any).fileId || (el as any).imageFileId,
                 displayName: (el as any).sourceName || el.name || "Image",
                 sourceWidth: (el as any).naturalWidth || el.width,
                 sourceHeight: (el as any).naturalHeight || el.height,
@@ -137,13 +142,14 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
       const el = currentSlide.elements.find(
         (item: any) =>
           !item.isDeleted &&
-          (item.type === "image" || item.type === "bookMockup") &&
-          "fileId" in item &&
-          item.fileId === fileId,
+          ((item.type === "image" || item.type === "bookMockup") && item.fileId === fileId ||
+            (item.type === "frame" && item.imageFileId === fileId)),
       );
       if (el) {
         // User explicitly re-selected this image: un-dismiss it
         dismissedObjectIdsRef.current.delete(el.id);
+        if ((el as any).fileId) dismissedObjectIdsRef.current.delete((el as any).fileId);
+        if ((el as any).imageFileId) dismissedObjectIdsRef.current.delete((el as any).imageFileId);
         useEngine.getState().selectOnly([el.id]);
         setAttachedImageIds((existing) =>
           existing.includes(el.id) ? existing : [...existing, el.id],
@@ -152,7 +158,7 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
           allSlideImageRefs.find((r: any) => r.objectId === el.id) || {
             objectId: el.id,
             elementVersion: el.version,
-            fileId: (el as any).fileId,
+            fileId: (el as any).fileId || (el as any).imageFileId,
             displayName: (el as any).sourceName || el.name || "Image",
             sourceWidth: (el as any).naturalWidth || el.width,
             sourceHeight: (el as any).naturalHeight || el.height,
@@ -170,17 +176,27 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
     (fileId: string) => {
       setAttachedImageIds((prev) => {
         const currentSlide = useEngine.getState().currentSlide();
-        if (!currentSlide) return prev;
-        const el = currentSlide.elements.find(
+        const el = currentSlide?.elements.find(
           (item: any) =>
             !item.isDeleted &&
-            (item.type === "image" || item.type === "bookMockup") &&
-            "fileId" in item &&
-            item.fileId === fileId,
+            (item.id === fileId ||
+              ((item.type === "image" || item.type === "bookMockup") && item.fileId === fileId) ||
+              (item.type === "frame" && item.imageFileId === fileId)),
         );
-        if (!el) return prev;
-        dismissedObjectIdsRef.current.add(el.id);
-        return prev.filter((id) => id !== el.id);
+        if (el) {
+          dismissedObjectIdsRef.current.add(el.id);
+          if ((el as any).fileId) dismissedObjectIdsRef.current.add((el as any).fileId);
+          if ((el as any).imageFileId) dismissedObjectIdsRef.current.add((el as any).imageFileId);
+          try {
+            const engine = useEngine.getState();
+            if (engine.selectedIds.has(el.id)) {
+              engine.selectOnly([...engine.selectedIds].filter((id) => id !== el.id));
+            }
+          } catch {}
+          return prev.filter((id) => id !== el.id && id !== fileId);
+        }
+        dismissedObjectIdsRef.current.add(fileId);
+        return prev.filter((id) => id !== fileId);
       });
     },
     [],
@@ -189,15 +205,37 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
   const clearAttachedImages = useCallback(() => {
     setAttachedImageIds([]);
     editorRef.current?.clear();
+    try {
+      useEngine.getState().clearSelection();
+    } catch {}
   }, []);
 
   const handleInlineTagsChange = useCallback(
     (inlineIds: string[]) => {
       // Any ID that was previously attached but is missing from inlineIds was deleted by the user
       setAttachedImageIds((prev) => {
+        const currentSlide = useEngine.getState().currentSlide();
         for (const id of prev) {
           if (!inlineIds.includes(id)) {
             dismissedObjectIdsRef.current.add(id);
+            const el = currentSlide?.elements.find(
+              (item: any) =>
+                !item.isDeleted &&
+                (item.id === id ||
+                  ((item.type === "image" || item.type === "bookMockup") && item.fileId === id) ||
+                  (item.type === "frame" && item.imageFileId === id)),
+            );
+            if (el) {
+              dismissedObjectIdsRef.current.add(el.id);
+              if ((el as any).fileId) dismissedObjectIdsRef.current.add((el as any).fileId);
+              if ((el as any).imageFileId) dismissedObjectIdsRef.current.add((el as any).imageFileId);
+              try {
+                const engine = useEngine.getState();
+                if (engine.selectedIds.has(el.id)) {
+                  engine.selectOnly([...engine.selectedIds].filter((sid) => sid !== el.id));
+                }
+              } catch {}
+            }
           }
         }
         return inlineIds;
@@ -209,7 +247,27 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
   const removeLastAttachedImage = useCallback(() => {
     setAttachedImageIds((prev) => {
       if (prev.length > 0) {
-        dismissedObjectIdsRef.current.add(prev[prev.length - 1]);
+        const lastId = prev[prev.length - 1];
+        dismissedObjectIdsRef.current.add(lastId);
+        const currentSlide = useEngine.getState().currentSlide();
+        const el = currentSlide?.elements.find(
+          (item: any) =>
+            !item.isDeleted &&
+            (item.id === lastId ||
+              ((item.type === "image" || item.type === "bookMockup") && item.fileId === lastId) ||
+              (item.type === "frame" && item.imageFileId === lastId)),
+        );
+        if (el) {
+          dismissedObjectIdsRef.current.add(el.id);
+          if ((el as any).fileId) dismissedObjectIdsRef.current.add((el as any).fileId);
+          if ((el as any).imageFileId) dismissedObjectIdsRef.current.add((el as any).imageFileId);
+          try {
+            const engine = useEngine.getState();
+            if (engine.selectedIds.has(el.id)) {
+              engine.selectOnly([...engine.selectedIds].filter((sid) => sid !== el.id));
+            }
+          } catch {}
+        }
       }
       return prev.slice(0, -1);
     });

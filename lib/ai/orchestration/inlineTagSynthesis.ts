@@ -27,8 +27,8 @@ export type InlinePromptSynthesis = {
   expandedPromptForModel: string;
 };
 
-// Matches @[content]
-const CANONICAL_TAG_REGEX = /@\[([^\]]+)\]/g;
+// Matches @[content] or @TagName (not part of an email address)
+const CANONICAL_TAG_REGEX = /(?:^|(?<=\s|[([{"']))(?:@\[([^\]]+)\]|@([A-Za-z0-9_\u0E00-\u0E7F]+))/g;
 
 /**
  * Parses prompt text into text segments and inline tag tokens.
@@ -55,8 +55,9 @@ export function parseInlineTagTokens(text: string): InlinePromptSegment[] {
       });
     }
 
-    const inner = match[1]?.trim() || "";
-    const lastColon = inner.lastIndexOf(":");
+    const isBracketed = Boolean(match[1]);
+    const inner = (match[1] || match[2] || "").trim();
+    const lastColon = isBracketed ? inner.lastIndexOf(":") : -1;
     let displayName = inner;
     let objectId = inner;
 
@@ -257,3 +258,29 @@ export function synthesizePromptWithInlineTags(
     expandedPromptForModel,
   };
 }
+
+/**
+ * Cleans internal / technical prefixes and command noise from user-facing prompts or summaries.
+ * e.g. "Edit ภาพ @[Cat:id] ด้วย Prompt : สร้างรูปแมว" -> "สร้างรูปแมว"
+ */
+export function cleanTechnicalPromptText(text: string): string {
+  let s = (text || "").trim();
+  // Strip common technical prefixes
+  s = s.replace(/^(?:Edit|แก้ไข|ปรับแต่ง)\s+(?:ภาพ|รูป|image)?\s*(?:@\[[^\]]+\]|@[^\s]+|[^\s]+)?\s*(?:ด้วย\s*(?:Prompt|คำสั่ง)\s*:\s*|with\s+prompt\s*:\s*)/iu, "");
+  s = s.replace(/^Edit\s+image\s+.*?with\s+prompt\s*:\s*/iu, "");
+  s = s.replace(/^propose_creative_direction\s*:\s*/iu, "");
+  s = s.replace(/^propose_design_plan\s*:\s*/iu, "");
+  s = s.replace(/^(?:วางแผน|คำสั่ง|Prompt)\s*:\s*/iu, "");
+  // Replace tag format @[name:id] with @name
+  s = s.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "@$1");
+  // Remove technical JSON if wrapped
+  if (s.startsWith("{") && s.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(s);
+      if (parsed.summary) s = parsed.summary;
+      else if (parsed.text) s = parsed.text;
+    } catch {}
+  }
+  return s.trim();
+}
+

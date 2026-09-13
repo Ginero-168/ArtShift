@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import type { CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
+import { useEngine } from "@/lib/engine/store";
+import { cleanTechnicalPromptText, parseInlineTagTokens, type InlineTagToken } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import type { CoPilotErrorCard } from "@/lib/ai/coPilot";
 import ComposerImageTags from "@/components/AI/ComposerImageTags";
@@ -70,20 +72,34 @@ export function UserMessageImagePreviews({
       }}
     >
       {refs.map((ref) => {
-        const dataUrl = getCached(ref.fileId)?.dataURL;
+        let dataUrl = getCached(ref.fileId)?.dataURL;
+        let effectiveFileId = ref.fileId;
+        if (!dataUrl) {
+          const slide = useEngine.getState().currentSlide();
+          const el = slide?.elements.find(
+            (candidate: any) =>
+              !candidate.isDeleted &&
+              (candidate.id === ref.objectId || candidate.name === ref.displayName),
+          );
+          const fid = (el as any)?.fileId || (el as any)?.imageFileId;
+          if (fid && typeof fid === "string") {
+            effectiveFileId = fid;
+            dataUrl = getCached(fid)?.dataURL;
+          }
+        }
         return (
           <div
             key={`${ref.objectId}:${ref.elementVersion}`}
-            onClick={() => onSelect(ref.fileId)}
+            onClick={() => onSelect(effectiveFileId)}
             draggable={true}
             onDragStart={(e) => {
-              const cachedData = getCached(ref.fileId);
+              const cachedData = getCached(effectiveFileId);
               const url = cachedData?.dataURL || "";
               e.dataTransfer.setData(
                 "application/x-artshift-chat-image",
-                JSON.stringify({ fileId: ref.fileId, url }),
+                JSON.stringify({ fileId: effectiveFileId, url }),
               );
-              e.dataTransfer.setData("artshift/file-id", ref.fileId);
+              e.dataTransfer.setData("artshift/file-id", effectiveFileId);
               if (url) {
                 e.dataTransfer.setData("text/uri-list", url);
                 e.dataTransfer.setData("text/plain", url);
@@ -187,6 +203,8 @@ interface SubAgentTaskItem {
   task: string;
   status: "running" | "success" | "error" | "pending";
   statusText?: string;
+  detailScore?: number;
+  precisionScore?: number;
 }
 
 function getAgentMeta(agent: string, title: string) {
@@ -444,6 +462,7 @@ export function CollapsibleThought({
     if (stage === "planning") {
       return [
         "Creative Director กำลังวิเคราะห์และระดมไอเดีย...",
+        "กำลังประเมิน Detail Score และ Precision Score เพื่อเลือกโมเดล...",
         "กำลังจัดวางโครงสร้างและองค์ประกอบศิลป์...",
         "กำลังเลือกสไตล์และโมเดลที่เหมาะสมที่สุด...",
         "กำลังจัดเตรียมแนวทางสร้างภาพที่แม่นยำ...",
@@ -505,6 +524,8 @@ export function CollapsibleThought({
           id: act.id,
           name: cleanName || meta.roleName,
           modelBadge,
+          detailScore: act.detailScore,
+          precisionScore: act.precisionScore,
           icon: meta.icon,
           themeColor: meta.badgeColor,
           themeBg: meta.badgeBg,
@@ -564,14 +585,14 @@ export function CollapsibleThought({
     defaultItems.push({
       id: "step-director",
       name: "Creative Director",
-      modelBadge: "gpt-oss-120b",
+      modelBadge: "Gemini 3 Flash",
       icon: "🧠",
       themeColor: "#6366f1",
       themeBg: "rgba(238, 242, 255, 0.8)",
       themeBorder: "rgba(199, 210, 254, 0.95)",
       task: isEdit
-        ? "วางแผนจัดวางองค์ประกอบ คุมแสงเงาและบรรยากาศเดิมให้กลมกลืนเป็นธรรมชาติ"
-        : "วิเคราะห์โจทย์ จัดวางสัดส่วน กำหนดคอนเซปต์ 2D Graphic และคู่สีตามโจทย์",
+        ? "วางแผนจัดวางองค์ประกอบ คุมแสงเงา ประเมิน Precision Score เพื่อรักษาภาพเดิม"
+        : "วิเคราะห์โจทย์ จัดวางสัดส่วน ประเมิน Detail Score & Precision Score เพื่อเลือกโมเดลสร้างภาพ",
       status: isLive ? (isAnalyzing ? "pending" : isPlanning ? "running" : "success") : "success",
       statusText: isLive ? (isAnalyzing ? "รอดำเนินการ" : isPlanning ? "กำลังวางแผน..." : "เสร็จสิ้น") : "เสร็จสิ้น",
     });
@@ -609,23 +630,26 @@ export function CollapsibleThought({
   }, [actions, isLive, stage, isEdit, prompt, toolLabel]);
 
   const thoughtDisplay = React.useMemo(() => {
+    const cleaned = thought ? cleanTechnicalPromptText(thought) : "";
     if (
-      thought &&
-      thought !== "กำลังจัดเตรียมผลลัพธ์..." &&
-      thought !== "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ..."
+      cleaned &&
+      cleaned !== "กำลังจัดเตรียมผลลัพธ์..." &&
+      cleaned !== "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ..." &&
+      !cleaned.startsWith("Edit ภาพ") &&
+      !cleaned.startsWith("Edit image")
     ) {
-      return thought;
+      return cleaned;
     }
     if (isEdit) {
-      const cleanPrompt = prompt ? prompt.replace(/@[^\s]+\s*/g, "").trim() : "";
+      const cleanPrompt = prompt ? cleanTechnicalPromptText(prompt) : "";
       return cleanPrompt
-        ? `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งภาพโดย ${cleanPrompt} พร้อมคุมโทนสี แสง และเงาให้กลมกลืนเป็นธรรมชาติ`
-        : "กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งตามคำขอ โดยรักษาเอกลักษณ์ของตัวละครและบรรยากาศเดิม";
+        ? `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งโดย ${cleanPrompt} พร้อมคุมโทนสี แสง และเงาให้กลมกลืนเป็นธรรมชาติค่ะ`
+        : "กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งตามคำขอ โดยรักษาเอกลักษณ์ของตัวละครและบรรยากาศเดิมค่ะ";
     }
     if (stage === "generating") {
-      return "กำลังสร้างสรรค์ภาพตามคอนเซปต์ของ Creative Director โดยเน้นความคมชัด แสงเงาที่สมจริง และองค์ประกอบระดับพรีเมียม";
+      return "กำลังสร้างสรรค์ภาพตามคอนเซปต์ของ Creative Director โดยเน้นความคมชัด แสงเงาที่สมจริง และองค์ประกอบระดับพรีเมียมค่ะ";
     }
-    return "กำลังวิเคราะห์และวางแผนกระบวนการทำงานที่ดีที่สุด เพื่อสร้างผลลัพธ์ที่ตรงกับคำขอของคุณมากที่สุด";
+    return "กำลังวิเคราะห์และวางแผนกระบวนการทำงานที่ดีที่สุด เพื่อสร้างผลลัพธ์ที่ตรงกับคำขอของคุณมากที่สุดค่ะ";
   }, [thought, isEdit, prompt, stage]);
 
   const completedCount = subAgentTasks.filter((t) => t.status === "success").length;
@@ -697,7 +721,7 @@ export function CollapsibleThought({
                   : "0 1px 2px rgba(0,0,0,0.02)",
             }}
           >
-            {/* Header row: Icon + Agent Name + Model Badge + Status Badge */}
+            {/* Header row: Icon + Agent Name + Model Badge + Score Badges + Status Badge */}
             <div
               style={{
                 display: "flex",
@@ -714,6 +738,7 @@ export function CollapsibleThought({
                   fontSize: 11.5,
                   fontWeight: 600,
                   color: "#1e293b",
+                  flexWrap: "wrap",
                 }}
               >
                 <span
@@ -746,6 +771,38 @@ export function CollapsibleThought({
                     }}
                   >
                     {taskItem.modelBadge}
+                  </span>
+                )}
+                {taskItem.detailScore !== undefined && (
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      padding: "0.5px 5px",
+                      borderRadius: 4,
+                      background: "rgba(224, 231, 255, 0.9)",
+                      color: "#4338ca",
+                      border: "1px solid rgba(199, 210, 254, 0.9)",
+                    }}
+                    title="Detail Complexity Score (0-10)"
+                  >
+                    Detail: {taskItem.detailScore}/10
+                  </span>
+                )}
+                {taskItem.precisionScore !== undefined && (
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      padding: "0.5px 5px",
+                      borderRadius: 4,
+                      background: "rgba(254, 235, 200, 0.9)",
+                      color: "#c05621",
+                      border: "1px solid rgba(251, 211, 141, 0.9)",
+                    }}
+                    title="Edit Precision Score (0-10)"
+                  >
+                    Precision: {taskItem.precisionScore}/10
                   </span>
                 )}
               </div>
@@ -1240,12 +1297,39 @@ export default function ChatThread({
                   gap: 4,
                 }}
               >
-                {msg.imageRefs && msg.imageRefs.length > 0 && (
-                  <UserMessageImagePreviews
-                    refs={msg.imageRefs}
-                    onSelect={(fileId) => onSelectCanvasImage(fileId)}
-                  />
-                )}
+                {(() => {
+                  let effectiveRefs = msg.imageRefs;
+                  if (!effectiveRefs || effectiveRefs.length === 0) {
+                    const segments = parseInlineTagTokens(msg.content);
+                    const tagSegs = segments.filter((s): s is InlineTagToken => s.type === "tag");
+                    if (tagSegs.length > 0) {
+                      const slide = useEngine.getState().currentSlide();
+                      effectiveRefs = tagSegs.map((t: InlineTagToken) => {
+                        const el = slide?.elements.find(
+                          (e: any) =>
+                            !e.isDeleted && (e.id === t.objectId || e.name === t.displayName),
+                        );
+                        return {
+                          objectId: t.objectId,
+                          elementVersion: el?.version || 1,
+                          fileId: (el as any)?.fileId || (el as any)?.imageFileId || t.objectId,
+                          displayName: t.displayName,
+                          sourceWidth: (el as any)?.naturalWidth || 800,
+                          sourceHeight: (el as any)?.naturalHeight || 600,
+                          width: el?.width || 800,
+                          height: el?.height || 600,
+                          angle: el?.angle || 0,
+                        };
+                      });
+                    }
+                  }
+                  return effectiveRefs && effectiveRefs.length > 0 ? (
+                    <UserMessageImagePreviews
+                      refs={effectiveRefs}
+                      onSelect={(fileId) => onSelectCanvasImage(fileId)}
+                    />
+                  ) : null;
+                })()}
                 <div
                   style={{
                     display: "flex",
@@ -1267,31 +1351,31 @@ export default function ChatThread({
                       borderRadius: 8,
                       border: isCopied
                         ? "1px solid #10b981"
-                        : "1px solid rgba(255, 255, 255, 0.12)",
-                      background: isCopied ? "#064e3b" : "#1e242d",
-                      color: isCopied ? "#34d399" : "#cbd5e1",
+                        : "1px solid #e2e8f0",
+                      background: isCopied ? "#ecfdf5" : "#ffffff",
+                      color: isCopied ? "#059669" : "#475569",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       cursor: "pointer",
-                      boxShadow: "0 1.5px 4px rgba(0, 0, 0, 0.16)",
+                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
                       flexShrink: 0,
                       marginBottom: 2,
                       transition: "all 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
                       if (!isCopied) {
-                        e.currentTarget.style.background = "#2b323d";
-                        e.currentTarget.style.color = "#ffffff";
-                        e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+                        e.currentTarget.style.background = "#f8fafc";
+                        e.currentTarget.style.color = "#0f172a";
+                        e.currentTarget.style.borderColor = "#cbd5e1";
                         e.currentTarget.style.transform = "scale(1.04)";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isCopied) {
-                        e.currentTarget.style.background = "#1e242d";
-                        e.currentTarget.style.color = "#cbd5e1";
-                        e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+                        e.currentTarget.style.background = "#ffffff";
+                        e.currentTarget.style.color = "#475569";
+                        e.currentTarget.style.borderColor = "#e2e8f0";
                         e.currentTarget.style.transform = "scale(1)";
                       }
                     }}
@@ -1449,6 +1533,7 @@ export default function ChatThread({
                       }}
                       title="คลิกเพื่อเลือกภาพบน Canvas หรือคลิกลากไปวางบน Canvas ได้"
                       style={{
+                        position: "relative",
                         flex: 1,
                         maxWidth: msg.images!.length === 1 ? 380 : 190,
                         aspectRatio: "1 / 1",
@@ -1469,6 +1554,58 @@ export default function ChatThread({
                         e.currentTarget.style.borderColor = "#e2e8f0";
                       }}
                     >
+                      {/* JPEG format badge */}
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 6,
+                          left: 6,
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          background: "rgba(15, 23, 42, 0.72)",
+                          backdropFilter: "blur(4px)",
+                          color: "#ffffff",
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          letterSpacing: "0.03em",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                        }}
+                      >
+                        JPEG
+                      </span>
+
+                      {/* Name Tag overlay badge if label exists */}
+                      {img.label && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: 6,
+                            left: 6,
+                            right: 6,
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            background: "rgba(15, 23, 42, 0.78)",
+                            backdropFilter: "blur(6px)",
+                            color: "#ffffff",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            overflow: "hidden",
+                            pointerEvents: "none",
+                            zIndex: 2,
+                            boxShadow: "0 1px 4px rgba(0, 0, 0, 0.25)",
+                          }}
+                        >
+                          <span style={{ fontSize: 11 }}>📷</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            @{img.label}
+                          </span>
+                        </div>
+                      )}
+
                       {/* biome-ignore lint/a11y/useAltText: AI generated image preview in chat message */}
                       {/* biome-ignore lint/performance/noImgElement: Direct chat message image rendering */}
                       <img
@@ -1507,6 +1644,22 @@ export default function ChatThread({
                 <InlineTagRenderer
                   theme="light"
                   content={msg.content}
+                  imageRefs={
+                    msg.imageRefs ||
+                    (msg.images
+                      ? msg.images.map((im) => ({
+                          objectId: im.fileId || "",
+                          elementVersion: 1,
+                          fileId: im.fileId || "",
+                          displayName: im.label || "ภาพ",
+                          sourceWidth: 1024,
+                          sourceHeight: 1024,
+                          width: 1024,
+                          height: 1024,
+                          angle: 0,
+                        }))
+                      : undefined)
+                  }
                   onSelect={(fileId) => onSelectCanvasImage(fileId)}
                 />
               </div>

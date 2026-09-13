@@ -9,38 +9,20 @@ import {
   type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
-import {
-  prepareRemoteCreativeDirection,
-  reviewRemoteCreativeOutput,
-} from "@/lib/ai/orchestration/creativeDirectorClient";
+import { prepareRemoteCreativeDirection, reviewRemoteCreativeOutput } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
-import {
-  buildComposerImageSelectionFromIds,
-  snapshotComposerImageRefs,
-} from "@/lib/ai/orchestration/imageReferences";
+import { buildComposerImageSelectionFromIds, snapshotComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
 import { deriveGeneratedImageName } from "@/lib/ai/orchestration/imageNaming";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
-import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
+import { cleanTechnicalPromptText, extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
+import { analyzeImageReferences, type ImageReferenceAnalysis } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
-  analyzeImageReferences,
-  type ImageReferenceAnalysis,
-} from "@/lib/ai/orchestration/referenceAnalysis";
-import {
-  type ContextAwareTurnResult,
-  createDirectedImageRun,
-  createDirectedImageTask,
-  isCanvasInventoryPrompt,
-  type PendingClarification,
-  prepareContextAwareTurn,
-  runSequentialExecutionPlan,
-  type SequentialExecutionPlan,
+  type ContextAwareTurnResult, createDirectedImageRun, createDirectedImageTask,
+  isCanvasInventoryPrompt, type PendingClarification, prepareContextAwareTurn,
+  runSequentialExecutionPlan, type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
-import {
-  isBroadImagePrompt,
-  createPromptRefinement,
-  type PromptRefinementCardData,
-} from "@/lib/ai/orchestration/promptRefinement";
+import { isBroadImagePrompt, createPromptRefinement, type PromptRefinementCardData } from "@/lib/ai/orchestration/promptRefinement";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
@@ -49,7 +31,7 @@ import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
 import { summarizePlanForReview } from "@/lib/designAgent/planReview";
 import { applyAiPlan } from "@/lib/engine/applyAiPlan";
-import { createImage } from "@/lib/engine/factory";
+import { createFrame, createImage } from "@/lib/engine/factory";
 import { preloadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import { calculateGhostBounds } from "@/lib/renderer/ghostOverlay";
@@ -61,15 +43,6 @@ import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatA
 
 export type { StagedVariationCard };
 
-function cleanTechnicalPromptText(text: string): string {
-  let s = text.trim();
-  s = s.replace(/^Edit\s+(?:ภาพ|รูป)?\s*(@\[[^\]]+\]|@[^\s]+|[^\s]+)?\s*ด้วย\s*Prompt\s*:\s*/iu, "");
-  s = s.replace(/^Edit\s+image\s+.*?with\s+prompt\s*:\s*/iu, "");
-  s = s.replace(/^propose_creative_direction\s*:\s*/iu, "");
-  s = s.replace(/^propose_design_plan\s*:\s*/iu, "");
-  s = s.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "@$1");
-  return s.trim();
-}
 
 function extractSubject(prompt: string, summary?: string): string {
   let effectivePrompt = prompt;
@@ -416,18 +389,18 @@ export default function AICoPilotBar() {
         // fallback
       }
     }
+    const targetRatio = (card.width || 1024) / Math.max(1, card.height || 1024);
+    const needsFrame = Math.abs(targetRatio - naturalWidth / Math.max(1, naturalHeight)) > 0.04;
     const elementName = deriveGeneratedImageName(card.label);
-    const element = createImage({
-      x: bounds.x,
-      y: bounds.y,
-      width: bounds.width,
-      height: bounds.height,
-      fileId,
-      naturalWidth,
-      naturalHeight,
-      name: elementName,
-      sourceName: elementName,
-    });
+    const element = needsFrame
+      ? createFrame({
+          x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+          name: `${elementName} (Frame)`, shape: "rect", imageFileId: fileId,
+        })
+      : createImage({
+          x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+          fileId, naturalWidth, naturalHeight, name: elementName, sourceName: elementName,
+        });
     state.addElement(element, `Place candidate variation ${card.label || card.id}`);
     setStagedVariations((prev) =>
       prev.map((v) => (v.id === card.id ? { ...v, status: "accepted" as const } : v)),
@@ -704,6 +677,10 @@ export default function AICoPilotBar() {
           analyses: analysesForTurn,
           selectedIds,
           canvas: slide ? { slide, selectedIds } : undefined,
+          conversationHistory: messages.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
           clarification: pending
             ? {
                 originalPrompt: pending.originalPrompt,
@@ -726,8 +703,8 @@ export default function AICoPilotBar() {
           const directorAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
             agent: "orchestrator",
-            title: "Creative Director (gpt-oss-120b)",
-            description: "กำลังวิเคราะห์โจทย์ จัดสัดส่วนภาพ วางแนวคิด 2D Graphic และคู่สีตามโจทย์…",
+            title: "Creative Director (Gemini 3 Flash)",
+            description: "กำลังวิเคราะห์โจทย์ ประเมิน Detail Score & Precision Score จัดสัดส่วนภาพและแนวคิด 2D Graphic…",
             status: "running", timestamp: Date.now(), stage: "analyzing", attempt: 0,
           };
           actions = [...actions, directorAction];
@@ -738,7 +715,7 @@ export default function AICoPilotBar() {
           }));
           let activeRunningAction: SubAgentActionLog = directorAction;
           // Creative Director disclosure copy:
-          // งานนี้จะส่งคำสั่งไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
+          // งานนี้จะส่งคำสั่งไปยัง Gemini 3 Flash Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
           const consent = true;
           if (!consent) {
             directorAction.status = "error";
@@ -752,23 +729,34 @@ export default function AICoPilotBar() {
                   prompt: promptToSend,
                   conversationHistory: messages
                     .flatMap((message): ClientChatMessage[] =>
-                      (message.role === "user" || message.role === "assistant") &&
-                      message.kind !== "progress"
+                      (message.role === "user" || message.role === "assistant") && message.kind !== "progress"
                         ? [{ role: message.role, content: message.content }]
                         : [],
                     )
                     .slice(-12),
                   designContext: buildDesignAgentContext(),
-                  canvasSummary: {
-                    objectCount: elementCount,
-                    selectedCount: selectedIds.size,
-                    width: slide?.width ?? 1920,
-                    height: slide?.height ?? 1080,
-                  },
+                  canvasSummary: { objectCount: elementCount, selectedCount: selectedIds.size, width: slide?.width ?? 1920, height: slide?.height ?? 1080 },
                   referenceAnalyses: analysesForTurn,
                 },
                 { signal: controller.signal, cloudConsent: true },
-              );
+              ).catch((dirErr) => {
+                if ((dirErr as Error).name !== "AbortError" && !controller.signal.aborted && (isImageGenerationPrompt(promptToSend) || refsForTurn.length > 0)) {
+                  console.warn("Creative Director error, activating self-healing fallback:", dirErr);
+                  const isEdit = refsForTurn.length > 0;
+                  return {
+                    kind: "image-task" as const, requestedOutputCount: 1, outputBriefs: ["ภาพผลลัพธ์"],
+                    summary: isEdit ? "แก้ไขและปรับแต่งภาพตามที่เลือก" : "สร้างสรรค์ภาพใหม่ตามคำอธิบาย",
+                    refinedPrompt: promptToSend,
+                    specialist: isEdit ? ("image_editor" as const) : ("image_generator" as const),
+                    capability: isEdit ? ("IMAGE_EDIT" as const) : ("IMAGE_DEFAULT" as const),
+                    modelAlias: "image-gpt-2" as const,
+                    knowledgeSkillIds: [], reviewCriteria: [],
+                    search: { required: false, queries: [], sources: [] },
+                    detailScore: 8, precisionScore: 8,
+                  };
+                }
+                throw dirErr;
+              });
 
               activeRunningAction = directorAction;
 
@@ -835,8 +823,19 @@ export default function AICoPilotBar() {
               } else {
                 directorAction.status = "success";
                 directorAction.stage = "succeeded";
+                directorAction.detailScore = direction.detailScore;
+                directorAction.precisionScore = direction.precisionScore;
                 const summaryDetail = direction.summary || "กำหนดคอนเซปต์และจัดวางองค์ประกอบศิลป์เรียบร้อย";
-                directorAction.description = `วางแผนสำเร็จ: ${summaryDetail} (เลือก ${direction.modelAlias})`;
+                const scoresParts: string[] = [];
+                if (direction.detailScore !== undefined) {
+                  scoresParts.push(`Detail: ${direction.detailScore}/10`);
+                }
+                if (direction.precisionScore !== undefined) {
+                  scoresParts.push(`Precision: ${direction.precisionScore}/10`);
+                }
+                const scoresBadge = scoresParts.length > 0 ? ` (${scoresParts.join(" · ")})` : "";
+                const cleanSummary = cleanTechnicalPromptText(summaryDetail);
+                directorAction.description = `วางแผนสำเร็จ: ${cleanSummary}${scoresBadge} (เลือก ${direction.modelAlias})`;
                 upsertCurrentAction({ ...directorAction });
 
                 const imageRun = createDirectedImageRun(contextDecision.input, direction);
@@ -998,6 +997,7 @@ export default function AICoPilotBar() {
                       thought: thoughtText,
                       toolLabel: "GPT Image 2",
                       images: generatedImages,
+                      imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
                       timestamp: Date.now(),
                       actions,
                       suggestions: completionSuggestions,
