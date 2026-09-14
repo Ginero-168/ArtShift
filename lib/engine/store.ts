@@ -255,6 +255,7 @@ export type EngineState = {
   redo: () => void;
   /** Replace the entire document (e.g. on file open). */
   loadDoc: (doc: EngineDoc) => void;
+  setDocTitle: (title: string) => void;
   setGridSnap: (size: number | null) => void;
   setShowHexGrid: (show: boolean) => void;
   setLayerFilter: (filter: LayerFilter) => void;
@@ -347,11 +348,11 @@ function newSlide(name: string): EngineSlide {
   };
 }
 
-function emptyDoc(): EngineDoc {
+export function createEmptyEngineDoc(title = "Untitled Project"): EngineDoc {
   const slide = newSlide("1");
   return {
     id: crypto.randomUUID(),
-    title: "Untitled",
+    title,
     width: SLIDE_W,
     height: SLIDE_H,
     slides: [slide],
@@ -362,6 +363,10 @@ function emptyDoc(): EngineDoc {
     updatedAt: Date.now(),
     schemaVersion: ENGINE_SCHEMA_VERSION,
   };
+}
+
+function emptyDoc(): EngineDoc {
+  return createEmptyEngineDoc("Untitled");
 }
 
 function nextZ(slide: EngineSlide): number {
@@ -1801,6 +1806,15 @@ export const useEngine = create<EngineState>((set, get) => {
         croppingImageId: null,
         activeRasterSelection: null,
       });
+    },
+    setDocTitle: (title) => {
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          title,
+          updatedAt: Date.now(),
+        },
+      }));
     },
     croppingImageId: null,
     setCroppingImageId: (id) => set({ croppingImageId: id }),

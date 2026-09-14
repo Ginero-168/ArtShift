@@ -1,1578 +1,460 @@
 "use client";
 
 /**
- * / — Excalidraw-style canvas editor (main app route).
+ * / — ArtShift Landing & Google Sign-in Gate.
  *
- * Layout:
- * - TopBar (ArtShift brand + title + Search/Stats/Import/Share)
- * - SlideRail (left, collapsible)
- * - Canvas workspace with floating toolbar + hamburger menu
- * - Properties panel (left of workspace, on selection)
+ * Requirements:
+ * - Public Index Route
+ * - Branding & Big "ArtShift" Title
+ * - Single Primary "Log in with Google" button
+ * - If already logged in, shows "Go to Projects"
+ * - Handles OAuth query parameters (?auth=...)
+ * - Rich, premium aesthetics (dark indigo gradient, ambient light, glassmorphism)
  */
 
-import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
-import ProfileMenu from "@/components/Auth/ProfileMenu";
-import BlockLibrary from "@/components/Builder/BlockLibrary";
-import BuilderInspector from "@/components/Builder/BuilderInspector";
-import LayerPanel from "@/components/Builder/LayerPanel";
-import CanvasEditor, { type CanvasEditorHandle } from "@/components/Canvas/CanvasEditor";
-import EditorOptionBar from "@/components/Canvas/EditorOptionBar";
-import SlideRail from "@/components/Canvas/SlideRail";
-import { useCanvasHotkeys } from "@/components/Canvas/useCanvasHotkeys";
-import {
-  IconBrand,
-  IconChevronDown,
-  IconDownload,
-  IconGrid,
-  IconMenu,
-  IconPalette,
-  IconRedo,
-  IconSettings,
-  IconStats,
-  IconUndo,
-  IconZoomIn,
-  IconZoomOut,
-} from "@/components/icons";
-import { importLegacyStoreDocument } from "@/lib/engine/legacyBridge";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { IconBrand, IconDownload, IconFrame, IconSparkles, IconWand } from "@/components/icons";
+import { useAuth } from "@/lib/auth/useAuth";
 
-const AIImageGeneratorModal = dynamic(() => import("@/components/AI/AIImageGeneratorModal"), {
-  ssr: false,
-});
-const BrandKitModal = dynamic(() => import("@/components/Brand/BrandKitModal"), { ssr: false });
-const CampaignStudioModal = dynamic(() => import("@/components/Campaign/CampaignStudioModal"), {
-  ssr: false,
-});
-const TemplateBrowser = dynamic(() => import("@/components/TemplateBrowser"), { ssr: false });
-const ModelManagerPanel = dynamic(() => import("@/components/ModelManagerPanel"), { ssr: false });
-
-import {
-  exportAllPNG,
-  exportCurrentSlideJPEG,
-  exportCurrentSlidePNG,
-  exportCurrentSlideWebP,
-  exportPDF,
-} from "@/lib/engine/exportPNG";
-import { exportPPTX } from "@/lib/engine/exportPPTX";
-import { exportAllSVG, exportCurrentSlideSVG } from "@/lib/engine/exportSVG";
-import { getImageCache } from "@/lib/engine/imageCache";
-import { clearEngine, type EngineLoadResult, loadEngine, saveEngine } from "@/lib/engine/persist";
-import { usePresetStore } from "@/lib/engine/presetStore";
-import { useEngine } from "@/lib/engine/store";
-import { loadThaiFonts } from "@/lib/fonts";
-import { useStore } from "@/lib/store";
-
-/* ——— Slide background palette ——— */
-const SLIDE_BG_PALETTE = [
-  "#ffffff",
-  "#f8f9fa",
-  "#e9ecef",
-  "#fff9db",
-  "#ffe3e3",
-  "#d3f9d8",
-  "#d0ebff",
-];
-
-type LoadIssue = Extract<EngineLoadResult, { status: "corrupt" }>;
-type SaveState =
-  | { status: "idle" }
-  | { status: "saving" }
-  | { status: "saved"; savedAt: number }
-  | { status: "error"; message: string };
-
-/* ——— Main component ——— */
-
-export default function HomePage() {
-  const undo = useEngine((s) => s.undo);
-  const redo = useEngine((s) => s.redo);
-  const deleteElements = useEngine((s) => s.deleteElements);
-  const loadDoc = useEngine((s) => s.loadDoc);
-  const theme = useStore((s) => s.theme);
-  const cycleTheme = useStore((s) => s.cycleTheme);
-  const setSlideBackground = useEngine((s) => s.setSlideBackground);
-  const showHexGrid = useEngine((s) => s.showHexGrid);
-  const setShowHexGrid = useEngine((s) => s.setShowHexGrid);
-  const layerFilter = useEngine((s) => s.layerFilter);
-  const setLayerFilter = useEngine((s) => s.setLayerFilter);
-  const currentSlideId = useEngine((s) => s.currentSlideId);
-  const currentSlideBackground = useEngine(
-    (s) => s.doc.slides.find((slide) => slide.id === s.currentSlideId)?.background ?? "#ffffff",
+export default function LandingRootPage() {
+  return (
+    <Suspense fallback={<LandingLoadingState />}>
+      <LandingPageContent />
+    </Suspense>
   );
-  const aiImageModalOpen = useEngine((s) => s.aiImageModalOpen);
-  const setAiImageModalOpen = useEngine((s) => s.setAiImageModalOpen);
+}
 
-  const [loaded, setLoaded] = useState(false);
-  const [loadIssue, setLoadIssue] = useState<LoadIssue | null>(null);
-  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [exportBusy, setExportBusy] = useState<string | null>(null);
-  const [showGSlidesModal, setShowGSlidesModal] = useState(false);
-  const [statsOpen, setStatsOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false);
-  const [campaignStudioOpen, setCampaignStudioOpen] = useState(false);
-  const [brandKitOpen, setBrandKitOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const persistedRevision = useRef<number | null>(null);
-  const saveRequest = useRef(0);
-
-  const canvasEditorRef = useRef<CanvasEditorHandle | null>(null);
-  const [zoomScale, setZoomScale] = useState(1);
-  const [zoomDropdownOpen, setZoomDropdownOpen] = useState(false);
-  const [zoomInputText, setZoomInputText] = useState("");
-  const zoomMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!zoomDropdownOpen) return;
-    function onDocClick(e: MouseEvent) {
-      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
-        setZoomDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [zoomDropdownOpen]);
-
-  // Load
-  useEffect(() => {
-    loadThaiFonts();
-    usePresetStore.getState().hydrate();
-    let cancelled = false;
-    (async () => {
-      const result = await loadEngine();
-      if (cancelled) return;
-      if (result.status === "corrupt") {
-        setLoadIssue(result);
-        return;
-      }
-      if (result.status === "loaded" || result.status === "recovered") {
-        loadDoc(result.doc);
-        persistedRevision.current = result.doc.updatedAt;
-        if (result.status === "recovered") {
-          setRecoveryNotice(
-            result.source === "backup"
-              ? "Recovered the last safe Artwork backup. Review it before continuing."
-              : "Loaded your previous ArtShift document. It will migrate on your next edit.",
-          );
-        }
-      } else {
-        persistedRevision.current = useEngine.getState().doc.updatedAt;
-      }
-      setLoaded(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadDoc]);
-
-  // Auto-save. Subscribe to revision changes without making the whole editor
-  // re-render for every live pointer preview.
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!loaded) return;
-    const unsubscribe = useEngine.subscribe((state, previous) => {
-      if (state.doc.updatedAt === previous.doc.updatedAt) return;
-      if (persistedRevision.current === state.doc.updatedAt) return;
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      const request = ++saveRequest.current;
-      const nextDoc = state.doc;
-      saveTimer.current = setTimeout(async () => {
-        setSaveState({ status: "saving" });
-        const revision = nextDoc.updatedAt;
-        const result = await saveEngine(nextDoc);
-        if (request !== saveRequest.current) return;
-        if (result.ok) {
-          persistedRevision.current = revision;
-          setSaveState({ status: "saved", savedAt: result.savedAt });
-        } else {
-          setSaveState({ status: "error", message: result.message });
-        }
-      }, 600);
-    });
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      unsubscribe();
-    };
-  }, [loaded]);
-
-  function downloadRecoveryPayload() {
-    if (!loadIssue?.recoveryPayload) return;
-    const blob = new Blob([loadIssue.recoveryPayload], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `artshift-recovery-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function startFreshArtwork() {
-    await clearEngine();
-    persistedRevision.current = useEngine.getState().doc.updatedAt;
-    setLoadIssue(null);
-    setSaveState({ status: "idle" });
-    setLoaded(true);
-  }
-
-  // Close menu on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onDoc(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [menuOpen]);
-
-  // Hotkeys
-  useCanvasHotkeys();
-
-  async function importLegacy() {
-    const engineDoc = await importLegacyStoreDocument();
-    loadDoc(engineDoc);
-    setMenuOpen(false);
-  }
-
-  async function runExport(
-    kind: "pptx" | "pdf" | "png" | "pngAll" | "svg" | "svgAll" | "webp" | "jpg",
-  ) {
-    if (exportBusy) return;
-    const { doc, currentSlideId: activeSlideId } = useEngine.getState();
-    setExportBusy(kind);
-    try {
-      const images = getImageCache();
-      if (kind === "pptx") {
-        await exportPPTX(doc, images);
-        setShowGSlidesModal(true);
-      } else if (kind === "pdf") {
-        await exportPDF(doc, images);
-      } else if (kind === "png") {
-        const slide = doc.slides.find((sl) => sl.id === activeSlideId);
-        if (slide) await exportCurrentSlidePNG(slide, doc, images);
-      } else if (kind === "webp") {
-        const slide = doc.slides.find((sl) => sl.id === activeSlideId);
-        if (slide) await exportCurrentSlideWebP(slide, doc, images);
-      } else if (kind === "jpg") {
-        const slide = doc.slides.find((sl) => sl.id === activeSlideId);
-        if (slide) await exportCurrentSlideJPEG(slide, doc, images);
-      } else if (kind === "pngAll") {
-        await exportAllPNG(doc, images);
-      } else if (kind === "svg") {
-        const slide = doc.slides.find((slide) => slide.id === activeSlideId);
-        if (slide) exportCurrentSlideSVG(slide);
-      } else if (kind === "svgAll") {
-        exportAllSVG(doc);
-      }
-    } finally {
-      setExportBusy(null);
-      setMenuOpen(false);
-    }
-  }
-
-  function handleLoadCampaignIntoCanvas(newSlides: import("@/lib/engine/types").EngineSlide[]) {
-    if (!newSlides.length) return;
-    const cur = useEngine.getState();
-    const existingSlides = cur.doc.slides.filter((s) => s.elements.length > 0);
-    const combinedSlides =
-      existingSlides.length > 0 ? [...cur.doc.slides, ...newSlides] : newSlides;
-    const updatedDoc = {
-      ...cur.doc,
-      slides: combinedSlides,
-      updatedAt: Date.now(),
-    };
-    loadDoc(updatedDoc);
-  }
-
-  function resetCanvas() {
-    if (confirm("Reset the canvas? All elements will be removed.")) {
-      const cur = useEngine.getState();
-      const slideId = cur.currentSlideId;
-      const slide = cur.doc.slides.find((s) => s.id === slideId);
-      if (slide) {
-        const ids = slide.elements.filter((e) => !e.isDeleted).map((e) => e.id);
-        if (ids.length) deleteElements(ids);
-      }
-    }
-    setMenuOpen(false);
-  }
-
-  if (loadIssue) {
-    return (
-      <main className={`recovery-screen theme-${theme}`}>
-        <section className="recovery-card" aria-labelledby="recovery-title">
-          <span className="recovery-kicker">Artwork recovery</span>
-          <h1 id="recovery-title">Your saved work needs attention.</h1>
-          <p>
-            ArtShift stopped autosave so the unreadable data stays untouched. Download a recovery
-            copy before starting over.
-          </p>
-          <code>{loadIssue.message}</code>
-          <div className="recovery-actions">
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={downloadRecoveryPayload}
-              disabled={!loadIssue.recoveryPayload}
-            >
-              Download recovery data
-            </button>
-            <button type="button" className="ghost-btn recovery-reset" onClick={startFreshArtwork}>
-              Start a fresh Artwork
-            </button>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  if (!loaded) {
-    return (
-      <div
-        className={`theme-${theme}`}
-        style={{
-          height: "100vh",
-          width: "100vw",
-          display: "grid",
-          placeItems: "center",
-          background: "var(--bg)",
-          color: "var(--ink-muted)",
-        }}
-      >
-        Loading…
+function LandingLoadingState() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#090d16",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#ffffff",
+      }}
+    >
+      <div style={{ width: 40, height: 40, color: "#818cf8" }} className="anim-pulse-ring">
+        <IconBrand />
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+function LandingPageContent() {
+  const searchParams = useSearchParams();
+  const { user, authenticated, loading, signInWithGoogle, signOut } = useAuth();
+  const [authAlert, setAuthAlert] = useState<string | null>(null);
+
+  useEffect(() => {
+    const authCode = searchParams.get("auth");
+    if (authCode === "google-cancelled") {
+      setAuthAlert("ยกเลิกการเข้าสู่ระบบด้วย Google แล้ว");
+    } else if (authCode === "google-unavailable") {
+      setAuthAlert("ระบบยังไม่ได้เปิดใช้งาน Google OAuth หรือยังไม่ได้ตั้งค่า Credentials");
+    } else if (authCode === "google-error") {
+      setAuthAlert("เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google กรุณาลองใหม่อีกครั้ง");
+    } else if (authCode === "session-expired") {
+      setAuthAlert("เซสชันการใช้งานของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบใหม่");
+    }
+  }, [searchParams]);
 
   return (
     <div
-      className={`app-root theme-${theme}`}
       style={{
-        position: "fixed",
-        inset: 0,
-        overflow: "hidden",
+        minHeight: "100vh",
+        background: "radial-gradient(circle at 50% -10%, #1e1b4b 0%, #0b0f19 60%, #030712 100%)",
+        color: "#ffffff",
         display: "flex",
         flexDirection: "column",
+        fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
+        position: "relative",
+        overflowX: "hidden",
       }}
     >
-      {/* ——— TopBar ——— */}
-      <header className="topbar">
-        <div className="topbar-left">
-          <div className="brand">
-            <div className="brand-mark">
-              <IconBrand />
-            </div>
-            <span>ArtShift</span>
-          </div>
-          <span
-            className={`save-state save-state-${saveState.status}`}
-            role="status"
-            title={saveState.status === "error" ? saveState.message : undefined}
-          >
-            {saveState.status === "saving"
-              ? "Saving…"
-              : saveState.status === "saved"
-                ? "Saved"
-                : saveState.status === "error"
-                  ? "Save failed"
-                  : "Local workspace"}
-          </span>
-        </div>
-        <div className="topbar-center">
-          <EditorOptionBar />
-        </div>
-        <div className="topbar-right">
-          <button className="ghost-btn" onClick={cycleTheme} title="Toggle theme">
-            <IconPalette size={15} />
-          </button>
-          <button className="ghost-btn" onClick={() => setStatsOpen(true)} title="Stats">
-            <IconStats size={15} />
-          </button>
-
-          <div style={{ position: "relative" }}>
-            <button
-              className="ghost-btn"
-              onClick={() => setSettingsOpen((v) => !v)}
-              title="Settings"
-            >
-              <IconSettings size={15} />
-            </button>
-            {settingsOpen && (
-              <div
-                className="menu"
-                style={{
-                  position: "absolute",
-                  top: 32,
-                  right: 0,
-                  zIndex: 30,
-                  padding: 0,
-                  overflow: "hidden",
-                }}
-              >
-                <ModelManagerPanel
-                  onResetProject={async () => {
-                    if (
-                      confirm("Reset all data? This will clear all slides and cannot be undone.")
-                    ) {
-                      await clearEngine();
-                      window.location.reload();
-                    }
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          <div style={{ position: "relative" }}>
-            <button
-              className="primary-btn"
-              onClick={() => {
-                setExportOpen((v) => !v);
-                setStatsOpen(false);
-              }}
-            >
-              <IconDownload size={11} /> Share
-            </button>
-            {exportOpen && (
-              <div className="menu" style={{ position: "absolute", top: 32, right: 0, zIndex: 30 }}>
-                <button
-                  onClick={() => {
-                    runExport("pptx");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download .pptx
-                </button>
-                <button
-                  onClick={() => {
-                    runExport("pdf");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download .pdf
-                </button>
-                <button
-                  onClick={() => {
-                    runExport("png");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download .png (current)
-                </button>
-                <button
-                  onClick={() => {
-                    runExport("webp");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download .webp (Optimized Ads)
-                </button>
-                <button
-                  onClick={() => {
-                    runExport("jpg");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download .jpg (High Quality)
-                </button>
-                <button
-                  onClick={() => {
-                    runExport("pngAll");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download .png (all)
-                </button>
-                <button
-                  onClick={() => {
-                    runExport("svg");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download editable .svg (current)
-                </button>
-                <button
-                  onClick={() => {
-                    runExport("svgAll");
-                    setExportOpen(false);
-                  }}
-                >
-                  <IconDownload size={13} /> Download editable .svg (all)
-                </button>
-              </div>
-            )}
-          </div>
-          <ProfileMenu />
-        </div>
-      </header>
-
-      {recoveryNotice ? (
-        <div className="recovery-banner" role="status">
-          <span>{recoveryNotice}</span>
-          <button type="button" onClick={() => setRecoveryNotice(null)}>
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      {/* Hidden PDF import input */}
-      <input
-        id="pdf-import-input"
-        type="file"
-        accept=".pdf,application/pdf"
-        style={{ display: "none" }}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          const { importPdfToImages } = await import("@/lib/import/pdfImport");
-          const { loadDataURL } = await import("@/lib/engine/imageCache");
-          const { createImage } = await import("@/lib/engine/factory");
-
-          const images = await importPdfToImages(file, 2);
-          for (let i = 0; i < images.length; i++) {
-            const entry = await loadDataURL(images[i]);
-            const st = useEngine.getState();
-            const slide = st.doc.slides.find((sl) => sl.id === st.currentSlideId);
-            const sw = slide?.width ?? 1920;
-            const sh = slide?.height ?? 1080;
-            const maxW = sw * 0.9;
-            const maxH = sh * 0.9;
-            const ratio = Math.min(maxW / entry.width, maxH / entry.height, 1);
-            const w = entry.width * ratio;
-            const h = entry.height * ratio;
-            const x = (sw - w) / 2;
-            const y = (sh - h) / 2;
-            if (i > 0) {
-              const newSlideId = useEngine.getState().addSlide();
-              useEngine.getState().setCurrentSlide(newSlideId);
-            }
-            useEngine.getState().addElement(
-              createImage({
-                x,
-                y,
-                width: w,
-                height: h,
-                fileId: entry.fileId,
-                naturalWidth: entry.width,
-                naturalHeight: entry.height,
-              }),
-              "import pdf page",
-            );
-          }
-          (e.target as HTMLInputElement).value = "";
+      {/* Background Ambient Glow Elements */}
+      <div
+        style={{
+          position: "absolute",
+          top: -120,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 700,
+          height: 380,
+          background:
+            "radial-gradient(ellipse, rgba(99, 102, 241, 0.28) 0%, rgba(139, 92, 246, 0) 70%)",
+          filter: "blur(40px)",
+          pointerEvents: "none",
         }}
       />
 
-      {/* ——— Main area ——— */}
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <SlideRail />
-        <BlockLibrary />
-        <div style={{ flex: 1, position: "relative" }} className="canvas-stage">
-          {loaded && (
-            <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
-          )}
-          <LayerPanel />
-
-          {/* ——— Left toolbar (top-left of workspace) ——— */}
+      {/* Header */}
+      <header
+        style={{
+          height: 72,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 32px",
+          maxWidth: 1200,
+          width: "100%",
+          margin: "0 auto",
+          zIndex: 20,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div
             style={{
-              position: "absolute",
-              top: 9,
-              left: 9,
-              zIndex: 10,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              gap: 4,
-            }}
-          >
-            {/* Top row: Hamburger + Settings + Undo + Redo */}
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              {/* Hamburger menu */}
-              <div ref={menuRef} style={{ position: "relative" }}>
-                <button
-                  onClick={() => setMenuOpen((v) => !v)}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    border: "1px solid var(--stroke, #e5e7eb)",
-                    background: "var(--surface-solid, #fff)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    color: "var(--ink, #111)",
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                  }}
-                  title="Menu"
-                >
-                  <IconMenu size={12} />
-                </button>
-                {menuOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 34,
-                      left: 0,
-                      width: 200,
-                      background: "var(--surface-solid, #fff)",
-                      border: "1px solid var(--stroke, #e5e7eb)",
-                      borderRadius: 9,
-                      boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
-                      padding: "6px 0",
-                      zIndex: 20,
-                    }}
-                  >
-                    {/* Open */}
-                    <HamburgerItem
-                      label="Open"
-                      onClick={() => {
-                        importLegacy();
-                      }}
-                    />
-                    {/* Import PDF */}
-                    <HamburgerItem
-                      label="Import PDF"
-                      onClick={() => {
-                        document.getElementById("pdf-import-input")?.click();
-                        setMenuOpen(false);
-                      }}
-                    />
-                    {/* Save */}
-                    <HamburgerItem
-                      label="Save to..."
-                      onClick={() => {
-                        saveEngine(useEngine.getState().doc);
-                        setMenuOpen(false);
-                      }}
-                    />
-                    {/* Export */}
-                    <HamburgerItem
-                      label="Export image..."
-                      onClick={() => {
-                        runExport("png");
-                      }}
-                    />
-                    {/* Find */}
-                    <HamburgerItem
-                      label="Find on Artwork"
-                      onClick={() => {
-                        setSearchOpen(true);
-                        setMenuOpen(false);
-                      }}
-                    />
-                    {/* Templates */}
-                    <HamburgerItem
-                      label="Templates"
-                      onClick={() => {
-                        setTemplateBrowserOpen(true);
-                        setMenuOpen(false);
-                      }}
-                    />
-                    {/* AI Image Studio */}
-                    <HamburgerItem
-                      label="✨ AI Image Studio (GPT Image 2 · low)"
-                      onClick={() => {
-                        useEngine.getState().setAiImageModalOpen(true);
-                        setMenuOpen(false);
-                      }}
-                    />
-                    {/* Campaign Studio */}
-                    <HamburgerItem
-                      label="Campaign Studio (Batch)"
-                      onClick={() => {
-                        setCampaignStudioOpen(true);
-                        setMenuOpen(false);
-                      }}
-                    />
-                    {/* Present */}
-                    <HamburgerItem
-                      label="Present"
-                      onClick={() => {
-                        window.open("/present", "_blank");
-                        setMenuOpen(false);
-                      }}
-                    />
-                    {/* Help */}
-                    <HamburgerItem label="Help" onClick={() => setMenuOpen(false)} />
-                    {/* Reset */}
-                    <HamburgerItem label="Reset the canvas" onClick={resetCanvas} />
-
-                    <div
-                      style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "4px 0" }}
-                    />
-
-                    {/* Canvas background */}
-                    <div style={{ padding: "6px 12px" }}>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: "var(--ink-muted, #6b7280)",
-                          marginBottom: 6,
-                          fontWeight: 500,
-                        }}
-                      >
-                        Canvas background
-                      </div>
-                      <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                        {SLIDE_BG_PALETTE.map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => {
-                              setSlideBackground(currentSlideId, c);
-                            }}
-                            style={{
-                              width: 18,
-                              height: 18,
-                              borderRadius: 3,
-                              border:
-                                currentSlideBackground === c
-                                  ? "2px solid var(--accent, #6366f1)"
-                                  : "1px solid var(--stroke, #d1d5db)",
-                              background: c,
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ——— Top-right toolbar: Viewport Controls | Layer Filter ——— */}
-          <div
-            style={{
-              position: "absolute",
-              top: 9,
-              right: 9,
-              zIndex: 10,
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
               display: "flex",
               alignItems: "center",
-              gap: 3,
-              background: "var(--surface-solid, #fff)",
-              border: "1px solid var(--stroke, #e5e7eb)",
-              borderRadius: 8,
-              padding: "3px 4px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              justifyContent: "center",
+              color: "#ffffff",
+              boxShadow: "0 4px 16px rgba(99, 102, 241, 0.4)",
             }}
           >
-            {/* 0. History: Undo & Redo (FAR LEFT) */}
-            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <button
-                type="button"
-                onClick={undo}
-                title="Undo"
-                style={{
-                  width: 26,
-                  height: 26,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--ink, #111827)",
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <IconUndo size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={redo}
-                title="Redo"
-                style={{
-                  width: 26,
-                  height: 26,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--ink, #111827)",
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <IconRedo size={14} />
-              </button>
-            </div>
+            <IconBrand />
+          </div>
+          <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.03em" }}>ArtShift</span>
+        </div>
 
-            {/* DIVIDER */}
-            <div
+        <div>
+          {!loading && authenticated ? (
+            <Link
+              href="/projects"
               style={{
-                width: 1,
-                height: 18,
-                background: "var(--stroke, #e5e7eb)",
-                margin: "0 3px",
-              }}
-            />
-
-            {/* Viewport Controls: Grid, Zoom Out, Zoom %, Zoom In */}
-            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              {/* Block Grid Toggle */}
-              <button
-                type="button"
-                onClick={() => setShowHexGrid(!showHexGrid)}
-                title={showHexGrid ? "Hide Block Grid" : "Show Block Grid"}
-                style={{
-                  height: 26,
-                  padding: "0 6px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 3,
-                  borderRadius: 5,
-                  border: "none",
-                  background: showHexGrid ? "rgba(99, 102, 241, 0.12)" : "transparent",
-                  color: showHexGrid ? "var(--accent, #6366f1)" : "var(--ink-muted, #6b7280)",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  transition: "all 0.12s ease",
-                }}
-                aria-pressed={showHexGrid}
-              >
-                <IconGrid size={13} />
-                <span style={{ fontSize: 11, letterSpacing: -0.2 }}>Grid</span>
-              </button>
-
-              {/* Zoom Out */}
-              <button
-                type="button"
-                onClick={() => {
-                  const next = Math.max(0.1, zoomScale - 0.15);
-                  canvasEditorRef.current?.setZoom(next);
-                }}
-                title="Zoom out"
-                style={{
-                  width: 24,
-                  height: 26,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--ink, #111827)",
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <IconZoomOut size={13} />
-              </button>
-
-              {/* Zoom % dropdown + input */}
-              <div ref={zoomMenuRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setZoomInputText(`${Math.round(zoomScale * 100)}%`);
-                    setZoomDropdownOpen((v) => !v);
-                  }}
-                  title="Zoom percentage (click for presets or type custom %)"
-                  style={{
-                    height: 26,
-                    padding: "0 6px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 3,
-                    borderRadius: 5,
-                    border: "1px solid var(--stroke, #e5e7eb)",
-                    background: zoomDropdownOpen ? "rgba(0,0,0,0.04)" : "transparent",
-                    color: "var(--ink, #111827)",
-                    cursor: "pointer",
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono, monospace)",
-                    fontWeight: 600,
-                    transition: "all 0.12s ease",
-                    minWidth: 56,
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <span>{Math.round(zoomScale * 100)}%</span>
-                  <IconChevronDown size={10} />
-                </button>
-
-                {zoomDropdownOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: 34,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      background: "var(--surface-solid, #fff)",
-                      border: "1px solid var(--stroke, #e5e7eb)",
-                      borderRadius: 8,
-                      boxShadow: "0 6px 24px rgba(0,0,0,0.15)",
-                      padding: "5px",
-                      zIndex: 50,
-                      minWidth: 130,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 2,
-                    }}
-                  >
-                    {/* Direct % input field */}
-                    <div style={{ padding: "2px 2px 4px 2px" }}>
-                      <input
-                        type="text"
-                        value={zoomInputText}
-                        onChange={(e) => setZoomInputText(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            const raw = zoomInputText.replace(/[^0-9.]/g, "");
-                            const num = parseFloat(raw);
-                            if (!Number.isNaN(num) && num > 0) {
-                              canvasEditorRef.current?.setZoom(num / 100);
-                              setZoomDropdownOpen(false);
-                            }
-                          } else if (e.key === "Escape") {
-                            setZoomDropdownOpen(false);
-                          }
-                        }}
-                        onBlur={() => {
-                          const raw = zoomInputText.replace(/[^0-9.]/g, "");
-                          const num = parseFloat(raw);
-                          if (!Number.isNaN(num) && num > 0) {
-                            canvasEditorRef.current?.setZoom(num / 100);
-                          }
-                        }}
-                        style={{
-                          width: "100%",
-                          boxSizing: "border-box",
-                          padding: "4px 6px",
-                          fontSize: 12,
-                          fontFamily: "var(--font-mono, monospace)",
-                          fontWeight: 600,
-                          textAlign: "center",
-                          borderRadius: 4,
-                          border: "1px solid var(--accent, #6366f1)",
-                          outline: "none",
-                        }}
-                      />
-                    </div>
-                    <div
-                      style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "1px 0" }}
-                    />
-                    {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((preset) => {
-                      const isActive = Math.round(zoomScale * 100) === Math.round(preset * 100);
-                      return (
-                        <button
-                          key={preset}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            canvasEditorRef.current?.setZoom(preset);
-                            setZoomDropdownOpen(false);
-                          }}
-                          style={{
-                            border: "none",
-                            background: isActive ? "rgba(99, 102, 241, 0.1)" : "transparent",
-                            color: isActive ? "var(--accent, #6366f1)" : "var(--ink, #111)",
-                            fontSize: 11,
-                            fontFamily: "var(--font-mono, monospace)",
-                            fontWeight: isActive ? 600 : 500,
-                            padding: "5px 8px",
-                            borderRadius: 4,
-                            textAlign: "left",
-                            cursor: "pointer",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <span>{Math.round(preset * 100)}%</span>
-                          {isActive && <span>✓</span>}
-                        </button>
-                      );
-                    })}
-                    <div
-                      style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "1px 0" }}
-                    />
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        canvasEditorRef.current?.resetView();
-                        setZoomDropdownOpen(false);
-                      }}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        color: "var(--ink, #111)",
-                        fontSize: 11,
-                        padding: "5px 8px",
-                        borderRadius: 4,
-                        textAlign: "left",
-                        cursor: "pointer",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span>Fit to screen</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Zoom In */}
-              <button
-                type="button"
-                onClick={() => {
-                  const next = Math.min(4.0, zoomScale + 0.15);
-                  canvasEditorRef.current?.setZoom(next);
-                }}
-                title="Zoom in"
-                style={{
-                  width: 24,
-                  height: 26,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--ink, #111827)",
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <IconZoomIn size={13} />
-              </button>
-            </div>
-
-            {/* DIVIDER */}
-            <div
-              style={{
-                width: 1,
-                height: 18,
-                background: "var(--stroke, #e5e7eb)",
-                margin: "0 3px",
-              }}
-            />
-
-            {/* 3. Layer Filter (All / Block / Free) */}
-            <div
-              style={{
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: 1,
-                background: "rgba(0,0,0,0.03)",
-                padding: "1px",
-                borderRadius: 6,
-                border: "1px solid var(--stroke, #e5e7eb)",
+                gap: 8,
+                padding: "8px 18px",
+                borderRadius: 9,
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.16)",
+                color: "#ffffff",
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: "none",
+                backdropFilter: "blur(8px)",
+                transition: "all 0.15s ease",
               }}
             >
-              <button
-                type="button"
-                onClick={() => setLayerFilter("all")}
-                title="Show all layers"
-                style={{
-                  padding: "2px 7px",
-                  height: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 5,
-                  border: "none",
-                  background: layerFilter === "all" ? "var(--surface-solid, #fff)" : "transparent",
-                  color:
-                    layerFilter === "all" ? "var(--ink, #111827)" : "var(--ink-muted, #6b7280)",
-                  fontWeight: layerFilter === "all" ? 600 : 500,
-                  boxShadow: layerFilter === "all" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                All
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setLayerFilter("block")}
-                title="Show Block layers only"
-                style={{
-                  padding: "2px 7px",
-                  height: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 3,
-                  borderRadius: 5,
-                  border: "none",
-                  background: layerFilter === "block" ? "rgba(59, 130, 246, 0.16)" : "transparent",
-                  color: layerFilter === "block" ? "#2563eb" : "var(--ink-muted, #6b7280)",
-                  fontWeight: layerFilter === "block" ? 600 : 500,
-                  boxShadow: layerFilter === "block" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <span style={{ fontSize: 10 }}>⬡</span>
-                <span>Block</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setLayerFilter("free")}
-                title="Show Free layers only"
-                style={{
-                  padding: "2px 7px",
-                  height: 24,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 3,
-                  borderRadius: 5,
-                  border: "none",
-                  background: layerFilter === "free" ? "rgba(249, 115, 22, 0.16)" : "transparent",
-                  color: layerFilter === "free" ? "#ea580c" : "var(--ink-muted, #6b7280)",
-                  fontWeight: layerFilter === "free" ? 600 : 500,
-                  boxShadow: layerFilter === "free" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
-              >
-                <span style={{ fontSize: 10 }}>◇</span>
-                <span>Free</span>
-              </button>
-            </div>
-          </div>
-
-          {templateBrowserOpen && <TemplateBrowser onClose={() => setTemplateBrowserOpen(false)} />}
-          {campaignStudioOpen && (
-            <CampaignStudioModal
-              isOpen={campaignStudioOpen}
-              onClose={() => setCampaignStudioOpen(false)}
-              onLoadIntoCanvas={handleLoadCampaignIntoCanvas}
-            />
-          )}
-          {brandKitOpen && (
-            <BrandKitModal isOpen={brandKitOpen} onClose={() => setBrandKitOpen(false)} />
-          )}
-          {aiImageModalOpen && (
-            <AIImageGeneratorModal
-              isOpen={aiImageModalOpen}
-              onClose={() => setAiImageModalOpen(false)}
-            />
+              <span>ไปที่โปรเจกต์ของคุณ →</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={signInWithGoogle}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 18px",
+                borderRadius: 9,
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.16)",
+                color: "#ffffff",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              <GoogleGIcon size={14} />
+              <span>เข้าสู่ระบบ</span>
+            </button>
           )}
         </div>
-        <BuilderInspector />
-      </div>
+      </header>
 
-      {/* ——— Google Slides instruction modal ——— */}
-      {searchOpen && <SearchReplaceModal onClose={() => setSearchOpen(false)} />}
-      {statsOpen && <StatsModal onClose={() => setStatsOpen(false)} />}
-      {showGSlidesModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            zIndex: 100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={() => setShowGSlidesModal(false)}
-        >
+      {/* Hero Section */}
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          padding: "48px 24px 80px",
+          maxWidth: 880,
+          margin: "0 auto",
+          zIndex: 10,
+        }}
+      >
+        {/* Auth Alert Banner */}
+        {authAlert && (
           <div
             style={{
-              background: "var(--surface-solid, #fff)",
-              borderRadius: 14,
-              padding: 28,
-              maxWidth: 440,
-              width: "90%",
-              boxShadow: "0 12px 40px rgba(0,0,0,0.2)",
-              border: "1px solid var(--stroke, #e5e7eb)",
-              color: "var(--ink, #111)",
+              padding: "10px 20px",
+              borderRadius: 8,
+              background: "rgba(239, 68, 68, 0.15)",
+              border: "1px solid rgba(239, 68, 68, 0.35)",
+              color: "#fca5a5",
+              fontSize: 13,
+              fontWeight: 500,
+              marginBottom: 28,
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 600 }}>
-              🌟 Import into Google Slides
-            </h3>
-            <ol style={{ margin: 0, paddingLeft: 22, fontSize: 14, lineHeight: 2 }}>
-              <li>
-                Open{" "}
-                <a
-                  href="https://slides.google.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: "var(--accent, #6366f1)" }}
-                >
-                  Google Slides
-                </a>
-              </li>
-              <li>
-                Click <strong>File → Import slides</strong>
-              </li>
-              <li>
-                Click <strong>Upload</strong> and select the{" "}
-                <code
-                  style={{
-                    background: "var(--stroke, #e5e7eb)",
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  .pptx
-                </code>{" "}
-                file
-              </li>
-              <li>Select the slides you want to import</li>
-              <li>Done! 🎉</li>
-            </ol>
-            <div style={{ marginTop: 18, textAlign: "right" }}>
-              <button
-                onClick={() => setShowGSlidesModal(false)}
-                style={{
-                  padding: "8px 24px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "var(--accent, #6366f1)",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                }}
-              >
-                Got it
-              </button>
-            </div>
+            {authAlert}
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        )}
 
-/* ——— Sub-components ——— */
-
-function SearchReplaceModal({ onClose }: { onClose: () => void }) {
-  const [find, setFind] = useState("");
-  const [replace, setReplace] = useState("");
-  const [results, setResults] = useState<{ slideIndex: number; elementId: string; text: string }[]>(
-    [],
-  );
-  const doc = useEngine((s) => s.doc);
-  const updateElements = useEngine((s) => s.updateElements);
-  const setCurrentSlide = useEngine((s) => s.setCurrentSlide);
-  const selectOnly = useEngine((s) => s.selectOnly);
-
-  function doSearch() {
-    if (!find.trim()) {
-      setResults([]);
-      return;
-    }
-    const hits: { slideIndex: number; elementId: string; text: string }[] = [];
-    doc.slides.forEach((sl, si) => {
-      sl.elements.forEach((el) => {
-        if (el.type === "text" && el.text.toLowerCase().includes(find.toLowerCase())) {
-          hits.push({ slideIndex: si, elementId: el.id, text: el.text });
-        }
-      });
-    });
-    setResults(hits);
-  }
-
-  function doReplace() {
-    if (!find.trim()) return;
-    const patches: { id: string; patch: Partial<import("@/lib/engine/types").EngineElement> }[] =
-      [];
-    doc.slides.forEach((sl) => {
-      sl.elements.forEach((el) => {
-        if (el.type === "text" && el.text.toLowerCase().includes(find.toLowerCase())) {
-          patches.push({
-            id: el.id,
-            patch: {
-              text: el.text.replace(
-                new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"),
-                replace,
-              ),
-            },
-          });
-        }
-      });
-    });
-    if (patches.length) updateElements(patches, "replace all");
-    doSearch();
-  }
-
-  function goToResult(r: (typeof results)[0]) {
-    const slide = doc.slides[r.slideIndex];
-    if (slide) {
-      setCurrentSlide(slide.id);
-      selectOnly([r.elementId]);
-    }
-  }
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        zIndex: 100,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--surface-solid, #fff)",
-          borderRadius: 14,
-          padding: 24,
-          width: 420,
-          maxHeight: "70vh",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.2)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Find & Replace</h3>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            value={find}
-            onChange={(e) => setFind(e.currentTarget.value)}
-            placeholder="Find..."
-            style={{
-              flex: 1,
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--stroke, #e5e7eb)",
-              fontSize: 12,
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") doSearch();
-            }}
-          />
-          <input
-            value={replace}
-            onChange={(e) => setReplace(e.currentTarget.value)}
-            placeholder="Replace with..."
-            style={{
-              flex: 1,
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--stroke, #e5e7eb)",
-              fontSize: 12,
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") doReplace();
-            }}
-          />
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={doSearch}
-            style={{
-              flex: 1,
-              padding: "6px",
-              borderRadius: 6,
-              border: "none",
-              background: "var(--accent, #6366f1)",
-              color: "#fff",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            Find
-          </button>
-          <button
-            onClick={doReplace}
-            style={{
-              flex: 1,
-              padding: "6px",
-              borderRadius: 6,
-              border: "none",
-              background: "var(--accent, #6366f1)",
-              color: "#fff",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            Replace All
-          </button>
-        </div>
-        <div style={{ fontSize: 11, color: "#9ca3af" }}>{results.length} result(s)</div>
+        {/* Pill Tag */}
         <div
           style={{
-            overflow: "auto",
-            maxHeight: 250,
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 14px",
+            borderRadius: 30,
+            background: "rgba(99, 102, 241, 0.12)",
+            border: "1px solid rgba(99, 102, 241, 0.3)",
+            color: "#a5b4fc",
+            fontSize: 12,
+            fontWeight: 600,
+            marginBottom: 24,
           }}
         >
-          {results.map((r, i) => (
-            <button
-              key={i}
-              onClick={() => goToResult(r)}
-              style={{
-                textAlign: "left",
-                padding: "6px 8px",
-                borderRadius: 5,
-                border: "1px solid var(--stroke, #e5e7eb)",
-                background: "var(--surface-hover, #f3f4f6)",
-                cursor: "pointer",
-                fontSize: 11,
-              }}
-            >
-              <span style={{ color: "#6366f1", fontWeight: 600 }}>Slide {r.slideIndex + 1}</span>{" "}
-              <span style={{ color: "var(--ink, #111)" }}>
-                {r.text.slice(0, 60)}
-                {r.text.length > 60 ? "..." : ""}
-              </span>
-            </button>
-          ))}
+          <IconSparkles size={13} color="#a5b4fc" />
+          <span>Local-First Presentation &amp; Graphic Canvas</span>
         </div>
-      </div>
+
+        {/* Big Title */}
+        <h1
+          style={{
+            fontSize: "clamp(42px, 7vw, 68px)",
+            fontWeight: 900,
+            lineHeight: 1.08,
+            letterSpacing: "-0.04em",
+            margin: "0 0 20px",
+            background: "linear-gradient(180deg, #ffffff 30%, #94a3b8 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          ArtShift
+        </h1>
+
+        {/* Tagline */}
+        <p
+          style={{
+            fontSize: "clamp(16px, 2.5vw, 20px)",
+            color: "#94a3b8",
+            lineHeight: 1.6,
+            maxWidth: 640,
+            margin: "0 0 40px",
+          }}
+        >
+          สร้างสไลด์ พรีเซนเทชัน และงานกราฟิกอย่างมืออาชีพด้วย Director AI ปลอดภัยด้วยระบบจัดเก็บข้อมูลในเครื่องคุณ
+          (Local IndexedDB) ไม่ส่งไฟล์ออกนอกเบราว์เซอร์
+        </p>
+
+        {/* Action Card: Sign in with Google OR Go to Projects */}
+        <div
+          style={{
+            background: "rgba(255, 255, 255, 0.04)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            borderRadius: 20,
+            padding: "28px 36px",
+            backdropFilter: "blur(16px)",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 16,
+            width: "100%",
+            maxWidth: 420,
+          }}
+        >
+          {loading ? (
+            <div style={{ padding: "12px 0", color: "#94a3b8", fontSize: 13 }}>
+              กำลังโหลดสถานะผู้ใช้…
+            </div>
+          ) : authenticated ? (
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: 13, color: "#cbd5e1" }}>
+                ยินดีต้อนรับกลับ, <strong>{user?.name || user?.email}</strong>
+              </div>
+
+              <Link
+                href="/projects"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                  width: "100%",
+                  padding: "14px 20px",
+                  borderRadius: 12,
+                  background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+                  color: "#ffffff",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  boxShadow: "0 4px 20px rgba(99, 102, 241, 0.45)",
+                  transition: "transform 0.15s ease",
+                  boxSizing: "border-box",
+                }}
+              >
+                <span>เปิดหน้ารายการโปรเจกต์</span>
+                <span>→</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={signOut}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#94a3b8",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  marginTop: 2,
+                }}
+              >
+                ออกจากระบบ (Sign out)
+              </button>
+            </div>
+          ) : (
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+              <button
+                type="button"
+                onClick={signInWithGoogle}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 12,
+                  width: "100%",
+                  padding: "14px 24px",
+                  borderRadius: 12,
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 20px rgba(255, 255, 255, 0.2)",
+                  transition: "transform 0.15s ease",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              >
+                <GoogleGIcon size={18} />
+                <span>เข้าสู่ระบบด้วย Google (Log in with Google)</span>
+              </button>
+
+              <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>
+                เข้าสู่ระบบเพื่อระบุตัวตนและเริ่มจัดการโปรเจกต์ของคุณ ข้อมูลทั้งหมดจะจัดเก็บในเครื่องของคุณอย่างปลอดภัย
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Feature Highlights Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 16,
+            width: "100%",
+            marginTop: 64,
+          }}
+        >
+          <FeatureCard
+            icon={<IconWand size={20} color="#818cf8" />}
+            title="Director AI"
+            description="ออกแบบและปรับปรุงสไลด์อัตโนมัติด้วยคำสั่งภาษาไทยและอังกฤษ"
+          />
+          <FeatureCard
+            icon={<IconFrame size={20} color="#38bdf8" />}
+            title="Vector & Icons"
+            description="ไอคอน SVG ในตัว ปรับขนาด หมุนอิสระแบบ Illustrator และเปลี่ยนสีได้ทันที"
+          />
+          <FeatureCard
+            icon={<span style={{ fontSize: 20 }}>🔒</span>}
+            title="100% Local Storage"
+            description="ไฟล์งานทุกชิ้นถูกจัดเก็บใน IndexedDB บนเครื่องคุณโดยสมบูรณ์"
+          />
+          <FeatureCard
+            icon={<IconDownload size={20} color="#34d399" />}
+            title="ส่งออกได้หลากหลาย"
+            description="Export เป็น .pptx (PowerPoint), PDF, SVG และ PNG ความละเอียดสูง"
+          />
+        </div>
+      </main>
     </div>
   );
 }
 
-function StatsModal({ onClose }: { onClose: () => void }) {
-  const doc = useEngine((s) => s.doc);
-  const slides = doc.slides.length;
-  const elements = doc.slides.reduce(
-    (acc, sl) => acc + sl.elements.filter((e) => !e.isDeleted).length,
-    0,
-  );
-  const textElements = doc.slides.reduce(
-    (acc, sl) => acc + sl.elements.filter((e) => !e.isDeleted && e.type === "text").length,
-    0,
-  );
-  const imageElements = doc.slides.reduce(
-    (acc, sl) => acc + sl.elements.filter((e) => !e.isDeleted && e.type === "image").length,
-    0,
-  );
-
+function FeatureCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
     <div
       style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        zIndex: 100,
+        background: "rgba(255, 255, 255, 0.03)",
+        border: "1px solid rgba(255, 255, 255, 0.06)",
+        borderRadius: 14,
+        padding: "20px 18px",
+        textAlign: "left",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        flexDirection: "column",
+        gap: 10,
       }}
-      onClick={onClose}
     >
       <div
         style={{
-          background: "var(--surface-solid, #fff)",
-          borderRadius: 14,
-          padding: 24,
-          width: 320,
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          background: "rgba(255, 255, 255, 0.05)",
           display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.2)",
+          alignItems: "center",
+          justifyContent: "center",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Stats</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <StatBox label="Slides" value={slides} />
-          <StatBox label="Elements" value={elements} />
-          <StatBox label="Text boxes" value={textElements} />
-          <StatBox label="Images" value={imageElements} />
-        </div>
-        <button
-          onClick={onClose}
-          style={{
-            padding: "8px",
-            borderRadius: 6,
-            border: "none",
-            background: "var(--accent, #6366f1)",
-            color: "#fff",
-            fontSize: 12,
-            cursor: "pointer",
-          }}
-        >
-          Close
-        </button>
+        {icon}
       </div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{title}</div>
+      <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{description}</div>
     </div>
   );
 }
 
-function StatBox({ label, value }: { label: string; value: number }) {
+function GoogleGIcon({ size = 18 }: { size?: number }) {
   return (
-    <div
-      style={{
-        padding: 12,
-        borderRadius: 8,
-        border: "1px solid var(--stroke, #e5e7eb)",
-        background: "var(--surface-hover, #f3f4f6)",
-        textAlign: "center",
-      }}
-    >
-      <div style={{ fontSize: 22, fontWeight: 700, color: "var(--accent, #6366f1)" }}>{value}</div>
-      <div style={{ fontSize: 11, color: "var(--ink-muted, #6b7280)" }}>{label}</div>
-    </div>
-  );
-}
-
-function HamburgerItem({
-  label,
-  shortcut,
-  danger,
-  onClick,
-}: {
-  label: string;
-  shortcut?: string;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 9,
-        width: "100%",
-        padding: "7px 12px",
-        border: "none",
-        background: "none",
-        fontSize: 11,
-        color: danger ? "#dc2626" : "var(--ink, #111)",
-        cursor: "pointer",
-        textAlign: "left",
-      }}
-      onMouseEnter={(e) =>
-        (e.currentTarget.style.background = danger ? "#fef2f2" : "var(--surface-hover, #f3f4f6)")
-      }
-      onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-    >
-      <span style={{ flex: 1 }}>{label}</span>
-      {shortcut && (
-        <span style={{ fontSize: 9, color: "var(--ink-muted, #9ca3af)" }}>{shortcut}</span>
-      )}
-    </button>
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
   );
 }

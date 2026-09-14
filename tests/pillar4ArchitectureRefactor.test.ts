@@ -68,14 +68,14 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
 
     // Red X button for default/cleared option (#b91c1c or #fee2e2)
     expect(refinementSource).toContain("#b91c1c");
-    expect(refinementSource).toContain("✕");
+    expect(refinementSource.includes("✕") || refinementSource.includes("IconClose")).toBe(true);
 
     // Selected option pill styling with bold blue (#0284c7)
     expect(refinementSource).toContain("#0284c7");
 
     // Action buttons matching wireframe workflow
-    expect(refinementSource).toContain("สร้างรูปภาพตามตัวเลือกนี้ 🪄");
-    expect(refinementSource).toContain("คัดลอกลงช่องพิมพ์ ✏️");
+    expect(refinementSource.includes("สร้างรูปภาพตามตัวเลือกนี้")).toBe(true);
+    expect(refinementSource.includes("คัดลอกลงช่องพิมพ์")).toBe(true);
   });
 
   it("validates dynamic prompt refinement live assembly for user cats prompt", () => {

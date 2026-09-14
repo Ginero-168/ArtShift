@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   try {
     const profile = await exchangeGoogleCode(config, code, verifier, req.signal);
     const user = upsertGoogleAccount(profile);
-    const response = redirect(`${publicUrl}/?auth=success`);
+    const response = redirect(`${publicUrl}/projects`);
     clearGoogleStateCookie(response);
     setAuthCookie(response, user.id);
     return response;
