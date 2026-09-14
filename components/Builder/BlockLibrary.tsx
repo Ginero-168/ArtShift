@@ -14,9 +14,14 @@ import {
   COMPOSITION_BLOCKS,
   type CompositionBlockDefinition,
 } from "@/lib/builder/compositionBlocks";
+import {
+  createVectorPathFromIcon,
+  type VectorIconDefinition,
+} from "@/lib/builder/vectorIconLibrary";
 import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
+import IconLibraryModal from "./IconLibraryModal";
 
 const AIAssistancePanel = dynamic(() => import("@/components/AI/AICoPilotBar"), { ssr: false });
 
@@ -73,6 +78,7 @@ export default function BlockLibrary() {
   const [query, setQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<LibraryTab>("assistant");
+  const [isIconModalOpen, setIsIconModalOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -84,11 +90,6 @@ export default function BlockLibrary() {
         block.category.toLowerCase().includes(needle),
     );
   }, [query]);
-  const showAiImageStudio =
-    !query.trim() ||
-    "ai image studio prompt to image gpt image 2 replicate low".includes(
-      query.trim().toLowerCase(),
-    );
 
   function toggleCategory(category: string) {
     setCollapsedCategories((prev) => ({
@@ -97,7 +98,26 @@ export default function BlockLibrary() {
     }));
   }
 
+  function handleSelectIcon(icon: VectorIconDefinition) {
+    if (!slide) return;
+    const size = 120;
+    const element = createVectorPathFromIcon(icon, {
+      x: Math.round((slide.width - size) / 2),
+      y: Math.round((slide.height - size) / 2),
+      size,
+      color: "#111827",
+    });
+    addElement(element, `add ${icon.name} icon`);
+    useEngine.getState().selectOnly([element.id]);
+    setIsIconModalOpen(false);
+  }
+
   function handleBlockClick(block: BuilderBlockDefinition) {
+    if (block.kind === "icon") {
+      setIsIconModalOpen(true);
+      return;
+    }
+
     const drawingDef = DRAWING_TOOL_MAP[block.kind];
     if (drawingDef) {
       if (
@@ -195,8 +215,7 @@ export default function BlockLibrary() {
           </section>
           {CATEGORIES.map((category) => {
             const blocks = filtered.filter((block) => block.category === category);
-            const includeAiImageStudio = category === "Content" && showAiImageStudio;
-            if (!blocks.length && !includeAiImageStudio) return null;
+            if (!blocks.length) return null;
             const isCollapsed = Boolean(collapsedCategories[category]);
 
             return (
@@ -218,20 +237,6 @@ export default function BlockLibrary() {
 
                 {!isCollapsed ? (
                   <div className={styles.blockGrid}>
-                    {includeAiImageStudio ? (
-                      <button
-                        type="button"
-                        className={`${styles.blockCard} ${styles.aiImageBlock}`}
-                        onClick={() => useEngine.getState().setAiImageModalOpen(true)}
-                        title="AI Image Studio · Replicate GPT Image 2 (automatic quality)"
-                        aria-label="AI Image Studio"
-                      >
-                        <span className={styles.glyph} aria-hidden="true">
-                          ✨
-                        </span>
-                        <span className={styles.blockLabel}>AI Image</span>
-                      </button>
-                    ) : null}
                     {blocks.map((block) => {
                       const active = isBlockActive(block);
                       return (
@@ -264,9 +269,7 @@ export default function BlockLibrary() {
               </section>
             );
           })}
-          {!filtered.length && !showAiImageStudio ? (
-            <p className={styles.empty}>No matching blocks.</p>
-          ) : null}
+          {!filtered.length ? <p className={styles.empty}>No matching blocks.</p> : null}
         </div>
       </div>
 
@@ -276,6 +279,12 @@ export default function BlockLibrary() {
       >
         <AIAssistancePanel />
       </div>
+
+      <IconLibraryModal
+        isOpen={isIconModalOpen}
+        onClose={() => setIsIconModalOpen(false)}
+        onSelectIcon={handleSelectIcon}
+      />
     </aside>
   );
 }

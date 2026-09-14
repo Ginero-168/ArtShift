@@ -90,7 +90,7 @@ describe("merge elements pipeline", () => {
     const slideAfter = useEngine.getState().currentSlide()!;
     expect(slideAfter.elements).toHaveLength(1);
     expect(slideAfter.elements[0].id).toBe(merged.id);
-    expect(slideAfter.elements[0].fileId).toBe("merged-img");
+    expect((slideAfter.elements[0] as any).fileId).toBe("merged-img");
     expect(useEngine.getState().selectedIds).toEqual(new Set([merged.id]));
 
     // Check layer membership

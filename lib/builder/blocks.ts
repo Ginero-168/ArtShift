@@ -36,6 +36,7 @@ export const BUILDER_BLOCK_MIME = "application/x-artshift-block";
 
 export type BuilderBlockKind =
   | "text"
+  | "icon"
   | "frameCircle"
   | "framePolaroid"
   | "frameArch"
@@ -106,6 +107,17 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     colSpan: 7,
     rowSpan: 3,
     minColSpan: 4,
+    minRowSpan: 2,
+  },
+  {
+    kind: "icon",
+    label: "Icon",
+    description: "Vector SVG icons",
+    category: "Content",
+    glyph: "✦",
+    colSpan: 4,
+    rowSpan: 4,
+    minColSpan: 2,
     minRowSpan: 2,
   },
   {
@@ -598,6 +610,33 @@ function makeElement(kind: BuilderBlockKind, rect: BentoRect): EngineElement {
   switch (kind) {
     case "text":
       return createTextFromPreset(rect, DEFAULT_TEXT_PRESET_ID);
+    case "icon": {
+      const size = Math.min(rect.width, rect.height, 120);
+      const el = createVectorPathFromWorldNodes(
+        [
+          { x: 50, y: 0 },
+          { x: 65, y: 35 },
+          { x: 100, y: 38 },
+          { x: 74, y: 64 },
+          { x: 82, y: 100 },
+          { x: 50, y: 80 },
+          { x: 18, y: 100 },
+          { x: 26, y: 64 },
+          { x: 0, y: 38 },
+          { x: 35, y: 35 },
+        ],
+        true,
+      );
+      el.x = rect.x + (rect.width - size) / 2;
+      el.y = rect.y + (rect.height - size) / 2;
+      el.width = size;
+      el.height = size;
+      el.backgroundColor = "#111827";
+      el.strokeColor = "transparent";
+      el.strokeWidth = 0;
+      el.name = "Icon";
+      return el;
+    }
     case "heading":
     case "subtitle":
     case "synopsis":

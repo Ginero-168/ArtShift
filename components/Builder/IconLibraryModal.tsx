@@ -1,0 +1,375 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  VECTOR_ICON_CATEGORIES,
+  VECTOR_ICONS,
+  type VectorIconCategory,
+  type VectorIconDefinition,
+} from "@/lib/builder/vectorIconLibrary";
+
+interface IconLibraryModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectIcon: (icon: VectorIconDefinition) => void;
+}
+
+export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: IconLibraryModalProps) {
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<VectorIconCategory | "All">("All");
+
+  const filteredIcons = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return VECTOR_ICONS.filter((icon) => {
+      const matchesCategory = selectedCategory === "All" || icon.category === selectedCategory;
+      if (!matchesCategory) return false;
+      if (!query) return true;
+      return (
+        icon.name.toLowerCase().includes(query) ||
+        icon.id.toLowerCase().includes(query) ||
+        icon.category.toLowerCase().includes(query) ||
+        icon.keywords.some((kw) => kw.toLowerCase().includes(query))
+      );
+    });
+  }, [search, selectedCategory]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="icon-modal-title"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(15, 23, 42, 0.45)",
+        backdropFilter: "blur(4px)",
+        padding: "16px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          width: "min(720px, 95vw)",
+          maxHeight: "min(680px, 90vh)",
+          backgroundColor: "#ffffff",
+          borderRadius: 16,
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "16px 20px 14px",
+            borderBottom: "1px solid #f1f5f9",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <h2
+              id="icon-modal-title"
+              style={{
+                margin: 0,
+                fontSize: 18,
+                fontWeight: 600,
+                color: "#0f172a",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span style={{ color: "#4f46e5" }}>✦</span>
+              Vector Icons (ไอคอนเวกเตอร์)
+            </h2>
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontSize: 12.5,
+                color: "#64748b",
+              }}
+            >
+              คลิกไอคอนเพื่อวางบน Canvas เป็น Vector Path เปลี่ยนสี Fill และ Stroke ได้อิสระ
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "none",
+              backgroundColor: "#f1f5f9",
+              color: "#64748b",
+              fontSize: 16,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.15s ease",
+            }}
+            title="Close (ปิด)"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Filter Controls */}
+        <div
+          style={{
+            padding: "12px 20px 8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            borderBottom: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+          }}
+        >
+          {/* Search Input */}
+          <div style={{ position: "relative" }}>
+            <span
+              style={{
+                position: "absolute",
+                left: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: 14,
+                color: "#94a3b8",
+                pointerEvents: "none",
+              }}
+            >
+              🔍
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ค้นหาไอคอน (เช่น star, heart, user, search, cart...)"
+              style={{
+                width: "100%",
+                padding: "8px 36px 8px 34px",
+                fontSize: 13,
+                borderRadius: 8,
+                border: "1px solid #cbd5e1",
+                backgroundColor: "#ffffff",
+                color: "#0f172a",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: "none",
+                  background: "transparent",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Category Tabs */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              overflowX: "auto",
+              paddingBottom: 2,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setSelectedCategory("All")}
+              style={{
+                padding: "4px 10px",
+                fontSize: 11.5,
+                fontWeight: 500,
+                borderRadius: 6,
+                border: "none",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.12s ease",
+                backgroundColor: selectedCategory === "All" ? "#4f46e5" : "#e2e8f0",
+                color: selectedCategory === "All" ? "#ffffff" : "#475569",
+              }}
+            >
+              All ({VECTOR_ICONS.length})
+            </button>
+            {VECTOR_ICON_CATEGORIES.map((cat) => {
+              const count = VECTOR_ICONS.filter((i) => i.category === cat).length;
+              const isSelected = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 11.5,
+                    fontWeight: 500,
+                    borderRadius: 6,
+                    border: "none",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.12s ease",
+                    backgroundColor: isSelected ? "#4f46e5" : "#e2e8f0",
+                    color: isSelected ? "#ffffff" : "#475569",
+                  }}
+                >
+                  {cat} ({count})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Icon Grid */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px 20px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))",
+            gap: 10,
+            alignContent: "start",
+          }}
+        >
+          {filteredIcons.length === 0 ? (
+            <div
+              style={{
+                gridColumn: "1 / -1",
+                padding: "40px 0",
+                textAlign: "center",
+                color: "#94a3b8",
+                fontSize: 13,
+              }}
+            >
+              ไม่พบไอคอนที่ตรงกับคำค้นหา &ldquo;{search}&rdquo;
+            </div>
+          ) : (
+            filteredIcons.map((icon) => (
+              <button
+                key={icon.id}
+                type="button"
+                onClick={() => onSelectIcon(icon)}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  padding: "12px 6px",
+                  borderRadius: 10,
+                  border: "1px solid #f1f5f9",
+                  backgroundColor: "#ffffff",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  color: "#334155",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "#6366f1";
+                  e.currentTarget.style.backgroundColor = "#f8faff";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(99, 102, 241, 0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "#f1f5f9";
+                  e.currentTarget.style.backgroundColor = "#ffffff";
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+                title={`เพิ่ม ${icon.name}`}
+              >
+                <svg
+                  viewBox={icon.viewBox || "0 0 24 24"}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    fill: "currentColor",
+                    display: "block",
+                  }}
+                  aria-hidden="true"
+                >
+                  <path d={icon.path} />
+                </svg>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 500,
+                    color: "#475569",
+                    textAlign: "center",
+                    lineHeight: 1.2,
+                    maxWidth: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {icon.name.split(" ")[0]}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "10px 20px",
+            borderTop: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span style={{ fontSize: 11.5, color: "#64748b" }}>
+            💡 เวกเตอร์ไอคอนสามารถเปลี่ยนสี Fill, Stroke และปรับขนาดได้อิสระที่ Property Panel
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "6px 14px",
+              fontSize: 12,
+              fontWeight: 500,
+              borderRadius: 6,
+              border: "1px solid #cbd5e1",
+              backgroundColor: "#ffffff",
+              color: "#475569",
+              cursor: "pointer",
+            }}
+          >
+            ปิด
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
