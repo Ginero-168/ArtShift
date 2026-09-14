@@ -35,6 +35,8 @@ export type AiTaskPlan = {
   qualityRationale: string;
   maxAttempts: number;
   modelAlias?: string;
+  detailScore?: number;
+  precisionScore?: number;
   reasonCodes?: readonly string[];
   selectedImages: readonly {
     objectId: string;

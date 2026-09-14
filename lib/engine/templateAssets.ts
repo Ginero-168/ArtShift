@@ -11,7 +11,20 @@ import type { EngineElement } from "./types";
 export async function materializeTemplateAssets(result: TemplateResult): Promise<TemplateResult> {
   const objects = await Promise.all(
     result.objects.map(async (element): Promise<EngineElement> => {
-      if (element.type !== "image" && element.type !== "bookMockup") return element;
+      if (element.type !== "image" && element.type !== "bookMockup" && element.type !== "frame") return element;
+      if (element.type === "frame") {
+        if (!element.imageFileId || getCached(element.imageFileId)) return element;
+        try {
+          const asset = await loadDataURL(element.imageFileId);
+          return {
+            ...element,
+            imageFileId: asset.fileId,
+            version: element.version + 1,
+          } as EngineElement;
+        } catch {
+          return element;
+        }
+      }
       if (!element.fileId || getCached(element.fileId)) {
         return element.type === "image" && !element.fileId
           ? { ...element, status: "error" }

@@ -7,7 +7,7 @@ const studioSource = readFileSync("components/AI/AIImageGeneratorModal.tsx", "ut
 describe("Creative Director consent copy", () => {
   it("discloses planning, optional external image search, generation, and review", () => {
     for (const source of [chatSource, studioSource]) {
-      expect(source).toContain("gpt-oss-120b Creative Director");
+      expect(source).toContain("Gemini 3 Flash Creative Director");
       expect(source).toContain("Unsplash/Pexels");
       expect(source).toContain("ตรวจผลลัพธ์");
     }

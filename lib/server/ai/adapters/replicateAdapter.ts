@@ -89,10 +89,10 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       tasks: SUPPORTED_TASKS,
       models: [
         {
-          id: GEMINI_CHAT_MODEL,
+          id: GEMINI_MODEL,
           alias: "creative-director",
           profile: "quality",
-          pricing: { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 },
+          pricing: { currency: "USD", inputPerMillionTokens: 0.5, outputPerMillionTokens: 3.0 },
         },
         {
           id: CHAT_MODEL,
@@ -133,14 +133,14 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           profile: "quality",
         },
         {
-          id: GPT_IMAGE_2_MODEL,
+          id: GPT_IMAGE_25_SUNBURST_MODEL,
           alias: "image-general",
           profile: "quality",
           pricing: { currency: "USD", perRunUsd: 0.13, note: "Ceiling covers high quality tier." },
         },
         {
           // Legacy alias kept for migration compatibility.
-          id: GPT_IMAGE_2_MODEL,
+          id: GPT_IMAGE_25_SUNBURST_MODEL,
           alias: "image-gpt-2",
           profile: "quality",
           pricing: { currency: "USD", perRunUsd: 0.13 },
@@ -248,6 +248,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const model = parseReplicateModel(request.model);
     assertSupportedChatModel(model.slug);
     const isGemini = model.slug === GEMINI_CHAT_MODEL || model.slug.includes("gemini");
+    const isGemini3 = model.slug.includes("gemini-3");
     const options = request.options;
     // Default thinking to OFF: when `reasoning` is not explicitly set,
     // dynamic_thinking must be false. Previously `mode !== "off"` evaluated
@@ -263,21 +264,33 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       Math.max(256, input.maxTokens ?? 4_096),
     );
     const predictionInput = isGemini
-      ? {
-          prompt: renderConversationPrompt(input.messages),
-          system_instruction: renderGeminiSystemInstruction(input),
-          dynamic_thinking: dynamicThinking,
-          // Always send thinking_budget: 0 when not using thinking to avoid
-          // partial thinking-only outputs that Replicate rejects as empty.
-          ...(!dynamicThinking
-            ? { thinking_budget: 0 }
-            : thinkingBudget !== undefined
-              ? { thinking_budget: thinkingBudget }
-              : {}),
-          max_output_tokens: chatMaxTokens,
-          max_tokens: chatMaxTokens,
-          temperature: 0.1,
-        }
+      ? isGemini3
+        ? {
+            prompt: renderConversationPrompt(input.messages),
+            system_instruction: renderGeminiSystemInstruction(input),
+            thinking_level: dynamicThinking
+              ? thinkingBudget !== undefined && thinkingBudget > 4096
+                ? "high"
+                : "low"
+              : "none",
+            max_output_tokens: chatMaxTokens,
+            temperature: 0.1,
+          }
+        : {
+            prompt: renderConversationPrompt(input.messages),
+            system_instruction: renderGeminiSystemInstruction(input),
+            dynamic_thinking: dynamicThinking,
+            // Always send thinking_budget: 0 when not using thinking to avoid
+            // partial thinking-only outputs that Replicate rejects as empty.
+            ...(!dynamicThinking
+              ? { thinking_budget: 0 }
+              : thinkingBudget !== undefined
+                ? { thinking_budget: thinkingBudget }
+                : {}),
+            max_output_tokens: chatMaxTokens,
+            max_tokens: chatMaxTokens,
+            temperature: 0.1,
+          }
       : {
           prompt: renderHarmonyPrompt(input),
           max_tokens: chatMaxTokens,
@@ -320,19 +333,31 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const model = parseReplicateModel(request.model);
     assertSupportedChatModel(model.slug);
     const isGemini = model.slug === GEMINI_CHAT_MODEL || model.slug.includes("gemini");
+    const isGemini3 = model.slug.includes("gemini-3");
     const predictionInput = isGemini
-      ? {
-          prompt: input.prompt,
-          system_instruction:
-            input.purpose === "image"
-              ? "Rewrite the user's request as one precise image-generation prompt. Return only the rewritten prompt."
-              : "Rewrite the user's request to be precise and actionable. Return only the rewritten prompt.",
-          dynamic_thinking: false,
-          thinking_budget: 0,
-          max_output_tokens: 512,
-          max_tokens: 512,
-          temperature: 0.1,
-        }
+      ? isGemini3
+        ? {
+            prompt: input.prompt,
+            system_instruction:
+              input.purpose === "image"
+                ? "Rewrite the user's request as one precise image-generation prompt. Return only the rewritten prompt."
+                : "Rewrite the user's request to be precise and actionable. Return only the rewritten prompt.",
+            thinking_level: "none",
+            max_output_tokens: 512,
+            temperature: 0.1,
+          }
+        : {
+            prompt: input.prompt,
+            system_instruction:
+              input.purpose === "image"
+                ? "Rewrite the user's request as one precise image-generation prompt. Return only the rewritten prompt."
+                : "Rewrite the user's request to be precise and actionable. Return only the rewritten prompt.",
+            dynamic_thinking: false,
+            thinking_budget: 0,
+            max_output_tokens: 512,
+            max_tokens: 512,
+            temperature: 0.1,
+          }
       : {
           prompt: renderHarmonyPrompt({
             messages: [{ role: "user", content: input.prompt }],
@@ -406,12 +431,14 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       {
         prompt: input.prompt,
         quality: requestedQuality,
-        aspect_ratio: input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
+        aspect_ratio: normalizeReplicateAspectRatio(
+          input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
+        ),
         ...(input.inputImages?.length
           ? { input_images: input.inputImages.map((image) => image.dataUrl) }
           : {}),
         number_of_images: 1,
-        output_format: "webp",
+        output_format: "jpeg",
         output_compression: 90,
         background,
         moderation: "auto",
@@ -701,10 +728,29 @@ function extractFileUrl(output: unknown): string | undefined {
   return undefined;
 }
 
-function aspectRatioFromDimensions(width: number, height: number): "1:1" | "3:2" | "2:3" {
+type ReplicateImageAspectRatio = "1:1" | "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4";
+
+function aspectRatioFromDimensions(width: number, height: number): ReplicateImageAspectRatio {
   const ratio = width / height;
   if (Math.abs(ratio - 1) < 0.08) return "1:1";
-  return ratio > 1 ? "3:2" : "2:3";
+  if (ratio >= 1.6) return "16:9";
+  if (ratio <= 0.625) return "9:16";
+  if (ratio >= 1.4) return "3:2";
+  if (ratio <= 0.72) return "2:3";
+  if (ratio > 1) return "4:3";
+  return "3:4";
+}
+
+function normalizeReplicateAspectRatio(ratio: string | undefined): ReplicateImageAspectRatio {
+  if (!ratio) return "1:1";
+  if (ratio === "1:1") return "1:1";
+  if (ratio === "16:9" || ratio === "21:9" || ratio === "3:1") return "16:9";
+  if (ratio === "9:16" || ratio === "1:3") return "9:16";
+  if (ratio === "3:2") return "3:2";
+  if (ratio === "2:3") return "2:3";
+  if (ratio === "4:3") return "4:3";
+  if (ratio === "3:4") return "3:4";
+  return "1:1";
 }
 
 async function fetchGeneratedImage(outputUrl: string, signal: AbortSignal): Promise<string> {
@@ -728,7 +774,7 @@ async function fetchGeneratedImage(outputUrl: string, signal: AbortSignal): Prom
   let response: Response;
   try {
     response = await fetch(parsed.toString(), {
-      headers: { Accept: "image/webp, image/png, image/jpeg" },
+      headers: { Accept: "image/jpeg, image/png, image/webp" },
       redirect: "manual",
       signal,
     });
@@ -756,7 +802,7 @@ async function fetchGeneratedImage(outputUrl: string, signal: AbortSignal): Prom
     ?.split(";", 1)[0]
     .trim()
     .toLowerCase();
-  const mimeType = rawContentType || "image/webp";
+  const mimeType = rawContentType || "image/jpeg";
   if (!GENERATED_IMAGE_MIME_TYPES.has(mimeType)) {
     throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned a non-image output.", {
       provider: "replicate",
@@ -863,8 +909,10 @@ function assertPImageUpscaleInputDimensions(width: number, height: number): void
   }
 }
 
-function assertRecraftProviderResponse(response: Response): void {
+async function assertRecraftProviderResponse(response: Response): Promise<void> {
   if (response.ok) return;
+  const errorText = await response.text().catch(() => "");
+  console.error(`[replicate error ${response.status}]`, errorText);
   const retryAfter = Number(response.headers.get("retry-after") ?? 0) || undefined;
   if (response.status === 401 || response.status === 403) {
     throw new AiRuntimeError("PROVIDER_AUTH", "Replicate rejected this request.", {
@@ -877,7 +925,7 @@ function assertRecraftProviderResponse(response: Response): void {
       retryAfterSeconds: retryAfter,
     });
   }
-  throw new AiRuntimeError("PROVIDER_UNAVAILABLE", "Replicate is temporarily unavailable.", {
+  throw new AiRuntimeError("PROVIDER_UNAVAILABLE", errorText || "Replicate is temporarily unavailable.", {
     provider: "replicate",
   });
 }
@@ -975,7 +1023,8 @@ function assertSupportedChatModel(model: string): void {
   if (
     model === CHAT_MODEL ||
     model === GEMINI_CHAT_MODEL ||
-    model.startsWith("google/gemini-2.5-flash")
+    model.startsWith("google/gemini-2.5-flash") ||
+    model.startsWith("google/gemini-3-flash")
   ) {
     return;
   }

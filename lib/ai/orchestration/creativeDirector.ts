@@ -13,9 +13,15 @@ import {
 } from "@/lib/designAgent/contracts";
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
-import { CREATING_MODEL_CATALOG, resolveCreatingModel } from "./creatingModelCatalog";
+import {
+  CREATING_MODEL_CATALOG,
+  detectRequestedCreatingModel,
+  resolveCreatingModel,
+} from "./creatingModelCatalog";
 import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from "./executionGraph";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
+import { computeDetailScore, computeEditPrecisionScore } from "./imageQualityPolicy";
+import { extractIntentFeatures } from "./imageWorkSpec";
 import { synthesizePromptWithInlineTags } from "./inlineTagSynthesis";
 import { DESIGN_PLAN_TOOL } from "./orchestratorTools";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
@@ -57,6 +63,8 @@ export type CreativeDirection =
       search: CreativeSearchPlan;
       requiredSubjects?: string[];
       requiredText?: string;
+      detailScore?: number;
+      precisionScore?: number;
     };
 
 export type OrchestratorDirection = CreativeDirection;
@@ -238,6 +246,18 @@ const CREATIVE_DIRECTION_TOOL = {
         items: { type: "string", maxLength: 200 },
       },
       requiredText: { type: "string", maxLength: 500 },
+      detailScore: {
+        type: "integer",
+        minimum: 0,
+        maximum: 10,
+        description: "Calculated detail complexity score (0-10)",
+      },
+      precisionScore: {
+        type: "integer",
+        minimum: 0,
+        maximum: 10,
+        description: "Calculated edit preservation score (0-10)",
+      },
       search: {
         type: "object",
         additionalProperties: false,
@@ -324,7 +344,11 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "For image creation or image editing, call propose_creative_direction. For an answer that needs no execution, return answer. Never return competing plans or call both planning tools in one turn.",
   "When the user attaches reference images or name tags, analyze their visual details, detected titles, OCR text, and objects to guide the design. If the user asks to create an ad, poster, or new image referencing the tagged subject, choose image_generator and incorporate the title, key messaging, and visual theme into refinedPrompt.",
   "For a sequential plan, every step must be executable from its payload and earlier outputs: image_generator/image_editor require payload.prompt, vectorizer requires an earlier image dependency, copywriter requires payload.headline or payload.text, and layout_designer/brand_stylist must describe the exact local operation. Never use placeholder URLs, sample copy or fabricated quality scores.",
-  "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested (1 to 5). A clear requested quantity (e.g. '3 รูป', '5 แบบ', '2 images') is authoritative and is not by itself a reason to ask a clarification.",
+  "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested to CREATE (1 to 5).",
+  "CRITICAL INPUT REFERENCES VS OUTPUT QUANTITY RULE:",
+  "  - Phrases like 'จาก 2 ปกนี้', 'จาก 3 รูปนี้', 'อิงจาก 2 ภาพ', 'from these 2 covers/photos' specify INPUT REFERENCE SOURCES, NOT the number of images to generate! Do NOT count input references as requested output count.",
+  "  - Unless the user explicitly requests multiple created outputs (e.g. 'ขอ 2 แบบ', 'สร้าง 3 รูป', '2 images', '3 variations'), always default to requestedOutputCount: 1.",
+  "  - When multiple references are attached for a single requested item (e.g. 'ออกแบบป้าย... จาก 2 ปกนี้'), synthesize both references into ONE unified design artwork (requestedOutputCount: 1).",
   "For image creation, return exactly one concise outputBrief in outputBriefs per requested output, written in the user's language (e.g. Thai if user asked in Thai). Each outputBrief must be a short, natural descriptive title (2-6 words) characterizing that standalone image (e.g. 'หมูน่ารัก', 'หมูตัวน้อยสีชมพู', 'หมูในฟาร์มสีเขียว', 'แมวยกสองนิ้วร่าเริง') so the user clearly sees what was created in each picture. Never output full English diffusion prompts in outputBriefs, never use generic labels like 'แบบที่ 1', and never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
   "For summary, write a concise, elegant, and professional Thai summary (1-2 sentences) of your creative direction and thought process. If editing an image, describe what is being modified or added in natural Thai without technical prefixes (e.g. 'ปรับแต่งภาพโดยเพิ่มมังกรบินเหนือเทือกเขา พร้อมคุมโทนแสงยามเย็นให้กลมกลืน'). If generating new images, describe the theme, composition, and mood in natural Thai. Never output raw command strings like 'Edit ภาพ... ด้วย Prompt :...' or unparsed JSON.",
   "Execution creates up to 5 separate outputs concurrently. Do not ask the user which single image to start with when 1 to 5 images are requested.",
@@ -338,13 +362,33 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Strictly preserve any explicit user-specified requirements (subjects, quantities, colors, gestures, text, brand constraints) while enriching all missing dimensions with sensible, harmonious defaults.",
   "Never echo back a minimal or 1-sentence prompt (such as just 'a cat') when given a broad request; always expand into a complete, well-crafted image prompt.",
   "If the user asks for a copyrighted character or trademark (e.g. 'สไปเดอร์แมน' / Spider-Man), describe the visual concept, color palette (red and blue suit), and superhero archetypal aesthetic without using infringing trademarked names.",
-  "CRITICAL ARTWORK VS 3D MOCKUP RULE:",
-  "When the user asks to design a sign, category header, shelf banner, poster, label, or graphic artwork (e.g. 'ออกแบบป้าย', 'ป้ายหมวด', 'ป้ายติดตั้งบนชั้น...', 'แบนเนอร์', 'artwork'):",
+  "CRITICAL BOOKSTORE SHELF SIGN & CATEGORY HEADER DESIGN PROTOCOL:",
+  "When the user asks to design a category sign, shelf header banner, poster, or graphic artwork (e.g. 'ออกแบบป้าย', 'ป้ายหมวด', 'ป้ายติดตั้งบนชั้น...', 'แบนเนอร์', 'artwork'):",
   "  - The user wants the DIRECT 2D GRAPHIC DESIGN ARTWORK FILE for printing/production, NOT a photo or 3D mockup of the sign sitting inside a room, on a bookshelf, or on a wall.",
   "  - Unless the user explicitly asks for 'mockup' or 'ถ่ายภาพจำลอง': NEVER place the sign as a 3D object inside a room, on a wooden shelf, or with books underneath.",
-  "  - RefinedPrompt must describe a pure flat 2D graphic design composition: 'Flat 2D graphic design artwork, direct front-facing 90-degree orthogonal view, full-bleed clean rectangular banner layout, modern corporate graphic design, sharp digital vector illustration and typography, pristine flat surface, completely flat composition, no 3D mockup, no room environment, no bookshelf, no wooden shelf, no books underneath, no table, no physical acrylic stand, no angled perspective, isolated 2D graphic artwork file for printing'.",
+  "  - RefinedPrompt must describe a pure flat 2D graphic design composition: 'Flat 2D graphic design artwork, direct front-facing 90-degree orthogonal view, clean horizontal panoramic banner layout, modern corporate graphic design, sharp digital vector illustration and typography, pristine flat surface, completely flat composition, no 3D mockup, no room environment, no bookshelf, no wooden shelf, no books underneath, no table, no physical acrylic stand, no angled perspective, isolated 2D graphic artwork file for printing'.",
   "  - Compute target aspect ratio from specified dimensions (e.g. 60x20cm -> 3:1 aspect ratio, wide panoramic banner format 1536x512).",
-  "  - Incorporate requested brand logos and book themes (e.g. Manifest book's radiant circular glowing halo ring and deep black/red color contrast) directly onto the flat 2D graphic surface.",
+  "  - 3:1 ULTRA-WIDE HORIZONTAL BANNER GEOMETRY & ZERO VERTICAL STACKING (CRITICAL): A 60x20cm banner is 3 times wider than its height (aspect ratio 3:1). The vertical height is very slim (only 20cm). In diffusion models, the image is rendered onto a 16:9 canvas and framed into 3:1, which crops the top 20% and bottom 20%. Therefore:",
+  "      * MANDATORY VERTICAL SAFE ZONE: ALL typography, headlines, brand logos, taglines, author credits, and circular halos MUST be strictly confined within the vertical center zone (between 30% and 70% height).",
+  "      * TOP & BOTTOM ZERO-TEXT RULE: The top 25% and bottom 25% of the canvas height MUST be 100% free of text, headers, and footers (pure dark background, glow, and stardust particles only). NEVER place any text near the top or bottom borders of the image!",
+  "      * NEVER STACK TEXT ABOVE OR BELOW CIRCULAR HALOS: Floating text above or below a circular halo is strictly forbidden because it pushes text directly into the frame cut-off zones. Text must be placed EITHER entirely INSIDE the circular halo, or HORIZONTALLY BESIDE the halo (to its left or right)!",
+  "      * HORIZONTAL MULTI-COLUMN LAYOUT: Choose one of two proven horizontal layouts:",
+  "          1) Triple Horizontal Columns (Recommended for Bookstore Shelf Signs): Left zone has inspiring quote/tagline ('เมื่อคำพูดและความคิดของคุณ กำหนดอนาคตได้'); Center zone has radiant golden circular halo with brand logo 'สำนักพิมพ์ Welearn' inside the halo; Right zone has category & author ('หมวดจิตวิทยา : MANIFEST · โดย คิดมาก').",
+  "          2) Dynamic Asymmetric 2-Line Flow: Left 1/3 has radiant golden circular halo motif; Right 2/3 has exactly 2 concise horizontal lines: Line 1 (Brand & Category): 'สำนักพิมพ์ Welearn · หมวดจิตวิทยาและการพัฒนาตนเอง : MANIFEST'; Line 2 (Tagline & Author): 'เมื่อคำพูดและความคิดของคุณ กำหนดอนาคตได้ · โดย คิดมาก (The Manifest Master)'.",
+  "      * NEVER stack 4-7 lines vertically in one tall column! Maximum 2 concise lines of text vertically anywhere on the banner.",
+  "  - DUAL-TONE GRADIENT FLOW: When referencing multiple covers (e.g. Black Book and Red Book of Manifest), create a seamless, harmonious gradient transition across the banner from Deep Obsidian Black on one side to Rich Crimson Velvet on the other, linked by luminous golden metallic energy waves and subtle paper texture.",
+  "  - THAI ACCENT SAFETY BUFFER: Thai vowels and tone marks (ไม้เอก, ไม้โท, สระอิ, การันต์) sit above letters. Ensure ample vertical breathing room above all Thai text so upper tone marks are never clipped by the frame.",
+  "",
+  "MODEL ROUTING & SCORING PROTOCOL:",
+  "When planning image-task, evaluate and return detailScore (0-10) and precisionScore (0-10):",
+  "  - Detail Score (0-10): +2 exact text / typography, +2 for >=4 invariants/constraints, +2 for multi-subject spatial relations >=3, +1 for brand rules/assets, +1 for lighting/composition lock, +1 for references, +1 for final-use asset.",
+  "  - Model routing for generate tasks (openai/gpt-image-2.5-sunburst is the default baseline model):",
+  "      * Detail Score 0-3 (Minimal/Basic): 'image-general' (gpt-image-2.5-sunburst) at medium quality for clean baseline generation.",
+  "      * Detail Score 4-7 (Production Standard): 'image-general' or 'image-precision' (gpt-image-2.5-sunburst) at high quality for rich compositions, brand rules, and typography.",
+  "      * Detail Score 8-10 (Masterwork/Print/Signage): 'image-precision' (gpt-image-2.5-sunburst) at high/xhigh quality for masterwork, signage banners, and extreme precision.",
+  "      * Speed / Multi-Variant Lane: Choose 'image-fast' (gpt-image-2.5-flare) ONLY when the user explicitly requests fast drafts/speed ('เร็ว', 'ด่วน', 'draft') or multiple parallel variants.",
+  "  - Edit Precision Score (0-10): +3 face/identity/character preservation, +3 logo/packaging/composition lock, +2 small-target edit, +1 exact text modification. If Edit Precision Score >= 4, choose 'image-precision'.",
+  "  - Always provide calculated detailScore and precisionScore in propose_creative_direction.",
   "",
   "Define observable Review criteria for the generated result. Do not reveal chain-of-thought; return only the structured direction tool call.",
   "Track the user's corrections and prior answers. Do not ask again for facts already present in conversation or Artwork context. If execution evidence reports a failure, revise the plan or provide a precise recovery step.",
@@ -522,6 +566,12 @@ function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<stri
     }
   }
   if (normalized.kind !== "image-task") return normalized;
+  if (typeof normalized.outputCount === "number" && normalized.outputCount > 1) {
+    if (normalized.requestedOutputCount === undefined) {
+      normalized.requestedOutputCount = normalized.outputCount;
+    }
+    normalized.outputCount = 1;
+  }
   if (
     normalized.outputCount === undefined &&
     normalized.requestedOutputCount === undefined &&
@@ -906,6 +956,61 @@ export function applyCreativeDirectionToTask(
   });
 }
 
+function parseNumberWord(val: string): number | undefined {
+  const v = val.trim().toLowerCase();
+  const digit = parseInt(v, 10);
+  if (!isNaN(digit)) return digit;
+  const map: Record<string, number> = {
+    "๑": 1, "๒": 2, "๓": 3, "๔": 4, "๕": 5,
+    "หนึ่ง": 1, "สอง": 2, "สาม": 3, "สี่": 4, "ห้า": 5,
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+  };
+  return map[v];
+}
+
+/**
+ * Deterministically extracts explicit user intent to generate multiple outputs
+ * (e.g. "ขอตัวเลือก 3 แบบ", "สร้างมา 3 รูป", "ขอ 3 แบบ", "เอา 3 ตัวเลือก", "3 variations")
+ * while strictly ignoring input reference phrases (e.g. "จาก 2 ปกนี้", "จาก 3 รูปนี้").
+ */
+export function extractExplicitRequestedOutputCount(prompt: string | undefined): number | undefined {
+  if (!prompt || typeof prompt !== "string") return undefined;
+  const text = prompt.trim();
+  if (!text) return undefined;
+
+  // 1. Prefix (ขอ/สร้าง/ทำ/เอา/เจน/ผลิต/เพิ่ม) + optional filler (ตัวเลือก/แบบ/เพิ่ม/มา/ให้) + number + classifier (แบบ/รูป/ภาพ/ตัวเลือก/ชิ้น/variations/options)
+  const prefixMatch =
+    /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|เพิ่ม|จัดมา|ออกแบบ|generate|create|make|give\s+me)\s*(?:ตัวเลือก|แบบ|ภาพ|รูป|เพิ่ม|อีก|มา|ให้|หน่อย|ที|ด้วย|เพิ่มเติม|\s+)*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ชิ้น|ดีไซน์|ใบ|variations?|options?|versions?|images?|designs?|choices?)/iu.exec(
+      text,
+    );
+  if (prefixMatch?.[1]) {
+    const parsed = parseNumberWord(prefixMatch[1]);
+    if (parsed && parsed >= 1 && parsed <= 5) return parsed;
+  }
+
+  // 2. Standalone number + classifier e.g. "3 แบบ", "3 ตัวเลือก", "3 variations", "3 options"
+  const standaloneMatch =
+    /(?:^|[^\u0E00-\u0E7Fa-zA-Z0-9])(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:แบบ|ตัวเลือก|ดีไซน์|variations?|options?|versions?)(?:$|[^\u0E00-\u0E7Fa-zA-Z0-9])/iu.exec(
+      text,
+    );
+  if (standaloneMatch?.[1]) {
+    const parsed = parseNumberWord(standaloneMatch[1]);
+    if (parsed && parsed >= 1 && parsed <= 5) return parsed;
+  }
+
+  // 3. Standalone number + รูป/ภาพ (not preceded by จาก/อิงจาก/ตาม and not followed by นี้/นั้น/เดิม)
+  const imageMatch =
+    /(?:^|[^จากตามอิง\u0E00-\u0E7Fa-zA-Z0-9])(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:รูป|ภาพ|ใบ|images?)(?!\s*(?:นี้|นั้น|เดิม|ข้างต้น|these|those|above))/iu.exec(
+      text,
+    );
+  if (imageMatch?.[1]) {
+    const parsed = parseNumberWord(imageMatch[1]);
+    if (parsed && parsed >= 1 && parsed <= 5) return parsed;
+  }
+
+  return undefined;
+}
+
 export function parseCreativeDirection(
   rawValue: unknown,
   input: CreativeDirectorInput,
@@ -949,25 +1054,45 @@ export function parseCreativeDirection(
   if (value.kind !== "image-task") {
     return invalidDirection("unknown direction kind: " + String(value.kind));
   }
-  const rawRequested =
-    value.requestedOutputCount ??
-    (Array.isArray(value.outputBriefs) && value.outputBriefs.length > 1
-      ? value.outputBriefs.length
-      : undefined);
-  if (value.outputCount === undefined && rawRequested === undefined) {
+  if (value.outputCount === undefined && value.requestedOutputCount === undefined) {
     return invalidDirection("missing outputCount and requestedOutputCount");
   }
-  if (value.outputCount !== undefined && value.outputCount !== 1 && rawRequested === undefined) {
+  if (value.outputCount !== undefined && value.outputCount !== 1) {
     return invalidDirection("outputCount must be 1 when specified");
   }
-  const rawCount = rawRequested ?? value.outputCount;
-  const requestedOutputCount = Number(rawCount);
+  const explicitRequestedCount = extractExplicitRequestedOutputCount(input.prompt);
+  const rawCount = explicitRequestedCount ?? value.requestedOutputCount ?? value.outputCount;
+  let requestedOutputCount = Number(rawCount);
   if (
     !Number.isInteger(requestedOutputCount) ||
     requestedOutputCount < 1 ||
     requestedOutputCount > 100
   ) {
     return invalidDirection("requestedOutputCount is not an integer between 1 and 100");
+  }
+
+  // Deterministic guard:
+  // 1. If user explicitly requested N outputs (e.g. "ขอตัวเลือก 3 แบบ", "สร้างมา 3 รูป", "3 variations"), strictly honor it (clamped 1-5).
+  // 2. If user referenced multiple inputs (e.g. "จาก 2 ปกนี้") and did NOT request multiple outputs, normalize to 1.
+  if (explicitRequestedCount !== undefined) {
+    requestedOutputCount = Math.max(1, Math.min(5, explicitRequestedCount));
+  } else if (requestedOutputCount > 1 && typeof input.prompt === "string") {
+    const hasInputRef =
+      /(?:จาก|อิงจาก|ตาม|based\s+on|from)\s*(\d+|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:ปก|รูป|ภาพ|ภาพถ่าย|ไฟล์|ชิ้น|covers?|photos?|images?|pictures?)/i.test(
+        input.prompt,
+      );
+    const hasExplicitOutputQty =
+      /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|generate|create|make|give\s+me)\s*(\d+|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ชิ้น|ดีไซน์|variations?|options?|versions?|images?|designs?)/i.test(
+        input.prompt,
+      ) ||
+      /\b(\d+|สอง|สาม|สี่|ห้า)\s*(?:แบบ|ตัวเลือก|ดีไซน์|variations?|options?|versions?)\b/i.test(
+        input.prompt,
+      ) ||
+      /\b(?:ขอ|สร้าง|ทำ|เอา)\s*\d+\s*(?:รูป|ภาพ|ใบ)\b/i.test(input.prompt);
+
+    if (hasInputRef && !hasExplicitOutputQty) {
+      requestedOutputCount = 1;
+    }
   }
   if (!isBoundedString(value.summary, 2_000)) {
     return invalidDirection("summary is missing or exceeds 2000 chars");
@@ -1048,15 +1173,55 @@ export function parseCreativeDirection(
     "image-gpt-2",
   ]);
   const rawModelAlias = typeof value.modelAlias === "string" ? value.modelAlias : "image-gpt-2";
-  if (!ALLOWED_IMAGE_ALIASES.has(rawModelAlias)) {
-    return invalidDirection(`model ${rawModelAlias} is not available`);
+  const extractedFeatures = extractIntentFeatures({
+    operation: specialist === "image_editor" ? "edit" : "generate",
+    refinedPrompt: (value.refinedPrompt as string).trim(),
+    userPrompt: input.prompt,
+    exactText:
+      typeof value.requiredText === "string" && value.requiredText.trim()
+        ? [value.requiredText.trim()]
+        : [],
+    references: (input.referenceAnalyses || []).map((r) => ({
+      assetRef: r.displayName || "ref",
+      role: "subject",
+    })),
+    finalUse: /(?:final|production|print|พิมพ์|ใช้งานจริง)/iu.test(input.prompt),
+    speedPreference: /(?:เร็ว|ด่วน|fast|quick)/iu.test(input.prompt) ? "fast" : "normal",
+    outputCount: requestedOutputCount,
+  });
+
+  const computedDetail = computeDetailScore(extractedFeatures);
+  const computedPrecision = computeEditPrecisionScore(extractedFeatures);
+
+  const detailScore =
+    typeof value.detailScore === "number" && value.detailScore >= 0 && value.detailScore <= 10
+      ? Math.round(value.detailScore)
+      : computedDetail;
+
+  const precisionScore =
+    typeof value.precisionScore === "number" && value.precisionScore >= 0 && value.precisionScore <= 10
+      ? Math.round(value.precisionScore)
+      : computedPrecision;
+
+  // Enforce threshold: image-fast requires detailScore >= 8 (or explicit speed in prompt); image-general/image-precision run on Sunburst.
+  let resolvedModelAlias = rawModelAlias;
+  const promptRequestsFastOrPrecision = detectRequestedCreatingModel(input.prompt) !== undefined;
+  if (
+    capability === "IMAGE_DEFAULT" &&
+    !promptRequestsFastOrPrecision &&
+    typeof value.detailScore === "number" &&
+    value.detailScore < 8 &&
+    resolvedModelAlias === "image-fast"
+  ) {
+    resolvedModelAlias = "image-general";
   }
+
   const modelResolution = resolveCreatingModel(
     capability === "IMAGE_EDIT" ? "edit" : "generate",
-    rawModelAlias,
+    resolvedModelAlias,
   );
   if (!modelResolution.ok) {
-    return invalidDirection(`model ${rawModelAlias} is not available: ${modelResolution.reason}`);
+    return invalidDirection(`model ${resolvedModelAlias} is not available: ${modelResolution.reason}`);
   }
 
   if (specialist === "image_editor" && capability !== "IMAGE_EDIT") {
@@ -1096,7 +1261,9 @@ export function parseCreativeDirection(
     refinedPrompt: (value.refinedPrompt as string).trim(),
     specialist,
     capability,
-    modelAlias: rawModelAlias as "image-general" | "image-fast" | "image-precision" | "image-gpt-2",
+    modelAlias: resolvedModelAlias as "image-general" | "image-fast" | "image-precision" | "image-gpt-2",
+    detailScore,
+    precisionScore,
     knowledgeSkillIds: [...new Set(finalKnowledgeIds)],
     reviewCriteria: value.reviewCriteria.map((criterion) => criterion.trim()),
     search: {

@@ -1,6 +1,7 @@
 import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
+  hasExplicitDimensionsInText,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
@@ -13,6 +14,7 @@ import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import {
   applyCreativeDirectionToTask,
   type CreativeDirection,
+  extractExplicitRequestedOutputCount,
   parseCreativeDirection,
 } from "./creativeDirector";
 import { prepareRemoteOrchestratorTurn } from "./creativeDirectorClient";
@@ -57,6 +59,10 @@ export type ContextAwareTurnInput = {
   analyses: readonly ImageReferenceAnalysis[];
   selectedIds?: ReadonlySet<string>;
   canvas?: Parameters<typeof inspectCanvas>[0];
+  conversationHistory?: readonly {
+    role: "user" | "assistant";
+    content: string;
+  }[];
   clarification?: {
     originalPrompt?: string;
     question: string;
@@ -91,6 +97,61 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
     throw new Error("selected image analysis must complete before planning the task");
   }
   return { kind: "director-ready", input };
+}
+
+export function resolveTaskDimensionsWithContext(
+  input: ContextAwareTurnInput,
+  direction?: Extract<CreativeDirection, { kind: "image-task" }>,
+) {
+  // 1. Current user prompt explicit dimensions
+  if (hasExplicitDimensionsInText(input.prompt)) {
+    return resolveImageGenerationDimensions(input.prompt);
+  }
+
+  // 2. Creative Director's refinedPrompt (e.g. 60x20cm, 3:1, 1536x512)
+  if (direction?.refinedPrompt && hasExplicitDimensionsInText(direction.refinedPrompt)) {
+    return resolveImageGenerationDimensions(direction.refinedPrompt);
+  }
+
+  // 3. Creative Director's summary (e.g. "ขนาด 60x20 ซม.")
+  if (direction?.summary && hasExplicitDimensionsInText(direction.summary)) {
+    return resolveImageGenerationDimensions(direction.summary);
+  }
+
+  // 4. Conversation history (search backwards for earlier user prompts with dimensions)
+  if (input.conversationHistory && input.conversationHistory.length > 0) {
+    for (let i = input.conversationHistory.length - 1; i >= 0; i--) {
+      const msg = input.conversationHistory[i];
+      if (msg.role === "user" && hasExplicitDimensionsInText(msg.content)) {
+        return resolveImageGenerationDimensions(msg.content);
+      }
+    }
+  }
+
+  // 5. Clarification original prompt
+  if (
+    input.clarification?.originalPrompt &&
+    hasExplicitDimensionsInText(input.clarification.originalPrompt)
+  ) {
+    return resolveImageGenerationDimensions(input.clarification.originalPrompt);
+  }
+
+  // 6. Selected single element on canvas
+  if (input.canvas && input.selectedIds && input.selectedIds.size === 1) {
+    const selectedId = Array.from(input.selectedIds)[0];
+    const el = input.canvas.slide.elements.find((e) => e.id === selectedId);
+    if (el && el.width > 0 && el.height > 0) {
+      const r = el.width / el.height;
+      if (r >= 2.4) return { width: 1536, height: 512, aspectRatio: "16:9" as const };
+      if (r >= 1.6) return { width: 1280, height: 720, aspectRatio: "16:9" as const };
+      if (r >= 1.2) return { width: 1024, height: 768, aspectRatio: "4:3" as const };
+      if (r <= 0.42) return { width: 512, height: 1536, aspectRatio: "9:16" as const };
+      if (r <= 0.65) return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+      if (r <= 0.85) return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+    }
+  }
+
+  return resolveImageGenerationDimensions(input.prompt);
 }
 
 // Only the validated Director decision may cross the task-creation boundary.
@@ -129,7 +190,7 @@ export function createDirectedImageTask(
     finalUse: /(?:final|production|print|พิมพ์|ใช้งานจริง)/iu.test(input.prompt),
   });
   const requiredText = extractRequiredText(input.prompt);
-  const requestedDimensions = resolveImageGenerationDimensions(input.prompt);
+  const requestedDimensions = resolveTaskDimensionsWithContext(input, direction);
   const requiredSubjects = [
     ...new Set(input.analyses.flatMap((analysis) => analysis.objects)),
   ].slice(0, 3);
@@ -142,6 +203,8 @@ export function createDirectedImageTask(
     qualityRationale: quality.rationale,
     maxAttempts: quality.maxAttempts,
     modelAlias: direction.modelAlias,
+    detailScore: direction.detailScore,
+    precisionScore: direction.precisionScore,
     reasonCodes: quality.reasonCodes,
     selectedImages: input.refs.map((ref) => ({
       objectId: ref.objectId,
@@ -216,7 +279,11 @@ export function createDirectedImageRun(
   direction: Extract<CreativeDirection, { kind: "image-task" }>,
   options: { runId?: string } = {},
 ): DirectedImageRun {
-  const count = direction.requestedOutputCount ?? direction.outputCount ?? 1;
+  const explicitCount = extractExplicitRequestedOutputCount(input.prompt);
+  const count =
+    direction.requestedOutputCount && direction.requestedOutputCount > 1
+      ? direction.requestedOutputCount
+      : (explicitCount ?? direction.requestedOutputCount ?? direction.outputCount ?? 1);
   const briefs =
     direction.outputBriefs && direction.outputBriefs.length === count
       ? direction.outputBriefs
@@ -228,10 +295,22 @@ export function createDirectedImageRun(
   const tasks: AiTask[] = briefs.map((brief, index) => {
     const baseTask = createDirectedImageTask(input, direction);
     const batchIndex = batches.findIndex((b) => b.itemIndexes.includes(index)) + 1;
+    let variationCues = "";
+    if (brief && /^[a-zA-Z0-9\s,.-]+$/.test(brief)) {
+      variationCues = ` (${brief.trim()})`;
+    } else if (/ดำ|black/i.test(brief)) {
+      variationCues = " (focusing on deep obsidian black theme and high-contrast glow)";
+    } else if (/แดง|red/i.test(brief)) {
+      variationCues = " (focusing on radiant crimson red glowing aura theme)";
+    } else if (/ทอง|gold/i.test(brief)) {
+      variationCues = " (focusing on elegant warm golden halo theme)";
+    } else if (/ขาว|สว่าง|white|bright/i.test(brief)) {
+      variationCues = " (focusing on bright clean minimalist illumination)";
+    }
     const taskPrompt =
       count === 1
         ? `${direction.refinedPrompt}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
-        : `${direction.refinedPrompt}\nVariation ${index + 1} (${brief}). Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+        : `${direction.refinedPrompt}\nDistinct variation ${index + 1} of ${count}${variationCues}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
     return {
       ...baseTask,
       id: `${runId}-task-${index + 1}`,

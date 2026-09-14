@@ -53,6 +53,11 @@
   background: #f5f7fa;
 }
 
+.libraryTabAssistant:hover {
+  color: #4338ca;
+  background: #f5f3ff;
+}
+
 .libraryTab:focus-visible {
   outline: 2px solid rgba(24, 89, 255, 0.45);
   outline-offset: 1px;
@@ -65,7 +70,7 @@
   box-shadow: 0 1px 2px rgba(24, 35, 58, 0.08);
 }
 
-.libraryTabActive:last-child {
+.libraryTabAssistant.libraryTabActive {
   border-color: rgba(99, 102, 241, 0.25);
   background: #f4f2ff;
   color: #4f46e5;

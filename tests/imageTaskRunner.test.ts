@@ -601,4 +601,52 @@ describe("context-aware image task runner", () => {
     expect(reviewEvent).toBeDefined();
     expect(reviewEvent?.status).toBe("unavailable");
   });
+
+  it("wraps generated image in an ArtShift Frame (Clipping Mask) when aspect ratio differs from target", async () => {
+    generateImageMock.mockResolvedValueOnce({
+      dataUrl: "data:image/png;base64,AA==",
+      fileId: "panoramic-full",
+      width: 1536,
+      height: 864,
+      seed: 0,
+      model: "openai/gpt-image-2",
+      prompt: "Signboard 60x20cm Welearn",
+    });
+    preloadDataURLMock.mockResolvedValueOnce({
+      dataURL: "data:image/png;base64,AA==",
+      fileId: "panoramic-full",
+      img: {} as HTMLImageElement,
+      width: 1536,
+      height: 864,
+    });
+
+    const panoramicTask = createAiTask({
+      ...plan,
+      id: "frame-mask-task",
+      requestedDimensions: {
+        width: 1536,
+        height: 512,
+        aspectRatio: "16:9",
+      },
+    });
+
+    const result = await runContextAwareImageTask(panoramicTask, [], {
+      cloudConsent: true,
+    });
+
+    expect(result.dataUrl).toBe("data:image/png;base64,AA==");
+    expect(result.width).toBe(1536);
+    expect(result.height).toBe(864);
+
+    const inserted = useEngine.getState().currentSlide()?.elements[0];
+    expect(inserted).toBeDefined();
+    expect(inserted?.type).toBe("frame");
+    if (inserted?.type === "frame") {
+      expect(inserted.shape).toBe("rect");
+      expect(inserted.imageFileId).toBe("panoramic-full");
+      // Aspect ratio of the frame container matches 3:1 (1536 / 512)
+      expect(inserted.width / inserted.height).toBeCloseTo(3.0, 1);
+    }
+  });
 });
+

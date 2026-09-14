@@ -91,7 +91,7 @@ describe("GPT Image 2 generation client", () => {
     expect(result).toBeDefined();
     expect(result.dataUrl).toBe(mockDataUrl);
     expect(result.seed).toBe(999);
-    expect(result.model).toBe("openai/gpt-image-2");
+    expect(result.model).toBe("openai/gpt-image-2.5-sunburst");
     expect(result.fileId).toBeDefined();
     expect(fetch).toHaveBeenCalledWith(
       "/api/ai/image",

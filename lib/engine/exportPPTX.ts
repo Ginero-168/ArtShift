@@ -183,8 +183,7 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
         !(
           (el.type === "rect" || el.type === "ellipse" || el.type === "diamond") &&
           el.roughness === 0
-        ) &&
-        el.type !== "frame"
+        )
       ) {
         try {
           rasterizedImages[el.id] = await rasterizeElement(el, images);

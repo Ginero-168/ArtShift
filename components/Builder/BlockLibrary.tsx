@@ -72,7 +72,7 @@ export default function BlockLibrary() {
   const insertCompositionBlock = useEngine((state) => state.insertCompositionBlock);
   const [query, setQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
-  const [activeTab, setActiveTab] = useState<LibraryTab>("blocks");
+  const [activeTab, setActiveTab] = useState<LibraryTab>("assistant");
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -141,22 +141,22 @@ export default function BlockLibrary() {
         <button
           type="button"
           role="tab"
+          aria-selected={activeTab === "assistant"}
+          className={`${styles.libraryTab} ${styles.libraryTabAssistant} ${activeTab === "assistant" ? styles.libraryTabActive : ""}`}
+          onClick={() => setActiveTab("assistant")}
+        >
+          <span aria-hidden="true">✦</span>
+          <span>AI Assistance</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={activeTab === "blocks"}
           className={`${styles.libraryTab} ${activeTab === "blocks" ? styles.libraryTabActive : ""}`}
           onClick={() => setActiveTab("blocks")}
         >
           <span aria-hidden="true">▦</span>
           <span>Block</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "assistant"}
-          className={`${styles.libraryTab} ${activeTab === "assistant" ? styles.libraryTabActive : ""}`}
-          onClick={() => setActiveTab("assistant")}
-        >
-          <span aria-hidden="true">✦</span>
-          <span>AI Assistance</span>
         </button>
       </div>
 

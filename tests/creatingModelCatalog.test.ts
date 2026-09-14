@@ -7,22 +7,22 @@ import {
 } from "@/lib/ai/orchestration/creatingModelCatalog";
 
 describe("Creating model capability catalog", () => {
-  it("routes current generation and editing to image-general (GPT Image 2)", () => {
-    // Default is now image-general (was image-gpt-2)
+  it("routes current generation and editing to image-general (GPT Image 2.5 Sunburst)", () => {
+    // Default is image-general pointing to Sunburst
     expect(resolveCreatingModel("generate")).toMatchObject({
       ok: true,
-      model: { alias: "image-general", status: "available" },
+      model: { alias: "image-general", modelId: "openai/gpt-image-2.5-sunburst", status: "available" },
     });
     expect(resolveCreatingModel("edit")).toMatchObject({
       ok: true,
-      model: { alias: "image-general", status: "available" },
+      model: { alias: "image-general", modelId: "openai/gpt-image-2.5-sunburst", status: "available" },
     });
   });
 
-  it("keeps legacy image-gpt-2 alias available for migration compatibility", () => {
+  it("keeps legacy image-gpt-2 alias available for migration compatibility, resolving to Sunburst", () => {
     expect(resolveCreatingModel("generate", "image-gpt-2")).toMatchObject({
       ok: true,
-      model: { alias: "image-gpt-2", modelId: "openai/gpt-image-2" },
+      model: { alias: "image-gpt-2", modelId: "openai/gpt-image-2.5-sunburst" },
     });
   });
 
@@ -75,17 +75,17 @@ describe("Creating model capability catalog", () => {
     });
   });
 
-  it("rejects xhigh quality on image-general (GPT Image 2 not supported)", () => {
+  it("accepts xhigh quality on image-general (GPT Image 2.5 Sunburst supported)", () => {
     expect(resolveCreatingModel("generate", "image-general", "xhigh")).toMatchObject({
-      ok: false,
-      reason: "quality-unsupported",
+      ok: true,
+      model: { alias: "image-general" },
     });
   });
 
-  it("rejects max quality on image-general", () => {
+  it("accepts max quality on image-general (GPT Image 2.5 Sunburst supported)", () => {
     expect(resolveCreatingModel("generate", "image-general", "max")).toMatchObject({
-      ok: false,
-      reason: "quality-unsupported",
+      ok: true,
+      model: { alias: "image-general" },
     });
   });
 
@@ -93,8 +93,8 @@ describe("Creating model capability catalog", () => {
     expect(resolveCreatingModel("generate", "image-general", "high")).toMatchObject({ ok: true });
   });
 
-  it("isQualitySupportedByAlias: xhigh rejected for image-general, accepted for image-fast", () => {
-    expect(isQualitySupportedByAlias("image-general", "xhigh")).toBe(false);
+  it("isQualitySupportedByAlias: xhigh and max accepted for image-general, image-fast, and image-precision", () => {
+    expect(isQualitySupportedByAlias("image-general", "xhigh")).toBe(true);
     expect(isQualitySupportedByAlias("image-fast", "xhigh")).toBe(true);
     expect(isQualitySupportedByAlias("image-precision", "max")).toBe(true);
   });
@@ -104,8 +104,10 @@ describe("Creating model capability catalog", () => {
     expect(detectRequestedCreatingModel("Use Nano Banana Pro for this image")).toBe(
       "nano-banana-pro",
     );
-    // GPT Image mention now maps to image-general (not image-gpt-2)
+    // GPT Image mention maps to image-general
     expect(detectRequestedCreatingModel("สร้างภาพด้วย GPT Image")).toBe("image-general");
+    expect(detectRequestedCreatingModel("สร้างภาพด้วย Sunburst")).toBe("image-precision");
+    expect(detectRequestedCreatingModel("สร้างภาพด้วย Flare ด่วน")).toBe("image-fast");
   });
 
   it("keeps transform models scoped to their real capabilities", () => {

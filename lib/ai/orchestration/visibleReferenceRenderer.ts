@@ -24,11 +24,17 @@ export function renderVisibleReference(ref: ComposerImageRef): VisibleReferenceR
     throw new Error(`selected image is no longer available locally: ${ref.displayName}`);
   const slide = useEngine.getState().currentSlide();
   const element = slide?.elements.find((candidate) => candidate.id === ref.objectId);
+  const elFileId =
+    element && "fileId" in element
+      ? (element as any).fileId
+      : element && "imageFileId" in element
+        ? (element as any).imageFileId
+        : undefined;
   if (
     !element ||
-    (element.type !== "image" && element.type !== "bookMockup") ||
+    (element.type !== "image" && element.type !== "bookMockup" && element.type !== "frame") ||
     element.version !== ref.elementVersion ||
-    element.fileId !== ref.fileId
+    elFileId !== ref.fileId
   ) {
     throw new Error(`selected image changed before analysis: ${ref.displayName}`);
   }

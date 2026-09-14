@@ -95,7 +95,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
     }
 
     // window.confirm removed per user request:
-    // ส่ง prompt ไปยัง gpt-oss-120b Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
+    // ส่ง prompt ไปยัง Gemini 3 Flash Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
     const consent = true;
     if (!consent) return;
 

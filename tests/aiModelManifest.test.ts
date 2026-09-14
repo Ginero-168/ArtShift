@@ -20,18 +20,20 @@ describe("AI model manifest", () => {
     });
   });
 
-  it("uses google/gemini-2.5-flash as the baseline Creative Director for every chat profile", () => {
+  it("uses google/gemini-3-flash as the baseline Creative Director for every chat profile", () => {
     const routes = createAiRouteTable({});
 
     expect(routes["assistant.chat"]?.economy?.[0]).toMatchObject({
       provider: "replicate",
-      model: "google/gemini-2.5-flash",
+      model: expect.stringMatching(/^google\/gemini-3-flash@[a-f0-9]{64}$/),
       alias: "creative-director",
+      pricing: { currency: "USD", inputPerMillionTokens: 0.5, outputPerMillionTokens: 3.0 },
     });
     expect(routes["assistant.chat"]?.quality?.[0]).toMatchObject({
       provider: "replicate",
-      model: "google/gemini-2.5-flash",
+      model: expect.stringMatching(/^google\/gemini-3-flash@[a-f0-9]{64}$/),
       alias: "creative-director",
+      pricing: { currency: "USD", inputPerMillionTokens: 0.5, outputPerMillionTokens: 3.0 },
     });
   });
 
@@ -41,10 +43,10 @@ describe("AI model manifest", () => {
     });
 
     expect(routes["assistant.chat"]?.economy?.[0]?.model).toBe(
-      `google/gemini-2.5-flash@${"d".repeat(64)}`,
+      `google/gemini-3-flash@${"d".repeat(64)}`,
     );
     expect(routes["assistant.chat"]?.quality?.[0]?.model).toBe(
-      `google/gemini-2.5-flash@${"d".repeat(64)}`,
+      `google/gemini-3-flash@${"d".repeat(64)}`,
     );
   });
 
@@ -116,15 +118,8 @@ describe("AI model manifest", () => {
     expect(serialized).not.toContain("https://");
   });
 
-  it("fails closed when GPT Image 2 has no pinned production version", () => {
+  it("routes image generation to image-general (GPT Image 2.5 Sunburst) with correct alias and pricing ceiling", () => {
     const routes = createAiRouteTable({});
-
-    expect(routes["image.generate"]).toEqual({ economy: [], quality: [] });
-  });
-
-  it("routes image generation to image-general (GPT Image 2) with correct alias and pricing ceiling", () => {
-    const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_2_VERSION: "1".repeat(64) });
-    const pinned = `openai/gpt-image-2@${"1".repeat(64)}`;
 
     // Primary semantic alias
     const generalRoute = routes["image.generate"]?.quality?.find(
@@ -132,29 +127,37 @@ describe("AI model manifest", () => {
     );
     expect(generalRoute).toMatchObject({
       provider: "replicate",
-      model: pinned,
+      model: "openai/gpt-image-2.5-sunburst",
       alias: "image-general",
+    });
+
+    // Precision alias
+    const precisionRoute = routes["image.generate"]?.quality?.find(
+      (r) => r.alias === "image-precision",
+    );
+    expect(precisionRoute).toMatchObject({
+      provider: "replicate",
+      model: "openai/gpt-image-2.5-sunburst",
+      alias: "image-precision",
     });
 
     // Legacy compatibility alias must also be present
     const legacyRoute = routes["image.generate"]?.quality?.find((r) => r.alias === "image-gpt-2");
     expect(legacyRoute).toMatchObject({
       provider: "replicate",
-      model: pinned,
+      model: "openai/gpt-image-2.5-sunburst",
       alias: "image-gpt-2",
     });
   });
 
-  it("does not route to Flare or Sunburst when feature flags are off", () => {
-    const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_2_VERSION: "1".repeat(64) });
+  it("does not route to Flare when feature flag is off", () => {
+    const routes = createAiRouteTable({});
     const aliases = routes["image.generate"]?.quality?.map((r) => r.alias) ?? [];
     expect(aliases).not.toContain("image-fast");
-    expect(aliases).not.toContain("image-precision");
   });
 
   it("adds Flare route when IMAGE_FAST_MODEL_ENABLED is true", () => {
     const routes = createAiRouteTable({
-      REPLICATE_GPT_IMAGE_2_VERSION: "1".repeat(64),
       IMAGE_FAST_MODEL_ENABLED: "true",
     });
     const fastRoute = routes["image.generate"]?.quality?.find((r) => r.alias === "image-fast");
@@ -165,30 +168,15 @@ describe("AI model manifest", () => {
     });
   });
 
-  it("adds Sunburst route when IMAGE_PRECISION_MODEL_ENABLED is true", () => {
-    const routes = createAiRouteTable({
-      REPLICATE_GPT_IMAGE_2_VERSION: "1".repeat(64),
-      IMAGE_PRECISION_MODEL_ENABLED: "true",
-    });
-    const precisionRoute = routes["image.generate"]?.quality?.find(
-      (r) => r.alias === "image-precision",
-    );
-    expect(precisionRoute).toMatchObject({
-      provider: "replicate",
-      model: "openai/gpt-image-2.5-sunburst",
-      alias: "image-precision",
-    });
-  });
-
-  it("allows only a server-side GPT Image 2 version pin", () => {
+  it("pins Sunburst when REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION is provided", () => {
     const version = "f".repeat(64);
-    const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_2_VERSION: version });
+    const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION: version });
 
     expect(
       routes["image.generate"]?.economy?.find((r) => r.alias === "image-general"),
     ).toMatchObject({
       provider: "replicate",
-      model: `openai/gpt-image-2@${version}`,
+      model: `openai/gpt-image-2.5-sunburst@${version}`,
       alias: "image-general",
     });
   });

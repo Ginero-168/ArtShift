@@ -16,6 +16,8 @@ import {
   getFrameShapeSVGPath,
   isConvertibleShape,
 } from "../lib/engine/frameMask";
+import { getCached, getImageCache, loadDataURL } from "../lib/engine/imageCache";
+import { deserializeWithImages, serializeWithImages } from "../lib/engine/serialize";
 import { useEngine } from "../lib/engine/store";
 import type { FrameElement, FrameMaskShape, ImageElement } from "../lib/engine/types";
 
@@ -279,5 +281,48 @@ describe("Frame Store Actions & SVG Serialization", () => {
       .doc.slides.find((s) => s.id === useEngine.getState().currentSlideId);
     const convertedOnSlide = slide?.elements.find((el) => el.id === rect.id);
     expect(convertedOnSlide?.type).toBe("frame");
+  });
+
+  it("persists and restores frame images across serializeWithImages and deserializeWithImages (Hard Refresh)", async () => {
+    const mockDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const entry = await loadDataURL(mockDataUrl);
+    expect(entry.fileId).toBeDefined();
+
+    const store = useEngine.getState();
+    const frame = createFrame({
+      x: 100,
+      y: 100,
+      width: 400,
+      height: 200,
+      name: "Banner Frame",
+      shape: "rect",
+      imageFileId: entry.fileId,
+    });
+    store.addElement(frame);
+
+    // 1. Serialize document with images
+    const serialized = serializeWithImages(useEngine.getState().doc);
+    expect(serialized.files).toBeDefined();
+    expect(serialized.files[entry.fileId]).toBe(mockDataUrl);
+
+    // 2. Deserialize document with images (simulates Hard Refresh page load)
+    const restoredDoc = await deserializeWithImages(serialized);
+    expect(restoredDoc).toBeDefined();
+
+    const restoredFrame = restoredDoc.slides
+      .flatMap((s) => s.elements)
+      .find((el) => el.id === frame.id) as FrameElement | undefined;
+    expect(restoredFrame).toBeDefined();
+    expect(restoredFrame?.type).toBe("frame");
+    expect(restoredFrame?.imageFileId).toBe(entry.fileId);
+
+    // 3. Image cache must contain the image for the frame after deserialization
+    const cached = getCached(restoredFrame!.imageFileId!);
+    expect(cached).toBeDefined();
+    expect(cached?.dataURL).toBe(mockDataUrl);
+
+    const imageMap = getImageCache();
+    expect(imageMap.get(restoredFrame!.imageFileId!)).toBeDefined();
   });
 });

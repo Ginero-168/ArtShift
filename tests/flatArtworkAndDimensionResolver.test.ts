@@ -45,7 +45,7 @@ describe("Anti-Mockup & Flat 2D Graphic Design Prompt Synthesis", () => {
     // Flat 2D Graphic Art Directives
     expect(streamlined).toContain("flat 2D graphic design artwork");
     expect(streamlined).toContain("direct front-facing 90-degree orthogonal view");
-    expect(streamlined).toContain("full-bleed rectangular banner layout");
+    expect(streamlined).toContain("clean horizontal panoramic banner layout");
 
     // Anti-Mockup Rules (No room, no wooden shelf, no books underneath)
     expect(streamlined).toContain("no 3D mockup");
@@ -61,6 +61,13 @@ describe("Anti-Mockup & Flat 2D Graphic Design Prompt Synthesis", () => {
     // Welearn Publishing Identity
     expect(streamlined).toContain("Welearn publishing brand identity");
     expect(streamlined).toContain('"Welearn"');
+
+    // Dynamic Asymmetry & Rich Editorial Content (Anti-stiff, anti-bullseye)
+    expect(streamlined).toContain("dynamic asymmetric wide panoramic banner composition (rule-of-thirds) avoiding dead-center bullseye symmetry");
+    expect(streamlined).toContain("rich editorial typography layout with clear hierarchy");
+    expect(streamlined).toContain("The Magic of Affirmation");
+    expect(streamlined).toContain("เมื่อคำพูดและความคิดของคุณ กำหนดอนาคตได้");
+    expect(streamlined).toContain("คิดมาก (The Manifest Master)");
   });
 
   it("pre-flight sanitization detects signage requests and applies flat 2D streamlining immediately", () => {
@@ -84,5 +91,30 @@ describe("Signage & Banner Design Knowledge Retrieval", () => {
     expect(signageSkill?.guidance.some((g) => g.includes("flat 2D graphic design artwork"))).toBe(
       true,
     );
+  });
+
+  it("preserves refined flat 2D prompt across multiple image variations without degrading to 3D mockup", () => {
+    const singleRefinedPrompt =
+      "Flat 2D graphic design artwork, direct front-facing 90-degree orthogonal view, full-bleed clean rectangular banner layout, modern corporate graphic design, sharp digital vector illustration and typography, pristine flat surface, completely flat composition, no 3D mockup, no room environment, no bookshelf, no wooden shelf, no books underneath, no table, no physical acrylic stand, no angled perspective, isolated 2D graphic artwork file for printing. Aspect ratio 3:1 (e.g., 1536x512 pixels). The design incorporates the visual theme of the 'Manifest' book by Kidmak. The text 'Welearn' is centrally placed.";
+
+    // Both single and multi-image tasks must be preserved through sanitizeAndPrepareImagePrompt
+    const singleSanitized = sanitizeAndPrepareImagePrompt(
+      `${singleRefinedPrompt}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`,
+    );
+    expect(singleSanitized).toContain("Flat 2D graphic design artwork");
+    expect(singleSanitized).toContain("no 3D mockup");
+    expect(singleSanitized).not.toContain("commercial advertising poster design");
+
+    const multiPrompt1 = `${singleRefinedPrompt}\nDistinct variation 1 of 3 (focusing on deep obsidian black theme and high-contrast glow). Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+    const multiSanitized1 = sanitizeAndPrepareImagePrompt(multiPrompt1);
+    expect(multiSanitized1).toContain("Flat 2D graphic design artwork");
+    expect(multiSanitized1).toContain("no 3D mockup");
+    expect(multiSanitized1).not.toContain("commercial advertising poster design");
+
+    const multiPromptWithThaiBrief = `${singleRefinedPrompt}\nVariation 1 (ป้ายหมวด Welearn โทนสีดำ). Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+    const multiSanitizedThai = sanitizeAndPrepareImagePrompt(multiPromptWithThaiBrief);
+    expect(multiSanitizedThai).toContain("Flat 2D graphic design artwork");
+    expect(multiSanitizedThai).toContain("no 3D mockup");
+    expect(multiSanitizedThai).not.toContain("commercial advertising poster design");
   });
 });

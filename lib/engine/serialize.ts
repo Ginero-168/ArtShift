@@ -47,9 +47,28 @@ export function serializeWithImages(doc: EngineDoc): SerializedDoc {
   const files: Record<string, string> = {};
   for (const sl of doc.slides) {
     for (const el of sl.elements) {
-      if ((el.type !== "image" && el.type !== "bookMockup") || el.isDeleted) continue;
-      const cached = getCached(el.fileId);
-      if (cached) files[el.fileId] = cached.dataURL;
+      if (el.isDeleted) continue;
+      if (el.type === "image" || el.type === "bookMockup") {
+        const cached = getCached(el.fileId);
+        if (cached?.dataURL) {
+          files[el.fileId] = cached.dataURL;
+        } else if (
+          typeof el.fileId === "string" &&
+          (el.fileId.startsWith("data:") || el.fileId.startsWith("http://") || el.fileId.startsWith("https://"))
+        ) {
+          files[el.fileId] = el.fileId;
+        }
+      } else if (el.type === "frame" && el.imageFileId) {
+        const cached = getCached(el.imageFileId);
+        if (cached?.dataURL) {
+          files[el.imageFileId] = cached.dataURL;
+        } else if (
+          typeof el.imageFileId === "string" &&
+          (el.imageFileId.startsWith("data:") || el.imageFileId.startsWith("http://") || el.imageFileId.startsWith("https://"))
+        ) {
+          files[el.imageFileId] = el.imageFileId;
+        }
+      }
     }
   }
   return { doc: toJSON(doc), files };
@@ -89,7 +108,9 @@ export async function deserializeWithImages(payload: SerializedDoc): Promise<Eng
   const doc = fromJSON(payload.doc);
   // Pre-warm image cache so the first render has bitmaps ready.
   await Promise.all(
-    Object.values(payload.files ?? {}).map((dataURL) => loadDataURL(dataURL).catch(() => null)),
+    Object.entries(payload.files ?? {}).map(([fileId, dataURL]) =>
+      loadDataURL(dataURL, fileId).catch(() => null),
+    ),
   );
   return doc;
 }

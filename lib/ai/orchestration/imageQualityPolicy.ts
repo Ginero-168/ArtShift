@@ -146,6 +146,9 @@ export function chooseImageRoute(
     ...(input as Partial<ImageIntentFeatures>),
   };
 
+  const detailScore = computeDetailScore(features);
+  const precisionScore = computeEditPrecisionScore(features);
+
   // 1. User override check
   if (features.requestedModelAlias) {
     const alias = features.requestedModelAlias;
@@ -168,6 +171,8 @@ export function chooseImageRoute(
       reasonCodes: ["USER_OVERRIDE"],
       maxSemanticAttempts: 2,
       fallbackPolicy: "same-capability-only",
+      detailScore,
+      precisionScore,
     };
   }
 
@@ -175,8 +180,6 @@ export function chooseImageRoute(
 
   // 2. Routing logic by operation
   if (features.operation === "generate") {
-    const detailScore = computeDetailScore(features);
-
     if (detailScore <= 3) {
       decision = {
         capabilityAlias: "IMAGE_GENERAL",
@@ -185,8 +188,10 @@ export function chooseImageRoute(
         reasonCodes: ["GENERAL_DEFAULT"],
         maxSemanticAttempts: 2,
         fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
       };
-    } else if (detailScore <= 6) {
+    } else if (detailScore <= 7) {
       decision = {
         capabilityAlias: "IMAGE_GENERAL",
         modelAlias: "image-general",
@@ -194,9 +199,11 @@ export function chooseImageRoute(
         reasonCodes: ["DETAIL_RICH"],
         maxSemanticAttempts: 3,
         fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
       };
     } else {
-      // detail 7–10
+      // detail 9–10: High complexity threshold
       const needsSpeedOrVariants =
         features.speedPreference === "fast" ||
         features.variantCount > 1 ||
@@ -214,6 +221,8 @@ export function chooseImageRoute(
           reasonCodes,
           maxSemanticAttempts: 3,
           fallbackPolicy: "same-capability-only",
+          detailScore,
+          precisionScore,
         };
       } else {
         // final and high precision
@@ -224,12 +233,12 @@ export function chooseImageRoute(
           reasonCodes: ["FINAL_PRECISION"],
           maxSemanticAttempts: 3,
           fallbackPolicy: "same-capability-only",
+          detailScore,
+          precisionScore,
         };
       }
     }
   } else if (features.operation === "edit" || features.operation === "iterate") {
-    const precisionScore = computeEditPrecisionScore(features);
-
     if (precisionScore <= 2 && features.speedPreference === "fast") {
       decision = {
         capabilityAlias: "IMAGE_FAST",
@@ -238,6 +247,8 @@ export function chooseImageRoute(
         reasonCodes: ["EVERYDAY_EDIT_DRAFT"],
         maxSemanticAttempts: 2,
         fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
       };
     } else if (precisionScore <= 3) {
       decision = {
@@ -247,6 +258,8 @@ export function chooseImageRoute(
         reasonCodes: ["EVERYDAY_EDIT"],
         maxSemanticAttempts: 3,
         fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
       };
     } else {
       // precision 4–10: preservation critical
@@ -257,6 +270,8 @@ export function chooseImageRoute(
         reasonCodes: ["PRESERVATION_CRITICAL"],
         maxSemanticAttempts: 3,
         fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
       };
     }
   } else if (features.operation === "compose") {
@@ -269,6 +284,8 @@ export function chooseImageRoute(
         reasonCodes: ["MULTI_REF_FAST"],
         maxSemanticAttempts: 3,
         fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
       };
     } else {
       decision = {
@@ -278,6 +295,8 @@ export function chooseImageRoute(
         reasonCodes: ["MULTI_REF_PRECISION"],
         maxSemanticAttempts: 3,
         fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
       };
     }
   } else {
@@ -289,6 +308,8 @@ export function chooseImageRoute(
       reasonCodes: ["GENERAL_DEFAULT"],
       maxSemanticAttempts: 2,
       fallbackPolicy: "same-capability-only",
+      detailScore,
+      precisionScore,
     };
   }
 
@@ -308,6 +329,8 @@ export function chooseImageRoute(
           reasonCodes: [...decision.reasonCodes, "FALLBACK_BASELINE"],
           maxSemanticAttempts: decision.maxSemanticAttempts,
           fallbackPolicy: "same-capability-only",
+          detailScore,
+          precisionScore,
         };
       }
       if (decision.capabilityAlias === "IMAGE_PRECISION") {
@@ -320,6 +343,8 @@ export function chooseImageRoute(
             reasonCodes: [...decision.reasonCodes, "FALLBACK_BASELINE"],
             maxSemanticAttempts: decision.maxSemanticAttempts,
             fallbackPolicy: "same-capability-only",
+            detailScore,
+            precisionScore,
           };
         }
       }
@@ -495,7 +520,7 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
     return {
       quality: "medium",
       rationale: "งานสร้างภาพทั่วไป ใช้ medium quality ตาม default policy",
-      maxAttempts: 2,
+      maxAttempts: 3,
       reasonCodes: ["GENERAL_DEFAULT"],
     };
   }
@@ -524,7 +549,7 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
   return {
     quality: "medium",
     rationale: "งานสร้างภาพทั่วไป ใช้ medium quality ตาม default policy",
-    maxAttempts: 2,
+    maxAttempts: 3,
     reasonCodes: ["GENERAL_DEFAULT"],
   };
 }

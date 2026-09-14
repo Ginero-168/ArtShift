@@ -40,10 +40,17 @@ export function subscribeImageCache(fn: () => void): () => void {
   return () => subscribers.delete(fn);
 }
 
-export async function loadDataURL(dataURL: string): Promise<CachedImage> {
-  const fileId = await hashString(dataURL);
-  const existing = cache.get(fileId);
-  if (existing) return existing;
+export async function loadDataURL(dataURL: string, explicitFileId?: string): Promise<CachedImage> {
+  const hashedFileId = await hashString(dataURL);
+  const fileId = explicitFileId || hashedFileId;
+  const existing = cache.get(fileId) || cache.get(hashedFileId);
+  if (existing) {
+    if (explicitFileId && !cache.has(explicitFileId)) {
+      cache.set(explicitFileId, existing);
+      imageMap.set(explicitFileId, existing.img);
+    }
+    return existing;
+  }
   const img = await decode(dataURL);
   if (img.naturalWidth * img.naturalHeight > MAX_IMAGE_PIXELS) {
     throw new Error("Image is too large. Maximum decoded size is 80 megapixels.");
@@ -57,6 +64,10 @@ export async function loadDataURL(dataURL: string): Promise<CachedImage> {
   };
   cache.set(fileId, entry);
   imageMap.set(fileId, img);
+  if (explicitFileId && explicitFileId !== hashedFileId) {
+    cache.set(hashedFileId, entry);
+    imageMap.set(hashedFileId, img);
+  }
   for (const fn of subscribers) fn();
   // Bump store so React re-renders the canvas.
   useEngine.setState({});
@@ -91,8 +102,8 @@ async function hashString(s: string): Promise<string> {
   return h.toString(16);
 }
 
-export async function preloadDataURL(dataURL: string): Promise<CachedImage> {
-  return loadDataURL(dataURL);
+export async function preloadDataURL(dataURL: string, explicitFileId?: string): Promise<CachedImage> {
+  return loadDataURL(dataURL, explicitFileId);
 }
 
 export function fileToDataURL(file: File): Promise<string> {

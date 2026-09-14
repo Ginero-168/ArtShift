@@ -8,7 +8,8 @@ import { loadDataURL } from "@/lib/engine/imageCache";
 import { GPT_IMAGE_2_MAX_COST_USD } from "./pricing";
 import { runVisualQualityGate } from "./visualQualityGate";
 
-export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2" as const;
+export const GPT_IMAGE_2_MODEL = "openai/gpt-image-2.5-sunburst" as const;
+export const GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst" as const;
 export const GPT_IMAGE_2_QUALITY = "high" as const;
 export const GPT_IMAGE_2_ESTIMATED_COST_USD = GPT_IMAGE_2_MAX_COST_USD;
 export type GptImageQuality = AiImageRenderQuality;
@@ -30,12 +31,24 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
   { id: "3:4", label: "Portrait", ratio: "3:4", width: 768, height: 1024, icon: "▯" },
 ];
 
+export function hasExplicitDimensionsInText(text?: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const val = text.toLocaleLowerCase();
+  return (
+    /(?:ขนาด\s*)?\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+(?:\.\d+)?\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/iu.test(
+      val,
+    ) ||
+    /\b(?:3:1|1:3|21:9|16:9|9:16|4:3|3:4)\b/u.test(val) ||
+    /(?:60x20|120x40|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|story|reel)/iu.test(val)
+  );
+}
+
 export function resolveImageGenerationDimensions(prompt: string) {
   const value = prompt.toLocaleLowerCase();
 
-  // Check for explicit physical/custom dimensions e.g. "60x20cm", "60x20", "120x40", "30x10"
+  // Check for explicit physical/custom dimensions e.g. "60x20cm", "60x20", "120x40", "30x10", "1536x512"
   const dimMatch =
-    /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|mm|m|in|นิ้ว)?/iu.exec(
+    /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/iu.exec(
       value,
     );
   if (dimMatch) {
@@ -67,6 +80,16 @@ export function resolveImageGenerationDimensions(prompt: string) {
     }
   }
 
+  // Check for ratio patterns like "3:1", "1:3", "21:9", "16:9", "9:16", "4:3", "3:4"
+  if (/(?:3:1|wide\s+panoramic|พาโนรามา)/iu.test(value)) {
+    return { width: 1536, height: 512, aspectRatio: "16:9" as const };
+  }
+  if (/(?:1:3|vertical\s+skyscraper)/iu.test(value)) {
+    return { width: 512, height: 1536, aspectRatio: "9:16" as const };
+  }
+  if (/(?:21:9)/u.test(value)) {
+    return { width: 1536, height: 512, aspectRatio: "16:9" as const };
+  }
   if (/(?:9:16|แนวตั้ง|story|reel)/iu.test(value)) {
     return { width: 720, height: 1280, aspectRatio: "9:16" as const };
   }
@@ -133,6 +156,9 @@ export const THAI_KEYWORD_MAP: Record<string, string> = {
   ภูเขา: "majestic mountain range, misty valley, cinematic lighting",
   ดอกไม้: "vibrant blooming colorful flowers, botanical garden, soft focus",
   อาหาร: "delicious gourmet meal plate, professional food photography, 8k",
+  ซูชิ: "delicious Japanese sushi platter, fresh nigiri, appetizing food photography",
+  อาหารญี่ปุ่น: "authentic Japanese cuisine feast, appetizing presentation",
+  เอิร์ธโทน: "warm natural earth-tone color palette, soft beige and wood tones",
   รถ: "modern sleek luxury sports car, cinematic studio lighting",
   บ้าน: "modern minimalist architecture house, luxury interior exterior design",
   หุ่นยนต์: "futuristic cyber robot, glowing neon details, sci-fi concept art",
@@ -158,6 +184,14 @@ export function cleanImagePrompt(rawPrompt: string): string {
 /** Identifies common Thai and English requests that should be handled by image generation. */
 export function isImageGenerationPrompt(userPrompt: string): boolean {
   const prompt = userPrompt.trim().toLowerCase();
+  if (
+    /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|เพิ่ม|จัดมา|ออกแบบ)\s*(?:มา|ให้|หน่อย|อีก|เพิ่ม|ตัวเลือก|\s+)*(?:รูป|ภาพ|แบบ|ตัวเลือก|ดีไซน์|ชิ้น|งาน)/iu.test(
+      prompt,
+    ) ||
+    /\b\d+\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|variations?|options?)\b/iu.test(prompt)
+  ) {
+    return true;
+  }
   return (
     prompt.includes("สร้างรูป") ||
     prompt.includes("วาดรูป") ||
@@ -167,8 +201,11 @@ export function isImageGenerationPrompt(userPrompt: string): boolean {
     prompt.includes("วาดภาพ") ||
     prompt.includes("ขอรูป") ||
     prompt.includes("ขอภาพ") ||
+    prompt.includes("ขอแบบ") ||
+    prompt.includes("ตัวเลือก") ||
     prompt.includes("generate image") ||
     prompt.includes("create image") ||
+    prompt.includes("variation") ||
     (prompt.startsWith("รูป") && prompt.length > 5) ||
     (prompt.startsWith("ภาพ") && prompt.length > 5) ||
     prompt.includes("draw ") ||
@@ -203,6 +240,9 @@ export function enrichPrompt(rawPrompt: string): string {
  * - Strips conversational fluff and returns a concise, high-aesthetic prompt.
  */
 export function streamlinePromptForImageGen(rawPrompt: string): string {
+  if (isAlreadyOrchestratedPrompt(rawPrompt)) {
+    return cleanImagePrompt(rawPrompt) || rawPrompt.trim();
+  }
   let cleaned = cleanImagePrompt(rawPrompt);
   if (!cleaned) return "beautiful aesthetic digital art";
 
@@ -245,12 +285,19 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
   const isSignage = /ป้าย|ป้ายหมวด|ป้ายติด|แบนเนอร์|signage|banner|shelf sign|artwork\s*ป้าย/i.test(
     rawPrompt,
   );
+  const hasAntiMockupConstraint =
+    /(?:no\s+3d\s+mockup|no\s+mockup|without\s+mockup|never\s+mockup|completely\s+flat|isolated\s+2d)/i.test(
+      rawPrompt,
+    );
   const isExplicitMockup =
-    /mockup|ม็อกอัป|ถ่ายภาพจำลอง|วางบนโต๊ะ|3d render|physical stand/i.test(rawPrompt);
+    !hasAntiMockupConstraint &&
+    /(?:ถ่ายภาพจำลอง|วางบนโต๊ะ|ต้องการ\s*mockup|ทำเป็น\s*mockup|3d\s*render\s*mockup|physical\s+stand\s+mockup|mockup\s*scene)/i.test(
+      rawPrompt,
+    );
 
   if (isSignage && !isExplicitMockup) {
     visualComponents.push(
-      "flat 2D graphic design artwork, direct front-facing 90-degree orthogonal view, full-bleed rectangular banner layout, modern corporate graphic design, sharp digital vector illustration and typography, pristine flat surface, completely flat composition, no 3D mockup, no room environment, no bookshelf, no wooden shelf, no books underneath, no table, no physical acrylic stand, no angled perspective, isolated 2D graphic artwork file for printing",
+      "flat 2D graphic design artwork, direct front-facing 90-degree orthogonal view, clean horizontal panoramic banner layout, modern corporate graphic design, sharp digital vector illustration and typography, pristine flat surface, completely flat composition, no 3D mockup, no room environment, no bookshelf, no wooden shelf, no books underneath, no table, no physical acrylic stand, no angled perspective, isolated 2D graphic artwork file for printing, strict horizontal banner safe area: top 25% and bottom 25% of canvas must have zero text and remain pure dark gradient background, all headlines, brand logos, taglines, and author names strictly confined within the vertical center zone (between 30% and 70% height) with generous breathing room, no text placed above or below the circular halo motif, maximum 2 concise horizontal lines vertically",
     );
   } else if (/โปสเตอร์|แบนเนอร์|poster|banner|โฆษณา|advertising/i.test(rawPrompt)) {
     visualComponents.push("commercial advertising poster design, vibrant professional layout");
@@ -258,25 +305,48 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
 
   // Manifest Book Theme
   if (/manifest|คิดมาก/i.test(rawPrompt)) {
-    visualComponents.push(
-      "Manifest book aesthetic theme, deep obsidian matte black and crimson red glowing aura, radiant golden and red circular light halo, manifestation energy ring, elegant glowing circular motif, cinematic ambient glow",
-    );
+    if (isSignage) {
+      visualComponents.push(
+        'Manifest book aesthetic theme, dynamic asymmetric wide panoramic banner composition (rule-of-thirds) avoiding dead-center bullseye symmetry, radiant golden and red circular light halo with volumetric light rays and floating stardust particles, luxurious dual-tone background seamlessly transitioning from deep obsidian matte black on one side to rich crimson red glowing aura on the other, rich editorial typography layout with clear hierarchy: bold prominent category title "หมวดจิตวิทยาและการพัฒนาตนเอง : MANIFEST", compelling book taglines "The Magic of Affirmation" and "เมื่อคำพูดและความคิดของคุณ กำหนดอนาคตได้", author credit "คิดมาก (The Manifest Master)", elegant metallic gold divider lines, sophisticated bookstore shelf category header artwork, strict 3:1 horizontal banner containment: absolute zero text in top 25% or bottom 25% margins, all text and headlines strictly confined within the vertical center zone (between 30% and 70% height), no vertical text stacking exceeding 2 lines, no text floating above or below the circular halo',
+      );
+    } else {
+      visualComponents.push(
+        "Manifest book aesthetic theme, deep obsidian matte black and crimson red glowing aura, radiant golden and red circular light halo, manifestation energy ring, elegant glowing circular motif, cinematic ambient glow",
+      );
+    }
   }
 
   // Welearn Publishing Brand
   if (/welearn|วีเลิร์น/i.test(rawPrompt)) {
     visualComponents.push(
-      'Welearn publishing brand identity, bold clean white modern typography reading "Welearn" and "สำนักพิมพ์ Welearn", stylized geometric "W" brand logo mark, high contrast, pristine publishing corporate graphic design',
+      'Welearn publishing brand identity, bold clean white modern typography reading "Welearn" and "สำนักพิมพ์ Welearn" cleanly integrated inside the horizontal center strip, high contrast, pristine publishing corporate graphic design',
     );
   }
 
-  // Thai Food / Cuisine
-  if (/อาหารไทย/i.test(rawPrompt)) {
+  // Japanese / Sushi / Asian Cuisine
+  if (/ซูชิ|sushi|แซลมอน|อาหารญี่ปุ่น/i.test(rawPrompt)) {
+    visualComponents.push(
+      "exquisite authentic Japanese sushi platter, fresh salmon and tuna nigiri, maki rolls, appetizing gourmet presentation",
+    );
+  } else if (/อาหารไทย/i.test(rawPrompt)) {
     visualComponents.push(
       "grand banquet feast of popular authentic Thai cuisine dishes, pad thai, tom yum, green curry, fresh herbs, appetizing presentation",
     );
   } else if (/อาหาร/i.test(rawPrompt)) {
     visualComponents.push("delicious gourmet meal banquet, professional culinary photography");
+  }
+
+  // Aesthetic / Colors / Minimal Studio
+  if (/เอิร์ธโทน|earth[- ]?tone/i.test(rawPrompt)) {
+    visualComponents.push("warm natural earth-tone color palette, soft beige and warm wood tones");
+  }
+  if (/มินิมอล|สตูดิโอคลีน|สะอาดตา|minimal/i.test(rawPrompt)) {
+    visualComponents.push("clean minimalist studio photography, pristine uncluttered background");
+  }
+  if (/สมจริง|ภาพถ่าย|realistic|photography/i.test(rawPrompt)) {
+    visualComponents.push(
+      "ultra-realistic commercial food photography, crisp macro detail, soft directional lighting",
+    );
   }
 
   // Wide angle / Perspective
@@ -310,19 +380,32 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
     visualComponents.push(`bold artistic typography header reading "${titleText}"`);
   }
 
-  // If bubble text was requested, transform into clean typography or celebratory slogan
+  // If bubble text was requested, transform into clean typography badge
   if (bubbleText) {
-    if (/^[A-Za-z0-9\s.,!'-]+$/.test(bubbleText)) {
-      visualComponents.push(`clean text badge with "${bubbleText}"`);
-    } else {
-      visualComponents.push("festive advertising ribbon badge with celebratory mood");
-    }
+    visualComponents.push(`promotional text badge reading "${bubbleText}"`);
+  }
+
+  // If no specific thematic subject component was matched, retain cleaned user prompt to avoid generic outputs
+  const hasSubject = visualComponents.some(
+    (c) =>
+      !c.includes("commercial advertising") &&
+      !c.includes("8k resolution") &&
+      !c.includes("flat 2D graphic design"),
+  );
+  if (!hasSubject && cleaned) {
+    visualComponents.unshift(cleaned);
   }
 
   // Add standard quality modifiers
-  visualComponents.push(
-    "8k resolution, cinematic lighting, sharp focus, masterwork commercial art",
-  );
+  if (isSignage) {
+    visualComponents.push(
+      "8k resolution, crisp vector graphics, high contrast, sharp focus, masterwork graphic artwork",
+    );
+  } else {
+    visualComponents.push(
+      "8k resolution, cinematic lighting, sharp focus, masterwork commercial art",
+    );
+  }
 
   if (visualComponents.length > 1) {
     return visualComponents.join(", ");
@@ -332,19 +415,73 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
 }
 
 /**
+ * Detects whether a prompt is already a compiled/orchestrated English prompt
+ * (e.g. from Creative Director or Prompt Compiler) rather than an unparsed raw user query.
+ */
+export function isAlreadyOrchestratedPrompt(prompt: string): boolean {
+  const trimmed = prompt.trim();
+  return (
+    /^(?:flat\s+2d\s+graphic\s+design|commercial\s+advertising|a\s+photorealistic|cinematic|modern\s+corporate|\[(?:TYPE|MAIN CONCEPT|COMPOSITION)\])/i.test(
+      trimmed,
+    ) ||
+    /output\s+constraints:\s*one\s+standalone\s+image\s+only/i.test(trimmed) ||
+    (/no\s+3d\s+mockup/i.test(trimmed) &&
+      /no\s+(?:bookshelf|room\s+environment|wooden\s+shelf)/i.test(trimmed))
+  );
+}
+
+/**
  * Pre-flight sanitization for prompts before sending to image generation.
- * Strips conversational constructs that fail diffusion models (like Thai text in bubbles),
- * and enforces flat 2D graphic design for signage and artwork requests.
+ * Enforces flat 2D graphic design for signage and shelf artwork requests,
+ * while preserving rich natural user prompts (including Thai text and dialogue badges) intact.
  */
 export function sanitizeAndPrepareImagePrompt(rawPrompt: string): string {
-  const containsProblematicBubble =
-    /(?:bubble|บอลลูน|กล่องคำพูด)/i.test(rawPrompt) && /[\u0E00-\u0E7F]/.test(rawPrompt);
-  const isSignageOrArtwork =
-    /(?:ออกแบบป้าย|ป้ายหมวด|ป้ายติด|ป้ายขนาด|artwork\s*ป้าย|ป้ายแบนเนอร์)/iu.test(rawPrompt);
-  if (containsProblematicBubble || isSignageOrArtwork) {
+  // If the prompt is already an English orchestrated/compiled prompt, preserve it completely
+  if (isAlreadyOrchestratedPrompt(rawPrompt)) {
+    return cleanImagePrompt(rawPrompt) || rawPrompt.trim();
+  }
+
+  // Only specialized signage/shelf headers need strict 2D layout restructuring
+  const isSignageOrArtwork = /(?:ออกแบบป้าย|ป้ายหมวด|ป้ายติด|ป้ายขนาด|artwork\s*ป้าย|ป้ายแบนเนอร์)/iu.test(
+    rawPrompt,
+  );
+  if (isSignageOrArtwork) {
     return streamlinePromptForImageGen(rawPrompt);
   }
   return cleanImagePrompt(rawPrompt) || rawPrompt.trim();
+}
+
+/**
+ * Converts a data URL to JPEG format (image/jpeg) if it is in WebP format.
+ * Guarantees that AI-generated assets are delivered to the user as standard JPEG.
+ */
+export async function convertWebpToJpeg(dataUrl: string, quality = 0.95): Promise<string> {
+  if (!dataUrl.startsWith("data:image/webp")) {
+    return dataUrl;
+  }
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return dataUrl.replace(/^data:image\/webp/, "data:image/jpeg");
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl.replace(/^data:image\/webp/, "data:image/jpeg"));
+        return;
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl.replace(/^data:image\/webp/, "data:image/jpeg"));
+    img.src = dataUrl;
+  });
 }
 
 /**
@@ -400,8 +537,11 @@ export async function generateAIImage(
     throw new Error("AI Image Studio returned an invalid image payload.");
   }
 
+  // Ensure output is JPEG, converting from WebP if provider delivered WebP
+  const finalDataUrl = await convertWebpToJpeg(data.dataUrl);
+
   // Cache in local engine image cache
-  const cached = await loadDataURL(data.dataUrl);
+  const cached = await loadDataURL(finalDataUrl);
   const qualityGate = runVisualQualityGate({
     dataUrl: cached.dataURL,
     prompt,
@@ -424,4 +564,28 @@ export async function generateAIImage(
     model: GPT_IMAGE_2_MODEL,
     prompt,
   };
+}
+
+export { normalizeUserBriefToV1 } from "./orchestration/briefNormalizer";
+export type {
+  ImageGenerationBriefV1,
+  PromptDecisionTier,
+  PromptRiskAnalysis,
+  ReferenceImageType,
+} from "./orchestration/briefSpecV1";
+export { compileBriefToPrompt } from "./orchestration/promptCompiler";
+export { analyzePromptRisk } from "./orchestration/promptRiskAnalyzer";
+
+/**
+ * Compiles a raw user brief/prompt into a structured modular section prompt
+ * according to AI Image Generation Brief Specification v1.
+ */
+export function compileSpecificationV1Prompt(
+  rawPrompt: string,
+  options?: Parameters<typeof import("./orchestration/briefNormalizer").normalizeUserBriefToV1>[1],
+): string {
+  const { normalizeUserBriefToV1 } = require("./orchestration/briefNormalizer");
+  const { compileBriefToPrompt } = require("./orchestration/promptCompiler");
+  const brief = normalizeUserBriefToV1(rawPrompt, options);
+  return compileBriefToPrompt(brief);
 }

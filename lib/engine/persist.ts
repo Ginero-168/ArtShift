@@ -151,8 +151,19 @@ class IndexedDbBackend implements PersistenceBackend {
     const tx = db.transaction(ASSET_STORE, "readonly");
     const done = transactionDone(tx);
     const assets = tx.objectStore(ASSET_STORE);
+    const assetIdSet = new Set<string>(documentRecord.assetIds ?? []);
+    for (const slide of documentRecord.doc?.slides ?? []) {
+      for (const el of slide.elements ?? []) {
+        if (el.isDeleted) continue;
+        if ((el.type === "image" || el.type === "bookMockup") && (el as any).fileId) {
+          assetIdSet.add((el as any).fileId);
+        } else if (el.type === "frame" && (el as any).imageFileId) {
+          assetIdSet.add((el as any).imageFileId);
+        }
+      }
+    }
     const records = await Promise.all(
-      documentRecord.assetIds.map((fileId) =>
+      Array.from(assetIdSet).map((fileId) =>
         requestResult<AssetRecord | undefined>(assets.get(fileId)),
       ),
     );

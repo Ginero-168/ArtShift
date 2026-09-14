@@ -5,6 +5,7 @@ import {
 } from "@/lib/ai/orchestration/harnessPolicy";
 import {
   type ContextAwareTurnInput,
+  createDirectedImageRun,
   createDirectedImageTask,
   isCanvasInventoryPrompt,
   prepareContextAwareTurn,
@@ -217,4 +218,124 @@ describe("context-aware turn orchestrator", () => {
       },
     });
   });
+
+  it("preserves aspect ratio and dimensions (e.g. 60x20cm -> 3:1) during follow-up requests like 'ขอตัวเลือกเพิ่ม 3 แบบ'", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "ขอตัวเลือกเพิ่ม 3 แบบ",
+      refs: [],
+      analyses: [],
+      conversationHistory: [
+        {
+          role: "user",
+          content: "ออกแบบป้ายหมวดหนังสือ Welearn ป้ายขนาด 60x20cm",
+        },
+        {
+          role: "assistant",
+          content: "วางแผนสำเร็จ: ออกแบบป้ายหมวดหนังสือ Welearn ขนาด 60x20 ซม.",
+        },
+      ],
+    };
+
+    const task = createDirectedImageTask(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 3,
+      summary: "วางแผนสำเร็จ: ออกแบบป้ายหมวดหนังสือ Welearn ขนาด 60x20 ซม.",
+      refinedPrompt: "Signboard 60x20cm, aspect ratio 3:1 (1536x512 pixels), Welearn publishing",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-precision",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Preserve 60x20cm aspect ratio"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(task.requestedDimensions).toEqual({
+      width: 1536,
+      height: 512,
+      aspectRatio: "16:9", // closest API standard or panoramic
+    });
+  });
+
+  it("inherits dimensions from direction.summary if refinedPrompt lacks dimensions and prompt is follow-up", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "ขอตัวเลือกเพิ่ม 3 แบบ",
+      refs: [],
+      analyses: [],
+    };
+
+    const task = createDirectedImageTask(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 3,
+      summary: "วางแผนสำเร็จ: ออกแบบป้ายหมวดหนังสือ Welearn ขนาด 60x20 ซม.",
+      refinedPrompt: "Welearn bookshelf signage in minimalist modern style",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-precision",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Clean signage layout"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(task.requestedDimensions).toEqual({
+      width: 1536,
+      height: 512,
+      aspectRatio: "16:9",
+    });
+  });
+
+  it("creates a 3-task DirectedImageRun when user asks 'ขอตัวเลือก 3 แบบ ' even if direction has outputCount 1", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "ขอตัวเลือก 3 แบบ ",
+      refs: [],
+      analyses: [],
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 1,
+      summary: "วางแผนสำเร็จ: ออกแบบป้ายหมวดหนังสือ Welearn",
+      refinedPrompt: "Signboard 60x20cm, Welearn publishing",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-precision",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Preserve brief"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(run.requestedOutputCount).toBe(3);
+    expect(run.tasks.length).toBe(3);
+    expect(run.tasks[0].imageRun?.requestedOutputCount).toBe(3);
+    expect(run.tasks[0].imageRun?.outputIndex).toBe(1);
+    expect(run.tasks[2].imageRun?.outputIndex).toBe(3);
+  });
+
+  it("creates a 3-task DirectedImageRun when user asks 'สร้างมา 3 รูป'", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "สร้างมา 3 รูป",
+      refs: [],
+      analyses: [],
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 1,
+      summary: "วางแผนสำเร็จ",
+      refinedPrompt: "Welearn bookshelf sign",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-precision",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Preserve brief"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(run.requestedOutputCount).toBe(3);
+    expect(run.tasks.length).toBe(3);
+  });
 });
+

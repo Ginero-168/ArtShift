@@ -79,6 +79,8 @@ export type ImageRouteDecision = {
   reasonCodes: ImageRouteReason[];
   maxSemanticAttempts: number;
   fallbackPolicy: "same-capability-only" | "wait-for-provider";
+  detailScore?: number;
+  precisionScore?: number;
 };
 
 export type ImageIntentFeatures = {

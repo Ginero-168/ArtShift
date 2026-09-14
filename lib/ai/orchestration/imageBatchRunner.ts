@@ -85,6 +85,7 @@ export type ContextAwareImageRunOptions = Omit<
 > & {
   executeTask?: ContextAwareImageTaskExecutor;
   onUpdate?: (update: ContextAwareImageRunUpdate) => void;
+  staggerMs?: number;
 };
 
 export function planImageBatches(requestedOutputCount: number): ImageBatchPlan[] {
@@ -176,8 +177,13 @@ export async function runContextAwareImageRun(
       );
     }
 
+    const staggerMs = options.staggerMs ?? (process.env.NODE_ENV === "test" ? 0 : 750);
     await Promise.all(
-      batch.itemIndexes.map(async (itemIndex) => {
+      batch.itemIndexes.map(async (itemIndex, offset) => {
+        if (offset > 0 && staggerMs > 0) {
+          // Stagger concurrent requests to avoid edge prediction collision and aborts
+          await new Promise((resolve) => setTimeout(resolve, offset * staggerMs));
+        }
         const item = items[itemIndex];
         const task = run.tasks[itemIndex];
         if (!item || !task) throw new Error("image run plan is inconsistent");

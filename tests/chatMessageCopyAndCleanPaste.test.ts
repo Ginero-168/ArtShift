@@ -84,10 +84,11 @@ describe("Chat Message Copy & Clean Paste with Name Tag", () => {
     expect(iconsSource).toContain("<rect width=\"12.5\" height=\"12.5\"");
   });
 
-  it("verifies ChatThread renders copy message button with ChatCopyIcon and data-testid", () => {
+  it("verifies ChatThread renders copy message button with ChatCopyIcon, white background, and data-testid", () => {
     const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
     expect(threadSource).toContain("ChatCopyIcon");
     expect(threadSource).toContain("copy-user-message-");
+    expect(threadSource).toContain('background: isCopied ? "#ecfdf5" : "#ffffff"');
     expect(threadSource).toContain("คัดลอกข้อความพร้อม Name Tag");
     expect(threadSource).toContain("copy-assistant-message-");
   });

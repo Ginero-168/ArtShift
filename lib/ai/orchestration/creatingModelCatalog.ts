@@ -4,7 +4,8 @@ export type CreatingCapability = "generate" | "edit" | "vectorize" | "upscale";
 
 /**
  * Semantic model aliases used by routing policy and Creative Director.
- * image-general / image-fast / image-precision are the new canonical aliases.
+ * image-general / image-fast / image-precision are the canonical aliases.
+ * All general and precision routes now use openai/gpt-image-2.5-sunburst.
  * image-gpt-2 is kept as a compatibility alias during migration.
  */
 export type CreatingModelAlias =
@@ -33,10 +34,7 @@ export type CreatingModelEntry = {
   notes: string;
 };
 
-/** Render qualities supported by all current GPT Image models. */
-const GPT_IMAGE_2_QUALITIES: readonly AiImageRenderQuality[] = ["low", "medium", "high", "auto"];
-
-/** Extended quality tiers available on GPT Image 2.5 (Flare, Sunburst). */
+/** Quality tiers available on GPT Image 2.5 (Flare, Sunburst). */
 const GPT_IMAGE_25_QUALITIES: readonly AiImageRenderQuality[] = [
   "low",
   "medium",
@@ -50,24 +48,25 @@ export const CREATING_MODEL_CATALOG: readonly CreatingModelEntry[] = [
   {
     alias: "image-general",
     provider: "replicate",
-    modelId: "openai/gpt-image-2",
+    modelId: "openai/gpt-image-2.5-sunburst",
     status: "available",
     capabilities: ["generate", "edit"],
-    supportedQualities: GPT_IMAGE_2_QUALITIES,
-    role: "creating",
-    notes: "General-purpose generation and editing baseline. Default route for most requests.",
-  },
-  {
-    // Compatibility alias — resolves to image-general internally.
-    alias: "image-gpt-2",
-    provider: "replicate",
-    modelId: "openai/gpt-image-2",
-    status: "available",
-    capabilities: ["generate", "edit"],
-    supportedQualities: GPT_IMAGE_2_QUALITIES,
+    supportedQualities: GPT_IMAGE_25_QUALITIES,
     role: "creating",
     notes:
-      "Legacy compatibility alias for image-general. Will be retired after callers migrate to image-general.",
+      "General-purpose generation and editing baseline powered by GPT Image 2.5 Sunburst. Default route for most requests.",
+  },
+  {
+    // Compatibility alias — resolves to image-general (Sunburst) internally.
+    alias: "image-gpt-2",
+    provider: "replicate",
+    modelId: "openai/gpt-image-2.5-sunburst",
+    status: "available",
+    capabilities: ["generate", "edit"],
+    supportedQualities: GPT_IMAGE_25_QUALITIES,
+    role: "creating",
+    notes:
+      "Legacy compatibility alias for image-general. Resolves to GPT Image 2.5 Sunburst.",
   },
   {
     alias: "image-fast",
@@ -89,7 +88,7 @@ export const CREATING_MODEL_CATALOG: readonly CreatingModelEntry[] = [
     supportedQualities: GPT_IMAGE_25_QUALITIES,
     role: "creating",
     notes:
-      "Precision lane for edits requiring high identity/logo/composition preservation fidelity. Active in live routing.",
+      "Precision lane for edits and high-fidelity generation requiring top-tier identity/logo/composition preservation. Active in live routing.",
   },
   {
     alias: "local-vtracer",
@@ -191,7 +190,9 @@ export function detectRequestedCreatingModel(prompt: string): CreatingModelAlias
   if (/\bflux(?:[\s-]*2(?:[\s-]*max)?)?\b/iu.test(normalized)) return "flux-2-max";
   if (/\bideogram\b/iu.test(normalized)) return "ideogram";
   if (/\brecraft(?:[\s-]*v?3)?\b/iu.test(normalized)) return "recraft-v3";
-  if (/\bgpt[\s-]*image(?:[\s-]*2)?\b/iu.test(normalized)) return "image-general";
+  if (/\bflare\b/iu.test(normalized)) return "image-fast";
+  if (/\bsunburst\b/iu.test(normalized)) return "image-precision";
+  if (/\bgpt[\s-]*image(?:[\s-]*2(?:[\s.]*5)?)?\b/iu.test(normalized)) return "image-general";
   return undefined;
 }
 

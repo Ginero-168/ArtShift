@@ -1,4 +1,3 @@
-import { GPT_IMAGE_2_MAX_COST_USD } from "@/lib/ai/pricing";
 import type { AiExecutionProfile, AiTaskKind } from "@/lib/ai-runtime/contracts";
 import type { AiRouteTable, AiRouteTarget } from "@/lib/ai-runtime/runtime";
 
@@ -8,7 +7,6 @@ const DEFAULT_REPLICATE_GPT4O_MINI_VERSION =
   "7a6099b47d623cc4a5c75037ab4616059a7066dec31fdbe409d671bddf7681d";
 const DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION =
   "e27b7b83f67f5865920667591a2a08a41cdc82906bd29306fe79581ab0646b8b";
-const REPLICATE_GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 const REPLICATE_GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-flare";
 const REPLICATE_GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
 const REPLICATE_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
@@ -17,12 +15,12 @@ const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
 
 /**
  * Pricing per image at the quality tiers available from the provider.
- * Updated 2026-09-09. Re-verify before any production rollout.
+ * Updated 2026-09-14: openai/gpt-image-2 replaced by openai/gpt-image-2.5-sunburst baseline.
  */
 const IMAGE_PRICING_PER_RUN = {
-  general: GPT_IMAGE_2_MAX_COST_USD, // medium=$0.047, high=$0.128; ceiling covers high
-  fast: 0.13, // Flare: same tier pricing as GPT Image 2; xhigh=$0.250
-  precision: 0.13, // Sunburst: same tier pricing as GPT Image 2; xhigh=$0.250
+  general: 0.13, // Sunburst: medium=$0.047, high=$0.128; ceiling covers high
+  fast: 0.13, // Flare: same tier pricing as Sunburst; xhigh=$0.250
+  precision: 0.13, // Sunburst: same tier pricing; xhigh=$0.250
 } as const;
 
 export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>> = {
@@ -37,14 +35,22 @@ export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>
 };
 
 export function createAiRouteTable(environment: Environment = process.env): AiRouteTable {
-  const googleModel = environment.GEMINI_MODEL || "gemini-2.5-flash";
+  const defaultGoogleModel = "gemini-3-flash-preview";
+  const googleModel = environment.GEMINI_MODEL || defaultGoogleModel;
   const openAiModel = environment.OPENAI_MODEL || "gpt-4o-mini";
-  const creativeDirectorModel = withVersion(
+  const defaultBrainModel = "google/gemini-3-flash";
+  const defaultBrainVersion = DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION;
+  const brainModel =
     environment.REPLICATE_BRAIN_MODEL ||
-      environment.REPLICATE_CHAT_QUALITY_MODEL ||
-      "google/gemini-2.5-flash",
-    environment.REPLICATE_BRAIN_MODEL_VERSION || environment.REPLICATE_CHAT_QUALITY_MODEL_VERSION,
-  );
+    environment.REPLICATE_CHAT_QUALITY_MODEL ||
+    defaultBrainModel;
+  const brainVersion =
+    environment.REPLICATE_BRAIN_MODEL_VERSION ||
+    environment.REPLICATE_CHAT_QUALITY_MODEL_VERSION ||
+    (brainModel === defaultBrainModel
+      ? environment.REPLICATE_GEMINI_3_FLASH_VERSION || defaultBrainVersion
+      : undefined);
+  const creativeDirectorModel = withVersion(brainModel, brainVersion);
   const replicateGpt = `openai/gpt-4o-mini@${environment.REPLICATE_GPT4O_MINI_VERSION || DEFAULT_REPLICATE_GPT4O_MINI_VERSION}`;
   const replicateGemini = `google/gemini-3-flash@${environment.REPLICATE_GEMINI_3_FLASH_VERSION || DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION}`;
   const replicateRecraft = withVersion(
@@ -57,29 +63,21 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
       DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION,
   );
 
-  // GPT Image 2 — requires pinned 64-char version hash for production stability.
-  const replicateGptImage2 = pinnedModel(
-    REPLICATE_GPT_IMAGE_2_MODEL,
-    environment.REPLICATE_GPT_IMAGE_2_VERSION,
+  // GPT Image 2.5 Sunburst — primary baseline and precision route (replaces gpt-image-2).
+  // Version pinning via REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION (optional until stable API).
+  const sunburstVersion = environment.REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION;
+  const replicateGptImage25Sunburst = withVersion(
+    REPLICATE_GPT_IMAGE_25_SUNBURST_MODEL,
+    sunburstVersion,
   );
 
-  // GPT Image 2.5 Flare — latest official model; version pinning optional until stable API.
-  // Enabled when IMAGE_FAST_MODEL_ENABLED=true and a version hash is configured.
+  // GPT Image 2.5 Flare — fast lane.
+  // Enabled when IMAGE_FAST_MODEL_ENABLED=true.
   const fastModelEnabled = environment.IMAGE_FAST_MODEL_ENABLED === "true";
   const replicateGptImage25Flare = fastModelEnabled
     ? withVersion(
         REPLICATE_GPT_IMAGE_25_FLARE_MODEL,
         environment.REPLICATE_GPT_IMAGE_25_FLARE_VERSION,
-      )
-    : undefined;
-
-  // GPT Image 2.5 Sunburst — precision lane.
-  // Enabled when IMAGE_PRECISION_MODEL_ENABLED=true.
-  const precisionModelEnabled = environment.IMAGE_PRECISION_MODEL_ENABLED === "true";
-  const replicateGptImage25Sunburst = precisionModelEnabled
-    ? withVersion(
-        REPLICATE_GPT_IMAGE_25_SUNBURST_MODEL,
-        environment.REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION,
       )
     : undefined;
 
@@ -120,14 +118,21 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
   // Route aliases map to semantic image model aliases used by the routing policy.
   const imageGenerateRoutes: AiRouteTarget[] = [];
 
-  // image-general (GPT Image 2) — always the baseline route.
-  if (replicateGptImage2) {
+  // image-general & image-precision (GPT Image 2.5 Sunburst) — baseline route.
+  if (replicateGptImage25Sunburst) {
     imageGenerateRoutes.push(
-      imageModelRoute(replicateGptImage2, "image-general", IMAGE_PRICING_PER_RUN.general),
+      imageModelRoute(replicateGptImage25Sunburst, "image-general", IMAGE_PRICING_PER_RUN.general),
+    );
+    imageGenerateRoutes.push(
+      imageModelRoute(
+        replicateGptImage25Sunburst,
+        "image-precision",
+        IMAGE_PRICING_PER_RUN.precision,
+      ),
     );
     // Keep legacy alias for compatibility until all callers migrate.
     imageGenerateRoutes.push(
-      imageModelRoute(replicateGptImage2, "image-gpt-2", IMAGE_PRICING_PER_RUN.general),
+      imageModelRoute(replicateGptImage25Sunburst, "image-gpt-2", IMAGE_PRICING_PER_RUN.general),
     );
   }
 
@@ -135,17 +140,6 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
   if (replicateGptImage25Flare) {
     imageGenerateRoutes.push(
       imageModelRoute(replicateGptImage25Flare, "image-fast", IMAGE_PRICING_PER_RUN.fast),
-    );
-  }
-
-  // image-precision (GPT Image 2.5 Sunburst) — enabled by feature flag.
-  if (replicateGptImage25Sunburst) {
-    imageGenerateRoutes.push(
-      imageModelRoute(
-        replicateGptImage25Sunburst,
-        "image-precision",
-        IMAGE_PRICING_PER_RUN.precision,
-      ),
     );
   }
 
@@ -190,25 +184,31 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 }
 
 function creativeDirectorRoute(model: string, alias = "creative-director"): AiRouteTarget {
+  const isGemini3 = model.includes("gemini-3");
   const isGemini = model.includes("gemini");
   return {
     provider: "replicate",
     model,
     alias,
     expectedMaxUsd: 0.01,
-    pricing: isGemini
-      ? { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 }
-      : { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
+    pricing: isGemini3
+      ? { currency: "USD", inputPerMillionTokens: 0.5, outputPerMillionTokens: 3.0 }
+      : isGemini
+        ? { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 }
+        : { currency: "USD", inputPerMillionTokens: 0.18, outputPerMillionTokens: 0.72 },
   };
 }
 
 function googleCreativeDirectorRoute(model: string, alias = "creative-director"): AiRouteTarget {
+  const isGemini3 = model.includes("gemini-3");
   return {
     provider: "google",
     model,
     alias,
     expectedMaxUsd: 0.01,
-    pricing: { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 },
+    pricing: isGemini3
+      ? { currency: "USD", inputPerMillionTokens: 0.5, outputPerMillionTokens: 3.0 }
+      : { currency: "USD", inputPerMillionTokens: 0.3, outputPerMillionTokens: 2.5 },
   };
 }
 

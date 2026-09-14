@@ -58,6 +58,8 @@ export interface SubAgentActionLog {
   stage?: string;
   attempt?: number;
   quality?: AiImageRenderQuality;
+  detailScore?: number;
+  precisionScore?: number;
 }
 
 export interface CoPilotErrorCard {
@@ -273,7 +275,7 @@ export async function executeCoPilotInstruction(
           options.signal ?? new AbortController().signal,
         ));
       act.stage = "analyzing";
-      act.description = "กำลังส่ง brief ให้ gpt-oss-120b Creative Director วางแผน…";
+      act.description = "กำลังส่ง brief ให้ Gemini 3 Flash Creative Director วางแผน…";
       onActionUpdate?.({ ...act });
       const direction = await prepareRemoteCreativeDirection(
         {
@@ -359,7 +361,13 @@ export async function executeCoPilotInstruction(
         imageRun.requestedOutputCount > 1 ? ` (${imageRun.requestedOutputCount} ภาพ)` : "";
       act.title = `🧠 Creative Director → ${direction.specialist}${countLabel}`;
       act.stage = "planned";
-      act.description = `เลือก ${direction.modelAlias} · วางแผนสร้าง ${imageRun.requestedOutputCount} ภาพ · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
+      act.detailScore = direction.detailScore;
+      act.precisionScore = direction.precisionScore;
+      const scoresText =
+        direction.detailScore !== undefined || direction.precisionScore !== undefined
+          ? ` · Detail: ${direction.detailScore ?? "-"}/10 · Precision: ${direction.precisionScore ?? "-"}/10`
+          : "";
+      act.description = `เลือก ${direction.modelAlias}${scoresText} · วางแผนสร้าง ${imageRun.requestedOutputCount} ภาพ · Knowledge: ${direction.knowledgeSkillIds.join(", ") || "none"}`;
       onActionUpdate?.({ ...act });
 
       const runResult = await runContextAwareImageRun(imageRun, selectedRefs, {
@@ -1006,7 +1014,7 @@ export function diagnoseOrchestratorError(
     };
   }
 
-  // 4. Provider 502 / Bad Gateway / Overload / Timeout
+  // 4. Provider 502 / Bad Gateway / Overload / Timeout / Model Failure
   if (
     errorLower.includes("502") ||
     errorLower.includes("504") ||
@@ -1014,7 +1022,9 @@ export function diagnoseOrchestratorError(
     errorLower.includes("gateway timeout") ||
     errorLower.includes("provider_unavailable") ||
     errorLower.includes("timeout") ||
-    errorLower.includes("timed out")
+    errorLower.includes("timed out") ||
+    errorLower.includes("image generation failed") ||
+    errorLower.includes("please try again")
   ) {
     const streamlined = streamlinePromptForImageGen(userPrompt);
     return {

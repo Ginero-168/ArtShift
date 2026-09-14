@@ -1,4 +1,4 @@
-import type { BookMockupElement, EngineElement, ImageElement } from "@/lib/engine/types";
+import type { BookMockupElement, EngineElement, FrameElement, ImageElement } from "@/lib/engine/types";
 
 export type ComposerImageRef = {
   objectId: string;
@@ -23,22 +23,28 @@ export function buildComposerImageSelection(
   selectedIds: ReadonlySet<string>,
 ): ComposerImageSelection {
   const allRefs = elements.flatMap((element, index) => {
-    if (
-      element.isDeleted ||
-      !selectedIds.has(element.id) ||
-      (element.type !== "image" && element.type !== "bookMockup")
-    ) {
+    if (element.isDeleted || !selectedIds.has(element.id)) {
       return [];
     }
+    const fileId =
+      element.type === "image" || element.type === "bookMockup"
+        ? element.fileId
+        : element.type === "frame"
+          ? element.imageFileId
+          : undefined;
+    if (!fileId) return [];
+
     const sourceName = element.type === "image" ? element.sourceName : undefined;
+    const naturalWidth = (element as any).naturalWidth || element.width;
+    const naturalHeight = (element as any).naturalHeight || element.height;
     return [
       {
         objectId: element.id,
         elementVersion: element.version,
-        fileId: element.fileId,
+        fileId,
         displayName: sourceName || element.name || `Image ${index + 1}`,
-        sourceWidth: element.naturalWidth,
-        sourceHeight: element.naturalHeight,
+        sourceWidth: naturalWidth,
+        sourceHeight: naturalHeight,
         width: element.width,
         height: element.height,
         angle: element.angle,
@@ -54,11 +60,16 @@ export function buildComposerImageSelectionFromIds(
   attachedIds: readonly string[],
   options?: { limit?: number },
 ): ComposerImageSelection {
-  type SupportedImageElement = ImageElement | BookMockupElement;
+  type SupportedImageElement = ImageElement | BookMockupElement | FrameElement;
   const elementMap = new Map<string, { element: SupportedImageElement; originalIndex: number }>();
   elements.forEach((element, index) => {
-    if (!element.isDeleted && (element.type === "image" || element.type === "bookMockup")) {
-      elementMap.set(element.id, { element, originalIndex: index });
+    if (
+      !element.isDeleted &&
+      (element.type === "image" ||
+        element.type === "bookMockup" ||
+        (element.type === "frame" && Boolean(element.imageFileId)))
+    ) {
+      elementMap.set(element.id, { element: element as SupportedImageElement, originalIndex: index });
     }
   });
 
@@ -71,14 +82,24 @@ export function buildComposerImageSelectionFromIds(
     const entry = elementMap.get(id);
     if (!entry) continue;
     const { element, originalIndex } = entry;
+    const fileId =
+      element.type === "image" || element.type === "bookMockup"
+        ? element.fileId
+        : element.type === "frame"
+          ? element.imageFileId
+          : undefined;
+    if (!fileId) continue;
+
     const sourceName = element.type === "image" ? element.sourceName : undefined;
+    const naturalWidth = (element as any).naturalWidth || element.width;
+    const naturalHeight = (element as any).naturalHeight || element.height;
     allRefs.push({
       objectId: element.id,
       elementVersion: element.version,
-      fileId: element.fileId,
+      fileId,
       displayName: sourceName || element.name || `Image ${originalIndex + 1}`,
-      sourceWidth: element.naturalWidth,
-      sourceHeight: element.naturalHeight,
+      sourceWidth: naturalWidth,
+      sourceHeight: naturalHeight,
       width: element.width,
       height: element.height,
       angle: element.angle,
@@ -98,7 +119,11 @@ export function buildAllSlideImageRefs(
   elements: readonly EngineElement[],
 ): ComposerImageRef[] {
   const imageElements = elements.filter(
-    (element) => !element.isDeleted && (element.type === "image" || element.type === "bookMockup"),
+    (element) =>
+      !element.isDeleted &&
+      (element.type === "image" ||
+        element.type === "bookMockup" ||
+        (element.type === "frame" && Boolean(element.imageFileId))),
   );
   return buildComposerImageSelectionFromIds(
     elements,

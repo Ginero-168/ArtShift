@@ -464,6 +464,100 @@ describe("Replicate AI adapter", () => {
     expect(body.input.dynamic_thinking).toBe(false);
   });
 
+  it("executes assistant.chat with Gemini 3 Flash using thinking_level and system_instruction", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-gemini-3-chat-1",
+          model: "google/gemini-3-flash",
+          status: "succeeded",
+          output: [
+            '{"kind":"tool_calls","text":"","calls":[{"id":"call-gemini3-1","name":"propose_creative_direction","input":{"kind":"image-task","summary":"Minimalist book banner","outputCount":3}}]}',
+          ],
+          metrics: { input_token_count: 600, output_token_count: 200, predict_time: 1.5 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "assistant.chat",
+      input: {
+        system: "You are the ArtShift Creative Director.",
+        messages: [{ role: "user", content: "ทำแบนเนอร์หนังสือ Manifest 3 รูป" }],
+        tools: [
+          {
+            name: "propose_creative_direction",
+            description: "Propose creative direction",
+            inputSchema: { type: "object" },
+          },
+        ],
+      },
+      model: "google/gemini-3-flash",
+      options: {
+        reasoning: { mode: "dynamic" },
+      },
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output.stopReason).toBe("tool_use");
+    expect(result.output.toolCalls).toEqual([
+      {
+        type: "tool_call",
+        id: "call-gemini3-1",
+        name: "propose_creative_direction",
+        input: { kind: "image-task", summary: "Minimalist book banner", outputCount: 3 },
+      },
+    ]);
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.input.system_instruction).toContain("You are the ArtShift Creative Director.");
+    expect(body.input.prompt).toBe("User: ทำแบนเนอร์หนังสือ Manifest 3 รูป");
+    expect(body.input.thinking_level).toBe("low");
+    expect(body.input.dynamic_thinking).toBeUndefined();
+    expect(body.input.max_output_tokens).toBeGreaterThanOrEqual(4_096);
+  });
+
+  it("executes google/gemini-3-flash prompt enhancement with thinking_level: none", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-gemini-3-prompt-1",
+          model: "google/gemini-3-flash",
+          status: "succeeded",
+          output: ["A clean minimalist 2D book banner artwork"],
+          metrics: { input_token_count: 50, output_token_count: 25, predict_time: 0.6 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "prompt.enhance",
+      input: { prompt: "แบนเนอร์หนังสือ", purpose: "image" },
+      model: "google/gemini-3-flash",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toEqual({
+      prompt: "A clean minimalist 2D book banner artwork",
+    });
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.input.system_instruction).toContain(
+      "Rewrite the user's request as one precise image-generation prompt",
+    );
+    expect(body.input.prompt).toBe("แบนเนอร์หนังสือ");
+    expect(body.input.thinking_level).toBe("none");
+    expect(body.input.dynamic_thinking).toBeUndefined();
+  });
+
   it("forwards automatic quality and reference images to GPT Image 2", async () => {
     const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi
@@ -519,7 +613,7 @@ describe("Replicate AI adapter", () => {
       aspect_ratio: "1:1",
       input_images: ["data:image/png;base64,REF"],
       number_of_images: 1,
-      output_format: "webp",
+      output_format: "jpeg",
       output_compression: 90,
       background: "opaque",
       moderation: "auto",

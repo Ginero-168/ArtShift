@@ -1,18 +1,22 @@
 import {
+  cleanImagePrompt,
   generateAIImage,
+  hasExplicitDimensionsInText,
+  isAlreadyOrchestratedPrompt,
   resolveImageGenerationDimensions,
   sanitizeAndPrepareImagePrompt,
   streamlinePromptForImageGen,
 } from "@/lib/ai/imageGeneration";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport, subscribeCanvasViewport } from "@/lib/engine/canvasViewport";
-import { createImage } from "@/lib/engine/factory";
+import { createFrame, createImage } from "@/lib/engine/factory";
 import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
 import { preloadDataURL } from "@/lib/engine/imageCache";
 import { getProcessingPreviewById } from "@/lib/engine/processingPreview";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
+import { autoCropImageToTargetRatio } from "./imageAutoCrop";
 import { runBriefQualityGate } from "./briefQualityGate";
 import type { CreativeOutputReview, CriterionEvidenceStatus } from "./creativeDirector";
 import type { ComposerImageRef } from "./imageReferences";
@@ -120,7 +124,15 @@ export async function runContextAwareImageTask(
     slideId: initialState.currentSlideId,
     revision: initialState.doc.updatedAt,
   };
-  const dimensions = task.requestedDimensions ?? resolveImageGenerationDimensions(task.prompt);
+  let dimensions = task.requestedDimensions ?? resolveImageGenerationDimensions(task.prompt);
+  if (
+    dimensions.width === 1024 &&
+    dimensions.height === 1024 &&
+    dimensions.aspectRatio === "1:1" &&
+    hasExplicitDimensionsInText(task.prompt)
+  ) {
+    dimensions = resolveImageGenerationDimensions(task.prompt);
+  }
   const viewport =
     getCanvasViewport() ??
     ({
@@ -226,13 +238,30 @@ export async function runContextAwareImageTask(
                 aspectRatio: dimensions.aspectRatio,
                 quality: task.quality,
                 modelAlias: task.modelAlias,
-                inputImages,
+                inputImages: attempt >= 2 ? [] : inputImages,
                 cloudConsent: options.cloudConsent === true,
                 enhance: false,
               },
               executionSignal,
             );
             throwIfAborted(executionSignal);
+
+            // Determine whether non-destructive ArtShift Frame masking (Clipping Mask) is needed
+            const targetRatio = dimensions.width / Math.max(1, dimensions.height);
+            const generatedRatio = generated.width / Math.max(1, generated.height);
+            const needsFrameMask = Math.abs(targetRatio - generatedRatio) > 0.04;
+            if (needsFrameMask) {
+              context.update({
+                phase: "analyzing",
+                progress: 0.35,
+                message: `เตรียมใส่ ArtShift Frame (Clipping Mask) สัดส่วน ${dimensions.width}×${dimensions.height} โดยคงรูปต้นฉบับเต็ม…`,
+              });
+            }
+
+            const gateAspectRatio = needsFrameMask
+              ? `${dimensions.width}:${dimensions.height}`
+              : dimensions.aspectRatio;
+
             const technicalGate = runVisualQualityGate({
               dataUrl: generated.dataUrl,
               prompt: task.prompt,
@@ -248,10 +277,10 @@ export async function runContextAwareImageTask(
             }
             const briefGate = runBriefQualityGate({
               prompt: task.prompt,
-              outputWidth: generated.width,
-              outputHeight: generated.height,
+              outputWidth: needsFrameMask ? dimensions.width : generated.width,
+              outputHeight: needsFrameMask ? dimensions.height : generated.height,
               outputCount: 1,
-              requestedAspectRatio: dimensions.aspectRatio,
+              requestedAspectRatio: gateAspectRatio,
               referenceCount: task.selectedImages.length,
               submittedReferenceCount: inputImages.length,
             });
@@ -310,9 +339,9 @@ export async function runContextAwareImageTask(
               });
             }
             const semanticGate = runGeneratedImageQualityGate({
-              outputWidth: generated.width,
-              outputHeight: generated.height,
-              requestedAspectRatio: dimensions.aspectRatio,
+              outputWidth: needsFrameMask ? dimensions.width : generated.width,
+              outputHeight: needsFrameMask ? dimensions.height : generated.height,
+              requestedAspectRatio: gateAspectRatio,
               requiredSubjects: task.requiredSubjects,
               requiredText: task.requiredText,
               referenceRequired: task.selectedImages.length > 0,
@@ -431,7 +460,7 @@ export async function runContextAwareImageTask(
             const currentViewport = getCanvasViewport() ?? viewport;
             const baseBounds = getGenerationPreviewBounds(
               { ...currentViewport, slideWidth: slide.width, slideHeight: slide.height },
-              { width: preloaded.width, height: preloaded.height },
+              needsFrameMask ? dimensions : { width: preloaded.width, height: preloaded.height },
             );
             const computedBounds = computeMultiImagePlacement(
               baseBounds,
@@ -461,17 +490,27 @@ export async function runContextAwareImageTask(
               message: "กำลังเพิ่มผลลัพธ์ลง Canvas…",
             });
             const elementName = deriveGeneratedImageName(task.summary, task.prompt);
-            const element = createImage({
-              x: finalBounds.x,
-              y: finalBounds.y,
-              width: finalBounds.width,
-              height: finalBounds.height,
-              fileId: preloaded.fileId,
-              naturalWidth: preloaded.width,
-              naturalHeight: preloaded.height,
-              name: elementName,
-              sourceName: elementName,
-            });
+            const element = needsFrameMask
+              ? createFrame({
+                  x: finalBounds.x,
+                  y: finalBounds.y,
+                  width: finalBounds.width,
+                  height: finalBounds.height,
+                  name: `${elementName} (Frame)`,
+                  shape: "rect",
+                  imageFileId: preloaded.fileId,
+                })
+              : createImage({
+                  x: finalBounds.x,
+                  y: finalBounds.y,
+                  width: finalBounds.width,
+                  height: finalBounds.height,
+                  fileId: preloaded.fileId,
+                  naturalWidth: preloaded.width,
+                  naturalHeight: preloaded.height,
+                  name: elementName,
+                  sourceName: elementName,
+                });
             state.addElement(element, `AI task ${task.id} generate image`);
             const afterCommit = useEngine.getState();
             const inserted = afterCommit
@@ -509,9 +548,17 @@ export async function runContextAwareImageTask(
             if (kind === "quality" && !qualityRepairInstruction) {
               qualityRepairInstruction = buildQualityRepairInstruction([errorMessage(error)]);
             }
-            if (kind === "provider_error" && !qualityRepairInstruction) {
-              const streamlined = streamlinePromptForImageGen(task.prompt);
-              qualityRepairInstruction = `Streamlined prompt: ${streamlined}`;
+            if (kind === "provider_error") {
+              if (isAlreadyOrchestratedPrompt(task.prompt)) {
+                // Preserves the refined 2D flat artwork prompt; attempt 2 drops inputImages to self-heal
+                qualityRepairInstruction = undefined;
+              } else if (attempt === 1) {
+                const streamlined = streamlinePromptForImageGen(task.prompt);
+                qualityRepairInstruction = `Streamlined prompt: ${streamlined}`;
+              } else {
+                const minimal = cleanImagePrompt(task.prompt) || "flat 2D graphic design artwork";
+                qualityRepairInstruction = `Streamlined prompt: ${minimal}`;
+              }
             }
             if (kind === "quality") {
               task = appendAiTaskEvent(task, { type: "quality.checked", passed: false, attempt });
@@ -563,7 +610,7 @@ export async function runContextAwareImageTask(
                 stage: "retrying",
                 message:
                   kind === "provider_error"
-                    ? "ระบบปรับคำขอให้อัตโนมัติและกำลังลองสร้างใหม่อีกครั้ง…"
+                    ? `รอบก่อนหน้าไม่สำเร็จ ระบบกำลังปรับปรุงคำขออัตโนมัติและสร้างภาพใหม่ (ครั้งที่ ${recovery.nextAttempt}/${task.maxAttempts})…`
                     : `กำลังแก้ปัญหาและลองใหม่: ${recovery.reason}`,
                 attempt,
                 quality: task.quality,
@@ -572,7 +619,7 @@ export async function runContextAwareImageTask(
                 progress: 0,
                 message:
                   kind === "provider_error"
-                    ? "ระบบปรับคำขอให้อัตโนมัติและกำลังสร้างภาพใหม่…"
+                    ? `รอบก่อนหน้าไม่สำเร็จ ระบบกำลังปรับปรุงคำขออัตโนมัติและสร้างภาพใหม่ (ครั้งที่ ${recovery.nextAttempt}/${task.maxAttempts})…`
                     : `กำลังแก้ปัญหาและลองใหม่…`,
               });
               continue;
@@ -638,10 +685,16 @@ function resolveReferenceImages(
   const slide = useEngine.getState().currentSlide();
   return refs.map((ref) => {
     const element = slide?.elements.find((candidate) => candidate.id === ref.objectId);
+    const elFileId =
+      element && "fileId" in element
+        ? (element as any).fileId
+        : element && "imageFileId" in element
+          ? (element as any).imageFileId
+          : undefined;
     if (
-      (element?.type !== "image" && element?.type !== "bookMockup") ||
+      (element?.type !== "image" && element?.type !== "bookMockup" && element?.type !== "frame") ||
       element?.version !== ref.elementVersion ||
-      element?.fileId !== ref.fileId
+      elFileId !== ref.fileId
     ) {
       throw new Error(`selected image changed before execution: ${ref.displayName}`);
     }
@@ -684,10 +737,16 @@ function assertCommitTarget(
   if (!slide) throw new Error("Canvas target disappeared before commit");
   for (const ref of refs) {
     const element = slide.elements.find((candidate) => candidate.id === ref.objectId);
+    const elFileId =
+      element && "fileId" in element
+        ? (element as any).fileId
+        : element && "imageFileId" in element
+          ? (element as any).imageFileId
+          : undefined;
     if (
-      (element?.type !== "image" && element?.type !== "bookMockup") ||
+      (element?.type !== "image" && element?.type !== "bookMockup" && element?.type !== "frame") ||
       element.version !== ref.elementVersion ||
-      element.fileId !== ref.fileId
+      elFileId !== ref.fileId
     ) {
       throw new Error(`selected image changed before commit: ${ref.displayName}`);
     }
@@ -737,7 +796,12 @@ export function classifyFailure(error: unknown): RecoveryFailureKind {
     message.includes("gateway timeout") ||
     message.includes("provider_unavailable") ||
     message.includes("failed with status 502") ||
-    message.includes("failed with status 504")
+    message.includes("failed with status 504") ||
+    message.includes("image generation failed") ||
+    message.includes("please try again") ||
+    message.includes("generation failed") ||
+    message.includes("replicate prediction failed") ||
+    message.includes("ai image studio failed")
   )
     return "provider_error";
   if (message.includes("network") || message.includes("reach") || message.includes("timeout"))

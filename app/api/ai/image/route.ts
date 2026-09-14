@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
       warnings: [promptWarning, ...execution.metadata.warnings].filter(Boolean),
     });
   } catch (error) {
+    console.error("[api/ai/image error]", error);
     const outcomeUnknown = error instanceof AiRuntimeError && error.outcomeUnknown;
     const isAuth = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH";
     const isPolicy = error instanceof AiRuntimeError && error.code === "POLICY_DENIED";

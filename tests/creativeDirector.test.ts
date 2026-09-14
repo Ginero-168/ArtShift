@@ -868,6 +868,250 @@ describe("gpt-oss-120b Creative Director", () => {
       expect(direction.summary).toBe("สร้างรูปสุนัขโกลเด้น");
       expect(direction.specialist).toBe("image_generator");
       expect(direction.refinedPrompt).toContain("golden retriever");
+      expect(direction.detailScore).toBeDefined();
+      expect(direction.precisionScore).toBeDefined();
+    }
+  });
+
+  it("enforces detailScore >= 9 threshold for image-fast and returns score fields", async () => {
+    // Model returns image-fast with detailScore: 6 -> should normalize to image-general
+    const runtimeSub9 = {
+      execute: vi.fn().mockResolvedValue({
+        output: {
+          text: "",
+          toolCalls: [
+            {
+              id: "call_sub9",
+              type: "function",
+              name: "propose_creative_direction",
+              input: {
+                kind: "image-task",
+                summary: "Futuristic robot",
+                refinedPrompt: "A sleek humanoid robot standing in a modern showroom",
+                specialist: "image_generator",
+                capability: "IMAGE_DEFAULT",
+                modelAlias: "image-fast",
+                detailScore: 6,
+                precisionScore: 2,
+                outputCount: 1,
+              },
+            },
+          ],
+        },
+      }),
+    };
+
+    const directionSub9 = await prepareCreativeDirection(
+      {
+        prompt: "สร้างรูปหุ่นยนต์",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+        referenceAnalyses: [],
+      },
+      runtimeSub9 as any,
+    );
+
+    expect(directionSub9.kind).toBe("image-task");
+    if (directionSub9.kind === "image-task") {
+      expect(directionSub9.modelAlias).toBe("image-general"); // Normalized because detailScore 6 < 9
+      expect(directionSub9.detailScore).toBe(6);
+      expect(directionSub9.precisionScore).toBe(2);
+    }
+
+    // Model returns image-fast with detailScore: 9 -> allowed to keep image-fast
+    const runtime9 = {
+      execute: vi.fn().mockResolvedValue({
+        output: {
+          text: "",
+          toolCalls: [
+            {
+              id: "call_9",
+              type: "function",
+              name: "propose_creative_direction",
+              input: {
+                kind: "image-task",
+                summary: "Complex neon banner with typography",
+                refinedPrompt: "A complex graphic layout with dense text and multiple brand elements",
+                specialist: "image_generator",
+                capability: "IMAGE_DEFAULT",
+                modelAlias: "image-fast",
+                detailScore: 9,
+                precisionScore: 3,
+                outputCount: 1,
+              },
+            },
+          ],
+        },
+      }),
+    };
+
+    const direction9 = await prepareCreativeDirection(
+      {
+        prompt: "สร้างป้ายแบนเนอร์ตัวหนังสือแน่น",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1536, height: 512 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+        referenceAnalyses: [],
+      },
+      runtime9 as any,
+    );
+
+    expect(direction9.kind).toBe("image-task");
+    if (direction9.kind === "image-task") {
+      expect(direction9.modelAlias).toBe("image-fast");
+      expect(direction9.detailScore).toBe(9);
+      expect(direction9.precisionScore).toBe(3);
+    }
+  });
+
+  it("enforces distinction between input reference count and output creation count in system prompt", () => {
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("CRITICAL INPUT REFERENCES VS OUTPUT QUANTITY RULE");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("จาก 2 ปกนี้");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("synthesize both references into ONE unified design artwork");
+  });
+
+  it("normalizes requestedOutputCount to 1 when prompt references 2 covers without explicit output quantity request", async () => {
+    const runtime = {
+      execute: vi.fn().mockResolvedValue({
+        output: {
+          text: JSON.stringify({
+            kind: "image-task",
+            summary: "ป้าย Welearn ธีม Manifest",
+            refinedPrompt: "Flat 2D graphic design banner for Welearn publishing Manifest theme",
+            specialist: "image_generator",
+            capability: "IMAGE_DEFAULT",
+            modelAlias: "image-gpt-2",
+            knowledgeSkillIds: [],
+            reviewCriteria: ["Flat 2D graphic", "Welearn text present"],
+            search: { required: false, queries: [], sources: [] },
+            requestedOutputCount: 2,
+            outputBriefs: ["ป้าย Welearn สีดำทอง", "ป้าย Welearn สีแดงขาว"],
+          }),
+          toolCalls: [],
+        },
+      }),
+    };
+
+    const direction = await prepareCreativeDirection(
+      {
+        prompt:
+          "ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือ สำนักพิมพ์ Welearn จาก 2 ปกนี้ โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn ป้ายขนาด 60x20cm",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1536, height: 512 },
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+        referenceAnalyses: [],
+      },
+      runtime as any,
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(1);
+      expect(direction.outputBriefs).toBeDefined();
+      expect(direction.outputBriefs?.[0]).toBe("ป้าย Welearn สีดำทอง");
+    }
+  });
+
+  it("preserves requestedOutputCount when prompt explicitly requests multiple outputs alongside references", async () => {
+    const runtime = {
+      execute: vi.fn().mockResolvedValue({
+        output: {
+          text: JSON.stringify({
+            kind: "image-task",
+            summary: "ป้าย Welearn ธีม Manifest",
+            refinedPrompt: "Flat 2D graphic design banner for Welearn publishing Manifest theme",
+            specialist: "image_generator",
+            capability: "IMAGE_DEFAULT",
+            modelAlias: "image-gpt-2",
+            knowledgeSkillIds: [],
+            reviewCriteria: ["Flat 2D graphic", "Welearn text present"],
+            search: { required: false, queries: [], sources: [] },
+            requestedOutputCount: 2,
+            outputBriefs: ["ป้าย Welearn สีดำทอง", "ป้าย Welearn สีแดงขาว"],
+          }),
+          toolCalls: [],
+        },
+      }),
+    };
+
+    const direction = await prepareCreativeDirection(
+      {
+        prompt: "ออกแบบป้ายหมวดจาก 2 ปกนี้ ขอ 2 แบบ ธีม Manifest ขนาด 60x20cm",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1536, height: 512 },
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+        referenceAnalyses: [],
+      },
+      runtime as any,
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(2);
+      expect(direction.outputBriefs).toBeDefined();
+      expect(direction.outputBriefs).toHaveLength(2);
+    }
+  });
+
+  it("extracts explicit output count 3 from 'ขอตัวเลือก 3 แบบ ' and 'สร้างมา 3 รูป' even if model returned 1", async () => {
+    const runtime = {
+      execute: vi.fn().mockResolvedValue({
+        output: {
+          text: JSON.stringify({
+            kind: "image-task",
+            summary: "ป้าย Welearn",
+            refinedPrompt: "Flat 2D graphic design banner for Welearn",
+            specialist: "image_generator",
+            capability: "IMAGE_DEFAULT",
+            modelAlias: "image-gpt-2",
+            knowledgeSkillIds: [],
+            reviewCriteria: ["Flat 2D graphic"],
+            search: { required: false, queries: [], sources: [] },
+            requestedOutputCount: 1, // Model erroneously returned 1
+            outputBriefs: ["ป้าย Welearn"],
+          }),
+          toolCalls: [],
+        },
+      }),
+    };
+
+    // Case 1: "ขอตัวเลือก 3 แบบ "
+    const direction1 = await prepareCreativeDirection(
+      {
+        prompt: "ขอตัวเลือก 3 แบบ ",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1536, height: 512 },
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+        referenceAnalyses: [],
+      },
+      runtime as any,
+    );
+
+    expect(direction1.kind).toBe("image-task");
+    if (direction1.kind === "image-task") {
+      expect(direction1.requestedOutputCount).toBe(3);
+      expect(direction1.outputBriefs).toHaveLength(3);
+    }
+
+    // Case 2: "สร้างมา 3 รูป"
+    const direction2 = await prepareCreativeDirection(
+      {
+        prompt: "สร้างมา 3 รูป",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1536, height: 512 },
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+        referenceAnalyses: [],
+      },
+      runtime as any,
+    );
+
+    expect(direction2.kind).toBe("image-task");
+    if (direction2.kind === "image-task") {
+      expect(direction2.requestedOutputCount).toBe(3);
+      expect(direction2.outputBriefs).toHaveLength(3);
     }
   });
 });
+
+

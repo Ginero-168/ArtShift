@@ -11,7 +11,7 @@ import type {
   ImageRouteDecision,
 } from "@/lib/ai/orchestration/imageWorkSpec";
 
-describe("deterministic image routing policy v1", () => {
+describe("deterministic image routing policy v1 (GPT Image 2.5 Sunburst baseline)", () => {
   describe("scoring functions", () => {
     it("computes detail score accurately across boundaries", () => {
       // Base features: 0 score
@@ -41,7 +41,7 @@ describe("deterministic image routing policy v1", () => {
         constraintCount: 6,
         subjectCount: 3,
         spatialRelationCount: 4,
-        brandAssetSensitivity: "high",
+        brandAssetSensitivity: "high" as const,
         lightingLock: true,
         referenceCount: 3,
         finalUse: true,
@@ -54,14 +54,14 @@ describe("deterministic image routing policy v1", () => {
       const precisionFeatures: Partial<ImageIntentFeatures> = {
         operation: "edit",
         identitySensitivity: "high",
-        brandAssetSensitivity: "high",
+        brandAssetSensitivity: "high" as const,
         editLocality: "small-target",
       };
       expect(computeEditPrecisionScore(precisionFeatures)).toBe(8);
     });
   });
 
-  describe("generation routing table", () => {
+  describe("generation routing table (Sunburst baseline)", () => {
     it("routes detail 0–3 to image-general medium (GENERAL_DEFAULT)", () => {
       const route = chooseImageRoute({
         operation: "generate",
@@ -72,7 +72,7 @@ describe("deterministic image routing policy v1", () => {
         exactTextCount: 0,
         typographyDensity: "none",
         finalUse: false,
-        speedPreference: "normal",
+        speedPreference: "normal" as const,
       });
 
       expect(route.modelAlias).toBe("image-general");
@@ -82,7 +82,7 @@ describe("deterministic image routing policy v1", () => {
       expect(route.maxSemanticAttempts).toBe(2);
     });
 
-    it("routes detail 4–6 to image-general high (DETAIL_RICH)", () => {
+    it("routes detail 4–7 to image-general high (DETAIL_RICH)", () => {
       const route = chooseImageRoute({
         operation: "generate",
         constraintCount: 4, // +2
@@ -92,16 +92,73 @@ describe("deterministic image routing policy v1", () => {
         spatialRelationCount: 0,
         referenceCount: 0,
         typographyDensity: "light",
-        speedPreference: "normal",
+        speedPreference: "normal" as const,
       });
 
+      expect(route.detailScore).toBe(5);
       expect(route.modelAlias).toBe("image-general");
       expect(route.renderQuality).toBe("high");
       expect(route.reasonCodes).toContain("DETAIL_RICH");
       expect(route.maxSemanticAttempts).toBe(3);
     });
 
-    it("routes detail 7–10 + speed/variants/dense text to image-fast high (FAST_COMPLEX / DENSE_TEXT)", () => {
+    it("routes detail 7 to image-general high (DETAIL_RICH threshold boundary)", () => {
+      const route = chooseImageRoute({
+        operation: "generate",
+        constraintCount: 4, // +2
+        exactTextCount: 1, // +2
+        subjectCount: 2,
+        spatialRelationCount: 3, // +2
+        brandAssetSensitivity: "high" as const, // +1 -> total 7
+        speedPreference: "normal" as const,
+      });
+
+      expect(route.detailScore).toBe(7);
+      expect(route.modelAlias).toBe("image-general");
+      expect(route.capabilityAlias).toBe("IMAGE_GENERAL");
+      expect(route.renderQuality).toBe("high");
+      expect(route.reasonCodes).toContain("DETAIL_RICH");
+    });
+
+    it("routes detail 8–10 + speed to image-fast high (FAST_COMPLEX)", () => {
+      const route = chooseImageRoute({
+        operation: "generate",
+        constraintCount: 4, // +2
+        exactTextCount: 1, // +2
+        subjectCount: 2,
+        spatialRelationCount: 3, // +2
+        brandAssetSensitivity: "high" as const, // +1
+        finalUse: true, // +1 -> total 8
+        speedPreference: "fast",
+      });
+
+      expect(route.detailScore).toBe(8);
+      expect(route.modelAlias).toBe("image-fast");
+      expect(route.capabilityAlias).toBe("IMAGE_FAST");
+      expect(route.renderQuality).toBe("high");
+      expect(route.reasonCodes).toContain("FAST_COMPLEX");
+    });
+
+    it("routes detail 8–10 final without speed preference to image-precision high (FINAL_PRECISION)", () => {
+      const route = chooseImageRoute({
+        operation: "generate",
+        constraintCount: 4, // +2
+        exactTextCount: 1, // +2
+        subjectCount: 2,
+        spatialRelationCount: 3, // +2
+        brandAssetSensitivity: "high" as const, // +1
+        finalUse: true, // +1 -> total 8
+        speedPreference: "normal" as const,
+      });
+
+      expect(route.detailScore).toBe(8);
+      expect(route.modelAlias).toBe("image-precision");
+      expect(route.capabilityAlias).toBe("IMAGE_PRECISION");
+      expect(route.renderQuality).toBe("high");
+      expect(route.reasonCodes).toContain("FINAL_PRECISION");
+    });
+
+    it("routes detail 9–10 + dense text to image-fast high (FAST_COMPLEX / DENSE_TEXT)", () => {
       const route = chooseImageRoute({
         operation: "generate",
         constraintCount: 4, // +2
@@ -109,10 +166,13 @@ describe("deterministic image routing policy v1", () => {
         typographyDensity: "dense",
         subjectCount: 2,
         spatialRelationCount: 3, // +2
-        finalUse: true, // +1 -> total 7
+        brandAssetSensitivity: "high" as const, // +1
+        lightingLock: true, // +1
+        finalUse: true, // +1 -> total 9
         speedPreference: "fast",
       });
 
+      expect(route.detailScore).toBe(9);
       expect(route.modelAlias).toBe("image-fast");
       expect(route.capabilityAlias).toBe("IMAGE_FAST");
       expect(route.renderQuality).toBe("high");
@@ -120,20 +180,22 @@ describe("deterministic image routing policy v1", () => {
       expect(route.reasonCodes).toContain("FAST_COMPLEX");
     });
 
-    it("routes detail 7–10 final without speed preference to image-precision high (FINAL_PRECISION)", () => {
+    it("routes detail 9–10 final without speed preference to image-precision high (FINAL_PRECISION)", () => {
       const route = chooseImageRoute({
         operation: "generate",
         constraintCount: 5, // +2
         exactTextCount: 1, // +2
         subjectCount: 3,
         spatialRelationCount: 3, // +2
-        brandAssetSensitivity: "high", // +1
-        finalUse: true, // +1 -> total 8
-        speedPreference: "normal",
+        brandAssetSensitivity: "high" as const, // +1
+        lightingLock: true, // +1
+        finalUse: true, // +1 -> total 9
+        speedPreference: "normal" as const,
         variantCount: 1,
         typographyDensity: "light",
       });
 
+      expect(route.detailScore).toBe(9);
       expect(route.modelAlias).toBe("image-precision");
       expect(route.capabilityAlias).toBe("IMAGE_PRECISION");
       expect(route.renderQuality).toBe("high");
@@ -225,8 +287,11 @@ describe("deterministic image routing policy v1", () => {
           operation: "generate",
           constraintCount: 4,
           exactTextCount: 3,
+          typographyDensity: "dense",
           subjectCount: 2,
           spatialRelationCount: 3,
+          brandAssetSensitivity: "high" as const,
+          lightingLock: true,
           finalUse: true,
           speedPreference: "fast" as const,
         },
@@ -240,7 +305,7 @@ describe("deterministic image routing policy v1", () => {
   });
 
   describe("escalation ladder", () => {
-    it("escalates GPT2 medium on detail miss to GPT2 high", () => {
+    it("escalates baseline medium on detail miss to baseline high", () => {
       const current: ImageRouteDecision = {
         capabilityAlias: "IMAGE_GENERAL",
         modelAlias: "image-general",
