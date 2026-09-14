@@ -38,6 +38,7 @@ export type ObjectContextIconName =
   | "exclude"
   | "minus-back"
   | "divide"
+  | "merge"
   | "object";
 
 const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Object.freeze({
@@ -80,6 +81,7 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   Exclude: "exclude",
   "Minus Back": "minus-back",
   Divide: "divide",
+  Merge: "merge",
   "Convert to frame": "frame",
   Object: "object",
 });

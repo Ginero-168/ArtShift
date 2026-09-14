@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { unionBBox } from "@/lib/engine/bounds";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
+import { mergeSelectedImages } from "@/lib/engine/mergeElements";
 import { getObjectContextCategory } from "@/lib/engine/objectContext";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
@@ -124,6 +125,7 @@ export default function ObjectContextBar({
   const alignSelectedElements = useEngine((state) => state.alignSelectedElements);
   const distributeSelectedElements = useEngine((state) => state.distributeSelectedElements);
   const applyBooleanOperation = useEngine((state) => state.applyBooleanOperation);
+  const replaceElementsWithMerged = useEngine((state) => state.replaceElementsWithMerged);
   const convertShapeToFrame = useEngine((state) => state.convertShapeToFrame);
   const detachFrameImage = useEngine((state) => state.detachFrameImage);
 
@@ -188,10 +190,22 @@ export default function ObjectContextBar({
   const toggleVectorize = () =>
     setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
+  const imageCount = selected.filter((el) => el.type === "image").length;
+  const handleMergeImages = async () => {
+    if (!slide || imageCount < 2) return;
+    const merged = await mergeSelectedImages(slide, ids);
+    if (merged) {
+      replaceElementsWithMerged(ids, merged);
+    }
+  };
+
   if (selected.length > 1) {
     controls.push(action("Align", () => alignSelectedElements("center")));
     controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
     controls.push(action("Group", () => groupElements(ids)));
+    if (imageCount >= 2) {
+      controls.push(action("Merge", handleMergeImages));
+    }
     if (allShapes) {
       controls.push(action("Unite", () => applyBooleanOperation("union")));
       controls.push(action("Minus Front", () => applyBooleanOperation("subtract")));

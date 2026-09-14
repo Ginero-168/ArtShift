@@ -43,6 +43,7 @@ const toolbarLabels = [
   "Exclude",
   "Minus Back",
   "Divide",
+  "Merge",
   "Convert to frame",
 ];
 

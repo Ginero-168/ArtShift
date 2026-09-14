@@ -15,6 +15,7 @@ import {
   IconFrame,
   IconGroup,
   IconImage,
+  IconMerge,
   IconMultiple,
   IconPalette,
   IconParagraph,
@@ -86,6 +87,7 @@ const ICON_BY_NAME: Readonly<Record<ObjectContextIconName, ObjectContextIcon>> =
   exclude: IconPathfinderExclude,
   "minus-back": IconPathfinderMinusBack,
   divide: IconPathfinderDivide,
+  merge: IconMerge,
   object: IconSquare,
 });
 

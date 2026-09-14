@@ -82,6 +82,7 @@ import {
   type EngineSlide,
   type FrameElement,
   type FrameMaskShape,
+  type ImageElement,
   type LayerMode,
   SLIDE_H,
   SLIDE_W,
@@ -218,6 +219,7 @@ export type EngineState = {
   alignSelectedElements: (mode: AlignMode, relativeTo?: "selection" | "slide") => void;
   distributeSelectedElements: (axis: DistributeAxis) => void;
   applyBooleanOperation: (op: BooleanOperation) => void;
+  replaceElementsWithMerged: (ids: string[], mergedElement: ImageElement) => void;
   setFrameImage: (frameId: string, imageFileId: string | undefined) => void;
   setFrameShape: (frameId: string, shape: FrameMaskShape) => void;
   detachFrameImage: (frameId: string) => void;
@@ -1256,6 +1258,49 @@ export const useEngine = create<EngineState>((set, get) => {
           updatedAt: Date.now(),
         },
         selectedIds: new Set(resultElements.map((r) => r.id)),
+      }));
+    },
+
+    replaceElementsWithMerged: (ids, mergedElement) => {
+      if (!ids.length) return;
+      const s = get();
+      const slide = s.currentSlide();
+      if (!slide) return;
+
+      pushHistory(s.history, s.doc, "merge images");
+
+      const removedIds = new Set(ids);
+      const nextElements = slide.elements.filter((el) => !removedIds.has(el.id));
+
+      const targetLayer =
+        slide.layers.find((layer) => layer.objectIds.some((id) => removedIds.has(id))) ??
+        slide.layers.find((layer) => layer.id === s.activeLayerId) ??
+        slide.layers[0];
+      const targetLayerId = targetLayer?.id;
+
+      mergedElement.z = nextZ({ ...slide, elements: nextElements });
+      nextElements.push(mergedElement);
+
+      const nextLayers = slide.layers.map((layer) => ({
+        ...layer,
+        objectIds: layer.objectIds
+          .filter((id) => !removedIds.has(id))
+          .concat(layer.id === targetLayerId ? [mergedElement.id] : []),
+      }));
+
+      const updatedSlide = recomputeArrowBindings({
+        ...slide,
+        elements: nextElements,
+        layers: nextLayers,
+      });
+
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          slides: cur.doc.slides.map((sl) => (sl.id === slide.id ? updatedSlide : sl)),
+          updatedAt: Date.now(),
+        },
+        selectedIds: new Set([mergedElement.id]),
       }));
     },
 
