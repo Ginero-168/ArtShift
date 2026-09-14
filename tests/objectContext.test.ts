@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getObjectContextBarLeft, getObjectContextCategory } from "@/lib/engine/objectContext";
+import {
+  getObjectContextBarLeft,
+  getObjectContextBarTop,
+  getObjectContextCategory,
+  OBJECT_CONTEXT_BAR_OFFSET,
+} from "@/lib/engine/objectContext";
 import type { EngineElement } from "@/lib/engine/types";
 
 describe("object context categories", () => {
@@ -20,5 +25,43 @@ describe("object context categories", () => {
 
   it("allows a too-wide bar to overflow right but never left", () => {
     expect(getObjectContextBarLeft(100, 1200, 1000)).toBe(0);
+  });
+
+  it("positions option bar 25px (scaled) above the object by default (15px higher than before)", () => {
+    expect(OBJECT_CONTEXT_BAR_OFFSET).toBe(25);
+    const result = getObjectContextBarTop({
+      topPointY: 300,
+      bottomPointY: 450,
+      barHeight: 38,
+      scale: 1,
+    });
+    // 300 - 38 - 25 = 237
+    expect(result.placeBelow).toBe(false);
+    expect(result.top).toBe(237);
+  });
+
+  it("scales offset proportionally with zoom scale", () => {
+    const result = getObjectContextBarTop({
+      topPointY: 400,
+      bottomPointY: 600,
+      barHeight: 38,
+      scale: 1.5,
+    });
+    // 400 - 38 - (25 * 1.5) = 400 - 38 - 37.5 = 324.5
+    expect(result.placeBelow).toBe(false);
+    expect(result.top).toBe(324.5);
+  });
+
+  it("places option bar below the object when top clearance is tight", () => {
+    const result = getObjectContextBarTop({
+      topPointY: 20,
+      bottomPointY: 150,
+      barHeight: 38,
+      scale: 1,
+    });
+    // 20 - 38 - 25 = -43 < 4 => placeBelow = true
+    // bottomPoint.y + 25 = 150 + 25 = 175
+    expect(result.placeBelow).toBe(true);
+    expect(result.top).toBe(175);
   });
 });

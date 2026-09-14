@@ -51,3 +51,24 @@ export function getObjectContextBarLeft(
   }
   return Math.max(0, centeredLeft);
 }
+
+/**
+ * Vertical offset between the object bounding box and the option bar in world units.
+ * Previously 10px, increased by 15px to 25px.
+ */
+export const OBJECT_CONTEXT_BAR_OFFSET = 25;
+
+export function getObjectContextBarTop(params: {
+  topPointY: number;
+  bottomPointY: number;
+  barHeight: number;
+  scale: number;
+  offset?: number;
+}): { top: number; placeBelow: boolean } {
+  const offset = (params.offset ?? OBJECT_CONTEXT_BAR_OFFSET) * params.scale;
+  const placeBelow = params.topPointY - params.barHeight - offset < 4;
+  const top = placeBelow
+    ? params.bottomPointY + offset
+    : params.topPointY - params.barHeight - offset;
+  return { top, placeBelow };
+}

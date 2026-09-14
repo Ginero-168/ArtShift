@@ -7,7 +7,7 @@ import { unionBBox } from "@/lib/engine/bounds";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
 import { mergeSelectedImages } from "@/lib/engine/mergeElements";
-import { getObjectContextCategory } from "@/lib/engine/objectContext";
+import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/objectContext";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { getObjectContextIcon } from "./objectContextIcons";
@@ -138,10 +138,15 @@ export default function ObjectContextBar({
   const bottomPoint = bbox
     ? worldToScreen({ x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height })
     : { x: 0, y: 0 };
-  const placeBelow = topPoint.y - barSize.height - 10 * scale < 4;
+  const { top: barTop } = getObjectContextBarTop({
+    topPointY: topPoint.y,
+    bottomPointY: bottomPoint.y,
+    barHeight: barSize.height,
+    scale,
+  });
   const barPosition = {
     left: topPoint.x,
-    top: placeBelow ? bottomPoint.y + 10 * scale : topPoint.y - barSize.height - 10 * scale,
+    top: barTop,
   };
 
   useEffect(() => {
