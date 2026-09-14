@@ -1,3 +1,4 @@
+import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
@@ -69,6 +70,7 @@ export type ContextAwareTurnInput = {
     optionIds: readonly string[];
   };
   clarificationRound?: number;
+  preferredQuality?: AiImageRenderQuality;
 };
 
 export type ContextAwareTurnResult =
@@ -182,13 +184,26 @@ export function createDirectedImageTask(
   }
   const canvasInspection = input.canvas ? inspectCanvas(input.canvas) : undefined;
   const taskClass = input.refs.length > 0 ? "complex" : "simple";
-  const quality = chooseImageQuality({
+  const defaultQuality = chooseImageQuality({
     prompt: input.prompt,
     taskClass,
     hasReference: input.refs.length > 0,
     requiresExactText: /(?:ข้อความ|ตัวอักษร|headline|typography)/iu.test(input.prompt),
     finalUse: /(?:final|production|print|พิมพ์|ใช้งานจริง)/iu.test(input.prompt),
   });
+  const selectedQuality =
+    input.preferredQuality && input.preferredQuality !== "auto"
+      ? input.preferredQuality
+      : defaultQuality.quality;
+  const quality = {
+    quality: selectedQuality,
+    rationale:
+      input.preferredQuality && input.preferredQuality !== "auto"
+        ? `ผู้ใช้ระบุระดับคุณภาพแบบเจาะจง (${input.preferredQuality})`
+        : defaultQuality.rationale,
+    maxAttempts: defaultQuality.maxAttempts,
+    reasonCodes: defaultQuality.reasonCodes,
+  };
   const requiredText = extractRequiredText(input.prompt);
   const requestedDimensions = resolveTaskDimensionsWithContext(input, direction);
   const requiredSubjects = [

@@ -7,7 +7,8 @@ const DEFAULT_REPLICATE_GPT4O_MINI_VERSION =
   "7a6099b47d623cc4a5c75037ab4616059a7066dec31fdbe409d671bddf7681d";
 const DEFAULT_REPLICATE_GEMINI_3_FLASH_VERSION =
   "e27b7b83f67f5865920667591a2a08a41cdc82906bd29306fe79581ab0646b8b";
-const REPLICATE_GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-flare";
+// Flare retired: all fast routes resolve to Sunburst.
+const REPLICATE_GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
 const REPLICATE_GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
 const REPLICATE_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
@@ -136,10 +137,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     );
   }
 
-  // image-fast (GPT Image 2.5 Flare) — enabled by feature flag.
-  if (replicateGptImage25Flare) {
+  // image-fast alias maps directly to Sunburst (Flare retired) when enabled
+  if (fastModelEnabled && replicateGptImage25Sunburst) {
     imageGenerateRoutes.push(
-      imageModelRoute(replicateGptImage25Flare, "image-fast", IMAGE_PRICING_PER_RUN.fast),
+      imageModelRoute(replicateGptImage25Sunburst, "image-fast", IMAGE_PRICING_PER_RUN.general),
     );
   }
 

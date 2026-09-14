@@ -133,8 +133,11 @@ export type ChooseImageRouteOptions = {
 };
 
 /**
- * Deterministic Image Routing Policy v1.
- * Pure function mapping intent features to model alias, quality, reason codes, and attempts.
+ * Deterministic Image Routing Policy v1 (openai/gpt-image-2.5-sunburst baseline).
+ * All tiers exclusively route to Sunburst:
+ * - Tier 1 (Detail Score 0–3): Low quality ($0.012)
+ * - Tier 2 (Detail Score 4–7): Medium quality ($0.047)
+ * - Tier 3 (Detail Score 8–10): High quality ($0.128)
  */
 export function chooseImageRoute(
   input: ImageIntentFeatures | (Partial<ImageWorkSpec> & { prompt?: string }),
@@ -155,15 +158,11 @@ export function chooseImageRoute(
     const capability =
       alias === "image-precision"
         ? "IMAGE_PRECISION"
-        : alias === "image-fast"
-          ? "IMAGE_FAST"
-          : "IMAGE_GENERAL";
+        : "IMAGE_GENERAL";
     const modelAlias =
       alias === "image-precision"
         ? "image-precision"
-        : alias === "image-fast"
-          ? "image-fast"
-          : "image-general";
+        : "image-general";
     return {
       capabilityAlias: capability,
       modelAlias,
@@ -178,13 +177,14 @@ export function chooseImageRoute(
 
   let decision: ImageRouteDecision;
 
-  // 2. Routing logic by operation
+  // 2. Routing logic by operation (All Sunburst: Tier 1 Low, Tier 2 Med, Tier 3 High)
   if (features.operation === "generate") {
     if (detailScore <= 3) {
+      // Tier 1: Low
       decision = {
         capabilityAlias: "IMAGE_GENERAL",
         modelAlias: "image-general",
-        renderQuality: "medium",
+        renderQuality: "low",
         reasonCodes: ["GENERAL_DEFAULT"],
         maxSemanticAttempts: 2,
         fallbackPolicy: "same-capability-only",
@@ -192,10 +192,11 @@ export function chooseImageRoute(
         precisionScore,
       };
     } else if (detailScore <= 7) {
+      // Tier 2: Medium
       decision = {
         capabilityAlias: "IMAGE_GENERAL",
         modelAlias: "image-general",
-        renderQuality: "high",
+        renderQuality: "medium",
         reasonCodes: ["DETAIL_RICH"],
         maxSemanticAttempts: 3,
         fallbackPolicy: "same-capability-only",
@@ -203,47 +204,28 @@ export function chooseImageRoute(
         precisionScore,
       };
     } else {
-      // detail 9–10: High complexity threshold
-      const needsSpeedOrVariants =
-        features.speedPreference === "fast" ||
-        features.variantCount > 1 ||
-        features.typographyDensity === "dense";
-
-      if (needsSpeedOrVariants) {
-        const reasonCodes: ImageRouteReason[] =
-          features.typographyDensity === "dense"
-            ? ["DENSE_TEXT", "FAST_COMPLEX"]
-            : ["FAST_COMPLEX"];
-        decision = {
-          capabilityAlias: "IMAGE_FAST",
-          modelAlias: "image-fast",
-          renderQuality: "high",
-          reasonCodes,
-          maxSemanticAttempts: 3,
-          fallbackPolicy: "same-capability-only",
-          detailScore,
-          precisionScore,
-        };
-      } else {
-        // final and high precision
-        decision = {
-          capabilityAlias: "IMAGE_PRECISION",
-          modelAlias: "image-precision",
-          renderQuality: "high",
-          reasonCodes: ["FINAL_PRECISION"],
-          maxSemanticAttempts: 3,
-          fallbackPolicy: "same-capability-only",
-          detailScore,
-          precisionScore,
-        };
-      }
+      // Tier 3: High (detail 8–10)
+      const isDenseText = features.typographyDensity === "dense";
+      const reasonCodes: ImageRouteReason[] = isDenseText
+        ? ["DENSE_TEXT", "FINAL_PRECISION"]
+        : ["FINAL_PRECISION"];
+      decision = {
+        capabilityAlias: "IMAGE_PRECISION",
+        modelAlias: "image-precision",
+        renderQuality: "high",
+        reasonCodes,
+        maxSemanticAttempts: 3,
+        fallbackPolicy: "same-capability-only",
+        detailScore,
+        precisionScore,
+      };
     }
   } else if (features.operation === "edit" || features.operation === "iterate") {
     if (precisionScore <= 2 && features.speedPreference === "fast") {
       decision = {
-        capabilityAlias: "IMAGE_FAST",
-        modelAlias: "image-fast",
-        renderQuality: "medium",
+        capabilityAlias: "IMAGE_GENERAL",
+        modelAlias: "image-general",
+        renderQuality: "low",
         reasonCodes: ["EVERYDAY_EDIT_DRAFT"],
         maxSemanticAttempts: 2,
         fallbackPolicy: "same-capability-only",
@@ -252,9 +234,9 @@ export function chooseImageRoute(
       };
     } else if (precisionScore <= 3) {
       decision = {
-        capabilityAlias: "IMAGE_FAST",
-        modelAlias: "image-fast",
-        renderQuality: "high",
+        capabilityAlias: "IMAGE_GENERAL",
+        modelAlias: "image-general",
+        renderQuality: "medium",
         reasonCodes: ["EVERYDAY_EDIT"],
         maxSemanticAttempts: 3,
         fallbackPolicy: "same-capability-only",
@@ -275,36 +257,22 @@ export function chooseImageRoute(
       };
     }
   } else if (features.operation === "compose") {
-    const prioritizeSpeed = features.speedPreference === "fast" || features.variantCount > 1;
-    if (prioritizeSpeed) {
-      decision = {
-        capabilityAlias: "IMAGE_FAST",
-        modelAlias: "image-fast",
-        renderQuality: "high",
-        reasonCodes: ["MULTI_REF_FAST"],
-        maxSemanticAttempts: 3,
-        fallbackPolicy: "same-capability-only",
-        detailScore,
-        precisionScore,
-      };
-    } else {
-      decision = {
-        capabilityAlias: "IMAGE_PRECISION",
-        modelAlias: "image-precision",
-        renderQuality: "high",
-        reasonCodes: ["MULTI_REF_PRECISION"],
-        maxSemanticAttempts: 3,
-        fallbackPolicy: "same-capability-only",
-        detailScore,
-        precisionScore,
-      };
-    }
+    decision = {
+      capabilityAlias: "IMAGE_PRECISION",
+      modelAlias: "image-precision",
+      renderQuality: "high",
+      reasonCodes: ["MULTI_REF_PRECISION"],
+      maxSemanticAttempts: 3,
+      fallbackPolicy: "same-capability-only",
+      detailScore,
+      precisionScore,
+    };
   } else {
-    // Default fallback
+    // Default fallback: Tier 1 Low
     decision = {
       capabilityAlias: "IMAGE_GENERAL",
       modelAlias: "image-general",
-      renderQuality: "medium",
+      renderQuality: "low",
       reasonCodes: ["GENERAL_DEFAULT"],
       maxSemanticAttempts: 2,
       fallbackPolicy: "same-capability-only",
@@ -320,26 +288,12 @@ export function chooseImageRoute(
       decision.modelAlias,
     );
     if (!resolution.ok && resolution.reason === "model-unavailable") {
-      // Flare or Sunburst unavailable -> route back to GPT Image 2 baseline safely
-      if (decision.capabilityAlias === "IMAGE_FAST") {
-        return {
-          capabilityAlias: "IMAGE_GENERAL",
-          modelAlias: "image-general",
-          renderQuality: decision.renderQuality === "medium" ? "medium" : "high",
-          reasonCodes: [...decision.reasonCodes, "FALLBACK_BASELINE"],
-          maxSemanticAttempts: decision.maxSemanticAttempts,
-          fallbackPolicy: "same-capability-only",
-          detailScore,
-          precisionScore,
-        };
-      }
       if (decision.capabilityAlias === "IMAGE_PRECISION") {
-        // Critical edits do not silent-downgrade unless non-critical
         if (!decision.reasonCodes.includes("PRESERVATION_CRITICAL")) {
           return {
             capabilityAlias: "IMAGE_GENERAL",
             modelAlias: "image-general",
-            renderQuality: "high",
+            renderQuality: "medium",
             reasonCodes: [...decision.reasonCodes, "FALLBACK_BASELINE"],
             maxSemanticAttempts: decision.maxSemanticAttempts,
             fallbackPolicy: "same-capability-only",
@@ -357,104 +311,61 @@ export function chooseImageRoute(
 /**
  * Route Escalation Ladder.
  * Escalates route based on failure diagnosis without blind retries:
- * GPT2 medium -> detail miss -> GPT2 high
- * GPT2 medium -> dense text + speed -> Flare high
- * Flare medium -> quality miss -> Flare high
- * Flare medium -> preservation miss -> Sunburst high
- * GPT2 high / Flare high -> preservation miss -> Sunburst high
- * Sunburst high -> fidelity miss on final/critical -> Sunburst xhigh
+ * Sunburst low -> detail miss -> Sunburst medium
+ * Sunburst medium -> detail miss -> Sunburst high
+ * Sunburst high -> fidelity/preservation miss -> Sunburst xhigh
  * Sunburst xhigh -> one justified attempt -> Sunburst max (FINAL_CRITICAL_AFTER_FAILED_GATE)
  */
 export function escalateRoute(
   current: ImageRouteDecision,
   failureReason: ImageFailureReason,
 ): ImageRouteDecision {
-  const { modelAlias, renderQuality } = current;
+  const { renderQuality } = current;
 
-  // 1. GPT2 medium
-  if (modelAlias === "image-general" && renderQuality === "medium") {
-    if (failureReason === "text-miss") {
-      return {
-        capabilityAlias: "IMAGE_FAST",
-        modelAlias: "image-fast",
-        renderQuality: "high",
-        reasonCodes: ["ESCALATION_DETAIL_MISS", "DENSE_TEXT"],
-        maxSemanticAttempts: 2,
-        fallbackPolicy: "same-capability-only",
-      };
-    }
+  // 1. Low quality -> escalate to medium
+  if (renderQuality === "low") {
     return {
       capabilityAlias: "IMAGE_GENERAL",
       modelAlias: "image-general",
-      renderQuality: "high",
+      renderQuality: "medium",
       reasonCodes: ["ESCALATION_DETAIL_MISS"],
       maxSemanticAttempts: 2,
       fallbackPolicy: "same-capability-only",
     };
   }
 
-  // 2. Flare medium
-  if (modelAlias === "image-fast" && renderQuality === "medium") {
-    if (failureReason === "preservation-miss") {
-      return {
-        capabilityAlias: "IMAGE_PRECISION",
-        modelAlias: "image-precision",
-        renderQuality: "high",
-        reasonCodes: ["ESCALATION_PRESERVATION_MISS"],
-        maxSemanticAttempts: 2,
-        fallbackPolicy: "same-capability-only",
-      };
-    }
+  // 2. Medium quality -> escalate to high
+  if (renderQuality === "medium") {
     return {
-      capabilityAlias: "IMAGE_FAST",
-      modelAlias: "image-fast",
+      capabilityAlias: "IMAGE_PRECISION",
+      modelAlias: "image-precision",
       renderQuality: "high",
-      reasonCodes: ["ESCALATION_QUALITY_MISS"],
+      reasonCodes: failureReason === "preservation-miss"
+        ? ["ESCALATION_PRESERVATION_MISS"]
+        : ["ESCALATION_DETAIL_MISS"],
       maxSemanticAttempts: 2,
       fallbackPolicy: "same-capability-only",
     };
   }
 
-  // 3. GPT2 high or Flare high
-  if ((modelAlias === "image-general" || modelAlias === "image-fast") && renderQuality === "high") {
-    if (failureReason === "preservation-miss") {
-      return {
-        capabilityAlias: "IMAGE_PRECISION",
-        modelAlias: "image-precision",
-        renderQuality: "high",
-        reasonCodes: ["ESCALATION_PRESERVATION_MISS"],
-        maxSemanticAttempts: 2,
-        fallbackPolicy: "same-capability-only",
-      };
-    }
-    if (failureReason === "detail-miss" && modelAlias === "image-general") {
-      return {
-        capabilityAlias: "IMAGE_FAST",
-        modelAlias: "image-fast",
-        renderQuality: "high",
-        reasonCodes: ["ESCALATION_DETAIL_MISS"],
-        maxSemanticAttempts: 2,
-        fallbackPolicy: "same-capability-only",
-      };
-    }
-  }
-
-  // 4. Sunburst high
-  if (modelAlias === "image-precision" && renderQuality === "high") {
+  // 3. High quality -> escalate to xhigh on fidelity or preservation miss
+  if (renderQuality === "high") {
     if (failureReason === "fidelity-miss" || failureReason === "preservation-miss") {
       return {
         capabilityAlias: "IMAGE_PRECISION",
         modelAlias: "image-precision",
         renderQuality: "xhigh",
-        reasonCodes: ["ESCALATION_FIDELITY_MISS"],
+        reasonCodes: failureReason === "preservation-miss"
+          ? ["ESCALATION_PRESERVATION_MISS"]
+          : ["ESCALATION_FIDELITY_MISS"],
         maxSemanticAttempts: 1,
         fallbackPolicy: "same-capability-only",
       };
     }
   }
 
-  // 5. Sunburst xhigh
-  if (modelAlias === "image-precision" && renderQuality === "xhigh") {
+  // 4. XHigh quality -> escalate to max
+  if (renderQuality === "xhigh") {
     return {
       capabilityAlias: "IMAGE_PRECISION",
       modelAlias: "image-precision",
@@ -465,7 +376,7 @@ export function escalateRoute(
     };
   }
 
-  // 6. Max reached or no further escalation
+  // 5. Max reached or no further escalation
   return {
     ...current,
     maxSemanticAttempts: Math.max(0, current.maxSemanticAttempts - 1),
@@ -476,8 +387,9 @@ export function escalateRoute(
  * Choose render quality for image generation using structured features when
  * available, falling back to prompt keyword heuristics.
  *
- * Plan requirement: general generation defaults to "medium", not "high".
- * High quality is chosen when the detail score or prompt signals justify it.
+ * Tier 1 (Detail Score 0-3): Low ($0.012)
+ * Tier 2 (Detail Score 4-7): Medium ($0.047)
+ * Tier 3 (Detail Score 8-10): High ($0.128)
  */
 export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecision {
   // User explicitly requested a draft/fast pass — but never downgrade final-use assets
@@ -491,7 +403,7 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
   if (isDraftRequest) {
     return {
       quality: "low",
-      rationale: "ผู้ใช้ระบุว่าเป็นงานร่าง/ทดลองและไม่มี reference หรือข้อความที่ต้องรักษา",
+      rationale: "ผู้ใช้ระบุว่าเป็นงานร่าง/ทดลอง ใช้ Tier 1 (low quality)",
       maxAttempts: 1,
       reasonCodes: ["FAST_DRAFT"],
     };
@@ -500,27 +412,29 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
   // Use structured features when available
   if (input.features) {
     const score = computeDetailScore(input.features);
-    if (input.features.finalUse && score >= 4) {
+    // Tier 3: Detail Score 8-10 -> High
+    if (score >= 8 || (input.features.finalUse && score >= 7)) {
       return {
         quality: "high",
-        rationale: "เป็น final-use asset ที่มีรายละเอียดสูง ใช้ high quality",
+        rationale: `Tier 3 (detail score ${score}/10) — มีความซับซ้อน/ข้อกำหนดสูง ใช้ High quality`,
         maxAttempts: 3,
-        reasonCodes: ["DETAIL_RICH", "FINAL_USE"],
+        reasonCodes: input.features.finalUse ? ["DETAIL_RICH", "FINAL_USE"] : ["DETAIL_RICH"],
       };
     }
+    // Tier 2: Detail Score 4-7 -> Medium
     if (score >= 4) {
       return {
-        quality: "high",
-        rationale: `detail score ${score}/10 — brief มีข้อกำหนดหรือองค์ประกอบซับซ้อน`,
+        quality: "medium",
+        rationale: `Tier 2 (detail score ${score}/10) — brief มีรายละเอียดปานกลาง ใช้ Medium quality`,
         maxAttempts: 3,
         reasonCodes: ["DETAIL_RICH"],
       };
     }
-    // score 0–3: general default = medium
+    // Tier 1: Detail Score 0-3 -> Low
     return {
-      quality: "medium",
-      rationale: "งานสร้างภาพทั่วไป ใช้ medium quality ตาม default policy",
-      maxAttempts: 3,
+      quality: "low",
+      rationale: `Tier 1 (detail score ${score}/10) — งานสร้างภาพทั่วไป/พื้นฐาน ใช้ Low quality ตาม Tier 1 policy`,
+      maxAttempts: 2,
       reasonCodes: ["GENERAL_DEFAULT"],
     };
   }
@@ -528,28 +442,42 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
   // Prompt-based heuristics fallback (when structured features not available)
   const prompt = input.prompt.toLocaleLowerCase();
   const requiresHighQuality =
-    input.hasReference ||
-    input.requiresExactText ||
     input.finalUse ||
     input.taskClass === "complex" ||
-    /(?:product|สินค้า|packaging|บรรจุภัณฑ์|typography|ข้อความ|poster|โปสเตอร์|print|พิมพ์|โลโก้|logo)/iu.test(
+    /(?:print|พิมพ์|signage|ป้าย|masterwork|hyper-detailed|ละเอียดสูง|ultra-detailed|8k)/iu.test(
       prompt,
     );
 
   if (requiresHighQuality) {
     return {
       quality: "high",
-      rationale: "brief มี reference, สินค้า, ข้อความ หรือองค์ประกอบซับซ้อนที่ต้องความแม่นยำสูง",
+      rationale: "Tier 3 — brief มีความซับซ้อน/สำหรับงานจริงที่ต้องความแม่นยำสูง ใช้ High quality",
       maxAttempts: 3,
       reasonCodes: input.finalUse ? ["DETAIL_RICH", "FINAL_USE"] : ["DETAIL_RICH"],
     };
   }
 
-  // Default: medium (was incorrectly "high" before this fix)
+  const requiresMediumQuality =
+    input.hasReference ||
+    input.requiresExactText ||
+    /(?:product|สินค้า|packaging|บรรจุภัณฑ์|typography|ข้อความ|poster|โปสเตอร์|โลโก้|logo)/iu.test(
+      prompt,
+    );
+
+  if (requiresMediumQuality) {
+    return {
+      quality: "medium",
+      rationale: "Tier 2 — brief มี reference, สินค้า หรือข้อความ ใช้ Medium quality",
+      maxAttempts: 3,
+      reasonCodes: ["DETAIL_RICH"],
+    };
+  }
+
+  // Tier 1 default: Low
   return {
-    quality: "medium",
-    rationale: "งานสร้างภาพทั่วไป ใช้ medium quality ตาม default policy",
-    maxAttempts: 3,
+    quality: "low",
+    rationale: "Tier 1 — งานสร้างภาพทั่วไป ใช้ Low quality ตาม default policy",
+    maxAttempts: 2,
     reasonCodes: ["GENERAL_DEFAULT"],
   };
 }

@@ -119,9 +119,9 @@ describe("Creating model capability catalog", () => {
     });
   });
 
-  it("Flare catalog entry points to correct model slug", () => {
+  it("image-fast catalog entry resolves to Sunburst (Flare retired)", () => {
     const entry = CREATING_MODEL_CATALOG.find((e) => e.alias === "image-fast");
-    expect(entry?.modelId).toBe("openai/gpt-image-2.5-flare");
+    expect(entry?.modelId).toBe("openai/gpt-image-2.5-sunburst");
   });
 
   it("Sunburst catalog entry points to correct model slug", () => {

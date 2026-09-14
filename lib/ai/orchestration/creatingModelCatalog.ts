@@ -71,13 +71,13 @@ export const CREATING_MODEL_CATALOG: readonly CreatingModelEntry[] = [
   {
     alias: "image-fast",
     provider: "replicate",
-    modelId: "openai/gpt-image-2.5-flare",
+    modelId: "openai/gpt-image-2.5-sunburst",
     status: "available",
     capabilities: ["generate", "edit"],
     supportedQualities: GPT_IMAGE_25_QUALITIES,
     role: "creating",
     notes:
-      "Fast lane for everyday generation/editing, dense-text, and multi-variant tasks. Active in live routing.",
+      "Fast lane alias resolving directly to GPT Image 2.5 Sunburst. Flare is retired.",
   },
   {
     alias: "image-precision",

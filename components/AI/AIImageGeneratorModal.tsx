@@ -10,6 +10,7 @@ import {
   INSPIRATION_PROMPTS,
 } from "@/lib/ai/imageGeneration";
 import type { PendingClarification } from "@/lib/ai/orchestration/turnOrchestrator";
+import { QUALITY_OPTIONS, type QualitySelection } from "@/components/AI/ChatComposer";
 
 type ImageStyleId = "photorealistic" | "digital-art" | "3d-render" | "anime";
 
@@ -61,6 +62,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
   const [prompt, setPrompt] = useState("");
   const [selectedStyle, setSelectedStyle] = useState<ImageStyleId | null>(null);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatioOption>(ASPECT_RATIOS[0]);
+  const [selectedQuality, setSelectedQuality] = useState<QualitySelection>("auto");
   const [enhance, setEnhance] = useState(false);
   const [pending, setPending] = useState<PendingClarification>();
   const [directorReply, setDirectorReply] = useState<string>();
@@ -108,9 +110,12 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
     try {
       const style = STYLE_PRESETS.find((preset) => preset.id === selectedStyle);
       const basePrompt = (reply ?? prompt).trim();
+      const qualitySuffix =
+        selectedQuality !== "auto" ? `สำหรับระดับคุณภาพ ${selectedQuality}` : undefined;
       const generationPrompt = [
         basePrompt,
         style?.promptSuffix,
+        qualitySuffix,
         enhance ? "Please refine the brief without changing explicit requirements." : undefined,
         `สำหรับอัตราส่วน ${selectedRatio.ratio}`,
       ]
@@ -212,8 +217,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 AI Image Studio (Text-to-Image)
               </h2>
               <p style={{ fontSize: 11, color: "#64748b", margin: 0, marginTop: 2 }}>
-                Replicate · {GPT_IMAGE_2_MODEL} · quality: auto (default {GPT_IMAGE_2_QUALITY}) ·
-                quality-first generation
+                Replicate · openai/gpt-image-2.5-sunburst · Tier 1 (Low) / Tier 2 (Med) / Tier 3 (High)
               </p>
             </div>
           </div>
@@ -406,6 +410,59 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                       <span style={{ fontSize: 12 }}>{ratio.icon}</span>
                       <span>{ratio.label}</span>
                       <span style={{ fontSize: 8.5, opacity: 0.8 }}>{ratio.ratio}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Quality Selection */}
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#1e293b",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 6,
+                }}
+              >
+                <span>Image Quality</span>
+                <span style={{ fontSize: 10, color: "#6366f1", fontWeight: 600 }}>
+                  Sunburst Only
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                {QUALITY_OPTIONS.map((opt) => {
+                  const active = selectedQuality === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSelectedQuality(opt.id)}
+                      style={{
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        border: active ? `1.5px solid ${opt.accentColor}` : "1px solid #e2e8f0",
+                        background: active ? "#f8fafc" : "#fff",
+                        color: active ? opt.accentColor : "#475569",
+                        cursor: "pointer",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 2,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 11 }}>{opt.badge}</span>
+                        <span style={{ fontWeight: active ? 700 : 600 }}>{opt.id.toUpperCase()}</span>
+                      </div>
+                      <span style={{ fontSize: 8.5, color: "#64748b" }}>{opt.price}</span>
                     </button>
                   );
                 })}

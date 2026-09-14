@@ -1,8 +1,79 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useRef, useState } from "react";
 import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/InlineTagEditor";
 import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { MagicWandPromptIcon, SendIcon, StopIcon } from "@/components/AI/ChatIcons";
+
+export type QualitySelection = "auto" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export interface QualityOption {
+  id: QualitySelection;
+  label: string;
+  badge: string;
+  price: string;
+  tier: string;
+  description: string;
+  accentColor: string;
+}
+
+export const QUALITY_OPTIONS: readonly QualityOption[] = [
+  {
+    id: "auto",
+    label: "Auto (ตาม Detail Tier)",
+    badge: "⚡",
+    price: "Auto",
+    tier: "Tier 1-3",
+    description: "คำนวณอัตโนมัติ: Tier 1 (Low) / Tier 2 (Med) / Tier 3 (High)",
+    accentColor: "#6366f1",
+  },
+  {
+    id: "low",
+    label: "Tier 1 · Low",
+    badge: "🟢",
+    price: "$0.012",
+    tier: "Tier 1 (0–3)",
+    description: "ประหยัด & สร้างภาพรวดเร็ว เหมาะกับงานร่าง",
+    accentColor: "#10b981",
+  },
+  {
+    id: "medium",
+    label: "Tier 2 · Medium",
+    badge: "🔵",
+    price: "$0.047",
+    tier: "Tier 2 (4–7)",
+    description: "คุณภาพมาตรฐาน คมชัดสมดุล สำหรับงานทั่วไป",
+    accentColor: "#3b82f6",
+  },
+  {
+    id: "high",
+    label: "Tier 3 · High",
+    badge: "🟣",
+    price: "$0.128",
+    tier: "Tier 3 (8–10)",
+    description: "ความละเอียดสูง สำหรับงานจริง/สื่อพิมพ์/ตัวหนังสือ",
+    accentColor: "#8b5cf6",
+  },
+  {
+    id: "xhigh",
+    label: "X-High",
+    badge: "💎",
+    price: "$0.250",
+    tier: "Special",
+    description: "ความคมชัดระดับสูงพิเศษ เก็บรายละเอียดลึก",
+    accentColor: "#ec4899",
+  },
+  {
+    id: "max",
+    label: "Max",
+    badge: "👑",
+    price: "$0.500",
+    tier: "Masterwork",
+    description: "รายละเอียดสูงสุดระดับ Masterwork ละเอียดทุกพิกเซล",
+    accentColor: "#f59e0b",
+  },
+] as const;
 
 export interface ChatComposerProps {
   input: string;
@@ -20,6 +91,8 @@ export interface ChatComposerProps {
   topSlot?: React.ReactNode;
   onTogglePromptHelper?: () => void;
   isPromptHelperOpen?: boolean;
+  selectedQuality?: QualitySelection;
+  onSelectQuality?: (quality: QualitySelection) => void;
 }
 
 export default function ChatComposer({
@@ -38,7 +111,40 @@ export default function ChatComposer({
   topSlot,
   onTogglePromptHelper,
   isPromptHelperOpen = false,
+  selectedQuality = "auto",
+  onSelectQuality,
 }: ChatComposerProps) {
+  const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
+  const qualityMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click or escape key
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        qualityMenuRef.current &&
+        !qualityMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsQualityMenuOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsQualityMenuOpen(false);
+      }
+    }
+    if (isQualityMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isQualityMenuOpen]);
+
+  const activeOption =
+    QUALITY_OPTIONS.find((opt) => opt.id === selectedQuality) || QUALITY_OPTIONS[0];
+
   return (
     <div
       style={{
@@ -51,9 +157,231 @@ export default function ChatComposer({
         flexDirection: "column",
         alignItems: "stretch",
         gap: 8,
+        position: "relative",
       }}
     >
       {topSlot}
+
+      {/* Toolbar row with Quality Selector Button & Dropdown */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          fontSize: 12,
+        }}
+      >
+        <div ref={qualityMenuRef} style={{ position: "relative" }}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setIsQualityMenuOpen((prev) => !prev)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              borderRadius: 20,
+              border: isQualityMenuOpen
+                ? "1.5px solid #6366f1"
+                : selectedQuality !== "auto"
+                  ? `1.5px solid ${activeOption.accentColor}`
+                  : "1px solid #e2e8f0",
+              background:
+                selectedQuality !== "auto"
+                  ? "#f8fafc"
+                  : isQualityMenuOpen
+                    ? "#f1f5f9"
+                    : "#ffffff",
+              color: "#1e293b",
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: busy ? "not-allowed" : "pointer",
+              transition: "all 0.15s ease",
+              boxShadow: isQualityMenuOpen
+                ? "0 2px 8px rgba(99, 102, 241, 0.15)"
+                : "none",
+            }}
+            title="คลิกเพื่อเลือกระดับคุณภาพของภาพ (openai/gpt-image-2.5-sunburst)"
+          >
+            <span>{activeOption.badge}</span>
+            <span>Quality:</span>
+            <span style={{ color: activeOption.accentColor, fontWeight: 700 }}>
+              {activeOption.label.split(" · ")[1] || activeOption.label}
+            </span>
+            {selectedQuality !== "auto" && (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "#64748b",
+                  background: "#f1f5f9",
+                  padding: "1px 5px",
+                  borderRadius: 6,
+                }}
+              >
+                {activeOption.price}
+              </span>
+            )}
+            <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 2 }}>
+              {isQualityMenuOpen ? "▲" : "▼"}
+            </span>
+          </button>
+
+          {/* Quality Options Dropdown List */}
+          {isQualityMenuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: "calc(100% + 6px)",
+                left: 0,
+                width: 310,
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 12,
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                padding: "6px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                zIndex: 9999,
+                animation: "fadeIn 0.12s ease-out",
+              }}
+            >
+              {/* Dropdown Header */}
+              <div
+                style={{
+                  padding: "6px 8px 4px",
+                  borderBottom: "1px solid #f1f5f9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#475569" }}>
+                  เลือกความละเอียดภาพ (Quality)
+                </span>
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    color: "#6366f1",
+                    background: "#e0e7ff",
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    fontWeight: 600,
+                  }}
+                >
+                  Sunburst Only
+                </span>
+              </div>
+
+              {/* Options List */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
+                {QUALITY_OPTIONS.map((opt) => {
+                  const isSelected = selectedQuality === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        onSelectQuality?.(opt.id);
+                        setIsQualityMenuOpen(false);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: isSelected
+                          ? `1.5px solid ${opt.accentColor}`
+                          : "1px solid transparent",
+                        background: isSelected ? "#f8fafc" : "transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "background 0.12s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = "#f1f5f9";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      <span style={{ fontSize: 14, marginTop: 1 }}>{opt.badge}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 4,
+                          }}
+                        >
+                          <strong
+                            style={{
+                              fontSize: 12,
+                              color: isSelected ? opt.accentColor : "#1e293b",
+                              fontWeight: isSelected ? 700 : 600,
+                            }}
+                          >
+                            {opt.label}
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 600,
+                              color: "#64748b",
+                              background: isSelected ? "#e2e8f0" : "#f1f5f9",
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                            }}
+                          >
+                            {opt.price}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            color: "#64748b",
+                            marginTop: 2,
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {opt.description}
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <span style={{ color: opt.accentColor, fontSize: 12, fontWeight: 700 }}>
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Dropdown Footer Note */}
+              <div
+                style={{
+                  padding: "4px 8px 2px",
+                  borderTop: "1px solid #f1f5f9",
+                  fontSize: 9.5,
+                  color: "#94a3b8",
+                  textAlign: "center",
+                }}
+              >
+                โมเดล: openai/gpt-image-2.5-sunburst
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Selected Quality Hint */}
+        <div style={{ fontSize: 10.5, color: "#94a3b8" }}>
+          {selectedQuality === "auto" ? "ตาม Detail Score" : `${activeOption.price} / run`}
+        </div>
+      </div>
 
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, width: "100%" }}>
         {/* Input Field with InlineTagEditor */}

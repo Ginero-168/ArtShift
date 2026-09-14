@@ -42,7 +42,8 @@ const GEMINI_CHAT_MODEL = "google/gemini-2.5-flash";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
-const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-flare";
+// Flare retired: replaced with Sunburst across all routes.
+const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
 const GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
 
 /** Models that support xhigh and max quality tiers. */
@@ -146,10 +147,10 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           pricing: { currency: "USD", perRunUsd: 0.13 },
         },
         {
-          id: GPT_IMAGE_25_FLARE_MODEL,
+          id: GPT_IMAGE_25_SUNBURST_MODEL,
           alias: "image-fast",
           profile: "quality",
-          pricing: { currency: "USD", perRunUsd: 0.25, note: "Ceiling covers xhigh tier." },
+          pricing: { currency: "USD", perRunUsd: 0.13, note: "Resolves to Sunburst (Flare retired)." },
         },
         {
           id: GPT_IMAGE_25_SUNBURST_MODEL,

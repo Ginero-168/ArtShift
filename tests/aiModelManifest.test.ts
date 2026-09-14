@@ -156,14 +156,14 @@ describe("AI model manifest", () => {
     expect(aliases).not.toContain("image-fast");
   });
 
-  it("adds Flare route when IMAGE_FAST_MODEL_ENABLED is true", () => {
+  it("adds image-fast route pointing to Sunburst when IMAGE_FAST_MODEL_ENABLED is true (Flare retired)", () => {
     const routes = createAiRouteTable({
       IMAGE_FAST_MODEL_ENABLED: "true",
     });
     const fastRoute = routes["image.generate"]?.quality?.find((r) => r.alias === "image-fast");
     expect(fastRoute).toMatchObject({
       provider: "replicate",
-      model: "openai/gpt-image-2.5-flare",
+      model: "openai/gpt-image-2.5-sunburst",
       alias: "image-fast",
     });
   });

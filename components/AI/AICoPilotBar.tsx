@@ -38,7 +38,7 @@ import { calculateGhostBounds } from "@/lib/renderer/ghostOverlay";
 
 import { useCanvasSelectionBridge } from "@/components/AI/useCanvasSelectionBridge";
 import ChatThread from "@/components/AI/ChatThread";
-import ChatComposer from "@/components/AI/ChatComposer";
+import ChatComposer, { type QualitySelection } from "@/components/AI/ChatComposer";
 import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatActionCards";
 
 export type { StagedVariationCard };
@@ -228,6 +228,7 @@ export default function AICoPilotBar() {
   const [pendingSequentialPlan, setPendingSequentialPlan] =
     useState<SequentialExecutionPlan | null>(null);
   const [isExecutingPlan, setIsExecutingPlan] = useState(false);
+  const [selectedQuality, setSelectedQuality] = useState<QualitySelection>("auto");
   const [stagedVariations, setStagedVariations] = useState<StagedVariationCard[]>([]);
   const [pendingClarification, setPendingClarification] =
     useState<PendingClarification | null>(null);
@@ -689,6 +690,7 @@ export default function AICoPilotBar() {
               }
             : undefined,
           clarificationRound: pending?.round ?? 0,
+          preferredQuality: selectedQuality !== "auto" ? selectedQuality : undefined,
         });
       }
 
@@ -1281,6 +1283,7 @@ export default function AICoPilotBar() {
                 refs: refsForTurn,
                 analyses: analysesForTurn,
                 canvas: slide ? { slide, selectedIds } : undefined,
+                preferredQuality: selectedQuality !== "auto" ? selectedQuality : undefined,
               },
               result,
             );
@@ -1577,6 +1580,8 @@ export default function AICoPilotBar() {
         onInlineTagsChange={handleInlineTagsChange}
         onTogglePromptHelper={handleTogglePromptHelper}
         isPromptHelperOpen={Boolean(promptRefinementData)}
+        selectedQuality={selectedQuality}
+        onSelectQuality={setSelectedQuality}
       />
     </div>
   );
