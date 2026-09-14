@@ -38,8 +38,8 @@ type Props = {
   onDoubleClick?: (e: React.MouseEvent) => void;
 };
 
-const HANDLE = 8;
-const ROTATE_OFFSET = 28;
+const HANDLE = 6;
+const ROTATE_OFFSET = 16;
 
 type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rot" | "start" | "end" | "mid";
 
@@ -748,7 +748,7 @@ export default function Transformer({
           x2={rotHandle.pt.x}
           y2={rotHandle.pt.y}
           stroke="var(--accent, #4f46e5)"
-          strokeWidth={1.25}
+          strokeWidth={1}
         />
       )}
       {lineScreenPts ? (
@@ -758,16 +758,17 @@ export default function Transformer({
           fill="none"
           stroke="var(--accent, #4f46e5)"
           strokeWidth={1}
-          strokeDasharray="4 3"
-          strokeOpacity={0.5}
+          strokeDasharray="3 3"
+          strokeOpacity={0.6}
         />
       ) : outlineCorners ? (
         <polygon
           points={outlineCorners.map((p) => `${p.x},${p.y}`).join(" ")}
           fill="rgba(99, 102, 241, 0.001)"
           stroke="var(--accent, #4f46e5)"
-          strokeWidth={1.25}
-          strokeDasharray="6 4"
+          strokeWidth={1}
+          shapeRendering="crispEdges"
+          vectorEffect="non-scaling-stroke"
           style={{
             pointerEvents: onDoubleClick ? "auto" : "none",
             cursor: onDoubleClick ? "pointer" : "default",
@@ -780,27 +781,27 @@ export default function Transformer({
       ) : null}
       {rotateDeg !== null && rotHandle && (
         <g
-          transform={`translate(${rotHandle.pt.x}, ${rotHandle.pt.y - 24})`}
+          transform={`translate(${rotHandle.pt.x}, ${rotHandle.pt.y - 18})`}
           style={{ pointerEvents: "none" }}
         >
           <rect
-            x={-30}
-            y={-14}
-            width={60}
-            height={28}
-            rx={6}
+            x={-24}
+            y={-11}
+            width={48}
+            height={22}
+            rx={4}
             fill="#0f172a"
             stroke="var(--accent, #4f46e5)"
-            strokeWidth={1.5}
-            filter="drop-shadow(0 4px 10px rgba(0,0,0,0.4))"
+            strokeWidth={1}
+            filter="drop-shadow(0 2px 6px rgba(0,0,0,0.3))"
           />
           <text
             x={0}
             y={1}
             fill="#ffffff"
-            fontSize={13}
+            fontSize={11}
             fontFamily="system-ui, -apple-system, sans-serif"
-            fontWeight={700}
+            fontWeight={600}
             textAnchor="middle"
             dominantBaseline="middle"
           >
@@ -813,7 +814,7 @@ export default function Transformer({
         const isMidHandle = h.id === "mid";
         const isRotateHandle = h.id === "rot";
         const isCircle = isLineHandle || isMidHandle || isRotateHandle || h.bound;
-        const r = isRotateHandle ? 6 : isLineHandle ? 6 : isMidHandle ? 4.5 : HANDLE / 2;
+        const r = isRotateHandle ? 4 : isLineHandle ? 4.5 : isMidHandle ? 3.5 : HANDLE / 2;
         return (
           <g
             key={h.id}
@@ -829,11 +830,8 @@ export default function Transformer({
                 <circle
                   cx={0}
                   cy={0}
-                  r={6}
-                  fill={active === "rot" ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
-                  stroke="var(--accent, #4f46e5)"
-                  strokeWidth={1.5}
-                  filter="drop-shadow(0 2px 5px rgba(0,0,0,0.22))"
+                  r={10}
+                  fill="transparent"
                   onPointerDown={onPointerDown(h.id)}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
@@ -842,45 +840,87 @@ export default function Transformer({
                 <circle
                   cx={0}
                   cy={0}
-                  r={1.75}
+                  r={4}
+                  fill={active === "rot" ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
+                  stroke="var(--accent, #4f46e5)"
+                  strokeWidth={1}
+                  filter="drop-shadow(0 1px 2px rgba(0,0,0,0.18))"
+                  onPointerDown={onPointerDown(h.id)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
+                />
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={1.25}
                   fill={active === "rot" ? "var(--surface-solid, #fff)" : "var(--accent, #4f46e5)"}
                   pointerEvents="none"
                 />
               </g>
             ) : isCircle ? (
-              <circle
-                cx={0}
-                cy={0}
-                r={r}
-                fill={
-                  active === h.id
-                    ? "var(--accent, #4f46e5)"
-                    : isMidHandle
-                      ? "var(--accent-soft, #c7d2fe)"
-                      : "var(--surface-solid, #fff)"
-                }
-                stroke={h.bound ? "#16a34a" : "var(--accent, #4f46e5)"}
-                strokeWidth={isLineHandle ? 1.6 : 1.25}
-                onPointerDown={onPointerDown(h.id)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerUp}
-              />
+              <g>
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={9}
+                  fill="transparent"
+                  onPointerDown={onPointerDown(h.id)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
+                />
+                <circle
+                  cx={0}
+                  cy={0}
+                  r={r}
+                  fill={
+                    active === h.id
+                      ? "var(--accent, #4f46e5)"
+                      : isMidHandle
+                        ? "var(--accent-soft, #c7d2fe)"
+                        : "var(--surface-solid, #fff)"
+                  }
+                  stroke={h.bound ? "#16a34a" : "var(--accent, #4f46e5)"}
+                  strokeWidth={1}
+                  onPointerDown={onPointerDown(h.id)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
+                />
+              </g>
             ) : (
-              <rect
-                x={-HANDLE / 2}
-                y={-HANDLE / 2}
-                width={HANDLE}
-                height={HANDLE}
-                rx={2}
-                fill={active === h.id ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
-                stroke="var(--accent, #4f46e5)"
-                strokeWidth={1.25}
-                onPointerDown={onPointerDown(h.id)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerUp}
-              />
+              <g>
+                {/* Transparent hit area for reliable grabbing */}
+                <rect
+                  x={-7}
+                  y={-7}
+                  width={14}
+                  height={14}
+                  fill="transparent"
+                  stroke="none"
+                  onPointerDown={onPointerDown(h.id)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
+                />
+                {/* Crisp square handle (Adobe Illustrator style) */}
+                <rect
+                  x={-HANDLE / 2}
+                  y={-HANDLE / 2}
+                  width={HANDLE}
+                  height={HANDLE}
+                  rx={0}
+                  fill={active === h.id ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
+                  stroke="var(--accent, #4f46e5)"
+                  strokeWidth={1}
+                  shapeRendering="crispEdges"
+                  onPointerDown={onPointerDown(h.id)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
+                />
+              </g>
             )}
           </g>
         );
