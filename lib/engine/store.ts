@@ -1440,57 +1440,71 @@ export const useEngine = create<EngineState>((set, get) => {
 
     flipHorizontal: (ids) => {
       const state = get();
-      const result = buildFlippedDuplicates(state.currentSlide(), ids, "horizontal");
-      if (!result) return;
+      if (!ids.length) return;
+      const slide = state.currentSlide();
+      if (!slide) return;
+      const targets = slide.elements.filter(
+        (element) =>
+          ids.includes(element.id) && !element.isDeleted && !isObjectLocked(slide, element.id),
+      );
+      if (!targets.length) return;
+
       pushHistory(state.history, state.doc, "flip horizontal");
+      const minX = Math.min(...targets.map((element) => element.x));
+      const maxX = Math.max(...targets.map((element) => element.x + element.width));
+      const centerX = (minX + maxX) / 2;
+      const targetIds = new Set(targets.map((element) => element.id));
+
       set((cur) => {
-        const mapped = mapCurrentSlide(cur, (slide) => {
-          const sourceLayer = getLayerForObject(slide, result.targets[0].id);
-          const layerId = sourceLayer?.id ?? cur.activeLayerId ?? slide.layers[0]?.id;
-          if (!layerId) return slide;
-          let next = slide;
-          for (const element of result.clones) {
-            next = addObjectToLayer(
-              next,
-              { ...element, z: nextZ(next) },
-              layerId,
-              cur.doc.workspaceStrictness,
-            );
-          }
-          return recomputeArrowBindings(next);
+        const mapped = mapCurrentSlide(cur, (currentSlide) => {
+          const updatedElements = currentSlide.elements.map((element) => {
+            if (!targetIds.has(element.id)) return element;
+            return {
+              ...element,
+              x: targets.length > 1 ? 2 * centerX - (element.x + element.width) : element.x,
+              angle: element.angle === 0 ? 0 : -element.angle,
+              flipX: !element.flipX,
+              version: element.version + 1,
+            } as EngineElement;
+          });
+          return recomputeArrowBindings({ ...currentSlide, elements: updatedElements });
         });
-        return {
-          ...mapped,
-          selectedIds: new Set(result.clones.map((element) => element.id)),
-        };
+        return mapped;
       });
     },
 
     flipVertical: (ids) => {
       const state = get();
-      const result = buildFlippedDuplicates(state.currentSlide(), ids, "vertical");
-      if (!result) return;
+      if (!ids.length) return;
+      const slide = state.currentSlide();
+      if (!slide) return;
+      const targets = slide.elements.filter(
+        (element) =>
+          ids.includes(element.id) && !element.isDeleted && !isObjectLocked(slide, element.id),
+      );
+      if (!targets.length) return;
+
       pushHistory(state.history, state.doc, "flip vertical");
+      const minY = Math.min(...targets.map((element) => element.y));
+      const maxY = Math.max(...targets.map((element) => element.y + element.height));
+      const centerY = (minY + maxY) / 2;
+      const targetIds = new Set(targets.map((element) => element.id));
+
       set((cur) => {
-        const mapped = mapCurrentSlide(cur, (slide) => {
-          const sourceLayer = getLayerForObject(slide, result.targets[0].id);
-          const layerId = sourceLayer?.id ?? cur.activeLayerId ?? slide.layers[0]?.id;
-          if (!layerId) return slide;
-          let next = slide;
-          for (const element of result.clones) {
-            next = addObjectToLayer(
-              next,
-              { ...element, z: nextZ(next) },
-              layerId,
-              cur.doc.workspaceStrictness,
-            );
-          }
-          return recomputeArrowBindings(next);
+        const mapped = mapCurrentSlide(cur, (currentSlide) => {
+          const updatedElements = currentSlide.elements.map((element) => {
+            if (!targetIds.has(element.id)) return element;
+            return {
+              ...element,
+              y: targets.length > 1 ? 2 * centerY - (element.y + element.height) : element.y,
+              angle: element.angle === 0 ? 0 : -element.angle,
+              flipY: !element.flipY,
+              version: element.version + 1,
+            } as EngineElement;
+          });
+          return recomputeArrowBindings({ ...currentSlide, elements: updatedElements });
         });
-        return {
-          ...mapped,
-          selectedIds: new Set(result.clones.map((element) => element.id)),
-        };
+        return mapped;
       });
     },
 
@@ -1749,47 +1763,6 @@ export const useEngine = create<EngineState>((set, get) => {
 });
 
 // ——— internals ———
-
-type FlipAxis = "horizontal" | "vertical";
-
-type FlippedDuplicateBatch = {
-  targets: EngineElement[];
-  clones: EngineElement[];
-};
-
-function buildFlippedDuplicates(
-  slide: EngineSlide | undefined,
-  ids: string[],
-  axis: FlipAxis,
-): FlippedDuplicateBatch | null {
-  if (!slide || ids.length === 0) return null;
-  const targets = slide.elements.filter(
-    (element) =>
-      ids.includes(element.id) && !element.isDeleted && !isObjectLocked(slide, element.id),
-  );
-  if (!targets.length) return null;
-
-  const minX = Math.min(...targets.map((element) => element.x));
-  const maxX = Math.max(...targets.map((element) => element.x + element.width));
-  const minY = Math.min(...targets.map((element) => element.y));
-  const maxY = Math.max(...targets.map((element) => element.y + element.height));
-  const centerX = (minX + maxX) / 2;
-  const centerY = (minY + maxY) / 2;
-  const clones = cloneElementsForDuplicate(targets, 0, 0).map((clone, index) => {
-    const source = targets[index];
-    return {
-      ...clone,
-      x: axis === "horizontal" ? 2 * centerX - (source.x + source.width) : source.x,
-      y: axis === "vertical" ? 2 * centerY - (source.y + source.height) : source.y,
-      angle: source.angle === 0 ? 0 : -source.angle,
-      flipX: axis === "horizontal" ? !source.flipX : source.flipX,
-      flipY: axis === "vertical" ? !source.flipY : source.flipY,
-      version: source.version + 1,
-    } as EngineElement;
-  });
-
-  return { targets, clones };
-}
 
 function mapDoc(
   state: EngineState,

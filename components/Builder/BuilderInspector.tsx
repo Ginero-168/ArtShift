@@ -9,14 +9,18 @@ import {
   IconAlignMiddleV,
   IconAlignRight,
   IconAlignTop,
+  IconCrop,
   IconDistributeH,
   IconDistributeV,
+  IconFlipHorizontal,
+  IconFlipVertical,
   IconPathfinderDivide,
   IconPathfinderExclude,
   IconPathfinderIntersect,
   IconPathfinderMinusBack,
   IconPathfinderMinusFront,
   IconPathfinderUnite,
+  IconRotate,
 } from "@/components/icons";
 import { getBuilderBlockDefinition } from "@/lib/builder/blocks";
 import {
@@ -79,6 +83,8 @@ export default function BuilderInspector() {
   const updateBlockPlacement = useEngine((state) => state.updateBlockPlacement);
   const setFrameImage = useEngine((state) => state.setFrameImage);
   const detachFrameImage = useEngine((state) => state.detachFrameImage);
+  const flipHorizontal = useEngine((state) => state.flipHorizontal);
+  const flipVertical = useEngine((state) => state.flipVertical);
   const alignSelectedElements = useEngine((state) => state.alignSelectedElements);
   const distributeSelectedElements = useEngine((state) => state.distributeSelectedElements);
   const setSlideBackground = useEngine((state) => state.setSlideBackground);
@@ -101,6 +107,10 @@ export default function BuilderInspector() {
     () =>
       slide?.elements.filter((element) => selectedIds.has(element.id) && !element.isDeleted) ?? [],
     [selectedIds, slide],
+  );
+  const imageElement = useMemo(
+    () => selected.find((el): el is ImageElement => el.type === "image"),
+    [selected],
   );
 
   const shapesInSelectionOrGroup = useMemo(() => {
@@ -273,8 +283,96 @@ export default function BuilderInspector() {
 
         {first ? (
           <>
-            {/* Topmost Alignment Toolbar with Icons */}
+            {/* Topmost Transform & Alignment Toolbar with Icons */}
             <div className={styles.topAlignSection}>
+              {/* Transform Toolbar: Flip H, Flip V, Rotate, Crop (above Align) */}
+              <div className={styles.alignToolbarRow} style={{ marginBottom: 6 }}>
+                <button
+                  type="button"
+                  className={styles.alignIconButton}
+                  onClick={() => flipHorizontal(selected.map((el) => el.id))}
+                  title="Flip Horizontal (กลับแนวนอน)"
+                  aria-label="Flip Horizontal"
+                >
+                  <IconFlipHorizontal size={14} />
+                  <span
+                    style={{ fontSize: 9.5, marginLeft: 3, fontWeight: 500, whiteSpace: "nowrap" }}
+                  >
+                    Flip H
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.alignIconButton}
+                  onClick={() => flipVertical(selected.map((el) => el.id))}
+                  title="Flip Vertical (กลับแนวตั้ง)"
+                  aria-label="Flip Vertical"
+                >
+                  <IconFlipVertical size={14} />
+                  <span
+                    style={{ fontSize: 9.5, marginLeft: 3, fontWeight: 500, whiteSpace: "nowrap" }}
+                  >
+                    Flip V
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.alignIconButton}
+                  onClick={() => {
+                    updateElements(
+                      selected.map((el) => ({
+                        id: el.id,
+                        patch: { angle: (el.angle ?? 0) + Math.PI / 2 },
+                      })),
+                      "rotate 90°",
+                    );
+                  }}
+                  title="Rotate 90° (หมุน 90 องศา)"
+                  aria-label="Rotate 90°"
+                >
+                  <IconRotate size={14} />
+                  <span
+                    style={{ fontSize: 9.5, marginLeft: 3, fontWeight: 500, whiteSpace: "nowrap" }}
+                  >
+                    Rotate
+                  </span>
+                </button>
+                {imageElement && (
+                  <button
+                    type="button"
+                    className={styles.alignIconButton}
+                    onClick={() =>
+                      setCroppingImageId(
+                        croppingImageId === imageElement.id ? null : imageElement.id,
+                      )
+                    }
+                    style={
+                      croppingImageId === imageElement.id
+                        ? {
+                            background: "var(--accent, #6366f1)",
+                            color: "#ffffff",
+                            borderColor: "var(--accent, #6366f1)",
+                          }
+                        : undefined
+                    }
+                    title="Crop image (ตัดรูปภาพ)"
+                    aria-label="Crop"
+                  >
+                    <IconCrop size={14} />
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        marginLeft: 3,
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {croppingImageId === imageElement.id ? "Done" : "Crop"}
+                    </span>
+                  </button>
+                )}
+              </div>
+
               <div className={styles.alignToolbarRow}>
                 <button
                   type="button"

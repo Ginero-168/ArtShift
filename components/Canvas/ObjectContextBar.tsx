@@ -119,10 +119,6 @@ export default function ObjectContextBar({
   );
   const selectedIds = useEngine((state) => state.selectedIds);
   const updateElements = useEngine((state) => state.updateElements);
-  const flipHorizontal = useEngine((state) => state.flipHorizontal);
-  const flipVertical = useEngine((state) => state.flipVertical);
-  const setCroppingImageId = useEngine((state) => state.setCroppingImageId);
-  const croppingImageId = useEngine((state) => state.croppingImageId);
   const setTool = useEngine((state) => state.setTool);
   const groupElements = useEngine((state) => state.groupElements);
   const alignSelectedElements = useEngine((state) => state.alignSelectedElements);
@@ -205,20 +201,6 @@ export default function ObjectContextBar({
       controls.push(action("Divide", () => applyBooleanOperation("divide")));
     }
   } else if (first.type === "image") {
-    controls.push(action("Flip Horizontal", () => flipHorizontal(ids)));
-    controls.push(action("Flip Vertical", () => flipVertical(ids)));
-    controls.push(
-      action("Rotate 90°", () => apply({ angle: first.angle + Math.PI / 2 }, "rotate image")),
-    );
-    controls.push(
-      action(
-        "Crop",
-        () => setCroppingImageId(croppingImageId === first.id ? null : first.id),
-        false,
-        croppingImageId === first.id,
-      ),
-    );
-    controls.push(divider("image-tools"));
     controls.push(
       action(IMAGE_ACTION_LABELS.upscale, toggleUpscale, false, activeImageTool === "upscale"),
     );
@@ -253,8 +235,6 @@ export default function ObjectContextBar({
         requestCanvasEdit("path", first.id);
       }),
     );
-    controls.push(action("Flip Horizontal", () => flipHorizontal(ids)));
-    controls.push(action("Flip Vertical", () => flipVertical(ids)));
     if (isConvertibleShape(first))
       controls.push(action("Convert to frame", () => convertShapeToFrame(first.id)));
   } else if (first.type === "bookMockup") {

@@ -48,17 +48,7 @@ test("keeps image tools and VTracer settings independent", async ({ page }) => {
   expect(await imageToolbar.evaluate((node) => (node as HTMLElement).style.transform)).toBe(
     "translateX(-50%)",
   );
-  for (const label of [
-    "Flip Horizontal",
-    "Flip Vertical",
-    "Rotate 90°",
-    "Crop",
-    "Upscale",
-    "RemoveBG",
-    "Extract",
-    "Vectorize",
-    "Download",
-  ]) {
+  for (const label of ["Upscale", "RemoveBG", "Extract", "Vectorize", "Download"]) {
     await expect(imageToolbar.getByRole("button", { name: label, exact: true })).toBeVisible();
   }
   await expect(imageToolbar.locator(".object-context-label")).toHaveCount(0);

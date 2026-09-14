@@ -32,13 +32,13 @@ test("Flip Horizontal and Flip Vertical mirror the selected image", async ({ pag
   await expect(canvas).toBeVisible();
 
   const before = await canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL());
-  await toolbar.getByRole("button", { name: "Flip Horizontal", exact: true }).click();
+  await page.getByRole("button", { name: "Flip Horizontal", exact: true }).click();
   await expect
     .poll(() => canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL()))
     .not.toBe(before);
   const afterHorizontal = await canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL());
 
-  await toolbar.getByRole("button", { name: "Flip Vertical", exact: true }).click();
+  await page.getByRole("button", { name: "Flip Vertical", exact: true }).click();
   await expect
     .poll(() => canvas.evaluate((node) => (node as HTMLCanvasElement).toDataURL()))
     .not.toBe(afterHorizontal);

@@ -49,7 +49,7 @@ describe("engine store", () => {
     });
   });
 
-  it("creates a selected horizontal-flipped duplicate without mutating the source", () => {
+  it("flips the selected image horizontally in-place without creating a duplicate", () => {
     const st = useEngine.getState();
     st.setLayerMode(st.activeLayerId, "free");
     const source = createImage({
@@ -62,15 +62,15 @@ describe("engine store", () => {
       naturalHeight: 220,
     });
     st.addElement(source);
-    const original = structuredClone(useEngine.getState().currentSlide()!.elements[0]);
     const historyBeforeFlip = useEngine.getState().history.past.length;
 
     st.flipHorizontal([source.id]);
 
     const elements = useEngine.getState().currentSlide()!.elements;
-    const result = elements.find((element) => element.id !== source.id);
-    expect(elements).toHaveLength(2);
-    expect(result).toMatchObject({
+    expect(elements).toHaveLength(1);
+    const flipped = elements[0];
+    expect(flipped).toMatchObject({
+      id: source.id,
       type: "image",
       x: source.x,
       y: source.y,
@@ -79,13 +79,11 @@ describe("engine store", () => {
       angle: source.angle,
       flipX: true,
     });
-    expect(result?.id).not.toBe(source.id);
-    expect(elements.find((element) => element.id === source.id)).toEqual(original);
     expect(useEngine.getState().history.past).toHaveLength(historyBeforeFlip + 1);
-    expect(useEngine.getState().selectedIds).toEqual(new Set([result!.id]));
+    expect(useEngine.getState().selectedIds).toEqual(new Set([source.id]));
   });
 
-  it("creates a selected vertical-flipped duplicate without mutating the source", () => {
+  it("flips the selected image vertically in-place without creating a duplicate", () => {
     const st = useEngine.getState();
     st.setLayerMode(st.activeLayerId, "free");
     const source = createImage({
@@ -98,14 +96,14 @@ describe("engine store", () => {
       naturalHeight: 360,
     });
     st.addElement(source);
-    const original = structuredClone(useEngine.getState().currentSlide()!.elements[0]);
 
     st.flipVertical([source.id]);
 
     const elements = useEngine.getState().currentSlide()!.elements;
-    const result = elements.find((element) => element.id !== source.id);
-    expect(elements).toHaveLength(2);
-    expect(result).toMatchObject({
+    expect(elements).toHaveLength(1);
+    const flipped = elements[0];
+    expect(flipped).toMatchObject({
+      id: source.id,
       type: "image",
       x: source.x,
       y: source.y,
@@ -114,9 +112,7 @@ describe("engine store", () => {
       angle: source.angle,
       flipY: true,
     });
-    expect(result?.id).not.toBe(source.id);
-    expect(elements.find((element) => element.id === source.id)).toEqual(original);
-    expect(useEngine.getState().selectedIds).toEqual(new Set([result!.id]));
+    expect(useEngine.getState().selectedIds).toEqual(new Set([source.id]));
   });
 
   it("assigns unique z-order to pasted elements", () => {
