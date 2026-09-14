@@ -8,8 +8,22 @@ describe("Transformer Bounding Box UI (Adobe Illustrator style)", () => {
     expect(source).toContain("const HANDLE = 6;");
   });
 
-  it("uses compact rotate offset of 16px", () => {
-    expect(source).toContain("const ROTATE_OFFSET = 16;");
+  it("does not render a dangling top stem handle (removed ROTATE_OFFSET and stem line)", () => {
+    expect(source).not.toContain("const ROTATE_OFFSET");
+    expect(source).not.toContain("Stem line connecting top-center handle to rotate handle");
+  });
+
+  it("implements corner rotation zones at all 4 corners (rot-nw, rot-ne, rot-se, rot-sw)", () => {
+    expect(source).toContain('"rot-nw"');
+    expect(source).toContain('"rot-ne"');
+    expect(source).toContain('"rot-se"');
+    expect(source).toContain('"rot-sw"');
+    expect(source).toContain("isRotateHandle");
+  });
+
+  it("provides custom curved rotate cursor for corner rotation", () => {
+    expect(source).toContain("getRotateCursor");
+    expect(source).toContain("data:image/svg+xml");
   });
 
   it("uses crisp square handles with rx={0}", () => {
@@ -18,8 +32,7 @@ describe("Transformer Bounding Box UI (Adobe Illustrator style)", () => {
   });
 
   it("uses a solid 1px bounding box polygon without dashed stroke", () => {
-    // The polygon element should not have strokeDasharray
-    const polygonMatch = source.match(/<polygon[\s\S]*?\/>/);
+    const polygonMatch = source.match(/<polygon\s+points=\{outlineCorners[\s\S]*?\/>/);
     expect(polygonMatch).toBeDefined();
     expect(polygonMatch![0]).toContain("strokeWidth={1}");
     expect(polygonMatch![0]).not.toContain("strokeDasharray");

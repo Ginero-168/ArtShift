@@ -39,9 +39,34 @@ type Props = {
 };
 
 const HANDLE = 6;
-const ROTATE_OFFSET = 16;
 
-type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rot" | "start" | "end" | "mid";
+type HandleId =
+  | "nw"
+  | "n"
+  | "ne"
+  | "e"
+  | "se"
+  | "s"
+  | "sw"
+  | "w"
+  | "rot-nw"
+  | "rot-ne"
+  | "rot-se"
+  | "rot-sw"
+  | "rot"
+  | "start"
+  | "end"
+  | "mid";
+
+function isRotateHandle(id: string | null | undefined): boolean {
+  return Boolean(id && (id === "rot" || id.startsWith("rot-")));
+}
+
+function getRotateCursor(angleDeg: number): string {
+  const a = ((Math.round(angleDeg) % 360) + 360) % 360;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><g transform='rotate(${a} 12 12)'><path d='M7.5 7.5 A6.5 6.5 0 0 1 16.5 7.5' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round'/><path d='M7.5 7.5 A6.5 6.5 0 0 1 16.5 7.5' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round'/><polygon points='5.5,9 7.5,4.5 9.5,9' fill='%230f172a' stroke='white' stroke-width='0.75'/><polygon points='14.5,9 16.5,4.5 18.5,9' fill='%230f172a' stroke='white' stroke-width='0.75'/></g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, crosshair`;
+}
 
 export default function Transformer({
   worldToScreen,
@@ -91,7 +116,7 @@ export default function Transformer({
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
         let initialMouseAngle: number | undefined;
-        if (handle === "rot") {
+        if (isRotateHandle(handle)) {
           const svgRect = svgRef.current?.getBoundingClientRect();
           const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
           const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
@@ -124,7 +149,7 @@ export default function Transformer({
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
       let initialMouseAngle: number | undefined;
-      if (handle === "rot") {
+      if (isRotateHandle(handle)) {
         const svgRect = svgRef.current?.getBoundingClientRect();
         const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
         const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
@@ -159,7 +184,7 @@ export default function Transformer({
       const drag = dragRef.current;
       if (!drag) return;
       if (!drag.checkpointed) {
-        checkpointInteraction(drag.handle === "rot" ? "rotate" : "resize");
+        checkpointInteraction(isRotateHandle(drag.handle) ? "rotate" : "resize");
         drag.checkpointed = true;
       }
       const snapGrid = useEngine.getState().doc.snapGrid;
@@ -170,7 +195,7 @@ export default function Transformer({
         const { originals, aabb } = drag.multi;
         const handle = drag.handle;
 
-        if (handle === "rot") {
+        if (isRotateHandle(handle)) {
           const svgRect = svgRef.current?.getBoundingClientRect();
           const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
           const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
@@ -399,7 +424,7 @@ export default function Transformer({
         previewElements([{ id: start.id, patch }]);
         return;
       }
-      if (drag.handle === "rot") {
+      if (isRotateHandle(drag.handle)) {
         const svgRect = svgRef.current?.getBoundingClientRect();
         const mouseContainerX = svgRect ? e.clientX - svgRect.left : e.clientX;
         const mouseContainerY = svgRect ? e.clientY - svgRect.top : e.clientY;
@@ -581,7 +606,7 @@ export default function Transformer({
         /* ignore */
       }
       if (drag.checkpointed) commitInteraction();
-      if (drag.checkpointed && drag.handle !== "rot" && slide) {
+      if (drag.checkpointed && !isRotateHandle(drag.handle) && slide) {
         const ids = drag.multi ? drag.multi.originals.map((element) => element.id) : [drag.el.id];
         for (const id of ids) {
           if (getLayerForObject(slide, id)?.mode === "block") commitBlockLayout(id);
@@ -612,12 +637,32 @@ export default function Transformer({
     for (const it of layout)
       handles.push({ id: it.id, pt: worldToScreen({ x: it.lx, y: it.ly }), cursor: it.cursor });
 
-    // Rotate handle positioned above top-center for multi-selection / group
-    const rotScreen = worldToScreen({
+    // Corner rotation zones for multi-selection AABB (Adobe Illustrator style)
+    const screenCenter = worldToScreen({
       x: bbox.x + bbox.width / 2,
-      y: bbox.y - ROTATE_OFFSET / scale,
+      y: bbox.y + bbox.height / 2,
     });
-    handles.push({ id: "rot", pt: rotScreen, cursor: "grab" });
+    const cornerRotations: { id: HandleId; lx: number; ly: number; baseAngle: number }[] = [
+      { id: "rot-nw", lx: bbox.x, ly: bbox.y, baseAngle: 315 },
+      { id: "rot-ne", lx: bbox.x + bbox.width, ly: bbox.y, baseAngle: 45 },
+      { id: "rot-se", lx: bbox.x + bbox.width, ly: bbox.y + bbox.height, baseAngle: 135 },
+      { id: "rot-sw", lx: bbox.x, ly: bbox.y + bbox.height, baseAngle: 225 },
+    ];
+    for (const cr of cornerRotations) {
+      const cornerScreen = worldToScreen({ x: cr.lx, y: cr.ly });
+      const vx = cornerScreen.x - screenCenter.x;
+      const vy = cornerScreen.y - screenCenter.y;
+      const len = Math.hypot(vx, vy) || 1;
+      const rotPt = {
+        x: cornerScreen.x + (vx / len) * 11,
+        y: cornerScreen.y + (vy / len) * 11,
+      };
+      handles.push({
+        id: cr.id,
+        pt: rotPt,
+        cursor: getRotateCursor(cr.baseAngle),
+      });
+    }
   }
   if (single && slide && !isObjectLocked(slide, single.id)) {
     if (single.type === "line" || single.type === "arrow") {
@@ -682,16 +727,39 @@ export default function Transformer({
       for (const it of layout)
         handles.push({ id: it.id, pt: worldToScreen(local(it.lx, it.ly)), cursor: it.cursor });
 
-      // Rotate handle positioned above top-center along the element's local orientation.
-      const rotWorld = local(w / 2, -ROTATE_OFFSET / scale);
-      const rotScreen = worldToScreen(rotWorld);
-      handles.push({ id: "rot", pt: rotScreen, cursor: "grab" });
+      // Corner rotation zones (Adobe Illustrator style: hover/drag just outside 4 corners)
+      const screenCenter = worldToScreen({ x: cx, y: cy });
+      const angleDeg = ((Math.round((single.angle * 180) / Math.PI) % 360) + 360) % 360;
+      const cornerRotations: { id: HandleId; lx: number; ly: number; baseAngle: number }[] = [
+        { id: "rot-nw", lx: 0, ly: 0, baseAngle: 315 },
+        { id: "rot-ne", lx: w, ly: 0, baseAngle: 45 },
+        { id: "rot-se", lx: w, ly: h, baseAngle: 135 },
+        { id: "rot-sw", lx: 0, ly: h, baseAngle: 225 },
+      ];
+      for (const cr of cornerRotations) {
+        const cornerScreen = worldToScreen(local(cr.lx, cr.ly));
+        const vx = cornerScreen.x - screenCenter.x;
+        const vy = cornerScreen.y - screenCenter.y;
+        const len = Math.hypot(vx, vy) || 1;
+        const rotPt = {
+          x: cornerScreen.x + (vx / len) * 11,
+          y: cornerScreen.y + (vy / len) * 11,
+        };
+        handles.push({
+          id: cr.id,
+          pt: rotPt,
+          cursor: getRotateCursor(cr.baseAngle + angleDeg),
+        });
+      }
     }
   }
 
-  // Connecting stem line from top-center to rotate handle
-  const rotHandle = handles.find((h) => h.id === "rot");
-  const nHandle = handles.find((h) => h.id === "n");
+  // Active rotation handle or top-most corner for HUD degree badge
+  const activeRotHandle = handles.find((h) => isRotateHandle(h.id) && active === h.id);
+  const hudTargetPt =
+    activeRotHandle?.pt ??
+    handles.find((h) => h.id === "rot-ne")?.pt ??
+    handles.find((h) => h.id === "ne")?.pt;
 
   // For lines/arrows: compute all control points projected to screen
   const isLinearType = single && (single.type === "line" || single.type === "arrow");
@@ -727,6 +795,13 @@ export default function Transformer({
           ].map(worldToScreen)
         : null;
 
+  // Render rotation zones first so resize handles sit on top with priority hit testing
+  const sortedHandles = [...handles].sort((a, b) => {
+    const aRot = isRotateHandle(a.id) ? 0 : 1;
+    const bRot = isRotateHandle(b.id) ? 0 : 1;
+    return aRot - bRot;
+  });
+
   return (
     <svg
       ref={svgRef}
@@ -740,17 +815,6 @@ export default function Transformer({
         pointerEvents: "none",
       }}
     >
-      {/* Stem line connecting top-center handle to rotate handle */}
-      {nHandle && rotHandle && (
-        <line
-          x1={nHandle.pt.x}
-          y1={nHandle.pt.y}
-          x2={rotHandle.pt.x}
-          y2={rotHandle.pt.y}
-          stroke="var(--accent, #4f46e5)"
-          strokeWidth={1}
-        />
-      )}
       {lineScreenPts ? (
         /* For lines/arrows: draw dashed guide polyline through all control points */
         <polyline
@@ -779,9 +843,9 @@ export default function Transformer({
           }}
         />
       ) : null}
-      {rotateDeg !== null && rotHandle && (
+      {rotateDeg !== null && hudTargetPt && (
         <g
-          transform={`translate(${rotHandle.pt.x}, ${rotHandle.pt.y - 18})`}
+          transform={`translate(${hudTargetPt.x}, ${hudTargetPt.y - 18})`}
           style={{ pointerEvents: "none" }}
         >
           <rect
@@ -809,55 +873,34 @@ export default function Transformer({
           </text>
         </g>
       )}
-      {handles.map((h) => {
+      {sortedHandles.map((h) => {
         const isLineHandle = h.id === "start" || h.id === "end";
         const isMidHandle = h.id === "mid";
-        const isRotateHandle = h.id === "rot";
-        const isCircle = isLineHandle || isMidHandle || isRotateHandle || h.bound;
-        const r = isRotateHandle ? 4 : isLineHandle ? 4.5 : isMidHandle ? 3.5 : HANDLE / 2;
+        const isRot = isRotateHandle(h.id);
+        const isCircle = isLineHandle || isMidHandle || h.bound;
+        const r = isLineHandle ? 4.5 : isMidHandle ? 3.5 : HANDLE / 2;
         return (
           <g
             key={h.id}
             transform={`translate(${h.pt.x}, ${h.pt.y})`}
             style={{
               pointerEvents: "auto",
-              cursor: isRotateHandle ? (active === "rot" ? "grabbing" : "grab") : h.cursor,
+              cursor: h.cursor,
             }}
           >
             <title>{handleLabel(h.id)}</title>
-            {isRotateHandle ? (
-              <g>
-                <circle
-                  cx={0}
-                  cy={0}
-                  r={10}
-                  fill="transparent"
-                  onPointerDown={onPointerDown(h.id)}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
-                />
-                <circle
-                  cx={0}
-                  cy={0}
-                  r={4}
-                  fill={active === "rot" ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
-                  stroke="var(--accent, #4f46e5)"
-                  strokeWidth={1}
-                  filter="drop-shadow(0 1px 2px rgba(0,0,0,0.18))"
-                  onPointerDown={onPointerDown(h.id)}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
-                />
-                <circle
-                  cx={0}
-                  cy={0}
-                  r={1.25}
-                  fill={active === "rot" ? "var(--surface-solid, #fff)" : "var(--accent, #4f46e5)"}
-                  pointerEvents="none"
-                />
-              </g>
+            {isRot ? (
+              <circle
+                cx={0}
+                cy={0}
+                r={13}
+                fill="transparent"
+                style={{ cursor: h.cursor }}
+                onPointerDown={onPointerDown(h.id)}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+              />
             ) : isCircle ? (
               <g>
                 <circle
@@ -930,7 +973,7 @@ export default function Transformer({
 }
 
 function handleLabel(id: HandleId): string {
-  const labels: Record<HandleId, string> = {
+  const labels: Record<string, string> = {
     nw: "resize top-left",
     n: "resize top",
     ne: "resize top-right",
@@ -940,6 +983,10 @@ function handleLabel(id: HandleId): string {
     sw: "resize bottom-left",
     w: "resize left",
     rot: "rotate",
+    "rot-nw": "rotate top-left",
+    "rot-ne": "rotate top-right",
+    "rot-se": "rotate bottom-right",
+    "rot-sw": "rotate bottom-left",
     start: "arrow start point",
     end: "arrow end point",
     mid: "arrow midpoint",
