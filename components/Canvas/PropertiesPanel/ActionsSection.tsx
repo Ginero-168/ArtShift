@@ -13,6 +13,7 @@ import {
   IconPathfinderMinusBack,
   IconPathfinderMinusFront,
   IconPathfinderUnite,
+  IconPolaroid,
   IconSendBackward,
   IconSendToBack,
   IconTrash,
@@ -309,7 +310,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
               cursor: "pointer",
             }}
           >
-            <span>🖼️</span>
+            <IconPolaroid size={13} color="currentColor" />
             <span>Convert to Frame</span>
           </button>
         </Section>

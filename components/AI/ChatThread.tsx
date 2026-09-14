@@ -1,16 +1,9 @@
 import React, { useEffect, useState } from "react";
-import type { CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
-import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
-import { useEngine } from "@/lib/engine/store";
-import { cleanTechnicalPromptText, parseInlineTagTokens, type InlineTagToken } from "@/lib/ai/orchestration/inlineTagSynthesis";
-import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
-import type { CoPilotErrorCard } from "@/lib/ai/coPilot";
-import ComposerImageTags from "@/components/AI/ComposerImageTags";
-import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
+import { ContentPolicyErrorCard } from "@/components/AI/ChatActionCards";
 import {
   ChatCopyIcon,
-  ChevronDownIcon,
   CheckIcon,
+  ChevronDownIcon,
   CloseIcon,
   ImageSparkleIcon,
   SpinnerIcon,
@@ -19,8 +12,35 @@ import {
   ThumbsUpIcon,
   TrashIcon,
 } from "@/components/AI/ChatIcons";
+import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
+import {
+  IconBot,
+  IconBrain,
+  IconCamera,
+  IconClipboard,
+  IconClose,
+  IconLayoutGrid,
+  IconPalette,
+  IconPenEdit,
+  IconRotate,
+  IconSearch,
+  IconSettings,
+  IconShieldCheck,
+  IconSparkles,
+  IconUndo,
+  IconWand,
+  IconZap,
+} from "@/components/icons";
+import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
+import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
+import {
+  cleanTechnicalPromptText,
+  type InlineTagToken,
+  parseInlineTagTokens,
+} from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
-import { ContentPolicyErrorCard } from "@/components/AI/ChatActionCards";
+import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
+import { useEngine } from "@/lib/engine/store";
 
 export interface ChatThreadProps {
   messages: CoPilotMessage[];
@@ -180,7 +200,7 @@ export function UserMessageImagePreviews({
                 gap: 4,
               }}
             >
-              <span style={{ fontSize: 10 }}>📷</span>
+              <IconCamera size={11} color="#64748b" />
               <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                 @{ref.displayName}
               </span>
@@ -196,7 +216,7 @@ interface SubAgentTaskItem {
   id: string;
   name: string;
   modelBadge?: string;
-  icon: string;
+  icon: React.ReactNode;
   themeColor: string;
   themeBg: string;
   themeBorder: string;
@@ -216,7 +236,7 @@ function getAgentMeta(agent: string, title: string) {
     lowerTitle.includes("วิเคราะห์บริบท")
   ) {
     return {
-      icon: "🔍",
+      icon: <IconSearch size={12} color="#0284c7" />,
       roleName: "Image Analyzer",
       badgeColor: "#0284c7",
       badgeBg: "rgba(224, 242, 254, 0.75)",
@@ -229,7 +249,7 @@ function getAgentMeta(agent: string, title: string) {
     agent === "orchestrator"
   ) {
     return {
-      icon: "🧠",
+      icon: <IconBrain size={12} color="#6366f1" />,
       roleName: "Creative Director",
       badgeColor: "#6366f1",
       badgeBg: "rgba(238, 242, 255, 0.8)",
@@ -245,7 +265,7 @@ function getAgentMeta(agent: string, title: string) {
     lowerTitle.includes("ปรับแต่ง")
   ) {
     return {
-      icon: "🎨",
+      icon: <IconPalette size={12} color="#ea580c" />,
       roleName: agent === "image_edit" ? "Image Editor" : "Image Specialist",
       badgeColor: "#ea580c",
       badgeBg: "rgba(255, 237, 213, 0.8)",
@@ -259,16 +279,20 @@ function getAgentMeta(agent: string, title: string) {
     lowerTitle.includes("ตรวจ")
   ) {
     return {
-      icon: "🛡️",
+      icon: <IconShieldCheck size={12} color="#9333ea" />,
       roleName: "Quality Reviewer",
       badgeColor: "#9333ea",
       badgeBg: "rgba(243, 232, 255, 0.8)",
       borderColor: "rgba(233, 213, 255, 0.95)",
     };
   }
-  if (agent === "layout_designer" || lowerTitle.includes("layout") || lowerTitle.includes("จัดวาง")) {
+  if (
+    agent === "layout_designer" ||
+    lowerTitle.includes("layout") ||
+    lowerTitle.includes("จัดวาง")
+  ) {
     return {
-      icon: "📐",
+      icon: <IconLayoutGrid size={12} color="#059669" />,
       roleName: "Layout Specialist",
       badgeColor: "#059669",
       badgeBg: "rgba(209, 250, 229, 0.8)",
@@ -277,7 +301,7 @@ function getAgentMeta(agent: string, title: string) {
   }
   if (agent === "vectorizer" || lowerTitle.includes("vector") || lowerTitle.includes("เวกเตอร์")) {
     return {
-      icon: "⚡",
+      icon: <IconZap size={12} color="#0891b2" fill="#0891b2" stroke="#0891b2" />,
       roleName: "Vector Specialist",
       badgeColor: "#0891b2",
       badgeBg: "rgba(207, 250, 254, 0.8)",
@@ -286,7 +310,7 @@ function getAgentMeta(agent: string, title: string) {
   }
   if (agent === "copywriter" || lowerTitle.includes("copywriter")) {
     return {
-      icon: "✍️",
+      icon: <IconPenEdit size={12} color="#d97706" />,
       roleName: "Copywriter Specialist",
       badgeColor: "#d97706",
       badgeBg: "rgba(254, 243, 199, 0.8)",
@@ -294,7 +318,7 @@ function getAgentMeta(agent: string, title: string) {
     };
   }
   return {
-    icon: "🤖",
+    icon: <IconBot size={12} color="#475569" />,
     roleName: "AI Specialist",
     badgeColor: "#475569",
     badgeBg: "rgba(241, 245, 249, 0.8)",
@@ -302,7 +326,10 @@ function getAgentMeta(agent: string, title: string) {
   };
 }
 
-function renderStatusBadge(status: "running" | "success" | "error" | "pending", statusText?: string) {
+function renderStatusBadge(
+  status: "running" | "success" | "error" | "pending",
+  statusText?: string,
+) {
   if (status === "success") {
     return (
       <span
@@ -367,7 +394,7 @@ function renderStatusBadge(status: "running" | "success" | "error" | "pending", 
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: 10 }}>✕</span>
+        <IconClose size={10} color="#b91c1c" />
         <span>{statusText || "ไม่สำเร็จ"}</span>
       </span>
     );
@@ -391,6 +418,46 @@ function renderStatusBadge(status: "running" | "success" | "error" | "pending", 
     >
       <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#94a3b8" }} />
       <span>{statusText || "รอดำเนินการ"}</span>
+    </span>
+  );
+}
+
+function renderSuggestionLabel(sug: string) {
+  let icon: React.ReactNode = null;
+  let text = sug;
+
+  if (sug.startsWith("✨")) {
+    icon = <IconSparkles size={12} color="#6366f1" />;
+    text = sug.replace(/^✨\s*/, "");
+  } else if (sug.startsWith("🔄")) {
+    icon = <IconRotate size={12} color="#0284c7" />;
+    text = sug.replace(/^🔄\s*/, "");
+  } else if (
+    sug.startsWith("✏️") ||
+    sug.startsWith("✍️") ||
+    sug.startsWith("✍") ||
+    sug.startsWith("✏")
+  ) {
+    icon = <IconPenEdit size={12} color="#ea580c" />;
+    text = sug.replace(/^(?:✏️|✍️|✍|✏)\s*/, "");
+  } else if (sug.startsWith("📐")) {
+    icon = <IconLayoutGrid size={12} color="#059669" />;
+    text = sug.replace(/^📐\s*/, "");
+  } else if (sug.startsWith("↶")) {
+    icon = <IconUndo size={12} color="#64748b" />;
+    text = sug.replace(/^↶\s*/, "");
+  } else if (sug.startsWith("🧩")) {
+    icon = <IconWand size={12} color="#8b5cf6" />;
+    text = sug.replace(/^🧩\s*/, "");
+  } else if (sug.startsWith("⚙️") || sug.startsWith("⚙")) {
+    icon = <IconSettings size={12} color="#64748b" />;
+    text = sug.replace(/^(?:⚙️|⚙)\s*/, "");
+  }
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      {icon}
+      <span>{text}</span>
     </span>
   );
 }
@@ -531,7 +598,8 @@ export function CollapsibleThought({
           themeBg: meta.badgeBg,
           themeBorder: meta.borderColor,
           task: act.description || "ปฏิบัติหน้าที่ตามขั้นตอนที่ได้รับมอบหมาย",
-          status: act.status === "running" ? "running" : act.status === "error" ? "error" : "success",
+          status:
+            act.status === "running" ? "running" : act.status === "error" ? "error" : "success",
           statusText:
             act.status === "success"
               ? "เสร็จสิ้น"
@@ -543,12 +611,15 @@ export function CollapsibleThought({
         };
       });
 
-      if (isLive && !items.some((i) => i.name.toLowerCase().includes("reviewer") || i.name.includes("ตรวจ"))) {
+      if (
+        isLive &&
+        !items.some((i) => i.name.toLowerCase().includes("reviewer") || i.name.includes("ตรวจ"))
+      ) {
         items.push({
           id: "quality-reviewer-step",
           name: "Quality Reviewer",
           modelBadge: "Vision Quality Gate",
-          icon: "🛡️",
+          icon: <IconShieldCheck size={14} color="#9333ea" />,
           themeColor: "#9333ea",
           themeBg: "rgba(243, 232, 255, 0.8)",
           themeBorder: "rgba(233, 213, 255, 0.95)",
@@ -567,12 +638,17 @@ export function CollapsibleThought({
 
     const defaultItems: SubAgentTaskItem[] = [];
 
-    if (isEdit || prompt?.includes("@") || prompt?.includes("ภาพเดิม") || prompt?.includes("รูปเดิม")) {
+    if (
+      isEdit ||
+      prompt?.includes("@") ||
+      prompt?.includes("ภาพเดิม") ||
+      prompt?.includes("รูปเดิม")
+    ) {
       defaultItems.push({
         id: "step-analyzer",
         name: "Image Analyzer",
         modelBadge: "Vision Context",
-        icon: "🔍",
+        icon: <IconSearch size={14} color="#0284c7" />,
         themeColor: "#0284c7",
         themeBg: "rgba(224, 242, 254, 0.75)",
         themeBorder: "rgba(186, 230, 253, 0.9)",
@@ -586,7 +662,7 @@ export function CollapsibleThought({
       id: "step-director",
       name: "Creative Director",
       modelBadge: "Gemini 3 Flash",
-      icon: "🧠",
+      icon: <IconBrain size={14} color="#6366f1" />,
       themeColor: "#6366f1",
       themeBg: "rgba(238, 242, 255, 0.8)",
       themeBorder: "rgba(199, 210, 254, 0.95)",
@@ -594,7 +670,13 @@ export function CollapsibleThought({
         ? "วางแผนจัดวางองค์ประกอบ คุมแสงเงา ประเมิน Precision Score เพื่อรักษาภาพเดิม"
         : "วิเคราะห์โจทย์ จัดวางสัดส่วน ประเมิน Detail Score & Precision Score เพื่อเลือกโมเดลสร้างภาพ",
       status: isLive ? (isAnalyzing ? "pending" : isPlanning ? "running" : "success") : "success",
-      statusText: isLive ? (isAnalyzing ? "รอดำเนินการ" : isPlanning ? "กำลังวางแผน..." : "เสร็จสิ้น") : "เสร็จสิ้น",
+      statusText: isLive
+        ? isAnalyzing
+          ? "รอดำเนินการ"
+          : isPlanning
+            ? "กำลังวางแผน..."
+            : "เสร็จสิ้น"
+        : "เสร็จสิ้น",
     });
 
     const specialistModel = toolLabel || "GPT Image 2";
@@ -602,14 +684,20 @@ export function CollapsibleThought({
       id: "step-specialist",
       name: isEdit ? "Image Editor" : "Image Specialist",
       modelBadge: specialistModel,
-      icon: "🎨",
+      icon: <IconPalette size={14} color="#ea580c" />,
       themeColor: "#ea580c",
       themeBg: "rgba(255, 237, 213, 0.8)",
       themeBorder: "rgba(254, 215, 170, 0.95)",
       task: isEdit
         ? "ปรับแต่งภาพ คุมแสงเงาและสไตล์เดิมตามคำสั่งของ Creative Director"
         : "เรนเดอร์ภาพกราฟิกความละเอียดสูงตามคอนเซปต์และสเปกของ Creative Director",
-      status: isLive ? (isGenerating ? "running" : isPlanning || isAnalyzing ? "pending" : "success") : "success",
+      status: isLive
+        ? isGenerating
+          ? "running"
+          : isPlanning || isAnalyzing
+            ? "pending"
+            : "success"
+        : "success",
       statusText: isLive ? (isGenerating ? "กำลังเรนเดอร์..." : "รอดำเนินการ") : "เสร็จสิ้น",
     });
 
@@ -617,7 +705,7 @@ export function CollapsibleThought({
       id: "step-reviewer",
       name: "Quality Reviewer",
       modelBadge: "Vision Quality Gate",
-      icon: "🛡️",
+      icon: <IconShieldCheck size={14} color="#9333ea" />,
       themeColor: "#9333ea",
       themeBg: "rgba(243, 232, 255, 0.8)",
       themeBorder: "rgba(233, 213, 255, 0.95)",
@@ -679,7 +767,7 @@ export function CollapsibleThought({
         }}
       >
         <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span style={{ fontSize: 12 }}>📋</span>
+          <IconClipboard size={13} color="#6366f1" />
           <span>การสั่งงาน Sub-Agents</span>
         </div>
         <span
@@ -911,7 +999,14 @@ export function CollapsibleThought({
             animation: isLive ? "artshiftBrainPulse 2s ease-in-out infinite" : undefined,
           }}
         />
-        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em", color: isLive ? "#4338ca" : "inherit" }}>
+        <span
+          style={{
+            fontSize: 12.5,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            color: isLive ? "#4338ca" : "inherit",
+          }}
+        >
           {isLive ? "กำลังคิดอยู่" : "ความคิดของ AI (Thought)"}
         </span>
         {isLive && (
@@ -987,8 +1082,8 @@ export function CollapsibleThought({
         />
       </button>
 
-      {isOpen && (
-        isLive ? (
+      {isOpen &&
+        (isLive ? (
           <div
             style={{
               position: "relative",
@@ -996,7 +1091,8 @@ export function CollapsibleThought({
               marginLeft: 2,
               padding: "10px 14px",
               borderLeft: "2.5px solid #6366f1",
-              background: "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
+              background:
+                "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
               borderRadius: "0 10px 10px 0",
               boxShadow: "0 2px 8px -2px rgba(99, 102, 241, 0.08)",
               display: "flex",
@@ -1013,7 +1109,8 @@ export function CollapsibleThought({
                 left: 0,
                 right: 0,
                 height: 2,
-                background: "linear-gradient(90deg, transparent 0%, #6366f1 30%, #a855f7 70%, transparent 100%)",
+                background:
+                  "linear-gradient(90deg, transparent 0%, #6366f1 30%, #a855f7 70%, transparent 100%)",
                 backgroundSize: "200% 100%",
                 animation: "artshiftShimmer 2s infinite linear",
               }}
@@ -1039,7 +1136,10 @@ export function CollapsibleThought({
                 }}
               >
                 <SpinnerIcon style={{ width: 12, height: 12, color: "#6366f1" }} />
-                <span key={currentMessage} style={{ animation: "artshiftSlideFadeIn 0.3s ease-out" }}>
+                <span
+                  key={currentMessage}
+                  style={{ animation: "artshiftSlideFadeIn 0.3s ease-out" }}
+                >
                   {currentMessage}
                 </span>
               </div>
@@ -1082,7 +1182,8 @@ export function CollapsibleThought({
               marginLeft: 2,
               padding: "10px 14px",
               borderLeft: "2.5px solid #818cf8",
-              background: "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
+              background:
+                "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
               borderRadius: "0 10px 10px 0",
               boxShadow: "0 2px 8px -2px rgba(99, 102, 241, 0.06)",
               display: "flex",
@@ -1107,8 +1208,7 @@ export function CollapsibleThought({
             {/* Sub-Agent Execution Details */}
             {renderSubAgentPanel()}
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 }
@@ -1129,9 +1229,7 @@ export function buildPromptWithTagsForCopy(msg: CoPilotMessage): string {
       }
     }
     if (missingRefs.length > 0) {
-      const prefix = missingRefs
-        .map((r) => `@[${r.displayName}:${r.objectId}]`)
-        .join(" ");
+      const prefix = missingRefs.map((r) => `@[${r.displayName}:${r.objectId}]`).join(" ");
       content = `${prefix} ${content}`.trim();
     }
   }
@@ -1349,9 +1447,7 @@ export default function ChatThread({
                       width: 26,
                       height: 26,
                       borderRadius: 8,
-                      border: isCopied
-                        ? "1px solid #10b981"
-                        : "1px solid #e2e8f0",
+                      border: isCopied ? "1px solid #10b981" : "1px solid #e2e8f0",
                       background: isCopied ? "#ecfdf5" : "#ffffff",
                       color: isCopied ? "#059669" : "#475569",
                       display: "flex",
@@ -1444,9 +1540,7 @@ export default function ChatThread({
           }
 
           const hasStructuredThought =
-            Boolean(msg.thought) ||
-            Boolean(msg.toolLabel) ||
-            (msg.images && msg.images.length > 0);
+            Boolean(msg.thought) || Boolean(msg.toolLabel) || (msg.images && msg.images.length > 0);
 
           return (
             <div
@@ -1599,14 +1693,19 @@ export default function ChatThread({
                             boxShadow: "0 1px 4px rgba(0, 0, 0, 0.25)",
                           }}
                         >
-                          <span style={{ fontSize: 11 }}>📷</span>
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <IconCamera size={11} color="#ffffff" />
+                          <span
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
                             @{img.label}
                           </span>
                         </div>
                       )}
 
-                      {/* biome-ignore lint/a11y/useAltText: AI generated image preview in chat message */}
                       {/* biome-ignore lint/performance/noImgElement: Direct chat message image rendering */}
                       <img
                         src={img.url}
@@ -1716,7 +1815,7 @@ export default function ChatThread({
                         }
                       }}
                     >
-                      <span>{sug}</span>
+                      {renderSuggestionLabel(sug)}
                     </button>
                   ))}
                 </div>
@@ -1820,12 +1919,10 @@ export default function ChatThread({
                       transition: "color 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
-                      if (feedbackState[msg.id] !== "down")
-                        e.currentTarget.style.color = "#475569";
+                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#475569";
                     }}
                     onMouseLeave={(e) => {
-                      if (feedbackState[msg.id] !== "down")
-                        e.currentTarget.style.color = "#94a3b8";
+                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#94a3b8";
                     }}
                   >
                     <ThumbsDownIcon />
@@ -1935,9 +2032,7 @@ export default function ChatThread({
                   }}
                 >
                   <SpinnerIcon style={{ color: "#4f46e5", width: 12, height: 12 }} />
-                  <span>
-                    สร้างรูปภาพด้วย {liveAssistantState.toolLabel || "GPT Image 2"}...
-                  </span>
+                  <span>สร้างรูปภาพด้วย {liveAssistantState.toolLabel || "GPT Image 2"}...</span>
                 </div>
 
                 {/* Skeleton placeholders */}
@@ -1959,8 +2054,7 @@ export default function ChatThread({
                         maxWidth: (liveAssistantState.requestedCount || 1) === 1 ? 380 : 190,
                         aspectRatio: "1 / 1",
                         borderRadius: 12,
-                        background:
-                          "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
+                        background: "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
                         backgroundSize: "200% 100%",
                         animation: "artshiftPulse 1.5s ease-in-out infinite",
                         border: "1px dashed #cbd5e1",

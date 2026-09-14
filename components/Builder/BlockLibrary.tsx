@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { IconChevronDown } from "@/components/icons";
+import { IconChevronDown, IconLayoutGrid, IconSearch, IconSparkles } from "@/components/icons";
 import {
   BUILDER_BLOCK_MIME,
   BUILDER_BLOCKS,
@@ -165,7 +165,9 @@ export default function BlockLibrary() {
           className={`${styles.libraryTab} ${styles.libraryTabAssistant} ${activeTab === "assistant" ? styles.libraryTabActive : ""}`}
           onClick={() => setActiveTab("assistant")}
         >
-          <span aria-hidden="true">✦</span>
+          <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center" }}>
+            <IconSparkles size={14} color="currentColor" />
+          </span>
           <span>AI Assistance</span>
         </button>
         <button
@@ -175,14 +177,18 @@ export default function BlockLibrary() {
           className={`${styles.libraryTab} ${activeTab === "blocks" ? styles.libraryTabActive : ""}`}
           onClick={() => setActiveTab("blocks")}
         >
-          <span aria-hidden="true">▦</span>
+          <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center" }}>
+            <IconLayoutGrid size={14} color="currentColor" />
+          </span>
           <span>Block</span>
         </button>
       </div>
 
       <div className={styles.libraryTabPanel} hidden={activeTab !== "blocks"}>
         <label className={styles.search}>
-          <span aria-hidden="true">⌕</span>
+          <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center" }}>
+            <IconSearch size={14} color="currentColor" />
+          </span>
           <input
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
@@ -205,8 +211,16 @@ export default function BlockLibrary() {
                   title={block.description}
                   aria-label={`Insert ${block.label} composition`}
                 >
-                  <span className={styles.glyph} aria-hidden="true">
-                    ▦
+                  <span
+                    className={styles.glyph}
+                    aria-hidden="true"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <IconLayoutGrid size={16} color="currentColor" />
                   </span>
                   <span className={styles.blockLabel}>{block.label}</span>
                 </button>

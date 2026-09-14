@@ -9,6 +9,7 @@ import {
   IconAlignMiddleV,
   IconAlignRight,
   IconAlignTop,
+  IconClose,
   IconCrop,
   IconDistributeH,
   IconDistributeV,
@@ -20,6 +21,8 @@ import {
   IconPathfinderMinusBack,
   IconPathfinderMinusFront,
   IconPathfinderUnite,
+  IconPenTool,
+  IconPolaroid,
   IconRotate,
 } from "@/components/icons";
 import { getBuilderBlockDefinition } from "@/lib/builder/blocks";
@@ -59,17 +62,17 @@ const DEFAULT_GRADIENT_COLORS: string[] = ["#6366f1", "#a855f7"];
 const DEFAULT_GRADIENT_STOPS: number[] = [0, 1];
 
 const FRAME_SHAPES: { shape: FrameMaskShape; label: string; glyph: string }[] = [
-  { shape: "circle", label: "Circle", glyph: "◎" },
+  { shape: "circle", label: "Circle", glyph: "○" },
   { shape: "roundedRect", label: "Rounded", glyph: "▢" },
   { shape: "diamond", label: "Diamond", glyph: "◇" },
   { shape: "triangle", label: "Triangle", glyph: "△" },
-  { shape: "star", label: "Star", glyph: "★" },
-  { shape: "heart", label: "Heart", glyph: "♥" },
+  { shape: "star", label: "Star", glyph: "☆" },
+  { shape: "heart", label: "Heart", glyph: "♡" },
   { shape: "hexagon", label: "Hexagon", glyph: "⬡" },
-  { shape: "plus", label: "Plus", glyph: "✚" },
+  { shape: "plus", label: "Plus", glyph: "+" },
   { shape: "arch", label: "Arch", glyph: "∩" },
-  { shape: "blob", label: "Blob", glyph: "🫧" },
-  { shape: "polaroid", label: "Polaroid", glyph: "🖼" },
+  { shape: "blob", label: "Blob", glyph: "◌" },
+  { shape: "polaroid", label: "Polaroid", glyph: "□" },
   { shape: "rect", label: "Rect", glyph: "□" },
 ];
 
@@ -701,7 +704,12 @@ export default function BuilderInspector() {
                     }
                   }}
                 >
-                  <span>✒ Convert to Editable Path</span>
+                  <span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <IconPenTool size={13} color="currentColor" />
+                      <span>Convert to Editable Path</span>
+                    </span>
+                  </span>
                 </button>
                 <p className={styles.fieldNote}>
                   Double-click artwork on canvas to edit anchor points directly.
@@ -726,7 +734,10 @@ export default function BuilderInspector() {
                     useEngine.getState().convertShapeToFrame(first.id);
                   }}
                 >
-                  <span>🖼️ Convert to Photo Frame</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <IconPolaroid size={13} color="currentColor" />
+                    <span>Convert to Photo Frame</span>
+                  </span>
                 </button>
                 <p className={styles.fieldNote}>
                   Transform this shape into a photo frame container with direct image clipping.
@@ -784,14 +795,14 @@ function VectorPathOptions({ path, apply }: { path: VectorPathElement; apply: Ve
           type="button"
           onClick={() => apply({ closed: !path.closed }, path.closed ? "open path" : "close path")}
         >
-          {path.closed ? "⬡ Closed Path" : "⤹ Open Path"}
+          {path.closed ? "Closed Path" : "Open Path"}
         </button>
         <button
           className={styles.secondaryButton}
           type="button"
           onClick={() => apply({ nodes: [...path.nodes].reverse() }, "reverse path")}
         >
-          Reverse ⇄
+          Reverse Path
         </button>
       </div>
 
@@ -805,7 +816,7 @@ function VectorPathOptions({ path, apply }: { path: VectorPathElement; apply: Ve
           }}
           title="Convert all anchor points to sharp corner vertices"
         >
-          ◿ Sharp Corners
+          Sharp Corners
         </button>
         <button
           className={styles.secondaryButton}
@@ -821,7 +832,7 @@ function VectorPathOptions({ path, apply }: { path: VectorPathElement; apply: Ve
           }}
           title="Convert all anchor points to smooth curve tangents"
         >
-          ◠ Smooth Curves
+          Smooth Curves
         </button>
       </div>
 
@@ -1026,9 +1037,14 @@ function FrameMaskOptions({
                 className={styles.dangerButton}
                 onClick={() => onSetImage(undefined)}
                 title="Remove photo"
-                style={{ padding: "0 8px" }}
+                style={{
+                  padding: "0 8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                ✕
+                <IconClose size={13} color="currentColor" />
               </button>
             </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { IconPenTool, IconScissors, IconSparkles, IconWand, IconZap } from "@/components/icons";
 import {
   type ProcessingPreview,
   type ProcessingPreviewKind,
@@ -22,13 +23,22 @@ const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   generate: "#2563eb",
 };
 
-const PREVIEW_ICON: Record<ProcessingPreviewKind, string> = {
-  extract: "✂",
-  "remove-bg": "✦",
-  vectorize: "◇",
-  upscale: "↗",
-  generate: "✦",
-};
+function renderPreviewIcon(kind: ProcessingPreviewKind, size = 15) {
+  switch (kind) {
+    case "extract":
+      return <IconScissors size={size} color="currentColor" />;
+    case "remove-bg":
+      return <IconWand size={size} color="currentColor" />;
+    case "vectorize":
+      return <IconPenTool size={size} color="currentColor" />;
+    case "upscale":
+      return <IconZap size={size} color="currentColor" />;
+    case "generate":
+      return <IconSparkles size={size} color="currentColor" />;
+    default:
+      return <IconSparkles size={size} color="currentColor" />;
+  }
+}
 
 export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen }: Props) {
   const [isDragging, setIsDragging] = useState(false);
@@ -209,7 +219,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
               flex: "0 0 auto",
             }}
           >
-            {PREVIEW_ICON[preview.kind]}
+            {renderPreviewIcon(preview.kind)}
           </span>
           <div style={{ minWidth: 0 }}>
             <strong style={{ display: "block", fontSize: 13, lineHeight: 1.2 }}>

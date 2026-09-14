@@ -135,7 +135,7 @@ export default function ContextMenu({ position, onClose }: Props) {
         { kind: "sep" },
         {
           kind: "item",
-          label: "✒ Edit Vector Points",
+          label: "Edit Vector Points",
           hint: "Double-click",
           onClick: () => {
             const slide = useEngine
@@ -168,7 +168,7 @@ export default function ContextMenu({ position, onClose }: Props) {
       { kind: "sep" },
       {
         kind: "item",
-        label: "★ Save to Preset",
+        label: "Save to Preset",
         onClick: () => {
           const slide = useEngine
             .getState()

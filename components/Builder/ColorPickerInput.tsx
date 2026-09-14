@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { IconPalette, IconTrash } from "@/components/icons";
 import {
   addColorToHistory,
   getColorHistory,
@@ -721,7 +722,7 @@ export default function ColorPickerInput({
               </div>
             </div>
 
-            {/* Active Stop Controls Bar: Stop Pill, Location input, Slider, + Add, 🗑 Delete */}
+            {/* Active Stop Controls Bar: Stop Pill, Location input, Slider, + Add, Delete */}
             <div
               style={{
                 display: "flex",
@@ -878,7 +879,7 @@ export default function ColorPickerInput({
                   transition: "all 0.1s ease",
                 }}
               >
-                🗑
+                <IconTrash size={12} color="currentColor" />
               </button>
             </div>
 
@@ -1344,7 +1345,7 @@ export default function ColorPickerInput({
                 pointerEvents: "none",
               }}
             >
-              <span style={{ fontSize: 10 }}>🎨</span>
+              <IconPalette size={11} color="rgba(255,255,255,0.9)" />
             </div>
           </div>
 

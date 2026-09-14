@@ -1,6 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  QUALITY_OPTIONS,
+  type QualitySelection,
+  renderQualityIcon,
+} from "@/components/AI/ChatComposer";
+import {
+  IconCamera,
+  IconClose,
+  IconCube,
+  IconDice,
+  IconFlower,
+  IconPalette,
+  IconPolaroid,
+  IconSparkles,
+  IconSpinner,
+  IconWarning,
+} from "@/components/icons";
 import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
 import {
   ASPECT_RATIOS,
@@ -10,9 +27,23 @@ import {
   INSPIRATION_PROMPTS,
 } from "@/lib/ai/imageGeneration";
 import type { PendingClarification } from "@/lib/ai/orchestration/turnOrchestrator";
-import { QUALITY_OPTIONS, type QualitySelection } from "@/components/AI/ChatComposer";
 
 type ImageStyleId = "photorealistic" | "digital-art" | "3d-render" | "anime";
+
+function renderStyleIcon(id: ImageStyleId) {
+  switch (id) {
+    case "photorealistic":
+      return <IconCamera size={14} color="#0284c7" />;
+    case "digital-art":
+      return <IconPalette size={14} color="#ea580c" />;
+    case "3d-render":
+      return <IconCube size={14} color="#06b6d4" />;
+    case "anime":
+      return <IconFlower size={14} color="#ec4899" />;
+    default:
+      return <IconPalette size={14} color="#6366f1" />;
+  }
+}
 
 const STYLE_PRESETS: Array<{
   id: ImageStyleId;
@@ -24,28 +55,28 @@ const STYLE_PRESETS: Array<{
   {
     id: "photorealistic",
     label: "Photorealistic",
-    badge: "📸",
+    badge: "",
     description: "Studio lighting, lifelike textures & faces",
     promptSuffix: "photorealistic, natural lens rendering, lifelike textures, studio lighting",
   },
   {
     id: "digital-art",
     label: "Digital Art",
-    badge: "🎨",
+    badge: "",
     description: "Creative concepts, balanced & versatile",
     promptSuffix: "polished digital art, expressive composition, rich color design",
   },
   {
     id: "3d-render",
     label: "3D Render",
-    badge: "🧊",
+    badge: "",
     description: "Isometric, cinematic 3D scene",
     promptSuffix: "high-quality 3D render, cinematic lighting, clean materials and depth",
   },
   {
     id: "anime",
     label: "Anime & Manga",
-    badge: "🌸",
+    badge: "",
     description: "Vibrant 2D illustration",
     promptSuffix: "vibrant 2D anime illustration, expressive linework, polished cel shading",
   },
@@ -210,14 +241,15 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
               }}
             >
-              ✨
+              <IconSparkles size={16} color="#ffffff" />
             </div>
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", margin: 0 }}>
                 AI Image Studio (Text-to-Image)
               </h2>
               <p style={{ fontSize: 11, color: "#64748b", margin: 0, marginTop: 2 }}>
-                Replicate · openai/gpt-image-2.5-sunburst · Tier 1 (Low) / Tier 2 (Med) / Tier 3 (High)
+                Replicate · openai/gpt-image-2.5-sunburst · Tier 1 (Low) / Tier 2 (Med) / Tier 3
+                (High)
               </p>
             </div>
           </div>
@@ -228,14 +260,16 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
             style={{
               background: "transparent",
               border: "none",
-              fontSize: 20,
               color: "#94a3b8",
               cursor: "pointer",
               padding: "4px 8px",
               borderRadius: 6,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            ✕
+            <IconClose size={18} color="#64748b" />
           </button>
         </div>
 
@@ -244,36 +278,26 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
           style={{
             display: "grid",
             gridTemplateColumns: "1.1fr 1fr",
-            gap: 20,
-            padding: 24,
-            overflowY: "auto",
+            minHeight: 520,
           }}
         >
-          {/* Director replies remain visible; only an actual image completion closes the modal. */}
-          {directorReply && (
-            <div role="status">
-              <p>{directorReply}</p>
-              {pending?.options.map((option) => (
-                <button
-                  type="button"
-                  key={option.id}
-                  disabled={loading}
-                  onClick={() => handleGenerate(option.label)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Left Column: Prompt & Controls */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Prompt Input Box */}
+          {/* Left Column: Configuration Controls */}
+          <div
+            style={{
+              padding: "20px 24px",
+              borderRight: "1px solid #f1f5f9",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+          >
+            {/* Prompt Input */}
             <div>
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
                   alignItems: "center",
+                  justifyContent: "space-between",
                   marginBottom: 6,
                 }}
               >
@@ -281,7 +305,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                   htmlFor="ai-prompt-input"
                   style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}
                 >
-                  Prompt (คำอธิบายภาพ)
+                  Prompt Description
                 </label>
                 <button
                   type="button"
@@ -295,10 +319,10 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
-                    gap: 3,
+                    gap: 4,
                   }}
                 >
-                  <span>🎲</span>
+                  <IconDice size={13} color="#6366f1" />
                   <span>Inspire Me</span>
                 </button>
               </div>
@@ -357,8 +381,10 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                         transition: "all 0.15s ease",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <span>{style.badge}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center" }}>
+                          {renderStyleIcon(style.id)}
+                        </span>
                         <strong style={{ fontSize: 11, color: active ? "#4338ca" : "#1e293b" }}>
                           {style.label}
                         </strong>
@@ -458,9 +484,13 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                         transition: "all 0.15s ease",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ fontSize: 11 }}>{opt.badge}</span>
-                        <span style={{ fontWeight: active ? 700 : 600 }}>{opt.id.toUpperCase()}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center" }}>
+                          {renderQualityIcon(opt.id, opt.accentColor, 12)}
+                        </span>
+                        <span style={{ fontWeight: active ? 700 : 600 }}>
+                          {opt.id.toUpperCase()}
+                        </span>
                       </div>
                       <span style={{ fontSize: 8.5, color: "#64748b" }}>{opt.price}</span>
                     </button>
@@ -482,7 +512,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span>✨</span>
+                <IconSparkles size={14} color="#6366f1" />
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "#1e293b" }}>
                     AI Prompt Magic
@@ -539,13 +569,13 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
             >
               {loading ? (
                 <>
-                  <span style={{ animation: "spin 1s linear infinite" }}>⏳</span>
-                  <span>🎨</span>
-                  <span>Creating with GPT Image 2...</span>
+                  <IconSpinner size={16} color="#fff" />
+                  <IconPalette size={16} color="#fff" />
+                  <span>Creating with Sunburst...</span>
                 </>
               ) : (
                 <>
-                  <span>✨</span>
+                  <IconSparkles size={15} color="#fff" />
                   <span>Generate Image</span>
                 </>
               )}
@@ -570,7 +600,9 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
           >
             {loading ? (
               <div style={{ textAlign: "center", padding: 20 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🎨</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                  <IconPalette size={38} color="#6366f1" />
+                </div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>
                   Creating your masterpiece...
                 </div>
@@ -580,7 +612,9 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
               </div>
             ) : error ? (
               <div style={{ textAlign: "center", color: "#fecaca", padding: 20 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+                  <IconWarning size={34} color="#f43f5e" />
+                </div>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>Task was not committed</div>
                 <div style={{ fontSize: 10, color: "#fda4af", marginTop: 5 }}>
                   The original Canvas remains unchanged.
@@ -588,7 +622,9 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
               </div>
             ) : (
               <div style={{ textAlign: "center", color: "#64748b", padding: 20 }}>
-                <div style={{ fontSize: 40, marginBottom: 8 }}>🖼️</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+                  <IconPolaroid size={42} color="#64748b" />
+                </div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
                   Ready to Create
                 </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { IconBuilding, IconClose, IconCrown, IconPalette, IconScale } from "@/components/icons";
 import { applyBrandKitToSlide } from "@/lib/brand/applyBrandKit";
 import {
   type BrandKit,
@@ -33,8 +34,7 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
 
   if (!isOpen) return null;
 
-  const currentSlide = doc.slides.find((s) => s.id === currentSlideId);
-  const compliance = currentSlide ? checkBrandCompliance(currentSlide, kit) : null;
+  const _currentSlide = doc.slides.find((s) => s.id === currentSlideId);
 
   function handleSave(updatedKit: BrandKit) {
     setKit(updatedKit);
@@ -45,27 +45,35 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
     handleSave(preset);
   }
 
-  function handleApplyToCurrentSlide() {
-    if (!currentSlide) return;
-    const transformed = applyBrandKitToSlide(currentSlide, kit);
-    const updatedSlides = doc.slides.map((s) => (s.id === currentSlideId ? transformed : s));
+  const handleApplyToCurrentSlide = () => {
+    const activeSlide = doc.slides.find((s) => s.id === currentSlideId);
+    if (!activeSlide) return;
+    const updated = applyBrandKitToSlide(activeSlide, kit);
     loadDoc({
       ...doc,
-      slides: updatedSlides,
+      slides: doc.slides.map((s) => (s.id === currentSlideId ? updated : s)),
       updatedAt: Date.now(),
     });
+    saveActiveBrandKit(kit);
     onClose();
-  }
+  };
 
-  function handleApplyToAllSlides() {
-    const updatedSlides = doc.slides.map((s) => applyBrandKitToSlide(s, kit));
-    loadDoc({
-      ...doc,
-      slides: updatedSlides,
-      updatedAt: Date.now(),
-    });
+  const handleApplyToAllSlides = () => {
+    let updatedSlides = doc.slides;
+    for (const slide of updatedSlides) {
+      updatedSlides = updatedSlides.map((s) =>
+        s.id === slide.id ? applyBrandKitToSlide(s, kit) : s,
+      );
+    }
+    loadDoc({ ...doc, slides: updatedSlides, updatedAt: Date.now() });
+    saveActiveBrandKit(kit);
     onClose();
-  }
+  };
+
+  const compliance = checkBrandCompliance(
+    doc.slides.find((s) => s.id === currentSlideId) || doc.slides[0],
+    kit,
+  );
 
   return (
     <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true">
@@ -73,13 +81,16 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
         {/* Header */}
         <div className={styles.header}>
           <div>
-            <h3 className={styles.title}>👑 Publisher Brand Kit & Enterprise Rules</h3>
+            <h3 className={styles.title} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <IconCrown size={20} color="#f59e0b" fill="#f59e0b" fillOpacity={0.25} />
+              Publisher Brand Kit & Enterprise Rules
+            </h3>
             <p className={styles.subtitle}>
               กำหนดอัตลักษณ์แบรนด์สำนักพิมพ์ สีประจำองค์กร ฟอนต์ และกฎเกณฑ์ความถูกต้อง
             </p>
           </div>
-          <button type="button" className={styles.closeBtn} onClick={onClose}>
-            ✕
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">
+            <IconClose size={16} />
           </button>
         </div>
 
@@ -131,9 +142,13 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
                 fontWeight: 600,
                 cursor: "pointer",
                 fontSize: "0.85rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              🏢 สำนักพิมพ์ & โลโก้
+              <IconBuilding size={14} color={activeTab === "identity" ? "#818cf8" : "#a1a1aa"} />
+              <span>สำนักพิมพ์ & โลโก้</span>
             </button>
             <button
               type="button"
@@ -147,9 +162,13 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
                 fontWeight: 600,
                 cursor: "pointer",
                 fontSize: "0.85rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              🎨 ชุดสี & Typography
+              <IconPalette size={14} color={activeTab === "colors" ? "#818cf8" : "#a1a1aa"} />
+              <span>ชุดสี & Typography</span>
             </button>
             <button
               type="button"
@@ -163,9 +182,13 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
                 fontWeight: 600,
                 cursor: "pointer",
                 fontSize: "0.85rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              ⚖️ กฎเกณฑ์ Brand Rules
+              <IconScale size={14} color={activeTab === "rules" ? "#818cf8" : "#a1a1aa"} />
+              <span>กฎเกณฑ์ Brand Rules</span>
             </button>
           </div>
 
@@ -469,8 +492,19 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
           >
             ปรับใช้กับสไลด์ปัจจุบัน (Apply to Current)
           </button>
-          <button type="button" className={styles.applyBtn} onClick={handleApplyToAllSlides}>
-            👑 ปรับใช้ Brand Kit กับทุกสไลด์ (Apply to All)
+          <button
+            type="button"
+            className={styles.applyBtn}
+            onClick={handleApplyToAllSlides}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <IconCrown size={15} color="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
+            <span>ปรับใช้ Brand Kit กับทุกสไลด์ (Apply to All)</span>
           </button>
         </div>
       </div>

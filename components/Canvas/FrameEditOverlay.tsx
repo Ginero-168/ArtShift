@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { IconCheck } from "@/components/icons";
 import { getFramePolaroidCutout, getFrameShapeSVGPath } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
@@ -471,9 +472,13 @@ export default function FrameEditOverlay({
             fontWeight: 600,
             cursor: "pointer",
             boxShadow: "0 1px 2px rgba(37, 99, 235, 0.3)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
-          ✓ Done
+          <IconCheck size={13} color="#ffffff" />
+          <span>Done</span>
         </button>
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  IconChevronDown,
   IconEye,
   IconEyeOff,
   IconGripVertical,
@@ -170,7 +171,7 @@ export default function LayerPanel() {
               title={`Click to switch to ${mode === "block" ? "Free" : "Block"} mode`}
               aria-label={`${displayName}: switch to ${mode === "block" ? "Free" : "Block"} mode`}
             >
-              {mode === "block" ? "⬡ BLOCK" : "◇ FREE"}
+              {mode === "block" ? "BLOCK" : "FREE"}
             </button>
             <button
               type="button"
@@ -251,7 +252,16 @@ export default function LayerPanel() {
                     }
                     onDoubleClick={() => selectOnly(entry.elements.map((element) => element.id))}
                   >
-                    <span aria-hidden="true">{collapsed ? "▸" : "▾"}</span>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: "inline-flex",
+                        transform: collapsed ? "rotate(-90deg)" : "none",
+                        transition: "transform 0.15s ease",
+                      }}
+                    >
+                      <IconChevronDown size={11} />
+                    </span>
                     <strong>{groupName} composition</strong>
                     <small>
                       {entry.elements.length} slots{allSelected ? " · selected" : ""}

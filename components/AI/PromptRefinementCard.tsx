@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { IconClose, IconPenEdit, IconWand } from "@/components/icons";
 import {
   buildRefinedPromptString,
   type PromptRefinementCardData,
@@ -18,9 +19,9 @@ export default function PromptRefinementCard({
   onDismiss,
 }: PromptRefinementCardProps) {
   // Local state for active selections: { [dimensionId]: optionId | null }
-  const [selections, setSelections] = useState<Record<string, string | null>>(
-    () => ({ ...data.selectedOptions })
-  );
+  const [selections, setSelections] = useState<Record<string, string | null>>(() => ({
+    ...data.selectedOptions,
+  }));
 
   const assembledPrompt = buildRefinedPromptString(data, selections);
 
@@ -74,7 +75,7 @@ export default function PromptRefinementCard({
               gap: 5,
             }}
           >
-            <span>🪄</span>
+            <IconWand size={14} color="#6366f1" />
             <span>Prompt ของผู้ใช้ ...</span>
           </div>
           <button
@@ -86,10 +87,12 @@ export default function PromptRefinementCard({
               border: "none",
               color: "#94a3b8",
               cursor: "pointer",
-              fontSize: 13,
               lineHeight: 1,
               padding: "2px 4px",
               borderRadius: 4,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               transition: "color 0.15s ease",
             }}
             onMouseEnter={(e) => {
@@ -99,7 +102,7 @@ export default function PromptRefinementCard({
               e.currentTarget.style.color = "#94a3b8";
             }}
           >
-            ✕
+            <IconClose size={13} color="currentColor" />
           </button>
         </div>
 
@@ -183,7 +186,10 @@ export default function PromptRefinementCard({
             e.currentTarget.style.boxShadow = "0 1.5px 5px rgba(79, 70, 229, 0.25)";
           }}
         >
-          <span>สร้างรูปภาพตามตัวเลือกนี้ 🪄</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span>สร้างรูปภาพตามตัวเลือกนี้</span>
+            <IconWand size={13} color="#ffffff" />
+          </span>
         </button>
 
         <button
@@ -208,7 +214,10 @@ export default function PromptRefinementCard({
             e.currentTarget.style.background = "#f1f5f9";
           }}
         >
-          <span>คัดลอกลงช่องพิมพ์ ✏️</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span>คัดลอกลงช่องพิมพ์</span>
+            <IconPenEdit size={12} color="#334155" />
+          </span>
         </button>
 
         <button
@@ -356,7 +365,7 @@ function DimensionRow({
               transition: "all 0.12s ease",
             }}
           >
-            ✕
+            <IconClose size={10} color={isCleared ? "#ffffff" : "#b91c1c"} />
           </button>
 
           {/* Option Pills */}

@@ -7,6 +7,7 @@ import {
   type VectorIconCategory,
   type VectorIconDefinition,
 } from "@/lib/builder/vectorIconLibrary";
+import { IconSparkles, IconClose, IconSearch, IconBulb } from "@/components/icons";
 
 interface IconLibraryModalProps {
   isOpen: boolean;
@@ -28,7 +29,7 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
         icon.name.toLowerCase().includes(query) ||
         icon.id.toLowerCase().includes(query) ||
         icon.category.toLowerCase().includes(query) ||
-        icon.keywords.some((kw) => kw.toLowerCase().includes(query))
+        icon.keywords.some((k) => k.toLowerCase().includes(query))
       );
     });
   }, [search, selectedCategory]);
@@ -43,35 +44,34 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 10000,
+        backgroundColor: "rgba(15, 23, 42, 0.5)",
+        backdropFilter: "blur(4px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(15, 23, 42, 0.45)",
-        backdropFilter: "blur(4px)",
-        padding: "16px",
+        zIndex: 10000,
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      onClick={onClose}
     >
       <div
         style={{
-          width: "min(720px, 95vw)",
-          maxHeight: "min(680px, 90vh)",
+          width: "90%",
+          maxWidth: 680,
+          maxHeight: "85vh",
           backgroundColor: "#ffffff",
-          borderRadius: 16,
+          borderRadius: 14,
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
           border: "1px solid #e2e8f0",
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
           style={{
-            padding: "16px 20px 14px",
+            padding: "16px 20px 12px",
             borderBottom: "1px solid #f1f5f9",
             display: "flex",
             alignItems: "center",
@@ -83,15 +83,15 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
               id="icon-modal-title"
               style={{
                 margin: 0,
-                fontSize: 18,
-                fontWeight: 600,
+                fontSize: 16,
+                fontWeight: 700,
                 color: "#0f172a",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
               }}
             >
-              <span style={{ color: "#4f46e5" }}>✦</span>
+              <IconSparkles size={18} color="#4f46e5" />
               Vector Icons (ไอคอนเวกเตอร์)
             </h2>
             <p
@@ -114,7 +114,6 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
               border: "none",
               backgroundColor: "#f1f5f9",
               color: "#64748b",
-              fontSize: 16,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -124,7 +123,7 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
             title="Close (ปิด)"
             aria-label="Close"
           >
-            ✕
+            <IconClose size={15} color="#64748b" />
           </button>
         </div>
 
@@ -147,12 +146,13 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
                 left: 12,
                 top: "50%",
                 transform: "translateY(-50%)",
-                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
                 color: "#94a3b8",
                 pointerEvents: "none",
               }}
             >
-              🔍
+              <IconSearch size={14} color="#94a3b8" />
             </span>
             <input
               type="text"
@@ -184,10 +184,13 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
                   background: "transparent",
                   color: "#94a3b8",
                   cursor: "pointer",
-                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 2,
                 }}
               >
-                ✕
+                <IconClose size={12} color="#94a3b8" />
               </button>
             )}
           </div>
@@ -349,8 +352,9 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
             justifyContent: "space-between",
           }}
         >
-          <span style={{ fontSize: 11.5, color: "#64748b" }}>
-            💡 เวกเตอร์ไอคอนสามารถเปลี่ยนสี Fill, Stroke และปรับขนาดได้อิสระที่ Property Panel
+          <span style={{ fontSize: 11.5, color: "#64748b", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <IconBulb size={14} color="#f59e0b" fill="#f59e0b" fillOpacity={0.25} />
+            <span>เวกเตอร์ไอคอนสามารถเปลี่ยนสี Fill, Stroke และปรับขนาดได้อิสระที่ Property Panel</span>
           </span>
           <button
             type="button"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { IconCamera } from "@/components/icons";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { parseInlineTagTokens } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
@@ -108,7 +109,7 @@ export default function InlineTagRenderer({
         }
 
         const activeRef = activePreviewId === seg.objectId ? matchedRef : null;
-        const activeDataUrl = activeRef
+        const _activeDataUrl = activeRef
           ? getCached(activeRef.fileId)?.dataURL
           : effectiveFileId
             ? getCached(effectiveFileId)?.dataURL
@@ -189,7 +190,7 @@ export default function InlineTagRenderer({
                   flexShrink: 0,
                 }}
               >
-                📷
+                <IconCamera size={10} color={isLight ? "#4338ca" : "#ffffff"} />
               </span>
             )}
             <span

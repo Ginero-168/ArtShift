@@ -291,11 +291,25 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       ctx.beginPath();
       ctx.arc(lx + s / 2, ly + s / 2, s / 1.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#fff";
-      ctx.font = `bold ${s}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("🔒", lx + s / 2, ly + s / 2);
+      const cx = lx + s / 2;
+      const cy = ly + s / 2;
+      const lw = s * 0.55;
+      const lh = s * 0.45;
+      // Shackle
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = Math.max(1, 1.2 / view.scale);
+      ctx.beginPath();
+      ctx.arc(cx, cy - lh * 0.25, lw * 0.35, Math.PI, 0);
+      ctx.stroke();
+      // Body
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(cx - lw / 2, cy - lh * 0.1, lw, lh, Math.max(1, 1 / view.scale));
+      } else {
+        ctx.rect(cx - lw / 2, cy - lh * 0.1, lw, lh);
+      }
+      ctx.fill();
       ctx.restore();
     }
 

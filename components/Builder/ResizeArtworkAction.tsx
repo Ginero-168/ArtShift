@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { IconLock, IconLockOpen } from "@/components/icons";
 import { useEngine } from "@/lib/engine/store";
 import styles from "./ResizeArtworkAction.module.css";
 
@@ -115,8 +116,13 @@ export default function ResizeArtworkAction() {
                   }}
                   title="Lock aspect ratio"
                   aria-pressed={locked}
+                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {locked ? "●" : "○"}
+                  {locked ? (
+                    <IconLock size={12} color="currentColor" />
+                  ) : (
+                    <IconLockOpen size={12} color="currentColor" />
+                  )}
                 </button>
                 <label>
                   <span>Height</span>

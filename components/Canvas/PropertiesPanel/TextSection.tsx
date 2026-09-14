@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconEye } from "@/components/icons";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement, TextElement } from "@/lib/engine/types";
@@ -179,7 +180,7 @@ export function TextSection({
             gap: 3,
           }}
         >
-          <span>👁️</span>
+          <IconEye size={13} color="currentColor" />
           <span>{contrastBusy ? "Checking..." : "Auto Contrast"}</span>
         </button>
       </Section>

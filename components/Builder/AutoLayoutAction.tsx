@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconSparkles } from "@/components/icons";
 import { useEngine } from "@/lib/engine/store";
 import styles from "./AutoLayoutAction.module.css";
 
@@ -31,8 +32,12 @@ export default function AutoLayoutAction() {
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <span aria-hidden="true" className={styles.icon}>
-          ✦
+        <span
+          aria-hidden="true"
+          className={styles.icon}
+          style={{ display: "inline-flex", alignItems: "center" }}
+        >
+          <IconSparkles size={14} color="currentColor" />
         </span>
         Smart Arrange
         <small>{preview ? "PREVIEW" : "LOCAL"}</small>

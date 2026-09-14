@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { IconClose, IconPencil, IconStar } from "@/components/icons";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { type Preset, type PresetFolder, usePresetStore } from "@/lib/engine/presetStore";
 import { useEngine } from "@/lib/engine/store";
@@ -78,8 +79,18 @@ export default function PresetPanel({ onClose }: Props) {
           borderBottom: "1px solid var(--stroke, #e5e7eb)",
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: 12, color: "var(--ink, #111)" }}>
-          ★ My Presets
+        <span
+          style={{
+            fontWeight: 600,
+            fontSize: 12,
+            color: "var(--ink, #111)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+          }}
+        >
+          <IconStar size={13} color="#f59e0b" fill="#f59e0b" />
+          <span>My Presets</span>
         </span>
         <span style={{ fontSize: 10, color: "var(--ink-muted, #9ca3af)" }}>
           {presets.length} saved
@@ -192,7 +203,9 @@ export default function PresetPanel({ onClose }: Props) {
             padding: "24px 0",
           }}
         >
-          <div style={{ fontSize: 28, marginBottom: 8 }}>⭐</div>
+          <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}>
+            <IconStar size={32} color="#fbbf24" fill="#fbbf24" fillOpacity={0.3} />
+          </div>
           <div style={{ fontSize: 11 }}>
             {activeFolderId === null
               ? "No presets yet."
@@ -533,7 +546,7 @@ function PresetCard({
             style={miniBtnStyle}
             title="Rename"
           >
-            ✎
+            <IconPencil size={11} color="currentColor" />
           </button>
           <button
             onClick={(e) => {
@@ -543,7 +556,7 @@ function PresetCard({
             style={miniBtnStyle}
             title="Delete"
           >
-            ×
+            <IconClose size={11} color="currentColor" />
           </button>
         </div>
       )}

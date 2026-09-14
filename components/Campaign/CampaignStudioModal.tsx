@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { IconCheck, IconClose } from "@/components/icons";
 import { exportCampaignBatchToZip, type ZipFolderStructure } from "@/lib/campaign/exportZip";
 import { type GeneratedBatchItem, generateCampaignBatch } from "@/lib/campaign/generator";
 import {
@@ -150,7 +151,7 @@ export default function CampaignStudioModal({ isOpen, onClose, onLoadIntoCanvas 
             <span className={styles.badge}>Batch Creative Pack</span>
           </div>
           <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">
-            ✕
+            <IconClose size={16} />
           </button>
         </div>
 
@@ -345,8 +346,18 @@ export default function CampaignStudioModal({ isOpen, onClose, onLoadIntoCanvas 
                       alignItems: "center",
                     }}
                   >
-                    <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#22c55e" }}>
-                      ✓ ตรวจพบข้อมูลหนังสือ {records.length} รายการ
+                    <span
+                      style={{
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        color: "#22c55e",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                      }}
+                    >
+                      <IconCheck size={14} color="#22c55e" />
+                      <span>ตรวจพบข้อมูลหนังสือ {records.length} รายการ</span>
                     </span>
                   </div>
                   <div className={styles.tableWrapper}>
@@ -479,9 +490,14 @@ export default function CampaignStudioModal({ isOpen, onClose, onLoadIntoCanvas 
                 >
                   <div>
                     <h3 style={{ margin: "0 0 0.25rem 0", fontSize: "1.1rem", fontWeight: 700 }}>
-                      {preflightReport.status === "pass"
-                        ? "✓ ผ่านการตรวจสอบคุณภาพ (Preflight Passed)"
-                        : `พบข้อสังเกต ${preflightReport.warningCount + preflightReport.errorCount} รายการ`}
+                      {preflightReport.status === "pass" ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <IconCheck size={16} color="currentColor" />
+                          <span>ผ่านการตรวจสอบคุณภาพ (Preflight Passed)</span>
+                        </span>
+                      ) : (
+                        `พบข้อสังเกต ${preflightReport.warningCount + preflightReport.errorCount} รายการ`
+                      )}
                     </h3>
                     <p style={{ margin: 0, fontSize: "0.85rem", opacity: 0.85 }}>
                       ผลิตชิ้นงานทั้งหมด {generatedBatch.length} ไฟล์ จากหนังสือ {records.length} เล่ม ×{" "}

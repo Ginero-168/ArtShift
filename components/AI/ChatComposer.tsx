@@ -1,10 +1,19 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/InlineTagEditor";
-import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
-import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { MagicWandPromptIcon, SendIcon, StopIcon } from "@/components/AI/ChatIcons";
+import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/InlineTagEditor";
+import {
+  IconCheck,
+  IconChevronDown,
+  IconCrown,
+  IconGem,
+  IconTierDot,
+  IconZap,
+} from "@/components/icons";
+import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
+import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
 
 export type QualitySelection = "auto" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -18,11 +27,28 @@ export interface QualityOption {
   accentColor: string;
 }
 
+export function renderQualityIcon(id: QualitySelection, accentColor: string, size = 14) {
+  switch (id) {
+    case "auto":
+      return <IconZap size={size} fill={accentColor} stroke={accentColor} />;
+    case "low":
+    case "medium":
+    case "high":
+      return <IconTierDot size={size} color={accentColor} />;
+    case "xhigh":
+      return <IconGem size={size} color={accentColor} fill={accentColor} fillOpacity={0.25} />;
+    case "max":
+      return <IconCrown size={size} color={accentColor} fill={accentColor} fillOpacity={0.3} />;
+    default:
+      return <IconZap size={size} color={accentColor} />;
+  }
+}
+
 export const QUALITY_OPTIONS: readonly QualityOption[] = [
   {
     id: "auto",
     label: "Auto (ตาม Detail Tier)",
-    badge: "⚡",
+    badge: "",
     price: "Auto",
     tier: "Tier 1-3",
     description: "คำนวณอัตโนมัติ: Tier 1 (Low) / Tier 2 (Med) / Tier 3 (High)",
@@ -31,7 +57,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
   {
     id: "low",
     label: "Tier 1 · Low",
-    badge: "🟢",
+    badge: "",
     price: "$0.012",
     tier: "Tier 1 (0–3)",
     description: "ประหยัด & สร้างภาพรวดเร็ว เหมาะกับงานร่าง",
@@ -40,7 +66,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
   {
     id: "medium",
     label: "Tier 2 · Medium",
-    badge: "🔵",
+    badge: "",
     price: "$0.047",
     tier: "Tier 2 (4–7)",
     description: "คุณภาพมาตรฐาน คมชัดสมดุล สำหรับงานทั่วไป",
@@ -49,7 +75,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
   {
     id: "high",
     label: "Tier 3 · High",
-    badge: "🟣",
+    badge: "",
     price: "$0.128",
     tier: "Tier 3 (8–10)",
     description: "ความละเอียดสูง สำหรับงานจริง/สื่อพิมพ์/ตัวหนังสือ",
@@ -58,7 +84,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
   {
     id: "xhigh",
     label: "X-High",
-    badge: "💎",
+    badge: "",
     price: "$0.250",
     tier: "Special",
     description: "ความคมชัดระดับสูงพิเศษ เก็บรายละเอียดลึก",
@@ -67,7 +93,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
   {
     id: "max",
     label: "Max",
-    badge: "👑",
+    badge: "",
     price: "$0.500",
     tier: "Masterwork",
     description: "รายละเอียดสูงสุดระดับ Masterwork ละเอียดทุกพิกเซล",
@@ -120,10 +146,7 @@ export default function ChatComposer({
   // Close dropdown on outside click or escape key
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        qualityMenuRef.current &&
-        !qualityMenuRef.current.contains(event.target as Node)
-      ) {
+      if (qualityMenuRef.current && !qualityMenuRef.current.contains(event.target as Node)) {
         setIsQualityMenuOpen(false);
       }
     }
@@ -189,23 +212,19 @@ export default function ChatComposer({
                   ? `1.5px solid ${activeOption.accentColor}`
                   : "1px solid #e2e8f0",
               background:
-                selectedQuality !== "auto"
-                  ? "#f8fafc"
-                  : isQualityMenuOpen
-                    ? "#f1f5f9"
-                    : "#ffffff",
+                selectedQuality !== "auto" ? "#f8fafc" : isQualityMenuOpen ? "#f1f5f9" : "#ffffff",
               color: "#1e293b",
               fontSize: 11.5,
               fontWeight: 600,
               cursor: busy ? "not-allowed" : "pointer",
               transition: "all 0.15s ease",
-              boxShadow: isQualityMenuOpen
-                ? "0 2px 8px rgba(99, 102, 241, 0.15)"
-                : "none",
+              boxShadow: isQualityMenuOpen ? "0 2px 8px rgba(99, 102, 241, 0.15)" : "none",
             }}
             title="คลิกเพื่อเลือกระดับคุณภาพของภาพ (openai/gpt-image-2.5-sunburst)"
           >
-            <span>{activeOption.badge}</span>
+            <span style={{ display: "inline-flex", alignItems: "center" }}>
+              {renderQualityIcon(activeOption.id, activeOption.accentColor, 14)}
+            </span>
             <span>Quality:</span>
             <span style={{ color: activeOption.accentColor, fontWeight: 700 }}>
               {activeOption.label.split(" · ")[1] || activeOption.label}
@@ -223,8 +242,17 @@ export default function ChatComposer({
                 {activeOption.price}
               </span>
             )}
-            <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 2 }}>
-              {isQualityMenuOpen ? "▲" : "▼"}
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                color: "#94a3b8",
+                marginLeft: 2,
+                transform: isQualityMenuOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.15s ease",
+              }}
+            >
+              <IconChevronDown size={11} />
             </span>
           </button>
 
@@ -239,7 +267,8 @@ export default function ChatComposer({
                 background: "#ffffff",
                 border: "1px solid #e2e8f0",
                 borderRadius: 12,
-                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                boxShadow:
+                  "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                 padding: "6px",
                 display: "flex",
                 flexDirection: "column",
@@ -276,7 +305,15 @@ export default function ChatComposer({
               </div>
 
               {/* Options List */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  maxHeight: 280,
+                  overflowY: "auto",
+                }}
+              >
                 {QUALITY_OPTIONS.map((opt) => {
                   const isSelected = selectedQuality === opt.id;
                   return (
@@ -308,7 +345,9 @@ export default function ChatComposer({
                         if (!isSelected) e.currentTarget.style.background = "transparent";
                       }}
                     >
-                      <span style={{ fontSize: 14, marginTop: 1 }}>{opt.badge}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", marginTop: 2 }}>
+                        {renderQualityIcon(opt.id, opt.accentColor, 15)}
+                      </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
@@ -352,8 +391,14 @@ export default function ChatComposer({
                         </div>
                       </div>
                       {isSelected && (
-                        <span style={{ color: opt.accentColor, fontSize: 12, fontWeight: 700 }}>
-                          ✓
+                        <span
+                          style={{
+                            color: opt.accentColor,
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <IconCheck size={14} color={opt.accentColor} />
                         </span>
                       )}
                     </button>
@@ -463,9 +508,7 @@ export default function ChatComposer({
                 boxShadow: isPromptHelperOpen ? "0 0 0 2px rgba(99, 102, 241, 0.2)" : "none",
               }}
               title={
-                isPromptHelperOpen
-                  ? "ปิดตัวช่วยแต่ง Prompt"
-                  : "เปิดตัวช่วยแต่ง Prompt (Prompt Helper)"
+                isPromptHelperOpen ? "ปิดตัวช่วยแต่ง Prompt" : "เปิดตัวช่วยแต่ง Prompt (Prompt Helper)"
               }
               onMouseEnter={(e) => {
                 if (!busy && !isPromptHelperOpen) {

@@ -1,6 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  IconCamera,
+  IconChevronDown,
+  IconCloud,
+  IconContrast,
+  IconPalette,
+  IconPenTool,
+  IconPolaroid,
+  IconSparkles,
+  IconTrash,
+  IconWand,
+  IconZap,
+} from "@/components/icons";
 import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
 import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import {
@@ -1129,7 +1142,14 @@ export function VisionObjectIsolator({
         }}
       >
         <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent, #6366f1)" }}>
-          {activeTool ? `${IMAGE_ACTION_LABELS[activeTool]} Settings` : "✨ Image Intelligence"}
+          {activeTool ? (
+            `${IMAGE_ACTION_LABELS[activeTool]} Settings`
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <IconSparkles size={13} color="var(--accent, #6366f1)" />
+              Image Intelligence
+            </span>
+          )}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {progress !== null && <span style={{ fontSize: 9, color: "#6b7280" }}>{progress}%</span>}
@@ -1147,7 +1167,10 @@ export function VisionObjectIsolator({
               borderRadius: 3,
             }}
           >
-            🗑️ Clear
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+              <IconTrash size={10} color="#94a3b8" />
+              Clear
+            </span>
           </button>
         </div>
       </div>
@@ -1227,7 +1250,9 @@ export function VisionObjectIsolator({
             gap: 3,
           }}
         >
-          <span>🪄</span>
+          <span>
+            <IconWand size={12} color="var(--accent, #6366f1)" />
+          </span>
           <span>{busy ? "Processing..." : "RemoveBG"}</span>
         </button>
 
@@ -1283,7 +1308,7 @@ export function VisionObjectIsolator({
             whiteSpace: "nowrap",
           }}
         >
-          <span>◇</span>
+          <IconPenTool size={11} color="currentColor" />
           <span>Vectorize</span>
         </button>
       </div>
@@ -1312,7 +1337,9 @@ export function VisionObjectIsolator({
             whiteSpace: "nowrap",
           }}
         >
-          <span>☁</span>
+          <span>
+            <IconCloud size={12} color="#0f766e" />
+          </span>
           <span>Vectorize(Cloud)</span>
         </button>
         {processingJobIdRef.current && !vectorizeOpen && (
@@ -1541,9 +1568,13 @@ export function VisionObjectIsolator({
                   color: preset === "highFidelity" ? "#4338ca" : "#334155",
                   cursor: "pointer",
                   textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
-                🌟 High-Fidelity (24c)
+                <IconSparkles size={11} color="#f59e0b" />
+                <span>High-Fidelity (24c)</span>
               </button>
               <button
                 type="button"
@@ -1559,9 +1590,13 @@ export function VisionObjectIsolator({
                   color: preset === "photoDetailed" ? "#4338ca" : "#334155",
                   cursor: "pointer",
                   textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
-                📸 Photo Ultra (36c)
+                <IconCamera size={11} color="#0284c7" />
+                <span>Photo Ultra (36c)</span>
               </button>
               <button
                 type="button"
@@ -1577,9 +1612,13 @@ export function VisionObjectIsolator({
                   color: preset === "illustration" ? "#4338ca" : "#334155",
                   cursor: "pointer",
                   textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
-                🎨 Illustration (12c)
+                <IconPalette size={11} color="#ea580c" />
+                <span>Illustration (12c)</span>
               </button>
               <button
                 type="button"
@@ -1595,9 +1634,13 @@ export function VisionObjectIsolator({
                   color: preset === "clipart" ? "#4338ca" : "#334155",
                   cursor: "pointer",
                   textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
-                🖼️ Clipart (8c)
+                <IconPolaroid size={11} color="#10b981" />
+                <span>Clipart (8c)</span>
               </button>
               <button
                 type="button"
@@ -1613,9 +1656,13 @@ export function VisionObjectIsolator({
                   color: preset === "lineArt" ? "#4338ca" : "#334155",
                   cursor: "pointer",
                   textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
-                ✒️ Line Art (Ink)
+                <IconPenTool size={11} color="#6366f1" />
+                <span>Line Art (Ink)</span>
               </button>
               <button
                 type="button"
@@ -1631,9 +1678,13 @@ export function VisionObjectIsolator({
                   color: preset === "silhouette" ? "#4338ca" : "#334155",
                   cursor: "pointer",
                   textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                 }}
               >
-                🖤 Silhouette (B&W)
+                <IconContrast size={11} color="#1e293b" />
+                <span>Silhouette (B&W)</span>
               </button>
             </div>
             <div
@@ -1780,7 +1831,16 @@ export function VisionObjectIsolator({
                 gap: 3,
               }}
             >
-              <span>{showAdvanced ? "▼" : "▶"}</span>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  transform: showAdvanced ? "rotate(0deg)" : "rotate(-90deg)",
+                  transition: "transform 0.15s ease",
+                }}
+              >
+                <IconChevronDown size={10} />
+              </span>
               <span>Advanced Detail & Curve Controls</span>
             </button>
 
@@ -2070,7 +2130,7 @@ export function VisionObjectIsolator({
                 boxShadow: "0 1px 3px rgba(99, 102, 241, 0.3)",
               }}
             >
-              <span>⚡</span>
+              <IconZap size={12} color="#ffffff" fill="#ffffff" />
               <span>{busy ? "Tracing Vector..." : "Generate VTracer Paths"}</span>
             </button>
             {processingJobIdRef.current && (
