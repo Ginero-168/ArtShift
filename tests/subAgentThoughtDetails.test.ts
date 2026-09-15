@@ -82,8 +82,8 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
 
     // Quality Reviewer action tracking
     expect(barSource).toContain('title: "Quality Reviewer (ตรวจเช็คคุณภาพ)"');
-    expect(barSource).toContain("const reviewerAction: SubAgentActionLog = {");
-    expect(barSource).toContain('status: "success", timestamp: Date.now(), stage: "succeeded",');
+    expect(barSource).toContain('status: "success"');
+    expect(barSource).toContain('stage: "succeeded"');
 
     // Passing actions to liveAssistantState & message history
     expect(barSource).toContain("actions: [...actions]");

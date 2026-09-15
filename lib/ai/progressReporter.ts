@@ -50,3 +50,18 @@ export function reportAIResult(event: {
     progress: 100,
   });
 }
+
+/** Publish a failed tool result as an assistant error message in AI Assistance Chat. */
+export function reportAIError(event: {
+  taskId: string;
+  operation: string;
+  message: string;
+  timestamp?: number;
+}): void {
+  reportAIProgress({
+    ...event,
+    stage: "error",
+    status: "error",
+    presentation: "result",
+  });
+}

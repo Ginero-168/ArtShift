@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { IconPenTool, IconScissors, IconSparkles, IconWand, IconZap } from "@/components/icons";
+import { IconBrief, IconPenTool, IconScissors, IconSparkles, IconWand, IconZap } from "@/components/icons";
 import {
   type ProcessingPreview,
   type ProcessingPreviewKind,
@@ -21,6 +21,7 @@ const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   vectorize: "#4f46e5",
   upscale: "#7c3aed",
   generate: "#2563eb",
+  brief: "#6366f1",
 };
 
 function renderPreviewIcon(kind: ProcessingPreviewKind, size = 15) {
@@ -35,6 +36,8 @@ function renderPreviewIcon(kind: ProcessingPreviewKind, size = 15) {
       return <IconZap size={size} color="currentColor" />;
     case "generate":
       return <IconSparkles size={size} color="currentColor" />;
+    case "brief":
+      return <IconBrief size={size} color="currentColor" />;
     default:
       return <IconSparkles size={size} color="currentColor" />;
   }

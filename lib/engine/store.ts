@@ -144,6 +144,7 @@ export type EngineState = {
   currentSlideId: string;
   activeLayerId: string;
   selectedIds: Set<string>;
+  selectionVersion: number;
   editorMode: EditorMode;
   tool: Tool;
   lineSubtype: LineSubtype;
@@ -388,6 +389,7 @@ export const useEngine = create<EngineState>((set, get) => {
     currentSlideId: initial.slides[0].id,
     activeLayerId: initial.slides[0].layers[0].id,
     selectedIds: new Set<string>(),
+    selectionVersion: 0,
     editorMode: "vector" as EditorMode,
     tool: "select" as Tool,
     clipboard: null as EngineElement[] | null,
@@ -576,6 +578,7 @@ export const useEngine = create<EngineState>((set, get) => {
           currentSlideId: id,
           activeLayerId: slide?.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
           selectedIds: new Set(),
+          selectionVersion: (state.selectionVersion || 0) + 1,
           activeRasterSelection: null,
           smartArrangePreview: null,
         };
@@ -585,7 +588,7 @@ export const useEngine = create<EngineState>((set, get) => {
       set((state) => {
         const slide = state.doc.slides.find((candidate) => candidate.id === state.currentSlideId);
         if (!slide?.layers.some((layer) => layer.id === id)) return state;
-        return { activeLayerId: id, selectedIds: new Set(), croppingImageId: null };
+        return { activeLayerId: id, selectedIds: new Set(), selectionVersion: (state.selectionVersion || 0) + 1, croppingImageId: null };
       }),
 
     selectOnly: (ids) =>
@@ -594,6 +597,7 @@ export const useEngine = create<EngineState>((set, get) => {
         const layer = ids[0] && slide ? getLayerForObject(slide, ids[0]) : undefined;
         return {
           selectedIds: new Set(ids),
+          selectionVersion: (state.selectionVersion || 0) + 1,
           activeLayerId: layer?.id ?? state.activeLayerId,
           croppingImageId: null,
         };
@@ -607,11 +611,17 @@ export const useEngine = create<EngineState>((set, get) => {
         const layer = slide ? getLayerForObject(slide, id) : undefined;
         return {
           selectedIds: next,
+          selectionVersion: (s.selectionVersion || 0) + 1,
           activeLayerId: layer?.id ?? s.activeLayerId,
           croppingImageId: null,
         };
       }),
-    clearSelection: () => set({ selectedIds: new Set(), croppingImageId: null }),
+    clearSelection: () =>
+      set((s) => ({
+        selectedIds: new Set(),
+        selectionVersion: (s.selectionVersion || 0) + 1,
+        croppingImageId: null,
+      })),
 
     addElement: (el, label = "add element") => {
       const s = get();

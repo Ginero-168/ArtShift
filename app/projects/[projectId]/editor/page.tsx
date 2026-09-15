@@ -15,7 +15,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ProfileMenu from "@/components/Auth/ProfileMenu";
 import BlockLibrary from "@/components/Builder/BlockLibrary";
 import BuilderInspector from "@/components/Builder/BuilderInspector";
@@ -78,6 +78,68 @@ const SLIDE_BG_PALETTE = [
   "#d0ebff",
 ];
 
+/* ——— Auto Save Status Indicator ——— */
+function AutoSaveIndicator({ status }: { status: "saving" | "saved" }) {
+  const isSaving = status === "saving";
+  const label = isSaving ? "กำลัง Save" : "Save แล้ว";
+  return (
+    <div
+      className={`auto-save-indicator ${isSaving ? "is-saving" : "is-saved"}`}
+      data-status={status}
+      role="status"
+      aria-live="polite"
+      aria-label={label}
+      title={label}
+    >
+      {isSaving ? (
+        <svg
+          className="auto-save-spin"
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="currentColor"
+            strokeOpacity="0.25"
+            strokeWidth="2.5"
+          />
+          <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2.5" />
+        </svg>
+      ) : (
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeOpacity="0.35"
+          />
+          <path d="m8.5 12.2 2.3 2.3 4.7-4.7" strokeWidth="2.2" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectEditorPage() {
   const router = useRouter();
   const params = useParams();
@@ -106,9 +168,11 @@ export default function ProjectEditorPage() {
 
   const [_project, setProject] = useState<ProjectMetadata | null>(null);
   const [projectName, setProjectName] = useState("Untitled Project");
+  const [projectNameWidth, setProjectNameWidth] = useState(48);
   const [loaded, setLoaded] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"saving" | "saved">("saved");
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -120,6 +184,7 @@ export default function ProjectEditorPage() {
   const [campaignStudioOpen, setCampaignStudioOpen] = useState(false);
   const [brandKitOpen, setBrandKitOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const projectNameMeasureRef = useRef<HTMLSpanElement | null>(null);
   const persistedRevision = useRef<number | null>(null);
   const saveRequest = useRef(0);
 
@@ -177,6 +242,7 @@ export default function ProjectEditorPage() {
 
         void projectStore.touchLastOpened(projectId);
         setLoaded(true);
+        setSaveStatus("saved");
       } catch (err) {
         if (!cancelled) {
           setSaveError(err instanceof Error ? err.message : "Failed to load project");
@@ -190,6 +256,37 @@ export default function ProjectEditorPage() {
     };
   }, [projectId, loadDoc]);
 
+  useLayoutEffect(() => {
+    let cancelled = false;
+    const measureProjectName = () => {
+      if (cancelled || !projectNameMeasureRef.current) return;
+      const titleText = projectName || "Untitled Project";
+      if (projectNameMeasureRef.current.textContent !== titleText) return;
+      const measuredWidth = Math.ceil(projectNameMeasureRef.current.getBoundingClientRect().width);
+      const fallbackWidth = Math.max(48, Math.ceil(titleText.length * 6 + 16));
+      const width = Math.max(measuredWidth, fallbackWidth);
+      setProjectNameWidth((current) => (current === width ? current : width));
+    };
+
+    measureProjectName();
+    const frame = requestAnimationFrame(measureProjectName);
+    const measureElement = projectNameMeasureRef.current;
+    const observer =
+      typeof ResizeObserver === "undefined" || !measureElement
+        ? null
+        : new ResizeObserver(measureProjectName);
+    if (observer && measureElement) observer.observe(measureElement);
+    if (typeof document.fonts?.ready?.then === "function") {
+      void document.fonts.ready.then(measureProjectName);
+    }
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [projectName]);
+
   // Scoped Auto-save
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -197,6 +294,7 @@ export default function ProjectEditorPage() {
     const unsubscribe = useEngine.subscribe((state, previous) => {
       if (state.doc.updatedAt === previous.doc.updatedAt) return;
       if (persistedRevision.current === state.doc.updatedAt) return;
+      setSaveStatus("saving");
       if (saveTimer.current) clearTimeout(saveTimer.current);
       const request = ++saveRequest.current;
       const nextDoc = state.doc;
@@ -207,8 +305,10 @@ export default function ProjectEditorPage() {
         if (result.ok) {
           persistedRevision.current = revision;
           setSaveError(null);
+          setSaveStatus("saved");
         } else {
           setSaveError(result.message);
+          setSaveStatus("saved");
         }
       }, 500);
     });
@@ -223,8 +323,10 @@ export default function ProjectEditorPage() {
     const finalName = name.trim() || "Untitled Project";
     setProjectName(finalName);
     if (!projectId || notFound) return;
+    setSaveStatus("saving");
     await projectStore.renameProject(projectId, finalName);
     setDocTitle(finalName);
+    setSaveStatus("saved");
   };
 
   // Close menu on outside click
@@ -244,7 +346,9 @@ export default function ProjectEditorPage() {
     const engineDoc = await importLegacyStoreDocument();
     loadDoc(engineDoc);
     if (projectId) {
+      setSaveStatus("saving");
       await projectStore.saveProjectDocument(projectId, engineDoc);
+      setSaveStatus("saved");
     }
     setMenuOpen(false);
   }
@@ -308,7 +412,10 @@ export default function ProjectEditorPage() {
     };
     loadDoc(updatedDoc);
     if (projectId) {
-      void projectStore.saveProjectDocument(projectId, updatedDoc);
+      setSaveStatus("saving");
+      void projectStore.saveProjectDocument(projectId, updatedDoc).then(() => {
+        setSaveStatus("saved");
+      });
     }
     setCampaignStudioOpen(false);
   }
@@ -318,7 +425,9 @@ export default function ProjectEditorPage() {
       const emptyDoc = createEmptyEngineDoc(projectName);
       loadDoc(emptyDoc);
       if (projectId) {
+        setSaveStatus("saving");
         await projectStore.saveProjectDocument(projectId, emptyDoc);
+        setSaveStatus("saved");
       }
       setMenuOpen(false);
     }
@@ -446,53 +555,59 @@ export default function ProjectEditorPage() {
             </div>
           </Link>
 
-          {/* Inline Editable Project Name */}
-          <input
-            type="text"
-            value={projectName}
-            onChange={(e) => {
-              setProjectName(e.target.value);
-            }}
-            onBlur={(e) => handleRename(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-            }}
-            placeholder="Untitled Project"
-            aria-label="Project Title"
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "var(--ink, #111827)",
-              background: "transparent",
-              border: "1px solid transparent",
-              borderRadius: 6,
-              padding: "4px 8px",
-              outline: "none",
-              width: "auto",
-              minWidth: 140,
-              maxWidth: 320,
-              transition: "all 0.15s ease",
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.background = "var(--surface-solid, #ffffff)";
-              e.currentTarget.style.borderColor = "var(--accent, #6366f1)";
-              e.currentTarget.style.boxShadow = "0 0 0 2px rgba(99, 102, 241, 0.15)";
-            }}
-            onMouseEnter={(e) => {
-              if (document.activeElement !== e.currentTarget) {
-                e.currentTarget.style.background = "var(--surface-hover, #f3f4f6)";
-                e.currentTarget.style.borderColor = "var(--stroke, #e5e7eb)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (document.activeElement !== e.currentTarget) {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.borderColor = "transparent";
-              }
-            }}
-          />
+          {/* Inline Editable Project Name + attached save state */}
+          <div className="project-title-group">
+            <span ref={projectNameMeasureRef} className="project-title-measure" aria-hidden="true">
+              {projectName || "Untitled Project"}
+            </span>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => {
+                setProjectName(e.target.value);
+                setSaveStatus("saving");
+              }}
+              onBlur={(e) => handleRename(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder="Untitled Project"
+              aria-label="Project Title"
+              className="project-title-input"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--ink, #111827)",
+                background: "transparent",
+                border: "1px solid transparent",
+                borderRadius: 6,
+                padding: "4px 8px",
+                outline: "none",
+                width: projectNameWidth,
+                transition: "all 0.15s ease",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.background = "var(--surface-solid, #ffffff)";
+                e.currentTarget.style.borderColor = "var(--accent, #6366f1)";
+                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(99, 102, 241, 0.15)";
+              }}
+              onMouseEnter={(e) => {
+                if (document.activeElement !== e.currentTarget) {
+                  e.currentTarget.style.background = "var(--surface-hover, #f3f4f6)";
+                  e.currentTarget.style.borderColor = "var(--stroke, #e5e7eb)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (document.activeElement !== e.currentTarget) {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.borderColor = "transparent";
+                }
+              }}
+            />
+            <AutoSaveIndicator status={saveStatus} />
+          </div>
 
           {saveError && (
             <span
@@ -697,7 +812,10 @@ export default function ProjectEditorPage() {
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <SlideRail />
         <BlockLibrary />
-        <div style={{ flex: 1, position: "relative" }} className="canvas-stage">
+        <div
+          style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}
+          className="canvas-stage"
+        >
           {loaded && (
             <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
           )}
@@ -1147,8 +1265,8 @@ export default function ProjectEditorPage() {
             </div>
           </div>
 
-          <BuilderInspector />
         </div>
+        <BuilderInspector />
       </div>
 
       {/* ——— Modals ——— */}

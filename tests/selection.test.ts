@@ -68,3 +68,16 @@ describe("interactive elements", () => {
     expect(getInteractiveElements(slide).map((element) => element.id)).toEqual([visible.id]);
   });
 });
+
+describe("unified group bounding box", () => {
+  it("implements unified group bounding box clustering in CanvasRoot", async () => {
+    const { readFileSync } = await import("fs");
+    const canvasRootSource = readFileSync("components/Canvas/CanvasRoot.tsx", "utf-8");
+
+    expect(canvasRootSource).toContain('import { unionBBox } from "@/lib/engine/bounds";');
+    expect(canvasRootSource).toContain("clusters: EngineElement[][]");
+    expect(canvasRootSource).toContain("other.groupIds.some((g) => current.groupIds.includes(g))");
+    expect(canvasRootSource).toContain("const bbox = unionBBox(cluster);");
+    expect(canvasRootSource).toContain("ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);");
+  });
+});

@@ -39,9 +39,12 @@ export type ObjectContextIconName =
   | "minus-back"
   | "divide"
   | "merge"
+  | "brief"
   | "object";
 
 const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Object.freeze({
+  "Convert to Brief": "brief",
+  "Creating Brief...": "brief",
   "Flip Horizontal": "flip-horizontal",
   "Flip Vertical": "flip-vertical",
   "Rotate 90°": "rotate",
@@ -62,6 +65,7 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   Align: "align",
   Distribute: "distribute",
   Group: "group",
+  Ungroup: "group",
   Color: "color",
   Fill: "fill",
   Stroke: "stroke",

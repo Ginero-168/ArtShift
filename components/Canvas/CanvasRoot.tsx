@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { unionBBox } from "@/lib/engine/bounds";
 import { cellsForPlacement, getAllHexCells, getHexMetrics } from "@/lib/engine/hexLayout";
 import { createPointerGestureRouter } from "@/lib/engine/pointerGestureRouter";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
@@ -262,22 +263,73 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     // Selection outline overlay.
     if (selectedIds && selectedIds.size > 0) {
       const elementsById = new Map(slide.elements.map((element) => [element.id, element]));
-      ctx.save();
-      ctx.strokeStyle = "#6366f1";
-      ctx.lineWidth = 1.5 / view.scale;
-      ctx.setLineDash([6 / view.scale, 4 / view.scale]);
-      for (const id of selectedIds) {
-        const el = elementsById.get(id);
-        if (!el || !visibleObject(el)) continue;
+      const activeElements = Array.from(selectedIds)
+        .map((id) => elementsById.get(id))
+        .filter((el): el is EngineElement => Boolean(el && visibleObject(el)));
+
+      if (activeElements.length > 0) {
         ctx.save();
-        const cx = el.x + el.width / 2;
-        const cy = el.y + el.height / 2;
-        ctx.translate(cx, cy);
-        ctx.rotate(el.angle);
-        ctx.strokeRect(-el.width / 2, -el.height / 2, el.width, el.height);
+        ctx.strokeStyle = "#6366f1";
+        ctx.lineWidth = 1.5 / view.scale;
+        ctx.setLineDash([6 / view.scale, 4 / view.scale]);
+
+        // Cluster elements that belong to the same group
+        const clusters: EngineElement[][] = [];
+        const visited = new Set<string>();
+
+        for (const el of activeElements) {
+          if (visited.has(el.id)) continue;
+
+          // If element has no groupIds, it is ungrouped -> own cluster
+          if (!el.groupIds || el.groupIds.length === 0) {
+            visited.add(el.id);
+            clusters.push([el]);
+            continue;
+          }
+
+          // Otherwise, cluster all elements connected via any shared groupId
+          const cluster: EngineElement[] = [];
+          const queue = [el];
+          visited.add(el.id);
+
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            cluster.push(current);
+
+            for (const other of activeElements) {
+              if (visited.has(other.id)) continue;
+              if (
+                other.groupIds &&
+                other.groupIds.length > 0 &&
+                other.groupIds.some((g) => current.groupIds.includes(g))
+              ) {
+                visited.add(other.id);
+                queue.push(other);
+              }
+            }
+          }
+          clusters.push(cluster);
+        }
+
+        for (const cluster of clusters) {
+          if (cluster.length === 1) {
+            const el = cluster[0];
+            ctx.save();
+            const cx = el.x + el.width / 2;
+            const cy = el.y + el.height / 2;
+            ctx.translate(cx, cy);
+            ctx.rotate(el.angle);
+            ctx.strokeRect(-el.width / 2, -el.height / 2, el.width, el.height);
+            ctx.restore();
+          } else {
+            const bbox = unionBBox(cluster);
+            if (bbox) {
+              ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);
+            }
+          }
+        }
         ctx.restore();
       }
-      ctx.restore();
     }
 
     // Lock indicator on locked elements.

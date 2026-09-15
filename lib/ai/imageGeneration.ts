@@ -38,8 +38,8 @@ export function hasExplicitDimensionsInText(text?: string): boolean {
     /(?:ขนาด\s*)?\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+(?:\.\d+)?\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/iu.test(
       val,
     ) ||
-    /\b(?:3:1|1:3|21:9|16:9|9:16|4:3|3:4)\b/u.test(val) ||
-    /(?:60x20|120x40|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|story|reel)/iu.test(val)
+    /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|1\s*:\s*1)\b/u.test(val) ||
+    /(?:60x20|120x40|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|landscape|portrait|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(val)
   );
 }
 
@@ -80,24 +80,33 @@ export function resolveImageGenerationDimensions(prompt: string) {
     }
   }
 
-  // Check for ratio patterns like "3:1", "1:3", "21:9", "16:9", "9:16", "4:3", "3:4"
-  if (/(?:3:1|wide\s+panoramic|พาโนรามา)/iu.test(value)) {
+  // Check for explicit square or numeric ratio patterns first
+  if (/(?:1\s*:\s*1|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(value)) {
+    return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
+  }
+  if (/(?:3\s*:\s*1|wide\s+panoramic|พาโนรามา)/iu.test(value)) {
     return { width: 1536, height: 512, aspectRatio: "16:9" as const };
   }
-  if (/(?:1:3|vertical\s+skyscraper)/iu.test(value)) {
+  if (/(?:1\s*:\s*3|vertical\s+skyscraper)/iu.test(value)) {
     return { width: 512, height: 1536, aspectRatio: "9:16" as const };
   }
-  if (/(?:21:9)/u.test(value)) {
+  if (/(?:21\s*:\s*9)/u.test(value)) {
     return { width: 1536, height: 512, aspectRatio: "16:9" as const };
   }
-  if (/(?:9:16|แนวตั้ง|story|reel)/iu.test(value)) {
-    return { width: 720, height: 1280, aspectRatio: "9:16" as const };
-  }
-  if (/(?:16:9|แนวนอน|banner|แบนเนอร์|cover)/iu.test(value)) {
+  if (/(?:16\s*:\s*9)/u.test(value)) {
     return { width: 1280, height: 720, aspectRatio: "16:9" as const };
   }
-  if (/(?:4:3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" as const };
-  if (/(?:3:4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+  if (/(?:9\s*:\s*16)/u.test(value)) {
+    return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+  }
+  if (/(?:4\s*:\s*3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" as const };
+  if (/(?:3\s*:\s*4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+  if (/(?:แนวตั้ง|\bvertical\b|portrait\s+(?:mode|orientation|ratio)|\bportrait\b(?!\s+of\b|\s+photo|\s+shot|\s+picture))/iu.test(value)) {
+    return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+  }
+  if (/(?:แนวนอน|\bhorizontal\b|landscape)/iu.test(value)) {
+    return { width: 1280, height: 720, aspectRatio: "16:9" as const };
+  }
   return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
 }
 
@@ -181,9 +190,37 @@ export function cleanImagePrompt(rawPrompt: string): string {
     .trim();
 }
 
-/** Identifies common Thai and English requests that should be handled by image generation. */
+/** Identifies requests specifically asking to edit or modify an image. */
+export function isImageEditPrompt(userPrompt: string): boolean {
+  const prompt = userPrompt.trim().toLowerCase();
+  if (
+    /(?:แก้|แก้ไข|ปรับแต่ง|ปรับ|รีทัช|แต่ง)\s*(?:ให้|หน่อย|\s+)*(?:รูป|ภาพ|รูปภาพ|image|photo|picture)/iu.test(
+      prompt,
+    ) ||
+    /(?:รูป|ภาพ|รูปภาพ|image|photo|picture)\s*(?:แก้|แก้ไข|ปรับแต่ง|ปรับ|รีทัช)/iu.test(prompt) ||
+    /\b(?:edit|modify|retouch)\s+(?:image|photo|picture|graphic)\b/iu.test(prompt)
+  ) {
+    return true;
+  }
+  return (
+    prompt.includes("แก้ไขรูป") ||
+    prompt.includes("แก้รูป") ||
+    prompt.includes("ปรับแต่งรูป") ||
+    prompt.includes("ปรับแต่งภาพ") ||
+    prompt.includes("ปรับรูป") ||
+    prompt.includes("รีทัชรูป") ||
+    prompt.includes("edit image") ||
+    prompt.includes("edit photo") ||
+    prompt.includes("modify image")
+  );
+}
+
+/** Identifies common Thai and English requests that should be handled by image generation or editing. */
 export function isImageGenerationPrompt(userPrompt: string): boolean {
   const prompt = userPrompt.trim().toLowerCase();
+  if (isImageEditPrompt(prompt)) {
+    return true;
+  }
   if (
     /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|เพิ่ม|จัดมา|ออกแบบ)\s*(?:มา|ให้|หน่อย|อีก|เพิ่ม|ตัวเลือก|\s+)*(?:รูป|ภาพ|แบบ|ตัวเลือก|ดีไซน์|ชิ้น|งาน)/iu.test(
       prompt,

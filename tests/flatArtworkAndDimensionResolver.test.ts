@@ -28,10 +28,66 @@ describe("Physical Dimension and Aspect Ratio Resolver", () => {
     expect(resolveImageGenerationDimensions("30x10cm").height).toBe(512);
   });
 
-  it("resolves standard ratios properly", () => {
+  it("resolves standard ratios properly when explicitly specified", () => {
     expect(resolveImageGenerationDimensions("ภาพแนวนอน 16:9").aspectRatio).toBe("16:9");
+    expect(resolveImageGenerationDimensions("ภาพ 16 : 9").aspectRatio).toBe("16:9");
+    expect(resolveImageGenerationDimensions("แนวนอน").aspectRatio).toBe("16:9");
+    expect(resolveImageGenerationDimensions("landscape").aspectRatio).toBe("16:9");
     expect(resolveImageGenerationDimensions("ภาพแนวตั้ง 9:16").aspectRatio).toBe("9:16");
+    expect(resolveImageGenerationDimensions("แนวตั้ง").aspectRatio).toBe("9:16");
+    expect(resolveImageGenerationDimensions("portrait").aspectRatio).toBe("9:16");
     expect(resolveImageGenerationDimensions("ภาพ 1:1 สี่เหลี่ยม").aspectRatio).toBe("1:1");
+    expect(resolveImageGenerationDimensions("สี่เหลี่ยมจัตุรัส").aspectRatio).toBe("1:1");
+    expect(resolveImageGenerationDimensions("square").aspectRatio).toBe("1:1");
+    expect(resolveImageGenerationDimensions("ขนาด 4:3").aspectRatio).toBe("4:3");
+    expect(resolveImageGenerationDimensions("ขนาด 3:4").aspectRatio).toBe("3:4");
+  });
+
+  it("strictly defaults to 1:1 (1024x1024) for prompts without explicit user dimension/ratio", () => {
+    // General prompts
+    expect(resolveImageGenerationDimensions("ภาพแมวน่ารัก")).toEqual({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    });
+
+    // Prompts with 'banner' / 'แบนเนอร์' should NOT automatically turn into 16:9 unless specified
+    expect(resolveImageGenerationDimensions("ออกแบบภาพสำหรับ banner กาแฟ")).toEqual({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    });
+    expect(resolveImageGenerationDimensions("ทำรูปแบนเนอร์ร้านอาหาร")).toEqual({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    });
+
+    // Prompts with 'cover' should NOT turn into 16:9
+    expect(resolveImageGenerationDimensions("ทำรูปสำหรับ cover เพลง")).toEqual({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    });
+
+    // Prompts with 'story' / 'reel' should NOT turn into 9:16 unless user explicitly specifies
+    expect(resolveImageGenerationDimensions("วาดรูปแมวเล่า story น่ารัก")).toEqual({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    });
+
+    // When the user DOES explicitly specify orientation along with banner, it honors the user's choice
+    expect(resolveImageGenerationDimensions("ออกแบบ banner แนวนอน")).toEqual({
+      width: 1280,
+      height: 720,
+      aspectRatio: "16:9",
+    });
+    expect(resolveImageGenerationDimensions("แบนเนอร์แนวตั้ง 9:16")).toEqual({
+      width: 720,
+      height: 1280,
+      aspectRatio: "9:16",
+    });
   });
 });
 

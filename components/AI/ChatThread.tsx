@@ -1731,12 +1731,12 @@ export default function ChatThread({
                   maxWidth: "92%",
                   padding: "8px 12px",
                   borderRadius: "3px 14px 14px 14px",
-                  background: "#f8fafc",
-                  color: "#1e293b",
+                  background: msg.isError ? "#fff1f2" : "#f8fafc",
+                  color: msg.isError ? "#991b1b" : "#1e293b",
                   fontSize: 12.5,
                   lineHeight: 1.5,
                   wordBreak: "break-word",
-                  border: "1px solid #f1f5f9",
+                  border: msg.isError ? "1px solid #fecdd3" : "1px solid #f1f5f9",
                   boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
                 }}
               >

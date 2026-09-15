@@ -1673,3 +1673,14 @@ export const IconScissors = (p: Props) =>
     </>,
     p,
   );
+
+export const IconBrief = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="1.8" />
+      <path d="M3 9h18M9 21V9" strokeWidth="1.8" />
+    </>,
+    p,
+  );
+

@@ -4,6 +4,7 @@ import {
   cleanImagePrompt,
   generateAIImage,
   isImageGenerationPrompt,
+  isImageEditPrompt,
 } from "@/lib/ai/imageGeneration";
 
 describe("GPT Image 2 generation client", () => {
@@ -16,6 +17,15 @@ describe("GPT Image 2 generation client", () => {
     const square = ASPECT_RATIOS.find((r) => r.id === "1:1");
     expect(square?.width).toBe(1024);
     expect(square?.height).toBe(1024);
+  });
+
+  it("recognizes image editing prompts as image intent", () => {
+    expect(isImageEditPrompt("แก้ไขรูป @[Cat:id-1] ให้ใส่หมวก")).toBe(true);
+    expect(isImageEditPrompt("แก้รูปนี้ให้สว่างขึ้น")).toBe(true);
+    expect(isImageEditPrompt("ปรับแต่งภาพตามที่เลือก")).toBe(true);
+    expect(isImageEditPrompt("edit image to add sunglasses")).toBe(true);
+    expect(isImageGenerationPrompt("แก้ไขรูป @[Hero:el-1]")).toBe(true);
+    expect(isImageGenerationPrompt("แก้รูป @[Hero:el-1] ให้เปลี่ยนพื้นหลัง")).toBe(true);
   });
 
   it("recognizes infographic briefs as image-generation intent", () => {

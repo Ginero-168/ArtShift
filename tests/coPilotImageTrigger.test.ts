@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateImageMock = vi.hoisted(() => vi.fn());
 const preloadDataURLMock = vi.hoisted(() => vi.fn());
+const getCachedMock = vi.hoisted(() => vi.fn());
 const prepareDirectionMock = vi.hoisted(() => vi.fn());
 const reviewOutputMock = vi.hoisted(() => vi.fn());
 
@@ -12,7 +13,7 @@ vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
 
 vi.mock("@/lib/engine/imageCache", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/engine/imageCache")>();
-  return { ...actual, preloadDataURL: preloadDataURLMock };
+  return { ...actual, preloadDataURL: preloadDataURLMock, getCached: getCachedMock };
 });
 
 vi.mock("@/lib/ai/orchestration/creativeDirectorClient", () => ({
@@ -34,7 +35,7 @@ vi.mock("@/lib/vision/visionEngine", async (importOriginal) => {
 
 import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
 import * as taskMachine from "@/lib/ai/orchestration/taskMachine";
-import { createText } from "@/lib/engine/factory";
+import { createImage, createText } from "@/lib/engine/factory";
 import { createEngineLayer } from "@/lib/engine/layers";
 import { useEngine } from "@/lib/engine/store";
 
@@ -57,6 +58,18 @@ describe("AI Co-Pilot image commands", () => {
       img: {} as HTMLImageElement,
       width: 1024,
       height: 1024,
+    });
+    getCachedMock.mockImplementation((fileId: string) => {
+      if (fileId === "cat-file-1") {
+        return {
+          fileId: "cat-file-1",
+          dataURL: "data:image/png;base64,CAT_REF_IMAGE_BASE64",
+          img: {} as HTMLImageElement,
+          width: 500,
+          height: 500,
+        };
+      }
+      return undefined;
     });
     prepareDirectionMock.mockReset();
     reviewOutputMock.mockReset();
@@ -256,5 +269,95 @@ describe("AI Co-Pilot image commands", () => {
         .currentSlide()
         ?.elements.some((element) => element.type === "image"),
     ).toBe(false);
+  });
+
+  it("resolves Name Tag reference @[Cat Photo:cat-elem-1] and passes inputImages to generateAIImage", async () => {
+    const catImage = {
+      ...createImage({
+        name: "Cat Photo",
+        fileId: "cat-file-1",
+        width: 500,
+        height: 500,
+        naturalWidth: 500,
+        naturalHeight: 500,
+        x: 50,
+        y: 50,
+      }),
+      id: "cat-elem-1",
+    };
+    const slide = useEngine.getState().currentSlide();
+    if (slide) {
+      useEngine.setState({
+        doc: {
+          ...useEngine.getState().doc,
+          slides: [{ ...slide, elements: [...slide.elements, catImage] }],
+        },
+        selectedIds: new Set<string>(), // Canvas selection is deliberately empty
+      });
+    }
+
+    await executeCoPilotInstruction(
+      "สร้างรูปอิงจาก @[Cat Photo:cat-elem-1] ให้ใส่แว่นกันแดด",
+      undefined,
+      {
+        cloudConsent: true,
+      },
+    );
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputImages: [
+          expect.objectContaining({
+            dataUrl: "data:image/png;base64,CAT_REF_IMAGE_BASE64",
+          }),
+        ],
+      }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("resolves Name Tag in image edit prompt and passes inputImages to generateAIImage", async () => {
+    const catImage = {
+      ...createImage({
+        name: "Cat Photo",
+        fileId: "cat-file-1",
+        width: 500,
+        height: 500,
+        naturalWidth: 500,
+        naturalHeight: 500,
+        x: 50,
+        y: 50,
+      }),
+      id: "cat-elem-1",
+    };
+    const slide = useEngine.getState().currentSlide();
+    if (slide) {
+      useEngine.setState({
+        doc: {
+          ...useEngine.getState().doc,
+          slides: [{ ...slide, elements: [...slide.elements, catImage] }],
+        },
+        selectedIds: new Set<string>(), // Canvas selection is deliberately empty
+      });
+    }
+
+    await executeCoPilotInstruction(
+      "แก้ไขรูป @[Cat Photo] ปรับพื้นหลังเป็นชายหาด",
+      undefined,
+      {
+        cloudConsent: true,
+      },
+    );
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputImages: [
+          expect.objectContaining({
+            dataUrl: "data:image/png;base64,CAT_REF_IMAGE_BASE64",
+          }),
+        ],
+      }),
+      expect.any(AbortSignal),
+    );
   });
 });

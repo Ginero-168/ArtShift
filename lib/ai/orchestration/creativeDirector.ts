@@ -343,6 +343,12 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "For supported Canvas edits, call propose_design_plan with exact current ids and a complete atomic command plan. Ask one focused clarification only when a missing fact materially changes the result.",
   "For image creation or image editing, call propose_creative_direction. For an answer that needs no execution, return answer. Never return competing plans or call both planning tools in one turn.",
   "When the user attaches reference images or name tags, analyze their visual details, detected titles, OCR text, and objects to guide the design. If the user asks to create an ad, poster, or new image referencing the tagged subject, choose image_generator and incorporate the title, key messaging, and visual theme into refinedPrompt.",
+  "NAME TAG REFERENCE PRESERVATION & MODIFICATION PROTOCOL:",
+  "When the user references one or more canvas elements using Name Tags (e.g. @[Name:id] or @Name or @รูป...):",
+  "  - The referenced images are extracted from the canvas and supplied directly as input_images to the image model.",
+  "  - For image editing tasks (e.g. 'แก้ไขรูป @tag', 'เพิ่ม... ในรูป @tag', 'ลบ... จาก @tag', 'เปลี่ยน... ใน @tag'): Select specialist 'image_editor', and formulate refinedPrompt to describe the exact desired modifications relative to the referenced input image.",
+  "  - For image creation tasks referencing a tag (e.g. 'สร้างรูปแมวตัวนี้ @tag ในชุดอวกาศ', 'วาดรูปคนนี้ @tag สไตล์การ์ตูน'): Formulate refinedPrompt instructing the model to maintain the subject's identity, physical appearance, colors, and key features from the input reference image while depicting the requested new setting, costume, or style.",
+  "  - Review criteria: Always include review criteria verifying that the subject identity and key features from the referenced tag image are preserved faithfully.",
   "For a sequential plan, every step must be executable from its payload and earlier outputs: image_generator/image_editor require payload.prompt, vectorizer requires an earlier image dependency, copywriter requires payload.headline or payload.text, and layout_designer/brand_stylist must describe the exact local operation. Never use placeholder URLs, sample copy or fabricated quality scores.",
   "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested to CREATE (1 to 5).",
   "CRITICAL INPUT REFERENCES VS OUTPUT QUANTITY RULE:",
@@ -362,6 +368,10 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Strictly preserve any explicit user-specified requirements (subjects, quantities, colors, gestures, text, brand constraints) while enriching all missing dimensions with sensible, harmonious defaults.",
   "Never echo back a minimal or 1-sentence prompt (such as just 'a cat') when given a broad request; always expand into a complete, well-crafted image prompt.",
   "If the user asks for a copyrighted character or trademark (e.g. 'สไปเดอร์แมน' / Spider-Man), describe the visual concept, color palette (red and blue suit), and superhero archetypal aesthetic without using infringing trademarked names.",
+  "ASPECT RATIO PROTOCOL (MANDATORY 1:1 BASELINE):",
+  "  - DEFAULT BASELINE: All image generation tasks MUST use a baseline aspect ratio of 1:1 (square, 1024x1024) unless the user explicitly specifies an aspect ratio or physical dimensions in their instruction.",
+  "  - EXPLICIT USER OVERRIDES ONLY: Only non-1:1 aspect ratios explicitly specified by the user (such as '16:9', 'แนวนอน', 'landscape', '9:16', 'แนวตั้ง', 'portrait', '3:1', '60x20cm', 'พาโนรามา', 'wide panoramic') may be used.",
+  "  - NEVER HALLUCINATE OR INFER NON-1:1: Do NOT infer or force 16:9, panoramic, or landscape simply because the prompt mentions 'แบนเนอร์', 'banner', 'cover', or 'poster', or because an existing Canvas element has a rectangular shape. If the user does not explicitly specify dimensions or an aspect ratio, the output must remain 1:1 square.",
   "CRITICAL BOOKSTORE SHELF SIGN & CATEGORY HEADER DESIGN PROTOCOL:",
   "When the user asks to design a category sign, shelf header banner, poster, or graphic artwork (e.g. 'ออกแบบป้าย', 'ป้ายหมวด', 'ป้ายติดตั้งบนชั้น...', 'แบนเนอร์', 'artwork'):",
   "  - The user wants the DIRECT 2D GRAPHIC DESIGN ARTWORK FILE for printing/production, NOT a photo or 3D mockup of the sign sitting inside a room, on a bookshelf, or on a wall.",
@@ -422,12 +432,14 @@ export async function prepareCreativeDirection(
   const searchImagesAvailable =
     Boolean(runtime.searchImages) && (runtime.searchImagesAvailable ?? true);
   const formattedReferences = formatReferenceAnalysesForPrompt(input.referenceAnalyses);
-  const inlineSynthesis = input.referenceAnalyses?.length
-    ? synthesizePromptWithInlineTags(
-        input.prompt,
-        input.referenceAnalyses as unknown as ImageReferenceAnalysis[],
-      )
-    : null;
+  const hasInlineTags = /@[^\s]+/u.test(input.prompt);
+  const inlineSynthesis =
+    (input.referenceAnalyses && input.referenceAnalyses.length > 0) || hasInlineTags
+      ? synthesizePromptWithInlineTags(
+          input.prompt,
+          ((input.referenceAnalyses as unknown as ImageReferenceAnalysis[]) || []),
+        )
+      : null;
   const messages: AiAssistantChatInput["messages"] = [
     ...normalizeConversationHistory(input.conversationHistory, input.prompt),
     {

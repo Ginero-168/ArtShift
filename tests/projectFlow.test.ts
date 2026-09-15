@@ -46,6 +46,15 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
 
     // Card navigation to editor
     expect(projectsSource).toContain("/projects/${p.id}/editor");
+
+    // First slot: New Project button with dashed border, '+' in center, and 'New Project' label
+    expect(projectsSource).toContain("NewProjectGridCard");
+    expect(projectsSource).toContain("New Project");
+    expect(projectsSource).toContain("2px dashed");
+
+    // Project cards render the first slide thumbnail
+    expect(projectsSource).toContain("ProjectSlideThumbnail");
+    expect(projectsSource).toContain("renderSlideToDataUrl");
   });
 
   it("verifies Editor route header matches strict requirements (Section 7)", () => {
@@ -70,6 +79,12 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
     // Has live Project Name Input
     expect(headerHtml).toContain('aria-label="Project Title"');
     expect(headerHtml).toContain("handleRename");
+
+    // Has Auto Save indicator right behind Project Title Input
+    expect(headerHtml).toContain("<AutoSaveIndicator");
+    expect(editorSource).toContain("function AutoSaveIndicator");
+    expect(editorSource).toContain("กำลัง Save");
+    expect(editorSource).toContain("Save แล้ว");
 
     // Autosave is scoped to projectId
     expect(editorSource).toContain("projectStore.saveProjectDocument(projectId, nextDoc)");

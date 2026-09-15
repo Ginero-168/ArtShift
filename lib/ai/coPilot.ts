@@ -5,6 +5,7 @@
  */
 
 import {
+  isImageEditPrompt,
   isImageGenerationPrompt,
   streamlinePromptForImageGen,
 } from "@/lib/ai/imageGeneration";
@@ -15,8 +16,10 @@ import {
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import {
   buildComposerImageSelection,
+  buildComposerImageSelectionFromIds,
   type ComposerImageRef,
 } from "@/lib/ai/orchestration/imageReferences";
+import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { analyzeImageReferences } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
@@ -87,6 +90,7 @@ export interface CoPilotMessage {
   thought?: string;
   toolLabel?: string;
   errorCard?: CoPilotErrorCard;
+  isError?: boolean;
   images?: CoPilotMessageImage[];
   imageRefs?: ComposerImageRef[];
   requestedCount?: number;
@@ -232,14 +236,31 @@ export async function executeCoPilotInstruction(
     if (onActionUpdate) onActionUpdate({ ...act });
   };
 
+  const inlineObjectIds = extractInlineTagObjectIds(prompt);
+  const elements = st.doc.slides.find((slide) => slide.id === st.currentSlideId)?.elements ?? [];
+  const hasInlineTags = inlineObjectIds.length > 0;
+  const isImageEdit = isImageEditPrompt(prompt);
+  const isImageGen = isImageGenerationPrompt(prompt);
+  const isBuiltInImageAction =
+    /(?:ลบพื้นหลัง|remove\s*bg|remove\s*background|vectorize|แปลงเป็น(?:\s+)?vector|แปลงเป็นเวกเตอร์)/iu.test(
+      prompt,
+    );
+
   // -------------------------------------------------------------
   // 1. SUB-AGENT: CONTEXT-AWARE IMAGE SPECIALIST
-  // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ"
+  // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ", "แก้ไขรูป"
   // -------------------------------------------------------------
-  if (pending || options.imageConversation || isImageGenerationPrompt(prompt)) {
-    const selection = buildComposerImageSelection(
-      st.doc.slides.find((slide) => slide.id === st.currentSlideId)?.elements ?? [],
-      st.selectedIds,
+  if (
+    pending ||
+    options.imageConversation ||
+    (hasInlineTags && !isBuiltInImageAction) ||
+    isImageGen ||
+    isImageEdit
+  ) {
+    const combinedIds = Array.from(new Set([...inlineObjectIds, ...st.selectedIds]));
+    const selection = buildComposerImageSelectionFromIds(
+      elements,
+      combinedIds.length > 0 ? combinedIds : Array.from(st.selectedIds),
     );
     if (!pending && selection.omittedCount > 0) {
       const act = logAction(
@@ -478,11 +499,15 @@ export async function executeCoPilotInstruction(
     );
 
     try {
-      // Find selected image or first image on canvas
+      // Find targeted image from inline tags, selected image, or first image on canvas
       const slide = st.doc.slides.find((s) => s.id === st.currentSlideId) || st.doc.slides[0];
       const elements = (slide?.elements ?? []).filter((e) => !e.isDeleted);
-      const targetImg = (elements.find((e) => st.selectedIds.has(e.id) && e.type === "image") ||
-        elements.find((e) => e.type === "image")) as ImageElement | undefined;
+      const targetImg = (
+        (inlineObjectIds.length > 0 &&
+          elements.find((e) => (inlineObjectIds.includes(e.id) || inlineObjectIds.includes(e.name || "")) && (e.type === "image" || e.type === "frame" || e.type === "bookMockup"))) ||
+        elements.find((e) => st.selectedIds.has(e.id) && e.type === "image") ||
+        elements.find((e) => e.type === "image")
+      ) as ImageElement | undefined;
 
       if (!targetImg) {
         updateActionStatus(act, "error", "No image found on canvas to remove background.");
@@ -558,8 +583,16 @@ export async function executeCoPilotInstruction(
     try {
       const slide = st.doc.slides.find((s) => s.id === st.currentSlideId) || st.doc.slides[0];
       const elements = (slide?.elements ?? []).filter((e) => !e.isDeleted);
-      const targetImg = (elements.find((e) => st.selectedIds.has(e.id) && e.type === "image") ||
-        elements.find((e) => e.type === "image")) as ImageElement | undefined;
+      const targetImg = (
+        (inlineObjectIds.length > 0 &&
+          elements.find(
+            (e) =>
+              (inlineObjectIds.includes(e.id) || inlineObjectIds.includes(e.name || "")) &&
+              (e.type === "image" || e.type === "frame" || e.type === "bookMockup"),
+          )) ||
+        elements.find((e) => st.selectedIds.has(e.id) && e.type === "image") ||
+        elements.find((e) => e.type === "image")
+      ) as ImageElement | undefined;
 
       if (!targetImg) {
         updateActionStatus(act, "error", "No image found on canvas to vectorize.");

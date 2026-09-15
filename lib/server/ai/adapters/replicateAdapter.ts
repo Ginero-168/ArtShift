@@ -1044,7 +1044,7 @@ function createModelInput(
     return {
       prompt,
       image_input: [input.image.dataUrl],
-      max_completion_tokens: task === "vision.propose" ? 2_048 : 1_024,
+      max_completion_tokens: task === "vision.propose" ? 2_048 : 2_048,
       temperature: task === "vision.propose" ? 0 : 0.2,
     };
   }
@@ -1053,7 +1053,7 @@ function createModelInput(
       prompt,
       images: [input.image.dataUrl],
       thinking_level: task === "vision.propose" ? "low" : "none",
-      max_output_tokens: task === "vision.propose" ? 2_048 : 1_024,
+      max_output_tokens: task === "vision.propose" ? 2_048 : 2_048,
       temperature: task === "vision.propose" ? 0 : 0.2,
     };
   }

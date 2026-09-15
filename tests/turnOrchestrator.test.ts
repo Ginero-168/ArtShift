@@ -337,5 +337,67 @@ describe("context-aware turn orchestrator", () => {
     expect(run.requestedOutputCount).toBe(3);
     expect(run.tasks.length).toBe(3);
   });
+
+  it("strictly defaults requestedDimensions to 1:1 (1024x1024) even if a 16:9 element is selected on canvas", () => {
+    const wideRect = createRect({ x: 0, y: 0, width: 800, height: 400 });
+    const slideWithWide = {
+      ...slide,
+      elements: [wideRect],
+    };
+
+    const input: ContextAwareTurnInput = {
+      prompt: "สร้างรูปแมวน่ารัก",
+      refs: [],
+      analyses: [],
+      canvas: { slide: slideWithWide, selectedIds: new Set([wideRect.id]) },
+    };
+
+    const task = createDirectedImageTask(input, {
+      kind: "image-task",
+      outputCount: 1,
+      summary: "สร้างรูปแมวน่ารักในห้องนั่งเล่น",
+      refinedPrompt: "An endearing domestic cat sitting in a cozy living room",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Natural domestic cat"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    // Mandatory 1:1 baseline must NOT be overridden by selected canvas element aspect ratio
+    expect(task.requestedDimensions).toEqual({
+      width: 1024,
+      height: 1024,
+      aspectRatio: "1:1",
+    });
+  });
+
+  it("respects explicit user-specified aspect ratio in turn prompt", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "สร้างรูปแมวน่ารัก สัดส่วน 16:9 แนวนอน",
+      refs: [],
+      analyses: [],
+    };
+
+    const task = createDirectedImageTask(input, {
+      kind: "image-task",
+      outputCount: 1,
+      summary: "สร้างรูปแมวน่ารัก 16:9",
+      refinedPrompt: "An endearing cat in landscape 16:9",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Preserve 16:9 landscape aspect ratio"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(task.requestedDimensions).toEqual({
+      width: 1280,
+      height: 720,
+      aspectRatio: "16:9",
+    });
+  });
 });
 

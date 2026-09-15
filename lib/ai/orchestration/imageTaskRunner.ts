@@ -16,9 +16,10 @@ import { getProcessingPreviewById } from "@/lib/engine/processingPreview";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
-import { autoCropImageToTargetRatio } from "./imageAutoCrop";
 import { runBriefQualityGate } from "./briefQualityGate";
 import type { CreativeOutputReview, CriterionEvidenceStatus } from "./creativeDirector";
+import { autoCropImageToTargetRatio } from "./imageAutoCrop";
+import { deriveGeneratedImageName } from "./imageNaming";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
 import { type GeneratedOutputAnalysis, runGeneratedImageQualityGate } from "./resultQualityGate";
@@ -31,7 +32,6 @@ import {
   registerAiTask,
 } from "./taskMachine";
 import { renderVisibleReference } from "./visibleReferenceRenderer";
-import { deriveGeneratedImageName } from "./imageNaming";
 
 export type ContextAwareTaskStage =
   | "queued"
@@ -66,6 +66,7 @@ export type ContextAwareImageTaskOptions = {
   signal?: AbortSignal;
   cloudConsent?: boolean;
   placement?: { outputIndex: number; requestedOutputCount: number };
+  stageOnly?: boolean;
   analyzeOutput?: (
     dataURL: string,
     fileId: string,
@@ -103,7 +104,8 @@ export async function runContextAwareImageTask(
     mimeType?: "image/png" | "image/jpeg" | "image/webp";
   }>;
   try {
-    inputImages = resolveReferenceImages(refs);
+    const effectiveRefs = refs && refs.length > 0 ? refs : (task.selectedImages ?? []);
+    inputImages = resolveReferenceImages(effectiveRefs);
   } catch (error) {
     task = appendAiTaskEvent(task, {
       type: "task.failed",
@@ -238,7 +240,7 @@ export async function runContextAwareImageTask(
                 aspectRatio: dimensions.aspectRatio,
                 quality: task.quality,
                 modelAlias: task.modelAlias,
-                inputImages: attempt >= 2 ? [] : inputImages,
+                inputImages,
                 cloudConsent: options.cloudConsent === true,
                 enhance: false,
               },
@@ -489,6 +491,30 @@ export async function runContextAwareImageTask(
               progress: 0.98,
               message: "กำลังเพิ่มผลลัพธ์ลง Canvas…",
             });
+            if (options.stageOnly) {
+              task = appendAiTaskEvent(task, { type: "commit.completed", attempt });
+              task = appendAiTaskEvent(task, {
+                type: "task.succeeded",
+                summary: "Generated image passed quality, preload, and staged for user preview",
+              });
+              task = transition(task, { type: "succeeded" }, options, {
+                stage: "succeeded",
+                message: `สร้างตัวเลือกภาพสำเร็จ (${preloaded.width} × ${preloaded.height}px) พร้อมให้พรีวิว`,
+                attempt,
+                quality: task.quality,
+              });
+              context.update({ progress: 1, message: "สร้างตัวเลือกภาพสำเร็จ พร้อมให้พรีวิว" });
+              committed = {
+                task,
+                elementId: `staged-${preloaded.fileId}`,
+                fileId: preloaded.fileId,
+                dataUrl: preloaded.dataURL,
+                width: preloaded.width,
+                height: preloaded.height,
+              };
+              return;
+            }
+
             const elementName = deriveGeneratedImageName(task.summary, task.prompt);
             const element = needsFrameMask
               ? createFrame({
@@ -679,7 +705,7 @@ export async function runContextAwareImageTask(
 }
 
 function resolveReferenceImages(
-  refs: readonly ComposerImageRef[],
+  refs: ReadonlyArray<ComposerImageRef | AiTask["selectedImages"][number]>,
 ): Array<{ dataUrl: string; mimeType?: "image/png" | "image/jpeg" | "image/webp" }> {
   if (refs.length === 0) return [];
   const slide = useEngine.getState().currentSlide();
@@ -698,7 +724,21 @@ function resolveReferenceImages(
     ) {
       throw new Error(`selected image changed before execution: ${ref.displayName}`);
     }
-    const rendered = renderVisibleReference(ref);
+    const composerRef: ComposerImageRef =
+      "sourceWidth" in ref
+        ? ref
+        : {
+            objectId: ref.objectId,
+            elementVersion: ref.elementVersion,
+            fileId: ref.fileId,
+            displayName: ref.displayName,
+            sourceWidth: element.width,
+            sourceHeight: element.height,
+            width: element.width,
+            height: element.height,
+            angle: element.angle ?? 0,
+          };
+    const rendered = renderVisibleReference(composerRef);
     const mimeType = rendered.dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,/u)?.[1] as
       | "image/png"
       | "image/jpeg"

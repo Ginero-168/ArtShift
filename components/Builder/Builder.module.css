@@ -672,6 +672,9 @@
 }
 
 .inspector {
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
   width: 292px;
   display: flex;
   flex-direction: column;
@@ -1679,6 +1682,16 @@
  * only constrained viewports fall back to the viewport edge.
  */
 @media (max-width: 720px) {
+  .inspector {
+    position: fixed;
+    top: 40px;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    width: min(292px, calc(100vw - 24px));
+    box-shadow: -12px 0 30px rgba(15, 23, 42, 0.16);
+  }
+
   .layerDock {
     position: fixed;
     bottom: max(12px, env(safe-area-inset-bottom));

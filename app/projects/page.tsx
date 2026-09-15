@@ -29,6 +29,214 @@ import {
 } from "@/components/icons";
 import { useAuth } from "@/lib/auth/useAuth";
 import { type ProjectMetadata, projectStore } from "@/lib/project/projectStore";
+import { renderSlideToDataUrl } from "@/lib/renderer/thumbnail";
+
+function NewProjectGridCard({ onClick }: { onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      style={{
+        minHeight: 250,
+        background: "#f8fafc",
+        border: "2px dashed #cbd5e1",
+        borderRadius: 14,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        cursor: "pointer",
+        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        userSelect: "none",
+        padding: "24px 16px",
+        boxSizing: "border-box",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "translateY(-2px)";
+        e.currentTarget.style.borderColor = "#6366f1";
+        e.currentTarget.style.background = "#f5f3ff";
+        e.currentTarget.style.boxShadow = "0 8px 24px rgba(99, 102, 241, 0.12)";
+        const circle = e.currentTarget.querySelector(".new-proj-circle") as HTMLElement | null;
+        if (circle) {
+          circle.style.background = "#6366f1";
+          circle.style.borderColor = "#6366f1";
+          circle.style.transform = "scale(1.08)";
+        }
+        const icon = e.currentTarget.querySelector(".new-proj-icon") as HTMLElement | null;
+        if (icon) {
+          icon.style.color = "#ffffff";
+        }
+        const text = e.currentTarget.querySelector(".new-proj-text") as HTMLElement | null;
+        if (text) {
+          text.style.color = "#4f46e5";
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "none";
+        e.currentTarget.style.borderColor = "#cbd5e1";
+        e.currentTarget.style.background = "#f8fafc";
+        e.currentTarget.style.boxShadow = "none";
+        const circle = e.currentTarget.querySelector(".new-proj-circle") as HTMLElement | null;
+        if (circle) {
+          circle.style.background = "#ffffff";
+          circle.style.borderColor = "#e2e8f0";
+          circle.style.transform = "scale(1)";
+        }
+        const icon = e.currentTarget.querySelector(".new-proj-icon") as HTMLElement | null;
+        if (icon) {
+          icon.style.color = "#6366f1";
+        }
+        const text = e.currentTarget.querySelector(".new-proj-text") as HTMLElement | null;
+        if (text) {
+          text.style.color = "#334155";
+        }
+      }}
+    >
+      <div
+        className="new-proj-circle"
+        style={{
+          width: 50,
+          height: 50,
+          borderRadius: "50%",
+          background: "#ffffff",
+          border: "1.5px solid #e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
+          transition: "all 0.2s ease",
+        }}
+      >
+        <span
+          className="new-proj-icon"
+          style={{
+            display: "inline-flex",
+            color: "#6366f1",
+            transition: "color 0.2s ease",
+          }}
+        >
+          <IconPlus size={24} />
+        </span>
+      </div>
+
+      <span
+        className="new-proj-text"
+        style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color: "#334155",
+          letterSpacing: "-0.01em",
+          transition: "color 0.2s ease",
+        }}
+      >
+        New Project
+      </span>
+    </div>
+  );
+}
+
+function ProjectSlideThumbnail({ project }: { project: ProjectMetadata }) {
+  const [thumbUrl, setThumbUrl] = useState<string | null>(project.thumbnail || null);
+
+  useEffect(() => {
+    if (project.thumbnail) {
+      setThumbUrl(project.thumbnail);
+      return;
+    }
+
+    let isMounted = true;
+    void (async () => {
+      try {
+        const record = await projectStore.getProjectDocument(project.id);
+        if (!isMounted || !record?.doc?.slides?.[0]) return;
+
+        const firstSlide = record.doc.slides[0];
+        const dataUrl = await renderSlideToDataUrl(firstSlide, record.files, 480);
+        if (!isMounted) return;
+
+        if (dataUrl) {
+          setThumbUrl(dataUrl);
+          void projectStore.updateProjectThumbnail(project.id, dataUrl);
+        }
+      } catch (err) {
+        console.warn("Failed to render project slide thumbnail:", err);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [project.id, project.thumbnail]);
+
+  if (thumbUrl) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "8px 12px",
+          boxSizing: "border-box",
+        }}
+      >
+        <img
+          src={thumbUrl}
+          alt={project.name}
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
+            objectFit: "contain",
+            borderRadius: 4,
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+            border: "1px solid rgba(0, 0, 0, 0.06)",
+            background: "#ffffff",
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "8px 12px",
+        boxSizing: "border-box",
+      }}
+    >
+      <div
+        style={{
+          width: 120,
+          height: 68,
+          background: "#ffffff",
+          borderRadius: 6,
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
+          border: "1px solid #e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#94a3b8",
+        }}
+      >
+        <IconBrand />
+      </div>
+    </div>
+  );
+}
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -618,7 +826,7 @@ export default function ProjectsPage() {
           <div style={{ textAlign: "center", padding: "64px 0", color: "#64748b" }}>
             กำลังโหลดรายการโปรเจกต์…
           </div>
-        ) : filteredProjects.length === 0 ? (
+        ) : filteredProjects.length === 0 && searchQuery ? (
           <div
             style={{
               background: "#ffffff",
@@ -649,24 +857,12 @@ export default function ProjectsPage() {
             </div>
             <div style={{ maxWidth: 360 }}>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>
-                {searchQuery ? "ไม่พบโปรเจกต์ที่ค้นหา" : "ยังไม่มีโปรเจกต์ในเครื่องนี้"}
+                ไม่พบโปรเจกต์ที่ค้นหา
               </div>
               <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
-                {searchQuery
-                  ? `ไม่พบโปรเจกต์ที่ตรงกับ "${searchQuery}" ลองค้นหาด้วยคำอื่น`
-                  : "เริ่มต้นสร้างสไลด์หรือกราฟิกใหม่ หรือนำเข้าไฟล์โปรเจกต์ .artshift จากเครื่องอื่น"}
+                {`ไม่พบโปรเจกต์ที่ตรงกับ "${searchQuery}" ลองค้นหาด้วยคำอื่น`}
               </div>
             </div>
-            {!searchQuery && (
-              <button
-                type="button"
-                onClick={handleCreateProject}
-                style={{ ...primaryBtnStyle, padding: "10px 22px", fontSize: 13, marginTop: 8 }}
-              >
-                <IconPlus size={15} color="#ffffff" />
-                <span>+ สร้างโปรเจกต์แรกของคุณ</span>
-              </button>
-            )}
           </div>
         ) : (
           <div
@@ -676,6 +872,12 @@ export default function ProjectsPage() {
               gap: 20,
             }}
           >
+            {/* Slot 1: New Project Button */}
+            {!searchQuery && (
+              <NewProjectGridCard onClick={handleCreateProject} />
+            )}
+
+            {/* Slots 2..N: Project Cards */}
             {filteredProjects.map((p) => {
               const formattedDate = formatTimestamp(p.updatedAt);
               return (
@@ -708,31 +910,17 @@ export default function ProjectsPage() {
                   {/* Thumbnail / Preview Header */}
                   <div
                     style={{
-                      height: 140,
-                      background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+                      height: 150,
+                      background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       position: "relative",
                       borderBottom: "1px solid #edf2f7",
+                      overflow: "hidden",
                     }}
                   >
-                    <div
-                      style={{
-                        width: 80,
-                        height: 50,
-                        background: "#ffffff",
-                        borderRadius: 6,
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-                        border: "1px solid #cbd5e1",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "#6366f1",
-                      }}
-                    >
-                      <IconBrand />
-                    </div>
+                    <ProjectSlideThumbnail project={p} />
 
                     {/* Slide Count Badge */}
                     <span
@@ -747,6 +935,7 @@ export default function ProjectsPage() {
                         fontWeight: 600,
                         padding: "2px 7px",
                         borderRadius: 4,
+                        zIndex: 2,
                       }}
                     >
                       {p.slideCount ?? 1} {(p.slideCount ?? 1) > 1 ? "slides" : "slide"}

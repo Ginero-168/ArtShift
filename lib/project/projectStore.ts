@@ -3,6 +3,7 @@
 import { deserializeWithImages, serializeWithImages } from "../engine/serialize";
 import { createEmptyEngineDoc } from "../engine/store";
 import type { EngineDoc } from "../engine/types";
+import { renderSlideToDataUrl } from "../renderer/thumbnail";
 
 export const PROJECT_SCHEMA_VERSION = 1;
 const DB_NAME = "artshift-projects-v1";
@@ -61,6 +62,7 @@ export interface ProjectStoreBackend {
     ownerKey: string,
     doc: EngineDoc,
     files: Record<string, string>,
+    thumbnail?: string,
   ): Promise<number>;
   clearAll(): Promise<void>;
 }
@@ -178,6 +180,7 @@ class IndexedDbProjectBackend implements ProjectStoreBackend {
     ownerKey: string,
     doc: EngineDoc,
     files: Record<string, string>,
+    thumbnail?: string,
   ): Promise<number> {
     const db = await this.getDB();
     const assetIds = Object.keys(files);
@@ -202,11 +205,14 @@ class IndexedDbProjectBackend implements ProjectStoreBackend {
       assetStore.put({ fileId, dataURL });
     }
 
-    // 3. Update Project metadata updatedAt and slideCount
+    // 3. Update Project metadata updatedAt, slideCount, and thumbnail
     const existing = await idbRequest<ProjectMetadata | undefined>(projectStore.get(projectId));
     if (existing) {
       existing.updatedAt = now;
       existing.slideCount = doc.slides?.length ?? 1;
+      if (thumbnail) {
+        existing.thumbnail = thumbnail;
+      }
       projectStore.put(existing);
     }
 
@@ -268,6 +274,7 @@ class MemoryProjectBackend implements ProjectStoreBackend {
     ownerKey: string,
     doc: EngineDoc,
     files: Record<string, string>,
+    thumbnail?: string,
   ): Promise<number> {
     const now = Date.now();
     const assetIds = Object.keys(files);
@@ -285,6 +292,9 @@ class MemoryProjectBackend implements ProjectStoreBackend {
     if (proj) {
       proj.updatedAt = now;
       proj.slideCount = doc.slides?.length ?? 1;
+      if (thumbnail) {
+        proj.thumbnail = thumbnail;
+      }
     }
     return now;
   }
@@ -348,6 +358,18 @@ class ResilientProjectStore {
     doc.title = name;
     doc.updatedAt = now;
 
+    const serialized = serializeWithImages(doc);
+    const combinedFiles = { ...serialized.files, ...(options?.files || {}) };
+
+    let initialThumbnail: string | undefined;
+    if (typeof document !== "undefined" && doc.slides?.[0]) {
+      try {
+        initialThumbnail = await renderSlideToDataUrl(doc.slides[0], combinedFiles, 480);
+      } catch {
+        // ignore
+      }
+    }
+
     const metadata: ProjectMetadata = {
       id,
       ownerKey,
@@ -355,15 +377,13 @@ class ResilientProjectStore {
       createdAt: now,
       updatedAt: now,
       lastOpenedAt: now,
+      thumbnail: initialThumbnail,
       slideCount: doc.slides?.length ?? 1,
       schemaVersion: PROJECT_SCHEMA_VERSION,
     };
 
     await this.backend.putProject(metadata);
-
-    const serialized = serializeWithImages(doc);
-    const combinedFiles = { ...serialized.files, ...(options?.files || {}) };
-    await this.backend.saveDocument(id, ownerKey, serialized.doc, combinedFiles);
+    await this.backend.saveDocument(id, ownerKey, serialized.doc, combinedFiles, initialThumbnail);
 
     return metadata;
   }
@@ -411,19 +431,42 @@ class ResilientProjectStore {
     return { doc: decoded, files: result.files };
   }
 
+  async getProjectDocument(
+    projectId: string,
+  ): Promise<{ doc: EngineDoc; files: Record<string, string> } | null> {
+    return this.backend.getDocument(projectId);
+  }
+
+  async updateProjectThumbnail(projectId: string, thumbnail: string): Promise<void> {
+    const meta = await this.getProject(projectId);
+    if (!meta) return;
+    meta.thumbnail = thumbnail;
+    await this.backend.putProject(meta);
+  }
+
   async saveProjectDocument(
     projectId: string,
     doc: EngineDoc,
+    options?: { thumbnail?: string },
   ): Promise<ProjectSaveResult> {
     try {
       const meta = await this.getProject(projectId);
       const ownerKey = meta?.ownerKey || "local-default";
       const serialized = serializeWithImages(doc);
+      let thumbnail = options?.thumbnail;
+      if (!thumbnail && typeof document !== "undefined" && doc.slides?.[0]) {
+        try {
+          thumbnail = await renderSlideToDataUrl(doc.slides[0], serialized.files, 480);
+        } catch {
+          // ignore thumbnail generation errors
+        }
+      }
       const savedAt = await this.backend.saveDocument(
         projectId,
         ownerKey,
         serialized.doc,
         serialized.files,
+        thumbnail,
       );
       return { ok: true, savedAt };
     } catch (error) {

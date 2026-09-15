@@ -1,9 +1,60 @@
+import { getImageCache, loadDataURL } from "../engine/imageCache";
 import type { EngineSlide } from "../engine/types";
 import { getLocalRasterProcessor } from "../raster/localRasterProcessor";
 import { type RenderCtx, renderSlide } from "./canvas";
 
 export function renderSlideThumbnail(slide: EngineSlide, render: RenderCtx) {
   renderSlide(slide, render, slide.width, slide.height, { showFrames: true });
+}
+
+/**
+ * Render a slide to a standalone JPEG dataURL for project card thumbnails.
+ * Pre-warms the image cache for any referenced image files.
+ */
+export async function renderSlideToDataUrl(
+  slide: EngineSlide,
+  files?: Record<string, string>,
+  targetWidth = 480,
+): Promise<string> {
+  if (typeof document === "undefined" || typeof document.createElement !== "function") {
+    return "";
+  }
+
+  try {
+    const slideW = Math.max(1, slide.width);
+    const slideH = Math.max(1, slide.height);
+    const scale = targetWidth / slideW;
+    const targetHeight = Math.max(1, Math.round(slideH * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+
+    // Pre-warm images if files map is provided
+    if (files && Object.keys(files).length > 0) {
+      await Promise.all(
+        Object.entries(files).map(([fileId, dataURL]) =>
+          loadDataURL(dataURL, fileId).catch(() => null),
+        ),
+      );
+    }
+
+    // Draw background
+    ctx.fillStyle = slide.background || "#ffffff";
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+    // Scale and render slide elements
+    ctx.save();
+    ctx.scale(scale, scale);
+    renderSlide(slide, { ctx, images: getImageCache() }, slideW, slideH, { showFrames: true });
+    ctx.restore();
+
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return "";
+  }
 }
 
 /**

@@ -209,6 +209,7 @@ export async function runContextAwareImageRun(
               outputIndex: item.outputIndex,
               requestedOutputCount: run.requestedOutputCount,
             },
+            stageOnly: options.stageOnly,
             onUpdate: (taskUpdate) => {
               emit(
                 item,

@@ -3,6 +3,7 @@ import {
   IconAlignCenterH,
   IconBold,
   IconBook,
+  IconBrief,
   IconCornerRadius,
   IconCrop,
   IconDetach,
@@ -88,6 +89,7 @@ const ICON_BY_NAME: Readonly<Record<ObjectContextIconName, ObjectContextIcon>> =
   "minus-back": IconPathfinderMinusBack,
   divide: IconPathfinderDivide,
   merge: IconMerge,
+  brief: IconBrief,
   object: IconSquare,
 });
 

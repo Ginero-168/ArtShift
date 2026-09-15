@@ -62,6 +62,9 @@ export function buildComposerImageSelectionFromIds(
 ): ComposerImageSelection {
   type SupportedImageElement = ImageElement | BookMockupElement | FrameElement;
   const elementMap = new Map<string, { element: SupportedImageElement; originalIndex: number }>();
+  const nameMap = new Map<string, { element: SupportedImageElement; originalIndex: number }>();
+
+  let imageIndex = 0;
   elements.forEach((element, index) => {
     if (
       !element.isDeleted &&
@@ -69,18 +72,52 @@ export function buildComposerImageSelectionFromIds(
         element.type === "bookMockup" ||
         (element.type === "frame" && Boolean(element.imageFileId)))
     ) {
-      elementMap.set(element.id, { element: element as SupportedImageElement, originalIndex: index });
+      const entry = { element: element as SupportedImageElement, originalIndex: index };
+      elementMap.set(element.id, entry);
+
+      imageIndex++;
+      const name = element.name?.trim().toLowerCase();
+      if (name) nameMap.set(name, entry);
+
+      const sourceName = (element as any).sourceName?.trim().toLowerCase();
+      if (sourceName) nameMap.set(sourceName, entry);
+
+      nameMap.set(`image ${imageIndex}`, entry);
+      nameMap.set(`image ${index + 1}`, entry);
+      nameMap.set(`รูปที่ ${imageIndex}`, entry);
+      nameMap.set(`รูปที่ ${index + 1}`, entry);
+      nameMap.set(`ภาพที่ ${imageIndex}`, entry);
+      nameMap.set(`ภาพที่ ${index + 1}`, entry);
     }
   });
 
   const allRefs: ComposerImageRef[] = [];
   const seenIds = new Set<string>();
 
-  for (const id of attachedIds) {
-    if (seenIds.has(id)) continue;
-    seenIds.add(id);
-    const entry = elementMap.get(id);
+  for (const rawId of attachedIds) {
+    if (!rawId) continue;
+    const cleanId = rawId.replace(/^@\[?/, "").replace(/\]$/, "").trim();
+    if (!cleanId) continue;
+
+    let targetId = cleanId;
+    let fallbackName = cleanId;
+    const colonIndex = cleanId.lastIndexOf(":");
+    if (colonIndex > 0) {
+      fallbackName = cleanId.slice(0, colonIndex).trim();
+      targetId = cleanId.slice(colonIndex + 1).trim() || fallbackName;
+    }
+
+    const entry =
+      elementMap.get(targetId) ||
+      elementMap.get(cleanId) ||
+      nameMap.get(targetId.toLowerCase()) ||
+      nameMap.get(fallbackName.toLowerCase()) ||
+      nameMap.get(cleanId.toLowerCase());
+
     if (!entry) continue;
+    if (seenIds.has(entry.element.id)) continue;
+    seenIds.add(entry.element.id);
+
     const { element, originalIndex } = entry;
     const fileId =
       element.type === "image" || element.type === "bookMockup"

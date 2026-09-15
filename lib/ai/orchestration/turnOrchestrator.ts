@@ -36,7 +36,8 @@ import {
   planImageBatches,
 } from "./imageBatchRunner";
 import { chooseImageQuality } from "./imageQualityPolicy";
-import type { ComposerImageRef } from "./imageReferences";
+import { buildComposerImageSelectionFromIds, type ComposerImageRef } from "./imageReferences";
+import { extractInlineTagObjectIds } from "./inlineTagSynthesis";
 import type { ClarificationOption } from "./intentCompleteness";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
 import { useDirectorSession } from "./sessionState";
@@ -105,32 +106,12 @@ export function resolveTaskDimensionsWithContext(
   input: ContextAwareTurnInput,
   direction?: Extract<CreativeDirection, { kind: "image-task" }>,
 ) {
-  // 1. Current user prompt explicit dimensions
+  // 1. Explicit dimensions in current user prompt
   if (hasExplicitDimensionsInText(input.prompt)) {
     return resolveImageGenerationDimensions(input.prompt);
   }
 
-  // 2. Creative Director's refinedPrompt (e.g. 60x20cm, 3:1, 1536x512)
-  if (direction?.refinedPrompt && hasExplicitDimensionsInText(direction.refinedPrompt)) {
-    return resolveImageGenerationDimensions(direction.refinedPrompt);
-  }
-
-  // 3. Creative Director's summary (e.g. "ขนาด 60x20 ซม.")
-  if (direction?.summary && hasExplicitDimensionsInText(direction.summary)) {
-    return resolveImageGenerationDimensions(direction.summary);
-  }
-
-  // 4. Conversation history (search backwards for earlier user prompts with dimensions)
-  if (input.conversationHistory && input.conversationHistory.length > 0) {
-    for (let i = input.conversationHistory.length - 1; i >= 0; i--) {
-      const msg = input.conversationHistory[i];
-      if (msg.role === "user" && hasExplicitDimensionsInText(msg.content)) {
-        return resolveImageGenerationDimensions(msg.content);
-      }
-    }
-  }
-
-  // 5. Clarification original prompt
+  // 2. Explicit dimensions in clarification original prompt
   if (
     input.clarification?.originalPrompt &&
     hasExplicitDimensionsInText(input.clarification.originalPrompt)
@@ -138,22 +119,34 @@ export function resolveTaskDimensionsWithContext(
     return resolveImageGenerationDimensions(input.clarification.originalPrompt);
   }
 
-  // 6. Selected single element on canvas
-  if (input.canvas && input.selectedIds && input.selectedIds.size === 1) {
-    const selectedId = Array.from(input.selectedIds)[0];
-    const el = input.canvas.slide.elements.find((e) => e.id === selectedId);
-    if (el && el.width > 0 && el.height > 0) {
-      const r = el.width / el.height;
-      if (r >= 2.4) return { width: 1536, height: 512, aspectRatio: "16:9" as const };
-      if (r >= 1.6) return { width: 1280, height: 720, aspectRatio: "16:9" as const };
-      if (r >= 1.2) return { width: 1024, height: 768, aspectRatio: "4:3" as const };
-      if (r <= 0.42) return { width: 512, height: 1536, aspectRatio: "9:16" as const };
-      if (r <= 0.65) return { width: 720, height: 1280, aspectRatio: "9:16" as const };
-      if (r <= 0.85) return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+  // 3. User follow-up or variation requests (e.g. "ขอตัวเลือกเพิ่ม 3 แบบ", "สร้างเพิ่ม", "เอาอีกรูป")
+  // where the previous user turn or approved direction specified explicit dimensions:
+  const isFollowUpOrVariation = /(?:ขอตัวเลือก|ตัวเลือกเพิ่ม|เอาอีก|สร้างเพิ่ม|ทำเพิ่ม|อีกแบบ|อีกรูป|variation|แบบที่)/iu.test(
+    input.prompt,
+  );
+
+  if (isFollowUpOrVariation) {
+    if (input.conversationHistory && input.conversationHistory.length > 0) {
+      for (let i = input.conversationHistory.length - 1; i >= 0; i--) {
+        const msg = input.conversationHistory[i];
+        if (msg.role === "user" && hasExplicitDimensionsInText(msg.content)) {
+          return resolveImageGenerationDimensions(msg.content);
+        }
+      }
+    }
+
+    if (direction?.refinedPrompt && hasExplicitDimensionsInText(direction.refinedPrompt)) {
+      return resolveImageGenerationDimensions(direction.refinedPrompt);
+    }
+
+    if (direction?.summary && hasExplicitDimensionsInText(direction.summary)) {
+      return resolveImageGenerationDimensions(direction.summary);
     }
   }
 
-  return resolveImageGenerationDimensions(input.prompt);
+  // Default baseline for all image generation is strictly 1:1 (1024x1024)
+  // Canvas elements or implicit keywords do NOT override the 1:1 baseline.
+  return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
 }
 
 // Only the validated Director decision may cross the task-creation boundary.
@@ -394,6 +387,27 @@ async function executeDefaultSpecialistStep(
       if (!prompt.trim()) throw new Error("Image specialist step has no executable prompt");
       const dimensions = resolveImageGenerationDimensions(prompt);
       const dependencyImage = extractImageDataUrl(dependencyOutput);
+
+      const state = useEngine.getState();
+      const slide = state.currentSlide();
+      const combinedPrompt = `${prompt} ${plan.originalPrompt || ""}`;
+      const inlineIds = extractInlineTagObjectIds(combinedPrompt);
+      const taggedRefs =
+        inlineIds.length > 0 && slide
+          ? buildComposerImageSelectionFromIds(slide.elements, inlineIds).refs
+          : [];
+
+      const resolvedInputImages: Array<{ dataUrl: string }> = [];
+      if (dependencyImage) {
+        resolvedInputImages.push({ dataUrl: dependencyImage });
+      }
+      for (const ref of taggedRefs) {
+        const cached = getCached(ref.fileId);
+        if (cached?.dataURL && !resolvedInputImages.some((img) => img.dataUrl === cached.dataURL)) {
+          resolvedInputImages.push({ dataUrl: cached.dataURL });
+        }
+      }
+
       const generated = await generateAIImage(
         {
           prompt,
@@ -402,14 +416,10 @@ async function executeDefaultSpecialistStep(
           aspectRatio: dimensions.aspectRatio,
           quality: "high",
           cloudConsent: true,
-          ...(step.specialist === "image_editor" && dependencyImage
-            ? { inputImages: [{ dataUrl: dependencyImage }] }
-            : {}),
+          ...(resolvedInputImages.length > 0 ? { inputImages: resolvedInputImages } : {}),
         },
         signal,
       );
-      const state = useEngine.getState();
-      const slide = state.currentSlide();
       if (!slide) throw new Error("Image specialist step could not find the active Artwork");
       const placement = nextArtifactPlacement(
         slide.width,

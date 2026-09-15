@@ -47,7 +47,7 @@ export function renderQualityIcon(id: QualitySelection, accentColor: string, siz
 export const QUALITY_OPTIONS: readonly QualityOption[] = [
   {
     id: "auto",
-    label: "Auto (ตาม Detail Tier)",
+    label: "Auto",
     badge: "",
     price: "Auto",
     tier: "Tier 1-3",
@@ -423,9 +423,11 @@ export default function ChatComposer({
         </div>
 
         {/* Selected Quality Hint */}
-        <div style={{ fontSize: 10.5, color: "#94a3b8" }}>
-          {selectedQuality === "auto" ? "ตาม Detail Score" : `${activeOption.price} / run`}
-        </div>
+        {selectedQuality !== "auto" && (
+          <div style={{ fontSize: 10.5, color: "#94a3b8" }}>
+            {`${activeOption.price} / run`}
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, width: "100%" }}>

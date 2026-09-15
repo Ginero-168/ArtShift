@@ -6,10 +6,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { unionBBox } from "@/lib/engine/bounds";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
-import { mergeSelectedImages } from "@/lib/engine/mergeElements";
+import { mergeSelectedElements, mergeSelectedImages } from "@/lib/engine/mergeElements";
 import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/objectContext";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
+import { convertImageToBrief } from "@/lib/ai/briefGenerator";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
@@ -52,6 +53,8 @@ const buttonStyle = {
 };
 
 function action(label: string, onClick: () => void, disabled = false, active = false) {
+  const isDownload = label.toLowerCase() === "download";
+
   return (
     <button
       type="button"
@@ -65,6 +68,11 @@ function action(label: string, onClick: () => void, disabled = false, active = f
       onClick={onClick}
       style={{
         ...buttonStyle,
+        width: isDownload ? 30 : "auto",
+        minWidth: isDownload ? 30 : 28,
+        height: 30,
+        padding: isDownload ? 0 : "0 7px",
+        gap: isDownload ? 0 : 5,
         background: active ? "var(--accent-soft, rgba(79, 70, 229, 0.12))" : buttonStyle.background,
         color: active ? "var(--accent, #4f46e5)" : buttonStyle.color,
         borderColor: active
@@ -75,8 +83,22 @@ function action(label: string, onClick: () => void, disabled = false, active = f
       }}
     >
       <span aria-hidden="true" className="object-context-icon">
-        {getObjectContextIcon(label, { size: 15, className: "object-context-svg" })}
+        {getObjectContextIcon(label, { size: 14, className: "object-context-svg" })}
       </span>
+      {!isDownload && (
+        <span
+          className="object-context-label"
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            lineHeight: 1,
+            letterSpacing: "-0.01em",
+            userSelect: "none",
+          }}
+        >
+          {label}
+        </span>
+      )}
     </button>
   );
 }
@@ -122,6 +144,7 @@ export default function ObjectContextBar({
   const updateElements = useEngine((state) => state.updateElements);
   const setTool = useEngine((state) => state.setTool);
   const groupElements = useEngine((state) => state.groupElements);
+  const ungroupElements = useEngine((state) => state.ungroupElements);
   const alignSelectedElements = useEngine((state) => state.alignSelectedElements);
   const distributeSelectedElements = useEngine((state) => state.distributeSelectedElements);
   const applyBooleanOperation = useEngine((state) => state.applyBooleanOperation);
@@ -166,12 +189,15 @@ export default function ObjectContextBar({
   const first = selected[0];
   const firstId = first?.id;
   const [activeImageTool, setActiveImageTool] = useState<ImageActionId | null>(null);
+  const [briefBusy, setBriefBusy] = useState(false);
   useEffect(() => {
     if (!firstId) {
       setActiveImageTool(null);
+      setBriefBusy(false);
       return;
     }
     setActiveImageTool(null);
+    setBriefBusy(false);
   }, [firstId]);
 
   if (isDragging || !first) return null;
@@ -195,29 +221,48 @@ export default function ObjectContextBar({
   const toggleVectorize = () =>
     setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
-  const imageCount = selected.filter((el) => el.type === "image").length;
-  const handleMergeImages = async () => {
-    if (!slide || imageCount < 2) return;
-    const merged = await mergeSelectedImages(slide, ids);
+  const isGroup =
+    selected.length > 1 &&
+    selected.some((element) => element.groupIds && element.groupIds.length > 0);
+
+  const handleConvertToBrief = async (imgEl: ImageElement) => {
+    if (briefBusy) return;
+    setBriefBusy(true);
+    try {
+      await convertImageToBrief(imgEl);
+    } catch {
+      // convertImageToBrief already reports the failure to AI Assistance Chat.
+    } finally {
+      setBriefBusy(false);
+    }
+  };
+  const handleMergeElements = async () => {
+    if (!slide || selected.length < 2) return;
+    const merged = await mergeSelectedElements(slide, ids);
     if (merged) {
       replaceElementsWithMerged(ids, merged);
     }
   };
 
   if (selected.length > 1) {
-    controls.push(action("Align", () => alignSelectedElements("center")));
-    controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
-    controls.push(action("Group", () => groupElements(ids)));
-    if (imageCount >= 2) {
-      controls.push(action("Merge", handleMergeImages));
-    }
-    if (allShapes) {
-      controls.push(action("Unite", () => applyBooleanOperation("union")));
-      controls.push(action("Minus Front", () => applyBooleanOperation("subtract")));
-      controls.push(action("Intersect", () => applyBooleanOperation("intersect")));
-      controls.push(action("Exclude", () => applyBooleanOperation("exclude")));
-      controls.push(action("Minus Back", () => applyBooleanOperation("minusBack")));
-      controls.push(action("Divide", () => applyBooleanOperation("divide")));
+    if (isGroup) {
+      controls.push(action("Merge", handleMergeElements));
+      controls.push(action("Ungroup", () => ungroupElements(ids)));
+      controls.push(action("Align", () => alignSelectedElements("center")));
+      controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
+    } else {
+      controls.push(action("Align", () => alignSelectedElements("center")));
+      controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
+      controls.push(action("Group", () => groupElements(ids)));
+      controls.push(action("Merge", handleMergeElements));
+      if (allShapes) {
+        controls.push(action("Unite", () => applyBooleanOperation("union")));
+        controls.push(action("Minus Front", () => applyBooleanOperation("subtract")));
+        controls.push(action("Intersect", () => applyBooleanOperation("intersect")));
+        controls.push(action("Exclude", () => applyBooleanOperation("exclude")));
+        controls.push(action("Minus Back", () => applyBooleanOperation("minusBack")));
+        controls.push(action("Divide", () => applyBooleanOperation("divide")));
+      }
     }
   } else if (first.type === "image") {
     controls.push(
@@ -234,6 +279,14 @@ export default function ObjectContextBar({
     controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === "extract"));
     controls.push(
       action(VECTORIZE_GROUP_LABEL, toggleVectorize, false, isVectorizeTool(activeImageTool)),
+    );
+    controls.push(
+      action(
+        briefBusy ? "Creating Brief..." : "Convert to Brief",
+        () => void handleConvertToBrief(first),
+        false,
+        briefBusy,
+      ),
     );
     controls.push(divider("image-export"));
     controls.push(
@@ -340,12 +393,14 @@ export default function ObjectContextBar({
 
   if (controls.length === 0) return null;
 
+  const displayCategory = isGroup ? "Group" : (category ?? "Object");
+
   return (
     <div
       ref={barRef}
       className="object-context-bar"
       role="toolbar"
-      aria-label={`${category ?? "Object"} options`}
+      aria-label={`${displayCategory} options`}
       onPointerDown={(event) => event.stopPropagation()}
       style={{
         position: "absolute",
@@ -372,8 +427,8 @@ export default function ObjectContextBar({
       <span
         className="object-context-category"
         role="img"
-        title={category ?? "Object"}
-        aria-label={category ?? "Object"}
+        title={displayCategory}
+        aria-label={displayCategory}
         style={{
           width: 22,
           minWidth: 22,
@@ -385,7 +440,7 @@ export default function ObjectContextBar({
           color: "var(--accent, #4f46e5)",
         }}
       >
-        {getObjectContextIcon(category ?? "Object", {
+        {getObjectContextIcon(displayCategory, {
           size: 16,
           className: "object-context-svg",
         })}
@@ -459,6 +514,10 @@ export default function ObjectContextBar({
           width: 15px;
           height: 15px;
           overflow: visible;
+        }
+        .object-context-label {
+          white-space: nowrap;
+          user-select: none;
         }
         .object-context-button {
           touch-action: manipulation;

@@ -1,5 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { IconBrief } from "@/components/icons";
+import { convertImageToBrief } from "@/lib/ai/briefGenerator";
+import { reportAIError } from "@/lib/ai/progressReporter";
+import type { ImageElement } from "@/lib/engine/types";
 import { type EditorMode, useEngine } from "@/lib/engine/store";
 import RasterToolOptions from "./RasterToolOptions";
 import {
@@ -65,6 +70,38 @@ export default function EditorOptionBar() {
     ...COMMON_TOOL_DEFINITIONS,
     ...(editorMode === "raster" ? RASTER_TOOL_DEFINITIONS : VECTOR_TOOL_DEFINITIONS),
   ];
+
+  const [briefBusy, setBriefBusy] = useState(false);
+  const handleToolbarConvertToBrief = async () => {
+    if (briefBusy) return;
+    const state = useEngine.getState();
+    const slide = state.currentSlide();
+    if (!slide) return;
+    const selectedImage = slide.elements.find(
+      (el): el is ImageElement => el.type === "image" && state.selectedIds.has(el.id) && !el.isDeleted,
+    );
+    const anyImage = slide.elements.find(
+      (el): el is ImageElement => el.type === "image" && !el.isDeleted,
+    );
+    const targetImage = selectedImage || anyImage;
+    if (!targetImage) {
+      reportAIError({
+        taskId: `brief-${crypto.randomUUID()}`,
+        operation: "Convert to Brief",
+        message:
+          "Convert to Brief Error: กรุณาวางหรือเลือกรูปภาพบน Canvas ก่อนสร้างบรีฟ",
+      });
+      return;
+    }
+    setBriefBusy(true);
+    try {
+      await convertImageToBrief(targetImage);
+    } catch {
+      // convertImageToBrief already reports the failure to AI Assistance Chat.
+    } finally {
+      setBriefBusy(false);
+    }
+  };
 
   return (
     <div
@@ -138,6 +175,29 @@ export default function EditorOptionBar() {
           );
         })}
       </div>
+
+      <span
+        aria-hidden="true"
+        style={{ width: 1, height: 20, margin: "0 3px", background: "var(--stroke, #e5e7eb)" }}
+      />
+
+      <button
+        type="button"
+        title="Convert to Brief: สร้างบรีฟเส้น กรอบ และตัวหนังสือจากภาพ Reference"
+        aria-label="Convert to Brief"
+        onClick={() => void handleToolbarConvertToBrief()}
+        disabled={briefBusy}
+        style={{
+          ...toolButtonStyle(false),
+          color: briefBusy ? "var(--ink-muted, #94a3b8)" : "var(--accent, #6366f1)",
+          background: "rgba(99, 102, 241, 0.08)",
+          border: "1px solid rgba(99, 102, 241, 0.2)",
+          cursor: briefBusy ? "wait" : "pointer",
+        }}
+      >
+        <IconBrief size={15} />
+        <span>{briefBusy ? "Briefing..." : "Brief"}</span>
+      </button>
 
       {editorMode === "raster" && TOOLS_WITH_OPTIONS.has(tool) ? (
         <>

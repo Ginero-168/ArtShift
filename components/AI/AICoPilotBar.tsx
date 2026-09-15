@@ -1,28 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatActionCards";
+import ChatComposer, { type QualitySelection } from "@/components/AI/ChatComposer";
+import ChatThread from "@/components/AI/ChatThread";
+import { useCanvasSelectionBridge } from "@/components/AI/useCanvasSelectionBridge";
 import {
-  type CoPilotMessage,
-  diagnoseOrchestratorError,
-  executeCoPilotInstruction,
-  isToolCoPilotPrompt,
-  type SubAgentActionLog,
+  type CoPilotMessage, diagnoseOrchestratorError, executeCoPilotInstruction,
+  isToolCoPilotPrompt, type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import { prepareRemoteCreativeDirection, reviewRemoteCreativeOutput } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
-import { buildComposerImageSelectionFromIds, snapshotComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
 import { deriveGeneratedImageName } from "@/lib/ai/orchestration/imageNaming";
+import { buildComposerImageSelectionFromIds, snapshotComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import { cleanTechnicalPromptText, extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
+import { createPromptRefinement, isBroadImagePrompt, type PromptRefinementCardData } from "@/lib/ai/orchestration/promptRefinement";
 import { analyzeImageReferences, type ImageReferenceAnalysis } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
   type ContextAwareTurnResult, createDirectedImageRun, createDirectedImageTask,
   isCanvasInventoryPrompt, type PendingClarification, prepareContextAwareTurn,
   runSequentialExecutionPlan, type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
-import { isBroadImagePrompt, createPromptRefinement, type PromptRefinementCardData } from "@/lib/ai/orchestration/promptRefinement";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
@@ -36,154 +37,86 @@ import { preloadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import { calculateGhostBounds } from "@/lib/renderer/ghostOverlay";
 
-import { useCanvasSelectionBridge } from "@/components/AI/useCanvasSelectionBridge";
-import ChatThread from "@/components/AI/ChatThread";
-import ChatComposer, { type QualitySelection } from "@/components/AI/ChatComposer";
-import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatActionCards";
-
 export type { StagedVariationCard };
-
 
 function extractSubject(prompt: string, summary?: string): string {
   let effectivePrompt = prompt;
   if (effectivePrompt.includes("User reply:")) {
     effectivePrompt = effectivePrompt.slice(effectivePrompt.lastIndexOf("User reply:") + 11).trim();
   } else if (effectivePrompt.includes("\n\n")) {
-    const segments = effectivePrompt
-      .split("\n\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const segments = effectivePrompt.split("\n\n").map((s) => s.trim()).filter(Boolean);
     effectivePrompt = segments[segments.length - 1] || effectivePrompt;
   }
-
-  // Strip all tag syntax @[...] and @tags from effectivePrompt
   effectivePrompt = effectivePrompt.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim();
 
   if (summary && summary.trim().length > 0 && !summary.includes("Director question:")) {
     let cleanFromSummary = cleanTechnicalPromptText(summary);
     if (cleanFromSummary.includes("User reply:")) {
-      cleanFromSummary = cleanFromSummary
-        .slice(cleanFromSummary.lastIndexOf("User reply:") + 11)
-        .trim();
+      cleanFromSummary = cleanFromSummary.slice(cleanFromSummary.lastIndexOf("User reply:") + 11).trim();
     }
-    cleanFromSummary = cleanFromSummary.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim();
-    cleanFromSummary = cleanFromSummary
+    cleanFromSummary = cleanFromSummary.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim()
       .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu, "")
       .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
       .replace(/^(?:รูปภาพ|ภาพ|รูป)\s*/iu, "")
       .replace(/\s*(?:ตามที่ขอ|เรียบร้อยแล้ว|สมจริง|สวยๆ|สไตล์.*|ในฉาก.*)\s*$/iu, "")
       .trim();
-    if (
-      cleanFromSummary.length > 0 &&
-      cleanFromSummary.length < 60 &&
-      !cleanFromSummary.includes("\n")
-    ) {
+    if (cleanFromSummary.length > 0 && cleanFromSummary.length < 60 && !cleanFromSummary.includes("\n")) {
       return cleanFromSummary;
     }
   }
 
   let cleaned = effectivePrompt
-    .replace(
-      /^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu,
-      "",
-    )
-    .trim();
-  cleaned = cleaned.replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "").trim();
-  cleaned = cleaned
+    .replace(/^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu, "")
+    .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
     .replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง|ด้วยนะ|ด้วยครับ|ด้วยค่ะ|ด้วย)\s*$/iu, "")
     .trim();
-  if (cleaned.includes("\n")) {
-    cleaned = cleaned.split("\n")[0].trim();
-  }
+  if (cleaned.includes("\n")) cleaned = cleaned.split("\n")[0].trim();
   return cleaned || "ภาพ";
 }
 
-function formatThoughtText(
-  rawPrompt: string,
-  directionSummary?: string,
-  count = 1,
-  isEdit = false,
-): string {
+function formatThoughtText(rawPrompt: string, directionSummary?: string, count = 1, isEdit = false): string {
   const cleanPrompt = cleanTechnicalPromptText(rawPrompt);
   const cleanSummary = directionSummary ? cleanTechnicalPromptText(directionSummary) : "";
-
   if (isEdit) {
     if (cleanSummary && cleanSummary.length > 5 && !cleanSummary.startsWith("สร้างภาพ")) {
-      const actionText = cleanSummary.startsWith("ปรับ") || cleanSummary.startsWith("แก้ไข")
-        ? cleanSummary
-        : `ปรับแต่ง: ${cleanSummary}`;
+      const actionText = cleanSummary.startsWith("ปรับ") || cleanSummary.startsWith("แก้ไข") ? cleanSummary : `ปรับแต่ง: ${cleanSummary}`;
       return `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผน${actionText} โดยรักษาความกลมกลืนของแสง เงา และบรรยากาศโดยรวมให้เป็นธรรมชาติ`;
     }
     const editInstruction = cleanPrompt.replace(/@[^\s]+\s*/g, "").trim() || "ตามคำขอ";
     return `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งภาพโดย ${editInstruction} พร้อมคุมโทนสีและแสงเงาเดิมให้ลงตัว`;
   }
-
-  const isConceptPrompt =
-    rawPrompt.includes("คิดให้หน่อย") ||
-    rawPrompt.includes("concept") ||
-    rawPrompt.includes("คอนเซปต์") ||
-    rawPrompt.includes("เจ๋งๆ") ||
-    rawPrompt.includes("ไอเดีย");
-
+  const isConceptPrompt = /(?:คิดให้หน่อย|concept|คอนเซปต์|เจ๋งๆ|ไอเดีย)/i.test(rawPrompt);
   if (isConceptPrompt && cleanSummary) {
     return `คิดคอนเซปต์เป็น "${cleanSummary}" โดยวางแผนจัดองค์ประกอบ แสงเงา มุมกล้อง และรายละเอียดให้สวยงามสมจริง`;
   }
-
   if (cleanSummary && cleanSummary.length > 5 && !cleanSummary.startsWith("สร้างภาพ")) {
     return `วางแผนออกแบบ: "${cleanSummary}" (${count} ภาพ) โดยกำหนดสไตล์ โทนสี แสงเงา และความคมชัดระดับสูง`;
   }
-
   const subject = extractSubject(rawPrompt, cleanSummary);
   return `กำลังวางแผนสร้างรูปภาพ "${subject}" (${count} ภาพ) โดยจัดองค์ประกอบ แสงเงา และรายละเอียดระดับสูงให้สมบูรณ์แบบค่ะ`;
 }
 
-function formatImageCompletionReply(
-  subject: string,
-  count: number,
-  outputBriefs?: readonly string[],
-  isEdit = false,
-): string {
-  let cleanSubject = subject
-    .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
-    .replace(/@[^\s]+/g, "")
-    .trim();
-
-  const firstBrief = outputBriefs?.[0]
-    ?.replace(/^รูปที่\s*\d+:\s*/iu, "")
-    ?.replace(/^(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*/iu, "")
-    ?.trim();
-
-  let headerLine = "";
-  if (isEdit) {
-    const editName = firstBrief || (cleanSubject && !cleanSubject.startsWith("ปรับ") ? cleanSubject : "");
-    headerLine = editName
-      ? `ปรับแต่งภาพ "${editName}" เสร็จแล้ว ${count} รูปค่ะ`
-      : `ปรับแต่งภาพเรียบร้อยแล้วค่ะ (${count} รูป)`;
-  } else {
-    const genName = firstBrief || cleanSubject || "ภาพ";
-    headerLine = `สร้างรูป${genName}เสร็จแล้ว ${count} รูปค่ะ`;
-  }
+function formatImageCompletionReply(subject: string, count: number, outputBriefs?: readonly string[], isEdit = false): string {
+  const cleanSubject = subject.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim();
+  const firstBrief = outputBriefs?.[0]?.replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "")?.trim();
+  const headerLine = isEdit
+    ? ((firstBrief || (cleanSubject && !cleanSubject.startsWith("ปรับ") ? cleanSubject : ""))
+      ? `ปรับแต่งภาพ "${firstBrief || cleanSubject}" เสร็จแล้ว ${count} รูปค่ะ`
+      : `ปรับแต่งภาพเรียบร้อยแล้วค่ะ (${count} รูป)`)
+    : `สร้างรูป${firstBrief || cleanSubject || "ภาพ"}เสร็จแล้ว ${count} รูปค่ะ`;
 
   const lines: string[] = [headerLine, ""];
   if (outputBriefs && outputBriefs.length > 0) {
     outputBriefs.slice(0, count).forEach((brief, idx) => {
-      const cleanBrief = brief
-        .replace(/^รูปที่\s*\d+:\s*/iu, "")
-        .replace(/^(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*/iu, "")
-        .trim();
+      const cleanBrief = brief.replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "").trim();
       lines.push(`• รูปที่ ${idx + 1}: ${cleanBrief || `${cleanSubject || "ภาพ"} แบบที่ ${idx + 1}`}`);
     });
   } else {
-    for (let i = 1; i <= count; i++) {
-      lines.push(`• รูปที่ ${i}: ${cleanSubject || "ภาพ"} แบบที่ ${i}`);
-    }
+    for (let i = 1; i <= count; i++) lines.push(`• รูปที่ ${i}: ${cleanSubject || "ภาพ"} แบบที่ ${i}`);
   }
-  lines.push("");
-  lines.push("ถ้าอยากให้ปรับสไตล์ ท่าทาง หรือสีสันเพิ่มเติม บอกได้เลยนะคะ");
+  lines.push("", "ถ้าอยากให้ปรับสไตล์ ท่าทาง หรือสีสันเพิ่มเติม บอกได้เลยนะคะ");
   return lines.join("\n");
 }
-
-
 
 export default function AICoPilotBar() {
   const currentSlideId = useEngine((s) => s.currentSlideId);
@@ -230,8 +163,9 @@ export default function AICoPilotBar() {
   const [isExecutingPlan, setIsExecutingPlan] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState<QualitySelection>("auto");
   const [stagedVariations, setStagedVariations] = useState<StagedVariationCard[]>([]);
-  const [pendingClarification, setPendingClarification] =
-    useState<PendingClarification | null>(null);
+  const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(
+    null,
+  );
   const [liveAssistantState, setLiveAssistantState] = useState<{
     stage: "outputting" | "generating" | "analyzing" | "planning";
     thought?: string;
@@ -244,8 +178,9 @@ export default function AICoPilotBar() {
     actions?: SubAgentActionLog[];
   } | null>(null);
   const [feedbackState, setFeedbackState] = useState<Record<string, "up" | "down">>({});
-  const [promptRefinementData, setPromptRefinementData] =
-    useState<PromptRefinementCardData | null>(null);
+  const [promptRefinementData, setPromptRefinementData] = useState<PromptRefinementCardData | null>(
+    null,
+  );
 
   const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
 
@@ -263,10 +198,12 @@ export default function AICoPilotBar() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastAlternativePromptRef = useRef<string | null>(null);
+  const activeHoveredVariationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     return subscribeAIProgress((event) => {
-      const isResult = event.presentation === "result";
+      const isError = event.status === "error";
+      const isResult = event.presentation === "result" || isError;
       const progressLabel = typeof event.progress === "number" ? ` (${event.progress}%)` : "";
       setMessages((previous) => {
         const messageId = isResult
@@ -276,6 +213,7 @@ export default function AICoPilotBar() {
           id: messageId,
           role: isResult ? "assistant" : "system",
           kind: isResult ? "message" : "progress",
+          isError,
           content: isResult
             ? event.message
             : `${event.operation} · ${event.message}${progressLabel}`,
@@ -326,6 +264,7 @@ export default function AICoPilotBar() {
   }, [messages, currentActions, streamingText, stagedVariations, pendingSequentialPlan]);
 
   const handleVariationHover = (card: StagedVariationCard) => {
+    activeHoveredVariationIdRef.current = card.id;
     const currentSlide = useEngine.getState().currentSlide();
     if (!currentSlide) return;
     const bounds = calculateGhostBounds(
@@ -339,6 +278,7 @@ export default function AICoPilotBar() {
     img.crossOrigin = "anonymous";
     img.src = card.url || `/api/ai/image/cache?fileId=${card.fileId}`;
     const setOverlay = () => {
+      if (activeHoveredVariationIdRef.current !== card.id) return;
       useEngine.getState().setGhostOverlay({
         variationId: card.id,
         image: img,
@@ -358,6 +298,7 @@ export default function AICoPilotBar() {
   };
 
   const handleVariationLeave = () => {
+    activeHoveredVariationIdRef.current = null;
     useEngine.getState().clearGhostOverlay();
   };
 
@@ -395,12 +336,24 @@ export default function AICoPilotBar() {
     const elementName = deriveGeneratedImageName(card.label);
     const element = needsFrame
       ? createFrame({
-          x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
-          name: `${elementName} (Frame)`, shape: "rect", imageFileId: fileId,
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          name: `${elementName} (Frame)`,
+          shape: "rect",
+          imageFileId: fileId,
         })
       : createImage({
-          x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
-          fileId, naturalWidth, naturalHeight, name: elementName, sourceName: elementName,
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          fileId,
+          naturalWidth,
+          naturalHeight,
+          name: elementName,
+          sourceName: elementName,
         });
     state.addElement(element, `Place candidate variation ${card.label || card.id}`);
     setStagedVariations((prev) =>
@@ -625,16 +578,21 @@ export default function AICoPilotBar() {
       ) {
         if (hasImageContext && analysesForTurn.length === 0) {
           const analysisAction: SubAgentActionLog = {
-            id: crypto.randomUUID(), agent: "orchestrator",
+            id: crypto.randomUUID(),
+            agent: "orchestrator",
             title: "Image Analyzer (วิเคราะห์ภาพต้นฉบับ)",
             description: `กำลังวิเคราะห์ภาพต้นฉบับและบริบทบน Canvas (${refsForTurn.length} ภาพ)…`,
-            status: "running", timestamp: Date.now(),
+            status: "running",
+            timestamp: Date.now(),
           };
           analysisActions.push(analysisAction);
           upsertCurrentAction(analysisAction);
           setLiveAssistantState({
-            stage: "analyzing", prompt: promptToSend, isEdit: true,
-            statusMessage: "กำลังวิเคราะห์ภาพต้นฉบับและบริบท...", actions: [analysisAction],
+            stage: "analyzing",
+            prompt: promptToSend,
+            isEdit: true,
+            statusMessage: "กำลังวิเคราะห์ภาพต้นฉบับและบริบท...",
+            actions: [analysisAction],
           });
           try {
             analysesForTurn = await analyzeImageReferences(
@@ -706,14 +664,20 @@ export default function AICoPilotBar() {
             id: crypto.randomUUID(),
             agent: "orchestrator",
             title: "Creative Director (Gemini 3 Flash)",
-            description: "กำลังวิเคราะห์โจทย์ ประเมิน Detail Score & Precision Score จัดสัดส่วนภาพและแนวคิด 2D Graphic…",
-            status: "running", timestamp: Date.now(), stage: "analyzing", attempt: 0,
+            description:
+              "กำลังวิเคราะห์โจทย์ ประเมิน Detail Score & Precision Score จัดสัดส่วนภาพและแนวคิด 2D Graphic…",
+            status: "running",
+            timestamp: Date.now(),
+            stage: "analyzing",
+            attempt: 0,
           };
           actions = [...actions, directorAction];
           upsertCurrentAction({ ...directorAction });
           setLiveAssistantState((prev) => ({
             ...(prev || { prompt: promptToSend, isEdit: refsForTurn.length > 0 }),
-            stage: "planning", statusMessage: "Creative Director กำลังวางแผนงาน...", actions: [...actions],
+            stage: "planning",
+            statusMessage: "Creative Director กำลังวางแผนงาน...",
+            actions: [...actions],
           }));
           let activeRunningAction: SubAgentActionLog = directorAction;
           // Creative Director disclosure copy:
@@ -722,7 +686,8 @@ export default function AICoPilotBar() {
           if (!consent) {
             directorAction.status = "error";
             directorAction.stage = "cancelled";
-            directorAction.description = "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
+            directorAction.description =
+              "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
             reply = "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider";
           } else {
             try {
@@ -731,30 +696,47 @@ export default function AICoPilotBar() {
                   prompt: promptToSend,
                   conversationHistory: messages
                     .flatMap((message): ClientChatMessage[] =>
-                      (message.role === "user" || message.role === "assistant") && message.kind !== "progress"
+                      (message.role === "user" || message.role === "assistant") &&
+                      message.kind !== "progress"
                         ? [{ role: message.role, content: message.content }]
                         : [],
                     )
                     .slice(-12),
                   designContext: buildDesignAgentContext(),
-                  canvasSummary: { objectCount: elementCount, selectedCount: selectedIds.size, width: slide?.width ?? 1920, height: slide?.height ?? 1080 },
+                  canvasSummary: {
+                    objectCount: elementCount,
+                    selectedCount: selectedIds.size,
+                    width: slide?.width ?? 1920,
+                    height: slide?.height ?? 1080,
+                  },
                   referenceAnalyses: analysesForTurn,
                 },
                 { signal: controller.signal, cloudConsent: true },
               ).catch((dirErr) => {
-                if ((dirErr as Error).name !== "AbortError" && !controller.signal.aborted && (isImageGenerationPrompt(promptToSend) || refsForTurn.length > 0)) {
-                  console.warn("Creative Director error, activating self-healing fallback:", dirErr);
+                if (
+                  (dirErr as Error).name !== "AbortError" &&
+                  !controller.signal.aborted &&
+                  (isImageGenerationPrompt(promptToSend) || refsForTurn.length > 0)
+                ) {
+                  console.warn(
+                    "Creative Director error, activating self-healing fallback:",
+                    dirErr,
+                  );
                   const isEdit = refsForTurn.length > 0;
                   return {
-                    kind: "image-task" as const, requestedOutputCount: 1, outputBriefs: ["ภาพผลลัพธ์"],
+                    kind: "image-task" as const,
+                    requestedOutputCount: 1,
+                    outputBriefs: ["ภาพผลลัพธ์"],
                     summary: isEdit ? "แก้ไขและปรับแต่งภาพตามที่เลือก" : "สร้างสรรค์ภาพใหม่ตามคำอธิบาย",
                     refinedPrompt: promptToSend,
                     specialist: isEdit ? ("image_editor" as const) : ("image_generator" as const),
                     capability: isEdit ? ("IMAGE_EDIT" as const) : ("IMAGE_DEFAULT" as const),
                     modelAlias: "image-gpt-2" as const,
-                    knowledgeSkillIds: [], reviewCriteria: [],
+                    knowledgeSkillIds: [],
+                    reviewCriteria: [],
                     search: { required: false, queries: [], sources: [] },
-                    detailScore: 8, precisionScore: 8,
+                    detailScore: 8,
+                    precisionScore: 8,
                   };
                 }
                 throw dirErr;
@@ -787,7 +769,8 @@ export default function AICoPilotBar() {
               } else if (direction.kind === "clarification") {
                 directorAction.status = "success";
                 directorAction.stage = "clarifying";
-                directorAction.description = "Creative Director ต้องการรายละเอียดเพิ่มก่อนเลือก Specialist";
+                directorAction.description =
+                  "Creative Director ต้องการรายละเอียดเพิ่มก่อนเลือก Specialist";
                 reply = direction.question;
                 suggestions = direction.options;
                 setPendingClarification({
@@ -819,7 +802,8 @@ export default function AICoPilotBar() {
               } else if (direction.search.required) {
                 directorAction.status = "success";
                 directorAction.stage = "analyzing";
-                directorAction.description = "Creative Director ระบุว่าต้องค้น Context ภายนอกก่อนสร้างงาน";
+                directorAction.description =
+                  "Creative Director ระบุว่าต้องค้น Context ภายนอกก่อนสร้างงาน";
                 reply = `ยังไม่เรียก Image Model ครับ Creative Director ต้องค้นข้อมูลเพิ่มก่อน: ${direction.search.queries.join(", ")}`;
                 suggestions = ["เพิ่ม Reference เอง", "ปรับ brief โดยไม่ใช้ข้อมูลภายนอก"];
               } else {
@@ -827,7 +811,8 @@ export default function AICoPilotBar() {
                 directorAction.stage = "succeeded";
                 directorAction.detailScore = direction.detailScore;
                 directorAction.precisionScore = direction.precisionScore;
-                const summaryDetail = direction.summary || "กำหนดคอนเซปต์และจัดวางองค์ประกอบศิลป์เรียบร้อย";
+                const summaryDetail =
+                  direction.summary || "กำหนดคอนเซปต์และจัดวางองค์ประกอบศิลป์เรียบร้อย";
                 const scoresParts: string[] = [];
                 if (direction.detailScore !== undefined) {
                   scoresParts.push(`Detail: ${direction.detailScore}/10`);
@@ -843,32 +828,49 @@ export default function AICoPilotBar() {
                 const imageRun = createDirectedImageRun(contextDecision.input, direction);
                 setPendingClarification(null);
                 const count = imageRun.requestedOutputCount;
-                const isEditTurn = direction.specialist === "image_editor" || refsForTurn.length > 0;
-                const thoughtText = formatThoughtText(rawPrompt, direction.summary, count, isEditTurn);
-                const modelName = direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias;
-                const specialistTitle = direction.specialist === "image_editor" ? "Image Editor" : "Image Specialist";
+                const isEditTurn =
+                  direction.specialist === "image_editor" || refsForTurn.length > 0;
+                const thoughtText = formatThoughtText(
+                  rawPrompt,
+                  direction.summary,
+                  count,
+                  isEditTurn,
+                );
+                const modelName =
+                  direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias;
+                const specialistTitle =
+                  direction.specialist === "image_editor" ? "Image Editor" : "Image Specialist";
 
                 const imageTaskAction: SubAgentActionLog = {
-                  id: imageRun.id, taskId: imageRun.id,
+                  id: imageRun.id,
+                  taskId: imageRun.id,
                   agent: direction.specialist === "image_editor" ? "image_edit" : "image_gen",
                   title: `${specialistTitle} (${modelName})${count > 1 ? ` · ${count} ภาพ` : ""}`,
                   description: `กำลังเรนเดอร์ภาพกราฟิกความละเอียดสูงตามสเปกของ Creative Director (${count} ภาพ)...`,
-                  status: "running", timestamp: Date.now(), stage: "planned",
+                  status: "running",
+                  timestamp: Date.now(),
+                  stage: "planned",
                 };
                 activeRunningAction = imageTaskAction;
                 actions = [...actions, imageTaskAction];
                 upsertCurrentAction({ ...imageTaskAction });
 
                 setLiveAssistantState({
-                  stage: "generating", thought: thoughtText,
-                  toolLabel: `Generating images using ${modelName}`, requestedCount: count,
+                  stage: "generating",
+                  thought: thoughtText,
+                  toolLabel: `Generating images using ${modelName}`,
+                  requestedCount: count,
                   statusMessage: `กำลังสร้างรูปภาพด้วย ${modelName}...`,
-                  prompt: rawPrompt, isEdit: isEditTurn, actions: [...actions],
+                  prompt: rawPrompt,
+                  isEdit: isEditTurn,
+                  actions: [...actions],
                 });
 
+                const isMultiOutput = imageRun.requestedOutputCount > 1;
                 const runResult = await runContextAwareImageRun(imageRun, refsForTurn, {
                   signal: controller.signal,
                   cloudConsent: true,
+                  stageOnly: isMultiOutput,
                   reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
                     reviewRemoteCreativeOutput(
                       { prompt, reviewCriteria, outputAnalysis },
@@ -901,7 +903,8 @@ export default function AICoPilotBar() {
                 if (runResult.status === "cancelled") {
                   imageTaskAction.status = "error";
                   imageTaskAction.stage = "cancelled";
-                  imageTaskAction.description = "ยกเลิกงานสร้างภาพตามคำขอแล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
+                  imageTaskAction.description =
+                    "ยกเลิกงานสร้างภาพตามคำขอแล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
                   upsertCurrentAction({ ...imageTaskAction });
                   reply = "ยกเลิกงานสร้างภาพตามคำขอแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas";
                   suggestions = ["ระบุ brief ใหม่", "ตรวจสอบภาพที่เลือก"];
@@ -955,10 +958,13 @@ export default function AICoPilotBar() {
                   upsertCurrentAction({ ...imageTaskAction });
 
                   const reviewerAction: SubAgentActionLog = {
-                    id: crypto.randomUUID(), agent: "brand_stylist",
+                    id: crypto.randomUUID(),
+                    agent: "brand_stylist",
                     title: "Quality Reviewer (ตรวจเช็คคุณภาพ)",
                     description: "ตรวจเช็คความสมบูรณ์ แสงเงา ความคมชัด และมาตรฐานความตรงตามบรีฟ",
-                    status: "success", timestamp: Date.now(), stage: "succeeded",
+                    status: "success",
+                    timestamp: Date.now(),
+                    stage: "succeeded",
                   };
                   actions = [...actions, reviewerAction];
                   upsertCurrentAction({ ...reviewerAction });
@@ -972,7 +978,8 @@ export default function AICoPilotBar() {
                     }));
 
                   const subject = extractSubject(promptToSend, direction.summary);
-                  const isEditTurn = direction.specialist === "image_editor" || refsForTurn.length > 0;
+                  const isEditTurn =
+                    direction.specialist === "image_editor" || refsForTurn.length > 0;
                   reply = formatImageCompletionReply(
                     subject,
                     runResult.completedCount,
@@ -984,10 +991,32 @@ export default function AICoPilotBar() {
                     imageRun.requestedOutputCount > 1
                       ? imageRun.requestedOutputCount - runResult.completedCount
                       : 0;
-                  let completionSuggestions = ["ปรับรายละเอียดต่อ", "ตรวจสอบ Layout", "↶ Undo ผลลัพธ์ล่าสุด"];
+                  let completionSuggestions = [
+                    "ปรับรายละเอียดต่อ",
+                    "ตรวจสอบ Layout",
+                    "↶ Undo ผลลัพธ์ล่าสุด",
+                  ];
                   if (partialFailureCount > 0) {
                     reply += `\n\n⚠️ หมายเหตุ: มีอีก ${partialFailureCount} ภาพที่สร้างไม่สำเร็จเนื่องจาก AI Provider ขัดข้องชั่วคราว คุณสามารถกดสร้างภาพที่เหลือใหม่ได้ครับ`;
                     completionSuggestions = ["🔄 สร้างภาพที่เหลือใหม่", ...completionSuggestions];
+                  }
+
+                  if (isMultiOutput) {
+                    const newStaged: StagedVariationCard[] = runResult.items
+                      .filter((i) => i.status === "succeeded" && Boolean(i.result?.dataUrl))
+                      .map((i, idx) => ({
+                        id: `var-${Date.now()}-${idx + 1}`,
+                        fileId: i.result?.fileId || `img-${idx + 1}`,
+                        url: i.result?.dataUrl || "",
+                        width: i.result?.width || 1024,
+                        height: i.result?.height || 1024,
+                        label: direction.outputBriefs?.[idx] || `ตัวเลือกที่ ${idx + 1}`,
+                        status: "staged" as const,
+                        targetSlideId: slide?.id,
+                      }));
+                    setStagedVariations(newStaged);
+                    reply +=
+                      "\n\n💡 เลื่อนเมาส์เหนือตัวเลือกใน Staging Tray ด้านล่างเพื่อดู Ghost Preview บน Canvas หรือกด Apply ภาพที่ต้องการลงชิ้นงานได้เลยครับ";
                   }
 
                   setMessages((previous) => [
@@ -1022,22 +1051,27 @@ export default function AICoPilotBar() {
                   : "failed";
               if (outcomeUnknown) {
                 activeRunningAction.description = "ผลลัพธ์ provider ยังยืนยันไม่ได้ จึงไม่สร้างงานซ้ำอัตโนมัติ";
-                reply = "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้";
+                reply =
+                  "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้";
                 suggestions = ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"];
               } else if (wasCancelled) {
                 activeRunningAction.description = "ยกเลิก Task แล้ว ไม่มีการเปลี่ยนแปลงบน Canvas";
                 reply = "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการเปลี่ยนแปลงบน Canvas";
                 suggestions = ["ส่ง brief เดิมอีกครั้ง", "ตรวจสอบภาพที่เลือก"];
               } else {
-                const diagnosis = diagnoseOrchestratorError((error as Error).message, promptToSend, {
-                  conversationHistory: messages
-                    .flatMap((m) =>
-                      (m.role === "user" || m.role === "assistant") && m.kind !== "progress"
-                        ? [{ role: m.role, content: m.content }]
-                        : [],
-                    )
-                    .slice(-10),
-                });
+                const diagnosis = diagnoseOrchestratorError(
+                  (error as Error).message,
+                  promptToSend,
+                  {
+                    conversationHistory: messages
+                      .flatMap((m) =>
+                        (m.role === "user" || m.role === "assistant") && m.kind !== "progress"
+                          ? [{ role: m.role, content: m.content }]
+                          : [],
+                      )
+                      .slice(-10),
+                  },
+                );
                 if (diagnosis.alternativePrompt) {
                   lastAlternativePromptRef.current = diagnosis.alternativePrompt;
                 }
@@ -1405,48 +1439,24 @@ export default function AICoPilotBar() {
     ]);
   };
 
-
   const hasSelection = selectedIds.size > 0;
 
   return (
     <div
       style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        pointerEvents: "auto",
-        overflow: "hidden",
-        background: "#ffffff",
-        color: "#0f172a",
-        fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        position: "relative", width: "100%", height: "100%", minHeight: 0,
+        display: "flex", flexDirection: "column", pointerEvents: "auto", overflow: "hidden",
+        background: "#ffffff", color: "#0f172a",
+        fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
       <style>{`
-        @keyframes artshiftPulse {
-          0%, 100% { opacity: 0.55; }
-          50% { opacity: 1; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .artshift-custom-scroll::-webkit-scrollbar {
-          width: 5px;
-        }
-        .artshift-custom-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .artshift-custom-scroll::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
-          border-radius: 4px;
-        }
-        .artshift-custom-scroll::-webkit-scrollbar-thumb:hover {
-          background: #cbd5e1;
-        }
+        @keyframes artshiftPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .artshift-custom-scroll::-webkit-scrollbar { width: 5px; }
+        .artshift-custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .artshift-custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+        .artshift-custom-scroll::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
       `}</style>
 
       {/* 1. Thread Header and Messages Area */}
@@ -1460,66 +1470,26 @@ export default function AICoPilotBar() {
         scrollRef={scrollRef}
         onSelectCanvasImage={handleSelectCanvasImage}
         onSelectSuggestion={(sug, errorCard) => {
-          const isEditAction =
-            sug.startsWith("✏️") ||
-            sug.includes("ปรับแต่ง") ||
-            sug.includes("ปรับปรุง") ||
-            sug.includes("แก้ไขคำขอ") ||
-            sug.includes("Edit prompt") ||
-            sug.includes("แก้ brief");
-
+          const isEditAction = sug.startsWith("✏️") || /(?:ปรับแต่ง|ปรับปรุง|แก้ไขคำขอ|Edit prompt|แก้ brief)/i.test(sug);
+          const fallbackUserPrompt = errorCard?.promptToEdit || messages.slice().reverse().find((m) => m.role === "user")?.content || editorRef.current?.getValue() || input;
           if (isEditAction) {
-            const promptToEdit =
-              errorCard?.promptToEdit ||
-              messages
-                .slice()
-                .reverse()
-                .find((m) => m.role === "user")?.content ||
-              editorRef.current?.getValue() ||
-              input;
-            if (promptToEdit) {
-              setInput(promptToEdit);
-              editorRef.current?.setValue(promptToEdit);
+            if (fallbackUserPrompt) {
+              setInput(fallbackUserPrompt);
+              editorRef.current?.setValue(fallbackUserPrompt);
               editorRef.current?.focus();
-              const refinement = createPromptRefinement(promptToEdit);
-              setPromptRefinementData(refinement);
+              setPromptRefinementData(createPromptRefinement(fallbackUserPrompt));
             }
             return;
           }
-
-          const isRetryAction =
-            sug.includes("ลองสร้างใหม่อีกครั้ง") ||
-            sug.includes("ลองใหม่อีกครั้ง") ||
-            sug.includes("สร้างภาพที่เหลือใหม่") ||
-            sug.startsWith("🔄");
-
+          const isRetryAction = sug.startsWith("🔄") || /(?:ลองสร้างใหม่อีกครั้ง|ลองใหม่อีกครั้ง|สร้างภาพที่เหลือใหม่)/i.test(sug);
           if (isRetryAction) {
-            const promptToRetry =
-              errorCard?.promptToEdit ||
-              messages
-                .slice()
-                .reverse()
-                .find((m) => m.role === "user")?.content ||
-              editorRef.current?.getValue() ||
-              input;
-            if (promptToRetry) {
-              handleSend(promptToRetry);
-              return;
-            }
+            if (fallbackUserPrompt) { handleSend(fallbackUserPrompt); return; }
           }
-
-          if (
-            sug.includes("ตรวจสอบภาพที่เลือกบน Canvas") ||
-            sug.includes("ตรวจสอบภาพที่เลือก")
-          ) {
+          if (sug.includes("ตรวจสอบภาพที่เลือกบน Canvas") || sug.includes("ตรวจสอบภาพที่เลือก")) {
             handleSelectCanvasImage();
             return;
           }
-
-          if (sug.includes("ตรวจสอบการตั้งค่า API Token") || sug.startsWith("⚙️")) {
-            return;
-          }
-
+          if (sug.includes("ตรวจสอบการตั้งค่า API Token") || sug.startsWith("⚙️")) return;
           handleSend(sug);
         }}
         onToggleFeedback={handleToggleFeedback}

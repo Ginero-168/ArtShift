@@ -39,8 +39,8 @@ export async function mergeSelectedImages(
     }
   }
 
-  // Calculate resolution scale for crisp rendering
-  let maxScale = 1;
+  // Calculate resolution scale for crisp rendering (default 2x for sharp shapes & text)
+  let maxScale = 2;
   for (const el of targets) {
     if (el.type === "image") {
       const sx = (el.naturalWidth || el.width) / Math.max(1, el.width);
@@ -95,3 +95,5 @@ export async function mergeSelectedImages(
     sourceName: "merged-image.png",
   });
 }
+
+export const mergeSelectedElements = mergeSelectedImages;

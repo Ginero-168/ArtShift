@@ -152,4 +152,58 @@ describe("selected image references", () => {
     const refs = buildAllSlideImageRefs(images);
     expect(refs).toHaveLength(8);
   });
+
+  it("resolves Name Tags by display name, sourceName, and tag syntax", () => {
+    const heroImage = {
+      ...createImage({
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        fileId: "file-hero",
+        naturalWidth: 200,
+        naturalHeight: 200,
+      }),
+      id: "el-uuid-1",
+      name: "Hero Cat",
+      sourceName: "hero-cat.png",
+      version: 1,
+    };
+    const logoImage = {
+      ...createImage({
+        x: 120,
+        y: 0,
+        width: 80,
+        height: 80,
+        fileId: "file-logo",
+        naturalWidth: 160,
+        naturalHeight: 160,
+      }),
+      id: "el-uuid-2",
+      name: "Brand Logo",
+      sourceName: "logo.png",
+      version: 1,
+    };
+
+    // 1. Resolve by @Name without id
+    const byName = buildComposerImageSelectionFromIds([heroImage, logoImage], ["@Hero Cat"]);
+    expect(byName.refs).toHaveLength(1);
+    expect(byName.refs[0]?.objectId).toBe("el-uuid-1");
+
+    // 2. Resolve by bracketed tag syntax @[Hero Cat:el-uuid-1]
+    const byTag = buildComposerImageSelectionFromIds([heroImage, logoImage], ["@[Hero Cat:el-uuid-1]"]);
+    expect(byTag.refs).toHaveLength(1);
+    expect(byTag.refs[0]?.objectId).toBe("el-uuid-1");
+
+    // 3. Resolve by sourceName
+    const bySourceName = buildComposerImageSelectionFromIds([heroImage, logoImage], ["logo.png"]);
+    expect(bySourceName.refs).toHaveLength(1);
+    expect(bySourceName.refs[0]?.objectId).toBe("el-uuid-2");
+
+    // 4. Resolve by sequential label "Image 1"
+    const byIndex = buildComposerImageSelectionFromIds([heroImage, logoImage], ["Image 2"]);
+    expect(byIndex.refs).toHaveLength(1);
+    expect(byIndex.refs[0]?.objectId).toBe("el-uuid-2");
+  });
 });
+

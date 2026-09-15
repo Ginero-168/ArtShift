@@ -1,0 +1,376 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { generateBriefElements } from "@/lib/ai/briefGenerator";
+import type { ConvertToBriefData } from "@/lib/ai/briefParser";
+import type { ImageElement } from "@/lib/engine/types";
+
+describe("Brief Generator Service & Layout Geometry", () => {
+  const mockImageElement: ImageElement = {
+    id: "img-test-1",
+    type: "image",
+    fileId: "file-mock-1",
+    x: 100,
+    y: 150,
+    width: 600,
+    height: 400,
+    naturalWidth: 1200,
+    naturalHeight: 800,
+    angle: 0,
+    opacity: 1,
+    strokeColor: "transparent",
+    backgroundColor: "transparent",
+    strokeWidth: 0,
+    strokeStyle: "solid",
+    fillStyle: "solid",
+    roughness: 0,
+    seed: 1,
+    groupIds: [],
+    locked: false,
+    z: 1,
+    version: 1,
+    crop: null,
+    status: "loaded",
+    isDeleted: false,
+  };
+
+  const sampleBriefData: ConvertToBriefData = {
+    aspectRatio: { width: 600, height: 400 },
+    backgroundPartitions: [
+      {
+        name: "เชฟซูชิ",
+        box: [0, 0, 450, 1000],
+        color: "#e0e7ff",
+        labelPlacement: "top-left",
+      },
+      {
+        name: "รูปซูชิ",
+        box: [450, 0, 1000, 1000],
+        color: "#cffafe",
+        labelPlacement: "center",
+      },
+    ],
+    dividers: [
+      {
+        start: [0, 450],
+        end: [1000, 450],
+        color: "#000000",
+        strokeWidth: 1.5,
+      },
+    ],
+    focalObjects: [
+      {
+        name: "ป้ายราคา",
+        shape: "ellipse",
+        box: [140, 680, 380, 820],
+        color: "#fef08a",
+        text: "ชิ้นละ 10 บาท",
+        textColor: "#000000",
+      },
+      {
+        name: "ป้ายสโลแกน",
+        shape: "ellipse",
+        box: [240, 800, 480, 940],
+        color: "#ffe4e6",
+        text: "อุ่นใจ ใกล้บ้าน",
+        textColor: "#000000",
+      },
+    ],
+    texts: [
+      {
+        text: "ชิ้นละ 10 บาท",
+        box: [220, 700, 300, 800],
+        fontSize: 18,
+        align: "center",
+      },
+    ],
+  };
+
+  it("creates elements positioned side-by-side matching the exact dimensions and aspect ratio of the image", () => {
+    const elements = generateBriefElements(sampleBriefData, mockImageElement);
+    expect(elements.length).toBeGreaterThan(0);
+
+    // Outer frame must match image width and height
+    const outerFrame = elements.find((e) => e.name === "Brief Frame");
+    expect(outerFrame).toBeDefined();
+    expect(outerFrame?.width).toBe(mockImageElement.width);
+    expect(outerFrame?.height).toBe(mockImageElement.height);
+
+    // Target X must be immediately to the right of image with gap (100 + 600 + 40 = 740)
+    expect(outerFrame?.x).toBe(740);
+    expect(outerFrame?.y).toBe(mockImageElement.y);
+  });
+
+  it("creates background partitions with Thai labels and pastel colors", () => {
+    const elements = generateBriefElements(sampleBriefData, mockImageElement);
+
+    const chefZone = elements.find((e) => e.name === "เชฟซูชิ");
+    expect(chefZone).toBeDefined();
+    expect(chefZone?.backgroundColor).toBe("#e0e7ff");
+
+    const sushiZone = elements.find((e) => e.name === "รูปซูชิ");
+    expect(sushiZone).toBeDefined();
+    expect(sushiZone?.backgroundColor).toBe("#cffafe");
+
+    // Labels
+    const chefLabel = elements.find((e) => e.type === "text" && (e as any).text === "เชฟซูชิ");
+    expect(chefLabel).toBeDefined();
+
+    const sushiLabel = elements.find((e) => e.type === "text" && (e as any).text === "รูปซูชิ");
+    expect(sushiLabel).toBeDefined();
+  });
+
+  it("creates badges (ellipses) with exact Thai text inside", () => {
+    const elements = generateBriefElements(sampleBriefData, mockImageElement);
+
+    const priceBadge = elements.find((e) => e.type === "ellipse" && e.backgroundColor === "#fef08a");
+    expect(priceBadge).toBeDefined();
+
+    const priceText = elements.find((e) => e.type === "text" && (e as any).text === "ชิ้นละ 10 บาท");
+    expect(priceText).toBeDefined();
+
+    const sloganBadge = elements.find((e) => e.type === "ellipse" && e.backgroundColor === "#ffe4e6");
+    expect(sloganBadge).toBeDefined();
+
+    const sloganText = elements.find((e) => e.type === "text" && (e as any).text === "อุ่นใจ ใกล้บ้าน");
+    expect(sloganText).toBeDefined();
+  });
+
+  it("groups all generated brief elements together under a unified groupId", () => {
+    const elements = generateBriefElements(sampleBriefData, mockImageElement);
+    const firstGroupId = elements[0].groupIds[0];
+    expect(firstGroupId).toBeTruthy();
+
+    for (const el of elements) {
+      expect(el.groupIds).toContain(firstGroupId);
+    }
+  });
+
+  it("respects targetBounds from dragged preload card placement", () => {
+    const draggedBounds = { x: 1200, y: 350, width: 600, height: 400 };
+    const elements = generateBriefElements(sampleBriefData, mockImageElement, undefined, draggedBounds);
+    const outerFrame = elements.find((e) => e.name === "Brief Frame");
+
+    expect(outerFrame).toBeDefined();
+    expect(outerFrame?.x).toBe(1200);
+    expect(outerFrame?.y).toBe(350);
+    expect(outerFrame?.width).toBe(600);
+    expect(outerFrame?.height).toBe(400);
+  });
+
+  it("verifies 'Convert to Brief' uses the canvas Preload ghost overlay and queue", () => {
+    const briefGenSource = readFileSync("lib/ai/briefGenerator.ts", "utf8");
+    expect(briefGenSource).toContain("enqueueProcessingJob");
+    expect(briefGenSource).toContain('kind: "brief"');
+    expect(briefGenSource).toContain('label: "Convert to Brief"');
+    expect(briefGenSource).toContain("getProcessingPreviewPlacement");
+
+    const previewOverlaySource = readFileSync("components/Canvas/ProcessingPreviewOverlay.tsx", "utf8");
+    expect(previewOverlaySource).toContain('brief: "#6366f1"');
+    expect(previewOverlaySource).toContain("IconBrief");
+  });
+
+  it("generates structured Art Direction wireframe brief matching Image 3 specification", () => {
+    const artDirectionData: ConvertToBriefData = {
+      aspectRatio: { width: 484, height: 280 },
+      heroSubject: {
+        box: [0, 0, 1000, 396],
+        description: "รูปภาพเด็กชาย กำลังยิ้มแย้ม และเล่นน้ำ ขณะใส่ห่วงยางสีน้ำเงิน",
+        color: "#dbeafe",
+      },
+      backgroundZone: {
+        box: [0, 396, 1000, 1000],
+        description: "พื้นหลังเป็นภาพสวนน้ำ",
+        color: "#f5f0eb",
+      },
+      headlineCard: {
+        box: [220, 520, 600, 840],
+        text: "สวนน้ำ\nเปิดใหม่",
+        color: "#e2e8f0",
+      },
+      badge: {
+        box: [180, 810, 410, 950],
+        shape: "ellipse",
+        text: "เปิดแล้ว\nวันนี้",
+        color: "#fcd34d",
+      },
+      subtextCard: {
+        box: [665, 480, 765, 900],
+        text: "เปิดรับความสุขกับทุกครอบครัวไปด้วยกัน",
+        color: "#e2e8f0",
+      },
+      backgroundPartitions: [],
+      dividers: [],
+      focalObjects: [],
+      texts: [],
+    };
+
+    const elements = generateBriefElements(artDirectionData, mockImageElement);
+    expect(elements.length).toBeGreaterThanOrEqual(10); // Outer frame + 5 rect/ellipse shapes + 5 text labels
+
+    // 1. Hero Subject on the left
+    const heroCard = elements.find((e) => e.name === "Hero Subject");
+    expect(heroCard).toBeDefined();
+    expect(heroCard?.backgroundColor).toBe("#dbeafe");
+    const heroLabel = elements.find((e) => e.name?.startsWith("Hero Label:"));
+    expect(heroLabel).toBeDefined();
+    expect((heroLabel as any).text).toContain("รูปภาพเด็กชาย กำลังยิ้มแย้ม");
+
+    // 2. Background Zone on the right
+    const bgCard = elements.find((e) => e.name === "Background Zone");
+    expect(bgCard).toBeDefined();
+    expect(bgCard?.backgroundColor).toBe("#f5f0eb");
+    const bgLabel = elements.find((e) => (e as any).text === "พื้นหลังเป็นภาพสวนน้ำ");
+    expect(bgLabel).toBeDefined();
+
+    // 3. Headline Card with "สวนน้ำ\nเปิดใหม่"
+    const hlCard = elements.find((e) => e.name === "Headline Card");
+    expect(hlCard).toBeDefined();
+    const hlText = elements.find((e) => (e as any).text === "สวนน้ำ\nเปิดใหม่");
+    expect(hlText).toBeDefined();
+
+    // 4. Promo Badge with "เปิดแล้ว\nวันนี้"
+    const badgeShape = elements.find((e) => e.name === "Promo Badge");
+    expect(badgeShape).toBeDefined();
+    expect(badgeShape?.type).toBe("ellipse");
+    expect(badgeShape?.backgroundColor).toBe("#fcd34d");
+    const badgeText = elements.find((e) => (e as any).text === "เปิดแล้ว\nวันนี้");
+    expect(badgeText).toBeDefined();
+
+    // 5. Subtext Card with "เปิดรับความสุขกับทุกครอบครัวไปด้วยกัน"
+    const subtextCard = elements.find((e) => e.name === "Subtext Card");
+    expect(subtextCard).toBeDefined();
+    const subtext = elements.find((e) => (e as any).text === "เปิดรับความสุขกับทุกครอบครัวไปด้วยกัน");
+    expect(subtext).toBeDefined();
+  });
+
+  it("renders comprehensive poster with category tags, brand logo, and footer highlights bar", () => {
+    const fullPosterData: ConvertToBriefData = {
+      aspectRatio: { width: 600, height: 1000 },
+      heroSubject: {
+        box: [280, 20, 890, 480],
+        description: "รูปภาพเด็กชาย กำลังยิ้มแย้ม และเล่นน้ำ ขณะใส่ห่วงยางสีน้ำเงิน",
+        color: "#dbeafe",
+      },
+      backgroundZone: {
+        box: [0, 0, 890, 1000],
+        description: "พื้นหลังเป็นภาพสวนน้ำและสไลเดอร์",
+        color: "#f5f0eb",
+      },
+      headlineCard: {
+        box: [40, 40, 200, 460],
+        text: "สวนน้ำ\nเปิดใหม่",
+        color: "#e2e8f0",
+      },
+      subtextCard: {
+        box: [190, 70, 230, 410],
+        text: "เปิดรับความสุขกับทุกครอบครัวไปด้วยกัน",
+        color: "#e2e8f0",
+      },
+      badge: {
+        box: [230, 320, 360, 460],
+        shape: "ellipse",
+        text: "เปิดแล้ว\nวันนี้",
+        color: "#fcd34d",
+      },
+      featureTags: [
+        { text: "WATER SLIDES", box: [350, 15, 410, 130], color: "#fed7aa" },
+        { text: "WAVE POOL", box: [405, 15, 465, 125], color: "#fed7aa" },
+        { text: "KIDS ZONE", box: [460, 15, 510, 120], color: "#fed7aa" },
+        { text: "FOOD & DRINKS", box: [505, 15, 555, 120], color: "#fed7aa" },
+        { text: "FAMILY FUN", box: [550, 15, 600, 120], color: "#fed7aa" },
+      ],
+      brandLogo: {
+        box: [480, 330, 540, 450],
+        text: "AQUA WORLD",
+        subtext: "PROMISE SMILES EVERYDAY",
+      },
+      footerBar: {
+        box: [900, 15, 980, 480],
+        color: "#1e293b",
+        items: [
+          { text: "สนุกได้ทั้งครอบครัว" },
+          { text: "ปลอดภัยได้มาตรฐาน" },
+          { text: "เดินทางสะดวก" },
+          { text: "ความสุข... รอคุณอยู่ที่นี่" },
+        ],
+      },
+      backgroundPartitions: [],
+      dividers: [],
+      focalObjects: [],
+      texts: [],
+    };
+
+    const elements = generateBriefElements(fullPosterData, mockImageElement);
+
+    // Verify outer frame
+    expect(elements.find((e) => e.name === "Brief Frame")).toBeDefined();
+
+    // Verify Hero Subject & Background Zone
+    expect(elements.find((e) => e.name === "Hero Subject")).toBeDefined();
+    expect(elements.find((e) => e.name === "Background Zone")).toBeDefined();
+
+    // Verify Category Pills (Feature Tags)
+    const tagElements = elements.filter((e) => e.name?.startsWith("Tag: "));
+    expect(tagElements).toHaveLength(5);
+    expect(elements.some((e) => (e as any).text === "WATER SLIDES")).toBe(true);
+    expect(elements.some((e) => (e as any).text === "FAMILY FUN")).toBe(true);
+
+    // Verify Brand Logo
+    expect(elements.find((e) => e.name?.startsWith("Logo Zone:"))).toBeDefined();
+    expect(elements.some((e) => (e as any).text?.includes("AQUA WORLD"))).toBe(true);
+
+    // Verify Footer Bar
+    expect(elements.find((e) => e.name === "Footer Bar")).toBeDefined();
+    expect(elements.some((e) => (e as any).text === "สนุกได้ทั้งครอบครัว")).toBe(true);
+    expect(elements.some((e) => (e as any).text === "ความสุข... รอคุณอยู่ที่นี่")).toBe(true);
+
+    // Verify all elements are unified under a single groupId
+    const firstGroupId = elements[0].groupIds[0];
+    expect(firstGroupId).toBeTruthy();
+    for (const el of elements) {
+      expect(el.groupIds).toContain(firstGroupId);
+    }
+  });
+
+  it("verifies 'Convert to Brief' button is exposed in both ObjectContextBar and EditorOptionBar", () => {
+    const objectContextBarSource = readFileSync("components/Canvas/ObjectContextBar.tsx", "utf8");
+    expect(objectContextBarSource).toContain("Convert to Brief");
+    expect(objectContextBarSource).toContain("handleConvertToBrief");
+
+    const editorOptionBarSource = readFileSync("components/Canvas/EditorOptionBar.tsx", "utf8");
+    expect(editorOptionBarSource).toContain("Convert to Brief");
+    expect(editorOptionBarSource).toContain("handleToolbarConvertToBrief");
+  });
+
+  it("pairs each visual component (Text + Card/Bubble) into its own sub-group while maintaining master group", () => {
+    const elements = generateBriefElements(sampleBriefData, mockImageElement);
+    const masterGroupId = elements[0].groupIds[0];
+
+    // Check chefZone and chefLabel pair
+    const chefZone = elements.find((e) => e.name === "เชฟซูชิ");
+    const chefLabel = elements.find((e) => e.type === "text" && (e as any).text === "เชฟซูชิ");
+    expect(chefZone).toBeDefined();
+    expect(chefLabel).toBeDefined();
+    expect(chefZone?.groupIds).toHaveLength(2);
+    expect(chefLabel?.groupIds).toHaveLength(2);
+    // Both share their innermost sub-group
+    expect(chefZone?.groupIds[0]).toBe(chefLabel?.groupIds[0]);
+    // Both belong to the master group
+    expect(chefZone?.groupIds[1]).toBe(masterGroupId);
+    expect(chefLabel?.groupIds[1]).toBe(masterGroupId);
+
+    // Check price badge shape and text pair
+    const priceBadge = elements.find((e) => e.type === "ellipse" && e.backgroundColor === "#fef08a");
+    const priceText = elements.find((e) => e.type === "text" && (e as any).text === "ชิ้นละ 10 บาท");
+    expect(priceBadge).toBeDefined();
+    expect(priceText).toBeDefined();
+    expect(priceBadge?.groupIds).toHaveLength(2);
+    expect(priceText?.groupIds).toHaveLength(2);
+    expect(priceBadge?.groupIds[0]).toBe(priceText?.groupIds[0]);
+    expect(priceBadge?.groupIds[1]).toBe(masterGroupId);
+    expect(priceText?.groupIds[1]).toBe(masterGroupId);
+  });
+});
+
+
+
