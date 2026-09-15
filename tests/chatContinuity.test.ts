@@ -56,6 +56,36 @@ describe("chatContinuity", () => {
     expect(composed).toContain("Photoreal Scottish Fold cat on a sofa");
   });
 
+  it("locks Shared Anchors and varies Layer-2 axes on brand follow-ups", () => {
+    const composed = composeFollowUpDirectorPrompt("สร้างมาอีก 3 รูป", {
+      userPrompt: "ออกแบบป้าย Welearn 60x20cm Manifest",
+      refinedPrompt: "Flat 2D Welearn shelf sign, 3:1, Manifest theme",
+      width: 1536,
+      height: 512,
+      aspectRatio: "16:9",
+      refinementMode: "brand-variant",
+      sharedAnchors: [
+        { id: "wordmark", label: "Wordmark", detail: "Welearn เด่นที่สุด" },
+        { id: "ratio", label: "สัดส่วน", detail: "60×20 ซม. (3:1)" },
+      ],
+      variantSelections: [
+        {
+          axisId: "mood",
+          axisTitle: "คาแรคเตอร์",
+          optionId: "mood_premium",
+          label: "พรีเมียม",
+          character: "ลึกลับ · หรู",
+          modifier: "คาแรคเตอร์พรีเมียม",
+        },
+      ],
+    });
+    expect(composed).toContain("SHARED ANCHORS");
+    expect(composed).toContain("Welearn เด่นที่สุด");
+    expect(composed).toContain("PRIOR VARIANT AXES");
+    expect(composed).toContain("พรีเมียม");
+    expect(composed).toContain("Never change text/logo");
+  });
+
   it("extracts structured generationContext from assistant history", () => {
     const prior = extractPriorImageGenerationContext([
       { role: "user", content: "สร้างรูปแมว 16:9" },

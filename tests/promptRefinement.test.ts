@@ -3,6 +3,7 @@ import {
   isBroadImagePrompt,
   createPromptRefinement,
   buildRefinedPromptString,
+  buildRefinementOrchestratorLocks,
 } from "../lib/ai/orchestration/promptRefinement";
 
 describe("promptRefinement", () => {
@@ -17,10 +18,14 @@ describe("promptRefinement", () => {
 
     it("rejects prompts that are already detailed or specific", () => {
       expect(
-        isBroadImagePrompt("สร้างรูปแมวสีส้ม ขนฟู นั่งอยู่บนโซฟากำมะหยี่สีเขียว สไตล์ photorealistic 8k")
+        isBroadImagePrompt(
+          "สร้างรูปแมวสีส้ม ขนฟู นั่งอยู่บนโซฟากำมะหยี่สีเขียว สไตล์ photorealistic 8k",
+        ),
       ).toBe(false);
       expect(
-        isBroadImagePrompt("วาดภาพสุนัขโกลเด้นรีทรีฟเวอร์กำลังวิ่งริมทะเลช่วงพระอาทิตย์ตก แสง cinematic lighting 16:9")
+        isBroadImagePrompt(
+          "วาดภาพสุนัขโกลเด้นรีทรีฟเวอร์กำลังวิ่งริมทะเลช่วงพระอาทิตย์ตก แสง cinematic lighting 16:9",
+        ),
       ).toBe(false);
     });
 
@@ -29,6 +34,14 @@ describe("promptRefinement", () => {
       expect(isBroadImagePrompt("เปลี่ยนสีพื้นหลังสไลด์เป็นสีแดง")).toBe(false);
       expect(isBroadImagePrompt("ย้ายกล่องข้อความไปทางขวา 50px")).toBe(false);
     });
+
+    it("opens helper for brand/shelf briefs even when long", () => {
+      expect(
+        isBroadImagePrompt(
+          "ออกแบบป้ายหมวดหนังสือ Welearn ป้ายขนาด 60x20cm ธีม Manifest จากปกหนังสือสองเล่ม",
+        ),
+      ).toBe(true);
+    });
   });
 
   describe("createPromptRefinement", () => {
@@ -36,6 +49,7 @@ describe("promptRefinement", () => {
       const refinement = createPromptRefinement("สร้างรูปแมว");
       expect(refinement.originalPrompt).toBe("สร้างรูปแมว");
       expect(refinement.subjectType).toBe("cat");
+      expect(refinement.mode).toBe("subject");
       expect(refinement.dimensions.length).toBeGreaterThan(3);
 
       const categoryIds = refinement.dimensions.map((c) => c.id);
@@ -49,6 +63,7 @@ describe("promptRefinement", () => {
       expect(colorCategory?.options.map((o) => o.label)).toContain("ส้ม");
       expect(colorCategory?.options.map((o) => o.label)).toContain("ดำ");
       expect(colorCategory?.options.map((o) => o.label)).toContain("ขาว");
+      expect(colorCategory?.options.find((o) => o.id === "orange")?.preview).toBeTruthy();
     });
 
     it("creates dog structured refinement for dog prompt", () => {
@@ -56,6 +71,21 @@ describe("promptRefinement", () => {
       expect(refinement.subjectType).toBe("dog");
       const breedCategory = refinement.dimensions.find((c) => c.id === "breed");
       expect(breedCategory?.options.map((o) => o.label)).toContain("โกลเด้น");
+    });
+
+    it("creates brand-variant mode with Shared Anchors for Welearn shelf signs", () => {
+      const refinement = createPromptRefinement(
+        "ออกแบบป้ายหมวด Welearn ขนาด 60x20cm ธีม Manifest",
+      );
+      expect(refinement.mode).toBe("brand-variant");
+      expect(refinement.subjectType).toBe("brand");
+      expect(refinement.sharedAnchors.some((a) => a.id === "ratio")).toBe(true);
+      expect(refinement.dimensions.map((d) => d.id)).toEqual(
+        expect.arrayContaining(["mood", "structure", "signature", "density"]),
+      );
+      const mood = refinement.dimensions.find((d) => d.id === "mood");
+      expect(mood?.options).toHaveLength(5);
+      expect(mood?.options.every((o) => o.preview)).toBe(true);
     });
   });
 
@@ -75,8 +105,8 @@ describe("promptRefinement", () => {
       expect(result).toContain("สีส้มสดใส");
       expect(result).toContain("สายพันธุ์เปอร์เซีย");
       expect(result).toContain("ห้องนั่งเล่นอบอุ่น");
-      expect(result).toContain("มุมกล้องระดับสายตา (Eye-level)");
-      expect(result).toContain("สไตล์ภาพถ่ายสมจริง (Photorealistic)");
+      expect(result).toContain("มุมกล้องระดับสายตา");
+      expect(result).toContain("สไตล์ภาพถ่ายสมจริง");
     });
 
     it("handles empty or partial selections gracefully", () => {
@@ -89,6 +119,23 @@ describe("promptRefinement", () => {
       expect(result).toContain("สร้างรูปแมว");
       expect(result).toContain("สีดำขลับ");
       expect(result).not.toContain("สายพันธุ์");
+    });
+  });
+
+  describe("buildRefinementOrchestratorLocks", () => {
+    it("exports Shared Anchors + Variant picks for Orchestrator continuity", () => {
+      const refinement = createPromptRefinement(
+        "ออกแบบป้ายหมวด Welearn ขนาด 60x20cm ธีม Manifest",
+      );
+      const locks = buildRefinementOrchestratorLocks(refinement, {
+        mood: "mood_premium",
+        structure: "struct_split",
+      });
+      expect(locks.refinementMode).toBe("brand-variant");
+      expect(locks.sharedAnchors.length).toBeGreaterThan(0);
+      expect(locks.variantSelections).toHaveLength(2);
+      expect(locks.variantSelections[0]?.optionId).toBe("mood_premium");
+      expect(locks.variantSelections[1]?.axisId).toBe("structure");
     });
   });
 });

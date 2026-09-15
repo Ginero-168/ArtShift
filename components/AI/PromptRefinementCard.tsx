@@ -2,14 +2,21 @@ import { useRef, useState } from "react";
 import { IconClose, IconPenEdit, IconWand } from "@/components/icons";
 import {
   buildRefinedPromptString,
+  buildRefinementOrchestratorLocks,
   type PromptRefinementCardData,
+  type RefinementOption,
 } from "@/lib/ai/orchestration/promptRefinement";
+import type { OptionPreview } from "@/lib/ai/orchestration/promptOptionCatalog";
 
 export interface PromptRefinementCardProps {
   data: PromptRefinementCardData;
   onGenerate: (refinedPrompt: string) => void;
   onApplyToComposer: (refinedPrompt: string) => void;
   onDismiss: () => void;
+  /** Optional: receive Layer-1/2 locks so Orchestrator can store them in generationContext */
+  onLocksChange?: (
+    locks: ReturnType<typeof buildRefinementOrchestratorLocks>,
+  ) => void;
 }
 
 export default function PromptRefinementCard({
@@ -17,31 +24,45 @@ export default function PromptRefinementCard({
   onGenerate,
   onApplyToComposer,
   onDismiss,
+  onLocksChange,
 }: PromptRefinementCardProps) {
-  // Local state for active selections: { [dimensionId]: optionId | null }
   const [selections, setSelections] = useState<Record<string, string | null>>(() => ({
     ...data.selectedOptions,
   }));
 
   const assembledPrompt = buildRefinedPromptString(data, selections);
+  const locks = buildRefinementOrchestratorLocks(data, selections);
+  const selectedCount = Object.values(selections).filter(Boolean).length;
+
+  const emitLocks = (next: Record<string, string | null>) => {
+    onLocksChange?.(buildRefinementOrchestratorLocks(data, next));
+  };
 
   const handleToggleOption = (dimId: string, optionId: string) => {
-    setSelections((prev) => ({
-      ...prev,
-      [dimId]: prev[dimId] === optionId ? null : optionId,
-    }));
+    setSelections((prev) => {
+      const next = {
+        ...prev,
+        [dimId]: prev[dimId] === optionId ? null : optionId,
+      };
+      emitLocks(next);
+      return next;
+    });
   };
 
   const handleClearDimension = (dimId: string) => {
-    setSelections((prev) => ({
-      ...prev,
-      [dimId]: null,
-    }));
+    setSelections((prev) => {
+      const next = { ...prev, [dimId]: null };
+      emitLocks(next);
+      return next;
+    });
   };
+
+  const isBrand = data.mode === "brand-variant";
 
   return (
     <div
       data-testid="prompt-refinement-card"
+      data-refinement-mode={data.mode}
       style={{
         border: "1px solid #e2e8f0",
         borderRadius: 12,
@@ -56,7 +77,6 @@ export default function PromptRefinementCard({
         position: "relative",
       }}
     >
-      {/* Header with Live Prompt Preview */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div
           style={{
@@ -77,6 +97,20 @@ export default function PromptRefinementCard({
           >
             <IconWand size={14} color="#6366f1" />
             <span>Prompt ของผู้ใช้ ...</span>
+            {isBrand && (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "#4338ca",
+                  background: "#eef2ff",
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                }}
+              >
+                Anchor + Variant
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -93,20 +127,12 @@ export default function PromptRefinementCard({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              transition: "color 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#0f172a";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "#94a3b8";
             }}
           >
             <IconClose size={13} color="currentColor" />
           </button>
         </div>
 
-        {/* Live dynamic preview box */}
         <div
           style={{
             padding: "5px 8px",
@@ -125,19 +151,63 @@ export default function PromptRefinementCard({
         </div>
       </div>
 
-      {/* Category Rows */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {data.sharedAnchors.length > 0 && (
+        <div
+          data-testid="shared-anchors-strip"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            padding: "6px 8px",
+            background: isBrand ? "#f8fafc" : "#fafafa",
+            borderRadius: 8,
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", letterSpacing: 0.2 }}>
+            {isBrand ? "ล็อกทุกแบบ (Shared Anchor)" : "บริบทที่คงไว้"}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {data.sharedAnchors.map((anchor) => (
+              <span
+                key={anchor.id}
+                title={anchor.detail}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "#0f172a",
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 999,
+                  padding: "2px 8px",
+                  maxWidth: "100%",
+                }}
+              >
+                {anchor.label}
+                <span style={{ color: "#64748b", fontWeight: 500 }}> · {anchor.detail}</span>
+              </span>
+            ))}
+          </div>
+          {isBrand && (
+            <div style={{ fontSize: 10, color: "#64748b", lineHeight: 1.35 }}>
+              เลือกคาแรคเตอร์ด้านล่างเพื่อสร้างความต่าง — ข้อความ/โลโก้/สัดส่วนจะไม่ขยับเมื่อ Orchestrator
+              สร้างแบบต่อเนื่อง
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {data.dimensions.map((dim) => {
           const selectedOptionId = selections[dim.id] ?? null;
-          const isCleared = selectedOptionId === null;
-
           return (
             <DimensionRow
               key={dim.id}
               title={dim.title}
+              hint={dim.hint}
               options={dim.options}
               selectedOptionId={selectedOptionId}
-              isCleared={isCleared}
+              visual={dim.options.some((o) => o.preview)}
               onClear={() => handleClearDimension(dim.id)}
               onToggleOption={(optId) => handleToggleOption(dim.id, optId)}
             />
@@ -145,7 +215,6 @@ export default function PromptRefinementCard({
         })}
       </div>
 
-      {/* Action Buttons */}
       <div
         style={{
           display: "flex",
@@ -159,7 +228,10 @@ export default function PromptRefinementCard({
         <button
           type="button"
           data-testid="refinement-generate-button"
-          onClick={() => onGenerate(assembledPrompt)}
+          onClick={() => {
+            onLocksChange?.(locks);
+            onGenerate(assembledPrompt);
+          }}
           style={{
             flex: 1,
             display: "flex",
@@ -175,26 +247,24 @@ export default function PromptRefinementCard({
             fontWeight: 700,
             cursor: "pointer",
             boxShadow: "0 1.5px 5px rgba(79, 70, 229, 0.25)",
-            transition: "all 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-1px)";
-            e.currentTarget.style.boxShadow = "0 3px 8px rgba(79, 70, 229, 0.35)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "none";
-            e.currentTarget.style.boxShadow = "0 1.5px 5px rgba(79, 70, 229, 0.25)";
           }}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span>สร้างรูปภาพตามตัวเลือกนี้</span>
+            <span>
+              {isBrand && selectedCount > 0
+                ? `สร้างตามทิศทางที่เลือก (${selectedCount})`
+                : "สร้างรูปภาพตามตัวเลือกนี้"}
+            </span>
             <IconWand size={13} color="#ffffff" />
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => onApplyToComposer(assembledPrompt)}
+          onClick={() => {
+            onLocksChange?.(locks);
+            onApplyToComposer(assembledPrompt);
+          }}
           title="คัดลอกลงในช่องพิมพ์เพื่อแก้ไขต่อ"
           style={{
             padding: "6px 8px",
@@ -205,13 +275,6 @@ export default function PromptRefinementCard({
             fontSize: 11,
             fontWeight: 600,
             cursor: "pointer",
-            transition: "all 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#e2e8f0";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#f1f5f9";
           }}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -233,12 +296,6 @@ export default function PromptRefinementCard({
             fontWeight: 500,
             cursor: "pointer",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "#0f172a";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "#64748b";
-          }}
         >
           ข้าม
         </button>
@@ -249,92 +306,53 @@ export default function PromptRefinementCard({
 
 interface DimensionRowProps {
   title: string;
-  options: Array<{ id: string; label: string; modifier: string }>;
+  hint?: string;
+  options: RefinementOption[];
   selectedOptionId: string | null;
-  isCleared: boolean;
+  visual: boolean;
   onClear: () => void;
   onToggleOption: (id: string) => void;
 }
 
 function DimensionRow({
   title,
+  hint,
   options,
   selectedOptionId,
-  isCleared,
+  visual,
   onClear,
   onToggleOption,
 }: DimensionRowProps) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const isCleared = selectedOptionId === null;
 
   const handleScroll = (delta: number) => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: delta, behavior: "smooth" });
-    }
+    scrollContainerRef.current?.scrollBy({ left: delta, behavior: "smooth" });
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      {/* Dimension Title */}
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: "#334155",
-        }}
-      >
-        {title}
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#334155" }}>{title}</div>
+        {hint && <div style={{ fontSize: 10, color: "#94a3b8" }}>{hint}</div>}
       </div>
 
-      {/* Row with Navigation and Options */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          width: "100%",
-        }}
-      >
-        {/* Left Arrow Button */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 4, width: "100%" }}>
         <button
           type="button"
           aria-label={`Scroll ${title} left`}
-          onClick={() => handleScroll(-120)}
-          style={{
-            flexShrink: 0,
-            width: 18,
-            height: 18,
-            borderRadius: "50%",
-            border: "1px solid #cbd5e1",
-            background: "#ffffff",
-            color: "#475569",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            fontSize: 10,
-            fontWeight: 800,
-            padding: 0,
-            transition: "all 0.1s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#f1f5f9";
-            e.currentTarget.style.borderColor = "#94a3b8";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#ffffff";
-            e.currentTarget.style.borderColor = "#cbd5e1";
-          }}
+          onClick={() => handleScroll(visual ? -160 : -120)}
+          style={navBtnStyle}
         >
           ‹
         </button>
 
-        {/* Scrollable Container with X and Option Pills */}
         <div
           ref={scrollContainerRef}
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 4,
+            alignItems: visual ? "stretch" : "center",
+            gap: 6,
             overflowX: "auto",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
@@ -342,17 +360,17 @@ function DimensionRow({
             padding: "1px 0",
           }}
         >
-          {/* First Pill: X button */}
           <button
             type="button"
             onClick={onClear}
-            title={`ไม่ระบุ${title} (ใช้ค่าเริ่มต้น)`}
+            title={`ไม่ระบุ${title}`}
             style={{
               flexShrink: 0,
-              minWidth: 24,
-              height: 22,
-              padding: "0 6px",
-              borderRadius: 5,
+              alignSelf: visual ? "center" : undefined,
+              minWidth: visual ? 36 : 24,
+              height: visual ? 36 : 22,
+              padding: visual ? "0 8px" : "0 6px",
+              borderRadius: 6,
               border: isCleared ? "1px solid #dc2626" : "1px solid #fecaca",
               background: isCleared ? "#dc2626" : "#fef2f2",
               color: isCleared ? "#ffffff" : "#b91c1c",
@@ -362,16 +380,23 @@ function DimensionRow({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              transition: "all 0.12s ease",
             }}
           >
             <IconClose size={10} color={isCleared ? "#ffffff" : "#b91c1c"} />
           </button>
 
-          {/* Option Pills */}
           {options.map((opt) => {
             const isSelected = selectedOptionId === opt.id;
-
+            if (visual && opt.preview) {
+              return (
+                <ThumbnailOption
+                  key={opt.id}
+                  option={opt}
+                  selected={isSelected}
+                  onToggle={() => onToggleOption(opt.id)}
+                />
+              );
+            }
             return (
               <button
                 key={opt.id}
@@ -388,25 +413,7 @@ function DimensionRow({
                   fontWeight: isSelected ? 700 : 500,
                   fontSize: 11,
                   cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                   whiteSpace: "nowrap",
-                  transition: "all 0.12s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.background = "#eef2ff";
-                    e.currentTarget.style.borderColor = "#c7d2fe";
-                    e.currentTarget.style.color = "#4338ca";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.background = "#f8fafc";
-                    e.currentTarget.style.borderColor = "#e2e8f0";
-                    e.currentTarget.style.color = "#334155";
-                  }
                 }}
               >
                 {opt.label}
@@ -415,40 +422,149 @@ function DimensionRow({
           })}
         </div>
 
-        {/* Right Arrow Button */}
         <button
           type="button"
           aria-label={`Scroll ${title} right`}
-          onClick={() => handleScroll(120)}
-          style={{
-            flexShrink: 0,
-            width: 18,
-            height: 18,
-            borderRadius: "50%",
-            border: "1px solid #cbd5e1",
-            background: "#ffffff",
-            color: "#475569",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            fontSize: 10,
-            fontWeight: 800,
-            padding: 0,
-            transition: "all 0.1s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#f1f5f9";
-            e.currentTarget.style.borderColor = "#94a3b8";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#ffffff";
-            e.currentTarget.style.borderColor = "#cbd5e1";
-          }}
+          onClick={() => handleScroll(visual ? 160 : 120)}
+          style={navBtnStyle}
         >
           ›
         </button>
       </div>
     </div>
+  );
+}
+
+const navBtnStyle: {
+  flexShrink: number;
+  width: number;
+  height: number;
+  alignSelf: "center";
+  borderRadius: string;
+  border: string;
+  background: string;
+  color: string;
+  display: "flex";
+  alignItems: "center";
+  justifyContent: "center";
+  cursor: "pointer";
+  fontSize: number;
+  fontWeight: number;
+  padding: number;
+} = {
+  flexShrink: 0,
+  width: 18,
+  height: 18,
+  alignSelf: "center",
+  borderRadius: "50%",
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#475569",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  fontSize: 10,
+  fontWeight: 800,
+  padding: 0,
+};
+
+function ThumbnailOption({
+  option,
+  selected,
+  onToggle,
+}: {
+  option: RefinementOption;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={`refinement-thumb-${option.id}`}
+      onClick={onToggle}
+      title={option.modifier}
+      style={{
+        flexShrink: 0,
+        width: 76,
+        borderRadius: 8,
+        border: selected ? "2px solid #0284c7" : "1px solid #e2e8f0",
+        background: selected ? "#f0f9ff" : "#ffffff",
+        padding: 3,
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+        textAlign: "left",
+        boxShadow: selected ? "0 0 0 1px rgba(2,132,199,0.25)" : "none",
+      }}
+    >
+      <OptionPreviewSurface preview={option.preview!} selected={selected} />
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: selected ? 700 : 600,
+          color: selected ? "#0369a1" : "#334155",
+          lineHeight: 1.2,
+          padding: "0 2px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {option.label}
+      </div>
+      {option.character && (
+        <div
+          style={{
+            fontSize: 9,
+            color: "#94a3b8",
+            padding: "0 2px 1px",
+            lineHeight: 1.2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {option.character}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function OptionPreviewSurface({
+  preview,
+  selected,
+}: {
+  preview: OptionPreview;
+  selected: boolean;
+}) {
+  if (preview.kind === "swatch") {
+    const gradient = `linear-gradient(135deg, ${preview.colors.join(", ")})`;
+    return (
+      <div
+        style={{
+          height: 40,
+          borderRadius: 5,
+          background: gradient,
+          border: selected ? "1px solid #7dd3fc" : "1px solid rgba(15,23,42,0.06)",
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        height: 40,
+        borderRadius: 5,
+        overflow: "hidden",
+        border: selected ? "1px solid #7dd3fc" : "1px solid rgba(15,23,42,0.06)",
+        lineHeight: 0,
+      }}
+      // Catalog SVGs are authored in-repo (no user HTML).
+      dangerouslySetInnerHTML={{ __html: preview.svg }}
+    />
   );
 }

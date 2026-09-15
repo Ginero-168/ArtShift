@@ -12,7 +12,10 @@ import {
   SpinnerIcon,
 } from "@/components/AI/ChatIcons";
 import PromptRefinementCard from "@/components/AI/PromptRefinementCard";
-import type { PromptRefinementCardData } from "@/lib/ai/orchestration/promptRefinement";
+import {
+  buildRefinementOrchestratorLocks,
+  type PromptRefinementCardData,
+} from "@/lib/ai/orchestration/promptRefinement";
 
 export type StagedVariationCard = {
   id: string;
@@ -616,6 +619,9 @@ export interface ChatActionCardsProps {
   onGenerateFromRefinement?: (prompt: string) => void;
   onApplyRefinementToComposer?: (prompt: string) => void;
   onDismissRefinement?: () => void;
+  onRefinementLocksChange?: (
+    locks: ReturnType<typeof buildRefinementOrchestratorLocks>,
+  ) => void;
 
   pendingPlan?: PlanProposal | null;
   busy?: boolean;
@@ -640,6 +646,7 @@ export default function ChatActionCards({
   onGenerateFromRefinement,
   onApplyRefinementToComposer,
   onDismissRefinement,
+  onRefinementLocksChange,
 
   pendingPlan,
   busy = false,
@@ -666,6 +673,7 @@ export default function ChatActionCards({
           onGenerate={onGenerateFromRefinement}
           onApplyToComposer={onApplyRefinementToComposer}
           onDismiss={onDismissRefinement}
+          onLocksChange={onRefinementLocksChange}
         />
       )}
 

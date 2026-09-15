@@ -100,15 +100,8 @@ export interface CoPilotMessage {
   images?: CoPilotMessageImage[];
   imageRefs?: ComposerImageRef[];
   requestedCount?: number;
-  /** Locked brief/ratio from a successful image turn — used for chat continuity. */
-  generationContext?: {
-    userPrompt: string;
-    refinedPrompt: string;
-    summary?: string;
-    width: number;
-    height: number;
-    aspectRatio: string;
-  };
+  /** Locked brief/ratio (+ Shared Anchors / Variant axes) for chat continuity. */
+  generationContext?: PriorImageGenerationContext;
 }
 
 export interface WorkspaceContext {

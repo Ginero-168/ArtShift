@@ -23,7 +23,13 @@ import {
   type PriorImageGenerationContext,
 } from "@/lib/ai/orchestration/chatContinuity";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
-import { createPromptRefinement, isBroadImagePrompt, type PromptRefinementCardData } from "@/lib/ai/orchestration/promptRefinement";
+import {
+  buildRefinementOrchestratorLocks,
+  createPromptRefinement,
+  isBroadImagePrompt,
+  type PromptRefinementCardData,
+} from "@/lib/ai/orchestration/promptRefinement";
+import { inferSharedAnchors } from "@/lib/ai/orchestration/promptOptionCatalog";
 import { analyzeImageReferences, type ImageReferenceAnalysis } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
   type ContextAwareTurnResult, createDirectedImageRun, createDirectedImageTask,
@@ -166,6 +172,9 @@ export default function AICoPilotBar() {
   const [promptRefinementData, setPromptRefinementData] = useState<PromptRefinementCardData | null>(
     null,
   );
+  const pendingRefinementLocksRef = useRef<ReturnType<
+    typeof buildRefinementOrchestratorLocks
+  > | null>(null);
 
   const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
 
@@ -1025,6 +1034,19 @@ export default function AICoPilotBar() {
                       "\n\n💡 เลื่อนเมาส์เหนือตัวเลือกใน Staging Tray ด้านล่างเพื่อดู Ghost Preview บน Canvas หรือกด Apply ภาพที่ต้องการลงชิ้นงานได้เลยครับ";
                   }
 
+                  const locksFromHelper = pendingRefinementLocksRef.current;
+                  pendingRefinementLocksRef.current = null;
+                  const continuedAnchors =
+                    locksFromHelper?.sharedAnchors ??
+                    priorGeneration?.sharedAnchors ??
+                    inferSharedAnchors(
+                      isFollowUpTurn
+                        ? priorGeneration?.userPrompt || promptToSend
+                        : promptToSend,
+                    );
+                  const continuedVariants =
+                    locksFromHelper?.variantSelections ?? priorGeneration?.variantSelections;
+
                   setMessages((previous) => [
                     ...previous,
                     {
@@ -1045,7 +1067,15 @@ export default function AICoPilotBar() {
                         height: imageRun.tasks[0]?.requestedDimensions?.height ?? 1024,
                         aspectRatio:
                           imageRun.tasks[0]?.requestedDimensions?.aspectRatio ?? "1:1",
-                      },
+                        refinementMode:
+                          locksFromHelper?.refinementMode ??
+                          priorGeneration?.refinementMode ??
+                          (continuedVariants?.length ? "brand-variant" : "generic"),
+                        sharedAnchors: continuedAnchors,
+                        ...(continuedVariants?.length
+                          ? { variantSelections: continuedVariants }
+                          : {}),
+                      } satisfies PriorImageGenerationContext,
                       timestamp: Date.now(),
                       actions,
                       suggestions: completionSuggestions,
@@ -1530,7 +1560,13 @@ export default function AICoPilotBar() {
             editorRef.current?.setValue(refined);
             editorRef.current?.focus();
           }}
-          onDismissRefinement={() => setPromptRefinementData(null)}
+          onDismissRefinement={() => {
+            pendingRefinementLocksRef.current = null;
+            setPromptRefinementData(null);
+          }}
+          onRefinementLocksChange={(locks) => {
+            pendingRefinementLocksRef.current = locks;
+          }}
           pendingPlan={pendingPlan}
           busy={busy}
           onApplyPendingPlan={applyPendingPlan}

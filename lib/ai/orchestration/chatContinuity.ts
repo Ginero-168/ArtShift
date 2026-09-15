@@ -8,6 +8,23 @@ import {
  * (e.g. "สร้างมาอีก 3 รูป" should keep prior aspect ratio + base prompt).
  */
 
+/** Layer-1 locks carried across Orchestrator turns (must not drift on follow-ups). */
+export type SharedAnchorLock = {
+  id: string;
+  label: string;
+  detail: string;
+};
+
+/** Layer-2 picks from Prompt Helper — safe axes to vary on follow-ups. */
+export type VariantSelectionLock = {
+  axisId: string;
+  axisTitle: string;
+  optionId: string;
+  label: string;
+  character?: string;
+  modifier: string;
+};
+
 export type PriorImageGenerationContext = {
   userPrompt: string;
   refinedPrompt: string;
@@ -15,6 +32,10 @@ export type PriorImageGenerationContext = {
   width: number;
   height: number;
   aspectRatio: string;
+  /** subject = photo/illustration helper; brand-variant = Shared Anchor + Variant axes */
+  refinementMode?: "subject" | "brand-variant" | "generic";
+  sharedAnchors?: readonly SharedAnchorLock[];
+  variantSelections?: readonly VariantSelectionLock[];
 };
 
 /** Detects short follow-up / more-variations requests that rely on prior turn context. */
@@ -60,21 +81,50 @@ export function composeFollowUpDirectorPrompt(
   prior: PriorImageGenerationContext,
 ): string {
   const countHint = currentPrompt.trim();
+  const anchorLines =
+    prior.sharedAnchors && prior.sharedAnchors.length > 0
+      ? [
+          "=== SHARED ANCHORS (Layer 1 — LOCKED, identical on every variant) ===",
+          ...prior.sharedAnchors.map((a) => `- ${a.label}: ${a.detail}`),
+          "Never change text/logo/brand colors/ratio/hierarchy listed above to create variety.",
+        ]
+      : [];
+  const variantLines =
+    prior.variantSelections && prior.variantSelections.length > 0
+      ? [
+          "=== PRIOR VARIANT AXES (Layer 2 — safe to differentiate) ===",
+          ...prior.variantSelections.map(
+            (v) =>
+              `- ${v.axisTitle}: ${v.label}${v.character ? ` (${v.character})` : ""} → ${v.modifier}`,
+          ),
+          "For additional outputs, change at least two Layer-2 axes (mood / background structure / signature role / density) so each image has a distinct character pole — do not produce clones of the same personality.",
+        ]
+      : [
+          "=== VARIATION STRATEGY ===",
+          "No structured variant axes were stored. Still keep Layer-1 constraints from the prior brief; differentiate only mood, composition density, lighting accent, or secondary props.",
+        ];
+
   return [
     `User follow-up request: ${countHint}`,
     "",
     "=== PRIOR IMAGE GENERATION TO CONTINUE ===",
     `Original user brief: ${prior.userPrompt.slice(0, 4_000)}`,
     ...(prior.summary ? [`Prior summary: ${prior.summary.slice(0, 1_000)}`] : []),
+    `Refinement mode: ${prior.refinementMode ?? "generic"}`,
     `Prior aspect ratio / dimensions: ${prior.aspectRatio} (${prior.width}×${prior.height}) — KEEP unless the user explicitly changes ratio or size.`,
     "Prior refinedPrompt (use as BASE; create distinct variations of the same subject/style/constraints):",
     prior.refinedPrompt.slice(0, 12_000),
     "",
+    ...anchorLines,
+    ...(anchorLines.length ? [""] : []),
+    ...variantLines,
+    "",
     "CONTINUATION RULES:",
-    "- Keep the same subject, brand constraints, typography requirements, and aspect ratio from the prior generation.",
-    "- Produce distinct variations (pose, crop, lighting accent, secondary props) — do not clone the prior image.",
+    "- Keep Shared Anchors identical across all new outputs.",
+    "- Produce distinct Layer-2 variations — do not clone the prior image.",
     "- refinedPrompt must restate the full base brief in English, enriched for variation, and must explicitly include the prior aspect ratio.",
     "- requestedOutputCount must match the follow-up quantity when the user asked for N more images.",
+    "- If this was a brand/shelf-sign job, never invent new copy or move the logo to create variety.",
   ].join("\n");
 }
 

@@ -11,8 +11,8 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
     const lines = barSource.split("\n").length;
 
-    // Line count reduced from ~2,975 lines down to under 1,500 lines
-    expect(lines).toBeLessThan(1600);
+    // Line count reduced from ~2,975 lines; allow modest growth for Orchestrator continuity wiring
+    expect(lines).toBeLessThan(1700);
 
     // Integrates the 4 extracted submodules
     expect(barSource).toContain("useCanvasSelectionBridge");
@@ -76,6 +76,11 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     // Action buttons matching wireframe workflow
     expect(refinementSource.includes("สร้างรูปภาพตามตัวเลือกนี้")).toBe(true);
     expect(refinementSource.includes("คัดลอกลงช่องพิมพ์")).toBe(true);
+
+    // Visual catalog + Orchestrator locks
+    expect(refinementSource).toContain("shared-anchors-strip");
+    expect(refinementSource).toContain("onLocksChange");
+    expect(refinementSource).toContain("ThumbnailOption");
   });
 
   it("validates dynamic prompt refinement live assembly for user cats prompt", () => {
