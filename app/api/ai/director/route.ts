@@ -143,8 +143,17 @@ function parseDirectorInput(
           : undefined;
     const displayName =
       rawDisplayName && isSafeString(rawDisplayName, 500) ? rawDisplayName.trim() : undefined;
+    const rawObjectId =
+      typeof candidate.objectId === "string"
+        ? candidate.objectId
+        : isRecord(candidate.ref) && typeof candidate.ref.objectId === "string"
+          ? candidate.ref.objectId
+          : undefined;
+    const objectId =
+      rawObjectId && isSafeString(rawObjectId, 200) ? rawObjectId.trim() : undefined;
     referenceAnalyses.push({
       ...(displayName ? { displayName } : {}),
+      ...(objectId ? { objectId } : {}),
       caption: candidate.caption,
       objects: candidate.objects,
       visibleText: candidate.visibleText,

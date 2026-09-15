@@ -190,10 +190,11 @@ describe("selected image references", () => {
     expect(byName.refs).toHaveLength(1);
     expect(byName.refs[0]?.objectId).toBe("el-uuid-1");
 
-    // 2. Resolve by bracketed tag syntax @[Hero Cat:el-uuid-1]
+    // 2. Resolve by bracketed tag syntax @[Hero Cat:el-uuid-1] and keep Name Tag display name
     const byTag = buildComposerImageSelectionFromIds([heroImage, logoImage], ["@[Hero Cat:el-uuid-1]"]);
     expect(byTag.refs).toHaveLength(1);
     expect(byTag.refs[0]?.objectId).toBe("el-uuid-1");
+    expect(byTag.refs[0]?.displayName).toBe("Hero Cat");
 
     // 3. Resolve by sourceName
     const bySourceName = buildComposerImageSelectionFromIds([heroImage, logoImage], ["logo.png"]);

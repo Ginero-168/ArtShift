@@ -22,7 +22,11 @@ import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from ".
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
 import { computeDetailScore, computeEditPrecisionScore } from "./imageQualityPolicy";
 import { extractIntentFeatures } from "./imageWorkSpec";
-import { synthesizePromptWithInlineTags } from "./inlineTagSynthesis";
+import {
+  finalizeRefinedPromptWithNameTags,
+  inferInlineTagRoles,
+  synthesizePromptWithInlineTags,
+} from "./inlineTagSynthesis";
 import { DESIGN_PLAN_TOOL } from "./orchestratorTools";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
 import { type AiTask, appendAiTaskEvent } from "./taskMachine";
@@ -87,7 +91,7 @@ export type CreativeDirectorInput = {
   referenceAnalyses: readonly (Pick<
     ImageReferenceAnalysis,
     "caption" | "objects" | "visibleText" | "dimensions" | "appearanceNotes" | "limitations"
-  > & { displayName?: string })[];
+  > & { displayName?: string; objectId?: string })[];
   availableCapabilities: readonly string[];
   cloudConsent?: boolean;
   accountId?: string;
@@ -345,9 +349,13 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "When the user attaches reference images or name tags, analyze their visual details, detected titles, OCR text, and objects to guide the design. If the user asks to create an ad, poster, or new image referencing the tagged subject, choose image_generator and incorporate the title, key messaging, and visual theme into refinedPrompt.",
   "NAME TAG REFERENCE PRESERVATION & MODIFICATION PROTOCOL:",
   "When the user references one or more canvas elements using Name Tags (e.g. @[Name:id] or @Name or @รูป...):",
-  "  - The referenced images are extracted from the canvas and supplied directly as input_images to the image model.",
+  "  - The referenced images are extracted from the canvas and supplied directly as input_images to the image model IN THE SAME ORDER as the Name Tags / reference list.",
+  "  - Each Name Tag has a display name that MUST be preserved in refinedPrompt as a human label (e.g. Reference 1 \"merged-image.png\"). Never treat tagged images as anonymous blobs.",
+  "  - Infer role from the surrounding clause: สไตล์/style → STYLE reference; บรีฟ/Layout/composition → LAYOUT/BRIEF reference; แก้ไข/subject → SUBJECT reference.",
+  "  - CRITICAL: refinedPrompt MUST NEVER contain raw @[Name:id], bare UUIDs, or unparsed Name Tag syntax. Rewrite tags into natural English referring to Reference N by display name and role.",
   "  - For image editing tasks (e.g. 'แก้ไขรูป @tag', 'เพิ่ม... ในรูป @tag', 'ลบ... จาก @tag', 'เปลี่ยน... ใน @tag'): Select specialist 'image_editor', and formulate refinedPrompt to describe the exact desired modifications relative to the referenced input image.",
   "  - For image creation tasks referencing a tag (e.g. 'สร้างรูปแมวตัวนี้ @tag ในชุดอวกาศ', 'วาดรูปคนนี้ @tag สไตล์การ์ตูน'): Formulate refinedPrompt instructing the model to maintain the subject's identity, physical appearance, colors, and key features from the input reference image while depicting the requested new setting, costume, or style.",
+  "  - When one tag is style and another is layout/brief, keep those roles distinct: style controls look/lighting/subject treatment; layout/brief controls composition and typography zones. Do not copy photographic background slogans from a style reference unless the brief asks for that text.",
   "  - Review criteria: Always include review criteria verifying that the subject identity and key features from the referenced tag image are preserved faithfully.",
   "For a sequential plan, every step must be executable from its payload and earlier outputs: image_generator/image_editor require payload.prompt, vectorizer requires an earlier image dependency, copywriter requires payload.headline or payload.text, and layout_designer/brand_stylist must describe the exact local operation. Never use placeholder URLs, sample copy or fabricated quality scores.",
   "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested to CREATE (1 to 5).",
@@ -431,7 +439,10 @@ export async function prepareCreativeDirection(
   const knowledge = retrieveDesignKnowledge(input.prompt, 3);
   const searchImagesAvailable =
     Boolean(runtime.searchImages) && (runtime.searchImagesAvailable ?? true);
-  const formattedReferences = formatReferenceAnalysesForPrompt(input.referenceAnalyses);
+  const formattedReferences = formatReferenceAnalysesForPrompt(
+    input.referenceAnalyses,
+    input.prompt,
+  );
   const hasInlineTags = /@[^\s]+/u.test(input.prompt);
   const inlineSynthesis =
     (input.referenceAnalyses && input.referenceAnalyses.length > 0) || hasInlineTags
@@ -451,7 +462,7 @@ export async function prepareCreativeDirection(
             inlineSynthesis?.semanticMappingText ? `\n\n${inlineSynthesis.semanticMappingText}` : ""
           }${
             formattedReferences
-              ? `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Analyze and incorporate their visual style, context, detected title, and OCR text into your creative direction, refinedPrompt, and reviewCriteria:\n${formattedReferences}`
+              ? `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Each has a display name and inferred role. Analyze and incorporate them into your creative direction. In refinedPrompt, refer to Reference N by display name + role only — never emit @[Name:id] or UUIDs. Images are also supplied as input_images in this same order:\n${formattedReferences}`
               : ""
           }`,
         },
@@ -1185,6 +1196,7 @@ export function parseCreativeDirection(
     "image-gpt-2",
   ]);
   const rawModelAlias = typeof value.modelAlias === "string" ? value.modelAlias : "image-gpt-2";
+  const tagRoles = inferInlineTagRoles(input.prompt);
   const extractedFeatures = extractIntentFeatures({
     operation: specialist === "image_editor" ? "edit" : "generate",
     refinedPrompt: (value.refinedPrompt as string).trim(),
@@ -1193,10 +1205,19 @@ export function parseCreativeDirection(
       typeof value.requiredText === "string" && value.requiredText.trim()
         ? [value.requiredText.trim()]
         : [],
-    references: (input.referenceAnalyses || []).map((r) => ({
-      assetRef: r.displayName || "ref",
-      role: "subject",
-    })),
+    references: (input.referenceAnalyses || []).map((r) => {
+      const inferred = (r.objectId && tagRoles.get(r.objectId)) || "subject";
+      const role =
+        inferred === "layout"
+          ? "composition"
+          : inferred === "style"
+            ? "style"
+            : "subject";
+      return {
+        assetRef: r.displayName || r.objectId || "ref",
+        role,
+      };
+    }),
     finalUse: /(?:final|production|print|พิมพ์|ใช้งานจริง)/iu.test(input.prompt),
     speedPreference: /(?:เร็ว|ด่วน|fast|quick)/iu.test(input.prompt) ? "fast" : "normal",
     outputCount: requestedOutputCount,
@@ -1270,7 +1291,11 @@ export function parseCreativeDirection(
     requestedOutputCount,
     outputBriefs: finalBriefs.map((brief) => brief.trim()),
     summary: value.summary.trim(),
-    refinedPrompt: (value.refinedPrompt as string).trim(),
+    refinedPrompt: finalizeRefinedPromptWithNameTags(
+      (value.refinedPrompt as string).trim(),
+      input.prompt,
+      input.referenceAnalyses || [],
+    ),
     specialist,
     capability,
     modelAlias: resolvedModelAlias as "image-general" | "image-fast" | "image-precision" | "image-gpt-2",
@@ -1429,12 +1454,16 @@ function normalizeArtworkContext(value: unknown): unknown {
 
 function formatReferenceAnalysesForPrompt(
   values: CreativeDirectorInput["referenceAnalyses"],
+  userPrompt = "",
 ): string {
   if (!values.length) return "";
+  const roles = inferInlineTagRoles(userPrompt);
   return values
     .map((val, idx) => {
       const title = val.displayName ? `"${val.displayName}"` : `Image ${idx + 1}`;
-      const lines = [`- Reference ${idx + 1} (${title}):`];
+      const role = (val.objectId && roles.get(val.objectId)) || "reference";
+      const lines = [`- Reference ${idx + 1} (${title}, role: ${role}):`];
+      if (val.objectId) lines.push(`  • Object ID: ${val.objectId}`);
       if (val.caption) lines.push(`  • Visual Summary: ${val.caption}`);
       if (val.visibleText) lines.push(`  • Text on Image (OCR): "${val.visibleText}"`);
       if (val.objects?.length) lines.push(`  • Detected Objects: ${val.objects.join(", ")}`);
@@ -1450,6 +1479,7 @@ function formatReferenceAnalysesForPrompt(
 function normalizeReferenceAnalyses(values: CreativeDirectorInput["referenceAnalyses"]) {
   return values.slice(0, 4).map((value) => ({
     ...(value.displayName ? { displayName: value.displayName.slice(0, 500) } : {}),
+    ...(value.objectId ? { objectId: value.objectId.slice(0, 200) } : {}),
     caption: value.caption.slice(0, 2_000),
     objects: value.objects.slice(0, 50).map((item) => item.slice(0, 200)),
     visibleText: value.visibleText.slice(0, 2_000),

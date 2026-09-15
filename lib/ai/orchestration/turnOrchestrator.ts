@@ -37,7 +37,7 @@ import {
 } from "./imageBatchRunner";
 import { chooseImageQuality } from "./imageQualityPolicy";
 import { buildComposerImageSelectionFromIds, type ComposerImageRef } from "./imageReferences";
-import { extractInlineTagObjectIds } from "./inlineTagSynthesis";
+import { extractInlineTagRefs } from "./inlineTagSynthesis";
 import type { ClarificationOption } from "./intentCompleteness";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
 import { useDirectorSession } from "./sessionState";
@@ -391,10 +391,13 @@ async function executeDefaultSpecialistStep(
       const state = useEngine.getState();
       const slide = state.currentSlide();
       const combinedPrompt = `${prompt} ${plan.originalPrompt || ""}`;
-      const inlineIds = extractInlineTagObjectIds(combinedPrompt);
+      const inlineTags = extractInlineTagRefs(combinedPrompt);
       const taggedRefs =
-        inlineIds.length > 0 && slide
-          ? buildComposerImageSelectionFromIds(slide.elements, inlineIds).refs
+        inlineTags.length > 0 && slide
+          ? buildComposerImageSelectionFromIds(
+              slide.elements,
+              inlineTags.map((tag) => `@[${tag.displayName}:${tag.objectId}]`),
+            ).refs
           : [];
 
       const resolvedInputImages: Array<{ dataUrl: string }> = [];

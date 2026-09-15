@@ -42,7 +42,7 @@ export function buildComposerImageSelection(
         objectId: element.id,
         elementVersion: element.version,
         fileId,
-        displayName: sourceName || element.name || `Image ${index + 1}`,
+        displayName: element.name || sourceName || `Image ${index + 1}`,
         sourceWidth: naturalWidth,
         sourceHeight: naturalHeight,
         width: element.width,
@@ -130,11 +130,17 @@ export function buildComposerImageSelectionFromIds(
     const sourceName = element.type === "image" ? element.sourceName : undefined;
     const naturalWidth = (element as any).naturalWidth || element.width;
     const naturalHeight = (element as any).naturalHeight || element.height;
+    const tagDisplayName = colonIndex > 0 ? fallbackName : "";
     allRefs.push({
       objectId: element.id,
       elementVersion: element.version,
       fileId,
-      displayName: sourceName || element.name || `Image ${originalIndex + 1}`,
+      // Prefer Name Tag label from @[Name:id], then canvas object name, then filename.
+      displayName:
+        (tagDisplayName && tagDisplayName !== targetId ? tagDisplayName : "") ||
+        element.name ||
+        sourceName ||
+        `Image ${originalIndex + 1}`,
       sourceWidth: naturalWidth,
       sourceHeight: naturalHeight,
       width: element.width,

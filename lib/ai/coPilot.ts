@@ -19,7 +19,7 @@ import {
   buildComposerImageSelectionFromIds,
   type ComposerImageRef,
 } from "@/lib/ai/orchestration/imageReferences";
-import { extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
+import { extractInlineTagRefs } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { analyzeImageReferences } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
@@ -236,7 +236,8 @@ export async function executeCoPilotInstruction(
     if (onActionUpdate) onActionUpdate({ ...act });
   };
 
-  const inlineObjectIds = extractInlineTagObjectIds(prompt);
+  const inlineTagRefs = extractInlineTagRefs(prompt);
+  const inlineObjectIds = inlineTagRefs.map((tag) => tag.objectId);
   const elements = st.doc.slides.find((slide) => slide.id === st.currentSlideId)?.elements ?? [];
   const hasInlineTags = inlineObjectIds.length > 0;
   const isImageEdit = isImageEditPrompt(prompt);
@@ -258,10 +259,16 @@ export async function executeCoPilotInstruction(
     isImageEdit
   ) {
     const combinedIds = Array.from(new Set([...inlineObjectIds, ...st.selectedIds]));
-    const selection = buildComposerImageSelectionFromIds(
-      elements,
-      combinedIds.length > 0 ? combinedIds : Array.from(st.selectedIds),
-    );
+    const selectionIds =
+      inlineTagRefs.length > 0
+        ? [
+            ...inlineTagRefs.map((tag) => `@[${tag.displayName}:${tag.objectId}]`),
+            ...Array.from(st.selectedIds).filter((id) => !inlineObjectIds.includes(id)),
+          ]
+        : combinedIds.length > 0
+          ? combinedIds
+          : Array.from(st.selectedIds);
+    const selection = buildComposerImageSelectionFromIds(elements, selectionIds);
     if (!pending && selection.omittedCount > 0) {
       const act = logAction(
         "orchestrator",

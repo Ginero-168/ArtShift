@@ -15,7 +15,7 @@ import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner
 import { deriveGeneratedImageName } from "@/lib/ai/orchestration/imageNaming";
 import { buildComposerImageSelectionFromIds, snapshotComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
-import { cleanTechnicalPromptText, extractInlineTagObjectIds } from "@/lib/ai/orchestration/inlineTagSynthesis";
+import { cleanTechnicalPromptText, extractInlineTagRefs } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { createPromptRefinement, isBroadImagePrompt, type PromptRefinementCardData } from "@/lib/ai/orchestration/promptRefinement";
 import { analyzeImageReferences, type ImageReferenceAnalysis } from "@/lib/ai/orchestration/referenceAnalysis";
@@ -460,11 +460,18 @@ export default function AICoPilotBar() {
       }
     }
 
-    const inlineObjectIds = extractInlineTagObjectIds(rawPrompt);
-    const combinedObjectIds = Array.from(new Set([...inlineObjectIds, ...attachedImageIds]));
+    const inlineTagRefs = extractInlineTagRefs(rawPrompt);
+    const inlineObjectIds = inlineTagRefs.map((tag) => tag.objectId);
+    const selectionIds =
+      inlineTagRefs.length > 0
+        ? [
+            ...inlineTagRefs.map((tag) => `@[${tag.displayName}:${tag.objectId}]`),
+            ...attachedImageIds.filter((id) => !inlineObjectIds.includes(id)),
+          ]
+        : attachedImageIds;
     const effectiveSelection = buildComposerImageSelectionFromIds(
       slide?.elements ?? [],
-      combinedObjectIds.length > 0 ? combinedObjectIds : attachedImageIds,
+      selectionIds,
     );
 
     if (!pending && effectiveSelection.omittedCount > 0) {
