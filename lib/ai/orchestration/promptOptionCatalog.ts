@@ -289,19 +289,19 @@ export const OPTION_PREVIEW_LIBRARY: Record<string, OptionPreview> = {
   mood_premium: {
     kind: "svg",
     svg: svg(
-      `<rect width="64" height="40" fill="#0B0B0F"/><circle cx="32" cy="20" r="12" fill="none" stroke="#D4AF37" stroke-width="2"/><circle cx="32" cy="20" r="6" fill="#C8102E"/>`,
+      `<rect width="64" height="40" fill="#0B0B0F"/><circle cx="32" cy="20" r="12" fill="none" stroke="#D4AF37" stroke-width="2"/><circle cx="32" cy="20" r="6" fill="#334155"/>`,
     ),
   },
   mood_energy: {
     kind: "svg",
     svg: svg(
-      `<rect width="64" height="40" fill="#C8102E"/><path d="M20 30 L32 8 L36 20 L48 10 L40 32 Z" fill="#FDE047"/>`,
+      `<rect width="64" height="40" fill="#DC2626"/><path d="M20 30 L32 8 L36 20 L48 10 L40 32 Z" fill="#FDE047"/>`,
     ),
   },
   mood_graphic: {
     kind: "svg",
     svg: svg(
-      `<rect width="64" height="40" fill="#111827"/><rect x="0" y="0" width="32" height="40" fill="#C8102E"/><circle cx="32" cy="20" r="10" fill="none" stroke="#F8FAFC" stroke-width="3"/>`,
+      `<rect width="64" height="40" fill="#111827"/><rect x="0" y="0" width="32" height="40" fill="#2563EB"/><circle cx="32" cy="20" r="10" fill="none" stroke="#F8FAFC" stroke-width="3"/>`,
     ),
   },
   mood_drama: {
@@ -325,13 +325,13 @@ export const OPTION_PREVIEW_LIBRARY: Record<string, OptionPreview> = {
   struct_split: {
     kind: "svg",
     svg: svg(
-      `<rect width="32" height="40" fill="#0F172A"/><rect x="32" width="32" height="40" fill="#C8102E"/>`,
+      `<rect width="32" height="40" fill="#0F172A"/><rect x="32" width="32" height="40" fill="#DC2626"/>`,
     ),
   },
   struct_gradient: {
     kind: "svg",
     svg: svg(
-      `<defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0F172A"/><stop offset="1" stop-color="#C8102E"/></linearGradient></defs><rect width="64" height="40" fill="url(#lg)"/>`,
+      `<defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0F172A"/><stop offset="1" stop-color="#DC2626"/></linearGradient></defs><rect width="64" height="40" fill="url(#lg)"/>`,
     ),
   },
   struct_frame: {
@@ -400,39 +400,46 @@ export function resolveOptionPreview(optionId: string): OptionPreview | undefine
 
 /** Detect brand / shelf-sign / ad briefs that need Shared Anchor + Variant mode. */
 export function isBrandVariantBrief(prompt: string): boolean {
-  return /(?:welearn|we\s*learn|manifest|ป้าย|หมวด|ชั้นหนังสือ|แบนเนอร์|banner|โฆษณา|ad\b|poster|บรีฟ|layout|เลย์เอาต์|60\s*x\s*20|สำนักพิมพ์)/iu.test(
+  return /(?:ป้าย|หมวด|ชั้นหนังสือ|แบนเนอร์|banner|โฆษณา|\bad\b|poster|บรีฟ|layout|เลย์เอาต์|60\s*x\s*20|brand\s*kit|โลโก้|logo)/iu.test(
     prompt,
   );
 }
 
 export function inferSharedAnchors(prompt: string): SharedAnchorHint[] {
   const anchors: SharedAnchorHint[] = [];
-  if (/welearn|we\s*learn|สำนักพิมพ์/iu.test(prompt)) {
+
+  if (/(?:โลโก้|logo|wordmark|แบรนด์|brand)/iu.test(prompt)) {
     anchors.push({
-      id: "wordmark",
-      label: "Wordmark",
-      detail: "ชื่อ Welearn เด่นที่สุด — ห้ามย่อ/ย้ายลำดับชั้น",
-    });
-    anchors.push({
-      id: "logo-colors",
-      label: "โลโก้",
-      detail: "บล็อกสีน้ำเงิน–ฟ้าของโลโก้คงเดิม",
+      id: "logo",
+      label: "โลโก้ / Wordmark",
+      detail: "คงรูปทรง สี และลำดับชั้นของโลโก้ตามบรีฟ — ห้ามขยับเพื่อสร้างความต่าง",
     });
   }
-  if (/manifest/iu.test(prompt)) {
+
+  if (/(?:สีประจำ|ชุดสี|brand\s*color|ธีมสี|โทนแบรนด์)/iu.test(prompt)) {
     anchors.push({
       id: "theme",
-      label: "ธีมสี",
-      detail: "แดง #C8102E + ดำ + ทอง/โรสโกลด์",
+      label: "ชุดสีแบรนด์",
+      detail: "ใช้ชุดสีที่ระบุในบรีฟทุกแบบ — ห้ามเปลี่ยนโทนหลัก",
     });
   }
-  if (/60\s*x\s*20|3\s*:\s*1/iu.test(prompt)) {
+
+  const physical = /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×)\s*(\d+(?:\.\d+)?)\s*(?:cm|ซม)/iu.exec(
+    prompt,
+  );
+  if (physical) {
     anchors.push({
       id: "ratio",
       label: "สัดส่วน",
-      detail: "60×20 ซม. (3:1) — ล็อกทุกแบบ",
+      detail: `${physical[1]}×${physical[2]} ซม. — ล็อกทุกแบบ`,
     });
-  } else if (/16\s*:\s*9|9\s*:\s*16|1\s*:\s*1/iu.test(prompt)) {
+  } else if (/3\s*:\s*1/iu.test(prompt)) {
+    anchors.push({
+      id: "ratio",
+      label: "สัดส่วน",
+      detail: "3:1 — ล็อกทุกแบบ",
+    });
+  } else if (/16\s*:\s*9|9\s*:\s*16|1\s*:\s*1|4\s*:\s*3|3\s*:\s*4/iu.test(prompt)) {
     const m = prompt.match(/(\d+\s*:\s*\d+)/u);
     anchors.push({
       id: "ratio",
@@ -440,13 +447,23 @@ export function inferSharedAnchors(prompt: string): SharedAnchorHint[] {
       detail: m ? `${m[1].replace(/\s/g, "")} — ล็อกทุกแบบ` : "สัดส่วนที่ระบุในบรีฟ",
     });
   }
-  if (/@[^\s]+|merged|บรีฟ|layout|เลย์เอาต์|ปก/iu.test(prompt)) {
+
+  if (/@[^\s]+|merged|บรีฟ|layout|เลย์เอาต์|ปก|reference/iu.test(prompt)) {
     anchors.push({
       id: "refs",
       label: "รูปอ้างอิง",
       detail: "ใช้ชุด reference เดิมทุกแบบ — ไม่พึ่งข้อความอย่างเดียว",
     });
   }
+
+  if (/(?:ข้อความ|headline|สโลแกน|hashtag|ตัวอักษรบนภาพ)/iu.test(prompt)) {
+    anchors.push({
+      id: "copy",
+      label: "ข้อความบนภาพ",
+      detail: "ข้อความทุกบรรทัดตามบรีฟคงเดิมทุกแบบ",
+    });
+  }
+
   if (anchors.length === 0) {
     anchors.push({
       id: "brief",
@@ -554,13 +571,13 @@ export function createBrandVariantDimensions(): Array<{
     {
       id: "signature",
       title: "ซิกเนเจอร์",
-      hint: "บทบาทของวงกลม/โมทีฟหลัก",
+      hint: "บทบาทของโมทีฟหลักในงาน (เรขาคณิต / เส้น / เฟรม — ตาม visual language ของบรีฟ)",
       options: [
         {
           id: "sig_corner",
           label: "มุมประดับ",
           character: "เบา · มุม",
-          modifier: "วงกลม/ซิกเนเจอร์เป็นองค์ประกอบประดับมุม เส้นบาง",
+          modifier: "โมทีฟซิกเนเจอร์เป็นองค์ประกอบประดับมุม เส้นบาง น้ำหนักเบา",
           preview: OPTION_PREVIEW_LIBRARY.sig_corner,
           axis: "signature",
         },
@@ -568,7 +585,7 @@ export function createBrandVariantDimensions(): Array<{
           id: "sig_frame",
           label: "เฟรมข้อความ",
           character: "โอบข้อความ",
-          modifier: "วงกลมเป็นเฟรมโอบข้อความหลัก",
+          modifier: "โมทีฟซิกเนเจอร์เป็นเฟรมโอบข้อความหลัก",
           preview: OPTION_PREVIEW_LIBRARY.sig_frame,
           axis: "signature",
         },
@@ -584,7 +601,7 @@ export function createBrandVariantDimensions(): Array<{
           id: "sig_bold",
           label: "หนาชัด",
           character: "น้ำหนักสูง",
-          modifier: "วงกลม/ซิกเนเจอร์เส้นหนา น้ำหนักสูง เป็นจุดโฟกัส",
+          modifier: "โมทีฟซิกเนเจอร์เส้นหนา น้ำหนักสูง เป็นจุดโฟกัส",
           preview: OPTION_PREVIEW_LIBRARY.sig_bold,
           axis: "signature",
         },

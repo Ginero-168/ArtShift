@@ -38,7 +38,7 @@ describe("promptRefinement", () => {
     it("opens helper for brand/shelf briefs even when long", () => {
       expect(
         isBroadImagePrompt(
-          "ออกแบบป้ายหมวดหนังสือ Welearn ป้ายขนาด 60x20cm ธีม Manifest จากปกหนังสือสองเล่ม",
+          "ออกแบบป้ายหมวดหนังสือ ป้ายขนาด 60x20cm ใส่โลโก้แบรนด์ จากปกหนังสือสองเล่ม",
         ),
       ).toBe(true);
     });
@@ -73,13 +73,14 @@ describe("promptRefinement", () => {
       expect(breedCategory?.options.map((o) => o.label)).toContain("โกลเด้น");
     });
 
-    it("creates brand-variant mode with Shared Anchors for Welearn shelf signs", () => {
+    it("creates brand-variant mode with Shared Anchors for shelf/ad briefs", () => {
       const refinement = createPromptRefinement(
-        "ออกแบบป้ายหมวด Welearn ขนาด 60x20cm ธีม Manifest",
+        "ออกแบบป้ายหมวด ขนาด 60x20cm ใส่โลโก้แบรนด์",
       );
       expect(refinement.mode).toBe("brand-variant");
       expect(refinement.subjectType).toBe("brand");
       expect(refinement.sharedAnchors.some((a) => a.id === "ratio")).toBe(true);
+      expect(refinement.sharedAnchors.some((a) => a.id === "logo")).toBe(true);
       expect(refinement.dimensions.map((d) => d.id)).toEqual(
         expect.arrayContaining(["mood", "structure", "signature", "density"]),
       );
@@ -125,7 +126,7 @@ describe("promptRefinement", () => {
   describe("buildRefinementOrchestratorLocks", () => {
     it("exports Shared Anchors + Variant picks for Orchestrator continuity", () => {
       const refinement = createPromptRefinement(
-        "ออกแบบป้ายหมวด Welearn ขนาด 60x20cm ธีม Manifest",
+        "ออกแบบป้ายหมวด ขนาด 60x20cm ใส่โลโก้แบรนด์",
       );
       const locks = buildRefinementOrchestratorLocks(refinement, {
         mood: "mood_premium",

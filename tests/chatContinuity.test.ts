@@ -58,14 +58,14 @@ describe("chatContinuity", () => {
 
   it("locks Shared Anchors and varies Layer-2 axes on brand follow-ups", () => {
     const composed = composeFollowUpDirectorPrompt("สร้างมาอีก 3 รูป", {
-      userPrompt: "ออกแบบป้าย Welearn 60x20cm Manifest",
-      refinedPrompt: "Flat 2D Welearn shelf sign, 3:1, Manifest theme",
+      userPrompt: "ออกแบบป้ายหมวด 60x20cm ใส่โลโก้แบรนด์",
+      refinedPrompt: "Flat 2D shelf sign, 3:1, brand logo locked",
       width: 1536,
       height: 512,
       aspectRatio: "16:9",
       refinementMode: "brand-variant",
       sharedAnchors: [
-        { id: "wordmark", label: "Wordmark", detail: "Welearn เด่นที่สุด" },
+        { id: "logo", label: "โลโก้ / Wordmark", detail: "คงโลโก้ตามบรีฟ" },
         { id: "ratio", label: "สัดส่วน", detail: "60×20 ซม. (3:1)" },
       ],
       variantSelections: [
@@ -80,7 +80,7 @@ describe("chatContinuity", () => {
       ],
     });
     expect(composed).toContain("SHARED ANCHORS");
-    expect(composed).toContain("Welearn เด่นที่สุด");
+    expect(composed).toContain("คงโลโก้ตามบรีฟ");
     expect(composed).toContain("PRIOR VARIANT AXES");
     expect(composed).toContain("พรีเมียม");
     expect(composed).toContain("Never change text/logo");
