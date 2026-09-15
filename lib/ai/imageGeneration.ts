@@ -221,6 +221,16 @@ export function isImageGenerationPrompt(userPrompt: string): boolean {
   if (isImageEditPrompt(prompt)) {
     return true;
   }
+  // Follow-ups like "สร้างมาอีก 3 รูป" / "อีก 2 แบบ" must stay on the image path.
+  if (
+    /(?:สร้าง|ทำ|เอา|วาด|เจน|ผลิต|ออกแบบ|ขอ|generate|create|make)\s*(?:มา|ให้|เพิ่ม)?\s*อีก(?:\s*(?:\d+|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five))?\s*(?:แบบ|รูป|ภาพ|ตัวเลือก)?/iu.test(
+      prompt,
+    ) ||
+    /(?:^|\s)อีก\s*(?:\d+|หนึ่ง|สอง|สาม|สี่|ห้า)?\s*(?:แบบ|รูป|ภาพ|ตัวเลือก)/iu.test(prompt) ||
+    /(?:ขอตัวเลือก|ตัวเลือกเพิ่ม|สร้างเพิ่ม|ทำเพิ่ม|variation)/iu.test(prompt)
+  ) {
+    return true;
+  }
   if (
     /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|เพิ่ม|จัดมา|ออกแบบ)\s*(?:มา|ให้|หน่อย|อีก|เพิ่ม|ตัวเลือก|\s+)*(?:รูป|ภาพ|แบบ|ตัวเลือก|ดีไซน์|ชิ้น|งาน)/iu.test(
       prompt,

@@ -355,7 +355,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - CRITICAL: refinedPrompt MUST NEVER contain raw @[Name:id], bare UUIDs, or unparsed Name Tag syntax. Rewrite tags into natural English referring to Reference N by display name and role.",
   "  - For image editing tasks (e.g. 'แก้ไขรูป @tag', 'เพิ่ม... ในรูป @tag', 'ลบ... จาก @tag', 'เปลี่ยน... ใน @tag'): Select specialist 'image_editor', and formulate refinedPrompt to describe the exact desired modifications relative to the referenced input image.",
   "  - For image creation tasks referencing a tag (e.g. 'สร้างรูปแมวตัวนี้ @tag ในชุดอวกาศ', 'วาดรูปคนนี้ @tag สไตล์การ์ตูน'): Formulate refinedPrompt instructing the model to maintain the subject's identity, physical appearance, colors, and key features from the input reference image while depicting the requested new setting, costume, or style.",
-  "  - When one tag is style and another is layout/brief, keep those roles distinct: style controls look/lighting/subject treatment; layout/brief controls composition and typography zones. Do not copy photographic background slogans from a style reference unless the brief asks for that text.",
+  "  - When one tag is style and another is layout/brief, keep those roles distinct: style controls look/lighting/subject treatment; layout/brief controls composition and typography zones. If the style reference is already a finished poster, do not copy its layout or slogans — only the photographic look. Do not copy photographic background slogans from a style reference unless the brief asks for that text.",
   "  - Review criteria: Always include review criteria verifying that the subject identity and key features from the referenced tag image are preserved faithfully.",
   "For a sequential plan, every step must be executable from its payload and earlier outputs: image_generator/image_editor require payload.prompt, vectorizer requires an earlier image dependency, copywriter requires payload.headline or payload.text, and layout_designer/brand_stylist must describe the exact local operation. Never use placeholder URLs, sample copy or fabricated quality scores.",
   "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested to CREATE (1 to 5).",
@@ -377,9 +377,14 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Never echo back a minimal or 1-sentence prompt (such as just 'a cat') when given a broad request; always expand into a complete, well-crafted image prompt.",
   "If the user asks for a copyrighted character or trademark (e.g. 'สไปเดอร์แมน' / Spider-Man), describe the visual concept, color palette (red and blue suit), and superhero archetypal aesthetic without using infringing trademarked names.",
   "ASPECT RATIO PROTOCOL (MANDATORY 1:1 BASELINE):",
-  "  - DEFAULT BASELINE: All image generation tasks MUST use a baseline aspect ratio of 1:1 (square, 1024x1024) unless the user explicitly specifies an aspect ratio or physical dimensions in their instruction.",
-  "  - EXPLICIT USER OVERRIDES ONLY: Only non-1:1 aspect ratios explicitly specified by the user (such as '16:9', 'แนวนอน', 'landscape', '9:16', 'แนวตั้ง', 'portrait', '3:1', '60x20cm', 'พาโนรามา', 'wide panoramic') may be used.",
-  "  - NEVER HALLUCINATE OR INFER NON-1:1: Do NOT infer or force 16:9, panoramic, or landscape simply because the prompt mentions 'แบนเนอร์', 'banner', 'cover', or 'poster', or because an existing Canvas element has a rectangular shape. If the user does not explicitly specify dimensions or an aspect ratio, the output must remain 1:1 square.",
+  "  - DEFAULT BASELINE: All image generation tasks MUST use a baseline aspect ratio of 1:1 (square, 1024x1024) unless the user explicitly specifies an aspect ratio or physical dimensions in their instruction, OR this is a follow-up continuation of a prior image generation that already locked a ratio.",
+  "  - EXPLICIT USER OVERRIDES ONLY: Only non-1:1 aspect ratios explicitly specified by the user (such as '16:9', 'แนวนอน', 'landscape', '9:16', 'แนวตั้ง', 'portrait', '3:1', '60x20cm', 'พาโนรามา', 'wide panoramic') may be used for a fresh request.",
+  "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') after a prior image generation in this conversation:",
+  "      * Treat the prior refinedPrompt as the BASE brief. Restate and enrich it; do not invent a new unrelated subject.",
+  "      * KEEP the prior aspect ratio / dimensions unless the follow-up explicitly changes them.",
+  "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio.",
+  "      * If the message includes === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief and ratio.",
+  "  - NEVER HALLUCINATE OR INFER NON-1:1 for a brand-new request: Do NOT infer or force 16:9, panoramic, or landscape simply because the prompt mentions 'แบนเนอร์', 'banner', 'cover', or 'poster', or because an existing Canvas element has a rectangular shape. If the user does not explicitly specify dimensions or an aspect ratio and there is no prior locked ratio to continue, the output must remain 1:1 square.",
   "CRITICAL BOOKSTORE SHELF SIGN & CATEGORY HEADER DESIGN PROTOCOL:",
   "When the user asks to design a category sign, shelf header banner, poster, or graphic artwork (e.g. 'ออกแบบป้าย', 'ป้ายหมวด', 'ป้ายติดตั้งบนชั้น...', 'แบนเนอร์', 'artwork'):",
   "  - The user wants the DIRECT 2D GRAPHIC DESIGN ARTWORK FILE for printing/production, NOT a photo or 3D mockup of the sign sitting inside a room, on a bookshelf, or on a wall.",
@@ -1028,6 +1033,16 @@ export function extractExplicitRequestedOutputCount(prompt: string | undefined):
     );
   if (imageMatch?.[1]) {
     const parsed = parseNumberWord(imageMatch[1]);
+    if (parsed && parsed >= 1 && parsed <= 5) return parsed;
+  }
+
+  // 4. "อีก N รูป/แบบ" without a create-verb prefix
+  const moreMatch =
+    /อีก\s*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|variations?|options?|images?)/iu.exec(
+      text,
+    );
+  if (moreMatch?.[1]) {
+    const parsed = parseNumberWord(moreMatch[1]);
     if (parsed && parsed >= 1 && parsed <= 5) return parsed;
   }
 

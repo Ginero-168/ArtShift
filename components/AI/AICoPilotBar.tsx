@@ -16,6 +16,12 @@ import { deriveGeneratedImageName } from "@/lib/ai/orchestration/imageNaming";
 import { buildComposerImageSelectionFromIds, snapshotComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import { cleanTechnicalPromptText, extractInlineTagRefs } from "@/lib/ai/orchestration/inlineTagSynthesis";
+import {
+  composeFollowUpDirectorPrompt,
+  extractPriorImageGenerationContext,
+  isImageFollowUpPrompt,
+  type PriorImageGenerationContext,
+} from "@/lib/ai/orchestration/chatContinuity";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { createPromptRefinement, isBroadImagePrompt, type PromptRefinementCardData } from "@/lib/ai/orchestration/promptRefinement";
 import { analyzeImageReferences, type ImageReferenceAnalysis } from "@/lib/ai/orchestration/referenceAnalysis";
@@ -460,6 +466,24 @@ export default function AICoPilotBar() {
       }
     }
 
+    const historyForContinuity = messages
+      .filter(
+        (m): m is CoPilotMessage & { role: "user" | "assistant" } =>
+          (m.role === "user" || m.role === "assistant") && m.kind !== "progress",
+      )
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        ...(m.generationContext ? { generationContext: m.generationContext } : {}),
+      }));
+    const priorGeneration: PriorImageGenerationContext | null =
+      extractPriorImageGenerationContext(historyForContinuity);
+    const isFollowUpTurn = !pending && isImageFollowUpPrompt(promptToSend) && Boolean(priorGeneration);
+    const directorPrompt =
+      isFollowUpTurn && priorGeneration
+        ? composeFollowUpDirectorPrompt(promptToSend, priorGeneration)
+        : promptToSend;
+
     const inlineTagRefs = extractInlineTagRefs(rawPrompt);
     const inlineObjectIds = inlineTagRefs.map((tag) => tag.objectId);
     const selectionIds =
@@ -622,10 +646,8 @@ export default function AICoPilotBar() {
           analyses: analysesForTurn,
           selectedIds,
           canvas: slide ? { slide, selectedIds } : undefined,
-          conversationHistory: messages.map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
+          conversationHistory: historyForContinuity,
+          priorGeneration,
           clarification: pending
             ? {
                 originalPrompt: pending.originalPrompt,
@@ -679,14 +701,12 @@ export default function AICoPilotBar() {
             try {
               const direction = await prepareRemoteCreativeDirection(
                 {
-                  prompt: promptToSend,
-                  conversationHistory: messages
-                    .flatMap((message): ClientChatMessage[] =>
-                      (message.role === "user" || message.role === "assistant") &&
-                      message.kind !== "progress"
-                        ? [{ role: message.role, content: message.content }]
-                        : [],
-                    )
+                  prompt: directorPrompt,
+                  conversationHistory: historyForContinuity
+                    .map((message): ClientChatMessage => ({
+                      role: message.role,
+                      content: message.content,
+                    }))
                     .slice(-12),
                   designContext: buildDesignAgentContext(),
                   canvasSummary: {
@@ -1015,6 +1035,17 @@ export default function AICoPilotBar() {
                       toolLabel: "GPT Image 2",
                       images: generatedImages,
                       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
+                      generationContext: {
+                        userPrompt: isFollowUpTurn
+                          ? priorGeneration?.userPrompt || promptToSend
+                          : promptToSend,
+                        refinedPrompt: direction.refinedPrompt,
+                        summary: direction.summary,
+                        width: imageRun.tasks[0]?.requestedDimensions?.width ?? 1024,
+                        height: imageRun.tasks[0]?.requestedDimensions?.height ?? 1024,
+                        aspectRatio:
+                          imageRun.tasks[0]?.requestedDimensions?.aspectRatio ?? "1:1",
+                      },
                       timestamp: Date.now(),
                       actions,
                       suggestions: completionSuggestions,

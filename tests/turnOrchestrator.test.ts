@@ -257,6 +257,50 @@ describe("context-aware turn orchestrator", () => {
     });
   });
 
+  it("inherits 16:9 and prior brief for 'สร้างมาอีก 3 รูป' via priorGeneration", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "สร้างมาอีก 3 รูป",
+      refs: [],
+      analyses: [],
+      priorGeneration: {
+        userPrompt: "สร้างรูปแมวสัดส่วน 16:9 นอนบนโซฟา",
+        refinedPrompt: "Photoreal Scottish Fold cat on a sofa, soft window light, 16:9 landscape",
+        width: 1280,
+        height: 720,
+        aspectRatio: "16:9",
+        summary: "แมวนอนบนโซฟา",
+      },
+      conversationHistory: [
+        { role: "user", content: "สร้างรูปแมวสัดส่วน 16:9 นอนบนโซฟา" },
+        { role: "assistant", content: "สร้างรูปแมวแนวนอนเสร็จแล้วครับ" },
+      ],
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 1,
+      summary: "สร้างภาพแมวเพิ่ม",
+      refinedPrompt: "Photoreal Scottish Fold cat on a sofa, soft window light, playful pose variation",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Same cat identity"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(run.requestedOutputCount).toBe(3);
+    expect(run.tasks).toHaveLength(3);
+    expect(run.tasks[0]?.requestedDimensions).toEqual({
+      width: 1280,
+      height: 720,
+      aspectRatio: "16:9",
+    });
+    expect(run.tasks[0]?.prompt).toContain("16:9");
+    expect(run.tasks[0]?.prompt).toContain("1280×720");
+  });
+
   it("inherits dimensions from direction.summary if refinedPrompt lacks dimensions and prompt is follow-up", () => {
     const input: ContextAwareTurnInput = {
       prompt: "ขอตัวเลือกเพิ่ม 3 แบบ",

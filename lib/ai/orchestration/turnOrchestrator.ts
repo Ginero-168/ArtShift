@@ -2,9 +2,12 @@ import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
-  hasExplicitDimensionsInText,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
+import {
+  type PriorImageGenerationContext,
+  resolveFollowUpDimensions,
+} from "./chatContinuity";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createImage, createText } from "@/lib/engine/factory";
@@ -64,7 +67,10 @@ export type ContextAwareTurnInput = {
   conversationHistory?: readonly {
     role: "user" | "assistant";
     content: string;
+    generationContext?: PriorImageGenerationContext;
   }[];
+  /** Structured context from the last successful image generation in this chat. */
+  priorGeneration?: PriorImageGenerationContext | null;
   clarification?: {
     originalPrompt?: string;
     question: string;
@@ -106,42 +112,20 @@ export function resolveTaskDimensionsWithContext(
   input: ContextAwareTurnInput,
   direction?: Extract<CreativeDirection, { kind: "image-task" }>,
 ) {
-  // 1. Explicit dimensions in current user prompt
-  if (hasExplicitDimensionsInText(input.prompt)) {
-    return resolveImageGenerationDimensions(input.prompt);
-  }
-
-  // 2. Explicit dimensions in clarification original prompt
-  if (
-    input.clarification?.originalPrompt &&
-    hasExplicitDimensionsInText(input.clarification.originalPrompt)
-  ) {
-    return resolveImageGenerationDimensions(input.clarification.originalPrompt);
-  }
-
-  // 3. User follow-up or variation requests (e.g. "ขอตัวเลือกเพิ่ม 3 แบบ", "สร้างเพิ่ม", "เอาอีกรูป")
-  // where the previous user turn or approved direction specified explicit dimensions:
-  const isFollowUpOrVariation = /(?:ขอตัวเลือก|ตัวเลือกเพิ่ม|เอาอีก|สร้างเพิ่ม|ทำเพิ่ม|อีกแบบ|อีกรูป|variation|แบบที่)/iu.test(
-    input.prompt,
-  );
-
-  if (isFollowUpOrVariation) {
-    if (input.conversationHistory && input.conversationHistory.length > 0) {
-      for (let i = input.conversationHistory.length - 1; i >= 0; i--) {
-        const msg = input.conversationHistory[i];
-        if (msg.role === "user" && hasExplicitDimensionsInText(msg.content)) {
-          return resolveImageGenerationDimensions(msg.content);
-        }
-      }
-    }
-
-    if (direction?.refinedPrompt && hasExplicitDimensionsInText(direction.refinedPrompt)) {
-      return resolveImageGenerationDimensions(direction.refinedPrompt);
-    }
-
-    if (direction?.summary && hasExplicitDimensionsInText(direction.summary)) {
-      return resolveImageGenerationDimensions(direction.summary);
-    }
+  const followUpDims = resolveFollowUpDimensions({
+    prompt: input.prompt,
+    prior: input.priorGeneration,
+    conversationHistory: input.conversationHistory,
+    clarificationOriginalPrompt: input.clarification?.originalPrompt,
+    directionRefinedPrompt: direction?.refinedPrompt,
+    directionSummary: direction?.summary,
+  });
+  if (followUpDims) {
+    return followUpDims as {
+      width: number;
+      height: number;
+      aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+    };
   }
 
   // Default baseline for all image generation is strictly 1:1 (1024x1024)
@@ -315,10 +299,15 @@ export function createDirectedImageRun(
     } else if (/ขาว|สว่าง|white|bright/i.test(brief)) {
       variationCues = " (focusing on bright clean minimalist illumination)";
     }
+    const dims = baseTask.requestedDimensions;
+    const ratioClause =
+      dims && !hasRatioMention(direction.refinedPrompt)
+        ? ` Aspect ratio ${dims.aspectRatio} (${dims.width}×${dims.height}).`
+        : "";
     const taskPrompt =
       count === 1
-        ? `${direction.refinedPrompt}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
-        : `${direction.refinedPrompt}\nDistinct variation ${index + 1} of ${count}${variationCues}. Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+        ? `${direction.refinedPrompt}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
+        : `${direction.refinedPrompt}\nDistinct variation ${index + 1} of ${count}${variationCues}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
     return {
       ...baseTask,
       id: `${runId}-task-${index + 1}`,
@@ -343,6 +332,10 @@ export function createDirectedImageRun(
     batches,
     tasks,
   };
+}
+
+function hasRatioMention(text: string): boolean {
+  return /\b(?:\d+\s*:\s*\d+|aspect\s*ratio|แนวนอน|แนวตั้ง|landscape|portrait)\b/iu.test(text);
 }
 
 export type SequentialPlanExecutionOptions = {

@@ -179,7 +179,7 @@ export function stripInlineTagTokens(text: string): string {
 function roleInstruction(role: InlineTagReferenceRole): string {
   switch (role) {
     case "style":
-      return "ROLE: STYLE reference — match photographic look, lighting, color grade, and subject treatment. Do NOT copy photographic background slogans/signage from this image unless the brief explicitly requests that text.";
+      return "ROLE: STYLE reference — match photographic look, lighting, color grade, and subject treatment. If this reference is already a finished poster/ad, extract subject photography and mood only; do NOT reuse its typography zones, badges, or slogans unless the brief/layout reference asks for that text.";
     case "layout":
       return "ROLE: LAYOUT / BRIEF reference — follow composition, typography zones, graphic structure, and messaging hierarchy from this image/brief.";
     case "subject":
@@ -229,7 +229,14 @@ export function buildReferenceRoleAppendix(
     caption?: string,
   ) => {
     const title = displayName || `Reference ${index}`;
-    const captionBit = caption?.trim() ? ` Visual summary: ${caption.trim().slice(0, 180)}.` : "";
+    const captionBit = (() => {
+      const t = caption?.trim();
+      if (!t) return "";
+      if (t.length <= 420) return ` Visual summary: ${t}.`;
+      const sliced = t.slice(0, 420);
+      const cut = sliced.lastIndexOf(" ");
+      return ` Visual summary: ${(cut > 80 ? sliced.slice(0, cut) : sliced).trim()}….`;
+    })();
     lines.push(`${index}. "${title}" — ${roleInstruction(role)}${captionBit}`);
   };
 

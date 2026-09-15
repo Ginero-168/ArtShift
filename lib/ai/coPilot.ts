@@ -20,6 +20,12 @@ import {
   type ComposerImageRef,
 } from "@/lib/ai/orchestration/imageReferences";
 import { extractInlineTagRefs } from "@/lib/ai/orchestration/inlineTagSynthesis";
+import {
+  composeFollowUpDirectorPrompt,
+  extractPriorImageGenerationContext,
+  isImageFollowUpPrompt,
+  type PriorImageGenerationContext,
+} from "@/lib/ai/orchestration/chatContinuity";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { analyzeImageReferences } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
@@ -94,6 +100,15 @@ export interface CoPilotMessage {
   images?: CoPilotMessageImage[];
   imageRefs?: ComposerImageRef[];
   requestedCount?: number;
+  /** Locked brief/ratio from a successful image turn — used for chat continuity. */
+  generationContext?: {
+    userPrompt: string;
+    refinedPrompt: string;
+    summary?: string;
+    width: number;
+    height: number;
+    aspectRatio: string;
+  };
 }
 
 export interface WorkspaceContext {
@@ -122,6 +137,12 @@ export type CoPilotOptions = {
   pendingClarification?: PendingClarification;
   imageConversation?: boolean;
   imageQuality?: "low" | "medium" | "high";
+  conversationHistory?: Array<{
+    role: "user" | "assistant";
+    content: string;
+    generationContext?: PriorImageGenerationContext;
+  }>;
+  priorGeneration?: PriorImageGenerationContext | null;
 };
 
 /** Prompts that map to a built-in tool command rather than Design Agent chat. */
@@ -305,9 +326,17 @@ export async function executeCoPilotInstruction(
       act.stage = "analyzing";
       act.description = "กำลังส่ง brief ให้ Gemini 3 Flash Creative Director วางแผน…";
       onActionUpdate?.({ ...act });
+      const history = options.conversationHistory ?? [];
+      const priorGeneration =
+        options.priorGeneration ?? extractPriorImageGenerationContext(history);
+      const directorPrompt =
+        !pending && isImageFollowUpPrompt(prompt) && priorGeneration
+          ? composeFollowUpDirectorPrompt(prompt, priorGeneration)
+          : prompt;
       const direction = await prepareRemoteCreativeDirection(
         {
-          prompt,
+          prompt: directorPrompt,
+          conversationHistory: history.map((m) => ({ role: m.role, content: m.content })).slice(-12),
           canvasSummary: {
             objectCount: context.elementCount,
             selectedCount: context.selectedIds.length,
@@ -378,6 +407,8 @@ export async function executeCoPilotInstruction(
           prompt,
           refs: selectedRefs,
           analyses,
+          conversationHistory: history,
+          priorGeneration,
           canvas: workspaceSlide
             ? { slide: workspaceSlide, selectedIds: st.selectedIds }
             : undefined,
