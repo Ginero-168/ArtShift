@@ -86,6 +86,7 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   "Minus Back": "minus-back",
   Divide: "divide",
   Merge: "merge",
+  "Merging...": "merge",
   "Convert to frame": "frame",
   Object: "object",
 });

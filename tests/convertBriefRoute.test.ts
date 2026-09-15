@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBriefResponse } from "@/lib/ai/briefParser";
+import { isUsableBriefLayout, parseBriefResponse } from "@/lib/ai/briefParser";
 
 describe("Convert to Brief API Parser", () => {
   it("parses valid JSON response from vision model with exact wireframe brief schema", () => {
@@ -24,6 +24,7 @@ describe("Convert to Brief API Parser", () => {
 
     const parsed = parseBriefResponse(rawAiOutput);
     expect(parsed).not.toBeNull();
+    expect(isUsableBriefLayout(parsed)).toBe(true);
     expect(parsed?.backgroundPartitions).toHaveLength(2);
     expect(parsed?.backgroundPartitions[0].name).toBe("เชฟซูชิ");
     expect(parsed?.backgroundPartitions[1].name).toBe("รูปซูชิ");
@@ -64,6 +65,7 @@ describe("Convert to Brief API Parser", () => {
     }));
 
     expect(parsed).not.toBeNull();
+    expect(isUsableBriefLayout(parsed)).toBe(false);
     expect(parsed?.heroSubject).toBeUndefined();
     expect(parsed?.headlineCard).toBeUndefined();
     expect(parsed?.backgroundZone).toBeUndefined();

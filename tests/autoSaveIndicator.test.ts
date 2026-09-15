@@ -40,10 +40,18 @@ describe("Auto Save Status Indicator in Editor Header", () => {
     expect(globalsCss).toContain("#059669");
   });
 
-  it("triggers saveStatus transition to 'saving' and then 'saved' during editing, auto-save, and rename", () => {
-    // Input onChange triggers setSaveStatus("saving")
+  it("triggers saveStatus transition to 'saving' and then 'saved' during document autosave and rename blur", () => {
+    // Typing the title alone must not claim a save is in progress.
+    const onChangeBlock = editorSource.slice(
+      editorSource.indexOf("onChange={(e) => {"),
+      editorSource.indexOf("onBlur={(e) => handleRename"),
+    );
+    expect(onChangeBlock).toContain("setProjectName(e.target.value)");
+    expect(onChangeBlock).not.toContain('setSaveStatus("saving")');
+
+    // Rename blur / handleRename owns the saving → saved transition for titles.
+    expect(editorSource).toContain("async (name: string)");
     expect(editorSource).toContain('setSaveStatus("saving")');
-    // Save completion triggers setSaveStatus("saved")
     expect(editorSource).toContain('setSaveStatus("saved")');
   });
 });

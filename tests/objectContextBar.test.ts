@@ -50,7 +50,7 @@ describe("ObjectContextBar Hook Rules and Convert to Brief Action", () => {
 
   it("provides Merge and Ungroup controls when a group is selected", () => {
     expect(fileContent).toContain('if (isGroup) {');
-    expect(fileContent).toContain('controls.push(action("Merge", handleMergeElements));');
+    expect(fileContent).toContain('mergeBusy ? "Merging..." : "Merge"');
     expect(fileContent).toContain('controls.push(action("Ungroup", () => ungroupElements(ids)));');
   });
 });

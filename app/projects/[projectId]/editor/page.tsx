@@ -324,9 +324,14 @@ export default function ProjectEditorPage() {
     setProjectName(finalName);
     if (!projectId || notFound) return;
     setSaveStatus("saving");
-    await projectStore.renameProject(projectId, finalName);
-    setDocTitle(finalName);
-    setSaveStatus("saved");
+    try {
+      await projectStore.renameProject(projectId, finalName);
+      setDocTitle(finalName);
+      setSaveStatus("saved");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to rename project");
+      setSaveStatus("saved");
+    }
   };
 
   // Close menu on outside click
@@ -564,8 +569,9 @@ export default function ProjectEditorPage() {
               type="text"
               value={projectName}
               onChange={(e) => {
+                // Keep the indicator honest: typing alone does not persist yet.
+                // Save status flips in handleRename / document autosave.
                 setProjectName(e.target.value);
-                setSaveStatus("saving");
               }}
               onBlur={(e) => handleRename(e.target.value)}
               onKeyDown={(e) => {

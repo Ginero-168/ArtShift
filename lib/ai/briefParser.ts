@@ -199,6 +199,23 @@ Return ONLY a strictly valid JSON object (no markdown formatting, no codeblocks)
   "intentionalTexts": []
 };`;
 
+/** True when a brief has at least one layout region the canvas generator can draw. */
+export function isUsableBriefLayout(data: ConvertToBriefData | null | undefined): boolean {
+  if (!data) return false;
+  return Boolean(
+    data.heroSubject ||
+      data.headlineCard ||
+      data.backgroundZone ||
+      data.badge ||
+      data.subtextCard ||
+      data.brandLogo ||
+      data.footerBar ||
+      (data.featureTags && data.featureTags.length > 0) ||
+      (data.backgroundPartitions && data.backgroundPartitions.length > 0) ||
+      (data.focalObjects && data.focalObjects.length > 0),
+  );
+}
+
 export function parseBriefResponse(raw: string): ConvertToBriefData | null {
   try {
     let clean = raw.trim();

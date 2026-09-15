@@ -1,5 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { BRIEF_VISION_PROMPT, parseBriefResponse } from "@/lib/ai/briefParser";
+import {
+  BRIEF_VISION_PROMPT,
+  isUsableBriefLayout,
+  parseBriefResponse,
+} from "@/lib/ai/briefParser";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
@@ -11,6 +15,11 @@ export const dynamic = "force-dynamic";
 const limiter = new RateLimiter(30, 60_000);
 const MAX_REQUEST_BODY_BYTES = 20 * 1024 * 1024;
 
+/**
+ * One cloud vision pass per request.
+ * Client owns the 3-attempt retry loop so quality stays on the same path
+ * without multiplying server-side retries.
+ */
 export async function POST(req: NextRequest) {
   const account = getUserAccount(req);
   const limitKey = account ? `account:${account.id}` : `ip:${getClientIp(req)}`;
@@ -65,15 +74,8 @@ export async function POST(req: NextRequest) {
 
     const rawText = execution.output?.text ?? "";
     const parsedResult = parseBriefResponse(rawText);
-    const hasUsableLayout = Boolean(
-      parsedResult &&
-        (parsedResult.heroSubject ||
-          parsedResult.headlineCard ||
-          parsedResult.backgroundZone ||
-          parsedResult.backgroundPartitions.length > 0),
-    );
 
-    if (parsedResult && hasUsableLayout) {
+    if (isUsableBriefLayout(parsedResult)) {
       return NextResponse.json({
         success: true,
         result: parsedResult,
@@ -85,16 +87,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "AI วิเคราะห์ภาพไม่สำเร็จ: ผลลัพธ์ไม่อยู่ในรูปแบบ Brief ที่ใช้งานได้",
+        retryable: true,
+        error: "unusable_layout",
       },
       { status: 502 },
     );
-  } catch (error) {
-    const detail = error instanceof Error ? error.message.trim().slice(0, 500) : "Unknown AI error";
+  } catch {
     return NextResponse.json(
       {
         success: false,
-        error: `AI วิเคราะห์ภาพไม่สำเร็จ: ${detail || "Unknown AI error"}`,
+        retryable: true,
+        error: "vision_failed",
       },
       { status: 502 },
     );

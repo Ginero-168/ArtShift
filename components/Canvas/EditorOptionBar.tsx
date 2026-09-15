@@ -88,8 +88,7 @@ export default function EditorOptionBar() {
       reportAIError({
         taskId: `brief-${crypto.randomUUID()}`,
         operation: "Convert to Brief",
-        message:
-          "Convert to Brief Error: กรุณาวางหรือเลือกรูปภาพบน Canvas ก่อนสร้างบรีฟ",
+        message: "กรุณาวางหรือเลือกรูปภาพบน Canvas ก่อนสร้างบรีฟนะคะ",
       });
       return;
     }

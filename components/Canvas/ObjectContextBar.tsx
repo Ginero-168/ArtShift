@@ -190,14 +190,17 @@ export default function ObjectContextBar({
   const firstId = first?.id;
   const [activeImageTool, setActiveImageTool] = useState<ImageActionId | null>(null);
   const [briefBusy, setBriefBusy] = useState(false);
+  const [mergeBusy, setMergeBusy] = useState(false);
   useEffect(() => {
     if (!firstId) {
       setActiveImageTool(null);
       setBriefBusy(false);
+      setMergeBusy(false);
       return;
     }
     setActiveImageTool(null);
     setBriefBusy(false);
+    setMergeBusy(false);
   }, [firstId]);
 
   if (isDragging || !first) return null;
@@ -237,16 +240,21 @@ export default function ObjectContextBar({
     }
   };
   const handleMergeElements = async () => {
-    if (!slide || selected.length < 2) return;
-    const merged = await mergeSelectedElements(slide, ids);
-    if (merged) {
-      replaceElementsWithMerged(ids, merged);
+    if (!slide || selected.length < 2 || mergeBusy) return;
+    setMergeBusy(true);
+    try {
+      const merged = await mergeSelectedElements(slide, ids);
+      if (merged) {
+        replaceElementsWithMerged(ids, merged);
+      }
+    } finally {
+      setMergeBusy(false);
     }
   };
 
   if (selected.length > 1) {
     if (isGroup) {
-      controls.push(action("Merge", handleMergeElements));
+      controls.push(action(mergeBusy ? "Merging..." : "Merge", () => void handleMergeElements(), false, mergeBusy));
       controls.push(action("Ungroup", () => ungroupElements(ids)));
       controls.push(action("Align", () => alignSelectedElements("center")));
       controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
@@ -254,7 +262,7 @@ export default function ObjectContextBar({
       controls.push(action("Align", () => alignSelectedElements("center")));
       controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
       controls.push(action("Group", () => groupElements(ids)));
-      controls.push(action("Merge", handleMergeElements));
+      controls.push(action(mergeBusy ? "Merging..." : "Merge", () => void handleMergeElements(), false, mergeBusy));
       if (allShapes) {
         controls.push(action("Unite", () => applyBooleanOperation("union")));
         controls.push(action("Minus Front", () => applyBooleanOperation("subtract")));

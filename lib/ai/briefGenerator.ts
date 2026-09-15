@@ -7,13 +7,34 @@ import {
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, EngineSlide, ImageElement } from "@/lib/engine/types";
-import type { ConvertToBriefData } from "@/lib/ai/briefParser";
-import { reportAIError } from "@/lib/ai/progressReporter";
+import { type ConvertToBriefData, isUsableBriefLayout } from "@/lib/ai/briefParser";
+import { reportAIError, reportAIResult } from "@/lib/ai/progressReporter";
 
 export type ConvertToBriefOptions = {
   signal?: AbortSignal;
   onProgress?: (status: string) => void;
 };
+
+/** Always cloud vision quality — never local analyzer. */
+export const CLOUD_BRIEF_ATTEMPTS = 3;
+const CLOUD_RETRY_BASE_MS = 700;
+const BRIEF_FAILURE_AFTER_RETRIES =
+  "สร้างบรีฟไม่สำเร็จหลังลองใหม่อัตโนมัติ 3 ครั้ง กรุณาลองอีกครั้งนะคะ";
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 export function getImageDataUrlFromElement(element: ImageElement): string | null {
   const cached = getCached(element.fileId);
@@ -36,7 +57,7 @@ export function getImageDataUrlFromElement(element: ImageElement): string | null
   return null;
 }
 
-export async function fetchBriefDataForImage(
+async function fetchBriefDataOnce(
   dataUrl: string,
   signal?: AbortSignal,
 ): Promise<ConvertToBriefData> {
@@ -51,19 +72,42 @@ export async function fetchBriefDataForImage(
     success?: boolean;
     result?: ConvertToBriefData;
     error?: string;
-    isFallback?: boolean;
+    retryable?: boolean;
   } | null;
-  if (!res.ok) {
-    throw new Error(json?.error || `Failed to convert to brief (HTTP ${res.status})`);
-  }
-  if (json?.isFallback) {
-    throw new Error("Convert to Brief ได้รับผลลัพธ์สำรอง ซึ่งถูกปิดใช้งานแล้ว");
-  }
-  if (!json?.success || !json.result) {
-    throw new Error(json?.error || "Failed to analyze layout for brief");
+
+  if (json?.success && isUsableBriefLayout(json.result)) {
+    return json.result as ConvertToBriefData;
   }
 
-  return json.result as ConvertToBriefData;
+  const err = new Error(json?.error || `brief_http_${res.status}`);
+  (err as Error & { retryable?: boolean }).retryable =
+    res.status === 429 || res.status >= 500 || json?.retryable === true || !json?.success;
+  throw err;
+}
+
+/**
+ * Cloud-only brief fetch with exactly CLOUD_BRIEF_ATTEMPTS attempts.
+ * No local/analyzer fallback — quality stays on the vision path.
+ */
+export async function fetchBriefDataForImage(
+  dataUrl: string,
+  signal?: AbortSignal,
+  onAttempt?: (attempt: number, maxAttempts: number) => void,
+): Promise<ConvertToBriefData> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= CLOUD_BRIEF_ATTEMPTS; attempt++) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    onAttempt?.(attempt, CLOUD_BRIEF_ATTEMPTS);
+    try {
+      return await fetchBriefDataOnce(dataUrl, signal);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      if (attempt >= CLOUD_BRIEF_ATTEMPTS) break;
+      await sleep(CLOUD_RETRY_BASE_MS * attempt, signal);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(BRIEF_FAILURE_AFTER_RETRIES);
 }
 
 function formatSubjectDescription(desc: string): string[] {
@@ -613,11 +657,11 @@ export async function convertImageToBrief(
   options.onProgress?.("กำลังเตรียมรูปภาพอ้างอิง...");
   const dataUrl = getImageDataUrlFromElement(imageElement);
   if (!dataUrl) {
-    const message = "ไม่สามารถอ่านข้อมูลภาพอ้างอิงเพื่อสร้างบรีฟได้";
+    const message = "ยังอ่านภาพอ้างอิงไม่ได้ กรุณาเลือกรูปที่โหลดเสร็จแล้วแล้วลองใหม่นะคะ";
     reportAIError({
       taskId: `brief-${crypto.randomUUID()}`,
       operation: "Convert to Brief",
-      message: `Convert to Brief Error: ${message}`,
+      message,
     });
     throw new Error(message);
   }
@@ -637,45 +681,29 @@ export async function convertImageToBrief(
     signal: options.signal,
     concurrent: true,
     run: async (context) => {
-      options.onProgress?.("AI กำลังวิเคราะห์สัดส่วน เลย์เอาต์ และโครงสร้างภาพ...");
-      context.update({ progress: 0.15, message: "AI กำลังวิเคราะห์สัดส่วน เลย์เอาต์ และโครงสร้างภาพ…" });
+      const update = (message: string, progress = 0.2) => {
+        options.onProgress?.(message);
+        context.update({ progress, message });
+      };
 
-      let briefData: ConvertToBriefData | null = null;
-
-      // 1. Call Replicate cloud vision analysis
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30_000);
-        const signal = context.signal
-          ? AbortSignal.any([context.signal, controller.signal])
-          : controller.signal;
-        try {
-          briefData = await fetchBriefDataForImage(dataUrl, signal);
-        } finally {
-          clearTimeout(timeout);
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        context.update({ progress: 0, message: `AI วิเคราะห์ภาพไม่สำเร็จ: ${msg}` });
-        throw new Error(`ไม่สามารถวิเคราะห์ภาพได้ — Replicate API ไม่พร้อมใช้งาน: ${msg}`);
-      }
-
-      // 2. Validate that we got real data back
-      const hasValidLayout = Boolean(
-        briefData && (
-          briefData.heroSubject ||
-          briefData.headlineCard ||
-          briefData.backgroundZone ||
-          (briefData.backgroundPartitions && briefData.backgroundPartitions.length > 0)
-        )
+      const briefData = await fetchBriefDataForImage(
+        dataUrl,
+        context.signal ?? options.signal,
+        (attempt, maxAttempts) => {
+          update(
+            attempt === 1
+              ? "กำลังวิเคราะห์สัดส่วนและโครงสร้างภาพ…"
+              : `ยังไม่สำเร็จ กำลังลองใหม่อัตโนมัติ (${attempt}/${maxAttempts})…`,
+            0.15 + attempt * 0.15,
+          );
+        },
       );
-      if (!briefData || !hasValidLayout) {
-        context.update({ progress: 0, message: "AI ไม่สามารถวิเคราะห์โครงสร้างภาพได้" });
-        throw new Error("AI วิเคราะห์ภาพไม่สำเร็จ — ไม่ได้รับข้อมูลโครงสร้างภาพจาก Replicate");
+
+      if (!isUsableBriefLayout(briefData)) {
+        throw new Error(BRIEF_FAILURE_AFTER_RETRIES);
       }
 
-      options.onProgress?.("กำลังสร้างเส้น กรอบ และตัวหนังสือบน Canvas...");
-      context.update({ progress: 0.92, message: "กำลังสร้างเส้น กรอบ และตัวหนังสือบน Canvas…" });
+      update("กำลังสร้างเส้น กรอบ และตัวหนังสือบน Canvas…", 0.92);
 
       const placement = getProcessingPreviewPlacement(context.id, initialBounds);
       const slide = useEngine.getState().currentSlide();
@@ -685,21 +713,30 @@ export async function convertImageToBrief(
         useEngine.getState().addElements(createdElements, "Convert to Brief");
       }
 
-      options.onProgress?.("สร้างบรีฟเรียบร้อยแล้ว!");
-      context.update({ progress: 1, message: "สร้างบรีฟเรียบร้อยแล้ว!" });
+      update("สร้างบรีฟเรียบร้อยแล้ว!", 1);
     },
   });
 
   try {
     await job.promise;
+    reportAIResult({
+      taskId: job.id,
+      operation: "Convert to Brief",
+      message: "สร้างบรีฟจากภาพอ้างอิงเรียบร้อยแล้วค่ะ",
+    });
     return createdElements;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown Convert to Brief error";
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    const raw = error instanceof Error ? error.message : "";
+    const message =
+      raw && !/replicate|brief_http_|unusable_layout|vision_failed|brief_unavailable/i.test(raw)
+        ? raw
+        : BRIEF_FAILURE_AFTER_RETRIES;
     reportAIError({
       taskId: job.id,
       operation: "Convert to Brief",
-      message: `Convert to Brief Error: ${message}`,
+      message,
     });
-    throw error;
+    throw new Error(message);
   }
 }

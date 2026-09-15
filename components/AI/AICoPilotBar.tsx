@@ -25,6 +25,7 @@ import {
   runSequentialExecutionPlan, type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
+import { formatImageCompletionReply } from "@/lib/ai/imageCompletionReply";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { buildDesignAgentContext, type ClientChatMessage } from "@/lib/designAgent/client";
@@ -94,28 +95,6 @@ function formatThoughtText(rawPrompt: string, directionSummary?: string, count =
   }
   const subject = extractSubject(rawPrompt, cleanSummary);
   return `กำลังวางแผนสร้างรูปภาพ "${subject}" (${count} ภาพ) โดยจัดองค์ประกอบ แสงเงา และรายละเอียดระดับสูงให้สมบูรณ์แบบค่ะ`;
-}
-
-function formatImageCompletionReply(subject: string, count: number, outputBriefs?: readonly string[], isEdit = false): string {
-  const cleanSubject = subject.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim();
-  const firstBrief = outputBriefs?.[0]?.replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "")?.trim();
-  const headerLine = isEdit
-    ? ((firstBrief || (cleanSubject && !cleanSubject.startsWith("ปรับ") ? cleanSubject : ""))
-      ? `ปรับแต่งภาพ "${firstBrief || cleanSubject}" เสร็จแล้ว ${count} รูปค่ะ`
-      : `ปรับแต่งภาพเรียบร้อยแล้วค่ะ (${count} รูป)`)
-    : `สร้างรูป${firstBrief || cleanSubject || "ภาพ"}เสร็จแล้ว ${count} รูปค่ะ`;
-
-  const lines: string[] = [headerLine, ""];
-  if (outputBriefs && outputBriefs.length > 0) {
-    outputBriefs.slice(0, count).forEach((brief, idx) => {
-      const cleanBrief = brief.replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "").trim();
-      lines.push(`• รูปที่ ${idx + 1}: ${cleanBrief || `${cleanSubject || "ภาพ"} แบบที่ ${idx + 1}`}`);
-    });
-  } else {
-    for (let i = 1; i <= count; i++) lines.push(`• รูปที่ ${i}: ${cleanSubject || "ภาพ"} แบบที่ ${i}`);
-  }
-  lines.push("", "ถ้าอยากให้ปรับสไตล์ ท่าทาง หรือสีสันเพิ่มเติม บอกได้เลยนะคะ");
-  return lines.join("\n");
 }
 
 export default function AICoPilotBar() {
