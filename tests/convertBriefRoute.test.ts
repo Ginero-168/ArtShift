@@ -186,4 +186,46 @@ describe("Convert to Brief API Parser", () => {
     // Backward compatibility: featureTags should also populate focalObjects
     expect(parsed?.focalObjects.some((o) => o.text === "WATER SLIDES")).toBe(true);
   });
+
+  it("drops photographic shirt/background slogans that sit inside the hero subject", () => {
+    const rawAiOutput = JSON.stringify({
+      aspectRatio: { width: 600, height: 1000 },
+      heroSubject: {
+        box: [250, 80, 900, 620],
+        description: "เด็กผู้ชายยิ้มแย้มใส่ชุดว่ายน้ำลายฉลามในสวนน้ำ",
+        color: "#dbeafe",
+      },
+      headlineCard: {
+        box: [40, 40, 200, 460],
+        text: "สวนน้ำ\nเปิดใหม่",
+        color: "#e2e8f0",
+      },
+      texts: [
+        { text: "SMALL SPLASH BIG DREAMS", box: [620, 220, 700, 520], fontSize: 14 },
+        { text: "สวนน้ำ\nเปิดใหม่", box: [40, 40, 200, 460], fontSize: 28 },
+      ],
+      intentionalTexts: [
+        { text: "MORE NOISE ON TOWEL", box: [700, 300, 760, 500] },
+      ],
+      backgroundPartitions: [],
+      dividers: [],
+      focalObjects: [
+        {
+          name: "shirt slogan",
+          shape: "rect",
+          box: [640, 240, 690, 500],
+          color: "#ffffff",
+          text: "SMALL SPLASH BIG DREAMS",
+        },
+      ],
+      textsLegacyIgnored: [],
+    });
+
+    const parsed = parseBriefResponse(rawAiOutput);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.texts.some((t) => /small splash/i.test(t.text))).toBe(false);
+    expect(parsed?.texts.some((t) => /towel/i.test(t.text))).toBe(false);
+    expect(parsed?.focalObjects.some((o) => /small splash/i.test(o.text || ""))).toBe(false);
+    expect(parsed?.headlineCard?.text).toContain("สวนน้ำ");
+  });
 });

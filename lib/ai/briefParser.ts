@@ -109,8 +109,17 @@ Rules:
 - Return ONLY valid JSON. No markdown. No code fences. No trailing semicolon.
 - Coordinates are normalized 0..1000 as [ymin, xmin, ymax, xmax] (0=top/left, 1000=bottom/right).
 - Prefer real text from the image. Thai text must stay Thai.
-- Include every major layout block you can see. Omit keys you cannot support.
+- Include every major GRAPHIC layout block. Omit keys you cannot support.
 - Keep the JSON compact but complete.
+
+Text policy (important):
+- ONLY extract intentional design/copy: headline, subheadline, promo badge, feature tags/pills, brand logo, footer bar items.
+- DO NOT extract photographic / background / prop text, including:
+  - text printed on clothing, towels, tubes, or merch in the photo
+  - text on signs, boards, or scenery that are part of the photograph (not the ad layout)
+  - watermarks, UI chrome, or accidental OCR noise
+- Put person/product appearance only in heroSubject.description (no clothing slogans as separate text).
+- Leave "texts" and "intentionalTexts" empty unless a layout text does not fit the named fields above.
 
 Required shape:
 {
@@ -145,6 +154,66 @@ export function isUsableBriefLayout(data: ConvertToBriefData | null | undefined)
       (data.backgroundPartitions && data.backgroundPartitions.length > 0) ||
       (data.focalObjects && data.focalObjects.length > 0),
   );
+}
+
+type NormBox = [number, number, number, number];
+
+function boxCenter(box: NormBox): { y: number; x: number } {
+  return { y: (box[0] + box[2]) / 2, x: (box[1] + box[3]) / 2 };
+}
+
+function pointInBox(y: number, x: number, box: NormBox, pad = 20): boolean {
+  return y >= box[0] - pad && y <= box[2] + pad && x >= box[1] - pad && x <= box[3] + pad;
+}
+
+function normalizeCopy(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function collectProtectedCopy(data: {
+  headlineCard?: BriefHeadlineCard;
+  badge?: BriefBadge;
+  subtextCard?: BriefSubtextCard;
+  featureTags?: BriefFeatureTag[];
+  brandLogo?: BriefBrandLogo;
+  footerBar?: BriefFooterBar;
+}): Set<string> {
+  const protectedCopy = new Set<string>();
+  const add = (value?: string) => {
+    const normalized = value ? normalizeCopy(value) : "";
+    if (normalized) protectedCopy.add(normalized);
+  };
+  add(data.headlineCard?.text);
+  add(data.badge?.text);
+  add(data.subtextCard?.text);
+  add(data.brandLogo?.text);
+  add(data.brandLogo?.subtext);
+  for (const tag of data.featureTags ?? []) add(tag.text);
+  for (const item of data.footerBar?.items ?? []) add(item.text);
+  return protectedCopy;
+}
+
+/**
+ * Drop OCR/noise text that sits inside the hero photo (e.g. shirt slogans)
+ * unless it matches intentional layout copy already captured in named fields.
+ */
+export function filterPhotographicBriefTexts(
+  texts: BriefText[],
+  heroSubject?: BriefHeroSubject,
+  protectedCopy: Set<string> = new Set(),
+): BriefText[] {
+  if (!heroSubject) {
+    return texts.filter((item) => Boolean(item.text?.trim()));
+  }
+  return texts.filter((item) => {
+    const clean = item.text?.trim();
+    if (!clean) return false;
+    if (protectedCopy.has(normalizeCopy(clean))) return false;
+    const center = boxCenter(item.box);
+    // Text centered inside the hero photograph is treated as photo-intrinsic noise.
+    if (pointInBox(center.y, center.x, heroSubject.box)) return false;
+    return true;
+  });
 }
 
 export function parseBriefResponse(raw: string): ConvertToBriefData | null {
@@ -423,6 +492,23 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
       }
     }
 
+    const protectedCopy = collectProtectedCopy({
+      headlineCard,
+      badge,
+      subtextCard,
+      featureTags,
+      brandLogo,
+      footerBar,
+    });
+    const filteredTexts = filterPhotographicBriefTexts(texts, heroSubject, protectedCopy);
+    const filteredFocalObjects = focalObjects.filter((object) => {
+      const clean = object.text?.trim();
+      if (!clean || !heroSubject) return true;
+      if (protectedCopy.has(normalizeCopy(clean))) return true;
+      const center = boxCenter(object.box);
+      return !pointInBox(center.y, center.x, heroSubject.box);
+    });
+
     return {
       aspectRatio,
       heroSubject,
@@ -435,8 +521,8 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
       footerBar,
       backgroundPartitions,
       dividers,
-      focalObjects,
-      texts,
+      focalObjects: filteredFocalObjects,
+      texts: filteredTexts,
     };
   } catch {
     return null;
