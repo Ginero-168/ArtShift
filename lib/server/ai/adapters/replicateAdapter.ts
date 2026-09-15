@@ -1040,12 +1040,19 @@ function createModelInput(
   input: AiVisionInput,
 ): Record<string, unknown> {
   const prompt = createVisionPrompt(task, input);
+  // Brief / structured JSON describe prompts need more room than short captions.
+  // 2048 truncates complex ad wireframes mid-JSON and makes every retry fail the same way.
+  const wantsStructuredJson = /return only[\s\S]{0,80}json|strictly valid json|wireframe|aspectRatio/i.test(
+    prompt,
+  );
+  const describeMaxTokens = wantsStructuredJson ? 8_192 : 2_048;
+  const describeTemperature = wantsStructuredJson || task === "vision.propose" ? 0 : 0.2;
   if (model === GPT_MODEL) {
     return {
       prompt,
       image_input: [input.image.dataUrl],
-      max_completion_tokens: task === "vision.propose" ? 2_048 : 2_048,
-      temperature: task === "vision.propose" ? 0 : 0.2,
+      max_completion_tokens: task === "vision.propose" ? 2_048 : describeMaxTokens,
+      temperature: describeTemperature,
     };
   }
   if (model === GEMINI_MODEL) {
@@ -1053,8 +1060,8 @@ function createModelInput(
       prompt,
       images: [input.image.dataUrl],
       thinking_level: task === "vision.propose" ? "low" : "none",
-      max_output_tokens: task === "vision.propose" ? 2_048 : 2_048,
-      temperature: task === "vision.propose" ? 0 : 0.2,
+      max_output_tokens: task === "vision.propose" ? 2_048 : describeMaxTokens,
+      temperature: describeTemperature,
     };
   }
   throw new AiRuntimeError("INVALID_INPUT", `Unsupported Replicate model ${model}.`, {

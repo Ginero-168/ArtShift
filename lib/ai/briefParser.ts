@@ -102,102 +102,33 @@ export type ConvertToBriefData = {
   texts: BriefText[];
 };
 
-export const BRIEF_VISION_PROMPT = `You are an expert graphic design art director and advertising layout analyzer.
-Analyze this reference advertisement/poster image and decompose it into a complete, professional graphic design blueprint brief (Wireframe Art Direction Brief) for recreating on a vector canvas.
+export const BRIEF_VISION_PROMPT = `You are an expert advertising art director.
+Analyze this ad/poster image and return a wireframe brief as ONE JSON object.
 
-Identify and decompose every visual element into these structured components:
+Rules:
+- Return ONLY valid JSON. No markdown. No code fences. No trailing semicolon.
+- Coordinates are normalized 0..1000 as [ymin, xmin, ymax, xmax] (0=top/left, 1000=bottom/right).
+- Prefer real text from the image. Thai text must stay Thai.
+- Include every major layout block you can see. Omit keys you cannot support.
+- Keep the JSON compact but complete.
 
-## Core Visual & Text Components:
-1. "heroSubject": The primary person, child, model, mascot, or featured hero product.
-   - "box": [ymin, xmin, ymax, xmax] in 0..1000 bounding the subject tightly.
-   - "description": Concise, natural Thai description of who/what the subject is and what they are doing (e.g. "รูปภาพเด็กชาย กำลังยิ้มแย้ม และเล่นน้ำ ขณะใส่ห่วงยางสีน้ำเงิน" or "เชฟกำลังปั้นซูชิ").
-   - "color": Soft pastel fill, e.g. "#dbeafe".
-2. "backgroundZone": The background scene / environment setting.
-   - "box": [ymin, xmin, ymax, xmax] bounding the backdrop.
-   - "description": Concise Thai label describing the environment (e.g. "พื้นหลังเป็นภาพสวนน้ำและสไลเดอร์" or "ฉากหลังบรรยากาศร้าน").
-   - "color": Warm wireframe pastel, e.g. "#f5f0eb".
-3. "headlineCard": The primary headline / title text block.
-   - "box": [ymin, xmin, ymax, xmax] bounding the headline card.
-   - "text": The EXACT headline text with natural line breaks (\\n) as printed (e.g. "สวนน้ำ\\nเปิดใหม่").
-   - "color": Soft pastel wireframe fill, e.g. "#e2e8f0".
-4. "badge": The prominent promo callout badge, sticker, or stamp.
-   - "box": [ymin, xmin, ymax, xmax] bounding the badge.
-   - "shape": "ellipse" (for circle/oval) or "rect".
-   - "text": The EXACT badge text with line break (e.g. "เปิดแล้ว\\nวันนี้" or "ชิ้นละ 10 บาท").
-   - "color": Accent pastel color, e.g. "#fcd34d".
-5. "subtextCard": Supporting subtitle, slogan, or description line.
-   - "box": [ymin, xmin, ymax, xmax].
-   - "text": The EXACT supporting text (e.g. "เปิดรับความสุขกับทุกครอบครัวไปด้วยกัน").
-   - "color": Soft pastel fill, e.g. "#e2e8f0".
-6. "featureTags": Secondary category badges, pills, or menu tabs (e.g. side pills like "WATER SLIDES", "WAVE POOL", "KIDS ZONE", "FOOD & DRINKS", "FAMILY FUN").
-   - Array of objects with "text", "box" [ymin, xmin, ymax, xmax], and "color" (e.g. "#fed7aa").
-7. "brandLogo": Brand name, park name, or logo block (e.g. "AQUA WORLD").
-   - "box": [ymin, xmin, ymax, xmax].
-   - "text": Brand name text.
-   - "subtext": Optional brand slogan (e.g. "PROMISE SMILES EVERYDAY").
-8. "footerBar": Bottom info bar, guarantee strip, or feature highlights container.
-   - "box": [ymin, xmin, ymax, xmax].
-   - "color": "#1e293b" or "#334155".
-   - "items": Array of items with "text" (e.g. ["สนุกได้ทั้งครอบครัว", "ปลอดภัยได้มาตรฐาน", "เดินทางสะดวก", "ความสุข... รอคุณอยู่ที่นี่"]).
-9. "dividers": Lines separating composition zones (array with "start": [x, y], "end": [x, y] in 0..1000).
-10. "intentionalTexts": Any other notable intentional layout texts.
-
-All coordinates MUST be normalized to 0..1000: [ymin, xmin, ymax, xmax] where 0 is top/left and 1000 is bottom/right.
-
-Return ONLY a strictly valid JSON object (no markdown formatting, no codeblocks):
+Required shape:
 {
-  "aspectRatio": { "width": 600, "height": 1000 },
-  "heroSubject": {
-    "box": [280, 20, 890, 480],
-    "description": "รูปภาพเด็กชาย กำลังยิ้มแย้ม และเล่นน้ำ ขณะใส่ห่วงยางสีน้ำเงิน",
-    "color": "#dbeafe"
-  },
-  "backgroundZone": {
-    "box": [0, 0, 890, 1000],
-    "description": "พื้นหลังเป็นภาพสวนน้ำและสไลเดอร์",
-    "color": "#f5f0eb"
-  },
-  "headlineCard": {
-    "box": [40, 40, 200, 460],
-    "text": "สวนน้ำ\\nเปิดใหม่",
-    "color": "#e2e8f0"
-  },
-  "subtextCard": {
-    "box": [190, 70, 230, 410],
-    "text": "เปิดรับความสุขกับทุกครอบครัวไปด้วยกัน",
-    "color": "#e2e8f0"
-  },
-  "badge": {
-    "box": [230, 320, 360, 460],
-    "shape": "ellipse",
-    "text": "เปิดแล้ว\\nวันนี้",
-    "color": "#fcd34d"
-  },
-  "featureTags": [
-    { "text": "WATER SLIDES", "box": [350, 15, 410, 130], "color": "#fed7aa" },
-    { "text": "WAVE POOL", "box": [405, 15, 465, 125], "color": "#fed7aa" },
-    { "text": "KIDS ZONE", "box": [460, 15, 510, 120], "color": "#fed7aa" },
-    { "text": "FOOD & DRINKS", "box": [505, 15, 555, 120], "color": "#fed7aa" },
-    { "text": "FAMILY FUN", "box": [550, 15, 600, 120], "color": "#fed7aa" }
-  ],
-  "brandLogo": {
-    "box": [480, 330, 540, 450],
-    "text": "AQUA WORLD",
-    "subtext": "PROMISE SMILES EVERYDAY"
-  },
-  "footerBar": {
-    "box": [900, 15, 980, 480],
-    "color": "#1e293b",
-    "items": [
-      { "text": "สนุกได้ทั้งครอบครัว" },
-      { "text": "ปลอดภัยได้มาตรฐาน" },
-      { "text": "เดินทางสะดวก" },
-      { "text": "ความสุข... รอคุณอยู่ที่นี่" }
-    ]
-  },
-  "dividers": [],
+  "aspectRatio": { "width": number, "height": number },
+  "heroSubject": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#dbeafe" },
+  "backgroundZone": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#f5f0eb" },
+  "headlineCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#e2e8f0" },
+  "badge": { "box": [ymin,xmin,ymax,xmax], "shape": "ellipse"|"rect", "text": "exact text", "color": "#fcd34d" },
+  "subtextCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#e2e8f0" },
+  "featureTags": [{ "text": "exact", "box": [ymin,xmin,ymax,xmax], "color": "#fed7aa" }],
+  "brandLogo": { "box": [ymin,xmin,ymax,xmax], "text": "brand", "subtext": "optional" },
+  "footerBar": { "box": [ymin,xmin,ymax,xmax], "color": "#1e293b", "items": [{ "text": "exact" }] },
+  "dividers": [{ "start": [x,y], "end": [x,y], "color": "#000000", "strokeWidth": 1.5 }],
+  "backgroundPartitions": [],
+  "focalObjects": [],
+  "texts": [],
   "intentionalTexts": []
-};`;
+}`;
 
 /** True when a brief has at least one layout region the canvas generator can draw. */
 export function isUsableBriefLayout(data: ConvertToBriefData | null | undefined): boolean {
@@ -220,10 +151,12 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
   try {
     let clean = raw.trim();
     clean = clean.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    // Models sometimes echo `};` from broken prompt examples.
+    clean = clean.replace(/;\s*$/g, "").trim();
     const jsonMatch = clean.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
 
-    let candidate = jsonMatch[0];
+    let candidate = jsonMatch[0].replace(/;\s*$/g, "");
     let parsed: (Partial<ConvertToBriefData> & Record<string, any>) | null = null;
 
     try {
