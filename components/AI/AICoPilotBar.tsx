@@ -1611,6 +1611,10 @@ export default function AICoPilotBar() {
         onStop={() => abortRef.current?.abort()}
         onBackspaceAtStart={removeLastAttachedImage}
         onInlineTagsChange={handleInlineTagsChange}
+        onClear={() => {
+          clearAttachedImages();
+          setInput("");
+        }}
         onTogglePromptHelper={handleTogglePromptHelper}
         isPromptHelperOpen={Boolean(promptRefinementData)}
         selectedQuality={selectedQuality}

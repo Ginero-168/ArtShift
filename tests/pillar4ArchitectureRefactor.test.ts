@@ -45,6 +45,8 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     expect(composerSource).toContain("InlineTagEditor");
     expect(composerSource).toContain("onBackspaceAtStart");
     expect(composerSource).toContain("onSend");
+    expect(composerSource).toContain("onClear");
+    expect(composerSource).toContain("composer-clear-all");
   });
 
   it("verifies ChatActionCards encapsulates proposal, plan, tray, and refinement cards", () => {

@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { MagicWandPromptIcon, SendIcon, StopIcon } from "@/components/AI/ChatIcons";
+import { CloseIcon, MagicWandPromptIcon, SendIcon, StopIcon } from "@/components/AI/ChatIcons";
 import InlineTagEditor, { type InlineTagEditorHandle } from "@/components/AI/InlineTagEditor";
 import {
   IconCheck,
@@ -114,6 +114,7 @@ export interface ChatComposerProps {
   onStop: () => void;
   onBackspaceAtStart: () => void;
   onInlineTagsChange: (inlineIds: string[]) => void;
+  onClear?: () => void;
   topSlot?: React.ReactNode;
   onTogglePromptHelper?: () => void;
   isPromptHelperOpen?: boolean;
@@ -134,6 +135,7 @@ export default function ChatComposer({
   onStop,
   onBackspaceAtStart,
   onInlineTagsChange,
+  onClear,
   topSlot,
   onTogglePromptHelper,
   isPromptHelperOpen = false,
@@ -142,6 +144,7 @@ export default function ChatComposer({
 }: ChatComposerProps) {
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
   const qualityMenuRef = useRef<HTMLDivElement>(null);
+  const canClear = Boolean(onClear) && (Boolean(input.trim()) || composerImageRefs.length > 0);
 
   // Close dropdown on outside click or escape key
   useEffect(() => {
@@ -185,7 +188,180 @@ export default function ChatComposer({
     >
       {topSlot}
 
-      {/* Toolbar row with Quality Selector Button & Dropdown */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, width: "100%" }}>
+        {/* Input Field with InlineTagEditor */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            minHeight: 90,
+            borderRadius: 14,
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            padding: canClear ? "8px 28px 8px 12px" : "8px 12px",
+            boxSizing: "border-box",
+            position: "relative",
+            transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+          }}
+          onFocusCapture={(e) => {
+            e.currentTarget.style.borderColor = "#4f46e5";
+            e.currentTarget.style.boxShadow = "0 0 0 2px rgba(79, 70, 229, 0.1)";
+          }}
+          onBlurCapture={(e) => {
+            e.currentTarget.style.borderColor = "#e2e8f0";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        >
+          {canClear && (
+            <button
+              type="button"
+              data-testid="composer-clear-all"
+              aria-label="ล้างข้อความและแท็กทั้งหมด"
+              title="ล้างช่องแชท"
+              onClick={onClear}
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+                width: 22,
+                height: 22,
+                padding: 0,
+                margin: 0,
+                border: "none",
+                borderRadius: 6,
+                background: "transparent",
+                color: "#94a3b8",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                zIndex: 2,
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#64748b";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "#94a3b8";
+              }}
+            >
+              <CloseIcon style={{ width: 12, height: 12, color: "currentColor" }} />
+            </button>
+          )}
+          <InlineTagEditor
+            ref={setEditorRef}
+            rows={3}
+            omittedCount={omittedCount}
+            placeholder={
+              hasSelection || composerImageRefs.length > 0
+                ? "แก้ไขภาพหรือวัตถุที่เลือก..."
+                : "บอกสิ่งที่ต้องการออกแบบ..."
+            }
+            availableImages={allSlideImageRefs}
+            onSend={() => onSend()}
+            onBackspaceAtStart={onBackspaceAtStart}
+            onChange={(val) => {
+              setInput(val);
+              const inlineIds = extractInlineTagObjectIds(val);
+              onInlineTagsChange(inlineIds);
+            }}
+          />
+        </div>
+
+        {/* Action column (Prompt Helper button on top, Send / Stop button below) */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 6,
+            flex: "0 0 36px",
+          }}
+        >
+          {/* Prompt Refinement Helper Button */}
+          {onTogglePromptHelper && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onTogglePromptHelper}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                border: isPromptHelperOpen ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
+                background: isPromptHelperOpen
+                  ? "linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%)"
+                  : "#f8fafc",
+                color: isPromptHelperOpen ? "#4f46e5" : "#6366f1",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: busy ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+                boxShadow: isPromptHelperOpen ? "0 0 0 2px rgba(99, 102, 241, 0.2)" : "none",
+              }}
+              title={
+                isPromptHelperOpen ? "ปิดตัวช่วยแต่ง Prompt" : "เปิดตัวช่วยแต่ง Prompt (Prompt Helper)"
+              }
+              onMouseEnter={(e) => {
+                if (!busy && !isPromptHelperOpen) {
+                  e.currentTarget.style.background = "#f1f5f9";
+                  e.currentTarget.style.borderColor = "#c7d2fe";
+                  e.currentTarget.style.transform = "scale(1.05)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!busy && !isPromptHelperOpen) {
+                  e.currentTarget.style.background = "#f8fafc";
+                  e.currentTarget.style.borderColor = "#e2e8f0";
+                  e.currentTarget.style.transform = "scale(1)";
+                }
+              }}
+            >
+              <MagicWandPromptIcon style={{ width: 16, height: 16 }} />
+            </button>
+          )}
+
+          {/* Send / Stop action */}
+          <button
+            type="button"
+            disabled={!busy && !input.trim()}
+            onClick={() => (busy ? onStop() : onSend())}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "none",
+              background: busy ? "#ef4444" : input.trim() ? "#4f46e5" : "#f1f5f9",
+              color: busy || input.trim() ? "#ffffff" : "#94a3b8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: busy || !input.trim() ? (busy ? "pointer" : "default") : "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title={busy ? "Cancel current task" : "Send to AI Assistance"}
+          >
+            {busy ? (
+              <StopIcon style={{ width: 12, height: 12, fill: "#ffffff" }} />
+            ) : (
+              <SendIcon
+                style={{
+                  width: 14,
+                  height: 14,
+                  stroke: input.trim() ? "#ffffff" : "#94a3b8",
+                }}
+              />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar row with Quality Selector — below chat input */}
       <div
         style={{
           display: "flex",
@@ -256,7 +432,7 @@ export default function ChatComposer({
             </span>
           </button>
 
-          {/* Quality Options Dropdown List */}
+          {/* Quality Options Dropdown List — opens upward */}
           {isQualityMenuOpen && (
             <div
               style={{
@@ -428,142 +604,6 @@ export default function ChatComposer({
             {`${activeOption.price} / run`}
           </div>
         )}
-      </div>
-
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, width: "100%" }}>
-        {/* Input Field with InlineTagEditor */}
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            minHeight: 90,
-            borderRadius: 14,
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            padding: "8px 12px",
-            boxSizing: "border-box",
-            transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-          }}
-          onFocusCapture={(e) => {
-            e.currentTarget.style.borderColor = "#4f46e5";
-            e.currentTarget.style.boxShadow = "0 0 0 2px rgba(79, 70, 229, 0.1)";
-          }}
-          onBlurCapture={(e) => {
-            e.currentTarget.style.borderColor = "#e2e8f0";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        >
-          <InlineTagEditor
-            ref={setEditorRef}
-            rows={3}
-            omittedCount={omittedCount}
-            placeholder={
-              hasSelection || composerImageRefs.length > 0
-                ? "แก้ไขภาพหรือวัตถุที่เลือก..."
-                : "บอกสิ่งที่ต้องการออกแบบ..."
-            }
-            availableImages={allSlideImageRefs}
-            onSend={() => onSend()}
-            onBackspaceAtStart={onBackspaceAtStart}
-            onChange={(val) => {
-              setInput(val);
-              const inlineIds = extractInlineTagObjectIds(val);
-              onInlineTagsChange(inlineIds);
-            }}
-          />
-        </div>
-
-        {/* Action column (Prompt Helper button on top, Send / Stop button below) */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 6,
-            flex: "0 0 36px",
-          }}
-        >
-          {/* Prompt Refinement Helper Button */}
-          {onTogglePromptHelper && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onTogglePromptHelper}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                border: isPromptHelperOpen ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
-                background: isPromptHelperOpen
-                  ? "linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%)"
-                  : "#f8fafc",
-                color: isPromptHelperOpen ? "#4f46e5" : "#6366f1",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: busy ? "not-allowed" : "pointer",
-                transition: "all 0.15s ease",
-                boxShadow: isPromptHelperOpen ? "0 0 0 2px rgba(99, 102, 241, 0.2)" : "none",
-              }}
-              title={
-                isPromptHelperOpen ? "ปิดตัวช่วยแต่ง Prompt" : "เปิดตัวช่วยแต่ง Prompt (Prompt Helper)"
-              }
-              onMouseEnter={(e) => {
-                if (!busy && !isPromptHelperOpen) {
-                  e.currentTarget.style.background = "#f1f5f9";
-                  e.currentTarget.style.borderColor = "#c7d2fe";
-                  e.currentTarget.style.transform = "scale(1.05)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!busy && !isPromptHelperOpen) {
-                  e.currentTarget.style.background = "#f8fafc";
-                  e.currentTarget.style.borderColor = "#e2e8f0";
-                  e.currentTarget.style.transform = "scale(1)";
-                }
-              }}
-            >
-              <MagicWandPromptIcon style={{ width: 16, height: 16 }} />
-            </button>
-          )}
-
-          {/* Send / Stop action */}
-          <button
-            type="button"
-            disabled={!busy && !input.trim()}
-            onClick={() => (busy ? onStop() : onSend())}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              border: "none",
-              background: busy ? "#ef4444" : input.trim() ? "#4f46e5" : "#f1f5f9",
-              color: busy || input.trim() ? "#ffffff" : "#94a3b8",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: busy || !input.trim() ? (busy ? "pointer" : "default") : "pointer",
-              transition: "all 0.15s ease",
-            }}
-            title={busy ? "Cancel current task" : "Send to AI Assistance"}
-          >
-            {busy ? (
-              <StopIcon style={{ width: 12, height: 12, fill: "#ffffff" }} />
-            ) : (
-              <SendIcon
-                style={{
-                  width: 14,
-                  height: 14,
-                  stroke: input.trim() ? "#ffffff" : "#94a3b8",
-                }}
-              />
-            )}
-          </button>
-        </div>
       </div>
     </div>
   );
