@@ -3,6 +3,7 @@ import {
   generateAIImage,
   hasExplicitDimensionsInText,
   isAlreadyOrchestratedPrompt,
+  resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
   sanitizeAndPrepareImagePrompt,
   streamlinePromptForImageGen,
@@ -10,7 +11,10 @@ import {
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createFrame, createImage } from "@/lib/engine/factory";
-import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
+import {
+  getGenerationPreviewBesideSource,
+  getGenerationPreviewBounds,
+} from "@/lib/engine/generationPlacement";
 import { preloadDataURL } from "@/lib/engine/imageCache";
 import { getProcessingPreviewById } from "@/lib/engine/processingPreview";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
@@ -115,9 +119,9 @@ export async function runContextAwareImageTask(
     dataUrl: string;
     mimeType?: "image/png" | "image/jpeg" | "image/webp";
   }>;
+  const effectiveRefs =
+    refs && refs.length > 0 ? refs : (task.selectedImages ?? []);
   try {
-    const effectiveRefs =
-      refs && refs.length > 0 ? refs : (task.selectedImages ?? []);
     inputImages = resolveReferenceImages(effectiveRefs);
   } catch (error) {
     task = appendAiTaskEvent(task, {
@@ -147,6 +151,22 @@ export async function runContextAwareImageTask(
   let dimensions =
     task.requestedDimensions ?? resolveImageGenerationDimensions(task.prompt);
   if (
+    !task.requestedDimensions &&
+    effectiveRefs.length > 0 &&
+    !hasExplicitDimensionsInText(task.prompt)
+  ) {
+    const source = resolveSourceElementBounds(effectiveRefs, initialSlide);
+    if (source) {
+      const ref0 = effectiveRefs[0] as {
+        sourceWidth?: number;
+        sourceHeight?: number;
+      };
+      const pw = ref0?.sourceWidth || source.width;
+      const ph = ref0?.sourceHeight || source.height;
+      dimensions = resolveDimensionsFromPixelSize(pw, ph);
+    }
+  }
+  if (
     dimensions.width === 1024 &&
     dimensions.height === 1024 &&
     dimensions.aspectRatio === "1:1" &&
@@ -165,7 +185,11 @@ export async function runContextAwareImageTask(
       slideWidth: useEngine.getState().doc.width,
       slideHeight: useEngine.getState().doc.height,
     } as const);
-  const previewBounds = getGenerationPreviewBounds(viewport, dimensions);
+  const sourceElement = resolveSourceElementBounds(effectiveRefs, initialSlide);
+  const previewBounds = sourceElement
+    ? getGenerationPreviewBesideSource(sourceElement, dimensions)
+    : getGenerationPreviewBounds(viewport, dimensions);
+  const previewLayout = sourceElement ? "anchor" : "center";
   let committed: ContextAwareTaskResult | null = null;
   let lastError: unknown;
   let qualityRepairInstruction: string | undefined;
@@ -188,6 +212,7 @@ export async function runContextAwareImageTask(
     options.placement,
     initialSlide?.width ?? 1920,
     initialSlide?.height ?? 1080,
+    previewLayout,
   );
 
   const job = enqueueProcessingJob({
@@ -509,6 +534,7 @@ export async function runContextAwareImageTask(
             options.placement,
             slide.width,
             slide.height,
+            previewLayout,
           );
           // Keep the committed image aligned with the stable generate preview.
           // Only re-size from the latest viewport when the user dragged the card.
@@ -1101,11 +1127,30 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
+function resolveSourceElementBounds(
+  refs: ReadonlyArray<ComposerImageRef | AiTask["selectedImages"][number]>,
+  slide: ReturnType<ReturnType<typeof useEngine.getState>["currentSlide"]> | null | undefined,
+): { x: number; y: number; width: number; height: number } | null {
+  const first = refs[0];
+  if (!first || !slide) return null;
+  const element = slide.elements.find(
+    (candidate) => candidate.id === first.objectId && !candidate.isDeleted,
+  );
+  if (!element || element.width <= 0 || element.height <= 0) return null;
+  return {
+    x: element.x,
+    y: element.y,
+    width: element.width,
+    height: element.height,
+  };
+}
+
 export function computeMultiImagePlacement(
   baseBounds: { x: number; y: number; width: number; height: number },
   placement: { outputIndex: number; requestedOutputCount: number } | undefined,
   slideWidth: number,
   slideHeight: number,
+  layout: "center" | "anchor" = "center",
 ): { x: number; y: number; width: number; height: number } {
   if (!placement || placement.requestedOutputCount <= 1) {
     return baseBounds;
@@ -1144,8 +1189,14 @@ export function computeMultiImagePlacement(
   }
 
   const totalRowW = count * targetW + totalGap;
-  const startX = Math.max(padding, (slideWidth - totalRowW) / 2);
-  const startY = Math.max(padding, (slideHeight - targetH) / 2);
+  const startX =
+    layout === "anchor"
+      ? baseBounds.x
+      : Math.max(padding, (slideWidth - totalRowW) / 2);
+  const startY =
+    layout === "anchor"
+      ? baseBounds.y
+      : Math.max(padding, (slideHeight - targetH) / 2);
 
   const x = Math.round(startX + index * (targetW + gap));
   const y = Math.round(startY);

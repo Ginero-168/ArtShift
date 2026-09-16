@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  getGenerationPreviewBesideSource,
   getGenerationPreviewBounds,
   getVisibleWorldBounds,
 } from "@/lib/engine/generationPlacement";
+import { PROCESSING_PREVIEW_GAP } from "@/lib/engine/processingPreview";
 
 describe("generation preview placement", () => {
   const viewport = {
@@ -49,5 +51,16 @@ describe("generation preview placement", () => {
     expect(bounds.width).toBeGreaterThan(40);
     expect(bounds.height).toBeGreaterThan(40);
     expect(bounds.width / bounds.height).toBeCloseTo(1, 3);
+  });
+
+  it("places generate previews beside the source like other processing preloads", () => {
+    const beside = getGenerationPreviewBesideSource(
+      { x: 100, y: 80, width: 320, height: 480 },
+      { width: 768, height: 1024 },
+    );
+    expect(beside.x).toBe(100 + 320 + PROCESSING_PREVIEW_GAP);
+    expect(beside.y).toBe(80);
+    expect(beside.width / beside.height).toBeCloseTo(768 / 1024, 2);
+    expect(beside.width * beside.height).toBeGreaterThan(40 * 40);
   });
 });

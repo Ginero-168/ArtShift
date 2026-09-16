@@ -110,6 +110,22 @@ export function resolveImageGenerationDimensions(prompt: string) {
   return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
 }
 
+/** Map an arbitrary pixel size onto the nearest supported generation aspect bucket. */
+export function resolveDimensionsFromPixelSize(width: number, height: number): {
+  width: number;
+  height: number;
+  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+} {
+  const w = Math.max(1, width);
+  const h = Math.max(1, height);
+  const ratio = w / h;
+  if (ratio >= 1.6) return { width: 1280, height: 720, aspectRatio: "16:9" };
+  if (ratio >= 1.2) return { width: 1024, height: 768, aspectRatio: "4:3" };
+  if (ratio <= 0.65) return { width: 720, height: 1280, aspectRatio: "9:16" };
+  if (ratio <= 0.85) return { width: 768, height: 1024, aspectRatio: "3:4" };
+  return { width: 1024, height: 1024, aspectRatio: "1:1" };
+}
+
 export interface ImageGenerationOptions {
   prompt: string;
   aspectRatio?: AiImageAspectRatio;

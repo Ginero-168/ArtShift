@@ -1,4 +1,5 @@
 import type { CanvasViewportSnapshot } from "./canvasViewport";
+import { PROCESSING_PREVIEW_GAP } from "./processingPreview";
 
 export type WorldBounds = {
   x: number;
@@ -74,6 +75,30 @@ export function getGenerationPreviewBounds(
     y,
     width: Math.min(width, viewport.slideWidth),
     height: Math.min(height, viewport.slideHeight),
+  };
+}
+
+/**
+ * Place a generate preview beside a source image — same pattern as remove-bg /
+ * vectorize / upscale preloads (right of source, matching footprint + output aspect).
+ */
+export function getGenerationPreviewBesideSource(
+  source: WorldBounds,
+  output: { width: number; height: number },
+): WorldBounds {
+  const outRatio = Math.max(0.01, output.width / Math.max(1, output.height));
+  const sourceArea = Math.max(1, source.width * source.height);
+  // Start from source height (sits flush beside friends), then normalize area.
+  let height = Math.max(48, source.height);
+  let width = Math.max(48, Math.round(height * outRatio));
+  const scale = Math.sqrt(sourceArea / Math.max(1, width * height));
+  width = Math.max(48, Math.round(width * scale));
+  height = Math.max(48, Math.round(height * scale));
+  return {
+    x: source.x + source.width + PROCESSING_PREVIEW_GAP,
+    y: source.y,
+    width,
+    height,
   };
 }
 

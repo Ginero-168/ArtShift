@@ -409,11 +409,65 @@ describe("context-aware turn orchestrator", () => {
       search: { required: false, queries: [], sources: [] },
     });
 
-    // Mandatory 1:1 baseline must NOT be overridden by selected canvas element aspect ratio
+    // Without source refs, canvas selection alone must NOT override the 1:1 baseline
     expect(task.requestedDimensions).toEqual({
       width: 1024,
       height: 1024,
       aspectRatio: "1:1",
+    });
+  });
+
+  it("matches source image aspect when refs exist and size is not specified", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "สร้างภาพแนวเดียวกันจากต้นฉบับนี้",
+      refs: [
+        {
+          objectId: "img-1",
+          elementVersion: 1,
+          fileId: "file-1",
+          displayName: "Poster",
+          sourceWidth: 1200,
+          sourceHeight: 1800,
+          width: 400,
+          height: 600,
+          angle: 0,
+        },
+      ],
+      analyses: [
+        {
+          ref: {
+            objectId: "img-1",
+            elementVersion: 1,
+            displayName: "Poster",
+          },
+          caption: "poster",
+          objects: ["poster"],
+          visibleText: "",
+          dimensions: { width: 1200, height: 1800, aspectRatio: 0.67 },
+          transparency: "none",
+          appearanceNotes: [],
+          limitations: [],
+        },
+      ],
+    };
+
+    const task = createDirectedImageTask(input, {
+      kind: "image-task",
+      outputCount: 1,
+      summary: "สร้างภาพจากต้นฉบับ",
+      refinedPrompt: "A matching poster variation",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Match source aspect"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(task.requestedDimensions).toEqual({
+      width: 768,
+      height: 1024,
+      aspectRatio: "3:4",
     });
   });
 

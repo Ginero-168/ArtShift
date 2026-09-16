@@ -172,6 +172,70 @@ describe("context-aware image task runner", () => {
     expect(getAiTask(result.task.id)).toMatchObject({ status: "succeeded" });
   });
 
+  it("places the generate preview beside the source image like other preloads", async () => {
+    publishCanvasViewport({
+      width: 800,
+      height: 600,
+      scale: 1,
+      tx: 0,
+      ty: 0,
+      slideWidth: 1920,
+      slideHeight: 1080,
+    });
+    const source = createImage({
+      x: 120,
+      y: 90,
+      width: 300,
+      height: 450,
+      fileId: "source-file",
+    });
+    source.naturalWidth = 900;
+    source.naturalHeight = 1350;
+    useEngine.getState().addElements([source]);
+    const ref = {
+      objectId: source.id,
+      elementVersion: source.version,
+      fileId: source.fileId,
+      displayName: "Source",
+      sourceWidth: 900,
+      sourceHeight: 1350,
+      width: source.width,
+      height: source.height,
+      angle: 0,
+    };
+    getCachedMock.mockReturnValue({
+      dataURL: "data:image/png;base64,AA==",
+      fileId: "source-file",
+      img: { naturalWidth: 900, naturalHeight: 1350, width: 900, height: 1350 } as HTMLImageElement,
+      width: 900,
+      height: 1350,
+    });
+
+    let previewDuringGeneration: ReturnType<typeof getProcessingPreviewById> | undefined;
+    generateImageMock.mockImplementationOnce(async () => {
+      previewDuringGeneration = getProcessingPreviews()[0];
+      return {
+        dataUrl: "data:image/png;base64,AA==",
+        fileId: "generated-beside",
+        width: 768,
+        height: 1024,
+        seed: 0,
+        model: "openai/gpt-image-2",
+        prompt: plan.prompt,
+      };
+    });
+
+    try {
+      await runContextAwareImageTask(createAiTask(plan), [ref], { cloudConsent: true });
+    } catch {
+      // Placement is asserted from the live preview; later gates may still fail in this stub.
+    }
+
+    expect(previewDuringGeneration).toBeDefined();
+    expect(previewDuringGeneration!.x).toBeGreaterThan(source.x + source.width);
+    expect(previewDuringGeneration!.y).toBe(source.y);
+  });
+
   it("keeps the generate preview fixed when the Canvas pans during generation", async () => {
     const initialViewport = {
       width: 400,

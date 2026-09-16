@@ -2,6 +2,7 @@ import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
+  resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
 import {
@@ -128,8 +129,17 @@ export function resolveTaskDimensionsWithContext(
     };
   }
 
-  // Default baseline for all image generation is strictly 1:1 (1024x1024)
-  // Canvas elements or implicit keywords do NOT override the 1:1 baseline.
+  // With a source/reference image and no explicit size, match the original aspect.
+  const sourceRef = input.refs[0];
+  if (sourceRef) {
+    const w = sourceRef.sourceWidth || sourceRef.width;
+    const h = sourceRef.sourceHeight || sourceRef.height;
+    if (w > 0 && h > 0) {
+      return resolveDimensionsFromPixelSize(w, h);
+    }
+  }
+
+  // No source and no explicit ratio → square baseline.
   return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
 }
 

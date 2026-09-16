@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
   sanitizeAndPrepareImagePrompt,
   streamlinePromptForImageGen,
@@ -172,5 +173,17 @@ describe("Signage & Banner Design Knowledge Retrieval", () => {
     expect(multiSanitizedThai).toContain("Flat 2D graphic design artwork");
     expect(multiSanitizedThai).toContain("no 3D mockup");
     expect(multiSanitizedThai).not.toContain("commercial advertising poster design");
+  });
+});
+
+describe("resolveDimensionsFromPixelSize", () => {
+  it("maps source pixel sizes onto nearest supported generation buckets", () => {
+    expect(resolveDimensionsFromPixelSize(1200, 1800)).toEqual({
+      width: 768,
+      height: 1024,
+      aspectRatio: "3:4",
+    });
+    expect(resolveDimensionsFromPixelSize(1920, 1080).aspectRatio).toBe("16:9");
+    expect(resolveDimensionsFromPixelSize(1024, 1024).aspectRatio).toBe("1:1");
   });
 });
