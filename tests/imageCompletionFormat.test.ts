@@ -4,13 +4,19 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
 const librarySource = readFileSync("components/Builder/BlockLibrary.tsx", "utf8");
 const cssSource = readFileSync("components/Builder/Builder.module.css", "utf8");
+const replySource = readFileSync("lib/ai/imageCompletionReply.ts", "utf8");
+const presentationSource = readFileSync("lib/ai/imageResultPresentation.ts", "utf8");
+const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
 
 describe("Image Completion Summary Format", () => {
-  it("defines formatImageCompletionReply with bullet points and friendly closing", () => {
-    expect(source).toContain("function formatImageCompletionReply(");
-    expect(source).toContain("เสร็จแล้ว ${count} รูปค่ะ");
-    expect(source).toContain("• รูปที่ ${idx + 1}: ${cleanBrief");
-    expect(source).toContain("ถ้าอยากให้ปรับสไตล์ ท่าทาง หรือสีสันเพิ่มเติม บอกได้เลยนะคะ");
+  it("defines formatImageCompletionReply via human Scene/Tone/Framing summary", () => {
+    expect(replySource).toContain("function formatImageCompletionReply(");
+    expect(presentationSource).toContain("function buildImageResultSummary(");
+    expect(presentationSource).toContain('label: "Scene"');
+    expect(presentationSource).toContain('label: "Tone"');
+    expect(presentationSource).toContain('label: "Framing"');
+    expect(presentationSource).toContain("ถ้าอยากให้ปรับโทน / องค์ประกอบ / รายละเอียด");
+    expect(presentationSource).toContain("ถ้าอยากให้ Upscale หรือปรับโทน");
   });
 
   it("extracts clean subject from prompt or direction summary without clarification history leak", () => {
@@ -22,7 +28,13 @@ describe("Image Completion Summary Format", () => {
 
   it("uses formatImageCompletionReply in both context-aware batch run and remote turn paths", () => {
     expect(source).toMatch(/runResult\.completedCount,\s*direction\.outputBriefs/);
-    expect(source).toMatch(/formatImageCompletionReply\(subject,\s*1,\s*briefs\)/);
+    expect(source).toMatch(/formatImageCompletionReply\(subject,\s*1,\s*briefs/);
+  });
+
+  it("renders aspect-true thumbs and structured summary in ChatThread", () => {
+    expect(threadSource).toContain("ChatResultImageThumb");
+    expect(threadSource).toContain("ImageResultSummaryBlock");
+    expect(threadSource).toContain("Thought");
   });
 
   it("expands AI Assistance tab to 2x width (476px)", () => {

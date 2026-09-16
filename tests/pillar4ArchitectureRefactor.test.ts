@@ -11,8 +11,8 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
     const lines = barSource.split("\n").length;
 
-    // Line count reduced from ~2,975 lines; allow modest growth for Orchestrator continuity wiring
-    expect(lines).toBeLessThan(1700);
+    // Line count reduced from ~2,975 lines; allow modest growth for image-result UX wiring
+    expect(lines).toBeLessThan(1750);
 
     // Integrates the 4 extracted submodules
     expect(barSource).toContain("useCanvasSelectionBridge");
@@ -35,7 +35,7 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
     expect(threadSource).toContain("export default function ChatThread");
     expect(threadSource).toContain("CollapsibleThought");
-    expect(threadSource).toContain("ความคิดของ AI (Thought)");
+    expect(threadSource).toContain(">Thought</span>");
     expect(threadSource).toContain("artshift-custom-scroll");
   });
 

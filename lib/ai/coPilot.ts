@@ -9,6 +9,7 @@ import {
   isImageGenerationPrompt,
   streamlinePromptForImageGen,
 } from "@/lib/ai/imageGeneration";
+import type { ImageResultSummary } from "@/lib/ai/imageResultPresentation";
 import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
@@ -83,6 +84,10 @@ export interface CoPilotMessageImage {
   fileId?: string;
   label?: string;
   prompt?: string;
+  /** Native pixel width of the generated image (for aspect-true thumbs). */
+  width?: number;
+  /** Native pixel height of the generated image. */
+  height?: number;
 }
 
 export interface CoPilotMessage {
@@ -102,6 +107,10 @@ export interface CoPilotMessage {
   requestedCount?: number;
   /** Locked brief/ratio (+ Shared Anchors / Variant axes) for chat continuity. */
   generationContext?: PriorImageGenerationContext;
+  /** Structured human summary for completed image generations. */
+  resultSummary?: ImageResultSummary;
+  /** Quality tier used for this generation (auto/low/medium/high/…). */
+  qualityLabel?: string;
 }
 
 export interface WorkspaceContext {
