@@ -4,6 +4,7 @@
  */
 
 import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
+import { resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
 import { loadDataURL } from "@/lib/engine/imageCache";
 import { GPT_IMAGE_2_MAX_COST_USD } from "./pricing";
 import { runVisualQualityGate } from "./visualQualityGate";
@@ -49,10 +50,11 @@ export function resolveImageGenerationDimensions(prompt: string): {
   width: number;
   height: number;
   aspectRatio: AiImageAspectRatio;
+  ratioClamped?: boolean;
 } {
   const value = prompt.toLocaleLowerCase();
 
-  // Check for explicit physical/custom dimensions e.g. "60x20cm", "60x20", "120x40", "30x10", "2048x688"
+  // Explicit physical/custom dimensions e.g. "60x20cm", "60x30", "120 x 40 cm", "2048x688"
   const dimMatch =
     /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/iu.exec(
       value,
@@ -61,43 +63,19 @@ export function resolveImageGenerationDimensions(prompt: string): {
     const w = parseFloat(dimMatch[1]);
     const h = parseFloat(dimMatch[2]);
     if (w > 0 && h > 0) {
-      const ratio = w / h;
-      if (ratio >= 2.4) {
-        // Wide panoramic banner (e.g. 60x20cm, 3:1) — native custom size, not 16:9
-        return { width: 2048, height: 688, aspectRatio: "2048x688" };
-      }
-      if (ratio >= 1.6) {
-        return { width: 1280, height: 720, aspectRatio: "16:9" };
-      }
-      if (ratio >= 1.2) {
-        return { width: 1024, height: 768, aspectRatio: "4:3" };
-      }
-      if (ratio <= 0.42) {
-        // Vertical skyscraper banner 1:3
-        return { width: 688, height: 2048, aspectRatio: "688x2048" };
-      }
-      if (ratio <= 0.65) {
-        return { width: 720, height: 1280, aspectRatio: "9:16" };
-      }
-      if (ratio <= 0.85) {
-        return { width: 768, height: 1024, aspectRatio: "3:4" };
-      }
-      return { width: 1024, height: 1024, aspectRatio: "1:1" };
+      const resolved = resolveGenerationSizeFromRatio(w, h);
+      return {
+        width: resolved.width,
+        height: resolved.height,
+        aspectRatio: resolved.aspectRatio,
+        ratioClamped: resolved.ratioClamped,
+      };
     }
   }
 
-  // Check for explicit square or numeric ratio patterns first
+  // Named / numeric ratios — standards stay named; any other A:B uses custom pixels.
   if (/(?:1\s*:\s*1|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(value)) {
     return { width: 1024, height: 1024, aspectRatio: "1:1" };
-  }
-  if (/(?:3\s*:\s*1|wide\s+panoramic|พาโนรามา)/iu.test(value)) {
-    return { width: 2048, height: 688, aspectRatio: "2048x688" };
-  }
-  if (/(?:1\s*:\s*3|vertical\s+skyscraper)/iu.test(value)) {
-    return { width: 688, height: 2048, aspectRatio: "688x2048" };
-  }
-  if (/(?:21\s*:\s*9)/u.test(value)) {
-    return { width: 2048, height: 688, aspectRatio: "2048x688" };
   }
   if (/(?:16\s*:\s*9)/u.test(value)) {
     return { width: 1280, height: 720, aspectRatio: "16:9" };
@@ -107,6 +85,42 @@ export function resolveImageGenerationDimensions(prompt: string): {
   }
   if (/(?:4\s*:\s*3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" };
   if (/(?:3\s*:\s*4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" };
+  if (/(?:3\s*:\s*2)/u.test(value)) return { width: 1536, height: 1024, aspectRatio: "3:2" };
+  if (/(?:2\s*:\s*3)/u.test(value)) return { width: 1024, height: 1536, aspectRatio: "2:3" };
+
+  const colonRatio = /(\d+)\s*:\s*(\d+)/u.exec(value);
+  if (colonRatio) {
+    const rw = Number(colonRatio[1]);
+    const rh = Number(colonRatio[2]);
+    if (rw > 0 && rh > 0) {
+      const resolved = resolveGenerationSizeFromRatio(rw, rh);
+      return {
+        width: resolved.width,
+        height: resolved.height,
+        aspectRatio: resolved.aspectRatio,
+        ratioClamped: resolved.ratioClamped,
+      };
+    }
+  }
+
+  if (/(?:wide\s+panoramic|พาโนรามา)/iu.test(value)) {
+    const resolved = resolveGenerationSizeFromRatio(3, 1);
+    return {
+      width: resolved.width,
+      height: resolved.height,
+      aspectRatio: resolved.aspectRatio,
+      ratioClamped: resolved.ratioClamped,
+    };
+  }
+  if (/(?:vertical\s+skyscraper)/iu.test(value)) {
+    const resolved = resolveGenerationSizeFromRatio(1, 3);
+    return {
+      width: resolved.width,
+      height: resolved.height,
+      aspectRatio: resolved.aspectRatio,
+      ratioClamped: resolved.ratioClamped,
+    };
+  }
   if (/(?:แนวตั้ง|\bvertical\b|portrait\s+(?:mode|orientation|ratio)|\bportrait\b(?!\s+of\b|\s+photo|\s+shot|\s+picture))/iu.test(value)) {
     return { width: 720, height: 1280, aspectRatio: "9:16" };
   }
@@ -116,22 +130,20 @@ export function resolveImageGenerationDimensions(prompt: string): {
   return { width: 1024, height: 1024, aspectRatio: "1:1" };
 }
 
-/** Map an arbitrary pixel size onto the nearest supported generation aspect bucket. */
+/** Map an arbitrary pixel size onto a legal native generation size (same ratio). */
 export function resolveDimensionsFromPixelSize(width: number, height: number): {
   width: number;
   height: number;
   aspectRatio: AiImageAspectRatio;
+  ratioClamped?: boolean;
 } {
-  const w = Math.max(1, width);
-  const h = Math.max(1, height);
-  const ratio = w / h;
-  if (ratio >= 2.4) return { width: 2048, height: 688, aspectRatio: "2048x688" };
-  if (ratio >= 1.6) return { width: 1280, height: 720, aspectRatio: "16:9" };
-  if (ratio >= 1.2) return { width: 1024, height: 768, aspectRatio: "4:3" };
-  if (ratio <= 0.42) return { width: 688, height: 2048, aspectRatio: "688x2048" };
-  if (ratio <= 0.65) return { width: 720, height: 1280, aspectRatio: "9:16" };
-  if (ratio <= 0.85) return { width: 768, height: 1024, aspectRatio: "3:4" };
-  return { width: 1024, height: 1024, aspectRatio: "1:1" };
+  const resolved = resolveGenerationSizeFromRatio(width, height);
+  return {
+    width: resolved.width,
+    height: resolved.height,
+    aspectRatio: resolved.aspectRatio,
+    ratioClamped: resolved.ratioClamped,
+  };
 }
 
 export interface ImageGenerationOptions {

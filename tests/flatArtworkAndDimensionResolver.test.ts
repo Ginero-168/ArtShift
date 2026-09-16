@@ -18,16 +18,22 @@ describe("Physical Dimension and Aspect Ratio Resolver", () => {
     expect(dimensions.aspectRatio).toBe("2048x688");
   });
 
-  it("resolves various 3:1 physical ratios (60x20, 120x40cm, 30x10)", () => {
-    expect(resolveImageGenerationDimensions("ป้าย 60x20").width).toBe(2048);
-    expect(resolveImageGenerationDimensions("ป้าย 60x20").height).toBe(688);
-    expect(resolveImageGenerationDimensions("ป้าย 60x20").aspectRatio).toBe("2048x688");
-
-    expect(resolveImageGenerationDimensions("ขนาด 120 x 40 cm").width).toBe(2048);
-    expect(resolveImageGenerationDimensions("ขนาด 120 x 40 cm").height).toBe(688);
-
-    expect(resolveImageGenerationDimensions("30x10cm").width).toBe(2048);
-    expect(resolveImageGenerationDimensions("30x10cm").height).toBe(688);
+  it("resolves various physical ratios to matching native pixels (not buckets)", () => {
+    expect(resolveImageGenerationDimensions("ป้าย 60x20")).toMatchObject({
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
+    });
+    expect(resolveImageGenerationDimensions("ขนาด 120 x 40 cm")).toMatchObject({
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
+    });
+    expect(resolveImageGenerationDimensions("ป้าย 60x30cm")).toMatchObject({
+      width: 2048,
+      height: 1024,
+      aspectRatio: "2048x1024",
+    });
   });
 
   it("resolves explicit 3:1 / พาโนรามา to native panoramic pixels", () => {
@@ -35,12 +41,11 @@ describe("Physical Dimension and Aspect Ratio Resolver", () => {
       width: 2048,
       height: 688,
       aspectRatio: "2048x688",
+      ratioClamped: false,
     });
-    expect(resolveImageGenerationDimensions("พาโนรามา wide panoramic")).toEqual({
-      width: 2048,
-      height: 688,
-      aspectRatio: "2048x688",
-    });
+    expect(resolveImageGenerationDimensions("พาโนรามา wide panoramic").aspectRatio).toBe(
+      "2048x688",
+    );
   });
 
   it("resolves standard ratios properly when explicitly specified", () => {
@@ -191,13 +196,9 @@ describe("Signage & Banner Design Knowledge Retrieval", () => {
 });
 
 describe("resolveDimensionsFromPixelSize", () => {
-  it("maps source pixel sizes onto nearest supported generation buckets", () => {
-    expect(resolveDimensionsFromPixelSize(1200, 1800)).toEqual({
-      width: 768,
-      height: 1024,
-      aspectRatio: "3:4",
-    });
-    expect(resolveDimensionsFromPixelSize(1920, 1080).aspectRatio).toBe("16:9");
-    expect(resolveDimensionsFromPixelSize(1024, 1024).aspectRatio).toBe("1:1");
+  it("maps source pixel sizes onto native generation sizes for the same ratio", () => {
+    expect(resolveDimensionsFromPixelSize(1200, 1800).aspectRatio).toBe("1360x2048");
+    expect(resolveDimensionsFromPixelSize(1920, 1080).aspectRatio).toBe("2048x1152");
+    expect(resolveDimensionsFromPixelSize(1024, 1024).aspectRatio).toBe("2048x2048");
   });
 });

@@ -426,6 +426,22 @@ describe("context-aware image task runner", () => {
       width: 600,
       height: 400,
     });
+    generateImageMock.mockResolvedValue({
+      dataUrl: "data:image/png;base64,AA==",
+      fileId: "generated-file",
+      width: 2048,
+      height: 1360,
+      seed: 0,
+      model: "openai/gpt-image-2",
+      prompt: plan.prompt,
+    });
+    preloadDataURLMock.mockResolvedValue({
+      dataURL: "data:image/png;base64,AA==",
+      fileId: "generated-file",
+      img: {} as HTMLImageElement,
+      width: 2048,
+      height: 1360,
+    });
     const selectedRef = {
       objectId: source.id,
       elementVersion: source.version,
@@ -727,54 +743,7 @@ describe("context-aware image task runner", () => {
     expect(reviewEvent?.status).toBe("unavailable");
   });
 
-  it("wraps generated image in an ArtShift Frame (Clipping Mask) when aspect ratio differs from target", async () => {
-    generateImageMock.mockResolvedValueOnce({
-      dataUrl: "data:image/png;base64,AA==",
-      fileId: "panoramic-full",
-      width: 2048,
-      height: 1152,
-      seed: 0,
-      model: "openai/gpt-image-2",
-      prompt: "Signboard 60x20cm Welearn",
-    });
-    preloadDataURLMock.mockResolvedValueOnce({
-      dataURL: "data:image/png;base64,AA==",
-      fileId: "panoramic-full",
-      img: {} as HTMLImageElement,
-      width: 2048,
-      height: 1152,
-    });
-
-    const panoramicTask = createAiTask({
-      ...plan,
-      id: "frame-mask-task",
-      requestedDimensions: {
-        width: 2048,
-        height: 688,
-        aspectRatio: "2048x688",
-      },
-    });
-
-    const result = await runContextAwareImageTask(panoramicTask, [], {
-      cloudConsent: true,
-    });
-
-    expect(result.dataUrl).toBe("data:image/png;base64,AA==");
-    expect(result.width).toBe(2048);
-    expect(result.height).toBe(1152);
-
-    const inserted = useEngine.getState().currentSlide()?.elements[0];
-    expect(inserted).toBeDefined();
-    expect(inserted?.type).toBe("frame");
-    if (inserted?.type === "frame") {
-      expect(inserted.shape).toBe("rect");
-      expect(inserted.imageFileId).toBe("panoramic-full");
-      // Aspect ratio of the frame container matches native 3:1 (~2048 / 688)
-      expect(inserted.width / inserted.height).toBeCloseTo(2048 / 688, 1);
-    }
-  });
-
-  it("skips ArtShift Frame when generated pixels already match native 3:1 target", async () => {
+  it("requests native custom aspect and commits an image (never Frame-crops)", async () => {
     generateImageMock.mockResolvedValueOnce({
       dataUrl: "data:image/png;base64,AA==",
       fileId: "native-3x1",
@@ -806,6 +775,14 @@ describe("context-aware image task runner", () => {
       cloudConsent: true,
     });
 
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        width: 2048,
+        height: 688,
+        aspectRatio: "2048x688",
+      }),
+      expect.any(AbortSignal),
+    );
     expect(result.width).toBe(2048);
     expect(result.height).toBe(688);
     const inserted = useEngine.getState().currentSlide()?.elements[0];

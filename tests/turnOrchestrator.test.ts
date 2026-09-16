@@ -250,7 +250,7 @@ describe("context-aware turn orchestrator", () => {
       search: { required: false, queries: [], sources: [] },
     });
 
-    expect(task.requestedDimensions).toEqual({
+    expect(task.requestedDimensions).toMatchObject({
       width: 2048,
       height: 688,
       aspectRatio: "2048x688",
@@ -322,7 +322,7 @@ describe("context-aware turn orchestrator", () => {
       search: { required: false, queries: [], sources: [] },
     });
 
-    expect(task.requestedDimensions).toEqual({
+    expect(task.requestedDimensions).toMatchObject({
       width: 2048,
       height: 688,
       aspectRatio: "2048x688",
@@ -464,10 +464,10 @@ describe("context-aware turn orchestrator", () => {
       search: { required: false, queries: [], sources: [] },
     });
 
-    expect(task.requestedDimensions).toEqual({
-      width: 768,
-      height: 1024,
-      aspectRatio: "3:4",
+    expect(task.requestedDimensions).toMatchObject({
+      width: 1360,
+      height: 2048,
+      aspectRatio: "1360x2048",
     });
   });
 

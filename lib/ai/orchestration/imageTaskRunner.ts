@@ -10,7 +10,7 @@ import {
 } from "@/lib/ai/imageGeneration";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport } from "@/lib/engine/canvasViewport";
-import { createFrame, createImage } from "@/lib/engine/factory";
+import { createImage } from "@/lib/engine/factory";
 import {
   getGenerationPreviewBesideSource,
   getGenerationPreviewBounds,
@@ -29,7 +29,6 @@ import type {
   CreativeOutputReview,
   CriterionEvidenceStatus,
 } from "./creativeDirector";
-import { autoCropImageToTargetRatio } from "./imageAutoCrop";
 import { deriveGeneratedImageName } from "./imageNaming";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
@@ -276,22 +275,9 @@ export async function runContextAwareImageTask(
           );
           throwIfAborted(executionSignal);
 
-          // Determine whether non-destructive ArtShift Frame masking (Clipping Mask) is needed
-          const targetRatio = dimensions.width / Math.max(1, dimensions.height);
-          const generatedRatio =
-            generated.width / Math.max(1, generated.height);
-          const needsFrameMask = Math.abs(targetRatio - generatedRatio) > 0.04;
-          if (needsFrameMask) {
-            context.update({
-              phase: "analyzing",
-              progress: 0.35,
-              message: `เตรียมใส่ ArtShift Frame (Clipping Mask) สัดส่วน ${dimensions.width}×${dimensions.height} โดยคงรูปต้นฉบับเต็ม…`,
-            });
-          }
-
-          const gateAspectRatio = needsFrameMask
-            ? `${dimensions.width}:${dimensions.height}`
-            : dimensions.aspectRatio;
+          // Native generation only — never Frame-crop to force aspect.
+          // Requested size is sent upstream as custom WIDTHxHEIGHT / named ratio.
+          const gateAspectRatio = dimensions.aspectRatio;
 
           const technicalGate = runVisualQualityGate({
             dataUrl: generated.dataUrl,
@@ -310,8 +296,8 @@ export async function runContextAwareImageTask(
           }
           const briefGate = runBriefQualityGate({
             prompt: task.prompt,
-            outputWidth: needsFrameMask ? dimensions.width : generated.width,
-            outputHeight: needsFrameMask ? dimensions.height : generated.height,
+            outputWidth: generated.width,
+            outputHeight: generated.height,
             outputCount: 1,
             requestedAspectRatio: gateAspectRatio,
             referenceCount: task.selectedImages.length,
@@ -378,8 +364,8 @@ export async function runContextAwareImageTask(
             });
           }
           const semanticGate = runGeneratedImageQualityGate({
-            outputWidth: needsFrameMask ? dimensions.width : generated.width,
-            outputHeight: needsFrameMask ? dimensions.height : generated.height,
+            outputWidth: generated.width,
+            outputHeight: generated.height,
             requestedAspectRatio: gateAspectRatio,
             requiredSubjects: task.requiredSubjects,
             requiredText: task.requiredText,
@@ -525,9 +511,7 @@ export async function runContextAwareImageTask(
               slideWidth: slide.width,
               slideHeight: slide.height,
             },
-            needsFrameMask
-              ? dimensions
-              : { width: preloaded.width, height: preloaded.height },
+            { width: preloaded.width, height: preloaded.height },
           );
           const computedBounds = computeMultiImagePlacement(
             baseBounds,
@@ -600,27 +584,17 @@ export async function runContextAwareImageTask(
             task.summary,
             task.prompt,
           );
-          const element = needsFrameMask
-            ? createFrame({
-                x: finalBounds.x,
-                y: finalBounds.y,
-                width: finalBounds.width,
-                height: finalBounds.height,
-                name: `${elementName} (Frame)`,
-                shape: "rect",
-                imageFileId: preloaded.fileId,
-              })
-            : createImage({
-                x: finalBounds.x,
-                y: finalBounds.y,
-                width: finalBounds.width,
-                height: finalBounds.height,
-                fileId: preloaded.fileId,
-                naturalWidth: preloaded.width,
-                naturalHeight: preloaded.height,
-                name: elementName,
-                sourceName: elementName,
-              });
+          const element = createImage({
+            x: finalBounds.x,
+            y: finalBounds.y,
+            width: finalBounds.width,
+            height: finalBounds.height,
+            fileId: preloaded.fileId,
+            naturalWidth: preloaded.width,
+            naturalHeight: preloaded.height,
+            name: elementName,
+            sourceName: elementName,
+          });
           state.addElement(element, `AI task ${task.id} generate image`);
           const afterCommit = useEngine.getState();
           const inserted = afterCommit

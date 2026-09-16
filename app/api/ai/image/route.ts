@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { cleanImagePrompt, enrichPrompt } from "@/lib/ai/imageGeneration";
 import { GPT_IMAGE_2_EXECUTION_TIMEOUT_MS } from "@/lib/ai/runtimeLimits";
 import type { AiImageGenerateInput, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
+import { isAllowedImageAspectRatio } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
@@ -183,38 +184,12 @@ export async function POST(req: NextRequest) {
 }
 
 function boundedAspectRatio(value: unknown): AiImageGenerateInput["aspectRatio"] {
-  const allowed: AiImageGenerateInput["aspectRatio"][] = [
-    "1:1",
-    "3:2",
-    "2:3",
-    "4:3",
-    "3:4",
-    "16:9",
-    "9:16",
-    "3:1",
-    "1:3",
-    "auto",
-    "1024x1024",
-    "1536x1024",
-    "1024x1536",
-    "1536x1152",
-    "1152x1536",
-    "2048x2048",
-    "2048x1152",
-    "1152x2048",
-    "2048x688",
-    "688x2048",
-    "3840x2160",
-    "2160x3840",
-  ];
-  return typeof value === "string" && allowed.includes(value as AiImageGenerateInput["aspectRatio"])
-    ? (value as AiImageGenerateInput["aspectRatio"])
-    : undefined;
+  return typeof value === "string" && isAllowedImageAspectRatio(value) ? value : undefined;
 }
 
 function boundedDimension(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(2_048, Math.max(256, Math.round(value)))
+    ? Math.min(3_840, Math.max(256, Math.round(value)))
     : 1_024;
 }
 
