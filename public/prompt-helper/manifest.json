@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-16T01:55:56.512Z",
+  "thumbs": {
+    "3d": {
+      "src": "/prompt-helper/thumbs/3d.jpg"
+    },
+    "abstract": {
+      "src": "/prompt-helper/thumbs/abstract.jpg"
+    },
+    "cinematic": {
+      "src": "/prompt-helper/thumbs/cinematic.jpg"
+    },
+    "closeup": {
+      "src": "/prompt-helper/thumbs/closeup.jpg"
+    },
+    "dark": {
+      "src": "/prompt-helper/thumbs/dark.jpg"
+    },
+    "density_airy": {
+      "src": "/prompt-helper/thumbs/density_airy.jpg"
+    },
+    "density_centered": {
+      "src": "/prompt-helper/thumbs/density_centered.jpg"
+    },
+    "density_dense": {
+      "src": "/prompt-helper/thumbs/density_dense.jpg"
+    },
+    "density_left": {
+      "src": "/prompt-helper/thumbs/density_left.jpg"
+    },
+    "earth": {
+      "src": "/prompt-helper/thumbs/earth.jpg"
+    },
+    "flat": {
+      "src": "/prompt-helper/thumbs/flat.jpg"
+    },
+    "front": {
+      "src": "/prompt-helper/thumbs/front.jpg"
+    },
+    "isometric": {
+      "src": "/prompt-helper/thumbs/isometric.jpg"
+    },
+    "mood_drama": {
+      "src": "/prompt-helper/thumbs/mood_drama.jpg"
+    },
+    "mood_energy": {
+      "src": "/prompt-helper/thumbs/mood_energy.jpg"
+    },
+    "mood_graphic": {
+      "src": "/prompt-helper/thumbs/mood_graphic.jpg"
+    },
+    "mood_minimal": {
+      "src": "/prompt-helper/thumbs/mood_minimal.jpg"
+    },
+    "mood_premium": {
+      "src": "/prompt-helper/thumbs/mood_premium.jpg"
+    },
+    "nature": {
+      "src": "/prompt-helper/thumbs/nature.jpg"
+    },
+    "neon": {
+      "src": "/prompt-helper/thumbs/neon.jpg"
+    },
+    "painting": {
+      "src": "/prompt-helper/thumbs/painting.jpg"
+    },
+    "pastel": {
+      "src": "/prompt-helper/thumbs/pastel.jpg"
+    },
+    "photorealistic": {
+      "src": "/prompt-helper/thumbs/photorealistic.jpg"
+    },
+    "room": {
+      "src": "/prompt-helper/thumbs/room.jpg"
+    },
+    "sig_bold": {
+      "src": "/prompt-helper/thumbs/sig_bold.jpg"
+    },
+    "sig_corner": {
+      "src": "/prompt-helper/thumbs/sig_corner.jpg"
+    },
+    "sig_frame": {
+      "src": "/prompt-helper/thumbs/sig_frame.jpg"
+    },
+    "sig_stroke": {
+      "src": "/prompt-helper/thumbs/sig_stroke.jpg"
+    },
+    "struct_flat": {
+      "src": "/prompt-helper/thumbs/struct_flat.jpg"
+    },
+    "struct_frame": {
+      "src": "/prompt-helper/thumbs/struct_frame.jpg"
+    },
+    "struct_gradient": {
+      "src": "/prompt-helper/thumbs/struct_gradient.jpg"
+    },
+    "struct_split": {
+      "src": "/prompt-helper/thumbs/struct_split.jpg"
+    },
+    "studio": {
+      "src": "/prompt-helper/thumbs/studio.jpg"
+    },
+    "vibrant": {
+      "src": "/prompt-helper/thumbs/vibrant.jpg"
+    }
+  }
+}

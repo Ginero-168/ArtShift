@@ -18,6 +18,7 @@ import {
   type OptionPreview,
   type SharedAnchorHint,
 } from "./promptOptionCatalog";
+import type { PromptHelperVariantPlan } from "./promptHelperVariantPlan";
 
 export interface RefinementOption {
   id: string;
@@ -488,3 +489,113 @@ export function buildRefinementOrchestratorLocks(
     variantSelections,
   };
 }
+
+/**
+ * Apply a Gemini Level-2 plan onto a baseline refinement card.
+ * Unknown axes/options are ignored; empty plans leave the card unchanged.
+ */
+export function applyPromptHelperVariantPlan(
+  data: PromptRefinementCardData,
+  plan: PromptHelperVariantPlan | null | undefined,
+): PromptRefinementCardData {
+  if (!plan?.axes?.length) return data;
+
+  const optionPool = new Map<string, RefinementOption>();
+  for (const dim of data.dimensions) {
+    for (const opt of dim.options) optionPool.set(opt.id, opt);
+  }
+  // Also allow brand catalog options when Gemini prefers brand axes on a generic brief.
+  if (plan.preferBrandAxes || data.mode === "brand-variant") {
+    for (const dim of createBrandVariantDimensions()) {
+      for (const opt of dim.options) {
+        if (!optionPool.has(opt.id)) {
+          optionPool.set(opt.id, withPreview({
+            id: opt.id,
+            label: opt.label,
+            character: opt.character,
+            modifier: opt.modifier,
+            preview: opt.preview,
+          }));
+        }
+      }
+    }
+  }
+
+  const titleByAxis: Record<string, { title: string; hint?: string }> = {
+    mood: { title: "คาแรคเตอร์", hint: "เลือกทิศทางความรู้สึก — แต่ละขั้วคนละบุคลิก" },
+    structure: { title: "โครงสร้างพื้น", hint: "การจัดวางสีพื้นหลัง" },
+    signature: { title: "ลายเซ็นกราฟิก", hint: "บทบาทขององค์ประกอบซิกเนเจอร์" },
+    density: { title: "ความหนาแน่น", hint: "จัดวางแน่นหรือโล่ง" },
+    color: { title: "โทนสี", hint: "ขั้วสีของภาพ" },
+    background: { title: "พื้นหลัง", hint: "ฉากที่รองรับตัวแบบ" },
+    camera: { title: "มุมกล้อง", hint: "มุมมองและการจัดเฟรม" },
+    style: { title: "สไตล์ภาพ", hint: "ภาษาภาพหลัก" },
+    scenery: { title: "บรรยากาศ", hint: "ฉากทิวทัศน์" },
+  };
+
+  const existingMeta = new Map(
+    data.dimensions.map((dim) => [dim.id, { title: dim.title, hint: dim.hint }]),
+  );
+
+  const nextDimensions: RefinementDimension[] = [];
+  for (const axis of plan.axes) {
+    const options = axis.optionIds
+      .map((id) => optionPool.get(id))
+      .filter((opt): opt is RefinementOption => Boolean(opt))
+      .map(withPreview);
+    if (options.length === 0) continue;
+    const meta = existingMeta.get(axis.id) ?? titleByAxis[axis.id] ?? {
+      title: axis.id,
+      hint: undefined,
+    };
+    nextDimensions.push({
+      id: axis.id,
+      title: meta.title,
+      hint: meta.hint,
+      options,
+    });
+  }
+
+  if (nextDimensions.length === 0) return data;
+
+  const mode: RefinementMode =
+    plan.preferBrandAxes || data.mode === "brand-variant" ? "brand-variant" : data.mode;
+
+  return {
+    ...data,
+    mode,
+    subjectType: mode === "brand-variant" ? "brand" : data.subjectType,
+    dimensions: nextDimensions,
+    categories: nextDimensions,
+    selectedOptions: {},
+  };
+}
+
+/** Flattened catalog snapshot for Gemini planning prompts. */
+export function listPromptHelperCatalogAxes(): {
+  axisId: string;
+  options: { id: string; label: string }[];
+}[] {
+  const brand = createBrandVariantDimensions().map((dim) => ({
+    axisId: dim.id,
+    options: dim.options.map((o) => ({ id: o.id, label: o.label })),
+  }));
+  const generic = createGenericRefinementDimensions().map((dim) => ({
+    axisId: dim.id,
+    options: dim.options.map((o) => ({ id: o.id, label: o.label })),
+  }));
+  const byId = new Map<string, { axisId: string; options: { id: string; label: string }[] }>();
+  for (const axis of [...generic, ...brand]) {
+    const existing = byId.get(axis.axisId);
+    if (!existing) {
+      byId.set(axis.axisId, axis);
+      continue;
+    }
+    const seen = new Set(existing.options.map((o) => o.id));
+    for (const opt of axis.options) {
+      if (!seen.has(opt.id)) existing.options.push(opt);
+    }
+  }
+  return [...byId.values()];
+}
+

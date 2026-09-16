@@ -1,8 +1,9 @@
 /**
  * Visual option catalog for Prompt Helper.
- * Small, instant thumbnails (SVG / CSS) — no network, no AI generation.
- * Used so users pick a direction by eye, not by reading modifiers alone.
+ * Prefers Replicate-generated thumbnails stored on the VPS; falls back to SVG/swatch chips.
  */
+
+import { promptHelperThumbSrc } from "./promptHelperThumbManifest";
 
 export type OptionPreview =
   | {
@@ -15,6 +16,12 @@ export type OptionPreview =
       kind: "svg";
       /** Compact inline SVG body (viewBox 0 0 64 40) */
       svg: string;
+    }
+  | {
+      kind: "image";
+      /** VPS-hosted thumbnail under /prompt-helper/thumbs */
+      src: string;
+      alt?: string;
     };
 
 export type CatalogOption = {
@@ -395,6 +402,10 @@ export const OPTION_PREVIEW_LIBRARY: Record<string, OptionPreview> = {
 };
 
 export function resolveOptionPreview(optionId: string): OptionPreview | undefined {
+  const src = promptHelperThumbSrc(optionId);
+  if (src) {
+    return { kind: "image", src, alt: optionId };
+  }
   return OPTION_PREVIEW_LIBRARY[optionId];
 }
 

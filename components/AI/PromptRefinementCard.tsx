@@ -499,7 +499,15 @@ function ThumbnailOption({
         boxShadow: selected ? "0 0 0 1px rgba(2,132,199,0.25)" : "none",
       }}
     >
-      <OptionPreviewSurface preview={option.preview!} selected={selected} />
+      <OptionPreviewSurface
+        preview={
+          option.preview ?? {
+            kind: "swatch",
+            colors: ["#e2e8f0", "#f8fafc"],
+          }
+        }
+        selected={selected}
+      />
       <div
         style={{
           fontSize: 10,
@@ -540,15 +548,40 @@ function OptionPreviewSurface({
   preview: OptionPreview;
   selected: boolean;
 }) {
+  const frameStyle = {
+    height: 40,
+    borderRadius: 5,
+    overflow: "hidden" as const,
+    border: selected ? "1px solid #7dd3fc" : "1px solid rgba(15,23,42,0.06)",
+    lineHeight: 0,
+    background: "#f8fafc",
+  };
+
+  if (preview.kind === "image") {
+    return (
+      <div style={frameStyle}>
+        {/* Catalog thumbs are static VPS assets under /prompt-helper/thumbs */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={preview.src}
+          alt={preview.alt || ""}
+          width={70}
+          height={40}
+          style={{ width: "100%", height: 40, objectFit: "cover", display: "block" }}
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    );
+  }
+
   if (preview.kind === "swatch") {
     const gradient = `linear-gradient(135deg, ${preview.colors.join(", ")})`;
     return (
       <div
         style={{
-          height: 40,
-          borderRadius: 5,
+          ...frameStyle,
           background: gradient,
-          border: selected ? "1px solid #7dd3fc" : "1px solid rgba(15,23,42,0.06)",
         }}
       />
     );
@@ -556,13 +589,7 @@ function OptionPreviewSurface({
 
   return (
     <div
-      style={{
-        height: 40,
-        borderRadius: 5,
-        overflow: "hidden",
-        border: selected ? "1px solid #7dd3fc" : "1px solid rgba(15,23,42,0.06)",
-        lineHeight: 0,
-      }}
+      style={frameStyle}
       // Catalog SVGs are authored in-repo (no user HTML).
       dangerouslySetInnerHTML={{ __html: preview.svg }}
     />

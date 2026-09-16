@@ -443,14 +443,31 @@ export default function AICoPilotBar() {
     }
   };
 
-  const handleTogglePromptHelper = () => {
+  const handleTogglePromptHelper = async () => {
     if (promptRefinementData) {
+      pendingRefinementLocksRef.current = null;
       setPromptRefinementData(null);
-    } else {
-      const currentPrompt = (editorRef.current?.getValue() ?? input).trim();
-      const basePrompt = currentPrompt || "สร้างภาพ";
-      const refinement = createPromptRefinement(basePrompt);
-      setPromptRefinementData(refinement);
+      return;
+    }
+    const currentPrompt = (editorRef.current?.getValue() ?? input).trim();
+    const basePrompt = currentPrompt || "สร้างภาพ";
+    const baseline = createPromptRefinement(basePrompt);
+    setPromptRefinementData(baseline);
+    try {
+      const res = await fetch("/api/ai/prompt-helper/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: basePrompt, cloudConsent: true }),
+      });
+      if (!res.ok) return;
+      const json = (await res.json().catch(() => null)) as {
+        card?: ReturnType<typeof createPromptRefinement>;
+      } | null;
+      if (json?.card) {
+        setPromptRefinementData(json.card);
+      }
+    } catch {
+      // Baseline card already shown.
     }
   };
 
