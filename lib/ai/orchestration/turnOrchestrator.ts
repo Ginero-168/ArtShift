@@ -1,4 +1,4 @@
-import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
+import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
@@ -125,7 +125,7 @@ export function resolveTaskDimensionsWithContext(
     return followUpDims as {
       width: number;
       height: number;
-      aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+      aspectRatio: AiImageAspectRatio;
     };
   }
 

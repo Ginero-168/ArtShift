@@ -191,6 +191,8 @@ function boundedAspectRatio(value: unknown): AiImageGenerateInput["aspectRatio"]
     "3:4",
     "16:9",
     "9:16",
+    "3:1",
+    "1:3",
     "auto",
     "1024x1024",
     "1536x1024",
@@ -200,6 +202,8 @@ function boundedAspectRatio(value: unknown): AiImageGenerateInput["aspectRatio"]
     "2048x2048",
     "2048x1152",
     "1152x2048",
+    "2048x688",
+    "688x2048",
     "3840x2160",
     "2160x3840",
   ];

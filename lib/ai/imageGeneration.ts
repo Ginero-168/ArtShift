@@ -29,6 +29,8 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
   { id: "9:16", label: "Story/Reel", ratio: "9:16", width: 720, height: 1280, icon: "▯" },
   { id: "4:3", label: "Classic", ratio: "4:3", width: 1024, height: 768, icon: "▱" },
   { id: "3:4", label: "Portrait", ratio: "3:4", width: 768, height: 1024, icon: "▯" },
+  { id: "3:1", label: "Banner 3:1", ratio: "3:1", width: 2048, height: 688, icon: "▬" },
+  { id: "1:3", label: "Skyscraper 1:3", ratio: "1:3", width: 688, height: 2048, icon: "▮" },
 ];
 
 export function hasExplicitDimensionsInText(text?: string): boolean {
@@ -39,14 +41,18 @@ export function hasExplicitDimensionsInText(text?: string): boolean {
       val,
     ) ||
     /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|1\s*:\s*1)\b/u.test(val) ||
-    /(?:60x20|120x40|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|landscape|portrait|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(val)
+    /(?:60x20|120x40|2048x688|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|landscape|portrait|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(val)
   );
 }
 
-export function resolveImageGenerationDimensions(prompt: string) {
+export function resolveImageGenerationDimensions(prompt: string): {
+  width: number;
+  height: number;
+  aspectRatio: AiImageAspectRatio;
+} {
   const value = prompt.toLocaleLowerCase();
 
-  // Check for explicit physical/custom dimensions e.g. "60x20cm", "60x20", "120x40", "30x10", "1536x512"
+  // Check for explicit physical/custom dimensions e.g. "60x20cm", "60x20", "120x40", "30x10", "2048x688"
   const dimMatch =
     /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/iu.exec(
       value,
@@ -57,70 +63,72 @@ export function resolveImageGenerationDimensions(prompt: string) {
     if (w > 0 && h > 0) {
       const ratio = w / h;
       if (ratio >= 2.4) {
-        // Wide panoramic banner (e.g. 60x20cm, 3:1)
-        return { width: 1536, height: 512, aspectRatio: "16:9" as const };
+        // Wide panoramic banner (e.g. 60x20cm, 3:1) — native custom size, not 16:9
+        return { width: 2048, height: 688, aspectRatio: "2048x688" };
       }
       if (ratio >= 1.6) {
-        return { width: 1280, height: 720, aspectRatio: "16:9" as const };
+        return { width: 1280, height: 720, aspectRatio: "16:9" };
       }
       if (ratio >= 1.2) {
-        return { width: 1024, height: 768, aspectRatio: "4:3" as const };
+        return { width: 1024, height: 768, aspectRatio: "4:3" };
       }
       if (ratio <= 0.42) {
         // Vertical skyscraper banner 1:3
-        return { width: 512, height: 1536, aspectRatio: "9:16" as const };
+        return { width: 688, height: 2048, aspectRatio: "688x2048" };
       }
       if (ratio <= 0.65) {
-        return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+        return { width: 720, height: 1280, aspectRatio: "9:16" };
       }
       if (ratio <= 0.85) {
-        return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+        return { width: 768, height: 1024, aspectRatio: "3:4" };
       }
-      return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
+      return { width: 1024, height: 1024, aspectRatio: "1:1" };
     }
   }
 
   // Check for explicit square or numeric ratio patterns first
   if (/(?:1\s*:\s*1|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(value)) {
-    return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
+    return { width: 1024, height: 1024, aspectRatio: "1:1" };
   }
   if (/(?:3\s*:\s*1|wide\s+panoramic|พาโนรามา)/iu.test(value)) {
-    return { width: 1536, height: 512, aspectRatio: "16:9" as const };
+    return { width: 2048, height: 688, aspectRatio: "2048x688" };
   }
   if (/(?:1\s*:\s*3|vertical\s+skyscraper)/iu.test(value)) {
-    return { width: 512, height: 1536, aspectRatio: "9:16" as const };
+    return { width: 688, height: 2048, aspectRatio: "688x2048" };
   }
   if (/(?:21\s*:\s*9)/u.test(value)) {
-    return { width: 1536, height: 512, aspectRatio: "16:9" as const };
+    return { width: 2048, height: 688, aspectRatio: "2048x688" };
   }
   if (/(?:16\s*:\s*9)/u.test(value)) {
-    return { width: 1280, height: 720, aspectRatio: "16:9" as const };
+    return { width: 1280, height: 720, aspectRatio: "16:9" };
   }
   if (/(?:9\s*:\s*16)/u.test(value)) {
-    return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+    return { width: 720, height: 1280, aspectRatio: "9:16" };
   }
-  if (/(?:4\s*:\s*3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" as const };
-  if (/(?:3\s*:\s*4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" as const };
+  if (/(?:4\s*:\s*3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" };
+  if (/(?:3\s*:\s*4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" };
   if (/(?:แนวตั้ง|\bvertical\b|portrait\s+(?:mode|orientation|ratio)|\bportrait\b(?!\s+of\b|\s+photo|\s+shot|\s+picture))/iu.test(value)) {
-    return { width: 720, height: 1280, aspectRatio: "9:16" as const };
+    return { width: 720, height: 1280, aspectRatio: "9:16" };
   }
   if (/(?:แนวนอน|\bhorizontal\b|landscape)/iu.test(value)) {
-    return { width: 1280, height: 720, aspectRatio: "16:9" as const };
+    return { width: 1280, height: 720, aspectRatio: "16:9" };
   }
-  return { width: 1024, height: 1024, aspectRatio: "1:1" as const };
+  return { width: 1024, height: 1024, aspectRatio: "1:1" };
 }
 
 /** Map an arbitrary pixel size onto the nearest supported generation aspect bucket. */
 export function resolveDimensionsFromPixelSize(width: number, height: number): {
   width: number;
   height: number;
-  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+  aspectRatio: AiImageAspectRatio;
 } {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
   const ratio = w / h;
+  if (ratio >= 2.4) return { width: 2048, height: 688, aspectRatio: "2048x688" };
   if (ratio >= 1.6) return { width: 1280, height: 720, aspectRatio: "16:9" };
   if (ratio >= 1.2) return { width: 1024, height: 768, aspectRatio: "4:3" };
+  if (ratio <= 0.42) return { width: 688, height: 2048, aspectRatio: "688x2048" };
   if (ratio <= 0.65) return { width: 720, height: 1280, aspectRatio: "9:16" };
   if (ratio <= 0.85) return { width: 768, height: 1024, aspectRatio: "3:4" };
   return { width: 1024, height: 1024, aspectRatio: "1:1" };
@@ -370,7 +378,7 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
   if (/manifest|คิดมาก/i.test(rawPrompt)) {
     if (isSignage) {
       visualComponents.push(
-        'Manifest book aesthetic theme, dynamic asymmetric wide panoramic banner composition (rule-of-thirds) avoiding dead-center bullseye symmetry, radiant golden and red circular light halo with volumetric light rays and floating stardust particles, luxurious dual-tone background seamlessly transitioning from deep obsidian matte black on one side to rich crimson red glowing aura on the other, rich editorial typography layout with clear hierarchy: bold prominent category title "หมวดจิตวิทยาและการพัฒนาตนเอง : MANIFEST", compelling book taglines "The Magic of Affirmation" and "เมื่อคำพูดและความคิดของคุณ กำหนดอนาคตได้", author credit "คิดมาก (The Manifest Master)", elegant metallic gold divider lines, sophisticated bookstore shelf category header artwork, strict 3:1 horizontal banner containment: absolute zero text in top 25% or bottom 25% margins, all text and headlines strictly confined within the vertical center zone (between 30% and 70% height), no vertical text stacking exceeding 2 lines, no text floating above or below the circular halo',
+        'Manifest book aesthetic theme, dynamic asymmetric wide panoramic banner composition (rule-of-thirds) avoiding dead-center bullseye symmetry, radiant golden and red circular light halo with volumetric light rays and floating stardust particles, luxurious dual-tone background seamlessly transitioning from deep obsidian matte black on one side to rich crimson red glowing aura on the other, rich editorial typography layout with clear hierarchy: bold prominent category title "หมวดจิตวิทยาและการพัฒนาตนเอง : MANIFEST", compelling book taglines "The Magic of Affirmation" and "เมื่อคำพูดและความคิดของคุณ กำหนดอนาคตได้", author credit "คิดมาก (The Manifest Master)", elegant metallic gold divider lines, sophisticated bookstore shelf category header artwork, strict native 3:1 (2048x688) horizontal banner containment: compose for the full ultra-wide frame, keep modest top/bottom breathing room for Thai tone marks, prefer horizontal multi-column layout, no vertical text stacking exceeding 2 lines, no text floating above or below the circular halo',
       );
     } else {
       visualComponents.push(

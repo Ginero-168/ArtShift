@@ -3,6 +3,11 @@
  * so the UI shell stays thinner and reply copy stays unit-testable.
  */
 
+import {
+  extractPhysicalPrintSizeCm,
+  formatPrintUpscaleHint,
+} from "@/lib/ai/printUpscaleGuidance";
+
 export function stripComposerMentions(subject: string): string {
   return subject
     .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
@@ -16,11 +21,19 @@ export function stripOutputBriefPrefix(brief: string): string {
     .trim();
 }
 
+export type ImageCompletionReplyOptions = {
+  /** Pixel width of generated output — used for print DPI hint when prompt has cm size. */
+  outputWidthPx?: number;
+  /** Extra text (prompt / brief) to scan for physical print sizes like 60x20cm. */
+  printSizeSource?: string;
+};
+
 export function formatImageCompletionReply(
   subject: string,
   count: number,
   outputBriefs?: readonly string[],
   isEdit = false,
+  options?: ImageCompletionReplyOptions,
 ): string {
   const cleanSubject = stripComposerMentions(subject);
   const firstBrief = outputBriefs?.[0] ? stripOutputBriefPrefix(outputBriefs[0]) : undefined;
@@ -43,6 +56,16 @@ export function formatImageCompletionReply(
       lines.push(`• รูปที่ ${i}: ${cleanSubject || "ภาพ"} แบบที่ ${i}`);
     }
   }
+
+  const printSource = [options?.printSizeSource, subject, ...(outputBriefs ?? [])]
+    .filter(Boolean)
+    .join("\n");
+  const printSize = extractPhysicalPrintSizeCm(printSource);
+  if (printSize && !isEdit) {
+    const widthPx = options?.outputWidthPx && options.outputWidthPx > 0 ? options.outputWidthPx : 2048;
+    lines.push("", formatPrintUpscaleHint(printSize, widthPx));
+  }
+
   lines.push("", "ถ้าอยากให้ปรับสไตล์ ท่าทาง หรือสีสันเพิ่มเติม บอกได้เลยนะคะ");
   return lines.join("\n");
 }

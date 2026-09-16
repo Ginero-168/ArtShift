@@ -731,8 +731,8 @@ describe("context-aware image task runner", () => {
     generateImageMock.mockResolvedValueOnce({
       dataUrl: "data:image/png;base64,AA==",
       fileId: "panoramic-full",
-      width: 1536,
-      height: 864,
+      width: 2048,
+      height: 1152,
       seed: 0,
       model: "openai/gpt-image-2",
       prompt: "Signboard 60x20cm Welearn",
@@ -741,17 +741,17 @@ describe("context-aware image task runner", () => {
       dataURL: "data:image/png;base64,AA==",
       fileId: "panoramic-full",
       img: {} as HTMLImageElement,
-      width: 1536,
-      height: 864,
+      width: 2048,
+      height: 1152,
     });
 
     const panoramicTask = createAiTask({
       ...plan,
       id: "frame-mask-task",
       requestedDimensions: {
-        width: 1536,
-        height: 512,
-        aspectRatio: "16:9",
+        width: 2048,
+        height: 688,
+        aspectRatio: "2048x688",
       },
     });
 
@@ -760,8 +760,8 @@ describe("context-aware image task runner", () => {
     });
 
     expect(result.dataUrl).toBe("data:image/png;base64,AA==");
-    expect(result.width).toBe(1536);
-    expect(result.height).toBe(864);
+    expect(result.width).toBe(2048);
+    expect(result.height).toBe(1152);
 
     const inserted = useEngine.getState().currentSlide()?.elements[0];
     expect(inserted).toBeDefined();
@@ -769,8 +769,46 @@ describe("context-aware image task runner", () => {
     if (inserted?.type === "frame") {
       expect(inserted.shape).toBe("rect");
       expect(inserted.imageFileId).toBe("panoramic-full");
-      // Aspect ratio of the frame container matches 3:1 (1536 / 512)
-      expect(inserted.width / inserted.height).toBeCloseTo(3.0, 1);
+      // Aspect ratio of the frame container matches native 3:1 (~2048 / 688)
+      expect(inserted.width / inserted.height).toBeCloseTo(2048 / 688, 1);
     }
+  });
+
+  it("skips ArtShift Frame when generated pixels already match native 3:1 target", async () => {
+    generateImageMock.mockResolvedValueOnce({
+      dataUrl: "data:image/png;base64,AA==",
+      fileId: "native-3x1",
+      width: 2048,
+      height: 688,
+      seed: 0,
+      model: "openai/gpt-image-2.5-sunburst",
+      prompt: "Signboard 60x20cm Welearn native 3:1",
+    });
+    preloadDataURLMock.mockResolvedValueOnce({
+      dataURL: "data:image/png;base64,AA==",
+      fileId: "native-3x1",
+      img: {} as HTMLImageElement,
+      width: 2048,
+      height: 688,
+    });
+
+    const nativeTask = createAiTask({
+      ...plan,
+      id: "native-3x1-task",
+      requestedDimensions: {
+        width: 2048,
+        height: 688,
+        aspectRatio: "2048x688",
+      },
+    });
+
+    const result = await runContextAwareImageTask(nativeTask, [], {
+      cloudConsent: true,
+    });
+
+    expect(result.width).toBe(2048);
+    expect(result.height).toBe(688);
+    const inserted = useEngine.getState().currentSlide()?.elements[0];
+    expect(inserted?.type).toBe("image");
   });
 });

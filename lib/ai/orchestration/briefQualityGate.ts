@@ -67,10 +67,17 @@ export function runBriefQualityGate(input: BriefQualityGateInput): BriefQualityG
 
 function aspectRatioMatches(width: number, height: number, requested?: string): boolean {
   if (!requested || requested === "auto") return true;
-  const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/u.exec(requested);
-  if (!match) return true;
-  const expected = Number(match[1]) / Number(match[2]);
-  return Math.abs(width / Math.max(1, height) - expected) <= 0.02;
+  const colon = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/u.exec(requested);
+  if (colon) {
+    const expected = Number(colon[1]) / Number(colon[2]);
+    return Math.abs(width / Math.max(1, height) - expected) <= 0.02;
+  }
+  const pixels = /^(\d+)x(\d+)$/iu.exec(requested);
+  if (pixels) {
+    const expected = Number(pixels[1]) / Number(pixels[2]);
+    return Math.abs(width / Math.max(1, height) - expected) <= 0.02;
+  }
+  return true;
 }
 
 function containsSensitivePayload(value: string): boolean {

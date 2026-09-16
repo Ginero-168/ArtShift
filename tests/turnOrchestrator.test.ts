@@ -251,9 +251,9 @@ describe("context-aware turn orchestrator", () => {
     });
 
     expect(task.requestedDimensions).toEqual({
-      width: 1536,
-      height: 512,
-      aspectRatio: "16:9", // closest API standard or panoramic
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
     });
   });
 
@@ -323,9 +323,9 @@ describe("context-aware turn orchestrator", () => {
     });
 
     expect(task.requestedDimensions).toEqual({
-      width: 1536,
-      height: 512,
-      aspectRatio: "16:9",
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
     });
   });
 
