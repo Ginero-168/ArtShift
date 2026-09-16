@@ -115,14 +115,6 @@ export async function fetchBriefDataForImage(
   throw lastError instanceof Error ? lastError : new Error(BRIEF_FAILURE_AFTER_RETRIES);
 }
 
-function formatSubjectDescription(desc: string): string[] {
-  if (desc.includes("\n")) return desc.split("\n");
-  const words = desc.split(" ");
-  if (words.length <= 3) return [desc];
-  const mid = Math.ceil(words.length / 2);
-  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
-}
-
 export function generateBriefElements(
   data: ConvertToBriefData,
   imageElement: ImageElement,
@@ -187,24 +179,13 @@ export function generateBriefElements(
 
       const bgRect = createRect({ x: bx, y: by, width: bw, height: bh });
       styleBriefGuideShape(bgRect, BRIEF_GUIDE_FILL.zone);
-      bgRect.name = "Background Zone";
+      bgRect.name = data.backgroundZone.description
+        ? `Background Zone: ${data.backgroundZone.description}`
+        : "Background Zone";
       bgRect.groupIds = [bgGroupId, masterGroupId];
       elements.push(bgRect);
-
-      const bgFontSize = Math.min(16, Math.max(12, Math.round(targetWidth * 0.024)));
-      const bgLabel = createText({
-        x: bx + 16,
-        y: by + Math.max(12, Math.round(bh * 0.04)),
-        width: Math.max(60, bw - 32),
-        text: data.backgroundZone.description,
-        fontSize: bgFontSize,
-        fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
-      });
-      styleBriefGuideText(bgLabel);
-      bgLabel.textAlign = "center";
-      bgLabel.name = `Background Label: ${data.backgroundZone.description}`;
-      bgLabel.groupIds = [bgGroupId, masterGroupId];
-      elements.push(bgLabel);
+      // Zone descriptions stay on the shape name only — never as canvas text.
+      // Vision scene notes look like poster copy when this brief is used as a layout reference.
     }
 
     // 3. Hero Subject (e.g. Child playing in water or main character/model)
@@ -217,27 +198,12 @@ export function generateBriefElements(
 
       const heroRect = createRect({ x: sx, y: sy, width: sw, height: sh });
       styleBriefGuideShape(heroRect, BRIEF_GUIDE_FILL.hero);
-      heroRect.name = "Hero Subject";
+      heroRect.name = data.heroSubject.description
+        ? `Hero Subject: ${data.heroSubject.description}`
+        : "Hero Subject";
       heroRect.groupIds = [heroGroupId, masterGroupId];
       elements.push(heroRect);
-
-      const heroLines = formatSubjectDescription(data.heroSubject.description);
-      const heroFontSize = Math.min(18, Math.max(12, Math.round(targetWidth * 0.024)));
-      const heroTextH = heroLines.length * heroFontSize * 1.4;
-
-      const heroLabel = createText({
-        x: sx + 14,
-        y: Math.round(sy + Math.max(10, (sh - heroTextH) / 2)),
-        width: Math.max(60, sw - 28),
-        text: heroLines.join("\n"),
-        fontSize: heroFontSize,
-        fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
-      });
-      styleBriefGuideText(heroLabel);
-      heroLabel.textAlign = "center";
-      heroLabel.name = `Hero Label: ${data.heroSubject.description}`;
-      heroLabel.groupIds = [heroGroupId, masterGroupId];
-      elements.push(heroLabel);
+      // Same rule: subject/scene description is metadata, not layout copy.
     }
 
     // 4. Headline Card (e.g. "สวนน้ำ\nเปิดใหม่")

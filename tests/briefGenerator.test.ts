@@ -216,23 +216,30 @@ describe("Brief Generator Service & Layout Geometry", () => {
     };
 
     const elements = generateBriefElements(artDirectionData, mockImageElement);
-    expect(elements.length).toBeGreaterThanOrEqual(10); // Outer frame + 5 rect/ellipse shapes + 5 text labels
+    expect(elements.length).toBeGreaterThanOrEqual(8);
 
-    // 1. Hero Subject on the left
-    const heroCard = elements.find((e) => e.name === "Hero Subject");
+    // 1. Hero Subject on the left — zone only, no scene-description text
+    const heroCard = elements.find((e) => e.name?.startsWith("Hero Subject"));
     expect(heroCard).toBeDefined();
     expect(heroCard?.backgroundColor).toBe("#d4d4d8");
     expect(heroCard?.strokeWidth).toBe(0);
-    const heroLabel = elements.find((e) => e.name?.startsWith("Hero Label:"));
-    expect(heroLabel).toBeDefined();
-    expect((heroLabel as any).text).toContain("รูปภาพเด็กชาย กำลังยิ้มแย้ม");
+    expect(elements.some((e) => e.name?.startsWith("Hero Label:"))).toBe(false);
+    expect(
+      elements.some(
+        (e) => e.type === "text" && String((e as { text?: string }).text || "").includes("รูปภาพเด็กชาย"),
+      ),
+    ).toBe(false);
 
-    // 2. Background Zone on the right
-    const bgCard = elements.find((e) => e.name === "Background Zone");
+    // 2. Background Zone on the right — zone only, no scene-description text
+    const bgCard = elements.find((e) => e.name?.startsWith("Background Zone"));
     expect(bgCard).toBeDefined();
     expect(bgCard?.backgroundColor).toBe("#e4e4e7");
-    const bgLabel = elements.find((e) => (e as any).text === "พื้นหลังเป็นภาพสวนน้ำ");
-    expect(bgLabel).toBeDefined();
+    expect(elements.some((e) => e.name?.startsWith("Background Label:"))).toBe(false);
+    expect(
+      elements.some(
+        (e) => e.type === "text" && String((e as { text?: string }).text || "") === "พื้นหลังเป็นภาพสวนน้ำ",
+      ),
+    ).toBe(false);
 
     // 3. Headline Card with "สวนน้ำ\nเปิดใหม่"
     const hlCard = elements.find((e) => e.name === "Headline Card");
@@ -319,10 +326,16 @@ describe("Brief Generator Service & Layout Geometry", () => {
     // Verify outer frame
     expect(elements.find((e) => e.name === "Brief Frame")).toBeDefined();
 
-    // Verify Hero Subject & Background Zone
-    expect(elements.find((e) => e.name === "Hero Subject")).toBeDefined();
-    expect(elements.find((e) => e.name === "Background Zone")).toBeDefined();
-
+    // Verify Hero Subject & Background Zone (zones only — no scene-description text)
+    expect(elements.find((e) => e.name?.startsWith("Hero Subject"))).toBeDefined();
+    expect(elements.find((e) => e.name?.startsWith("Background Zone"))).toBeDefined();
+    expect(
+      elements.some(
+        (e) =>
+          e.type === "text" &&
+          String((e as { text?: string }).text || "").includes("เด็กชาย"),
+      ),
+    ).toBe(false);
     // Verify Category Pills (Feature Tags)
     const tagElements = elements.filter((e) => e.name?.startsWith("Tag: "));
     expect(tagElements).toHaveLength(5);

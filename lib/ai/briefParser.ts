@@ -115,6 +115,7 @@ Rules:
 
 Text policy (important):
 - ONLY extract intentional design/copy: headline, subheadline, promo badge, feature tags/pills, brand logo, footer bar items.
+- heroSubject.description / backgroundZone.description are short SCENE NOTES for the zone (who/what is pictured), NOT poster copy. Never put those notes into texts, intentionalTexts, featureTags, or any text field that would be drawn as layout copy.
 - DO NOT extract photographic / background / prop text, including:
   - text printed on clothing, towels, tubes, or merch in the photo
   - text on signs, boards, or scenery that are part of the photograph (not the ad layout)
