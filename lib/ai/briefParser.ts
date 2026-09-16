@@ -111,7 +111,7 @@ Rules:
 - Prefer real text from the image. Thai text must stay Thai.
 - Include every major GRAPHIC layout block. Omit keys you cannot support.
 - Keep the JSON compact but complete.
-- "color" fields are soft gray guide fills only (e.g. "#e4e4e7", "#d4d4d8"). Do NOT invent black outlines, yellow accents, or colorful wireframe chrome — the renderer draws a monochrome guide.
+- "color" fields are ignored for fill (renderer uses one shared gray + borders). Do NOT invent yellow accents or colorful wireframe chrome.
 
 Text policy (important):
 - ONLY extract intentional design/copy: headline, subheadline, promo badge, feature tags/pills, brand logo, footer bar items.
@@ -126,14 +126,14 @@ Text policy (important):
 Required shape:
 {
   "aspectRatio": { "width": number, "height": number },
-  "heroSubject": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#d4d4d8" },
-  "backgroundZone": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#e4e4e7" },
-  "headlineCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#ececef" },
-  "badge": { "box": [ymin,xmin,ymax,xmax], "shape": "ellipse"|"rect", "text": "exact text", "color": "#c8c8ce" },
-  "subtextCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#ececef" },
-  "featureTags": [{ "text": "exact", "box": [ymin,xmin,ymax,xmax], "color": "#d4d4d8" }],
+  "heroSubject": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#e5e5e5" },
+  "backgroundZone": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#e5e5e5" },
+  "headlineCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#e5e5e5" },
+  "badge": { "box": [ymin,xmin,ymax,xmax], "shape": "ellipse"|"rect", "text": "exact text", "color": "#e5e5e5" },
+  "subtextCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#e5e5e5" },
+  "featureTags": [{ "text": "exact", "box": [ymin,xmin,ymax,xmax], "color": "#e5e5e5" }],
   "brandLogo": { "box": [ymin,xmin,ymax,xmax], "text": "brand", "subtext": "optional" },
-  "footerBar": { "box": [ymin,xmin,ymax,xmax], "color": "#a1a1aa", "items": [{ "text": "exact" }] },
+  "footerBar": { "box": [ymin,xmin,ymax,xmax], "color": "#e5e5e5", "items": [{ "text": "exact" }] },
   "dividers": [],
   "backgroundPartitions": [],
   "focalObjects": [],
