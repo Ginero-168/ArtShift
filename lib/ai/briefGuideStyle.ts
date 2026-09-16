@@ -1,27 +1,32 @@
 /**
- * Monochrome layout-guide styling for Convert to Brief.
+ * Uniform layout-guide styling for Convert to Brief.
  *
- * Dark outlines + pastel/yellow fills get copied by image models as real
- * design chrome. Soft gray tonal blocks with no strokes keep hierarchy readable
- * while looking like guides, not finished artwork.
+ * One shared gray fill + a light border between regions (no tonal ladder).
+ * Hierarchy comes from borders and intentional copy only — not shade differences
+ * that image models may bake into finished artwork.
  */
+export const BRIEF_GUIDE_GRAY = "#e5e5e5";
+export const BRIEF_GUIDE_BORDER = "#737373";
+export const BRIEF_GUIDE_BORDER_WIDTH = 1.25;
+
+/** @deprecated Prefer BRIEF_GUIDE_GRAY — kept so call sites stay readable by role. */
 export const BRIEF_GUIDE_FILL = {
-  frame: "#f4f4f5",
-  zone: "#e4e4e7",
-  hero: "#d4d4d8",
-  card: "#ececef",
-  badge: "#c8c8ce",
-  tag: "#d4d4d8",
-  logo: "#f0f0f2",
-  footer: "#a1a1aa",
-  partitionA: "#e4e4e7",
-  partitionB: "#d4d4d8",
-  focal: "#c8c8ce",
+  frame: BRIEF_GUIDE_GRAY,
+  zone: BRIEF_GUIDE_GRAY,
+  hero: BRIEF_GUIDE_GRAY,
+  card: BRIEF_GUIDE_GRAY,
+  badge: BRIEF_GUIDE_GRAY,
+  tag: BRIEF_GUIDE_GRAY,
+  logo: BRIEF_GUIDE_GRAY,
+  footer: BRIEF_GUIDE_GRAY,
+  partitionA: BRIEF_GUIDE_GRAY,
+  partitionB: BRIEF_GUIDE_GRAY,
+  focal: BRIEF_GUIDE_GRAY,
 } as const;
 
 export const BRIEF_GUIDE_TEXT = {
-  default: "#52525b",
-  onFooter: "#fafafa",
+  default: "#404040",
+  onFooter: "#404040",
 } as const;
 
 type ShapeStyleTarget = {
@@ -33,18 +38,18 @@ type ShapeStyleTarget = {
   roughness: number;
 };
 
-export function styleBriefGuideShape(el: ShapeStyleTarget, fill: string): void {
-  el.strokeColor = "transparent";
-  el.strokeWidth = 0;
+export function styleBriefGuideShape(el: ShapeStyleTarget, _fill?: string): void {
+  el.strokeColor = BRIEF_GUIDE_BORDER;
+  el.strokeWidth = BRIEF_GUIDE_BORDER_WIDTH;
   el.strokeStyle = "solid";
   el.fillStyle = "solid";
-  el.backgroundColor = fill;
+  el.backgroundColor = BRIEF_GUIDE_GRAY;
   el.roughness = 0;
 }
 
 export function styleBriefGuideText(
   el: { strokeColor: string },
-  onDark = false,
+  _onDark = false,
 ): void {
-  el.strokeColor = onDark ? BRIEF_GUIDE_TEXT.onFooter : BRIEF_GUIDE_TEXT.default;
+  el.strokeColor = BRIEF_GUIDE_TEXT.default;
 }
