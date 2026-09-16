@@ -181,7 +181,7 @@ function roleInstruction(role: InlineTagReferenceRole): string {
     case "style":
       return "ROLE: STYLE reference — match photographic look, lighting, color grade, and subject treatment. If this reference is already a finished poster/ad, extract subject photography and mood only; do NOT reuse its typography zones, badges, or slogans unless the brief/layout reference asks for that text.";
     case "layout":
-      return "ROLE: LAYOUT / BRIEF reference — follow composition, typography zones, graphic structure, and messaging hierarchy from this image/brief.";
+      return "ROLE: LAYOUT / BRIEF reference — follow composition, typography zones, graphic structure, and messaging hierarchy from this image/brief. Gray blocks, outlines, and wireframe boxes are layout GUIDES only — do NOT reproduce them as borders, frames, cards, or design chrome in the final artwork. Render finished photography, typography, and graphic treatments instead.";
     case "subject":
       return "ROLE: SUBJECT reference — preserve identity, appearance, and key features of the referenced subject.";
     default:

@@ -100,16 +100,18 @@ describe("Brief Generator Service & Layout Geometry", () => {
     expect(outerFrame?.y).toBe(mockImageElement.y);
   });
 
-  it("creates background partitions with Thai labels and pastel colors", () => {
+  it("creates background partitions with Thai labels and monochrome guide fills", () => {
     const elements = generateBriefElements(sampleBriefData, mockImageElement);
 
     const chefZone = elements.find((e) => e.name === "เชฟซูชิ");
     expect(chefZone).toBeDefined();
-    expect(chefZone?.backgroundColor).toBe("#e0e7ff");
+    expect(chefZone?.backgroundColor).toBe("#e4e4e7");
+    expect(chefZone?.strokeWidth).toBe(0);
 
     const sushiZone = elements.find((e) => e.name === "รูปซูชิ");
     expect(sushiZone).toBeDefined();
-    expect(sushiZone?.backgroundColor).toBe("#cffafe");
+    expect(sushiZone?.backgroundColor).toBe("#d4d4d8");
+    expect(sushiZone?.strokeWidth).toBe(0);
 
     // Labels
     const chefLabel = elements.find((e) => e.type === "text" && (e as any).text === "เชฟซูชิ");
@@ -122,17 +124,26 @@ describe("Brief Generator Service & Layout Geometry", () => {
   it("creates badges (ellipses) with exact Thai text inside", () => {
     const elements = generateBriefElements(sampleBriefData, mockImageElement);
 
-    const priceBadge = elements.find((e) => e.type === "ellipse" && e.backgroundColor === "#fef08a");
+    const priceBadge = elements.find((e) => e.type === "ellipse" && e.name === "ป้ายราคา");
     expect(priceBadge).toBeDefined();
+    expect(priceBadge?.backgroundColor).toBe("#c8c8ce");
+    expect(priceBadge?.strokeWidth).toBe(0);
 
     const priceText = elements.find((e) => e.type === "text" && (e as any).text === "ชิ้นละ 10 บาท");
     expect(priceText).toBeDefined();
 
-    const sloganBadge = elements.find((e) => e.type === "ellipse" && e.backgroundColor === "#ffe4e6");
+    const sloganBadge = elements.find((e) => e.type === "ellipse" && e.name === "ป้ายสโลแกน");
     expect(sloganBadge).toBeDefined();
+    expect(sloganBadge?.backgroundColor).toBe("#c8c8ce");
 
     const sloganText = elements.find((e) => e.type === "text" && (e as any).text === "อุ่นใจ ใกล้บ้าน");
     expect(sloganText).toBeDefined();
+  });
+
+  it("omits hard divider lines so guide strokes are not copied into generations", () => {
+    const elements = generateBriefElements(sampleBriefData, mockImageElement);
+    expect(elements.some((e) => e.name === "เส้นแบ่งโซน")).toBe(false);
+    expect(elements.every((e) => e.type === "text" || e.strokeWidth === 0)).toBe(true);
   });
 
   it("groups all generated brief elements together under a unified groupId", () => {
@@ -210,7 +221,8 @@ describe("Brief Generator Service & Layout Geometry", () => {
     // 1. Hero Subject on the left
     const heroCard = elements.find((e) => e.name === "Hero Subject");
     expect(heroCard).toBeDefined();
-    expect(heroCard?.backgroundColor).toBe("#dbeafe");
+    expect(heroCard?.backgroundColor).toBe("#d4d4d8");
+    expect(heroCard?.strokeWidth).toBe(0);
     const heroLabel = elements.find((e) => e.name?.startsWith("Hero Label:"));
     expect(heroLabel).toBeDefined();
     expect((heroLabel as any).text).toContain("รูปภาพเด็กชาย กำลังยิ้มแย้ม");
@@ -218,13 +230,14 @@ describe("Brief Generator Service & Layout Geometry", () => {
     // 2. Background Zone on the right
     const bgCard = elements.find((e) => e.name === "Background Zone");
     expect(bgCard).toBeDefined();
-    expect(bgCard?.backgroundColor).toBe("#f5f0eb");
+    expect(bgCard?.backgroundColor).toBe("#e4e4e7");
     const bgLabel = elements.find((e) => (e as any).text === "พื้นหลังเป็นภาพสวนน้ำ");
     expect(bgLabel).toBeDefined();
 
     // 3. Headline Card with "สวนน้ำ\nเปิดใหม่"
     const hlCard = elements.find((e) => e.name === "Headline Card");
     expect(hlCard).toBeDefined();
+    expect(hlCard?.strokeWidth).toBe(0);
     const hlText = elements.find((e) => (e as any).text === "สวนน้ำ\nเปิดใหม่");
     expect(hlText).toBeDefined();
 
@@ -232,7 +245,8 @@ describe("Brief Generator Service & Layout Geometry", () => {
     const badgeShape = elements.find((e) => e.name === "Promo Badge");
     expect(badgeShape).toBeDefined();
     expect(badgeShape?.type).toBe("ellipse");
-    expect(badgeShape?.backgroundColor).toBe("#fcd34d");
+    expect(badgeShape?.backgroundColor).toBe("#c8c8ce");
+    expect(badgeShape?.strokeWidth).toBe(0);
     const badgeText = elements.find((e) => (e as any).text === "เปิดแล้ว\nวันนี้");
     expect(badgeText).toBeDefined();
 
@@ -360,7 +374,7 @@ describe("Brief Generator Service & Layout Geometry", () => {
     expect(chefLabel?.groupIds[1]).toBe(masterGroupId);
 
     // Check price badge shape and text pair
-    const priceBadge = elements.find((e) => e.type === "ellipse" && e.backgroundColor === "#fef08a");
+    const priceBadge = elements.find((e) => e.type === "ellipse" && e.name === "ป้ายราคา");
     const priceText = elements.find((e) => e.type === "text" && (e as any).text === "ชิ้นละ 10 บาท");
     expect(priceBadge).toBeDefined();
     expect(priceText).toBeDefined();

@@ -103,7 +103,7 @@ export type ConvertToBriefData = {
 };
 
 export const BRIEF_VISION_PROMPT = `You are an expert advertising art director.
-Analyze this ad/poster image and return a wireframe brief as ONE JSON object.
+Analyze this ad/poster image and return a layout brief as ONE JSON object.
 
 Rules:
 - Return ONLY valid JSON. No markdown. No code fences. No trailing semicolon.
@@ -111,6 +111,7 @@ Rules:
 - Prefer real text from the image. Thai text must stay Thai.
 - Include every major GRAPHIC layout block. Omit keys you cannot support.
 - Keep the JSON compact but complete.
+- "color" fields are soft gray guide fills only (e.g. "#e4e4e7", "#d4d4d8"). Do NOT invent black outlines, yellow accents, or colorful wireframe chrome — the renderer draws a monochrome guide.
 
 Text policy (important):
 - ONLY extract intentional design/copy: headline, subheadline, promo badge, feature tags/pills, brand logo, footer bar items.
@@ -124,15 +125,15 @@ Text policy (important):
 Required shape:
 {
   "aspectRatio": { "width": number, "height": number },
-  "heroSubject": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#dbeafe" },
-  "backgroundZone": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#f5f0eb" },
-  "headlineCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#e2e8f0" },
-  "badge": { "box": [ymin,xmin,ymax,xmax], "shape": "ellipse"|"rect", "text": "exact text", "color": "#fcd34d" },
-  "subtextCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#e2e8f0" },
-  "featureTags": [{ "text": "exact", "box": [ymin,xmin,ymax,xmax], "color": "#fed7aa" }],
+  "heroSubject": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#d4d4d8" },
+  "backgroundZone": { "box": [ymin,xmin,ymax,xmax], "description": "Thai", "color": "#e4e4e7" },
+  "headlineCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#ececef" },
+  "badge": { "box": [ymin,xmin,ymax,xmax], "shape": "ellipse"|"rect", "text": "exact text", "color": "#c8c8ce" },
+  "subtextCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#ececef" },
+  "featureTags": [{ "text": "exact", "box": [ymin,xmin,ymax,xmax], "color": "#d4d4d8" }],
   "brandLogo": { "box": [ymin,xmin,ymax,xmax], "text": "brand", "subtext": "optional" },
-  "footerBar": { "box": [ymin,xmin,ymax,xmax], "color": "#1e293b", "items": [{ "text": "exact" }] },
-  "dividers": [{ "start": [x,y], "end": [x,y], "color": "#000000", "strokeWidth": 1.5 }],
+  "footerBar": { "box": [ymin,xmin,ymax,xmax], "color": "#a1a1aa", "items": [{ "text": "exact" }] },
+  "dividers": [],
   "backgroundPartitions": [],
   "focalObjects": [],
   "texts": [],

@@ -150,6 +150,7 @@ describe("inlineTagSynthesis", () => {
     expect(finalized).toContain("ROLE: STYLE reference");
     expect(finalized).toContain('"Brief"');
     expect(finalized).toContain("ROLE: LAYOUT / BRIEF reference");
+    expect(finalized).toContain("layout GUIDES only");
     expect(buildReferenceRoleAppendix(original)).toContain("attachment order");
   });
 });

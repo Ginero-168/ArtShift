@@ -1,5 +1,5 @@
 import { getCached } from "@/lib/engine/imageCache";
-import { createEllipse, createLine, createRect, createText } from "@/lib/engine/factory";
+import { createEllipse, createRect, createText } from "@/lib/engine/factory";
 import {
   getProcessingPreviewBounds,
   getProcessingPreviewPlacement,
@@ -7,6 +7,11 @@ import {
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, EngineSlide, ImageElement } from "@/lib/engine/types";
+import {
+  BRIEF_GUIDE_FILL,
+  styleBriefGuideShape,
+  styleBriefGuideText,
+} from "@/lib/ai/briefGuideStyle";
 import { type ConvertToBriefData, isUsableBriefLayout } from "@/lib/ai/briefParser";
 import { reportAIError, reportAIResult } from "@/lib/ai/progressReporter";
 
@@ -153,12 +158,7 @@ export function generateBriefElements(
     width: targetWidth,
     height: targetHeight,
   });
-  outerFrame.strokeColor = "#0f172a";
-  outerFrame.strokeWidth = 2;
-  outerFrame.strokeStyle = "solid";
-  outerFrame.fillStyle = "solid";
-  outerFrame.backgroundColor = "#ffffff";
-  outerFrame.roughness = 0;
+  styleBriefGuideShape(outerFrame, BRIEF_GUIDE_FILL.frame);
   outerFrame.name = "Brief Frame";
   outerFrame.groupIds = [masterGroupId];
   elements.push(outerFrame);
@@ -186,12 +186,7 @@ export function generateBriefElements(
       const bh = Math.max(10, Math.round(((data.backgroundZone.box[2] - data.backgroundZone.box[0]) / 1000) * targetHeight));
 
       const bgRect = createRect({ x: bx, y: by, width: bw, height: bh });
-      bgRect.strokeColor = "#94a3b8";
-      bgRect.strokeWidth = 1.2;
-      bgRect.strokeStyle = "solid";
-      bgRect.fillStyle = "solid";
-      bgRect.backgroundColor = data.backgroundZone.color || "#f8fafc";
-      bgRect.roughness = 0;
+      styleBriefGuideShape(bgRect, BRIEF_GUIDE_FILL.zone);
       bgRect.name = "Background Zone";
       bgRect.groupIds = [bgGroupId, masterGroupId];
       elements.push(bgRect);
@@ -205,7 +200,7 @@ export function generateBriefElements(
         fontSize: bgFontSize,
         fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
       });
-      bgLabel.strokeColor = "#64748b";
+      styleBriefGuideText(bgLabel);
       bgLabel.textAlign = "center";
       bgLabel.name = `Background Label: ${data.backgroundZone.description}`;
       bgLabel.groupIds = [bgGroupId, masterGroupId];
@@ -221,12 +216,7 @@ export function generateBriefElements(
       const sh = Math.max(10, Math.round(((data.heroSubject.box[2] - data.heroSubject.box[0]) / 1000) * targetHeight));
 
       const heroRect = createRect({ x: sx, y: sy, width: sw, height: sh });
-      heroRect.strokeColor = "#0f172a";
-      heroRect.strokeWidth = 1.5;
-      heroRect.strokeStyle = "solid";
-      heroRect.fillStyle = "solid";
-      heroRect.backgroundColor = data.heroSubject.color || "#dbeafe";
-      heroRect.roughness = 0;
+      styleBriefGuideShape(heroRect, BRIEF_GUIDE_FILL.hero);
       heroRect.name = "Hero Subject";
       heroRect.groupIds = [heroGroupId, masterGroupId];
       elements.push(heroRect);
@@ -243,7 +233,7 @@ export function generateBriefElements(
         fontSize: heroFontSize,
         fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
       });
-      heroLabel.strokeColor = "#0f172a";
+      styleBriefGuideText(heroLabel);
       heroLabel.textAlign = "center";
       heroLabel.name = `Hero Label: ${data.heroSubject.description}`;
       heroLabel.groupIds = [heroGroupId, masterGroupId];
@@ -259,12 +249,7 @@ export function generateBriefElements(
       const hh = Math.max(10, Math.round(((data.headlineCard.box[2] - data.headlineCard.box[0]) / 1000) * targetHeight));
 
       const hlRect = createRect({ x: hx, y: hy, width: hw, height: hh });
-      hlRect.strokeColor = "#0f172a";
-      hlRect.strokeWidth = 1.5;
-      hlRect.strokeStyle = "solid";
-      hlRect.fillStyle = "solid";
-      hlRect.backgroundColor = data.headlineCard.color || "#e2e8f0";
-      hlRect.roughness = 0;
+      styleBriefGuideShape(hlRect, BRIEF_GUIDE_FILL.card);
       hlRect.name = "Headline Card";
       hlRect.groupIds = [hlGroupId, masterGroupId];
       elements.push(hlRect);
@@ -281,7 +266,7 @@ export function generateBriefElements(
         fontSize: hlFontSize,
         fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
       });
-      hlText.strokeColor = "#0f172a";
+      styleBriefGuideText(hlText);
       hlText.textAlign = "center";
       hlText.name = `Headline: ${data.headlineCard.text}`;
       hlText.groupIds = [hlGroupId, masterGroupId];
@@ -302,12 +287,7 @@ export function generateBriefElements(
         data.badge.shape === "rect"
           ? createRect({ x: bx, y: by, width: bw, height: bh })
           : createEllipse({ x: bx, y: by, width: bw, height: bh });
-      badgeShape.strokeColor = "#0f172a";
-      badgeShape.strokeWidth = 1.5;
-      badgeShape.strokeStyle = "solid";
-      badgeShape.fillStyle = "solid";
-      badgeShape.backgroundColor = data.badge.color || "#fcd34d";
-      badgeShape.roughness = 0;
+      styleBriefGuideShape(badgeShape, BRIEF_GUIDE_FILL.badge);
       badgeShape.name = "Promo Badge";
       badgeShape.groupIds = [badgeGroupId, masterGroupId];
       elements.push(badgeShape);
@@ -324,7 +304,7 @@ export function generateBriefElements(
         fontSize: badgeFontSize,
         fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
       });
-      badgeText.strokeColor = "#0f172a";
+      styleBriefGuideText(badgeText);
       badgeText.textAlign = "center";
       badgeText.name = `Badge: ${data.badge.text}`;
       badgeText.groupIds = [badgeGroupId, masterGroupId];
@@ -342,12 +322,7 @@ export function generateBriefElements(
       const sth = Math.max(14, Math.round(((data.subtextCard.box[2] - data.subtextCard.box[0]) / 1000) * targetHeight));
 
       const stRect = createRect({ x: stx, y: sty, width: stw, height: sth });
-      stRect.strokeColor = "#0f172a";
-      stRect.strokeWidth = 1.2;
-      stRect.strokeStyle = "solid";
-      stRect.fillStyle = "solid";
-      stRect.backgroundColor = data.subtextCard.color || "#e2e8f0";
-      stRect.roughness = 0;
+      styleBriefGuideShape(stRect, BRIEF_GUIDE_FILL.card);
       stRect.name = "Subtext Card";
       stRect.groupIds = [stGroupId, masterGroupId];
       elements.push(stRect);
@@ -364,7 +339,7 @@ export function generateBriefElements(
         fontSize: stFontSize,
         fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
       });
-      stText.strokeColor = "#0f172a";
+      styleBriefGuideText(stText);
       stText.textAlign = "center";
       stText.name = `Subtext: ${data.subtextCard.text}`;
       stText.groupIds = [stGroupId, masterGroupId];
@@ -383,12 +358,7 @@ export function generateBriefElements(
         const th = Math.max(14, Math.round(((tag.box[2] - tag.box[0]) / 1000) * targetHeight));
 
         const tagRect = createRect({ x: tx, y: ty, width: tw, height: th });
-        tagRect.strokeColor = "#0f172a";
-        tagRect.strokeWidth = 1;
-        tagRect.strokeStyle = "solid";
-        tagRect.fillStyle = "solid";
-        tagRect.backgroundColor = tag.color || "#fed7aa";
-        tagRect.roughness = 0;
+        styleBriefGuideShape(tagRect, BRIEF_GUIDE_FILL.tag);
         tagRect.name = `Tag: ${tag.text}`;
         tagRect.groupIds = [tagGroupId, masterGroupId];
         elements.push(tagRect);
@@ -402,7 +372,7 @@ export function generateBriefElements(
           fontSize: tagFontSize,
           fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
         });
-        tagText.strokeColor = "#0f172a";
+        styleBriefGuideText(tagText);
         tagText.textAlign = "center";
         tagText.name = `Tag Text: ${tag.text}`;
         tagText.groupIds = [tagGroupId, masterGroupId];
@@ -421,12 +391,7 @@ export function generateBriefElements(
       const lh = Math.max(16, Math.round(((data.brandLogo.box[2] - data.brandLogo.box[0]) / 1000) * targetHeight));
 
       const logoRect = createRect({ x: lx, y: ly, width: lw, height: lh });
-      logoRect.strokeColor = "#94a3b8";
-      logoRect.strokeWidth = 1;
-      logoRect.strokeStyle = "dashed";
-      logoRect.fillStyle = "solid";
-      logoRect.backgroundColor = data.brandLogo.color || "#ffffff";
-      logoRect.roughness = 0;
+      styleBriefGuideShape(logoRect, BRIEF_GUIDE_FILL.logo);
       logoRect.name = `Logo Zone: ${data.brandLogo.text}`;
       logoRect.groupIds = [logoGroupId, masterGroupId];
       elements.push(logoRect);
@@ -444,7 +409,7 @@ export function generateBriefElements(
         fontSize: logoFontSize,
         fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
       });
-      logoText.strokeColor = "#0f172a";
+      styleBriefGuideText(logoText);
       logoText.textAlign = "center";
       logoText.name = `Logo: ${data.brandLogo.text}`;
       logoText.groupIds = [logoGroupId, masterGroupId];
@@ -462,12 +427,7 @@ export function generateBriefElements(
       const fh = Math.max(20, Math.round(((data.footerBar.box[2] - data.footerBar.box[0]) / 1000) * targetHeight));
 
       const footerRect = createRect({ x: fx, y: fy, width: fw, height: fh });
-      footerRect.strokeColor = "#0f172a";
-      footerRect.strokeWidth = 1.2;
-      footerRect.strokeStyle = "solid";
-      footerRect.fillStyle = "solid";
-      footerRect.backgroundColor = data.footerBar.color || "#1e293b";
-      footerRect.roughness = 0;
+      styleBriefGuideShape(footerRect, BRIEF_GUIDE_FILL.footer);
       footerRect.name = "Footer Bar";
       footerRect.groupIds = [footerGroupId, masterGroupId];
       elements.push(footerRect);
@@ -498,7 +458,7 @@ export function generateBriefElements(
             fontSize: itemFontSize,
             fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
           });
-          itemText.strokeColor = "#f8fafc";
+          styleBriefGuideText(itemText, true);
           itemText.textAlign = "center";
           itemText.name = `Footer Item: ${item.text}`;
           itemText.groupIds = [footerGroupId, masterGroupId];
@@ -510,7 +470,7 @@ export function generateBriefElements(
     }
   } else {
     // Compatibility path: Background Partitions
-    for (const partition of data.backgroundPartitions) {
+    for (const [partitionIndex, partition] of data.backgroundPartitions.entries()) {
       const partGroupId = crypto.randomUUID();
       const px = targetX + Math.round((partition.box[1] / 1000) * targetWidth);
       const py = targetY + Math.round((partition.box[0] / 1000) * targetHeight);
@@ -523,12 +483,10 @@ export function generateBriefElements(
         width: pw,
         height: ph,
       });
-      pRect.strokeColor = "#0f172a";
-      pRect.strokeWidth = 1;
-      pRect.strokeStyle = "solid";
-      pRect.fillStyle = "solid";
-      pRect.backgroundColor = partition.color || "#e0e7ff";
-      pRect.roughness = 0;
+      styleBriefGuideShape(
+        pRect,
+        partitionIndex % 2 === 0 ? BRIEF_GUIDE_FILL.partitionA : BRIEF_GUIDE_FILL.partitionB,
+      );
       pRect.name = partition.name || "โซนพื้นที่";
       pRect.groupIds = [partGroupId, masterGroupId];
       elements.push(pRect);
@@ -553,7 +511,7 @@ export function generateBriefElements(
           fontSize: labelFontSize,
           fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
         });
-        pLabel.strokeColor = "#0f172a";
+        styleBriefGuideText(pLabel);
         pLabel.textAlign = textAlign;
         pLabel.name = `Label: ${partition.name}`;
         pLabel.groupIds = [partGroupId, masterGroupId];
@@ -574,12 +532,7 @@ export function generateBriefElements(
           ? createRect({ x: ox, y: oy, width: ow, height: oh })
           : createEllipse({ x: ox, y: oy, width: ow, height: oh });
 
-      shape.strokeColor = "#0f172a";
-      shape.strokeWidth = 1.2;
-      shape.strokeStyle = "solid";
-      shape.fillStyle = "solid";
-      shape.backgroundColor = obj.color || "#fef08a";
-      shape.roughness = 0;
+      styleBriefGuideShape(shape, BRIEF_GUIDE_FILL.focal);
       shape.name = obj.name || "ป้าย / วัตถุ";
       shape.groupIds = [objGroupId, masterGroupId];
       elements.push(shape);
@@ -598,7 +551,7 @@ export function generateBriefElements(
           fontSize: badgeFontSize,
           fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
         });
-        badgeText.strokeColor = obj.textColor || "#0f172a";
+        styleBriefGuideText(badgeText);
         badgeText.textAlign = "center";
         badgeText.name = `Text: ${obj.text}`;
         badgeText.groupIds = [objGroupId, masterGroupId];
@@ -607,20 +560,7 @@ export function generateBriefElements(
     }
   }
 
-  // 10. Dividers (rendered for both paths if present)
-  for (const divider of data.dividers) {
-    const x1 = targetX + Math.round((divider.start[0] / 1000) * targetWidth);
-    const y1 = targetY + Math.round((divider.start[1] / 1000) * targetHeight);
-    const x2 = targetX + Math.round((divider.end[0] / 1000) * targetWidth);
-    const y2 = targetY + Math.round((divider.end[1] / 1000) * targetHeight);
-
-    const line = createLine([x1, y1], [x2, y2]);
-    line.strokeColor = divider.color || "#0f172a";
-    line.strokeWidth = divider.strokeWidth || 1.5;
-    line.name = "เส้นแบ่งโซน";
-    line.groupIds = [masterGroupId];
-    elements.push(line);
-  }
+  // 10. Dividers are intentionally omitted — hard guide lines get copied as design chrome.
 
   // 11. Additional OCR / Intentional Texts
   for (const t of data.texts) {
@@ -640,7 +580,7 @@ export function generateBriefElements(
       fontSize,
       fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
     });
-    textEl.strokeColor = t.color || "#0f172a";
+    styleBriefGuideText(textEl);
     textEl.textAlign = t.align || "center";
     textEl.name = `Text: ${cleanText}`;
     textEl.groupIds = [masterGroupId];
