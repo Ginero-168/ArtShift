@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { ContentPolicyErrorCard } from "@/components/AI/ChatActionCards";
 import {
+  ChatResultImageThumb,
+  ImageResultSummaryBlock,
+} from "@/components/AI/ChatImageResult";
+import {
   ChatCopyIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -14,22 +18,14 @@ import {
 } from "@/components/AI/ChatIcons";
 import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
 import {
-  IconBot,
-  IconBrain,
   IconCamera,
-  IconClipboard,
-  IconClose,
   IconLayoutGrid,
-  IconPalette,
   IconPenEdit,
   IconRotate,
-  IconSearch,
   IconSettings,
-  IconShieldCheck,
   IconSparkles,
   IconUndo,
   IconWand,
-  IconZap,
 } from "@/components/icons";
 import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
 import { DEFAULT_CREATING_MODEL_LABEL } from "@/lib/ai/orchestration/creatingModelCatalog";
@@ -213,200 +209,6 @@ export function UserMessageImagePreviews({
   );
 }
 
-interface SubAgentTaskItem {
-  id: string;
-  name: string;
-  modelBadge?: string;
-  icon: React.ReactNode;
-  themeColor: string;
-  themeBg: string;
-  themeBorder: string;
-  task: string;
-  status: "running" | "success" | "error" | "pending";
-  statusText?: string;
-  detailScore?: number;
-  precisionScore?: number;
-}
-
-function getAgentMeta(agent: string, title: string) {
-  const lowerTitle = (title || "").toLowerCase();
-  if (
-    lowerTitle.includes("analyzer") ||
-    lowerTitle.includes("analysis") ||
-    lowerTitle.includes("วิเคราะห์ภาพ") ||
-    lowerTitle.includes("วิเคราะห์บริบท")
-  ) {
-    return {
-      icon: <IconSearch size={14} color="#0284c7" />,
-      roleName: "Image Analyzer",
-      badgeColor: "#0284c7",
-      badgeBg: "rgba(224, 242, 254, 0.75)",
-      borderColor: "rgba(186, 230, 253, 0.9)",
-    };
-  }
-  if (
-    lowerTitle.includes("director") ||
-    lowerTitle.includes("orchestrator") ||
-    agent === "orchestrator"
-  ) {
-    return {
-      icon: <IconBrain size={14} color="#6366f1" />,
-      roleName: "Creative Director",
-      badgeColor: "#6366f1",
-      badgeBg: "rgba(238, 242, 255, 0.8)",
-      borderColor: "rgba(199, 210, 254, 0.95)",
-    };
-  }
-  if (
-    agent === "image_gen" ||
-    agent === "image_edit" ||
-    lowerTitle.includes("specialist") ||
-    lowerTitle.includes("image") ||
-    lowerTitle.includes("สร้างรูป") ||
-    lowerTitle.includes("ปรับแต่ง")
-  ) {
-    return {
-      icon: <IconPalette size={14} color="#ea580c" />,
-      roleName: agent === "image_edit" ? "Image Editor" : "Image Specialist",
-      badgeColor: "#ea580c",
-      badgeBg: "rgba(255, 237, 213, 0.8)",
-      borderColor: "rgba(254, 215, 170, 0.95)",
-    };
-  }
-  if (
-    agent === "brand_stylist" ||
-    lowerTitle.includes("reviewer") ||
-    lowerTitle.includes("quality") ||
-    lowerTitle.includes("ตรวจ")
-  ) {
-    return {
-      icon: <IconShieldCheck size={14} color="#9333ea" />,
-      roleName: "Quality Reviewer",
-      badgeColor: "#9333ea",
-      badgeBg: "rgba(243, 232, 255, 0.8)",
-      borderColor: "rgba(233, 213, 255, 0.95)",
-    };
-  }
-  if (
-    agent === "layout_designer" ||
-    lowerTitle.includes("layout") ||
-    lowerTitle.includes("จัดวาง")
-  ) {
-    return {
-      icon: <IconLayoutGrid size={14} color="#059669" />,
-      roleName: "Layout Specialist",
-      badgeColor: "#059669",
-      badgeBg: "rgba(209, 250, 229, 0.8)",
-      borderColor: "rgba(167, 243, 208, 0.95)",
-    };
-  }
-  if (agent === "vectorizer" || lowerTitle.includes("vector") || lowerTitle.includes("เวกเตอร์")) {
-    return {
-      icon: <IconZap size={14} color="#0891b2" fill="#0891b2" stroke="#0891b2" />,
-      roleName: "Vector Specialist",
-      badgeColor: "#0891b2",
-      badgeBg: "rgba(207, 250, 254, 0.8)",
-      borderColor: "rgba(165, 243, 252, 0.95)",
-    };
-  }
-  if (agent === "copywriter" || lowerTitle.includes("copywriter")) {
-    return {
-      icon: <IconPenEdit size={14} color="#d97706" />,
-      roleName: "Copywriter Specialist",
-      badgeColor: "#d97706",
-      badgeBg: "rgba(254, 243, 199, 0.8)",
-      borderColor: "rgba(253, 230, 138, 0.95)",
-    };
-  }
-  return {
-    icon: <IconBot size={14} color="#475569" />,
-    roleName: "AI Specialist",
-    badgeColor: "#475569",
-    badgeBg: "rgba(241, 245, 249, 0.8)",
-    borderColor: "rgba(226, 232, 240, 0.95)",
-  };
-}
-
-function renderStatusBadge(
-  status: "running" | "success" | "error" | "pending",
-  statusText?: string,
-) {
-  if (status === "success") {
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 3.5,
-          fontSize: 10.5,
-          fontWeight: 600,
-          color: "#16a34a",
-          whiteSpace: "nowrap",
-          flexShrink: 0,
-        }}
-      >
-        <CheckIcon style={{ width: 11, height: 11, color: "#16a34a" }} />
-        <span>{statusText || "เสร็จสิ้น"}</span>
-      </span>
-    );
-  }
-  if (status === "running") {
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4.5,
-          fontSize: 10.5,
-          fontWeight: 600,
-          color: "#4f46e5",
-          whiteSpace: "nowrap",
-          flexShrink: 0,
-        }}
-      >
-        <SpinnerIcon style={{ width: 11, height: 11, color: "#6366f1" }} />
-        <span>{statusText || "กำลังทำ..."}</span>
-      </span>
-    );
-  }
-  if (status === "error") {
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 3.5,
-          fontSize: 10.5,
-          fontWeight: 600,
-          color: "#dc2626",
-          whiteSpace: "nowrap",
-          flexShrink: 0,
-        }}
-      >
-        <IconClose size={10} color="#dc2626" />
-        <span>{statusText || "ไม่สำเร็จ"}</span>
-      </span>
-    );
-  }
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        fontSize: 10.5,
-        fontWeight: 500,
-        color: "#94a3b8",
-        whiteSpace: "nowrap",
-        flexShrink: 0,
-      }}
-    >
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#cbd5e1" }} />
-      <span>{statusText || "รอดำเนินการ"}</span>
-    </span>
-  );
-}
-
 function renderSuggestionLabel(sug: string) {
   let icon: React.ReactNode = null;
   let text = sug;
@@ -450,7 +252,7 @@ function renderSuggestionLabel(sug: string) {
 export function CollapsibleThought({
   thought,
   isLive = false,
-  defaultOpen = false,
+  defaultOpen = true,
   statusMessage,
   stage = "outputting",
   prompt,
@@ -470,400 +272,52 @@ export function CollapsibleThought({
   actions?: SubAgentActionLog[];
   toolLabel?: string;
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [isOpen, setIsOpen] = useState(defaultOpen || isLive);
   const [messageIndex, setMessageIndex] = useState(0);
-  const [elapsedSec, setElapsedSec] = useState(1);
 
-  // Rotating thought messages list tailored to context
+  // Keep unused props referenced so call sites stay compatible without noisy lint.
+  void prompt;
+  void isEdit;
+  void actions;
+  void stage;
+
   const messageList = React.useMemo(() => {
-    if (customMessages && customMessages.length > 0) {
-      return customMessages;
-    }
-
-    if (isEdit) {
+    if (customMessages && customMessages.length > 0) return customMessages;
+    if (isLive) {
       return [
-        "กำลังวิเคราะห์รายละเอียดและตัวละครในภาพต้นฉบับ...",
-        "กำลังทำความเข้าใจคำขอและวางแผนปรับแต่ง...",
-        "Creative Director กำลังออกแบบบรรยากาศ แสง และเงา...",
-        "กำลังจัดวางองค์ประกอบให้กลมกลืนกับภาพเดิม...",
-        "กำลังส่งคำสั่งเพื่อเรนเดอร์รายละเอียดภาพ...",
-        "กำลังตรวจสอบคุณภาพและความสมดุลของผลงาน...",
+        "กำลังอ่านคำขอ...",
+        "กำลังจัดองค์ประกอบและโทนภาพ...",
+        "กำลังสร้างภาพ...",
+        "กำลังเก็บรายละเอียดให้ลงตัว...",
       ];
     }
+    return [];
+  }, [customMessages, isLive]);
 
-    if (stage === "generating") {
-      return [
-        "กำลังวิเคราะห์โจทย์และคอนเซปต์ภาพ...",
-        "Creative Director กำลังจัดวางมุมกล้องและสัดส่วนภาพ...",
-        "กำลังคัดสรรคู่สี โทนแสง และรายละเอียดพื้นผิว...",
-        "กำลังส่งคำสั่งสร้างภาพความละเอียดสูง...",
-        "กำลังเรนเดอร์และปรับแต่งความสมบูรณ์...",
-        "กำลังตรวจสอบคุณภาพงานก่อนส่งมอบ...",
-      ];
+  const liveLine = React.useMemo(() => {
+    if (statusMessage && !statusMessage.startsWith("กำลังจัดเตรียม") && !statusMessage.startsWith("กำลังวิเคราะห์บริบท")) {
+      return statusMessage;
     }
+    if (messageList.length === 0) return "";
+    return messageList[messageIndex % messageList.length];
+  }, [statusMessage, messageList, messageIndex]);
 
-    if (stage === "analyzing") {
-      return [
-        "กำลังวิเคราะห์ภาพต้นฉบับและบริบทที่เกี่ยวข้อง...",
-        "กำลังตรวจจับวัตถุและโครงสร้างบน Canvas...",
-        "กำลังประเมินจุดสำคัญเพื่อนำมาใช้ออกแบบ...",
-        "กำลังส่งต่อข้อมูลให้ Creative Director...",
-      ];
-    }
-
-    if (stage === "planning") {
-      return [
-        "Creative Director กำลังวิเคราะห์และระดมไอเดีย...",
-        "กำลังประเมิน Detail Score และ Precision Score เพื่อเลือกโมเดล...",
-        "กำลังจัดวางโครงสร้างและองค์ประกอบศิลป์...",
-        "กำลังเลือกสไตล์และโมเดลที่เหมาะสมที่สุด...",
-        "กำลังจัดเตรียมแนวทางสร้างภาพที่แม่นยำ...",
-      ];
-    }
-
-    return [
-      "กำลังคิดและวิเคราะห์บริบท...",
-      "กำลังทำความเข้าใจคำสั่งอย่างละเอียด...",
-      "กำลังวางแผนขั้นตอนการทำงาน...",
-      "Creative Director กำลังจัดเตรียมผลลัพธ์...",
-      "กำลังตรวจสอบความถูกต้องและรายละเอียด...",
-    ];
-  }, [stage, isEdit, customMessages]);
-
-  const effectiveMessages = React.useMemo(() => {
-    if (
-      statusMessage &&
-      !statusMessage.startsWith("กำลังจัดเตรียม") &&
-      !statusMessage.startsWith("กำลังวิเคราะห์บริบท")
-    ) {
-      if (!messageList.includes(statusMessage)) {
-        return [statusMessage, ...messageList];
-      }
-    }
-    return messageList;
-  }, [messageList, statusMessage]);
-
-  const currentMessage = effectiveMessages[messageIndex % effectiveMessages.length];
-
-  // Rotate messages while active
   useEffect(() => {
-    if (!isLive) return;
+    if (!isLive || messageList.length === 0) return;
     const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % effectiveMessages.length);
+      setMessageIndex((prev) => (prev + 1) % messageList.length);
     }, 2800);
     return () => clearInterval(interval);
-  }, [isLive, effectiveMessages.length]);
-
-  // Elapsed time counter
-  useEffect(() => {
-    if (!isLive) return;
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      setElapsedSec(Math.max(1, Math.floor((Date.now() - startTime) / 1000)));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isLive]);
-
-  const subAgentTasks = React.useMemo<SubAgentTaskItem[]>(() => {
-    if (actions && actions.length > 0) {
-      const items: SubAgentTaskItem[] = actions.map((act) => {
-        const meta = getAgentMeta(act.agent, act.title);
-        const modelMatch = act.title.match(/\(([^)]+)\)/);
-        const modelBadge = modelMatch ? modelMatch[1] : undefined;
-        const cleanName = act.title.replace(/\s*\([^)]+\)/g, "").trim();
-
-        return {
-          id: act.id,
-          name: cleanName || meta.roleName,
-          modelBadge,
-          detailScore: act.detailScore,
-          precisionScore: act.precisionScore,
-          icon: meta.icon,
-          themeColor: meta.badgeColor,
-          themeBg: meta.badgeBg,
-          themeBorder: meta.borderColor,
-          task: act.description || "ปฏิบัติหน้าที่ตามขั้นตอนที่ได้รับมอบหมาย",
-          status:
-            act.status === "running" ? "running" : act.status === "error" ? "error" : "success",
-          statusText:
-            act.status === "success"
-              ? "เสร็จสิ้น"
-              : act.status === "running"
-                ? "กำลังทำ..."
-                : act.status === "error"
-                  ? "ไม่สำเร็จ"
-                  : "รอดำเนินการ",
-        };
-      });
-
-      if (
-        isLive &&
-        !items.some((i) => i.name.toLowerCase().includes("reviewer") || i.name.includes("ตรวจ"))
-      ) {
-        items.push({
-          id: "quality-reviewer-step",
-          name: "Quality Reviewer",
-          modelBadge: "Vision Quality Gate",
-          icon: <IconShieldCheck size={14} color="#9333ea" />,
-          themeColor: "#9333ea",
-          themeBg: "rgba(243, 232, 255, 0.8)",
-          themeBorder: "rgba(233, 213, 255, 0.95)",
-          task: "ตรวจเช็คความสมบูรณ์ ความคมชัด แสงเงา และความตรงตามบรีฟ",
-          status: "pending",
-          statusText: "รอดำเนินการ",
-        });
-      }
-
-      return items;
-    }
-
-    const isAnalyzing = stage === "analyzing";
-    const isPlanning = stage === "planning" || stage === "outputting";
-    const isGenerating = stage === "generating";
-
-    const defaultItems: SubAgentTaskItem[] = [];
-
-    if (
-      isEdit ||
-      prompt?.includes("@") ||
-      prompt?.includes("ภาพเดิม") ||
-      prompt?.includes("รูปเดิม")
-    ) {
-      defaultItems.push({
-        id: "step-analyzer",
-        name: "Image Analyzer",
-        modelBadge: "Vision Context",
-        icon: <IconSearch size={14} color="#0284c7" />,
-        themeColor: "#0284c7",
-        themeBg: "rgba(224, 242, 254, 0.75)",
-        themeBorder: "rgba(186, 230, 253, 0.9)",
-        task: "วิเคราะห์ภาพต้นฉบับและบริบทบน Canvas เพื่อดึงสไตล์ แสงเงา และคู่สีมาใช้งาน",
-        status: isAnalyzing ? "running" : "success",
-        statusText: isAnalyzing ? "กำลังวิเคราะห์..." : "เสร็จสิ้น",
-      });
-    }
-
-    defaultItems.push({
-      id: "step-director",
-      name: "Creative Director",
-      modelBadge: "Gemini 3 Flash",
-      icon: <IconBrain size={14} color="#6366f1" />,
-      themeColor: "#6366f1",
-      themeBg: "rgba(238, 242, 255, 0.8)",
-      themeBorder: "rgba(199, 210, 254, 0.95)",
-      task: isEdit
-        ? "วางแผนจัดวางองค์ประกอบ คุมแสงเงา ประเมิน Precision Score เพื่อรักษาภาพเดิม"
-        : "วิเคราะห์โจทย์ จัดวางสัดส่วน ประเมิน Detail Score & Precision Score เพื่อเลือกโมเดลสร้างภาพ",
-      status: isLive ? (isAnalyzing ? "pending" : isPlanning ? "running" : "success") : "success",
-      statusText: isLive
-        ? isAnalyzing
-          ? "รอดำเนินการ"
-          : isPlanning
-            ? "กำลังวางแผน..."
-            : "เสร็จสิ้น"
-        : "เสร็จสิ้น",
-    });
-
-    const specialistModel = toolLabel || DEFAULT_CREATING_MODEL_LABEL;
-    defaultItems.push({
-      id: "step-specialist",
-      name: isEdit ? "Image Editor" : "Image Specialist",
-      modelBadge: specialistModel,
-      icon: <IconPalette size={14} color="#ea580c" />,
-      themeColor: "#ea580c",
-      themeBg: "rgba(255, 237, 213, 0.8)",
-      themeBorder: "rgba(254, 215, 170, 0.95)",
-      task: isEdit
-        ? "ปรับแต่งภาพ คุมแสงเงาและสไตล์เดิมตามคำสั่งของ Creative Director"
-        : "เรนเดอร์ภาพกราฟิกความละเอียดสูงตามคอนเซปต์และสเปกของ Creative Director",
-      status: isLive
-        ? isGenerating
-          ? "running"
-          : isPlanning || isAnalyzing
-            ? "pending"
-            : "success"
-        : "success",
-      statusText: isLive ? (isGenerating ? "กำลังเรนเดอร์..." : "รอดำเนินการ") : "เสร็จสิ้น",
-    });
-
-    defaultItems.push({
-      id: "step-reviewer",
-      name: "Quality Reviewer",
-      modelBadge: "Vision Quality Gate",
-      icon: <IconShieldCheck size={14} color="#9333ea" />,
-      themeColor: "#9333ea",
-      themeBg: "rgba(243, 232, 255, 0.8)",
-      themeBorder: "rgba(233, 213, 255, 0.95)",
-      task: "ตรวจสอบความสมบูรณ์ ความคมชัด แสงเงา และความตรงตามบรีฟ",
-      status: isLive ? "pending" : "success",
-      statusText: isLive ? "รอดำเนินการ" : "เสร็จสิ้น (ผ่านเกณฑ์)",
-    });
-
-    return defaultItems;
-  }, [actions, isLive, stage, isEdit, prompt, toolLabel]);
+  }, [isLive, messageList.length]);
 
   const thoughtDisplay = React.useMemo(() => {
     const cleaned = thought ? cleanTechnicalPromptText(thought) : "";
-    if (
-      cleaned &&
-      cleaned !== "กำลังจัดเตรียมผลลัพธ์..." &&
-      cleaned !== "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ..." &&
-      !cleaned.startsWith("Edit ภาพ") &&
-      !cleaned.startsWith("Edit image")
-    ) {
-      return cleaned;
-    }
-    if (isEdit) {
-      const cleanPrompt = prompt ? cleanTechnicalPromptText(prompt) : "";
-      return cleanPrompt
-        ? `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งโดย ${cleanPrompt} พร้อมคุมโทนสี แสง และเงาให้กลมกลืนเป็นธรรมชาติค่ะ`
-        : "กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งตามคำขอ โดยรักษาเอกลักษณ์ของตัวละครและบรรยากาศเดิมค่ะ";
-    }
-    if (stage === "generating") {
-      return "กำลังสร้างสรรค์ภาพตามคอนเซปต์ของ Creative Director โดยเน้นความคมชัด แสงเงาที่สมจริง และองค์ประกอบระดับพรีเมียมค่ะ";
-    }
-    return "กำลังวิเคราะห์และวางแผนกระบวนการทำงานที่ดีที่สุด เพื่อสร้างผลลัพธ์ที่ตรงกับคำขอของคุณมากที่สุดค่ะ";
-  }, [thought, isEdit, prompt, stage]);
+    if (cleaned && cleaned.length > 0) return cleaned;
+    if (isLive) return "กำลังคิดแนวทางสร้างภาพให้ตรงคำขอ...";
+    return "";
+  }, [thought, isLive]);
 
-  const completedCount = subAgentTasks.filter((t) => t.status === "success").length;
-  const isAllCompleted = completedCount === subAgentTasks.length && subAgentTasks.length > 0;
-
-  const renderSubAgentPanel = () => (
-    <div
-      style={{
-        marginTop: 4,
-        paddingTop: 10,
-        borderTop: "1px solid rgba(226, 232, 240, 0.9)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
-    >
-      {/* Sub-Agent Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          fontSize: 11,
-          fontWeight: 600,
-          color: "#64748b",
-        }}
-      >
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <IconClipboard size={13} color="#6366f1" />
-          <span>การสั่งงาน Sub-Agents</span>
-        </div>
-        <span
-          style={{
-            fontSize: 10.5,
-            fontWeight: 600,
-            color: isAllCompleted ? "#16a34a" : "#6366f1",
-          }}
-        >
-          {completedCount}/{subAgentTasks.length} เสร็จสิ้น
-        </span>
-      </div>
-
-      {/* Sub-Agent list — frameless */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {subAgentTasks.map((taskItem) => (
-          <div
-            key={taskItem.id}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 3,
-            }}
-          >
-            {/* Header row: Icon + Agent Name + Model Badge + Score Badges + Status */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-              }}
-            >
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  color: "#1e293b",
-                  flexWrap: "wrap",
-                  minWidth: 0,
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    lineHeight: 0,
-                  }}
-                >
-                  {taskItem.icon}
-                </span>
-                <span>{taskItem.name}</span>
-                {taskItem.modelBadge && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 500,
-                      color: "#94a3b8",
-                    }}
-                  >
-                    {taskItem.modelBadge}
-                  </span>
-                )}
-                {taskItem.detailScore !== undefined && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "#6366f1",
-                    }}
-                    title="Detail Complexity Score (0-10)"
-                  >
-                    Detail: {taskItem.detailScore}/10
-                  </span>
-                )}
-                {taskItem.precisionScore !== undefined && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "#ea580c",
-                    }}
-                    title="Edit Precision Score (0-10)"
-                  >
-                    Precision: {taskItem.precisionScore}/10
-                  </span>
-                )}
-              </div>
-              {renderStatusBadge(taskItem.status, taskItem.statusText)}
-            </div>
-
-            {/* Description row */}
-            <div
-              style={{
-                fontSize: 11,
-                lineHeight: 1.5,
-                color: "#64748b",
-                paddingLeft: 20,
-              }}
-            >
-              {taskItem.task}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  if (!thoughtDisplay && !isLive && !toolLabel) return null;
 
   return (
     <div
@@ -871,47 +325,21 @@ export function CollapsibleThought({
         display: "flex",
         flexDirection: "column",
         width: "100%",
-        marginBottom: 6,
+        marginBottom: 4,
       }}
     >
       <style>{`
         @keyframes artshiftBrainPulse {
-          0%, 100% {
-            transform: scale(1);
-            filter: drop-shadow(0 0 0px rgba(99, 102, 241, 0));
-          }
-          50% {
-            transform: scale(1.12);
-            filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.55));
-          }
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.08); }
         }
         @keyframes artshiftSlideFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(3px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(2px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes artshiftWaveDot {
-          0%, 80%, 100% {
-            transform: scale(0.65);
-            opacity: 0.35;
-          }
-          40% {
-            transform: scale(1.25);
-            opacity: 1;
-          }
-        }
-        @keyframes artshiftShimmer {
-          0% {
-            background-position: -200% 0;
-          }
-          100% {
-            background-position: 200% 0;
-          }
+          0%, 80%, 100% { transform: scale(0.65); opacity: 0.35; }
+          40% { transform: scale(1.2); opacity: 1; }
         }
       `}</style>
 
@@ -923,236 +351,86 @@ export function CollapsibleThought({
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
-          background: isLive ? "rgba(238, 242, 255, 0.5)" : "transparent",
-          border: isLive ? "1px solid rgba(199, 210, 254, 0.6)" : "none",
-          borderRadius: isLive ? 18 : 0,
+          background: "transparent",
+          border: "none",
           outline: "none",
-          padding: isLive ? "3px 10px 3px 7px" : "3px 0",
+          padding: "2px 0",
           cursor: "pointer",
           textAlign: "left",
-          color: "#334155",
-          transition: "all 0.15s ease",
+          color: "#64748b",
           width: "fit-content",
           maxWidth: "100%",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = "#4f46e5";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = "#334155";
         }}
       >
         <ThoughtBrainIcon
           style={{
-            color: "#6366f1",
-            width: 15,
-            height: 15,
+            color: "#64748b",
+            width: 14,
+            height: 14,
             animation: isLive ? "artshiftBrainPulse 2s ease-in-out infinite" : undefined,
           }}
         />
-        <span
-          style={{
-            fontSize: 12.5,
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
-            color: isLive ? "#4338ca" : "inherit",
-          }}
-        >
-          {isLive ? "กำลังคิดอยู่" : "ความคิดของ AI (Thought)"}
-        </span>
-        {isLive && (
-          <>
-            <span style={{ color: "#818cf8", fontSize: 12, fontWeight: 600 }}>:</span>
-            <span
-              key={currentMessage}
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: "#475569",
-                animation: "artshiftSlideFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
-                maxWidth: 240,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                display: "inline-block",
-              }}
-              title={currentMessage}
-            >
-              {currentMessage}
-            </span>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 2.5,
-                marginLeft: 2,
-              }}
-            >
+        <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Thought</span>
+        {isLive && liveLine ? (
+          <span
+            key={liveLine}
+            style={{
+              fontSize: 11.5,
+              color: "#94a3b8",
+              maxWidth: 220,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              animation: "artshiftSlideFadeIn 0.3s ease",
+            }}
+          >
+            {liveLine}
+          </span>
+        ) : null}
+        {isLive ? (
+          <span style={{ display: "inline-flex", gap: 2, marginLeft: 2 }}>
+            {[0, 0.2, 0.4].map((delay) => (
               <span
+                key={delay}
                 style={{
-                  display: "inline-block",
                   width: 3.5,
                   height: 3.5,
                   borderRadius: "50%",
-                  background: "#6366f1",
-                  animation: "artshiftWaveDot 1.2s ease-in-out infinite 0s",
+                  background: "#94a3b8",
+                  animation: `artshiftWaveDot 1.2s ease-in-out infinite ${delay}s`,
                 }}
               />
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 3.5,
-                  height: 3.5,
-                  borderRadius: "50%",
-                  background: "#6366f1",
-                  animation: "artshiftWaveDot 1.2s ease-in-out infinite 0.2s",
-                }}
-              />
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 3.5,
-                  height: 3.5,
-                  borderRadius: "50%",
-                  background: "#6366f1",
-                  animation: "artshiftWaveDot 1.2s ease-in-out infinite 0.4s",
-                }}
-              />
-            </span>
-          </>
-        )}
+            ))}
+          </span>
+        ) : null}
         <ChevronDownIcon
           style={{
             transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-            width: 12,
-            height: 12,
-            color: isLive ? "#6366f1" : "#94a3b8",
-            transition: "transform 0.2s ease, color 0.15s ease",
-            marginLeft: isLive ? 3 : 2,
+            width: 11,
+            height: 11,
+            color: "#94a3b8",
+            transition: "transform 0.2s ease",
           }}
         />
       </button>
 
-      {isOpen &&
-        (isLive ? (
-          <div
-            style={{
-              position: "relative",
-              marginTop: 6,
-              marginLeft: 2,
-              padding: "10px 12px 10px 14px",
-              borderLeft: "2px solid #6366f1",
-              background: "rgba(248, 250, 252, 0.7)",
-              borderRadius: "0 8px 8px 0",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              overflow: "hidden",
-            }}
-          >
-            {/* Shimmer top line animation */}
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 1.5,
-                background:
-                  "linear-gradient(90deg, transparent 0%, #6366f1 30%, #a855f7 70%, transparent 100%)",
-                backgroundSize: "200% 100%",
-                animation: "artshiftShimmer 2s infinite linear",
-              }}
-            />
-
-            {/* Live Activity & Timer header */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-                fontSize: 11.5,
-              }}
-            >
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  color: "#4338ca",
-                  fontWeight: 600,
-                }}
-              >
-                <SpinnerIcon style={{ width: 12, height: 12, color: "#6366f1" }} />
-                <span
-                  key={currentMessage}
-                  style={{ animation: "artshiftSlideFadeIn 0.3s ease-out" }}
-                >
-                  {currentMessage}
-                </span>
-              </div>
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 500,
-                  color: "#94a3b8",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {elapsedSec}s
-              </span>
-            </div>
-
-            {/* AI Thought & Intent Disclosure */}
-            <div
-              style={{
-                color: "#334155",
-                fontSize: 12,
-                lineHeight: 1.55,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {thoughtDisplay}
-            </div>
-
-            {/* Sub-Agent Execution Details */}
-            {renderSubAgentPanel()}
-          </div>
-        ) : (
-          <div
-            style={{
-              position: "relative",
-              marginTop: 6,
-              marginLeft: 2,
-              padding: "10px 12px 10px 14px",
-              borderLeft: "2px solid #a5b4fc",
-              background: "rgba(248, 250, 252, 0.55)",
-              borderRadius: "0 8px 8px 0",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              overflow: "hidden",
-            }}
-          >
-            {/* AI Thought & Intent Disclosure */}
-            <div
-              style={{
-                color: "#334155",
-                fontSize: 12,
-                lineHeight: 1.55,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {thought}
-            </div>
-
-            {/* Sub-Agent Execution Details */}
-            {renderSubAgentPanel()}
-          </div>
-        ))}
+      {isOpen && thoughtDisplay ? (
+        <div
+          style={{
+            marginTop: 4,
+            marginLeft: 6,
+            paddingLeft: 12,
+            borderLeft: "1.5px solid #cbd5e1",
+            color: "#64748b",
+            fontSize: 12,
+            lineHeight: 1.55,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {thoughtDisplay}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1502,14 +780,14 @@ export default function ChatThread({
                 <CollapsibleThought
                   thought={msg.thought}
                   isLive={false}
-                  defaultOpen={false}
+                  defaultOpen={true}
                   prompt={msg.role === "assistant" ? undefined : msg.content}
                   actions={msg.actions}
                   toolLabel={msg.toolLabel}
                 />
               )}
 
-              {/* Tool Step Indicator */}
+              {/* Minimal process label */}
               {msg.toolLabel && (
                 <div
                   style={{
@@ -1517,17 +795,15 @@ export default function ChatThread({
                     alignItems: "center",
                     gap: 5,
                     alignSelf: "flex-start",
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
-                    color: "#475569",
-                    fontSize: 11,
-                    fontWeight: 500,
+                    padding: "2px 0",
+                    color: "#64748b",
+                    fontSize: 11.5,
+                    fontWeight: 600,
                     marginTop: msg.thought ? 0 : 2,
+                    marginLeft: 6,
                   }}
                 >
-                  <ImageSparkleIcon style={{ color: "#4f46e5", width: 14, height: 14 }} />
+                  <ImageSparkleIcon style={{ color: "#64748b", width: 13, height: 13 }} />
                   <span>{msg.toolLabel}</span>
                 </div>
               )}
@@ -1541,134 +817,36 @@ export default function ChatThread({
                 />
               )}
 
-              {/* Image thumbnails */}
+              {/* Aspect-true result thumbs */}
               {msg.images && msg.images.length > 0 && (
                 <div
                   style={{
                     display: "flex",
+                    flexWrap: "wrap",
                     gap: 10,
-                    marginTop: 6,
-                    marginBottom: 4,
+                    marginTop: 4,
+                    marginBottom: 2,
                     width: "100%",
                   }}
                 >
                   {msg.images.map((img, idx) => (
-                    <div
+                    <ChatResultImageThumb
                       key={img.fileId || idx}
-                      onClick={() => onSelectCanvasImage(img.fileId)}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(
-                          "application/x-artshift-chat-image",
-                          JSON.stringify({ fileId: img.fileId, url: img.url }),
-                        );
-                        if (img.fileId) {
-                          e.dataTransfer.setData("artshift/file-id", img.fileId);
-                        }
-                        e.dataTransfer.setData("text/uri-list", img.url);
-                        e.dataTransfer.setData("text/plain", img.url);
-                        e.dataTransfer.effectAllowed = "copy";
-                      }}
-                      title="คลิกเพื่อเลือกภาพบน Canvas หรือคลิกลากไปวางบน Canvas ได้"
-                      style={{
-                        position: "relative",
-                        flex: 1,
-                        maxWidth: msg.images!.length === 1 ? 380 : 190,
-                        aspectRatio: "1 / 1",
-                        borderRadius: 12,
-                        overflow: "hidden",
-                        background: "#f8fafc",
-                        cursor: "grab",
-                        boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
-                        border: "1px solid #e2e8f0",
-                        transition: "all 0.15s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "scale(1.02)";
-                        e.currentTarget.style.borderColor = "#4f46e5";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "scale(1)";
-                        e.currentTarget.style.borderColor = "#e2e8f0";
-                      }}
-                    >
-                      {/* JPEG format badge */}
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: 6,
-                          left: 6,
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          background: "rgba(15, 23, 42, 0.72)",
-                          backdropFilter: "blur(4px)",
-                          color: "#ffffff",
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          letterSpacing: "0.03em",
-                          pointerEvents: "none",
-                          zIndex: 2,
-                        }}
-                      >
-                        JPEG
-                      </span>
-
-                      {/* Name Tag overlay badge if label exists */}
-                      {img.label && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            bottom: 6,
-                            left: 6,
-                            right: 6,
-                            padding: "3px 8px",
-                            borderRadius: 6,
-                            background: "rgba(15, 23, 42, 0.78)",
-                            backdropFilter: "blur(6px)",
-                            color: "#ffffff",
-                            fontSize: 10,
-                            fontWeight: 600,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                            overflow: "hidden",
-                            pointerEvents: "none",
-                            zIndex: 2,
-                            boxShadow: "0 1px 4px rgba(0, 0, 0, 0.25)",
-                          }}
-                        >
-                          <IconCamera size={11} color="#ffffff" />
-                          <span
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            @{img.label}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* biome-ignore lint/performance/noImgElement: Direct chat message image rendering */}
-                      <img
-                        src={img.url}
-                        alt="AI Generation result"
-                        draggable={false}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
-                          pointerEvents: "none",
-                        }}
-                      />
-                    </div>
+                      image={img}
+                      imageCount={msg.images!.length}
+                      generationContext={msg.generationContext}
+                      qualityLabel={msg.qualityLabel}
+                      toolLabel={msg.toolLabel}
+                      onSelect={onSelectCanvasImage}
+                    />
                   ))}
                 </div>
               )}
 
-              {/* Assistant message body */}
+              {/* Assistant message body / structured summary */}
+              {msg.resultSummary && !msg.isError ? (
+                <ImageResultSummaryBlock summary={msg.resultSummary} />
+              ) : (
               <div
                 style={{
                   alignSelf: "flex-start",
@@ -1695,10 +873,10 @@ export default function ChatThread({
                           elementVersion: 1,
                           fileId: im.fileId || "",
                           displayName: im.label || "ภาพ",
-                          sourceWidth: 1024,
-                          sourceHeight: 1024,
-                          width: 1024,
-                          height: 1024,
+                          sourceWidth: im.width || 1024,
+                          sourceHeight: im.height || 1024,
+                          width: im.width || 1024,
+                          height: im.height || 1024,
                           angle: 0,
                         }))
                       : undefined)
@@ -1706,6 +884,7 @@ export default function ChatThread({
                   onSelect={(fileId) => onSelectCanvasImage(fileId)}
                 />
               </div>
+              )}
 
               {/* Suggestion Chips */}
               {msg.suggestions && msg.suggestions.length > 0 && (
@@ -1945,10 +1124,10 @@ export default function ChatThread({
                 liveAssistantState.thought ||
                 (liveAssistantState.stage === "outputting"
                   ? "กำลังจัดเตรียมผลลัพธ์..."
-                  : "กำลังวิเคราะห์บริบทและเตรียมการสร้างภาพ...")
+                  : "กำลังคิดแนวทางสร้างภาพให้ตรงคำขอ...")
               }
               isLive={true}
-              defaultOpen={false}
+              defaultOpen={true}
               statusMessage={liveAssistantState.statusMessage}
               stage={liveAssistantState.stage}
               prompt={liveAssistantState.prompt}
@@ -1957,7 +1136,7 @@ export default function ChatThread({
               toolLabel={liveAssistantState.toolLabel}
             />
 
-            {/* Tool Step (if generating) */}
+            {/* Minimal process + skeleton */}
             {liveAssistantState.stage === "generating" && (
               <>
                 <div
@@ -1966,23 +1145,17 @@ export default function ChatThread({
                     alignItems: "center",
                     gap: 6,
                     alignSelf: "flex-start",
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
-                    color: "#475569",
-                    fontSize: 11,
-                    fontWeight: 500,
+                    padding: "2px 0",
+                    marginLeft: 6,
+                    color: "#64748b",
+                    fontSize: 11.5,
+                    fontWeight: 600,
                   }}
                 >
-                  <SpinnerIcon style={{ color: "#4f46e5", width: 12, height: 12 }} />
-                  <span>
-                    สร้างรูปภาพด้วย {liveAssistantState.toolLabel || DEFAULT_CREATING_MODEL_LABEL}
-                    ...
-                  </span>
+                  <SpinnerIcon style={{ color: "#64748b", width: 12, height: 12 }} />
+                  <span>{liveAssistantState.toolLabel || DEFAULT_CREATING_MODEL_LABEL}</span>
                 </div>
 
-                {/* Skeleton placeholders */}
                 <div
                   style={{
                     display: "flex",
@@ -1997,8 +1170,8 @@ export default function ChatThread({
                     <div
                       key={idx}
                       style={{
-                        flex: 1,
-                        maxWidth: (liveAssistantState.requestedCount || 1) === 1 ? 380 : 190,
+                        width: (liveAssistantState.requestedCount || 1) === 1 ? 168 : 120,
+                        maxWidth: "100%",
                         aspectRatio: "1 / 1",
                         borderRadius: 12,
                         background: "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
@@ -2008,12 +1181,13 @@ export default function ChatThread({
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        flexShrink: 0,
                       }}
                     >
                       <ImageSparkleIcon
                         style={{
-                          width: 24,
-                          height: 24,
+                          width: 20,
+                          height: 20,
                           color: "#94a3b8",
                           opacity: 0.5,
                         }}

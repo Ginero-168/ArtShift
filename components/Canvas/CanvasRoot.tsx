@@ -56,6 +56,8 @@ export type CanvasRootHandle = {
   setView: (v: ViewTransform) => void;
   /** Programmatically set zoom scale centered on the viewport. */
   setZoom: (scale: number) => void;
+  /** Zoom so a world-space rect fills the viewport (with padding). */
+  fitWorldRect: (rect: { x: number; y: number; width: number; height: number }, padding?: number) => void;
 };
 
 type Props = {
@@ -405,6 +407,24 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     [size.w, size.h],
   );
 
+  const fitWorldRect = useCallback(
+    (rect: { x: number; y: number; width: number; height: number }, padding = 56) => {
+      if (!size.w || !size.h) return;
+      if (!(rect.width > 0) || !(rect.height > 0)) return;
+      const pad = Math.max(16, padding);
+      const availableW = Math.max(40, size.w - pad * 2);
+      const availableH = Math.max(40, size.h - pad * 2);
+      const nextScale = Math.min(
+        MAX_SCALE,
+        Math.max(MIN_SCALE, Math.min(availableW / rect.width, availableH / rect.height)),
+      );
+      const tx = (size.w - rect.width * nextScale) / 2 - rect.x * nextScale;
+      const ty = (size.h - rect.height * nextScale) / 2 - rect.y * nextScale;
+      setView({ scale: nextScale, tx, ty });
+    },
+    [size.w, size.h],
+  );
+
   // ——— wheel zoom + scroll pan ———
   const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     if (e.ctrlKey || e.metaKey) {
@@ -488,8 +508,9 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       getView: () => view,
       setView,
       setZoom,
+      fitWorldRect,
     }),
-    [clientToWorld, worldToScreen, resetView, view, setZoom],
+    [clientToWorld, worldToScreen, resetView, view, setZoom, fitWorldRect],
   );
 
   // ——— pointer routing: pan vs forward to parent ———

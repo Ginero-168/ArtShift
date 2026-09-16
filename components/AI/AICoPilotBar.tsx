@@ -41,7 +41,8 @@ import {
   runSequentialExecutionPlan, type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
-import { formatImageCompletionReply } from "@/lib/ai/imageCompletionReply";
+import { formatImageCompletionReply, buildImageCompletionSummary } from "@/lib/ai/imageCompletionReply";
+import { formatHumanThoughtText } from "@/lib/ai/imageResultPresentation";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { buildDesignAgentContext, type ClientChatMessage } from "@/lib/designAgent/client";
@@ -91,26 +92,16 @@ function extractSubject(prompt: string, summary?: string): string {
   return cleaned || "ภาพ";
 }
 
-function formatThoughtText(rawPrompt: string, directionSummary?: string, count = 1, isEdit = false): string {
-  const cleanPrompt = cleanTechnicalPromptText(rawPrompt);
-  const cleanSummary = directionSummary ? cleanTechnicalPromptText(directionSummary) : "";
-  if (isEdit) {
-    if (cleanSummary && cleanSummary.length > 5 && !cleanSummary.startsWith("สร้างภาพ")) {
-      const actionText = cleanSummary.startsWith("ปรับ") || cleanSummary.startsWith("แก้ไข") ? cleanSummary : `ปรับแต่ง: ${cleanSummary}`;
-      return `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผน${actionText} โดยรักษาความกลมกลืนของแสง เงา และบรรยากาศโดยรวมให้เป็นธรรมชาติ`;
-    }
-    const editInstruction = cleanPrompt.replace(/@[^\s]+\s*/g, "").trim() || "ตามคำขอ";
-    return `กำลังวิเคราะห์ภาพต้นฉบับ และวางแผนปรับแต่งภาพโดย ${editInstruction} พร้อมคุมโทนสีและแสงเงาเดิมให้ลงตัว`;
-  }
-  const isConceptPrompt = /(?:คิดให้หน่อย|concept|คอนเซปต์|เจ๋งๆ|ไอเดีย)/i.test(rawPrompt);
-  if (isConceptPrompt && cleanSummary) {
-    return `คิดคอนเซปต์เป็น "${cleanSummary}" โดยวางแผนจัดองค์ประกอบ แสงเงา มุมกล้อง และรายละเอียดให้สวยงามสมจริง`;
-  }
-  if (cleanSummary && cleanSummary.length > 5 && !cleanSummary.startsWith("สร้างภาพ")) {
-    return `วางแผนออกแบบ: "${cleanSummary}" (${count} ภาพ) โดยกำหนดสไตล์ โทนสี แสงเงา และความคมชัดระดับสูง`;
-  }
-  const subject = extractSubject(rawPrompt, cleanSummary);
-  return `กำลังวางแผนสร้างรูปภาพ "${subject}" (${count} ภาพ) โดยจัดองค์ประกอบ แสงเงา และรายละเอียดระดับสูงให้สมบูรณ์แบบค่ะ`;
+function formatThoughtText(rawPrompt: string, directionSummary?: string, count = 1, isEdit = false, dims?: { width?: number; height?: number; aspectRatio?: string }): string {
+  return formatHumanThoughtText({
+    rawPrompt,
+    directionSummary,
+    count,
+    isEdit,
+    width: dims?.width,
+    height: dims?.height,
+    aspectRatio: dims?.aspectRatio,
+  });
 }
 
 export default function AICoPilotBar() {
@@ -873,6 +864,7 @@ export default function AICoPilotBar() {
                   direction.summary,
                   count,
                   isEditTurn,
+                  imageRun.tasks[0]?.requestedDimensions,
                 );
                 const modelName = formatCreatingModelLabel(direction.modelAlias);
                 resolvedModelLabel = modelName;
@@ -1013,6 +1005,9 @@ export default function AICoPilotBar() {
                       url: i.result?.dataUrl || "",
                       fileId: i.result?.fileId || `img-${idx + 1}`,
                       label: direction.outputBriefs?.[idx] || `รูปที่ ${idx + 1}`,
+                      width: i.result?.width,
+                      height: i.result?.height,
+                      prompt: direction.refinedPrompt,
                     }));
 
                   const subject = extractSubject(promptToSend, direction.summary);
@@ -1021,15 +1016,32 @@ export default function AICoPilotBar() {
                   const firstSucceeded = runResult.items.find(
                     (i) => i.status === "succeeded" && i.result?.width,
                   );
+                  const dims = imageRun.tasks[0]?.requestedDimensions;
+                  const replyOptions = {
+                    printSizeSource: `${promptToSend}\n${direction.summary ?? ""}\n${direction.refinedPrompt ?? ""}`,
+                    outputWidthPx: firstSucceeded?.result?.width ?? dims?.width,
+                    summary: direction.summary,
+                    refinedPrompt: direction.refinedPrompt,
+                    userPrompt: promptToSend,
+                    width: firstSucceeded?.result?.width ?? dims?.width,
+                    height: firstSucceeded?.result?.height ?? dims?.height,
+                    aspectRatio: dims?.aspectRatio,
+                    modelLabel: modelName,
+                    quality: selectedQuality,
+                  };
+                  const resultSummary = buildImageCompletionSummary(
+                    subject,
+                    runResult.completedCount,
+                    direction.outputBriefs,
+                    isEditTurn,
+                    replyOptions,
+                  );
                   reply = formatImageCompletionReply(
                     subject,
                     runResult.completedCount,
                     direction.outputBriefs,
                     isEditTurn,
-                    {
-                      printSizeSource: `${promptToSend}\n${direction.summary ?? ""}\n${direction.refinedPrompt ?? ""}`,
-                      outputWidthPx: firstSucceeded?.result?.width,
-                    },
+                    replyOptions,
                   );
 
                   const partialFailureCount =
@@ -1087,6 +1099,8 @@ export default function AICoPilotBar() {
                       toolLabel: modelName,
                       images: generatedImages,
                       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
+                      resultSummary,
+                      qualityLabel: selectedQuality,
                       generationContext: {
                         userPrompt: isFollowUpTurn
                           ? priorGeneration?.userPrompt || promptToSend
@@ -1212,8 +1226,18 @@ export default function AICoPilotBar() {
       let reply = "";
       let actions: SubAgentActionLog[] = [];
       let suggestions: string[] = [];
-      let remoteGeneratedImages: Array<{ url: string; fileId: string; label: string }> | undefined;
+      let remoteGeneratedImages:
+        | Array<{
+            url: string;
+            fileId: string;
+            label: string;
+            width?: number;
+            height?: number;
+            prompt?: string;
+          }>
+        | undefined;
       let remoteModelAlias: string | undefined;
+      let remoteResultSummary: ReturnType<typeof buildImageCompletionSummary> | undefined;
 
       if (localPlan) {
         const localAction: SubAgentActionLog = {
@@ -1440,16 +1464,35 @@ export default function AICoPilotBar() {
               result.outputBriefs && result.outputBriefs.length > 0
                 ? result.outputBriefs
                 : [result.summary];
-            reply = formatImageCompletionReply(subject, 1, briefs, false, {
+            const remoteReplyOptions = {
               printSizeSource: `${promptToSend}\n${result.summary ?? ""}\n${result.refinedPrompt ?? ""}`,
               outputWidthPx: generated.width,
-            });
+              summary: result.summary,
+              refinedPrompt: result.refinedPrompt,
+              userPrompt: promptToSend,
+              width: generated.width,
+              height: generated.height,
+              aspectRatio: directedTask.requestedDimensions?.aspectRatio,
+              modelLabel: formatCreatingModelLabel(result.modelAlias),
+              quality: selectedQuality,
+            };
+            remoteResultSummary = buildImageCompletionSummary(
+              subject,
+              1,
+              briefs,
+              false,
+              remoteReplyOptions,
+            );
+            reply = formatImageCompletionReply(subject, 1, briefs, false, remoteReplyOptions);
             remoteModelAlias = result.modelAlias;
             remoteGeneratedImages = [
               {
                 url: generated.dataUrl || "",
                 fileId: generated.fileId,
                 label: briefs[0] || result.summary,
+                width: generated.width,
+                height: generated.height,
+                prompt: result.refinedPrompt,
               },
             ];
             suggestions = ["ปรับรายละเอียดต่อ", "ตรวจสอบ Layout", "↶ Undo ผลลัพธ์ล่าสุด"];
@@ -1467,6 +1510,8 @@ export default function AICoPilotBar() {
           ? formatCreatingModelLabel(remoteModelAlias)
           : undefined,
         images: remoteGeneratedImages,
+        resultSummary: remoteResultSummary,
+        qualityLabel: remoteGeneratedImages ? selectedQuality : undefined,
         timestamp: Date.now(),
         actions,
         suggestions,

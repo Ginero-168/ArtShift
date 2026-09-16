@@ -20,7 +20,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { IconWand } from "@/components/icons";
-import { clearCanvasViewport, publishCanvasViewport } from "@/lib/engine/canvasViewport";
+import { clearCanvasViewport, publishCanvasViewport, registerFitWorldRectHandler } from "@/lib/engine/canvasViewport";
 import { createEditorController } from "@/lib/engine/editorController";
 import {
   createDiamond,
@@ -197,6 +197,10 @@ export type CanvasEditorHandle = {
   getView: () => ViewTransform;
   setView: (v: ViewTransform) => void;
   setZoom: (scale: number) => void;
+  fitWorldRect: (
+    rect: { x: number; y: number; width: number; height: number },
+    padding?: number,
+  ) => void;
 };
 
 export type CanvasEditorProps = {
@@ -451,9 +455,17 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       getView: () => rootRef.current?.getView() ?? { scale: 1, tx: 0, ty: 0 },
       setView: (v) => rootRef.current?.setView(v),
       setZoom: (s) => rootRef.current?.setZoom(s),
+      fitWorldRect: (rect, padding) => rootRef.current?.fitWorldRect(rect, padding),
     }),
     [],
   );
+
+  useEffect(() => {
+    registerFitWorldRectHandler((rect, padding) => {
+      rootRef.current?.fitWorldRect(rect, padding);
+    });
+    return () => registerFitWorldRectHandler(null);
+  }, []);
 
   const handleViewChange = useCallback(
     (nextView: ViewTransform) => {

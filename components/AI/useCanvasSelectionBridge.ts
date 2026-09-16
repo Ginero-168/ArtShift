@@ -5,6 +5,8 @@ import {
   buildComposerImageSelectionFromIds,
   type ComposerImageRef,
 } from "@/lib/ai/orchestration/imageReferences";
+import { elementWorldBBox } from "@/lib/engine/bounds";
+import { fitWorldRectToViewport } from "@/lib/engine/canvasViewport";
 import { useEngine } from "@/lib/engine/store";
 
 export interface CanvasSelectionBridge {
@@ -185,6 +187,12 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
         setAttachedImageIds((existing) =>
           existing.includes(el.id) ? existing : [...existing, el.id],
         );
+        // Zoom viewport so the image fills the canvas view.
+        try {
+          fitWorldRectToViewport(elementWorldBBox(el), 64);
+        } catch {
+          // ignore viewport zoom failures
+        }
         const match =
           allSlideImageRefs.find((r: any) => r.objectId === el.id) || {
             objectId: el.id,
