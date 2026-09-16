@@ -78,11 +78,46 @@ export type BriefFooterItem = {
   box?: [number, number, number, number];
 };
 
+export type BriefFooterDirection = "row" | "column";
+
 export type BriefFooterBar = {
   box: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0..1000
   color?: string; // e.g. "#1e293b"
+  /** row = left→right columns (selling points). column = top→bottom stack (title/subtitle/CTA). */
+  direction?: BriefFooterDirection;
   items: BriefFooterItem[];
 };
+
+/**
+ * Choose footer item flow when the model omits direction / per-item boxes.
+ * Long stacked copy (title→CTA) → column; short equal selling points → row.
+ */
+export function resolveFooterBarDirection(
+  footer: Pick<BriefFooterBar, "direction" | "items">,
+  footerWidthPx: number,
+  footerHeightPx: number,
+): BriefFooterDirection {
+  if (footer.direction === "row" || footer.direction === "column") {
+    return footer.direction;
+  }
+  const items = footer.items;
+  if (items.length <= 1) return "column";
+  if (items.every((item) => Array.isArray(item.box) && item.box.length === 4)) {
+    return "row"; // unused when boxes drive placement
+  }
+
+  const avgLen =
+    items.reduce((sum, item) => sum + item.text.trim().length, 0) / items.length;
+  const fontSize = Math.min(12, Math.max(9, Math.round(footerHeightPx * 0.28)));
+  const colWidth = footerWidthPx / items.length;
+  const fitsInColumns = avgLen * fontSize * 0.55 <= colWidth * 0.9;
+  const canStack = footerHeightPx / items.length >= fontSize * 1.35;
+
+  if (!fitsInColumns && canStack) return "column";
+  if (canStack && avgLen >= 18 && items.length <= 3) return "column";
+  if (canStack && avgLen >= 22) return "column";
+  return "row";
+}
 
 export type ConvertToBriefData = {
   aspectRatio: { width: number; height: number };
@@ -122,6 +157,7 @@ Text policy (important):
   - watermarks, UI chrome, or accidental OCR noise
 - Put person/product appearance only in heroSubject.description (no clothing slogans as separate text).
 - Leave "texts" and "intentionalTexts" empty unless a layout text does not fit the named fields above.
+- footerBar.direction: use "column" when footer copy stacks top→bottom (title / subtitle / CTA). Use "row" when equal selling-point columns sit left→right. Prefer per-item box when positions are clear.
 
 Required shape:
 {
@@ -133,7 +169,7 @@ Required shape:
   "subtextCard": { "box": [ymin,xmin,ymax,xmax], "text": "exact text", "color": "#e5e5e5" },
   "featureTags": [{ "text": "exact", "box": [ymin,xmin,ymax,xmax], "color": "#e5e5e5" }],
   "brandLogo": { "box": [ymin,xmin,ymax,xmax], "text": "brand", "subtext": "optional" },
-  "footerBar": { "box": [ymin,xmin,ymax,xmax], "color": "#e5e5e5", "items": [{ "text": "exact" }] },
+  "footerBar": { "box": [ymin,xmin,ymax,xmax], "color": "#e5e5e5", "direction": "row"|"column", "items": [{ "text": "exact", "box": [ymin,xmin,ymax,xmax] }] },
   "dividers": [],
   "backgroundPartitions": [],
   "focalObjects": [],
@@ -357,9 +393,17 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
     if (parsed.footerBar && typeof parsed.footerBar === "object") {
       const fb = parsed.footerBar;
       if (Array.isArray(fb.box) && fb.box.length === 4 && Array.isArray(fb.items)) {
+        const rawDir = typeof fb.direction === "string" ? fb.direction.toLowerCase() : "";
+        const direction =
+          rawDir === "column" || rawDir === "vertical" || rawDir === "stack"
+            ? "column"
+            : rawDir === "row" || rawDir === "horizontal"
+              ? "row"
+              : undefined;
         footerBar = {
           box: fb.box as [number, number, number, number],
           color: fb.color || "#1e293b",
+          direction,
           items: fb.items
             .filter((item: any) => item && (typeof item === "string" || item.text))
             .map((item: any) => {

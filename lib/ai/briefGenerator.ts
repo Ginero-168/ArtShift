@@ -12,7 +12,7 @@ import {
   styleBriefGuideShape,
   styleBriefGuideText,
 } from "@/lib/ai/briefGuideStyle";
-import { type ConvertToBriefData, isUsableBriefLayout } from "@/lib/ai/briefParser";
+import { type ConvertToBriefData, isUsableBriefLayout, resolveFooterBarDirection } from "@/lib/ai/briefParser";
 import { reportAIError, reportAIResult } from "@/lib/ai/progressReporter";
 
 export type ConvertToBriefOptions = {
@@ -368,20 +368,35 @@ export function generateBriefElements(
 
       const items = data.footerBar.items;
       if (items.length > 0) {
+        const direction = resolveFooterBarDirection(data.footerBar, fw, fh);
+        const itemFontSize = Math.min(
+          direction === "column" ? 14 : 12,
+          Math.max(9, Math.round(fh * (direction === "column" ? 0.22 : 0.28))),
+        );
         const itemWidth = fw / items.length;
-        const itemFontSize = Math.min(12, Math.max(9, Math.round(fh * 0.28)));
+        const itemHeight = fh / items.length;
 
         items.forEach((item, index) => {
-          let ix = fx + Math.round(index * itemWidth);
-          let iy = fy;
-          let iw = Math.round(itemWidth);
-          let ih = fh;
+          let ix: number;
+          let iy: number;
+          let iw: number;
+          let ih: number;
 
           if (item.box) {
             ix = targetX + Math.round((item.box[1] / 1000) * targetWidth);
             iy = targetY + Math.round((item.box[0] / 1000) * targetHeight);
             iw = Math.max(20, Math.round(((item.box[3] - item.box[1]) / 1000) * targetWidth));
             ih = Math.max(10, Math.round(((item.box[2] - item.box[0]) / 1000) * targetHeight));
+          } else if (direction === "column") {
+            ix = fx;
+            iy = fy + Math.round(index * itemHeight);
+            iw = fw;
+            ih = Math.round(itemHeight);
+          } else {
+            ix = fx + Math.round(index * itemWidth);
+            iy = fy;
+            iw = Math.round(itemWidth);
+            ih = fh;
           }
 
           const itemText = createText({

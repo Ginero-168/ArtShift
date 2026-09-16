@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { generateBriefElements } from "@/lib/ai/briefGenerator";
-import type { ConvertToBriefData } from "@/lib/ai/briefParser";
+import { resolveFooterBarDirection, type ConvertToBriefData } from "@/lib/ai/briefParser";
 import type { ImageElement } from "@/lib/engine/types";
 
 describe("Brief Generator Service & Layout Geometry", () => {
@@ -350,6 +350,76 @@ describe("Brief Generator Service & Layout Geometry", () => {
     for (const el of elements) {
       expect(el.groupIds).toContain(firstGroupId);
     }
+  });
+
+  it("stacks long footer copy top-to-bottom instead of left-to-right", () => {
+    const data: ConvertToBriefData = {
+      aspectRatio: { width: 1, height: 1 },
+      footerBar: {
+        box: [780, 40, 960, 960],
+        items: [
+          { text: "The Wicked King ราชันเจ้าอุบาย" },
+          { text: "นิยายเล่มดังภาคต่อ 'The Cruel Prince'" },
+          { text: "ลดแรงที่ร้านนายอินทร์@Thaimart" },
+        ],
+      },
+      backgroundPartitions: [],
+      dividers: [],
+      focalObjects: [],
+      texts: [],
+    };
+
+    const elements = generateBriefElements(data, mockImageElement);
+    const footerItems = elements.filter((e) => e.name?.startsWith("Footer Item:"));
+    expect(footerItems).toHaveLength(3);
+
+    const ys = footerItems.map((e) => e.y);
+    expect(ys[0]).toBeLessThan(ys[1]!);
+    expect(ys[1]).toBeLessThan(ys[2]!);
+
+    // Same column: x positions should be nearly aligned (not spread across width)
+    const xs = footerItems.map((e) => e.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(40);
+  });
+
+  it("keeps short equal footer selling points in a left-to-right row", () => {
+    const data: ConvertToBriefData = {
+      aspectRatio: { width: 1, height: 1 },
+      footerBar: {
+        box: [900, 15, 980, 480],
+        items: [
+          { text: "สนุกได้ทั้งครอบครัว" },
+          { text: "ปลอดภัยได้มาตรฐาน" },
+          { text: "เดินทางสะดวก" },
+          { text: "ความสุขรอคุณ" },
+        ],
+      },
+      backgroundPartitions: [],
+      dividers: [],
+      focalObjects: [],
+      texts: [],
+    };
+
+    const elements = generateBriefElements(data, mockImageElement);
+    const footerItems = elements.filter((e) => e.name?.startsWith("Footer Item:"));
+    expect(footerItems).toHaveLength(4);
+    const xs = footerItems.map((e) => e.x);
+    expect(xs[0]).toBeLessThan(xs[1]!);
+    expect(xs[1]).toBeLessThan(xs[2]!);
+    expect(xs[2]).toBeLessThan(xs[3]!);
+  });
+
+  it("honors explicit footerBar.direction=column even for short items", () => {
+    expect(
+      resolveFooterBarDirection(
+        {
+          direction: "column",
+          items: [{ text: "A" }, { text: "B" }, { text: "C" }],
+        },
+        400,
+        80,
+      ),
+    ).toBe("column");
   });
 
   it("verifies 'Convert to Brief' button is exposed in both ObjectContextBar and EditorOptionBar", () => {
