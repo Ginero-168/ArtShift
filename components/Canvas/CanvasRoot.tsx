@@ -28,6 +28,7 @@ import { unionBBox } from "@/lib/engine/bounds";
 import { cellsForPlacement, getAllHexCells, getHexMetrics } from "@/lib/engine/hexLayout";
 import { createPointerGestureRouter } from "@/lib/engine/pointerGestureRouter";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
+import { subscribeFontsLoaded } from "@/lib/fonts";
 import { recordEditorInteraction } from "@/lib/perf/editorTelemetry";
 import { renderElement, renderSlide } from "@/lib/renderer/canvas";
 import { drawGhostVariationOverlay, type GhostVariationOverlay } from "@/lib/renderer/ghostOverlay";
@@ -144,6 +145,8 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     window.addEventListener("artshift:raster-mask-ready", redraw);
     return () => window.removeEventListener("artshift:raster-mask-ready", redraw);
   }, []);
+
+  useEffect(() => subscribeFontsLoaded(() => setRasterMaskVersion((version) => version + 1)), []);
 
   // ——— resize observer ———
   useLayoutEffect(() => {

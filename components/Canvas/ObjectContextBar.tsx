@@ -11,6 +11,7 @@ import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/o
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { convertImageToBrief } from "@/lib/ai/briefGenerator";
+import { nextThaiFontCssFamily } from "@/lib/fonts";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
@@ -341,7 +342,7 @@ export default function ObjectContextBar({
     );
     controls.push(
       action("Font", () =>
-        apply({ fontFamily: first.fontFamily === "Inter" ? "Arial" : "Inter" }, "font family"),
+        apply({ fontFamily: nextThaiFontCssFamily(first.fontFamily) }, "font family"),
       ),
     );
     controls.push(

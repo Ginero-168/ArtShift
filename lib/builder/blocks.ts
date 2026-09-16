@@ -30,6 +30,7 @@ import {
 import { fitMediaElementToRect, isMediaElement } from "../engine/mediaLayout";
 import type { BlockPlacement, EngineElement, TextElement } from "../engine/types";
 import { convertElementToVectorPath } from "../engine/vectorPath";
+import { DEFAULT_THAI_FONT_FAMILY } from "../fonts";
 import { createTextFromPreset, DEFAULT_TEXT_PRESET_ID, type TextPresetId } from "./textPresets";
 
 export const BUILDER_BLOCK_MIME = "application/x-artshift-block";
@@ -963,7 +964,7 @@ function styleText(
   fontSize: number,
   patch: Partial<TextElement>,
 ): TextElement {
-  const element = createText({ ...rect, text, fontSize, fontFamily: "'Sarabun', sans-serif" });
+  const element = createText({ ...rect, text, fontSize, fontFamily: DEFAULT_THAI_FONT_FAMILY });
   Object.assign(element, patch);
   element.roughness = 0;
   element.fillStyle = "solid";

@@ -26,6 +26,7 @@ import type {
   VectorPathElement,
 } from "./types";
 import { recomputeVectorPathBounds } from "./vectorPath";
+import { DEFAULT_THAI_FONT_FAMILY } from "@/lib/fonts";
 
 let _seedCounter = 1;
 function nextSeed(): number {
@@ -294,7 +295,7 @@ export function createText(opts: {
     backgroundColor: "transparent",
     text: opts.text,
     fontSize,
-    fontFamily: opts.fontFamily ?? "'Excalifont', 'Mali', cursive",
+    fontFamily: opts.fontFamily ?? DEFAULT_THAI_FONT_FAMILY,
     fontStyle: "normal",
     textAlign: "left",
     verticalAlign: "top",

@@ -4,48 +4,89 @@ import { useEffect } from "react";
 import { useEngine } from "@/lib/engine/store";
 import { selectionForImage } from "@/lib/raster/activeSelection";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
-import { RASTER_TOOL_HOTKEYS } from "./rasterHotkeys";
+import { RASTER_TOOL_HOTKEYS, VECTOR_TOOL_HOTKEYS } from "./rasterHotkeys";
+
+/** True when the event target is (or is inside) a text-editing field. */
+export function isEditableHotkeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") {
+    return true;
+  }
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+/**
+ * Layout-independent letter from KeyboardEvent.code (KeyZ -> "z").
+ * Prefer this over event.key so Thai/other IME layouts still trigger shortcuts.
+ */
+export function letterFromKeyboardEvent(event: KeyboardEvent): string | null {
+  const match = /^Key([A-Z])$/.exec(event.code);
+  return match ? match[1].toLowerCase() : null;
+}
 
 export function handleCanvasHotkey(event: KeyboardEvent) {
-  const target = event.target as HTMLElement | null;
-  if (
-    target &&
-    (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
-  ) {
-    return;
-  }
+  if (isEditableHotkeyTarget(event.target)) return;
 
   const st = useEngine.getState();
   const selectedIds = st.selectedIds;
+  const mod = event.metaKey || event.ctrlKey;
+  const letter = letterFromKeyboardEvent(event);
 
-  if ((event.metaKey || event.ctrlKey) && !event.altKey) {
-    const commandKey = event.key.toLowerCase();
-    if (commandKey === "z") {
+  if (mod && !event.altKey) {
+    // Undo / Redo — always use physical KeyZ / KeyY (IME-safe).
+    if (event.code === "KeyZ") {
       event.preventDefault();
       if (event.shiftKey) st.redo();
       else st.undo();
       return;
     }
-    if (commandKey === "d" && !event.shiftKey) {
-      if (st.editorMode === "raster") {
-        event.preventDefault();
-        st.clearAllRasterSelections();
-      }
-      return;
-    }
-    if (commandKey === "y" && event.ctrlKey && !event.shiftKey) {
+    if (event.code === "KeyY" && event.ctrlKey && !event.metaKey && !event.shiftKey) {
       event.preventDefault();
       st.redo();
       return;
     }
+    if (event.code === "KeyA" && !event.shiftKey) {
+      event.preventDefault();
+      st.selectAll();
+      return;
+    }
+    if (event.code === "KeyC" && !event.shiftKey) {
+      if (selectedIds.size === 0) return;
+      event.preventDefault();
+      st.copyElements(Array.from(selectedIds));
+      return;
+    }
+    if (event.code === "KeyX" && !event.shiftKey) {
+      if (selectedIds.size === 0) return;
+      event.preventDefault();
+      st.cutElements(Array.from(selectedIds));
+      return;
+    }
+    if (event.code === "KeyV" && !event.shiftKey) {
+      event.preventDefault();
+      st.pasteElements();
+      return;
+    }
+    if (event.code === "KeyD" && !event.shiftKey) {
+      event.preventDefault();
+      if (st.editorMode === "raster") {
+        st.clearAllRasterSelections();
+      } else if (selectedIds.size > 0) {
+        st.copyElements(Array.from(selectedIds));
+        st.pasteElements();
+      }
+      return;
+    }
     return;
   }
+
   if (event.altKey) return;
 
   const brushSizeDelta = !event.shiftKey
-    ? event.key === "[" || event.code === "BracketLeft"
+    ? event.code === "BracketLeft" || event.key === "["
       ? -1
-      : event.key === "]" || event.code === "BracketRight"
+      : event.code === "BracketRight" || event.key === "]"
         ? 1
         : 0
     : 0;
@@ -112,9 +153,18 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
     return;
   }
 
-  const key = event.key.toLowerCase();
-  const match = RASTER_TOOL_HOTKEYS.find(
-    (shortcut) => shortcut.key === key && Boolean(shortcut.shiftKey) === event.shiftKey,
+  if (event.code === "Escape") {
+    if (selectedIds.size === 0 && !st.activeRasterSelection) return;
+    event.preventDefault();
+    if (st.activeRasterSelection) st.clearAllRasterSelections();
+    st.selectOnly([]);
+    return;
+  }
+
+  if (!letter) return;
+  const toolHotkeys = st.editorMode === "raster" ? RASTER_TOOL_HOTKEYS : VECTOR_TOOL_HOTKEYS;
+  const match = toolHotkeys.find(
+    (shortcut) => shortcut.key === letter && Boolean(shortcut.shiftKey) === event.shiftKey,
   );
   if (!match) return;
 
@@ -122,7 +172,7 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
   st.setTool(match.id);
 }
 
-/** Keep keyboard input intentionally scoped to the current Raster toolset. */
+/** Canvas / editor keyboard shortcuts (undo, clipboard, tools, delete). */
 export function useCanvasHotkeys() {
   useEffect(() => {
     window.addEventListener("keydown", handleCanvasHotkey);

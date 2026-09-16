@@ -52,7 +52,7 @@ import type {
 } from "@/lib/engine/types";
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
 import { convertElementToVectorPath, smoothVectorPathNodes } from "@/lib/engine/vectorPath";
-import { THAI_FONTS } from "@/lib/fonts";
+import FontFamilyPicker from "@/components/FontFamilyPicker";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
@@ -1275,16 +1275,10 @@ function TextOptions({
       </label>
       <label className={styles.field}>
         <span>Typeface</span>
-        <select
+        <FontFamilyPicker
           value={text.fontFamily}
-          onChange={(event) => apply({ fontFamily: event.currentTarget.value }, "font family")}
-        >
-          {THAI_FONTS.map((font) => (
-            <option key={font.family} value={font.cssFamily}>
-              {font.family}
-            </option>
-          ))}
-        </select>
+          onChange={(fontFamily) => apply({ fontFamily }, "font family")}
+        />
       </label>
       <div className={styles.numberGrid}>
         <NumberField

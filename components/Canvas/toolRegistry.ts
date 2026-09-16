@@ -24,7 +24,7 @@ import {
   IconWand,
 } from "@/components/icons";
 import type { Tool } from "@/lib/engine/store";
-import { RASTER_TOOL_HOTKEYS } from "./toolMetadata";
+import { RASTER_TOOL_HOTKEYS, VECTOR_TOOL_HOTKEYS } from "./toolMetadata";
 
 export type ToolIcon = (props: { size?: number }) => React.JSX.Element;
 
@@ -38,7 +38,9 @@ export type ToolDefinition = {
 };
 
 function shortcutFor(id: Tool): Pick<ToolDefinition, "hotkey" | "shiftKey"> {
-  const shortcut = RASTER_TOOL_HOTKEYS.find((entry) => entry.id === id);
+  const shortcut =
+    VECTOR_TOOL_HOTKEYS.find((entry) => entry.id === id) ??
+    RASTER_TOOL_HOTKEYS.find((entry) => entry.id === id);
   return shortcut ? { hotkey: shortcut.key, shiftKey: shortcut.shiftKey } : {};
 }
 
@@ -47,18 +49,36 @@ export const COMMON_TOOL_DEFINITIONS: ToolDefinition[] = [
 ];
 
 export const VECTOR_TOOL_DEFINITIONS: ToolDefinition[] = [
-  { id: "select", icon: IconCursor, label: "Select", title: "Select and move objects" },
+  {
+    id: "select",
+    icon: IconCursor,
+    label: "Select",
+    title: "Select and move objects (V)",
+    ...shortcutFor("select"),
+  },
   {
     id: "directSelect",
     icon: IconDirectSelect,
     label: "Direct",
-    title: "Edit vector anchor points",
+    title: "Edit vector anchor points (A)",
+    ...shortcutFor("directSelect"),
   },
-  { id: "pen", icon: IconPen, label: "Pen", title: "Draw Bezier paths" },
+  {
+    id: "pen",
+    icon: IconPen,
+    label: "Pen",
+    title: "Draw Bezier paths (P)",
+    ...shortcutFor("pen"),
+  },
   { id: "freedraw", icon: IconFreedraw, label: "Draw", title: "Draw a freehand vector path" },
-  { id: "text", icon: IconText, label: "Text", title: "Create text" },
+  {
+    id: "text",
+    icon: IconText,
+    label: "Text",
+    title: "Create text (T)",
+    ...shortcutFor("text"),
+  },
 ];
-
 export const RASTER_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     id: "rasterMove",

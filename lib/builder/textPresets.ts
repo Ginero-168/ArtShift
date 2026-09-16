@@ -1,6 +1,7 @@
 import { createText } from "../engine/factory";
 import { getTextSafePadding, measureTextElementHeight } from "../engine/textLayout";
 import type { TextElement } from "../engine/types";
+import { DEFAULT_THAI_FONT_FAMILY } from "../fonts";
 
 export type TextPresetId = NonNullable<TextElement["textPreset"]>;
 
@@ -147,7 +148,7 @@ export function createTextFromPreset(
     ...rect,
     text: preset.defaultText,
     fontSize: preset.fontSize,
-    fontFamily: "'Sarabun', sans-serif",
+    fontFamily: DEFAULT_THAI_FONT_FAMILY,
   });
   Object.assign(element, textPresetStyle(preset), { textPreset: preset.id });
   element.roughness = 0;

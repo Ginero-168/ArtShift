@@ -5,7 +5,7 @@ import { IconEye } from "@/components/icons";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement, TextElement } from "@/lib/engine/types";
-import { THAI_FONTS } from "@/lib/fonts";
+import FontFamilyPicker from "@/components/FontFamilyPicker";
 import { analyzeTextContrastUnderImage } from "@/lib/vision/textContrast";
 import { CompactDropdown, FONT_SIZES, Section } from "./PanelParts";
 
@@ -77,26 +77,11 @@ export function TextSection({
   return (
     <>
       <Section>
-        <select
+        <FontFamilyPicker
+          compact
           value={firstText.fontFamily}
-          onChange={(e) => apply({ fontFamily: e.target.value }, "font family")}
-          style={{
-            padding: "4px 6px",
-            borderRadius: 6,
-            border: "1px solid var(--stroke, #e5e7eb)",
-            fontSize: 11,
-            fontFamily: firstText.fontFamily,
-            cursor: "pointer",
-            background: "var(--surface-solid, #fff)",
-            color: "var(--ink, #111)",
-          }}
-        >
-          {THAI_FONTS.map((f) => (
-            <option key={f.family} value={f.cssFamily} style={{ fontFamily: f.cssFamily }}>
-              {f.family}
-            </option>
-          ))}
-        </select>
+          onChange={(fontFamily) => apply({ fontFamily }, "font family")}
+        />
       </Section>
       <Section>
         <CompactDropdown

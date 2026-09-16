@@ -1521,7 +1521,7 @@ export default function AICoPilotBar() {
         position: "relative", width: "100%", height: "100%", minHeight: 0,
         display: "flex", flexDirection: "column", pointerEvents: "auto", overflow: "hidden",
         background: "#ffffff", color: "#0f172a",
-        fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily: 'Sarabun, "Noto Sans Thai", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       <style>{`

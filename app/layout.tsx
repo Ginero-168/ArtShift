@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import ThaiFontsLoader from "@/components/ThaiFontsLoader";
 import "./globals.css";
 import "./excalidraw-thai.css";
 
@@ -18,8 +19,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="th">
+      <body>
+        <ThaiFontsLoader />
+        {children}
+      </body>
     </html>
   );
 }

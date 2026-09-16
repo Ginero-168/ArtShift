@@ -7,6 +7,13 @@ export type RasterToolHotkey = {
 };
 
 /** Keyboard metadata is intentionally icon-free so shortcut tests stay cheap. */
+export const VECTOR_TOOL_HOTKEYS: RasterToolHotkey[] = [
+  { id: "select", key: "v" },
+  { id: "directSelect", key: "a" },
+  { id: "pen", key: "p" },
+  { id: "text", key: "t" },
+];
+
 export const RASTER_TOOL_HOTKEYS: RasterToolHotkey[] = [
   { id: "rasterMove", key: "v" },
   { id: "rasterBrush", key: "b" },
