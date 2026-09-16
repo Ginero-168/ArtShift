@@ -24,6 +24,10 @@ import {
   renderHarmonyPrompt,
 } from "./replicateChatProtocol";
 import { assertProviderResponse, parseObjectProposals, textFromUnknownOutput } from "./shared";
+import {
+  aspectRatioFromDimensions,
+  normalizeReplicateAspectRatio,
+} from "@/lib/server/ai/replicateAspectRatio";
 
 const SUPPORTED_TASKS: AiTaskKind[] = [
   "assistant.chat",
@@ -727,31 +731,6 @@ function extractFileUrl(output: unknown): string | undefined {
     return (output as { url: string }).url;
   }
   return undefined;
-}
-
-type ReplicateImageAspectRatio = "1:1" | "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4";
-
-function aspectRatioFromDimensions(width: number, height: number): ReplicateImageAspectRatio {
-  const ratio = width / height;
-  if (Math.abs(ratio - 1) < 0.08) return "1:1";
-  if (ratio >= 1.6) return "16:9";
-  if (ratio <= 0.625) return "9:16";
-  if (ratio >= 1.4) return "3:2";
-  if (ratio <= 0.72) return "2:3";
-  if (ratio > 1) return "4:3";
-  return "3:4";
-}
-
-function normalizeReplicateAspectRatio(ratio: string | undefined): ReplicateImageAspectRatio {
-  if (!ratio) return "1:1";
-  if (ratio === "1:1") return "1:1";
-  if (ratio === "16:9" || ratio === "21:9" || ratio === "3:1") return "16:9";
-  if (ratio === "9:16" || ratio === "1:3") return "9:16";
-  if (ratio === "3:2") return "3:2";
-  if (ratio === "2:3") return "2:3";
-  if (ratio === "4:3") return "4:3";
-  if (ratio === "3:4") return "3:4";
-  return "1:1";
 }
 
 async function fetchGeneratedImage(outputUrl: string, signal: AbortSignal): Promise<string> {

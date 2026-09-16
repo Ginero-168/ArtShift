@@ -250,10 +250,10 @@ describe("context-aware turn orchestrator", () => {
       search: { required: false, queries: [], sources: [] },
     });
 
-    expect(task.requestedDimensions).toEqual({
-      width: 1536,
-      height: 512,
-      aspectRatio: "16:9", // closest API standard or panoramic
+    expect(task.requestedDimensions).toMatchObject({
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
     });
   });
 
@@ -322,10 +322,10 @@ describe("context-aware turn orchestrator", () => {
       search: { required: false, queries: [], sources: [] },
     });
 
-    expect(task.requestedDimensions).toEqual({
-      width: 1536,
-      height: 512,
-      aspectRatio: "16:9",
+    expect(task.requestedDimensions).toMatchObject({
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
     });
   });
 
@@ -464,10 +464,10 @@ describe("context-aware turn orchestrator", () => {
       search: { required: false, queries: [], sources: [] },
     });
 
-    expect(task.requestedDimensions).toEqual({
-      width: 768,
-      height: 1024,
-      aspectRatio: "3:4",
+    expect(task.requestedDimensions).toMatchObject({
+      width: 1360,
+      height: 2048,
+      aspectRatio: "1360x2048",
     });
   });
 

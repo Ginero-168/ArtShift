@@ -99,25 +99,40 @@ export type AiPromptEnhanceOutput = {
   prompt: string;
 };
 
-export type AiImageAspectRatio =
-  | "1:1"
-  | "3:2"
-  | "2:3"
-  | "4:3"
-  | "3:4"
-  | "16:9"
-  | "9:16"
-  | "auto"
-  | "1024x1024"
-  | "1536x1024"
-  | "1024x1536"
-  | "1536x1152"
-  | "1152x1536"
-  | "2048x2048"
-  | "2048x1152"
-  | "1152x2048"
-  | "3840x2160"
-  | "2160x3840";
+export const AI_NAMED_IMAGE_ASPECT_RATIOS = [
+  "1:1",
+  "3:2",
+  "2:3",
+  "4:3",
+  "3:4",
+  "16:9",
+  "9:16",
+  "3:1",
+  "1:3",
+  "auto",
+  "1024x1024",
+  "1536x1024",
+  "1024x1536",
+  "1536x1152",
+  "1152x1536",
+  "2048x2048",
+  "2048x1152",
+  "1152x2048",
+  "2048x688",
+  "688x2048",
+  "3840x2160",
+  "2160x3840",
+] as const;
+
+export type AiNamedImageAspectRatio = (typeof AI_NAMED_IMAGE_ASPECT_RATIOS)[number];
+
+/** Named ratio, preset size, or any custom WIDTHxHEIGHT accepted by GPT Image. */
+export type AiImageAspectRatio = AiNamedImageAspectRatio | (string & {});
+
+export function isAllowedImageAspectRatio(value: string): boolean {
+  if ((AI_NAMED_IMAGE_ASPECT_RATIOS as readonly string[]).includes(value)) return true;
+  return /^\d{2,5}x\d{2,5}$/i.test(value.trim());
+}
 
 /**
  * Render quality for image generation — distinct from AiExecutionProfile.

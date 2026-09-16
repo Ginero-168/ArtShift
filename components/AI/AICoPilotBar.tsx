@@ -1018,11 +1018,18 @@ export default function AICoPilotBar() {
                   const subject = extractSubject(promptToSend, direction.summary);
                   const isEditTurn =
                     direction.specialist === "image_editor" || refsForTurn.length > 0;
+                  const firstSucceeded = runResult.items.find(
+                    (i) => i.status === "succeeded" && i.result?.width,
+                  );
                   reply = formatImageCompletionReply(
                     subject,
                     runResult.completedCount,
                     direction.outputBriefs,
                     isEditTurn,
+                    {
+                      printSizeSource: `${promptToSend}\n${direction.summary ?? ""}\n${direction.refinedPrompt ?? ""}`,
+                      outputWidthPx: firstSucceeded?.result?.width,
+                    },
                   );
 
                   const partialFailureCount =
@@ -1433,7 +1440,10 @@ export default function AICoPilotBar() {
               result.outputBriefs && result.outputBriefs.length > 0
                 ? result.outputBriefs
                 : [result.summary];
-            reply = formatImageCompletionReply(subject, 1, briefs);
+            reply = formatImageCompletionReply(subject, 1, briefs, false, {
+              printSizeSource: `${promptToSend}\n${result.summary ?? ""}\n${result.refinedPrompt ?? ""}`,
+              outputWidthPx: generated.width,
+            });
             remoteModelAlias = result.modelAlias;
             remoteGeneratedImages = [
               {

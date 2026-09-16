@@ -1,4 +1,4 @@
-import type { AiImageRenderQuality } from "../../ai-runtime/contracts";
+import type { AiImageAspectRatio, AiImageRenderQuality } from "../../ai-runtime/contracts";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
 
 export type AiImageQuality = AiImageRenderQuality;
@@ -6,7 +6,7 @@ export type AiImageQuality = AiImageRenderQuality;
 export type AiTaskDimensions = {
   width: number;
   height: number;
-  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+  aspectRatio: AiImageAspectRatio;
 };
 
 export type AiTaskStatus =

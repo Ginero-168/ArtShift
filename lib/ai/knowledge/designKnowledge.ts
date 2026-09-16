@@ -135,7 +135,7 @@ export const DESIGN_KNOWLEDGE_SKILLS: readonly DesignKnowledgeSkill[] = Object.f
       "Design flat, production-ready 2D graphic signage and shelf category banners with exact aspect ratios, clear typography, and brand logo placement without 3D environmental mockup scenes.",
     guidance: [
       "Output must be direct, full-bleed flat 2D graphic design artwork (front-facing orthogonal view), NEVER a 3D environmental mockup of a sign sitting on a shelf, table, or wall.",
-      "Match exact physical dimensions and aspect ratio (e.g. 60x20cm is a 3:1 wide panoramic banner) so the artwork fills the full frame cleanly.",
+      "Match exact physical dimensions and aspect ratio (e.g. 60x20cm is a native 3:1 wide panoramic banner at 2048×688) so the artwork fills the full frame cleanly without 16:9 crop.",
       "Avoid dead-center bullseye symmetry. For wide panoramic signage, use dynamic asymmetric layouts (Rule of Thirds): hero key visual offset to one side, balanced with rich multi-level typography on the other.",
       "Integrate rich editorial content from references: publisher brand, clear category/series title, engaging book taglines, and author credits with crisp typography hierarchy instead of a bare solitary header.",
       "Place brand logo prominently, prioritize high-contrast legibility for distance reading, and incorporate themed aesthetics (such as glowing halo rings or color motifs) directly onto the flat 2D graphic surface.",

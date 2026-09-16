@@ -8,25 +8,44 @@ import {
 import { retrieveDesignKnowledge } from "@/lib/ai/knowledge/designKnowledge";
 
 describe("Physical Dimension and Aspect Ratio Resolver", () => {
-  it("resolves 60x20cm shelf sign prompt to a 3:1 wide panoramic banner (1536x512)", () => {
+  it("resolves 60x20cm shelf sign prompt to a native 3:1 banner (2048x688)", () => {
     const prompt =
       'ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือใส่ Logo สำนักพิมพ์ Welearn โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn และใส่โลโก้สำนักพิมพ์ ป้ายขนาด 60x20cm.';
     const dimensions = resolveImageGenerationDimensions(prompt);
 
-    expect(dimensions.width).toBe(1536);
-    expect(dimensions.height).toBe(512);
-    expect(dimensions.aspectRatio).toBe("16:9");
+    expect(dimensions.width).toBe(2048);
+    expect(dimensions.height).toBe(688);
+    expect(dimensions.aspectRatio).toBe("2048x688");
   });
 
-  it("resolves various 3:1 physical ratios (60x20, 120x40cm, 30x10)", () => {
-    expect(resolveImageGenerationDimensions("ป้าย 60x20").width).toBe(1536);
-    expect(resolveImageGenerationDimensions("ป้าย 60x20").height).toBe(512);
+  it("resolves various physical ratios to matching native pixels (not buckets)", () => {
+    expect(resolveImageGenerationDimensions("ป้าย 60x20")).toMatchObject({
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
+    });
+    expect(resolveImageGenerationDimensions("ขนาด 120 x 40 cm")).toMatchObject({
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
+    });
+    expect(resolveImageGenerationDimensions("ป้าย 60x30cm")).toMatchObject({
+      width: 2048,
+      height: 1024,
+      aspectRatio: "2048x1024",
+    });
+  });
 
-    expect(resolveImageGenerationDimensions("ขนาด 120 x 40 cm").width).toBe(1536);
-    expect(resolveImageGenerationDimensions("ขนาด 120 x 40 cm").height).toBe(512);
-
-    expect(resolveImageGenerationDimensions("30x10cm").width).toBe(1536);
-    expect(resolveImageGenerationDimensions("30x10cm").height).toBe(512);
+  it("resolves explicit 3:1 / พาโนรามา to native panoramic pixels", () => {
+    expect(resolveImageGenerationDimensions("ภาพ 3:1")).toEqual({
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
+      ratioClamped: false,
+    });
+    expect(resolveImageGenerationDimensions("พาโนรามา wide panoramic").aspectRatio).toBe(
+      "2048x688",
+    );
   });
 
   it("resolves standard ratios properly when explicitly specified", () => {
@@ -177,13 +196,9 @@ describe("Signage & Banner Design Knowledge Retrieval", () => {
 });
 
 describe("resolveDimensionsFromPixelSize", () => {
-  it("maps source pixel sizes onto nearest supported generation buckets", () => {
-    expect(resolveDimensionsFromPixelSize(1200, 1800)).toEqual({
-      width: 768,
-      height: 1024,
-      aspectRatio: "3:4",
-    });
-    expect(resolveDimensionsFromPixelSize(1920, 1080).aspectRatio).toBe("16:9");
-    expect(resolveDimensionsFromPixelSize(1024, 1024).aspectRatio).toBe("1:1");
+  it("maps source pixel sizes onto native generation sizes for the same ratio", () => {
+    expect(resolveDimensionsFromPixelSize(1200, 1800).aspectRatio).toBe("1360x2048");
+    expect(resolveDimensionsFromPixelSize(1920, 1080).aspectRatio).toBe("2048x1152");
+    expect(resolveDimensionsFromPixelSize(1024, 1024).aspectRatio).toBe("2048x2048");
   });
 });
