@@ -32,6 +32,7 @@ import {
   IconZap,
 } from "@/components/icons";
 import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
+import { DEFAULT_CREATING_MODEL_LABEL } from "@/lib/ai/orchestration/creatingModelCatalog";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import {
   cleanTechnicalPromptText,
@@ -236,7 +237,7 @@ function getAgentMeta(agent: string, title: string) {
     lowerTitle.includes("วิเคราะห์บริบท")
   ) {
     return {
-      icon: <IconSearch size={12} color="#0284c7" />,
+      icon: <IconSearch size={14} color="#0284c7" />,
       roleName: "Image Analyzer",
       badgeColor: "#0284c7",
       badgeBg: "rgba(224, 242, 254, 0.75)",
@@ -249,7 +250,7 @@ function getAgentMeta(agent: string, title: string) {
     agent === "orchestrator"
   ) {
     return {
-      icon: <IconBrain size={12} color="#6366f1" />,
+      icon: <IconBrain size={14} color="#6366f1" />,
       roleName: "Creative Director",
       badgeColor: "#6366f1",
       badgeBg: "rgba(238, 242, 255, 0.8)",
@@ -265,7 +266,7 @@ function getAgentMeta(agent: string, title: string) {
     lowerTitle.includes("ปรับแต่ง")
   ) {
     return {
-      icon: <IconPalette size={12} color="#ea580c" />,
+      icon: <IconPalette size={14} color="#ea580c" />,
       roleName: agent === "image_edit" ? "Image Editor" : "Image Specialist",
       badgeColor: "#ea580c",
       badgeBg: "rgba(255, 237, 213, 0.8)",
@@ -279,7 +280,7 @@ function getAgentMeta(agent: string, title: string) {
     lowerTitle.includes("ตรวจ")
   ) {
     return {
-      icon: <IconShieldCheck size={12} color="#9333ea" />,
+      icon: <IconShieldCheck size={14} color="#9333ea" />,
       roleName: "Quality Reviewer",
       badgeColor: "#9333ea",
       badgeBg: "rgba(243, 232, 255, 0.8)",
@@ -292,7 +293,7 @@ function getAgentMeta(agent: string, title: string) {
     lowerTitle.includes("จัดวาง")
   ) {
     return {
-      icon: <IconLayoutGrid size={12} color="#059669" />,
+      icon: <IconLayoutGrid size={14} color="#059669" />,
       roleName: "Layout Specialist",
       badgeColor: "#059669",
       badgeBg: "rgba(209, 250, 229, 0.8)",
@@ -301,7 +302,7 @@ function getAgentMeta(agent: string, title: string) {
   }
   if (agent === "vectorizer" || lowerTitle.includes("vector") || lowerTitle.includes("เวกเตอร์")) {
     return {
-      icon: <IconZap size={12} color="#0891b2" fill="#0891b2" stroke="#0891b2" />,
+      icon: <IconZap size={14} color="#0891b2" fill="#0891b2" stroke="#0891b2" />,
       roleName: "Vector Specialist",
       badgeColor: "#0891b2",
       badgeBg: "rgba(207, 250, 254, 0.8)",
@@ -310,7 +311,7 @@ function getAgentMeta(agent: string, title: string) {
   }
   if (agent === "copywriter" || lowerTitle.includes("copywriter")) {
     return {
-      icon: <IconPenEdit size={12} color="#d97706" />,
+      icon: <IconPenEdit size={14} color="#d97706" />,
       roleName: "Copywriter Specialist",
       badgeColor: "#d97706",
       badgeBg: "rgba(254, 243, 199, 0.8)",
@@ -318,7 +319,7 @@ function getAgentMeta(agent: string, title: string) {
     };
   }
   return {
-    icon: <IconBot size={12} color="#475569" />,
+    icon: <IconBot size={14} color="#475569" />,
     roleName: "AI Specialist",
     badgeColor: "#475569",
     badgeBg: "rgba(241, 245, 249, 0.8)",
@@ -337,18 +338,14 @@ function renderStatusBadge(
           display: "inline-flex",
           alignItems: "center",
           gap: 3.5,
-          padding: "2px 7px",
-          borderRadius: 12,
           fontSize: 10.5,
           fontWeight: 600,
-          background: "rgba(220, 252, 231, 0.9)",
-          color: "#15803d",
-          border: "1px solid rgba(187, 247, 208, 0.9)",
+          color: "#16a34a",
           whiteSpace: "nowrap",
           flexShrink: 0,
         }}
       >
-        <CheckIcon style={{ width: 10.5, height: 10.5, color: "#16a34a" }} />
+        <CheckIcon style={{ width: 11, height: 11, color: "#16a34a" }} />
         <span>{statusText || "เสร็จสิ้น"}</span>
       </span>
     );
@@ -360,18 +357,14 @@ function renderStatusBadge(
           display: "inline-flex",
           alignItems: "center",
           gap: 4.5,
-          padding: "2px 7px",
-          borderRadius: 12,
           fontSize: 10.5,
           fontWeight: 600,
-          background: "rgba(238, 242, 255, 0.95)",
-          color: "#4338ca",
-          border: "1px solid rgba(199, 210, 254, 0.95)",
+          color: "#4f46e5",
           whiteSpace: "nowrap",
           flexShrink: 0,
         }}
       >
-        <SpinnerIcon style={{ width: 10.5, height: 10.5, color: "#6366f1" }} />
+        <SpinnerIcon style={{ width: 11, height: 11, color: "#6366f1" }} />
         <span>{statusText || "กำลังทำ..."}</span>
       </span>
     );
@@ -383,18 +376,14 @@ function renderStatusBadge(
           display: "inline-flex",
           alignItems: "center",
           gap: 3.5,
-          padding: "2px 7px",
-          borderRadius: 12,
           fontSize: 10.5,
           fontWeight: 600,
-          background: "rgba(254, 242, 242, 0.9)",
-          color: "#b91c1c",
-          border: "1px solid rgba(254, 202, 202, 0.9)",
+          color: "#dc2626",
           whiteSpace: "nowrap",
           flexShrink: 0,
         }}
       >
-        <IconClose size={10} color="#b91c1c" />
+        <IconClose size={10} color="#dc2626" />
         <span>{statusText || "ไม่สำเร็จ"}</span>
       </span>
     );
@@ -405,18 +394,14 @@ function renderStatusBadge(
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        padding: "2px 7px",
-        borderRadius: 12,
         fontSize: 10.5,
         fontWeight: 500,
-        background: "rgba(241, 245, 249, 0.85)",
-        color: "#64748b",
-        border: "1px solid rgba(226, 232, 240, 0.85)",
+        color: "#94a3b8",
         whiteSpace: "nowrap",
         flexShrink: 0,
       }}
     >
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#94a3b8" }} />
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#cbd5e1" }} />
       <span>{statusText || "รอดำเนินการ"}</span>
     </span>
   );
@@ -679,7 +664,7 @@ export function CollapsibleThought({
         : "เสร็จสิ้น",
     });
 
-    const specialistModel = toolLabel || "GPT Image 2";
+    const specialistModel = toolLabel || DEFAULT_CREATING_MODEL_LABEL;
     defaultItems.push({
       id: "step-specialist",
       name: isEdit ? "Image Editor" : "Image Specialist",
@@ -747,11 +732,11 @@ export function CollapsibleThought({
     <div
       style={{
         marginTop: 4,
-        paddingTop: 8,
-        borderTop: "1px dashed #cbd5e1",
+        paddingTop: 10,
+        borderTop: "1px solid rgba(226, 232, 240, 0.9)",
         display: "flex",
         flexDirection: "column",
-        gap: 5,
+        gap: 8,
       }}
     >
       {/* Sub-Agent Header */}
@@ -762,8 +747,7 @@ export function CollapsibleThought({
           justifyContent: "space-between",
           fontSize: 11,
           fontWeight: 600,
-          color: "#475569",
-          paddingBottom: 2,
+          color: "#64748b",
         }}
       >
         <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -772,20 +756,17 @@ export function CollapsibleThought({
         </div>
         <span
           style={{
-            fontSize: 10,
+            fontSize: 10.5,
             fontWeight: 600,
-            padding: "1px 6px",
-            borderRadius: 10,
-            background: isAllCompleted ? "rgba(220, 252, 231, 0.9)" : "rgba(238, 242, 255, 0.9)",
-            color: isAllCompleted ? "#15803d" : "#4338ca",
+            color: isAllCompleted ? "#16a34a" : "#6366f1",
           }}
         >
           {completedCount}/{subAgentTasks.length} เสร็จสิ้น
         </span>
       </div>
 
-      {/* Sub-Agent Cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 4.5 }}>
+      {/* Sub-Agent list — frameless */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {subAgentTasks.map((taskItem) => (
           <div
             key={taskItem.id}
@@ -793,40 +774,27 @@ export function CollapsibleThought({
               display: "flex",
               flexDirection: "column",
               gap: 3,
-              padding: "6px 9px",
-              borderRadius: 7,
-              background: "rgba(255, 255, 255, 0.8)",
-              border: `1px solid ${
-                taskItem.status === "running"
-                  ? "rgba(199, 210, 254, 0.95)"
-                  : taskItem.status === "error"
-                    ? "rgba(254, 202, 202, 0.9)"
-                    : "rgba(241, 245, 249, 0.95)"
-              }`,
-              boxShadow:
-                taskItem.status === "running"
-                  ? "0 0 0 1.5px rgba(99, 102, 241, 0.15), 0 1px 3px rgba(0,0,0,0.03)"
-                  : "0 1px 2px rgba(0,0,0,0.02)",
             }}
           >
-            {/* Header row: Icon + Agent Name + Model Badge + Score Badges + Status Badge */}
+            {/* Header row: Icon + Agent Name + Model Badge + Score Badges + Status */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 6,
+                gap: 8,
               }}
             >
               <div
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 5.5,
+                  gap: 6,
                   fontSize: 11.5,
                   fontWeight: 600,
                   color: "#1e293b",
                   flexWrap: "wrap",
+                  minWidth: 0,
                 }}
               >
                 <span
@@ -834,13 +802,8 @@ export function CollapsibleThought({
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    width: 18,
-                    height: 18,
-                    borderRadius: 4,
-                    background: taskItem.themeBg,
-                    border: `1px solid ${taskItem.themeBorder}`,
-                    fontSize: 11,
                     flexShrink: 0,
+                    lineHeight: 0,
                   }}
                 >
                   {taskItem.icon}
@@ -849,13 +812,9 @@ export function CollapsibleThought({
                 {taskItem.modelBadge && (
                   <span
                     style={{
-                      fontSize: 9.5,
+                      fontSize: 10,
                       fontWeight: 500,
-                      padding: "0.5px 5px",
-                      borderRadius: 4,
-                      background: "rgba(241, 245, 249, 0.9)",
-                      color: "#64748b",
-                      border: "1px solid rgba(226, 232, 240, 0.8)",
+                      color: "#94a3b8",
                     }}
                   >
                     {taskItem.modelBadge}
@@ -864,13 +823,9 @@ export function CollapsibleThought({
                 {taskItem.detailScore !== undefined && (
                   <span
                     style={{
-                      fontSize: 9.5,
+                      fontSize: 10,
                       fontWeight: 600,
-                      padding: "0.5px 5px",
-                      borderRadius: 4,
-                      background: "rgba(224, 231, 255, 0.9)",
-                      color: "#4338ca",
-                      border: "1px solid rgba(199, 210, 254, 0.9)",
+                      color: "#6366f1",
                     }}
                     title="Detail Complexity Score (0-10)"
                   >
@@ -880,13 +835,9 @@ export function CollapsibleThought({
                 {taskItem.precisionScore !== undefined && (
                   <span
                     style={{
-                      fontSize: 9.5,
+                      fontSize: 10,
                       fontWeight: 600,
-                      padding: "0.5px 5px",
-                      borderRadius: 4,
-                      background: "rgba(254, 235, 200, 0.9)",
-                      color: "#c05621",
-                      border: "1px solid rgba(251, 211, 141, 0.9)",
+                      color: "#ea580c",
                     }}
                     title="Edit Precision Score (0-10)"
                   >
@@ -897,13 +848,13 @@ export function CollapsibleThought({
               {renderStatusBadge(taskItem.status, taskItem.statusText)}
             </div>
 
-            {/* Description row: Assigned task (สิ่งที่ได้รับมอบหมาย) */}
+            {/* Description row */}
             <div
               style={{
                 fontSize: 11,
-                lineHeight: 1.45,
-                color: "#475569",
-                paddingLeft: 23.5,
+                lineHeight: 1.5,
+                color: "#64748b",
+                paddingLeft: 20,
               }}
             >
               {taskItem.task}
@@ -1089,12 +1040,10 @@ export function CollapsibleThought({
               position: "relative",
               marginTop: 6,
               marginLeft: 2,
-              padding: "10px 14px",
-              borderLeft: "2.5px solid #6366f1",
-              background:
-                "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
-              borderRadius: "0 10px 10px 0",
-              boxShadow: "0 2px 8px -2px rgba(99, 102, 241, 0.08)",
+              padding: "10px 12px 10px 14px",
+              borderLeft: "2px solid #6366f1",
+              background: "rgba(248, 250, 252, 0.7)",
+              borderRadius: "0 8px 8px 0",
               display: "flex",
               flexDirection: "column",
               gap: 8,
@@ -1108,7 +1057,7 @@ export function CollapsibleThought({
                 top: 0,
                 left: 0,
                 right: 0,
-                height: 2,
+                height: 1.5,
                 background:
                   "linear-gradient(90deg, transparent 0%, #6366f1 30%, #a855f7 70%, transparent 100%)",
                 backgroundSize: "200% 100%",
@@ -1147,10 +1096,7 @@ export function CollapsibleThought({
                 style={{
                   fontSize: 10.5,
                   fontWeight: 500,
-                  color: "#64748b",
-                  background: "rgba(226, 232, 240, 0.6)",
-                  padding: "1px 6px",
-                  borderRadius: 10,
+                  color: "#94a3b8",
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
@@ -1180,12 +1126,10 @@ export function CollapsibleThought({
               position: "relative",
               marginTop: 6,
               marginLeft: 2,
-              padding: "10px 14px",
-              borderLeft: "2.5px solid #818cf8",
-              background:
-                "linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.7) 100%)",
-              borderRadius: "0 10px 10px 0",
-              boxShadow: "0 2px 8px -2px rgba(99, 102, 241, 0.06)",
+              padding: "10px 12px 10px 14px",
+              borderLeft: "2px solid #a5b4fc",
+              background: "rgba(248, 250, 252, 0.55)",
+              borderRadius: "0 8px 8px 0",
               display: "flex",
               flexDirection: "column",
               gap: 8,
@@ -2032,7 +1976,10 @@ export default function ChatThread({
                   }}
                 >
                   <SpinnerIcon style={{ color: "#4f46e5", width: 12, height: 12 }} />
-                  <span>สร้างรูปภาพด้วย {liveAssistantState.toolLabel || "GPT Image 2"}...</span>
+                  <span>
+                    สร้างรูปภาพด้วย {liveAssistantState.toolLabel || DEFAULT_CREATING_MODEL_LABEL}
+                    ...
+                  </span>
                 </div>
 
                 {/* Skeleton placeholders */}

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   CREATING_MODEL_CATALOG,
+  DEFAULT_CREATING_MODEL_LABEL,
   detectRequestedCreatingModel,
+  formatCreatingModelLabel,
   isQualitySupportedByAlias,
   resolveCreatingModel,
 } from "@/lib/ai/orchestration/creatingModelCatalog";
@@ -127,5 +129,13 @@ describe("Creating model capability catalog", () => {
   it("Sunburst catalog entry points to correct model slug", () => {
     const entry = CREATING_MODEL_CATALOG.find((e) => e.alias === "image-precision");
     expect(entry?.modelId).toBe("openai/gpt-image-2.5-sunburst");
+  });
+
+  it("formats human-readable labels from catalog model ids for chat UI", () => {
+    expect(formatCreatingModelLabel("image-general")).toBe("GPT Image 2.5 Sunburst");
+    expect(formatCreatingModelLabel("image-precision")).toBe("GPT Image 2.5 Sunburst");
+    expect(formatCreatingModelLabel("image-gpt-2")).toBe("GPT Image 2.5 Sunburst");
+    expect(formatCreatingModelLabel("image-fast")).toBe("GPT Image 2.5 Sunburst");
+    expect(formatCreatingModelLabel(undefined)).toBe(DEFAULT_CREATING_MODEL_LABEL);
   });
 });

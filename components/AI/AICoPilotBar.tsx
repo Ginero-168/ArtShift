@@ -32,6 +32,10 @@ import {
 import { inferSharedAnchors } from "@/lib/ai/orchestration/promptOptionCatalog";
 import { analyzeImageReferences, type ImageReferenceAnalysis } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
+  DEFAULT_CREATING_MODEL_LABEL,
+  formatCreatingModelLabel,
+} from "@/lib/ai/orchestration/creatingModelCatalog";
+import {
   type ContextAwareTurnResult, createDirectedImageRun, createDirectedImageTask,
   isCanvasInventoryPrompt, type PendingClarification, prepareContextAwareTurn,
   runSequentialExecutionPlan, type SequentialExecutionPlan,
@@ -577,6 +581,7 @@ export default function AICoPilotBar() {
         lastAssistantMsg &&
           ((lastAssistantMsg.images && lastAssistantMsg.images.length > 0) ||
             lastAssistantMsg.toolLabel === "GPT Image 2" ||
+            lastAssistantMsg.toolLabel === DEFAULT_CREATING_MODEL_LABEL ||
             lastAssistantMsg.toolLabel?.toLowerCase().includes("image")) &&
           !isCanvasInventoryPrompt(promptToSend) &&
           !isBuiltInImageAction,
@@ -697,6 +702,7 @@ export default function AICoPilotBar() {
             actions: [...actions],
           }));
           let activeRunningAction: SubAgentActionLog = directorAction;
+          let resolvedModelLabel = DEFAULT_CREATING_MODEL_LABEL;
           // Creative Director disclosure copy:
           // งานนี้จะส่งคำสั่งไปยัง Gemini 3 Flash Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
           const consent = true;
@@ -851,8 +857,8 @@ export default function AICoPilotBar() {
                   count,
                   isEditTurn,
                 );
-                const modelName =
-                  direction.modelAlias === "image-gpt-2" ? "GPT Image 2" : direction.modelAlias;
+                const modelName = formatCreatingModelLabel(direction.modelAlias);
+                resolvedModelLabel = modelName;
                 const specialistTitle =
                   direction.specialist === "image_editor" ? "Image Editor" : "Image Specialist";
 
@@ -873,7 +879,7 @@ export default function AICoPilotBar() {
                 setLiveAssistantState({
                   stage: "generating",
                   thought: thoughtText,
-                  toolLabel: `Generating images using ${modelName}`,
+                  toolLabel: modelName,
                   requestedCount: count,
                   statusMessage: `กำลังสร้างรูปภาพด้วย ${modelName}...`,
                   prompt: rawPrompt,
@@ -953,7 +959,7 @@ export default function AICoPilotBar() {
                       id: crypto.randomUUID(),
                       role: "assistant",
                       content: reply,
-                      toolLabel: "GPT Image 2",
+                      toolLabel: modelName,
                       errorCard: diagnosis.errorCard,
                       timestamp: Date.now(),
                       actions,
@@ -1054,7 +1060,7 @@ export default function AICoPilotBar() {
                       role: "assistant",
                       content: reply,
                       thought: thoughtText,
-                      toolLabel: "GPT Image 2",
+                      toolLabel: modelName,
                       images: generatedImages,
                       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
                       generationContext: {
@@ -1132,7 +1138,7 @@ export default function AICoPilotBar() {
                     id: crypto.randomUUID(),
                     role: "assistant",
                     content: reply,
-                    toolLabel: diagnosis.errorCard ? "GPT Image 2" : undefined,
+                    toolLabel: diagnosis.errorCard ? resolvedModelLabel : undefined,
                     errorCard: diagnosis.errorCard,
                     timestamp: Date.now(),
                     actions,
@@ -1183,6 +1189,7 @@ export default function AICoPilotBar() {
       let actions: SubAgentActionLog[] = [];
       let suggestions: string[] = [];
       let remoteGeneratedImages: Array<{ url: string; fileId: string; label: string }> | undefined;
+      let remoteModelAlias: string | undefined;
 
       if (localPlan) {
         const localAction: SubAgentActionLog = {
@@ -1410,6 +1417,7 @@ export default function AICoPilotBar() {
                 ? result.outputBriefs
                 : [result.summary];
             reply = formatImageCompletionReply(subject, 1, briefs);
+            remoteModelAlias = result.modelAlias;
             remoteGeneratedImages = [
               {
                 url: generated.dataUrl || "",
@@ -1428,7 +1436,9 @@ export default function AICoPilotBar() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: reply,
-        toolLabel: remoteGeneratedImages ? "GPT Image 2" : undefined,
+        toolLabel: remoteGeneratedImages
+          ? formatCreatingModelLabel(remoteModelAlias)
+          : undefined,
         images: remoteGeneratedImages,
         timestamp: Date.now(),
         actions,

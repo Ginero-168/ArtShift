@@ -196,6 +196,39 @@ export function detectRequestedCreatingModel(prompt: string): CreatingModelAlias
   return undefined;
 }
 
+/** Default UI label when no alias is known (matches current baseline route). */
+export const DEFAULT_CREATING_MODEL_LABEL = "GPT Image 2.5 Sunburst";
+
+/**
+ * Human-readable model label for chat UI (tool badge / Thought specialist).
+ * Prefer the catalog `modelId` so the label reflects the model that actually runs.
+ */
+export function formatCreatingModelLabel(alias?: string | null): string {
+  if (!alias) return DEFAULT_CREATING_MODEL_LABEL;
+  const entry = CREATING_MODEL_CATALOG.find((e) => e.alias === alias);
+  if (entry?.modelId) return formatModelIdLabel(entry.modelId);
+  return humanizeModelToken(alias);
+}
+
+function formatModelIdLabel(modelId: string): string {
+  const slug = modelId.includes("/") ? modelId.slice(modelId.lastIndexOf("/") + 1) : modelId;
+  const gptImage = slug.match(/^gpt-image-(.+)$/i);
+  if (gptImage) {
+    const parts = gptImage[1].split("-").filter(Boolean);
+    const version = parts[0] || "";
+    const variant = parts.slice(1).map(humanizeModelToken).join(" ");
+    return variant ? `GPT Image ${version} ${variant}` : `GPT Image ${version}`;
+  }
+  return slug.split("-").filter(Boolean).map(humanizeModelToken).join(" ");
+}
+
+function humanizeModelToken(token: string): string {
+  if (/^gpt$/i.test(token)) return "GPT";
+  if (/^ai$/i.test(token)) return "AI";
+  if (/^\d+(?:\.\d+)?$/.test(token)) return token;
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
 function unavailableModels(): CreatingModelEntry[] {
   const candidates: Array<[CreatingModelAlias, string]> = [
     ["nano-banana-pro", "Nano Banana Pro generation/editing adapter has not been integrated."],
