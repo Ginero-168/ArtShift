@@ -216,25 +216,18 @@ describe("Brief Generator Service & Layout Geometry", () => {
     };
 
     const elements = generateBriefElements(artDirectionData, mockImageElement);
-    expect(elements.length).toBeGreaterThanOrEqual(8);
+    expect(elements.length).toBeGreaterThanOrEqual(6);
 
-    // 1. Hero Subject on the left — zone only, no scene-description text
-    const heroCard = elements.find((e) => e.name?.startsWith("Hero Subject"));
-    expect(heroCard).toBeDefined();
-    expect(heroCard?.backgroundColor).toBe("#e5e5e5");
-    expect(heroCard?.strokeWidth).toBeGreaterThan(0);
+    // Hero / background zones must NOT be drawn (they become background text frames).
+    expect(elements.some((e) => e.name?.startsWith("Hero Subject"))).toBe(false);
+    expect(elements.some((e) => e.name?.startsWith("Background Zone"))).toBe(false);
     expect(elements.some((e) => e.name?.startsWith("Hero Label:"))).toBe(false);
+    expect(elements.some((e) => e.name?.startsWith("Background Label:"))).toBe(false);
     expect(
       elements.some(
         (e) => e.type === "text" && String((e as { text?: string }).text || "").includes("รูปภาพเด็กชาย"),
       ),
     ).toBe(false);
-
-    // 2. Background Zone on the right — zone only, no scene-description text
-    const bgCard = elements.find((e) => e.name?.startsWith("Background Zone"));
-    expect(bgCard).toBeDefined();
-    expect(bgCard?.backgroundColor).toBe("#e5e5e5");
-    expect(elements.some((e) => e.name?.startsWith("Background Label:"))).toBe(false);
     expect(
       elements.some(
         (e) => e.type === "text" && String((e as { text?: string }).text || "") === "พื้นหลังเป็นภาพสวนน้ำ",
@@ -326,9 +319,9 @@ describe("Brief Generator Service & Layout Geometry", () => {
     // Verify outer frame
     expect(elements.find((e) => e.name === "Brief Frame")).toBeDefined();
 
-    // Verify Hero Subject & Background Zone (zones only — no scene-description text)
-    expect(elements.find((e) => e.name?.startsWith("Hero Subject"))).toBeDefined();
-    expect(elements.find((e) => e.name?.startsWith("Background Zone"))).toBeDefined();
+    // Hero / background zones stay off-canvas (no background text frames).
+    expect(elements.find((e) => e.name?.startsWith("Hero Subject"))).toBeUndefined();
+    expect(elements.find((e) => e.name?.startsWith("Background Zone"))).toBeUndefined();
     expect(
       elements.some(
         (e) =>

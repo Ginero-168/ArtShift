@@ -383,25 +383,9 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
         }))
       : [];
 
-    // Synthesize partitions from art direction if not explicitly given
-    if (backgroundPartitions.length === 0) {
-      if (heroSubject) {
-        backgroundPartitions.push({
-          name: heroSubject.description,
-          box: heroSubject.box,
-          color: heroSubject.color || "#dbeafe",
-          labelPlacement: "center",
-        });
-      }
-      if (backgroundZone) {
-        backgroundPartitions.push({
-          name: backgroundZone.description,
-          box: backgroundZone.box,
-          color: backgroundZone.color || "#f5f0eb",
-          labelPlacement: "top-center",
-        });
-      }
-    }
+    // Do NOT synthesize partitions from heroSubject / backgroundZone.
+    // Those descriptions are scene notes; drawing them as labeled zones
+    // puts "Text จาก Background" onto the brief canvas.
 
     const dividers: BriefDivider[] = Array.isArray(parsed.dividers)
       ? parsed.dividers.map((d) => ({

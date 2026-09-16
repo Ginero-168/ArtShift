@@ -169,42 +169,10 @@ export function generateBriefElements(
   const renderedTexts = new Set<string>();
 
   if (hasArtDirection) {
-    // 2. Background Zone (rendered first as backdrop)
-    if (data.backgroundZone) {
-      const bgGroupId = crypto.randomUUID();
-      const bx = targetX + Math.round((data.backgroundZone.box[1] / 1000) * targetWidth);
-      const by = targetY + Math.round((data.backgroundZone.box[0] / 1000) * targetHeight);
-      const bw = Math.max(10, Math.round(((data.backgroundZone.box[3] - data.backgroundZone.box[1]) / 1000) * targetWidth));
-      const bh = Math.max(10, Math.round(((data.backgroundZone.box[2] - data.backgroundZone.box[0]) / 1000) * targetHeight));
-
-      const bgRect = createRect({ x: bx, y: by, width: bw, height: bh });
-      styleBriefGuideShape(bgRect, BRIEF_GUIDE_FILL.zone);
-      bgRect.name = data.backgroundZone.description
-        ? `Background Zone: ${data.backgroundZone.description}`
-        : "Background Zone";
-      bgRect.groupIds = [bgGroupId, masterGroupId];
-      elements.push(bgRect);
-      // Zone descriptions stay on the shape name only — never as canvas text.
-      // Vision scene notes look like poster copy when this brief is used as a layout reference.
-    }
-
-    // 3. Hero Subject (e.g. Child playing in water or main character/model)
-    if (data.heroSubject) {
-      const heroGroupId = crypto.randomUUID();
-      const sx = targetX + Math.round((data.heroSubject.box[1] / 1000) * targetWidth);
-      const sy = targetY + Math.round((data.heroSubject.box[0] / 1000) * targetHeight);
-      const sw = Math.max(10, Math.round(((data.heroSubject.box[3] - data.heroSubject.box[1]) / 1000) * targetWidth));
-      const sh = Math.max(10, Math.round(((data.heroSubject.box[2] - data.heroSubject.box[0]) / 1000) * targetHeight));
-
-      const heroRect = createRect({ x: sx, y: sy, width: sw, height: sh });
-      styleBriefGuideShape(heroRect, BRIEF_GUIDE_FILL.hero);
-      heroRect.name = data.heroSubject.description
-        ? `Hero Subject: ${data.heroSubject.description}`
-        : "Hero Subject";
-      heroRect.groupIds = [heroGroupId, masterGroupId];
-      elements.push(heroRect);
-      // Same rule: subject/scene description is metadata, not layout copy.
-    }
+    // Background / hero zones are scene metadata only — never draw them as
+    // bordered guide boxes. Those full-bleed frames get copied as text/photo
+    // chrome when the brief is used as a layout reference.
+    // Intentional copy blocks (headline, badge, tags, logo, footer) stay below.
 
     // 4. Headline Card (e.g. "สวนน้ำ\nเปิดใหม่")
     if (data.headlineCard) {
@@ -529,9 +497,17 @@ export function generateBriefElements(
   // 10. Dividers are intentionally omitted — hard guide lines get copied as design chrome.
 
   // 11. Additional OCR / Intentional Texts
+  // Never draw hero/background scene notes even if they leak into texts[].
+  const sceneNoteTexts = new Set(
+    [data.heroSubject?.description, data.backgroundZone?.description]
+      .map((s) => s?.trim().toLowerCase())
+      .filter((s): s is string => Boolean(s)),
+  );
+
   for (const t of data.texts) {
     const cleanText = t.text.trim();
     if (!cleanText || renderedTexts.has(cleanText.toLowerCase())) continue;
+    if (sceneNoteTexts.has(cleanText.toLowerCase())) continue;
 
     const tx = targetX + Math.round((t.box[1] / 1000) * targetWidth);
     const ty = targetY + Math.round((t.box[0] / 1000) * targetHeight);
