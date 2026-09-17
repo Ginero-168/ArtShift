@@ -1588,8 +1588,10 @@ export const useEngine = create<EngineState>((set, get) => {
       const s = get();
       const clip = s.clipboard;
       if (!clip?.length) return;
+      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+      if (!slide) return;
       pushHistory(s.history, s.doc, "paste");
-      const pasted = cloneElementsForPaste(clip);
+      const pasted = clampElementsToSlide(cloneElementsForPaste(clip), slide.width, slide.height);
       set((cur) =>
         mapCurrentSlide(cur, (sl) => {
           let next = sl;
@@ -1885,6 +1887,27 @@ export function cloneElementsForDuplicate(
 
 function cloneElementsForPaste(source: EngineElement[]): EngineElement[] {
   return cloneElementsForDuplicate(source, 20, 20);
+}
+
+/** Keep pasted geometry visible on the destination slide (cross-slide paste). */
+export function clampElementsToSlide(
+  elements: EngineElement[],
+  slideWidth: number,
+  slideHeight: number,
+  margin = 8,
+): EngineElement[] {
+  const maxW = Math.max(margin * 2, slideWidth);
+  const maxH = Math.max(margin * 2, slideHeight);
+  return elements.map((element) => {
+    const next = structuredClone(element);
+    const width = Math.max(1, Math.min(next.width, maxW - margin * 2));
+    const height = Math.max(1, Math.min(next.height, maxH - margin * 2));
+    next.width = width;
+    next.height = height;
+    next.x = Math.min(Math.max(margin, next.x), maxW - width - margin);
+    next.y = Math.min(Math.max(margin, next.y), maxH - height - margin);
+    return next;
+  });
 }
 
 function remapBinding<T extends { elementId: string }>(

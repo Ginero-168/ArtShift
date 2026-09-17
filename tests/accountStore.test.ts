@@ -3,15 +3,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  deleteOpenAiApiKey,
   deleteReplicateApiKey,
   getAccountById,
+  getOpenAiCredentialStatus,
   getReplicateCredentialStatus,
+  readOpenAiApiKey,
   readReplicateApiKey,
+  saveOpenAiApiKey,
   saveReplicateApiKey,
   upsertGoogleAccount,
 } from "@/lib/server/auth/accountStore";
 
 const TOKEN = `r8_${"x".repeat(37)}`;
+const OPENAI_TOKEN = `sk-${"z".repeat(48)}`;
 let storeDir = "";
 
 describe("persistent Google account store", () => {
@@ -64,6 +69,26 @@ describe("persistent Google account store", () => {
     });
     const rawStore = readFileSync(process.env.ARTSHIFT_ACCOUNT_STORE_PATH ?? "", "utf8");
     expect(rawStore).not.toContain(TOKEN);
+  });
+
+  it("stores OpenAI and Replicate keys independently for the same account", () => {
+    const account = upsertGoogleAccount({
+      sub: "google-sub-openai",
+      email: "openai@example.com",
+      emailVerified: true,
+    });
+
+    saveReplicateApiKey(account.id, TOKEN);
+    saveOpenAiApiKey(account.id, OPENAI_TOKEN);
+    expect(readReplicateApiKey(account.id)).toBe(TOKEN);
+    expect(readOpenAiApiKey(account.id)).toBe(OPENAI_TOKEN);
+    expect(getOpenAiCredentialStatus(account.id)).toMatchObject({
+      configured: true,
+      keyHint: "sk-••••zzzz",
+    });
+    expect(deleteOpenAiApiKey(account.id)).toBe(true);
+    expect(readOpenAiApiKey(account.id)).toBeUndefined();
+    expect(readReplicateApiKey(account.id)).toBe(TOKEN);
   });
 
   it("deletes the persisted credential without deleting the Google account", () => {

@@ -18,6 +18,7 @@ import RasterStudioViewport from "./RasterStudioViewport";
 /**
  * Fullscreen Raster Studio shell (Phase 1–2).
  * Open → edit pixels in image space → Save (bake revision) / Cancel.
+ * Chrome mirrors the main editor (light surface + accent tools).
  */
 export default function RasterStudioShell() {
   const open = useRasterStudioSession((s) => s.open);
@@ -66,7 +67,6 @@ export default function RasterStudioShell() {
       );
 
       if (event.key === "Escape" && !saving) {
-        // Prefer canceling selection / polygon before closing the studio.
         if (image && st.activeRasterSelection?.imageId === image.id) {
           event.preventDefault();
           st.clearRasterSelection(image.id);
@@ -186,8 +186,9 @@ export default function RasterStudioShell() {
         zIndex: 80,
         display: "flex",
         flexDirection: "column",
-        background: "var(--bg, #0f172a)",
-        color: "var(--ink, #f8fafc)",
+        background: "var(--bg, #f6f7f9)",
+        color: "var(--ink, #111827)",
+        fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
       }}
     >
       <header
@@ -195,29 +196,47 @@ export default function RasterStudioShell() {
           display: "flex",
           flexDirection: "column",
           gap: 8,
-          padding: "10px 16px",
-          borderBottom: "1px solid color-mix(in srgb, #fff 12%, transparent)",
-          background: "color-mix(in srgb, #020617 70%, transparent)",
+          padding: "10px 14px 12px",
+          borderBottom: "1px solid var(--stroke, #e5e7eb)",
+          background: "var(--surface-solid, #fff)",
+          boxShadow: "0 1px 4px rgba(15, 23, 42, 0.06)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <strong style={{ fontSize: 14, letterSpacing: "0.02em" }}>Raster Studio</strong>
-          <span style={{ fontSize: 12, opacity: 0.7, flex: 1 }}>
-            {payload.sourceName || "Smart Object"} · edit pixels here · Save keeps placement
-          </span>
-          {dirty ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <strong style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.01em" }}>
+                Raster Studio
+              </strong>
+              {dirty ? (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "2px 7px",
+                    borderRadius: 999,
+                    background: "rgba(245, 158, 11, 0.12)",
+                    color: "#b45309",
+                    border: "1px solid rgba(245, 158, 11, 0.28)",
+                  }}
+                >
+                  Unsaved
+                </span>
+              ) : null}
+            </div>
             <span
               style={{
                 fontSize: 11,
-                padding: "2px 8px",
-                borderRadius: 999,
-                background: "rgba(250, 204, 21, 0.15)",
-                color: "#facc15",
+                color: "var(--ink-muted, #6b7280)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
               }}
             >
-              Unsaved edits
+              {payload.sourceName || "Smart Object"} · pixel edits stay in image space · Save keeps
+              placement
             </span>
-          ) : null}
+          </div>
           <button type="button" onClick={close} disabled={saving} style={ghostButtonStyle}>
             Cancel
           </button>
@@ -230,19 +249,32 @@ export default function RasterStudioShell() {
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+            padding: 3,
+            border: "1px solid var(--stroke, #e5e7eb)",
+            borderRadius: 8,
+            background: "var(--surface-solid, #fff)",
+            boxShadow: "0 1px 4px rgba(15, 23, 42, 0.06)",
+          }}
+        >
           <RasterStudioToolbar />
           <span
             aria-hidden
-            style={{ width: 1, height: 28, background: "color-mix(in srgb, #fff 14%, transparent)" }}
+            style={{ width: 1, height: 28, background: "var(--stroke, #e5e7eb)", flexShrink: 0 }}
           />
-          <div style={{ color: "var(--ink, #e2e8f0)" }}>
+          <div style={{ minWidth: 0, flex: 1, overflowX: "auto", scrollbarWidth: "none" }}>
             <RasterToolOptions tool={optionsTool} />
           </div>
         </div>
       </header>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, background: "var(--canvas, #e9ecf1)" }}>
         <RasterStudioViewport elementId={payload.elementId} />
       </div>
 
@@ -251,8 +283,9 @@ export default function RasterStudioShell() {
           role="alert"
           style={{
             padding: "10px 16px",
-            background: "rgba(239, 68, 68, 0.15)",
-            color: "#fecaca",
+            borderTop: "1px solid rgba(239, 68, 68, 0.25)",
+            background: "rgba(254, 226, 226, 0.9)",
+            color: "#991b1b",
             fontSize: 13,
           }}
         >
@@ -264,22 +297,26 @@ export default function RasterStudioShell() {
 }
 
 const ghostButtonStyle: CSSProperties = {
-  border: "1px solid color-mix(in srgb, #fff 18%, transparent)",
-  background: "transparent",
-  color: "inherit",
+  border: "1px solid var(--stroke, #d1d5db)",
+  background: "var(--surface-solid, #fff)",
+  color: "var(--ink, #374151)",
   borderRadius: 8,
-  padding: "6px 12px",
-  fontSize: 13,
+  padding: "7px 14px",
+  fontSize: 12,
+  fontWeight: 600,
   cursor: "pointer",
+  flexShrink: 0,
 };
 
 const primaryButtonStyle: CSSProperties = {
   border: "none",
-  background: "#38bdf8",
-  color: "#0f172a",
+  background: "var(--accent, #6366f1)",
+  color: "#fff",
   borderRadius: 8,
-  padding: "6px 14px",
-  fontSize: 13,
-  fontWeight: 600,
+  padding: "7px 16px",
+  fontSize: 12,
+  fontWeight: 700,
   cursor: "pointer",
+  flexShrink: 0,
+  boxShadow: "0 1px 3px rgba(79, 70, 229, 0.28)",
 };

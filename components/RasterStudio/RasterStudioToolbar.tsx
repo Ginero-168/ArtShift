@@ -55,7 +55,7 @@ export default function RasterStudioToolbar() {
     <div
       role="toolbar"
       aria-label="Raster Studio tools"
-      style={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}
+      style={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", flexShrink: 0 }}
     >
       {TOOLS.map((tool) => {
         const Icon = tool.icon;
@@ -70,7 +70,7 @@ export default function RasterStudioToolbar() {
             onClick={() => setStudioTool(tool.id)}
             style={toolButtonStyle(active)}
           >
-            <Icon size={14} />
+            <Icon size={15} />
             <span>{tool.label}</span>
           </button>
         );
@@ -80,9 +80,9 @@ export default function RasterStudioToolbar() {
 }
 
 const toolButtonStyle = (active: boolean): CSSProperties => ({
-  height: 40,
-  minWidth: 48,
-  padding: "2px 4px",
+  height: 42,
+  minWidth: 52,
+  padding: "3px 4px 2px",
   display: "inline-flex",
   flexDirection: "column",
   alignItems: "center",
@@ -90,10 +90,12 @@ const toolButtonStyle = (active: boolean): CSSProperties => ({
   gap: 1,
   border: "none",
   borderRadius: 6,
-  background: active ? "#38bdf8" : "transparent",
-  color: active ? "#0f172a" : "inherit",
+  background: active ? "var(--accent, #6366f1)" : "transparent",
+  color: active ? "#fff" : "var(--ink, #111827)",
   cursor: "pointer",
-  fontSize: 9,
+  fontSize: 8,
+  lineHeight: "10px",
   fontWeight: active ? 700 : 600,
-  opacity: active ? 1 : 0.85,
+  whiteSpace: "nowrap",
+  textAlign: "center",
 });

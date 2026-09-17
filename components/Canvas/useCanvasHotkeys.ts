@@ -69,8 +69,12 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
       return;
     }
     if (event.code === "KeyV" && !event.shiftKey) {
-      event.preventDefault();
-      st.pasteElements();
+      // In-app Copy/Cut clipboard wins so paste works after switching slides.
+      // When empty, do not preventDefault — usePasteDrop handles OS files/text.
+      if (st.clipboard?.length) {
+        event.preventDefault();
+        st.pasteElements();
+      }
       return;
     }
     if (event.code === "KeyD" && !event.shiftKey) {

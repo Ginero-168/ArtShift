@@ -1,7 +1,9 @@
 import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
+  extractRequestedSizeSpecsFromText,
   generateAIImage,
+  hasExplicitDimensionsInText,
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
@@ -282,16 +284,38 @@ export function createDirectedImageRun(
   options: { runId?: string } = {},
 ): DirectedImageRun {
   const explicitCount = extractExplicitRequestedOutputCount(input.prompt);
-  const count =
-    direction.requestedOutputCount && direction.requestedOutputCount > 1
-      ? direction.requestedOutputCount
-      : (explicitCount ?? direction.requestedOutputCount ?? direction.outputCount ?? 1);
+  // Multi-size campaigns list several WxH / cm sizes or named A:B ratios.
+  // Assign each task its own target so we do not stamp every output as 1:1 / first ratio only.
+  const sizeSpecs = [
+    ...extractRequestedSizeSpecsFromText(input.prompt),
+    ...extractRequestedSizeSpecsFromText(input.clarification?.originalPrompt),
+    ...extractRequestedSizeSpecsFromText(direction.summary),
+    ...extractRequestedSizeSpecsFromText(direction.refinedPrompt),
+  ].filter((spec, index, all) => {
+    return all.findIndex((s) => s.aspectRatio === spec.aspectRatio) === index;
+  });
+  const sizeListCount = sizeSpecs.length >= 2 ? Math.min(5, sizeSpecs.length) : undefined;
+  const count = Math.min(
+    5,
+    Math.max(
+      1,
+      direction.requestedOutputCount && direction.requestedOutputCount > 1
+        ? Math.max(direction.requestedOutputCount, sizeListCount ?? 1)
+        : (explicitCount ?? sizeListCount ?? direction.requestedOutputCount ?? direction.outputCount ?? 1),
+    ),
+  );
   const briefs =
     direction.outputBriefs && direction.outputBriefs.length === count
       ? direction.outputBriefs
-      : Array.from({ length: count }, (_, idx) =>
-          idx === 0 ? direction.refinedPrompt : `${direction.refinedPrompt} (variation ${idx + 1})`,
-        );
+      : sizeSpecs.length >= count
+        ? sizeSpecs
+            .slice(0, count)
+            .map((spec, idx) => direction.outputBriefs?.[idx] ?? `ขนาด ${spec.label}`)
+        : Array.from({ length: count }, (_, idx) =>
+            idx === 0
+              ? direction.refinedPrompt
+              : `${direction.refinedPrompt} (variation ${idx + 1})`,
+          );
   const batches = planImageBatches(count);
   const runId = options.runId ?? crypto.randomUUID();
   const tasks: AiTask[] = briefs.map((brief, index) => {
@@ -309,20 +333,41 @@ export function createDirectedImageRun(
     } else if (/ขาว|สว่าง|white|bright/i.test(brief)) {
       variationCues = " (focusing on bright clean minimalist illumination)";
     }
-    const dims = baseTask.requestedDimensions;
-    const ratioClause =
-      dims && !hasRatioMention(direction.refinedPrompt)
-        ? ` Aspect ratio ${dims.aspectRatio} (${dims.width}×${dims.height}).`
-        : "";
+    const briefDims = hasExplicitDimensionsInText(brief)
+      ? resolveImageGenerationDimensions(brief)
+      : null;
+    const listDims =
+      sizeSpecs.length >= count
+        ? sizeSpecs[index]
+        : sizeSpecs.length === 1
+          ? sizeSpecs[0]
+          : sizeSpecs[index] ?? null;
+    const dims = briefDims
+      ? {
+          width: briefDims.width,
+          height: briefDims.height,
+          aspectRatio: briefDims.aspectRatio,
+        }
+      : listDims
+        ? {
+            width: listDims.width,
+            height: listDims.height,
+            aspectRatio: listDims.aspectRatio,
+          }
+        : baseTask.requestedDimensions;
+    const ratioClause = dims
+      ? ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}). Fill the full frame edge-to-edge; no letterboxing.`
+      : "";
     const taskPrompt =
       count === 1
         ? `${direction.refinedPrompt}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
-        : `${direction.refinedPrompt}\nDistinct variation ${index + 1} of ${count}${variationCues}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+        : `${direction.refinedPrompt}\nDistinct output ${index + 1} of ${count}${variationCues}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
     return {
       ...baseTask,
       id: `${runId}-task-${index + 1}`,
       summary: brief,
       prompt: taskPrompt,
+      requestedDimensions: dims,
       imageRun: {
         runId,
         outputIndex: index + 1,
@@ -342,10 +387,6 @@ export function createDirectedImageRun(
     batches,
     tasks,
   };
-}
-
-function hasRatioMention(text: string): boolean {
-  return /\b(?:\d+\s*:\s*\d+|aspect\s*ratio|แนวนอน|แนวตั้ง|landscape|portrait)\b/iu.test(text);
 }
 
 export type SequentialPlanExecutionOptions = {

@@ -12,6 +12,7 @@ import {
   requirePlanApproval,
 } from "@/lib/designAgent/contracts";
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
+import { extractRequestedSizeSpecsFromText } from "@/lib/ai/imageGeneration";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
 import {
   CREATING_MODEL_CATALOG,
@@ -379,6 +380,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "ASPECT RATIO PROTOCOL (MANDATORY 1:1 BASELINE):",
   "  - DEFAULT BASELINE: All image generation tasks MUST use a baseline aspect ratio of 1:1 (square, 1024x1024) unless the user explicitly specifies an aspect ratio or physical dimensions in their instruction, OR this is a follow-up continuation of a prior image generation that already locked a ratio.",
   "  - EXPLICIT USER OVERRIDES ONLY: Only non-1:1 aspect ratios explicitly specified by the user (such as '16:9', 'แนวนอน', 'landscape', '9:16', 'แนวตั้ง', 'portrait', '3:1', '60x20cm', 'พาโนรามา', 'wide panoramic') may be used for a fresh request.",
+  "  - MULTI-SIZE LISTS: When the user lists multiple distinct print/pixel sizes OR named aspect ratios (e.g. '53x20 cm, 29x7 cm, 1040x1040' or '16:9, 3:4 และ 9:16'), set requestedOutputCount to that count and put EACH size/ratio into the matching outputBrief. Never collapse every size into one output or one 1:1 square variation set.",
   "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') after a prior image generation in this conversation:",
   "      * Treat the prior refinedPrompt as the BASE brief. Restate and enrich it; do not invent a new unrelated subject.",
   "      * KEEP the prior aspect ratio / dimensions unless the follow-up explicitly changes them.",
@@ -1047,6 +1049,11 @@ export function extractExplicitRequestedOutputCount(prompt: string | undefined):
     const parsed = parseNumberWord(moreMatch[1]);
     if (parsed && parsed >= 1 && parsed <= 5) return parsed;
   }
+
+  // 5. Multiple distinct sizes / aspect ratios listed in one ask
+  // e.g. "เป็น 16:9, 3:4 และ 9:16" or "53x20 cm, 29x7 cm, 1040x1040"
+  const sizeListCount = extractRequestedSizeSpecsFromText(text).length;
+  if (sizeListCount >= 2) return Math.min(5, sizeListCount);
 
   return undefined;
 }

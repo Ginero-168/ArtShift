@@ -22,6 +22,13 @@ import {
   isImageFollowUpPrompt,
   type PriorImageGenerationContext,
 } from "@/lib/ai/orchestration/chatContinuity";
+import {
+  buildChatHistorySnapshot,
+  clearChatHistorySnapshot,
+  loadChatHistorySnapshot,
+  readProjectIdFromPath,
+  saveChatHistorySnapshot,
+} from "@/lib/ai/orchestration/chatHistoryStore";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import {
   buildRefinementOrchestratorLocks,
@@ -42,7 +49,10 @@ import {
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { formatImageCompletionReply, buildImageCompletionSummary } from "@/lib/ai/imageCompletionReply";
-import { formatHumanThoughtText } from "@/lib/ai/imageResultPresentation";
+import {
+  formatFriendlyAspectRatio,
+  formatHumanThoughtText,
+} from "@/lib/ai/imageResultPresentation";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { buildDesignAgentContext, type ClientChatMessage } from "@/lib/designAgent/client";
@@ -92,8 +102,19 @@ function extractSubject(prompt: string, summary?: string): string {
   return cleaned || "ภาพ";
 }
 
-function formatThoughtText(rawPrompt: string, directionSummary?: string, count = 1, isEdit = false, dims?: { width?: number; height?: number; aspectRatio?: string }): string {
-  return formatHumanThoughtText({
+function formatThoughtText(
+  rawPrompt: string,
+  directionSummary?: string,
+  count = 1,
+  isEdit = false,
+  dims?: { width?: number; height?: number; aspectRatio?: string },
+  plannedAspects?: readonly string[],
+): string {
+  const multiAspectNote =
+    plannedAspects && plannedAspects.length > 1
+      ? ` จะแยกสร้างตามสัดส่วน ${plannedAspects.join(" · ")}`
+      : "";
+  const base = formatHumanThoughtText({
     rawPrompt,
     directionSummary,
     count,
@@ -102,9 +123,27 @@ function formatThoughtText(rawPrompt: string, directionSummary?: string, count =
     height: dims?.height,
     aspectRatio: dims?.aspectRatio,
   });
+  return multiAspectNote ? `${base}${multiAspectNote}` : base;
+}
+
+const DEFAULT_ASSISTANT_GREETING: CoPilotMessage = {
+  id: "initial-msg",
+  role: "assistant",
+  content:
+    "สวัสดีครับ! ผมคือ AI Assistance ของคุณ จะอ่านบริบทและช่วยวางแผนก่อนสร้างภาพ เพื่อให้ได้ผลลัพธ์ที่ตรงความต้องการมากขึ้นครับ",
+  timestamp: 0,
+};
+
+function createDefaultGreeting(): CoPilotMessage {
+  return { ...DEFAULT_ASSISTANT_GREETING, timestamp: Date.now() };
 }
 
 export default function AICoPilotBar() {
+  const projectId = useMemo(() => readProjectIdFromPath(), []);
+  const restoredChat = useMemo(
+    () => (projectId ? loadChatHistorySnapshot(projectId) : null),
+    [projectId],
+  );
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const slide = useEngine((s) =>
     s.doc.slides.find((candidate) => candidate.id === s.currentSlideId),
@@ -129,28 +168,24 @@ export default function AICoPilotBar() {
     return buildComposerImageSelectionFromIds(slide?.elements ?? [], attachedImageIds);
   }, [slide?.elements, attachedImageIds]);
 
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => restoredChat?.input ?? "");
   const [busy, setBusy] = useState(false);
   const [streamingText, setStreamingText] = useState("");
-  const [messages, setMessages] = useState<CoPilotMessage[]>([
-    {
-      id: "initial-msg",
-      role: "assistant",
-      content:
-        "สวัสดีครับ! ผมคือ AI Assistance ของคุณ จะอ่านบริบทและช่วยวางแผนก่อนสร้างภาพ เพื่อให้ได้ผลลัพธ์ที่ตรงความต้องการมากขึ้นครับ",
-      timestamp: Date.now(),
-    },
-  ]);
+  const [messages, setMessages] = useState<CoPilotMessage[]>(() =>
+    restoredChat?.messages?.length ? restoredChat.messages : [createDefaultGreeting()],
+  );
 
   const [currentActions, setCurrentActions] = useState<SubAgentActionLog[]>([]);
   const [pendingPlan, setPendingPlan] = useState<PlanProposal | null>(null);
   const [pendingSequentialPlan, setPendingSequentialPlan] =
     useState<SequentialExecutionPlan | null>(null);
   const [isExecutingPlan, setIsExecutingPlan] = useState(false);
-  const [selectedQuality, setSelectedQuality] = useState<QualitySelection>("auto");
+  const [selectedQuality, setSelectedQuality] = useState<QualitySelection>(
+    () => restoredChat?.selectedQuality ?? "auto",
+  );
   const [stagedVariations, setStagedVariations] = useState<StagedVariationCard[]>([]);
   const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(
-    null,
+    () => restoredChat?.pendingClarification ?? null,
   );
   const [liveAssistantState, setLiveAssistantState] = useState<{
     stage: "outputting" | "generating" | "analyzing" | "planning";
@@ -181,13 +216,34 @@ export default function AICoPilotBar() {
   };
 
   const handleClearHistory = () => {
-    setMessages([]);
+    setMessages([createDefaultGreeting()]);
+    setPendingClarification(null);
+    setStagedVariations([]);
+    setPromptRefinementData(null);
+    setInput("");
+    if (projectId) clearChatHistorySnapshot(projectId);
   };
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastAlternativePromptRef = useRef<string | null>(null);
   const activeHoveredVariationIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const timer = window.setTimeout(() => {
+      saveChatHistorySnapshot(
+        buildChatHistorySnapshot({
+          projectId,
+          messages,
+          draft: input,
+          pendingClarification,
+          selectedQuality,
+        }),
+      );
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [projectId, messages, input, pendingClarification, selectedQuality]);
 
   useEffect(() => {
     return subscribeAIProgress((event) => {
@@ -859,12 +915,18 @@ export default function AICoPilotBar() {
                 const count = imageRun.requestedOutputCount;
                 const isEditTurn =
                   direction.specialist === "image_editor" || refsForTurn.length > 0;
+                const plannedAspects = imageRun.tasks
+                  .map((task) => task.requestedDimensions?.aspectRatio)
+                  .filter((ratio): ratio is string => Boolean(ratio));
                 const thoughtText = formatThoughtText(
                   rawPrompt,
                   direction.summary,
                   count,
                   isEditTurn,
-                  imageRun.tasks[0]?.requestedDimensions,
+                  plannedAspects.length > 1
+                    ? undefined
+                    : imageRun.tasks[0]?.requestedDimensions,
+                  plannedAspects,
                 );
                 const modelName = formatCreatingModelLabel(direction.modelAlias);
                 resolvedModelLabel = modelName;
@@ -1001,14 +1063,21 @@ export default function AICoPilotBar() {
 
                   const generatedImages = runResult.items
                     .filter((i) => i.status === "succeeded" && Boolean(i.result?.dataUrl))
-                    .map((i, idx) => ({
-                      url: i.result?.dataUrl || "",
-                      fileId: i.result?.fileId || `img-${idx + 1}`,
-                      label: direction.outputBriefs?.[idx] || `รูปที่ ${idx + 1}`,
-                      width: i.result?.width,
-                      height: i.result?.height,
-                      prompt: direction.refinedPrompt,
-                    }));
+                    .map((i) => {
+                      const task = imageRun.tasks[i.outputIndex - 1];
+                      const brief = direction.outputBriefs?.[i.outputIndex - 1];
+                      const ratio = task?.requestedDimensions?.aspectRatio;
+                      return {
+                        url: i.result?.dataUrl || "",
+                        fileId: i.result?.fileId || `img-${i.outputIndex}`,
+                        label:
+                          (brief && brief.trim()) ||
+                          (ratio ? `ขนาด ${ratio}` : `รูปที่ ${i.outputIndex}`),
+                        width: i.result?.width,
+                        height: i.result?.height,
+                        prompt: direction.refinedPrompt,
+                      };
+                    });
 
                   const subject = extractSubject(promptToSend, direction.summary);
                   const isEditTurn =
@@ -1016,7 +1085,29 @@ export default function AICoPilotBar() {
                   const firstSucceeded = runResult.items.find(
                     (i) => i.status === "succeeded" && i.result?.width,
                   );
-                  const dims = imageRun.tasks[0]?.requestedDimensions;
+                  const firstSucceededTask = firstSucceeded
+                    ? imageRun.tasks[firstSucceeded.outputIndex - 1]
+                    : undefined;
+                  const dims =
+                    firstSucceededTask?.requestedDimensions ??
+                    imageRun.tasks.find((task) => task.requestedDimensions)?.requestedDimensions;
+                  const succeededAspects = runResult.items
+                    .filter((i) => i.status === "succeeded")
+                    .map(
+                      (i) =>
+                        imageRun.tasks[i.outputIndex - 1]?.requestedDimensions?.aspectRatio ||
+                        formatFriendlyAspectRatio(i.result?.width, i.result?.height),
+                    )
+                    .filter((ratio): ratio is string => Boolean(ratio));
+                  const failedAspects = runResult.items
+                    .filter(
+                      (i) => i.status === "failed" || i.status === "outcome-unknown",
+                    )
+                    .map(
+                      (i) =>
+                        imageRun.tasks[i.outputIndex - 1]?.requestedDimensions?.aspectRatio ||
+                        `รูปที่ ${i.outputIndex}`,
+                    );
                   const replyOptions = {
                     printSizeSource: `${promptToSend}\n${direction.summary ?? ""}\n${direction.refinedPrompt ?? ""}`,
                     outputWidthPx: firstSucceeded?.result?.width ?? dims?.width,
@@ -1025,21 +1116,28 @@ export default function AICoPilotBar() {
                     userPrompt: promptToSend,
                     width: firstSucceeded?.result?.width ?? dims?.width,
                     height: firstSucceeded?.result?.height ?? dims?.height,
-                    aspectRatio: dims?.aspectRatio,
+                    aspectRatio:
+                      firstSucceededTask?.requestedDimensions?.aspectRatio ?? dims?.aspectRatio,
+                    succeededAspects,
+                    failedAspects,
                     modelLabel: modelName,
                     quality: selectedQuality,
                   };
                   const resultSummary = buildImageCompletionSummary(
                     subject,
                     runResult.completedCount,
-                    direction.outputBriefs,
+                    succeededAspects.length > 1
+                      ? succeededAspects.map((ratio) => `ขนาด ${ratio}`)
+                      : direction.outputBriefs,
                     isEditTurn,
                     replyOptions,
                   );
                   reply = formatImageCompletionReply(
                     subject,
                     runResult.completedCount,
-                    direction.outputBriefs,
+                    succeededAspects.length > 1
+                      ? succeededAspects.map((ratio) => `ขนาด ${ratio}`)
+                      : direction.outputBriefs,
                     isEditTurn,
                     replyOptions,
                   );
@@ -1054,23 +1152,45 @@ export default function AICoPilotBar() {
                     "↶ Undo ผลลัพธ์ล่าสุด",
                   ];
                   if (partialFailureCount > 0) {
-                    reply += `\n\n⚠️ หมายเหตุ: มีอีก ${partialFailureCount} ภาพที่สร้างไม่สำเร็จเนื่องจาก AI Provider ขัดข้องชั่วคราว คุณสามารถกดสร้างภาพที่เหลือใหม่ได้ครับ`;
+                    const failedDetails = runResult.items
+                      .filter(
+                        (i) => i.status === "failed" || i.status === "outcome-unknown",
+                      )
+                      .map((i) => {
+                        const ratio =
+                          imageRun.tasks[i.outputIndex - 1]?.requestedDimensions
+                            ?.aspectRatio || `รูปที่ ${i.outputIndex}`;
+                        const err = i.error || "";
+                        const isPolicy =
+                          /sensitive|policy|flagged|safety|nsfw|content filter/i.test(err);
+                        return isPolicy
+                          ? `${ratio} (โดน content policy)`
+                          : `${ratio} (provider error)`;
+                      });
+                    reply += `\n\n⚠️ สร้างไม่ครบ ${runResult.completedCount}/${imageRun.requestedOutputCount} — ขาด: ${failedDetails.join(", ")} กดสร้างภาพที่เหลือใหม่ได้ครับ`;
                     completionSuggestions = ["🔄 สร้างภาพที่เหลือใหม่", ...completionSuggestions];
                   }
 
                   if (isMultiOutput) {
                     const newStaged: StagedVariationCard[] = runResult.items
                       .filter((i) => i.status === "succeeded" && Boolean(i.result?.dataUrl))
-                      .map((i, idx) => ({
-                        id: `var-${Date.now()}-${idx + 1}`,
-                        fileId: i.result?.fileId || `img-${idx + 1}`,
-                        url: i.result?.dataUrl || "",
-                        width: i.result?.width || 1024,
-                        height: i.result?.height || 1024,
-                        label: direction.outputBriefs?.[idx] || `ตัวเลือกที่ ${idx + 1}`,
-                        status: "staged" as const,
-                        targetSlideId: slide?.id,
-                      }));
+                      .map((i) => {
+                        const task = imageRun.tasks[i.outputIndex - 1];
+                        const brief = direction.outputBriefs?.[i.outputIndex - 1];
+                        const ratio = task?.requestedDimensions?.aspectRatio;
+                        return {
+                          id: `var-${Date.now()}-${i.outputIndex}`,
+                          fileId: i.result?.fileId || `img-${i.outputIndex}`,
+                          url: i.result?.dataUrl || "",
+                          width: i.result?.width || 1024,
+                          height: i.result?.height || 1024,
+                          label:
+                            (brief && brief.trim()) ||
+                            (ratio ? `ขนาด ${ratio}` : `ตัวเลือกที่ ${i.outputIndex}`),
+                          status: "staged" as const,
+                          targetSlideId: slide?.id,
+                        };
+                      });
                     setStagedVariations(newStaged);
                     reply +=
                       "\n\n💡 เลื่อนเมาส์เหนือตัวเลือกใน Staging Tray ด้านล่างเพื่อดู Ghost Preview บน Canvas หรือกด Apply ภาพที่ต้องการลงชิ้นงานได้เลยครับ";
@@ -1107,10 +1227,16 @@ export default function AICoPilotBar() {
                           : promptToSend,
                         refinedPrompt: direction.refinedPrompt,
                         summary: direction.summary,
-                        width: imageRun.tasks[0]?.requestedDimensions?.width ?? 1024,
-                        height: imageRun.tasks[0]?.requestedDimensions?.height ?? 1024,
+                        width:
+                          firstSucceeded?.result?.width ??
+                          firstSucceededTask?.requestedDimensions?.width ??
+                          1024,
+                        height:
+                          firstSucceeded?.result?.height ??
+                          firstSucceededTask?.requestedDimensions?.height ??
+                          1024,
                         aspectRatio:
-                          imageRun.tasks[0]?.requestedDimensions?.aspectRatio ?? "1:1",
+                          firstSucceededTask?.requestedDimensions?.aspectRatio ?? "1:1",
                         refinementMode:
                           locksFromHelper?.refinementMode ??
                           priorGeneration?.refinementMode ??

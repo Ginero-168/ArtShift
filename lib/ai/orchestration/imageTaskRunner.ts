@@ -15,7 +15,7 @@ import {
   getGenerationPreviewBesideSource,
   getGenerationPreviewBounds,
 } from "@/lib/engine/generationPlacement";
-import { preloadDataURL } from "@/lib/engine/imageCache";
+import { preloadDataURL, loadDataURL } from "@/lib/engine/imageCache";
 import { getProcessingPreviewById } from "@/lib/engine/processingPreview";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
@@ -29,6 +29,7 @@ import type {
   CreativeOutputReview,
   CriterionEvidenceStatus,
 } from "./creativeDirector";
+import { autoCropImageToTargetRatio } from "./imageAutoCrop";
 import { deriveGeneratedImageName } from "./imageNaming";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
@@ -259,7 +260,7 @@ export async function runContextAwareImageTask(
           subAgent: task.subAgent,
         });
         try {
-          const generated = await generateAIImage(
+          const generatedRaw = await generateAIImage(
             {
               prompt: attemptPrompt,
               width: dimensions.width,
@@ -275,8 +276,33 @@ export async function runContextAwareImageTask(
           );
           throwIfAborted(executionSignal);
 
-          // Native generation only — never Frame-crop to force aspect.
-          // Requested size is sent upstream as custom WIDTHxHEIGHT / named ratio.
+          // Replicate GPT Image only accepts a fixed aspect enum. We request the
+          // nearest legal size upstream, then crop to the user's print/target
+          // ratio so banners fill edge-to-edge (except ratios beyond the model
+          // 3:1 cap, e.g. 29×7cm, which still need slight side padding).
+          // generateAIImage returns natural bitmap size — never trust provider
+          // metadata alone, or square outputs skip crop when the task asked wide.
+          let generated = generatedRaw;
+          const targetRatio =
+            dimensions.width / Math.max(1, dimensions.height);
+          const generatedRatio =
+            generatedRaw.width / Math.max(1, generatedRaw.height);
+          if (Math.abs(generatedRatio - targetRatio) > 0.03) {
+            const cropped = await autoCropImageToTargetRatio(
+              generatedRaw.dataUrl,
+              dimensions.width,
+              dimensions.height,
+            );
+            const cached = await loadDataURL(cropped.dataUrl);
+            generated = {
+              ...generatedRaw,
+              dataUrl: cached.dataURL,
+              fileId: cached.fileId,
+              width: cached.width,
+              height: cached.height,
+            };
+          }
+
           const gateAspectRatio = dimensions.aspectRatio;
 
           const technicalGate = runVisualQualityGate({

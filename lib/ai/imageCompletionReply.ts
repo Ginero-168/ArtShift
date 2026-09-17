@@ -34,6 +34,8 @@ export type ImageCompletionReplyOptions = {
   width?: number;
   height?: number;
   aspectRatio?: string;
+  succeededAspects?: readonly string[];
+  failedAspects?: readonly string[];
   modelLabel?: string;
   quality?: string;
 };
@@ -56,6 +58,8 @@ export function buildImageCompletionSummary(
     width: options?.width,
     height: options?.height,
     aspectRatio: options?.aspectRatio,
+    succeededAspects: options?.succeededAspects,
+    failedAspects: options?.failedAspects,
     modelLabel: options?.modelLabel,
     quality: options?.quality,
     printSizeSource: options?.printSizeSource,

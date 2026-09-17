@@ -118,8 +118,8 @@ describe("AI model manifest", () => {
     expect(serialized).not.toContain("https://");
   });
 
-  it("routes image generation to image-general (GPT Image 2.5 Sunburst) with correct alias and pricing ceiling", () => {
-    const routes = createAiRouteTable({});
+  it("routes image generation to Replicate Sunburst when OpenAI is not configured", () => {
+    const routes = createAiRouteTable({ OPENAI_API_KEY: "" });
 
     // Primary semantic alias
     const generalRoute = routes["image.generate"]?.quality?.find(
@@ -148,6 +148,17 @@ describe("AI model manifest", () => {
       model: "openai/gpt-image-2.5-sunburst",
       alias: "image-gpt-2",
     });
+  });
+
+  it("prefers OpenAI direct Sunburst when OPENAI_API_KEY is configured", () => {
+    const routes = createAiRouteTable({ OPENAI_API_KEY: "sk-test" });
+    const generalRoutes =
+      routes["image.generate"]?.quality?.filter((r) => r.alias === "image-general") ?? [];
+    expect(generalRoutes[0]).toMatchObject({
+      provider: "openai",
+      model: "gpt-image-2.5-sunburst",
+    });
+    expect(generalRoutes.some((r) => r.provider === "replicate")).toBe(true);
   });
 
   it("does not route to Flare when feature flag is off", () => {

@@ -6,8 +6,9 @@ import { isAllowedImageAspectRatio } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
+import { imageGenerationFallbackEnabled } from "@/lib/server/ai/imageGenerationProvider";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
-import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { getSessionOpenAiToken, getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,10 +79,21 @@ export async function POST(req: NextRequest) {
   }
   const inputImages = parsedInputImages.value;
   const enhance = body.enhance !== false;
+  const replicateToken = getSessionReplicateToken(req);
+  const openAiApiKey = getSessionOpenAiToken(req);
   const ai = getServerAiRuntime({
-    replicateToken: getSessionReplicateToken(req),
+    replicateToken,
+    openAiApiKey,
     accountId: account.id,
   });
+  const allowProviderFallback = imageGenerationFallbackEnabled(
+    {
+      ...process.env,
+      ...(openAiApiKey ? { OPENAI_API_KEY: openAiApiKey } : {}),
+      ...(replicateToken ? { REPLICATE_API_TOKEN: replicateToken } : {}),
+    },
+    replicateToken,
+  );
 
   let prompt = normalizedPrompt;
   let promptWarning: string | undefined;
@@ -126,10 +138,9 @@ export async function POST(req: NextRequest) {
       },
       {
         profile: "quality",
-        provider: "replicate",
         modelAlias: requestedModelAlias,
         cloudConsent: true,
-        allowFallback: false,
+        allowFallback: allowProviderFallback,
         timeoutMs: GPT_IMAGE_2_EXECUTION_TIMEOUT_MS,
         accountId: account.id,
         signal: req.signal,
@@ -148,29 +159,34 @@ export async function POST(req: NextRequest) {
     const outcomeUnknown = error instanceof AiRuntimeError && error.outcomeUnknown;
     const isAuth = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH";
     const isPolicy = error instanceof AiRuntimeError && error.code === "POLICY_DENIED";
+    const isInvalid = error instanceof AiRuntimeError && error.code === "INVALID_INPUT";
     const rawError = error instanceof Error ? error.message : "";
     const isSafety =
       isPolicy ||
       /safety|nsfw|sensitive|policy|flagged|copyright|trademark|content filter|violated|violation/i.test(
         rawError,
       );
-    const status = isAuth ? 503 : isSafety ? 422 : 502;
+    const status = isAuth ? 503 : isSafety || isInvalid ? 422 : 502;
     const predictionId =
       outcomeUnknown && error instanceof AiRuntimeError ? error.predictionId : undefined;
     const code = outcomeUnknown
       ? "OUTCOME_UNKNOWN"
       : isSafety
         ? "POLICY_DENIED"
-        : isAuth
-          ? "PROVIDER_AUTH"
-          : "PROVIDER_UNAVAILABLE";
+        : isInvalid
+          ? "INVALID_INPUT"
+          : isAuth
+            ? "PROVIDER_AUTH"
+            : "PROVIDER_UNAVAILABLE";
     const errorMessage = outcomeUnknown
       ? "AI provider result is uncertain; no duplicate request was created."
       : isAuth
         ? "AI provider is not configured for this session."
         : isSafety
           ? rawError || "Content policy violation: prompt violates safety or copyright guidelines."
-          : "Image generation failed. Please try again.";
+          : isInvalid
+            ? "สัดส่วนหรือพารามิเตอร์ภาพไม่รองรับโดย AI Provider — ลองขนาดใกล้เคียง เช่น 16:9 หรือ 3:2"
+            : "Image generation failed. Please try again.";
 
     return NextResponse.json(
       {

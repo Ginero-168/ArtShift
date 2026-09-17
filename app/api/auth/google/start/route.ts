@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   createGoogleAuthorizationUrl,
+  getCanonicalGoogleStartRedirect,
   getGoogleAuthConfig,
   getPublicAppUrl,
   setGoogleStateCookie,
@@ -13,6 +14,9 @@ export async function GET(req: NextRequest) {
   const config = getGoogleAuthConfig();
   const publicUrl = getPublicAppUrl() ?? new URL(req.url).origin;
   if (!config) return redirect(`${publicUrl}/?auth=google-unavailable`);
+
+  const canonicalStart = getCanonicalGoogleStartRedirect(req);
+  if (canonicalStart) return redirect(canonicalStart);
 
   const flow = createGoogleAuthorizationUrl(config);
   const response = redirect(flow.url);

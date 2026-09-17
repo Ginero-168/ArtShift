@@ -166,7 +166,7 @@ export default function ProfileMenu() {
                 onClick={() => setProviderOpen(true)}
                 style={menuButtonStyle}
               >
-                AI Provider &amp; Replicate Key
+                AI Provider &amp; API Keys
               </button>
               <button
                 type="button"
@@ -184,7 +184,7 @@ export default function ProfileMenu() {
                 Your Profile
               </strong>
               <p style={{ margin: "6px 0 10px", fontSize: 10, lineHeight: 1.45, color: "#64748b" }}>
-                Login ด้วย Google เพื่อจำ Replicate Key กับบัญชีของคุณ
+                Login ด้วย Google เพื่อจำ OpenAI / Replicate Key กับบัญชีของคุณ
               </p>
               <button
                 type="button"

@@ -39,7 +39,7 @@ describe("/api/ai/key", () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
-      error: "Sign in to save your Replicate API Key securely.",
+      error: "Sign in to save your API Key securely.",
       code: "AUTH_REQUIRED",
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -59,17 +59,40 @@ describe("/api/ai/key", () => {
       keyHint: "r8_••••bbbb",
       storage: "encrypted-account",
     });
+    expect(body.credentials.replicate).toMatchObject({ configured: true, keyHint: "r8_••••bbbb" });
     expect(JSON.stringify(body)).not.toContain(TOKEN);
     expect(response.headers.get("set-cookie")).toBeNull();
 
     const status = await GET(request(undefined, authCookie));
     expect(await status.json()).toMatchObject({
       credential: { authenticated: true, configured: true, keyHint: "r8_••••bbbb" },
+      credentials: {
+        openai: { configured: false },
+        replicate: { configured: true },
+      },
     });
   });
 
+  it("verifies and persists an OpenAI key separately from Replicate", async () => {
+    const openAiToken = `sk-${"a".repeat(48)}`;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
+    const response = await POST(
+      request({ provider: "openai", apiKey: openAiToken }, authCookie),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.credential).toMatchObject({
+      provider: "openai",
+      configured: true,
+      keyHint: "sk-••••aaaa",
+    });
+    expect(body.credentials.openai.configured).toBe(true);
+    expect(JSON.stringify(body)).not.toContain(openAiToken);
+  });
+
   it("deletes the persisted key while keeping the authenticated account", async () => {
-    const deleted = await DELETE(request(undefined, authCookie));
+    const deleted = await DELETE(request(undefined, authCookie, "replicate"));
     expect(deleted.status).toBe(200);
     expect(await deleted.json()).toMatchObject({
       credential: {
@@ -86,9 +109,16 @@ function fakeResponse(set: ReturnType<typeof vi.fn>): NextResponse {
   return { cookies: { set } } as unknown as NextResponse;
 }
 
-function request(body?: unknown, cookieValue?: string): NextRequest {
+function request(
+  body?: unknown,
+  cookieValue?: string,
+  deleteProvider?: string,
+): NextRequest {
   const serialized = body === undefined ? "" : JSON.stringify(body);
+  const url = new URL("http://localhost/api/ai/key");
+  if (deleteProvider) url.searchParams.set("provider", deleteProvider);
   return {
+    nextUrl: url,
     headers: new Headers({
       "content-type": "application/json",
       "content-length": String(new TextEncoder().encode(serialized).byteLength),

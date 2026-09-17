@@ -4,6 +4,7 @@ import {
   consumeGoogleState,
   createGoogleAuthorizationUrl,
   exchangeGoogleCode,
+  getCanonicalGoogleStartRedirect,
   GOOGLE_STATE_COOKIE,
   getGoogleAuthConfig,
   setGoogleStateCookie,
@@ -90,7 +91,27 @@ describe("Google OAuth", () => {
     process.env.ARTSHIFT_PUBLIC_URL = "https://www.artshift.io";
     expect(getGoogleAuthConfig()).toBeNull();
   });
+
+  it("bounces OAuth start off the apex host onto the canonical public URL", () => {
+    process.env.ARTSHIFT_PUBLIC_URL = "https://www.artshift.io";
+    expect(
+      getCanonicalGoogleStartRedirect(
+        fakeHeaders({ host: "artshift.io", "x-forwarded-host": "artshift.io" }),
+      ),
+    ).toBe("https://www.artshift.io/api/auth/google/start");
+    expect(
+      getCanonicalGoogleStartRedirect(fakeHeaders({ host: "www.artshift.io" })),
+    ).toBeNull();
+  });
 });
+
+function fakeHeaders(headers: Record<string, string>): Pick<NextRequest, "headers"> {
+  return {
+    headers: {
+      get: (name: string) => headers[name.toLowerCase()] ?? headers[name] ?? null,
+    },
+  } as Pick<NextRequest, "headers">;
+}
 
 function fakeResponse(set: ReturnType<typeof vi.fn>): NextResponse {
   return { cookies: { set } } as unknown as NextResponse;

@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
     clearGoogleStateCookie(response);
     setAuthCookie(response, user.id);
     return response;
-  } catch {
+  } catch (error) {
+    console.error("[auth/google/callback] exchange failed", error);
     return stateResponse;
   }
 }

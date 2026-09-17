@@ -44,6 +44,33 @@ export function getPublicAppUrl(): string | null {
   }
 }
 
+/** Hostname of the incoming request (honors X-Forwarded-Host behind nginx). */
+export function getRequestHostname(request: Pick<NextRequest, "headers">): string | null {
+  const forwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwarded || request.headers.get("host");
+  if (!host) return null;
+  const hostname = host.split(":")[0]?.trim().toLowerCase();
+  return hostname || null;
+}
+
+/**
+ * `__Host-` OAuth state cookies are bound to the exact host that set them, while
+ * Google's redirect_uri always uses ARTSHIFT_PUBLIC_URL. If the user starts login
+ * on a non-canonical host (e.g. artshift.io vs www.artshift.io), bounce to the
+ * canonical start URL before setting any cookie.
+ */
+export function getCanonicalGoogleStartRedirect(
+  request: Pick<NextRequest, "headers">,
+): string | null {
+  const publicUrl = getPublicAppUrl();
+  if (!publicUrl) return null;
+  const requestHost = getRequestHostname(request);
+  if (!requestHost) return null;
+  const canonicalHost = new URL(publicUrl).hostname.toLowerCase();
+  if (requestHost === canonicalHost) return null;
+  return `${publicUrl}/api/auth/google/start`;
+}
+
 export function createGoogleAuthorizationUrl(config: GoogleAuthConfig): {
   url: string;
   state: string;

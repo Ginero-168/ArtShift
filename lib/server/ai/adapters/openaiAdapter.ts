@@ -1,4 +1,6 @@
 import type {
+  AiImageGenerateInput,
+  AiImageGenerateOutput,
   AiPromptEnhanceInput,
   AiProviderStatus,
   AiTaskKind,
@@ -11,14 +13,27 @@ import type {
   AiProviderRequest,
   AiProviderResult,
 } from "@/lib/ai-runtime/runtime";
-import { assertProviderResponse, parseObjectProposals } from "./shared";
+import {
+  formatOpenAiImageSize,
+  OPENAI_GPT_IMAGE_25_SUNBURST_MODEL,
+  parseOpenAiImageSize,
+} from "@/lib/server/ai/openaiImageSize";
+import { assertProviderResponse, parseObjectProposals, splitDataUrl } from "./shared";
 
 const SUPPORTED_TASKS: AiTaskKind[] = [
   "vision.describe",
   "vision.propose",
   "vision.ocr",
   "prompt.enhance",
+  "image.generate",
 ];
+
+const ALLOWED_IMAGE_MODELS = new Set([
+  OPENAI_GPT_IMAGE_25_SUNBURST_MODEL,
+  "gpt-image-2.5-sunburst-2026-09-08",
+  "gpt-image-2.5-flare",
+  "gpt-image-2",
+]);
 
 type OpenAiResponse = {
   id?: string;
@@ -27,6 +42,16 @@ type OpenAiResponse = {
   output_text?: string;
   output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
   usage?: { input_tokens?: number; output_tokens?: number };
+};
+
+type OpenAiImagesResponse = {
+  created?: number;
+  data?: Array<{ b64_json?: string; revised_prompt?: string; url?: string }>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+  };
 };
 
 export class OpenAiAdapter implements AiProviderAdapter {
@@ -38,11 +63,12 @@ export class OpenAiAdapter implements AiProviderAdapter {
   ) {}
 
   async status(): Promise<AiProviderStatus> {
+    const configured = Boolean(this.apiKey);
     return {
       id: this.id,
       label: "OpenAI",
-      configured: Boolean(this.apiKey),
-      state: this.apiKey ? "ready" : "missing-key",
+      configured,
+      state: configured ? "ready" : "missing-key",
       tasks: SUPPORTED_TASKS,
       models: [
         {
@@ -56,14 +82,30 @@ export class OpenAiAdapter implements AiProviderAdapter {
             note: "Default GPT-4o mini estimate; configure when using another model.",
           },
         },
+        {
+          id: OPENAI_GPT_IMAGE_25_SUNBURST_MODEL,
+          alias: "image-general",
+          profile: "quality",
+          pricing: {
+            currency: "USD",
+            inputPerMillionTokens: 8,
+            outputPerMillionTokens: 30,
+            note: "GPT Image 2.5 token estimate from OpenAI pricing.",
+          },
+        },
       ],
-      message: this.apiKey ? undefined : "OPENAI_API_KEY is not configured.",
+      message: configured ? undefined : "OPENAI_API_KEY is not configured.",
     };
   }
 
   async execute<K extends AiTaskKind>(
     request: AiProviderRequest<K>,
   ): Promise<AiProviderResult<AiTaskOutput<K>>> {
+    if (request.task === "image.generate") {
+      return (await this.generateImage(
+        request as AiProviderRequest<"image.generate">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
+    }
     if (!SUPPORTED_TASKS.includes(request.task)) {
       throw new AiRuntimeError("NO_PROVIDER", `OpenAI does not support ${request.task}.`, {
         provider: this.id,
@@ -109,6 +151,132 @@ export class OpenAiAdapter implements AiProviderAdapter {
       },
     };
   }
+
+  private async generateImage(
+    request: AiProviderRequest<"image.generate">,
+  ): Promise<AiProviderResult<AiImageGenerateOutput>> {
+    if (!this.apiKey) {
+      throw new AiRuntimeError("PROVIDER_AUTH", "OPENAI_API_KEY is not configured.", {
+        provider: this.id,
+      });
+    }
+    const input = request.input as AiImageGenerateInput;
+    const model = normalizeImageModel(request.model);
+    const size = formatOpenAiImageSize(input.width, input.height);
+    const quality = input.quality ?? "medium";
+    const background = input.background ?? "opaque";
+    const outputFormat = background === "transparent" ? "png" : "jpeg";
+
+    const response =
+      input.inputImages?.length && input.inputImages.length > 0
+        ? await this.postImageEdits(input, model, size, quality, background, outputFormat, request.signal)
+        : await this.postImageGenerations(
+            input,
+            model,
+            size,
+            quality,
+            background,
+            outputFormat,
+            request.signal,
+          );
+
+    await assertProviderResponse(response, this.id);
+    const payload = (await response.json()) as OpenAiImagesResponse;
+    const b64 = payload.data?.[0]?.b64_json;
+    if (!b64) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "OpenAI returned no generated image.", {
+        provider: this.id,
+      });
+    }
+    const mime = outputFormat === "png" ? "image/png" : "image/jpeg";
+    const dataUrl = `data:${mime};base64,${b64}`;
+    const { width, height } = parseOpenAiImageSize(size);
+    return {
+      output: {
+        dataUrl,
+        prompt: input.prompt,
+        width,
+        height,
+        seed: input.seed ?? 0,
+      },
+      model,
+      usage: {
+        inputTokens: payload.usage?.input_tokens,
+        outputTokens: payload.usage?.output_tokens,
+      },
+      warnings:
+        input.seed !== undefined
+          ? [
+              `${model} does not expose deterministic seed control; the seed parameter was not sent upstream.`,
+            ]
+          : [],
+    };
+  }
+
+  private async postImageGenerations(
+    input: AiImageGenerateInput,
+    model: string,
+    size: string,
+    quality: string,
+    background: string,
+    outputFormat: string,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    return fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        prompt: input.prompt,
+        size,
+        quality,
+        background,
+        output_format: outputFormat,
+        n: 1,
+      }),
+      signal,
+    });
+  }
+
+  private async postImageEdits(
+    input: AiImageGenerateInput,
+    model: string,
+    size: string,
+    quality: string,
+    background: string,
+    outputFormat: string,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    const form = new FormData();
+    form.append("model", model);
+    form.append("prompt", input.prompt);
+    form.append("size", size);
+    form.append("quality", quality);
+    form.append("background", background);
+    form.append("output_format", outputFormat);
+    for (const [index, image] of (input.inputImages ?? []).entries()) {
+      const { mimeType, base64 } = splitDataUrl(image.dataUrl);
+      const bytes = Buffer.from(base64, "base64");
+      const blob = new Blob([bytes], { type: mimeType });
+      form.append("image[]", blob, `reference-${index}.${mimeType.split("/")[1] ?? "png"}`);
+    }
+    return fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      body: form,
+      signal,
+    });
+  }
+}
+
+function normalizeImageModel(model: string): string {
+  const trimmed = model.trim();
+  if (ALLOWED_IMAGE_MODELS.has(trimmed)) return trimmed;
+  if (trimmed.includes("sunburst")) return OPENAI_GPT_IMAGE_25_SUNBURST_MODEL;
+  return OPENAI_GPT_IMAGE_25_SUNBURST_MODEL;
 }
 
 function createOpenAiBody(task: AiTaskKind, unknownInput: unknown, model: string) {

@@ -97,7 +97,7 @@ export async function autoCropImageToTargetRatio(
         testCtx.drawImage(img, 0, 0);
 
         if (currentRatio < targetRatio) {
-          // Check top and bottom rows for black letterbox bars
+          // Check top and bottom rows for black OR white letterbox bars
           const cropHeight = Math.round(sourceWidth / targetRatio);
           const maxCheckRows = Math.floor((sourceHeight - cropHeight) / 2);
           const sampleCols = [
@@ -108,20 +108,20 @@ export async function autoCropImageToTargetRatio(
 
           try {
             for (let y = 0; y < maxCheckRows; y += 2) {
-              const isDark = sampleCols.every((x) => {
+              const isBar = sampleCols.every((x) => {
                 const p = testCtx.getImageData(x, y, 1, 1).data;
-                return p[0] < 30 && p[1] < 30 && p[2] < 30;
+                return isLetterboxPixel(p[0], p[1], p[2]);
               });
-              if (isDark) letterboxTop = y;
+              if (isBar) letterboxTop = y;
               else break;
             }
 
             for (let y = sourceHeight - 1; y > sourceHeight - 1 - maxCheckRows; y -= 2) {
-              const isDark = sampleCols.every((x) => {
+              const isBar = sampleCols.every((x) => {
                 const p = testCtx.getImageData(x, y, 1, 1).data;
-                return p[0] < 30 && p[1] < 30 && p[2] < 30;
+                return isLetterboxPixel(p[0], p[1], p[2]);
               });
-              if (isDark) letterboxBottom = sourceHeight - 1 - y;
+              if (isBar) letterboxBottom = sourceHeight - 1 - y;
               else break;
             }
           } catch {
@@ -175,4 +175,11 @@ export async function autoCropImageToTargetRatio(
 
     img.src = dataUrl;
   });
+}
+
+/** True for solid black or near-white padding bars (common GPT Image letterboxing). */
+export function isLetterboxPixel(r: number, g: number, b: number): boolean {
+  const dark = r < 30 && g < 30 && b < 30;
+  const nearWhite = r > 245 && g > 245 && b > 245;
+  return dark || nearWhite;
 }

@@ -167,6 +167,39 @@ describe("Canvas hotkeys", () => {
     expect(remaining?.length).toBe(4 - selected.length);
   });
 
+  it("pastes in-app clipboard on Cmd+V, but leaves OS paste free when clipboard is empty", () => {
+    const a = createText({ x: 10, y: 10, text: "A" });
+    useEngine.getState().addElement(a);
+    useEngine.getState().selectOnly([a.id]);
+    handleCanvasHotkey(
+      new KeyboardEvent("keydown", { key: "c", code: "KeyC", metaKey: true }),
+    );
+
+    const withClip = new KeyboardEvent("keydown", {
+      key: "v",
+      code: "KeyV",
+      metaKey: true,
+      cancelable: true,
+    });
+    const preventedWithClip = vi.spyOn(withClip, "preventDefault");
+    handleCanvasHotkey(withClip);
+    expect(preventedWithClip).toHaveBeenCalled();
+    expect(
+      useEngine.getState().currentSlide()?.elements.filter((el) => !el.isDeleted),
+    ).toHaveLength(2);
+
+    useEngine.setState({ clipboard: null });
+    const empty = new KeyboardEvent("keydown", {
+      key: "v",
+      code: "KeyV",
+      metaKey: true,
+      cancelable: true,
+    });
+    const preventedEmpty = vi.spyOn(empty, "preventDefault");
+    handleCanvasHotkey(empty);
+    expect(preventedEmpty).not.toHaveBeenCalled();
+  });
+
   it("duplicates selection with Command+D outside raster mode", () => {
     const st = useEngine.getState();
     st.setEditorMode("vector");

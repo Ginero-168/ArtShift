@@ -34,16 +34,127 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
   { id: "1:3", label: "Skyscraper 1:3", ratio: "1:3", width: 688, height: 2048, icon: "▮" },
 ];
 
+const DIMENSION_PAIR_RE =
+  /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/giu;
+const COLON_RATIO_RE = /(\d+)\s*:\s*(\d+)/gu;
+
+function textHasDimensionPair(text: string): boolean {
+  DIMENSION_PAIR_RE.lastIndex = 0;
+  return DIMENSION_PAIR_RE.test(text);
+}
+
+export type RequestedSizeSpec = {
+  width: number;
+  height: number;
+  aspectRatio: AiImageAspectRatio;
+  ratioClamped?: boolean;
+  /** Original mention, e.g. "16:9" or "53x20". */
+  label: string;
+  sourceWidth: number;
+  sourceHeight: number;
+};
+
 export function hasExplicitDimensionsInText(text?: string): boolean {
   if (!text || typeof text !== "string") return false;
   const val = text.toLocaleLowerCase();
   return (
-    /(?:ขนาด\s*)?\d+(?:\.\d+)?\s*(?:x|×|by)\s*\d+(?:\.\d+)?\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/iu.test(
-      val,
-    ) ||
+    textHasDimensionPair(val) ||
     /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|1\s*:\s*1)\b/u.test(val) ||
     /(?:60x20|120x40|2048x688|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|landscape|portrait|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(val)
   );
+}
+
+function resolveColonRatioDimensions(
+  ratioWidth: number,
+  ratioHeight: number,
+): {
+  width: number;
+  height: number;
+  aspectRatio: AiImageAspectRatio;
+  ratioClamped?: boolean;
+} {
+  // Prefer named presets for common social/print ratios.
+  return resolveImageGenerationDimensions(`${ratioWidth}:${ratioHeight}`);
+}
+
+/**
+ * Extract every physical/pixel WxH mention in order (for multi-size campaigns).
+ * Dedupes consecutive identical pairs so "53x20 cm Endcap 53x20" counts once.
+ */
+export function extractDimensionSpecsFromText(text?: string): RequestedSizeSpec[] {
+  if (!text || typeof text !== "string") return [];
+  const specs: RequestedSizeSpec[] = [];
+  DIMENSION_PAIR_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = DIMENSION_PAIR_RE.exec(text)) !== null) {
+    const sourceWidth = parseFloat(match[1] ?? "");
+    const sourceHeight = parseFloat(match[2] ?? "");
+    if (!(sourceWidth > 0) || !(sourceHeight > 0)) continue;
+    const prev = specs[specs.length - 1];
+    if (prev && prev.sourceWidth === sourceWidth && prev.sourceHeight === sourceHeight) {
+      continue;
+    }
+    const resolved = resolveGenerationSizeFromRatio(sourceWidth, sourceHeight);
+    specs.push({
+      width: resolved.width,
+      height: resolved.height,
+      aspectRatio: resolved.aspectRatio,
+      ratioClamped: resolved.ratioClamped,
+      label: `${sourceWidth}x${sourceHeight}`,
+      sourceWidth,
+      sourceHeight,
+    });
+  }
+  return specs;
+}
+
+/**
+ * Extract every A:B aspect mention in order (e.g. "16:9, 3:4 และ 9:16").
+ * Dedupes by resolved aspect id so repeats do not inflate output count.
+ */
+export function extractAspectRatioSpecsFromText(text?: string): RequestedSizeSpec[] {
+  if (!text || typeof text !== "string") return [];
+  const specs: RequestedSizeSpec[] = [];
+  const seen = new Set<string>();
+  COLON_RATIO_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = COLON_RATIO_RE.exec(text)) !== null) {
+    const sourceWidth = Number(match[1]);
+    const sourceHeight = Number(match[2]);
+    if (!(sourceWidth > 0) || !(sourceHeight > 0)) continue;
+    // Skip clock-like or version-like tokens (e.g. 2024:01) — keep realistic aspect nums.
+    if (sourceWidth > 64 || sourceHeight > 64) continue;
+    const resolved = resolveColonRatioDimensions(sourceWidth, sourceHeight);
+    if (seen.has(resolved.aspectRatio)) continue;
+    seen.add(resolved.aspectRatio);
+    specs.push({
+      width: resolved.width,
+      height: resolved.height,
+      aspectRatio: resolved.aspectRatio,
+      ratioClamped: resolved.ratioClamped,
+      label: `${sourceWidth}:${sourceHeight}`,
+      sourceWidth,
+      sourceHeight,
+    });
+  }
+  return specs;
+}
+
+/**
+ * All distinct size targets in a prompt: physical WxH first (print campaigns),
+ * then named A:B ratios. Used to drive multi-output runs.
+ */
+export function extractRequestedSizeSpecsFromText(text?: string): RequestedSizeSpec[] {
+  if (!text || typeof text !== "string") return [];
+  const fromPixels = extractDimensionSpecsFromText(text);
+  if (fromPixels.length > 0) {
+    const seen = new Set(fromPixels.map((s) => s.aspectRatio));
+    const extras = extractAspectRatioSpecsFromText(text).filter(
+      (s) => !seen.has(s.aspectRatio),
+    );
+    return [...fromPixels, ...extras];
+  }
+  return extractAspectRatioSpecsFromText(text);
 }
 
 export function resolveImageGenerationDimensions(prompt: string): {

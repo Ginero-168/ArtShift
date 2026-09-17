@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
 import {
+  extractDimensionSpecsFromText,
+  extractRequestedSizeSpecsFromText,
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
@@ -65,6 +67,33 @@ describe("resolveImageGenerationDimensions (any size)", () => {
   });
 });
 
+describe("extractDimensionSpecsFromText", () => {
+  it("extracts every WxH size in order for multi-size campaigns", () => {
+    const specs = extractDimensionSpecsFromText(
+      "Endcap 53x20 cm, Shelftalk 29x7 cm, 1040x1040 px, 1240x348 px, 1844x880 px",
+    );
+    expect(specs.map((s) => `${s.sourceWidth}x${s.sourceHeight}`)).toEqual([
+      "53x20",
+      "29x7",
+      "1040x1040",
+      "1240x348",
+      "1844x880",
+    ]);
+    expect(specs[2]?.aspectRatio).toBe("2048x2048");
+    expect(specs[0]?.aspectRatio).not.toBe("1:1");
+    expect(specs[2]?.width / specs[2]!.height).toBe(1);
+  });
+});
+
+describe("extractRequestedSizeSpecsFromText", () => {
+  it("extracts named aspect ratios listed in one Thai resize ask", () => {
+    const specs = extractRequestedSizeSpecsFromText(
+      "ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที",
+    );
+    expect(specs.map((s) => s.aspectRatio)).toEqual(["16:9", "3:4", "9:16"]);
+  });
+});
+
 describe("resolveDimensionsFromPixelSize", () => {
   it("no longer snaps mid ratios onto 16:9 / 4:3 buckets", () => {
     expect(resolveDimensionsFromPixelSize(1800, 900).aspectRatio).toBe("2048x1024");
@@ -73,17 +102,19 @@ describe("resolveDimensionsFromPixelSize", () => {
 });
 
 describe("normalizeReplicateAspectRatio", () => {
-  it("passes custom pixels and maps A:B without collapsing to 16:9", () => {
-    expect(normalizeReplicateAspectRatio("2048x1024")).toBe("2048x1024");
-    expect(normalizeReplicateAspectRatio("2:1")).toBe("2048x1024");
-    expect(normalizeReplicateAspectRatio("3:1")).toBe("2048x688");
+  it("snaps custom pixels / A:B onto Replicate-allowed tokens", () => {
+    expect(normalizeReplicateAspectRatio("2048x1024")).toBe("2048x1152");
+    expect(normalizeReplicateAspectRatio("2:1")).toBe("2048x1152");
+    expect(normalizeReplicateAspectRatio("3:1")).toBe("2048x1152");
     expect(normalizeReplicateAspectRatio("16:9")).toBe("16:9");
   });
 });
 
 describe("aspectRatioFromDimensions", () => {
-  it("emits custom tokens for non-standard sizes", () => {
-    expect(aspectRatioFromDimensions(2048, 1024)).toBe("2048x1024");
-    expect(aspectRatioFromDimensions(1280, 720)).toBe("16:9");
+  it("emits Replicate-allowed tokens for non-standard sizes", () => {
+    expect(aspectRatioFromDimensions(2048, 1024)).toBe("2048x1152");
+    expect(["16:9", "2048x1152", "3840x2160"]).toContain(
+      aspectRatioFromDimensions(1280, 720),
+    );
   });
 });

@@ -220,6 +220,10 @@ export type BuildImageResultSummaryOptions = {
   width?: number;
   height?: number;
   aspectRatio?: string;
+  /** All aspect ratios that actually succeeded (multi-size runs). */
+  succeededAspects?: readonly string[];
+  /** Aspect ratios that failed in a multi-size run. */
+  failedAspects?: readonly string[];
   modelLabel?: string;
   quality?: string;
   printSizeSource?: string;
@@ -229,10 +233,21 @@ export type BuildImageResultSummaryOptions = {
 /** Structured post-generation summary for chat (Scene / Tone / Framing + pills). */
 export function buildImageResultSummary(opts: BuildImageResultSummaryOptions): ImageResultSummary {
   const cleanSubject = stripComposerMentions(opts.subject);
+  const succeededAspects = (opts.succeededAspects ?? [])
+    .map((ratio) => formatFriendlyAspectRatio(undefined, undefined, ratio))
+    .filter(Boolean);
+  const failedAspects = (opts.failedAspects ?? [])
+    .map((ratio) => formatFriendlyAspectRatio(undefined, undefined, ratio))
+    .filter(Boolean);
   const firstBrief = opts.outputBriefs?.[0]
     ? stripOutputBriefPrefix(opts.outputBriefs[0])
     : undefined;
-  const titleBit = firstBrief || cleanSubject || "ภาพ";
+  // Prefer a neutral title for multi-size runs so we don't claim e.g. "…16:9"
+  // when that size failed and only other ratios landed.
+  const titleBit =
+    succeededAspects.length > 1
+      ? cleanSubject || "ภาพ"
+      : firstBrief || cleanSubject || "ภาพ";
 
   const headline = opts.isEdit
     ? `เสร็จแล้ว ปรับแต่ง "${titleBit}" เรียบร้อย ${opts.count} รูป`
@@ -241,29 +256,38 @@ export function buildImageResultSummary(opts: BuildImageResultSummaryOptions): I
   const source = [opts.refinedPrompt, opts.summary, opts.userPrompt, cleanSubject]
     .filter(Boolean)
     .join("\n");
-  const ratio = formatFriendlyAspectRatio(opts.width, opts.height, opts.aspectRatio);
+  const primaryRatio =
+    succeededAspects[0] ||
+    formatFriendlyAspectRatio(opts.width, opts.height, opts.aspectRatio);
   const printSource = [opts.printSizeSource, opts.userPrompt, opts.summary, ...(opts.outputBriefs ?? [])]
     .filter(Boolean)
     .join("\n");
   const printSize = extractPhysicalPrintSizeCm(printSource);
 
   const sceneValue =
-    firstBrief && firstBrief.length > 3
-      ? firstBrief
-      : opts.summary
-        ? firstSentence(opts.summary, 160)
-        : titleBit;
+    succeededAspects.length > 1
+      ? cleanSubject || firstSentence(opts.summary || opts.userPrompt || "ตามคำขอ", 160)
+      : firstBrief && firstBrief.length > 3
+        ? firstBrief
+        : opts.summary
+          ? firstSentence(opts.summary, 160)
+          : titleBit;
 
   const toneParts = [inferColorPalette(source), inferStyle(source), inferLighting(source)];
   const toneValue = toneParts.join(", ");
 
   let framingValue: string;
-  if (printSize && opts.width && opts.height) {
-    framingValue = `พาโนรามา ${ratio} (${opts.width}×${opts.height} px) สัดส่วนเดียวกับงานพิมพ์ ${printSize.widthCm}×${printSize.heightCm} ซม.`;
+  if (succeededAspects.length > 1) {
+    framingValue = `เฟรม ${succeededAspects.join(" · ")}`;
+    if (failedAspects.length > 0) {
+      framingValue += ` (ยังไม่ได้: ${failedAspects.join(" · ")})`;
+    }
+  } else if (printSize && opts.width && opts.height) {
+    framingValue = `พาโนรามา ${primaryRatio} (${opts.width}×${opts.height} px) สัดส่วนเดียวกับงานพิมพ์ ${printSize.widthCm}×${printSize.heightCm} ซม.`;
   } else if (opts.width && opts.height) {
-    framingValue = `เฟรม ${ratio} (${opts.width}×${opts.height} px)`;
+    framingValue = `เฟรม ${primaryRatio} (${opts.width}×${opts.height} px)`;
   } else {
-    framingValue = `เฟรม ${ratio}`;
+    framingValue = `เฟรม ${primaryRatio}`;
   }
 
   const fields: ImageResultField[] = opts.isEdit
@@ -284,7 +308,9 @@ export function buildImageResultSummary(opts: BuildImageResultSummaryOptions): I
   const modelPill = opts.modelLabel
     ? `${opts.modelLabel}${qualityLabel === "auto" ? " Auto" : ` ${qualityLabel}`}`
     : undefined;
-  const pills = [modelPill, ratio, qualityLabel].filter(Boolean) as string[];
+  const ratioPill =
+    succeededAspects.length > 1 ? succeededAspects.join(" · ") : primaryRatio;
+  const pills = [modelPill, ratioPill, qualityLabel].filter(Boolean) as string[];
 
   let printHint: string | undefined;
   if (printSize && !opts.isEdit) {

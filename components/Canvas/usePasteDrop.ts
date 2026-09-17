@@ -12,7 +12,7 @@
 
 import { useEffect } from "react";
 import { BUILDER_BLOCK_MIME, createBuilderBlock, isBuilderBlockKind } from "@/lib/builder/blocks";
-import { createImage } from "@/lib/engine/factory";
+import { createImage, createText } from "@/lib/engine/factory";
 import {
   fileToDataURL,
   getCached,
@@ -143,21 +143,115 @@ export function usePasteDrop(
     function onPaste(e: ClipboardEvent) {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      const items = e.clipboardData?.items;
-      if (!items) return;
+      if (t?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+
+      const cd = e.clipboardData;
+      if (!cd) return;
+
+      const { w: sw, h: sh } = currentSlideSize();
+      const center = { x: sw / 2, y: sh / 2 };
+
+      // 1) Image / PDF files from the OS clipboard (explicit file paste wins)
       const files: File[] = [];
-      for (const it of Array.from(items)) {
+      for (const it of Array.from(cd.items ?? [])) {
         if (it.kind === "file") {
           const f = it.getAsFile();
           if (f) files.push(f);
         }
       }
-      if (!files.length) return;
-      e.preventDefault();
-      const dt = new DataTransfer();
-      for (const f of files) dt.items.add(f);
-      const { w: sw, h: sh } = currentSlideSize();
-      handleFiles(dt.files, { x: sw / 2, y: sh / 2 });
+      if (files.length) {
+        e.preventDefault();
+        const dt = new DataTransfer();
+        for (const f of files) dt.items.add(f);
+        void handleFiles(dt.files, center);
+        return;
+      }
+
+      // 2) In-app element clipboard (Copy/Cut inside the editor) — must beat
+      // leftover OS text/HTML so Cut/Copy → switch slide → Paste works.
+      const engineClipboard = useEngine.getState().clipboard;
+      if (engineClipboard?.length) {
+        e.preventDefault();
+        useEngine.getState().pasteElements();
+        return;
+      }
+
+      // 3) HTML payload: embedded <img>, or inline SVG rendered as an image
+      const html = cd.getData("text/html");
+      if (html) {
+        const imgSrc = htmlToFirstImgSrc(html);
+        if (imgSrc && /^(https?:|data:|blob:)/i.test(imgSrc)) {
+          e.preventDefault();
+          void loadDataURL(imgSrc)
+            .then((entry) => handleImageEntry(entry, center, "paste image"))
+            .catch((err) => console.error("Failed to paste HTML image:", err));
+          return;
+        }
+        const svgText = extractSvgMarkup(html) ?? null;
+        if (svgText) {
+          e.preventDefault();
+          const dataURL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+          void loadDataURL(dataURL)
+            .then((entry) => handleImageEntry(entry, center, "paste svg"))
+            .catch((err) => console.error("Failed to paste SVG:", err));
+          return;
+        }
+      }
+
+      // 4) Direct image/svg+xml clipboard type
+      const svgDirect = cd.getData("image/svg+xml");
+      if (svgDirect?.trim()) {
+        e.preventDefault();
+        const dataURL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgDirect)}`;
+        void loadDataURL(dataURL)
+          .then((entry) => handleImageEntry(entry, center, "paste svg"))
+          .catch((err) => console.error("Failed to paste SVG:", err));
+        return;
+      }
+
+      // 5) Plain text → text element on the slide
+      const text = cd.getData("text/plain");
+      if (text?.trim()) {
+        const trimmed = text.trim();
+        if (/^(https?:|data:image\/|blob:)/i.test(trimmed) && !/\s/.test(trimmed)) {
+          e.preventDefault();
+          void loadDataURL(trimmed)
+            .then((entry) => handleImageEntry(entry, center, "paste image url"))
+            .catch(() => {
+              pastePlainText(trimmed, center);
+            });
+          return;
+        }
+        e.preventDefault();
+        pastePlainText(trimmed, center);
+      }
+    }
+
+    function pastePlainText(text: string, world: { x: number; y: number }) {
+      const lines = text.replace(/\r\n?/g, "\n").split("\n");
+      const longest = lines.reduce((max, line) => Math.max(max, line.length), 1);
+      const fontSize = 24;
+      const width = Math.min(720, Math.max(160, longest * fontSize * 0.55));
+      const element = createText({
+        x: world.x - width / 2,
+        y: world.y - 20,
+        text,
+        fontSize,
+        width,
+      });
+      addElement(element, "paste text");
+      useEngine.getState().selectOnly([element.id]);
+    }
+
+    /** Pull the first inline <svg>…</svg> out of an HTML clipboard fragment. */
+    function extractSvgMarkup(html: string): string | null {
+      const match = /<svg\b[^>]*>[\s\S]*?<\/svg>/i.exec(html);
+      return match?.[0] ?? null;
+    }
+
+    function htmlToFirstImgSrc(html: string): string | null {
+      const match = /<img\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(html);
+      return match?.[1] || match?.[2] || match?.[3] || null;
     }
 
     async function onDrop(e: DragEvent) {

@@ -3,8 +3,10 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSy
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-const STORE_VERSION = 1;
+const STORE_VERSION = 2;
 const CREDENTIAL_KEY_BYTES = 32;
+
+export type AiCredentialProvider = "replicate" | "openai";
 
 export type GoogleProfile = {
   sub: string;
@@ -23,12 +25,15 @@ export type AccountPublic = {
   createdAt: number;
 };
 
-export type ReplicateCredentialStatus = {
+export type StoredCredentialStatus = {
   configured: boolean;
   keyHint: string | null;
   storage: "encrypted-account";
   updatedAt: number | null;
 };
+
+/** @deprecated Prefer StoredCredentialStatus — kept for existing imports. */
+export type ReplicateCredentialStatus = StoredCredentialStatus;
 
 type PersistedUser = {
   id: string;
@@ -42,7 +47,7 @@ type PersistedUser = {
 };
 
 type PersistedCredential = {
-  provider: "replicate";
+  provider: AiCredentialProvider;
   ciphertext: string;
   iv: string;
   authTag: string;
@@ -51,8 +56,9 @@ type PersistedCredential = {
 };
 
 type PersistedStore = {
-  version: 1;
+  version: 2;
   users: Record<string, PersistedUser>;
+  /** Key format: `${accountId}::${provider}` */
   credentials: Record<string, PersistedCredential>;
 };
 
@@ -97,47 +103,35 @@ export function getAccountById(accountId: string): AccountPublic | null {
 }
 
 export function saveReplicateApiKey(accountId: string, token: string): void {
-  const store = readStore();
-  if (!store.users[accountId]) throw new Error("Account not found.");
-  if (typeof token !== "string" || token.length === 0) {
-    throw new Error("Replicate API Key is required.");
-  }
-
-  const encrypted = encryptCredential(accountId, token);
-  store.credentials[accountId] = {
-    provider: "replicate",
-    ...encrypted,
-    keyHint: maskReplicateApiKey(token),
-    updatedAt: Date.now(),
-  };
-  writeStore(store);
+  saveProviderApiKey(accountId, "replicate", token);
 }
 
 export function readReplicateApiKey(accountId: string): string | undefined {
-  const record = readStore().credentials[accountId];
-  if (record?.provider !== "replicate") return undefined;
-  return decryptCredential(accountId, record);
+  return readProviderApiKey(accountId, "replicate");
 }
 
-export function getReplicateCredentialStatus(accountId: string): ReplicateCredentialStatus {
-  const record = readStore().credentials[accountId];
-  if (record?.provider !== "replicate") {
-    return { configured: false, keyHint: null, storage: "encrypted-account", updatedAt: null };
-  }
-  return {
-    configured: true,
-    keyHint: record.keyHint,
-    storage: "encrypted-account",
-    updatedAt: record.updatedAt,
-  };
+export function getReplicateCredentialStatus(accountId: string): StoredCredentialStatus {
+  return getProviderCredentialStatus(accountId, "replicate");
 }
 
 export function deleteReplicateApiKey(accountId: string): boolean {
-  const store = readStore();
-  if (!store.credentials[accountId]) return false;
-  delete store.credentials[accountId];
-  writeStore(store);
-  return true;
+  return deleteProviderApiKey(accountId, "replicate");
+}
+
+export function saveOpenAiApiKey(accountId: string, token: string): void {
+  saveProviderApiKey(accountId, "openai", token);
+}
+
+export function readOpenAiApiKey(accountId: string): string | undefined {
+  return readProviderApiKey(accountId, "openai");
+}
+
+export function getOpenAiCredentialStatus(accountId: string): StoredCredentialStatus {
+  return getProviderCredentialStatus(accountId, "openai");
+}
+
+export function deleteOpenAiApiKey(accountId: string): boolean {
+  return deleteProviderApiKey(accountId, "openai");
 }
 
 export function getServerKeyMaterial(name: string): Buffer {
@@ -159,6 +153,61 @@ export function resetAccountStoreForTests(): void {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
+}
+
+function saveProviderApiKey(
+  accountId: string,
+  provider: AiCredentialProvider,
+  token: string,
+): void {
+  const store = readStore();
+  if (!store.users[accountId]) throw new Error("Account not found.");
+  if (typeof token !== "string" || token.length === 0) {
+    throw new Error(`${providerLabel(provider)} API Key is required.`);
+  }
+
+  const encrypted = encryptCredential(accountId, provider, token);
+  store.credentials[credentialKey(accountId, provider)] = {
+    provider,
+    ...encrypted,
+    keyHint: maskApiKey(provider, token),
+    updatedAt: Date.now(),
+  };
+  writeStore(store);
+}
+
+function readProviderApiKey(
+  accountId: string,
+  provider: AiCredentialProvider,
+): string | undefined {
+  const record = readStore().credentials[credentialKey(accountId, provider)];
+  if (record?.provider !== provider) return undefined;
+  return decryptCredential(accountId, provider, record);
+}
+
+function getProviderCredentialStatus(
+  accountId: string,
+  provider: AiCredentialProvider,
+): StoredCredentialStatus {
+  const record = readStore().credentials[credentialKey(accountId, provider)];
+  if (record?.provider !== provider) {
+    return { configured: false, keyHint: null, storage: "encrypted-account", updatedAt: null };
+  }
+  return {
+    configured: true,
+    keyHint: record.keyHint,
+    storage: "encrypted-account",
+    updatedAt: record.updatedAt,
+  };
+}
+
+function deleteProviderApiKey(accountId: string, provider: AiCredentialProvider): boolean {
+  const store = readStore();
+  const key = credentialKey(accountId, provider);
+  if (!store.credentials[key]) return false;
+  delete store.credentials[key];
+  writeStore(store);
+  return true;
 }
 
 function normalizeGoogleProfile(profile: GoogleProfile): GoogleProfile {
@@ -187,14 +236,14 @@ function normalizeGoogleProfile(profile: GoogleProfile): GoogleProfile {
   };
 }
 
-function encryptCredential(accountId: string, token: string) {
+function encryptCredential(accountId: string, provider: AiCredentialProvider, token: string) {
   const iv = randomBytes(12);
   const cipher = createCipheriv(
     "aes-256-gcm",
     getServerKeyMaterial("ARTSHIFT_CREDENTIAL_ENCRYPTION_KEY"),
     iv,
   );
-  cipher.setAAD(Buffer.from(`replicate:${accountId}`, "utf8"));
+  cipher.setAAD(Buffer.from(`${provider}:${accountId}`, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
   return {
     ciphertext: encode(ciphertext),
@@ -203,13 +252,17 @@ function encryptCredential(accountId: string, token: string) {
   };
 }
 
-function decryptCredential(accountId: string, record: PersistedCredential): string {
+function decryptCredential(
+  accountId: string,
+  provider: AiCredentialProvider,
+  record: PersistedCredential,
+): string {
   const decipher = createDecipheriv(
     "aes-256-gcm",
     getServerKeyMaterial("ARTSHIFT_CREDENTIAL_ENCRYPTION_KEY"),
     decode(record.iv),
   );
-  decipher.setAAD(Buffer.from(`replicate:${accountId}`, "utf8"));
+  decipher.setAAD(Buffer.from(`${provider}:${accountId}`, "utf8"));
   decipher.setAuthTag(decode(record.authTag));
   return Buffer.concat([decipher.update(decode(record.ciphertext)), decipher.final()]).toString(
     "utf8",
@@ -219,15 +272,18 @@ function decryptCredential(accountId: string, record: PersistedCredential): stri
 function readStore(): PersistedStore {
   try {
     const parsed = JSON.parse(readFileSync(getStorePath(), "utf8")) as unknown;
-    if (
-      !isRecord(parsed) ||
-      parsed.version !== STORE_VERSION ||
-      !isRecord(parsed.users) ||
-      !isRecord(parsed.credentials)
-    ) {
+    if (!isRecord(parsed) || !isRecord(parsed.users) || !isRecord(parsed.credentials)) {
       throw new Error("invalid store");
     }
-    return parsed as PersistedStore;
+    if (parsed.version === 2) {
+      return parsed as PersistedStore;
+    }
+    if (parsed.version === 1) {
+      const migrated = migrateStoreV1ToV2(parsed);
+      writeStore(migrated);
+      return migrated;
+    }
+    throw new Error("invalid store");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyStore();
     if (error instanceof SyntaxError || (error as Error).message === "invalid store") {
@@ -235,6 +291,18 @@ function readStore(): PersistedStore {
     }
     throw error;
   }
+}
+
+function migrateStoreV1ToV2(parsed: Record<string, unknown>): PersistedStore {
+  const users = parsed.users as Record<string, PersistedUser>;
+  const oldCredentials = parsed.credentials as Record<string, PersistedCredential>;
+  const credentials: Record<string, PersistedCredential> = {};
+  for (const [accountId, record] of Object.entries(oldCredentials)) {
+    if (!record || typeof record !== "object") continue;
+    const provider = record.provider === "openai" ? "openai" : "replicate";
+    credentials[credentialKey(accountId, provider)] = { ...record, provider };
+  }
+  return { version: 2, users, credentials };
 }
 
 function writeStore(store: PersistedStore): void {
@@ -274,7 +342,19 @@ function toPublicUser(user: PersistedUser): AccountPublic {
   };
 }
 
-function maskReplicateApiKey(token: string): string {
+function credentialKey(accountId: string, provider: AiCredentialProvider): string {
+  return `${accountId}::${provider}`;
+}
+
+function providerLabel(provider: AiCredentialProvider): string {
+  return provider === "openai" ? "OpenAI" : "Replicate";
+}
+
+function maskApiKey(provider: AiCredentialProvider, token: string): string {
+  if (provider === "openai") {
+    const prefix = token.startsWith("sk-proj-") ? "sk-proj-" : "sk-";
+    return `${prefix}••••${token.slice(-4)}`;
+  }
   return `${token.slice(0, 3)}••••${token.slice(-4)}`;
 }
 

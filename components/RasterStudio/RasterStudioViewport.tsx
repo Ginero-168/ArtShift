@@ -656,7 +656,21 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
           transformOrigin: "center center",
         }}
       >
-        <div style={{ position: "relative", lineHeight: 0 }}>
+        <div
+          style={{
+            position: "relative",
+            lineHeight: 0,
+            borderRadius: 4,
+            boxShadow:
+              "0 0 0 1px var(--stroke, #d1d5db), 0 8px 28px rgba(15, 23, 42, 0.12)",
+            overflow: "hidden",
+            // Checkerboard shows through transparent pixels (canvas is cleared, not filled).
+            backgroundColor: "#ffffff",
+            backgroundImage:
+              "repeating-conic-gradient(#d1d5db 0% 25%, #ffffff 0% 50%)",
+            backgroundSize: "16px 16px",
+          }}
+        >
           <canvas
             ref={canvasRef}
             style={{
@@ -665,8 +679,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
               maxHeight: "calc(100vh - 160px)",
               width: "auto",
               height: "auto",
-              background: "#020617",
-              boxShadow: "0 0 0 1px rgba(255,255,255,0.08)",
+              background: "transparent",
             }}
           />
           <RasterSelectionOverlay
@@ -699,7 +712,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
               <polyline
                 points={draftPath}
                 fill="none"
-                stroke="#38bdf8"
+                stroke="var(--accent, #6366f1)"
                 strokeWidth={Math.max(1, brushSize * 0.15)}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -715,10 +728,13 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
             position: "absolute",
             left: 12,
             bottom: 12,
-            padding: "4px 8px",
-            borderRadius: 6,
-            background: "rgba(15,23,42,0.85)",
+            padding: "5px 10px",
+            borderRadius: 8,
+            border: "1px solid var(--stroke, #e5e7eb)",
+            background: "var(--surface-solid, #fff)",
+            color: "var(--ink, #374151)",
             fontSize: 12,
+            boxShadow: "0 1px 4px rgba(15, 23, 42, 0.08)",
           }}
         >
           {status}

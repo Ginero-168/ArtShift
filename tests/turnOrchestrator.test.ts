@@ -497,5 +497,78 @@ describe("context-aware turn orchestrator", () => {
       aspectRatio: "16:9",
     });
   });
+
+  it("assigns a distinct requestedDimensions per listed print/pixel size", () => {
+    const input: ContextAwareTurnInput = {
+      prompt:
+        "สร้าง 5 ขนาด: Endcap 53x20 cm, Shelftalk 29x7 cm, 1040x1040 px, 1240x348 px, 1844x880 px",
+      refs: [],
+      analyses: [],
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 5,
+      summary: "สร้างครบ 5 ไซส์",
+      refinedPrompt: "Welearn publishing campaign key visual, flat 2D signage",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Match each requested print size"],
+      search: { required: false, queries: [], sources: [] },
+      outputBriefs: [
+        "Endcap 53x20 cm",
+        "Shelftalk 29x7 cm",
+        "Square 1040x1040",
+        "Banner 1240x348",
+        "Cover 1844x880",
+      ],
+    });
+
+    expect(run.tasks).toHaveLength(5);
+    expect(run.tasks.map((task) => task.requestedDimensions?.aspectRatio)).toEqual([
+      "2048x768",
+      "2048x688",
+      "2048x2048",
+      "2048x688",
+      "2048x976",
+    ]);
+    expect(run.tasks[0]?.requestedDimensions?.aspectRatio).not.toBe("1:1");
+    expect(run.tasks[2]?.requestedDimensions?.width).toBe(
+      run.tasks[2]?.requestedDimensions?.height,
+    );
+  });
+
+  it("creates 3 tasks for named aspect ratios 16:9, 3:4, 9:16", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที",
+      refs: [],
+      analyses: [],
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 1,
+      summary: "ปรับสัดส่วนปก",
+      refinedPrompt: "Same horror sushi chef cover artwork, recomposed for the target frame",
+      specialist: "image_editor",
+      capability: "IMAGE_EDIT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Preserve cover identity"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(run.requestedOutputCount).toBe(3);
+    expect(run.tasks).toHaveLength(3);
+    expect(run.tasks.map((task) => task.requestedDimensions?.aspectRatio)).toEqual([
+      "16:9",
+      "3:4",
+      "9:16",
+    ]);
+  });
 });
 

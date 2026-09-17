@@ -11,28 +11,37 @@ const resultCache = new AiResultCache(10 * 60_000, 100);
 
 export type ServerAiCredentials = {
   replicateToken?: string;
+  openAiApiKey?: string;
   accountId?: string;
 };
 
 export function createServerAiRuntime(credentials: ServerAiCredentials = {}): RoutedAiRuntime {
+  const routeEnv = {
+    ...process.env,
+    ...(credentials.openAiApiKey ? { OPENAI_API_KEY: credentials.openAiApiKey } : {}),
+    ...(credentials.replicateToken ? { REPLICATE_API_TOKEN: credentials.replicateToken } : {}),
+  };
   return new RoutedAiRuntime({
     adapters: [
       new AnthropicAiAdapter(),
       new ReplicateAiAdapter(credentials.replicateToken),
       new GoogleAiAdapter(),
-      new OpenAiAdapter(),
+      new OpenAiAdapter(credentials.openAiApiKey ?? process.env.OPENAI_API_KEY),
     ],
-    routes: createAiRouteTable(),
+    routes: createAiRouteTable(routeEnv),
     defaultProfiles: AI_DEFAULT_PROFILES,
     ledger,
-    cache: credentials.replicateToken ? new AiResultCache(10 * 60_000, 100) : resultCache,
+    cache:
+      credentials.replicateToken || credentials.openAiApiKey
+        ? new AiResultCache(10 * 60_000, 100)
+        : resultCache,
   });
 }
 
 const runtime = createServerAiRuntime();
 
 export function getServerAiRuntime(credentials: ServerAiCredentials = {}): RoutedAiRuntime {
-  return credentials.replicateToken || credentials.accountId
+  return credentials.replicateToken || credentials.openAiApiKey || credentials.accountId
     ? createServerAiRuntime(credentials)
     : runtime;
 }

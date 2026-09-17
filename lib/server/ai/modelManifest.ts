@@ -1,5 +1,7 @@
 import type { AiExecutionProfile, AiTaskKind } from "@/lib/ai-runtime/contracts";
 import type { AiRouteTable, AiRouteTarget } from "@/lib/ai-runtime/runtime";
+import { resolveImageGenerationBackend } from "@/lib/server/ai/imageGenerationProvider";
+import { OPENAI_GPT_IMAGE_25_SUNBURST_MODEL } from "@/lib/server/ai/openaiImageSize";
 
 type Environment = Record<string, string | undefined>;
 
@@ -118,30 +120,41 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
   // Build image generation route table.
   // Route aliases map to semantic image model aliases used by the routing policy.
   const imageGenerateRoutes: AiRouteTarget[] = [];
+  const imageBackend = resolveImageGenerationBackend(environment);
 
-  // image-general & image-precision (GPT Image 2.5 Sunburst) — baseline route.
-  if (replicateGptImage25Sunburst) {
-    imageGenerateRoutes.push(
-      imageModelRoute(replicateGptImage25Sunburst, "image-general", IMAGE_PRICING_PER_RUN.general),
-    );
-    imageGenerateRoutes.push(
-      imageModelRoute(
-        replicateGptImage25Sunburst,
-        "image-precision",
-        IMAGE_PRICING_PER_RUN.precision,
-      ),
-    );
-    // Keep legacy alias for compatibility until all callers migrate.
-    imageGenerateRoutes.push(
-      imageModelRoute(replicateGptImage25Sunburst, "image-gpt-2", IMAGE_PRICING_PER_RUN.general),
-    );
+  const pushSunburstAliases = (target: AiRouteTarget) => {
+    for (const alias of [
+      "image-general",
+      "image-precision",
+      "image-gpt-2",
+      ...(fastModelEnabled ? (["image-fast"] as const) : []),
+    ]) {
+      imageGenerateRoutes.push({ ...target, alias });
+    }
+  };
+
+  if (imageBackend === "openai") {
+    pushSunburstAliases(openAiImageModelRoute(IMAGE_PRICING_PER_RUN.general));
   }
 
-  // image-fast alias maps directly to Sunburst (Flare retired) when enabled
-  if (fastModelEnabled && replicateGptImage25Sunburst) {
-    imageGenerateRoutes.push(
-      imageModelRoute(replicateGptImage25Sunburst, "image-fast", IMAGE_PRICING_PER_RUN.general),
+  // Replicate Sunburst — fallback when OpenAI is primary, or sole backend.
+  if (replicateGptImage25Sunburst) {
+    const replicateTarget = imageModelRoute(
+      replicateGptImage25Sunburst,
+      "image-general",
+      IMAGE_PRICING_PER_RUN.general,
     );
+    if (imageBackend === "replicate") {
+      pushSunburstAliases(replicateTarget);
+    } else {
+      // OpenAI first: duplicate aliases for fallback attempts.
+      imageGenerateRoutes.push(
+        { ...replicateTarget, alias: "image-general" },
+        { ...replicateTarget, alias: "image-precision" },
+        { ...replicateTarget, alias: "image-gpt-2" },
+        ...(fastModelEnabled ? [{ ...replicateTarget, alias: "image-fast" as const }] : []),
+      );
+    }
   }
 
   return {
@@ -220,6 +233,20 @@ function imageModelRoute(model: string, alias: string, expectedMaxUsd: number): 
     alias,
     expectedMaxUsd,
     pricing: { currency: "USD", perRunUsd: expectedMaxUsd },
+  };
+}
+
+function openAiImageModelRoute(expectedMaxUsd: number): AiRouteTarget {
+  return {
+    provider: "openai",
+    model: OPENAI_GPT_IMAGE_25_SUNBURST_MODEL,
+    expectedMaxUsd,
+    pricing: {
+      currency: "USD",
+      inputPerMillionTokens: 8,
+      outputPerMillionTokens: 30,
+      perRunUsd: expectedMaxUsd,
+    },
   };
 }
 

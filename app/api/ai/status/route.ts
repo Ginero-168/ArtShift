@@ -4,6 +4,8 @@ import { readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getAiBudgetStatus, getServerAiRuntime } from "@/lib/server/ai/runtime";
 import {
   getCredentialStatus,
+  getCredentialsPayload,
+  getSessionOpenAiToken,
   getSessionReplicateToken,
   getUserAccount,
 } from "@/lib/server/ai/userCredentials";
@@ -22,12 +24,14 @@ export async function GET(req: NextRequest) {
   }
   if (!account) return jsonNoStore({ error: "Authentication is required." }, { status: 401 });
   const replicateToken = getSessionReplicateToken(req);
-  const ai = getServerAiRuntime({ replicateToken, accountId: account.id });
+  const openAiApiKey = getSessionOpenAiToken(req);
+  const ai = getServerAiRuntime({ replicateToken, openAiApiKey, accountId: account.id });
   return jsonNoStore({
     capabilities: await ai.capabilities(),
     budget: getAiBudgetStatus(account.id),
     usage: ai.usageSummary(account.id),
     credential: getCredentialStatus(req),
+    credentials: getCredentialsPayload(req),
   });
 }
 
@@ -53,6 +57,7 @@ export async function POST(req: NextRequest) {
   }
   getServerAiRuntime({
     replicateToken: getSessionReplicateToken(req),
+    openAiApiKey: getSessionOpenAiToken(req),
     accountId: account.id,
   }).clearCache();
   return jsonNoStore({ success: true });

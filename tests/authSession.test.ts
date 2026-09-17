@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { NextRequest, NextResponse } from "next/server";
@@ -12,11 +12,13 @@ import {
 } from "@/lib/server/auth/session";
 
 let storeDir = "";
+let storePath = "";
 
 describe("Google account auth session", () => {
   beforeAll(() => {
     storeDir = mkdtempSync(join(tmpdir(), "artshift-google-auth-session-test-"));
-    process.env.ARTSHIFT_ACCOUNT_STORE_PATH = join(storeDir, "store.json");
+    storePath = join(storeDir, "store.json");
+    process.env.ARTSHIFT_ACCOUNT_STORE_PATH = storePath;
   });
 
   afterAll(() => {
@@ -40,6 +42,69 @@ describe("Google account auth session", () => {
     expect(cookie.value).not.toContain(account.email);
     expect(cookie.value.split(".")).toHaveLength(4);
     expect(getAuthenticatedAccount(fakeRequest(cookie.name, cookie.value))).toEqual(account);
+  });
+
+  it("reads a version-2 account store and keeps it as v2", () => {
+    writeFileSync(
+      storePath,
+      JSON.stringify({
+        version: 2,
+        users: {
+          "user-v2": {
+            id: "user-v2",
+            provider: "google",
+            providerSubject: "google-v2-sub",
+            email: "v2@example.com",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+        credentials: {},
+      }),
+      "utf8",
+    );
+
+    const account = upsertGoogleAccount({
+      sub: "google-v2-sub",
+      email: "v2@example.com",
+      emailVerified: true,
+      name: "V2 User",
+    });
+
+    expect(account.id).toBe("user-v2");
+    expect(account.email).toBe("v2@example.com");
+    expect(JSON.parse(readFileSync(storePath, "utf8")).version).toBe(2);
+  });
+
+  it("migrates a version-1 account store to v2 on write", () => {
+    writeFileSync(
+      storePath,
+      JSON.stringify({
+        version: 1,
+        users: {
+          "user-v1": {
+            id: "user-v1",
+            provider: "google",
+            providerSubject: "google-v1-sub",
+            email: "v1@example.com",
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+        credentials: {},
+      }),
+      "utf8",
+    );
+
+    const account = upsertGoogleAccount({
+      sub: "google-v1-sub",
+      email: "v1@example.com",
+      emailVerified: true,
+      name: "V1 User",
+    });
+
+    expect(account.id).toBe("user-v1");
+    expect(JSON.parse(readFileSync(storePath, "utf8")).version).toBe(2);
   });
 
   it("rejects a tampered cookie", () => {

@@ -15,21 +15,33 @@ type AuthState = { authenticated: boolean; user: AuthUser | null };
 
 type CredentialState = {
   authenticated: boolean;
-  provider: "replicate";
+  provider: "replicate" | "openai";
   configured: boolean;
   keyHint: string | null;
   storage: "encrypted-account";
   updatedAt: number | null;
 };
 
+type CredentialsState = {
+  authenticated: boolean;
+  replicate: CredentialState;
+  openai: CredentialState;
+};
+
 type AuthResponse = { authenticated?: boolean; user?: AuthUser | null; error?: string };
-type CredentialResponse = { credential?: CredentialState; error?: string };
+type CredentialResponse = {
+  credential?: CredentialState;
+  credentials?: CredentialsState;
+  error?: string;
+};
 
 export default function AIProviderSettings({ onClose }: { onClose?: () => void }) {
   const [auth, setAuth] = useState<AuthState | null>(null);
-  const [credential, setCredential] = useState<CredentialState | null>(null);
-  const [apiKey, setApiKey] = useState("");
+  const [credentials, setCredentials] = useState<CredentialsState | null>(null);
+  const [replicateKey, setReplicateKey] = useState("");
+  const [openAiKey, setOpenAiKey] = useState("");
   const [busy, setBusy] = useState(true);
+  const [busyProvider, setBusyProvider] = useState<"replicate" | "openai" | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -59,26 +71,45 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
         user: payload.user ?? null,
       };
       setAuth(nextAuth);
-      if (nextAuth.authenticated) await refreshCredential();
+      if (nextAuth.authenticated) await refreshCredentials();
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "Unable to read account status.");
       setAuth({ authenticated: false, user: null });
     }
   }
 
-  async function refreshCredential() {
+  async function refreshCredentials() {
     const response = await fetch("/api/ai/key", {
       cache: "no-store",
       headers: { accept: "application/json" },
     });
     const payload = (await response.json()) as CredentialResponse;
-    if (!response.ok) throw new Error(payload.error || "Unable to read Replicate status.");
-    setCredential(payload.credential ?? null);
+    if (!response.ok) throw new Error(payload.error || "Unable to read API key status.");
+    if (payload.credentials) {
+      setCredentials(payload.credentials);
+      return;
+    }
+    // Legacy shape: only Replicate
+    if (payload.credential) {
+      setCredentials({
+        authenticated: payload.credential.authenticated,
+        replicate: payload.credential,
+        openai: {
+          authenticated: payload.credential.authenticated,
+          provider: "openai",
+          configured: false,
+          keyHint: null,
+          storage: "encrypted-account",
+          updatedAt: null,
+        },
+      });
+    }
   }
 
-  async function connectReplicate() {
-    if (!apiKey || busy || !auth?.authenticated) return;
-    setBusy(true);
+  async function connectProvider(provider: "replicate" | "openai") {
+    const apiKey = provider === "replicate" ? replicateKey : openAiKey;
+    if (!apiKey || busy || busyProvider || !auth?.authenticated) return;
+    setBusyProvider(provider);
     setMessage("");
     setError("");
     try {
@@ -86,48 +117,68 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
         method: "POST",
         cache: "no-store",
         headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ provider: "replicate", apiKey }),
+        body: JSON.stringify({ provider, apiKey }),
       });
       const payload = (await response.json()) as CredentialResponse;
-      if (!response.ok || !payload.credential) {
-        throw new Error(payload.error || "Replicate rejected this API Key.");
+      if (!response.ok || !payload.credentials) {
+        throw new Error(
+          payload.error ||
+            (provider === "openai"
+              ? "OpenAI rejected this API Key."
+              : "Replicate rejected this API Key."),
+        );
       }
-      setCredential(payload.credential);
-      setApiKey("");
-      setMessage("เชื่อมต่อ Replicate สำเร็จ และเข้ารหัสไว้กับบัญชีของคุณแล้ว");
+      setCredentials(payload.credentials);
+      if (provider === "replicate") setReplicateKey("");
+      else setOpenAiKey("");
+      setMessage(
+        provider === "openai"
+          ? "เชื่อมต่อ OpenAI สำเร็จ และเข้ารหัสไว้กับบัญชีของคุณแล้ว"
+          : "เชื่อมต่อ Replicate สำเร็จ และเข้ารหัสไว้กับบัญชีของคุณแล้ว",
+      );
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "เชื่อมต่อ Replicate ไม่สำเร็จ");
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : provider === "openai"
+            ? "เชื่อมต่อ OpenAI ไม่สำเร็จ"
+            : "เชื่อมต่อ Replicate ไม่สำเร็จ",
+      );
     } finally {
-      setBusy(false);
+      setBusyProvider(null);
     }
   }
 
-  async function removeReplicate() {
-    if (busy || !auth?.authenticated) return;
-    setBusy(true);
+  async function removeProvider(provider: "replicate" | "openai") {
+    if (busy || busyProvider || !auth?.authenticated) return;
+    setBusyProvider(provider);
     setMessage("");
     setError("");
     try {
-      const response = await fetch("/api/ai/key", {
+      const response = await fetch(`/api/ai/key?provider=${provider}`, {
         method: "DELETE",
         cache: "no-store",
         headers: { accept: "application/json" },
       });
       const payload = (await response.json()) as CredentialResponse;
-      if (!response.ok || !payload.credential) {
+      if (!response.ok || !payload.credentials) {
         throw new Error(payload.error || "Unable to remove the API Key.");
       }
-      setCredential(payload.credential);
-      setMessage("ลบ Replicate Key ออกจากบัญชีแล้ว");
+      setCredentials(payload.credentials);
+      setMessage(
+        provider === "openai"
+          ? "ลบ OpenAI Key ออกจากบัญชีแล้ว"
+          : "ลบ Replicate Key ออกจากบัญชีแล้ว",
+      );
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : "ลบ Replicate Key ไม่สำเร็จ");
+      setError(reason instanceof Error ? reason.message : "ลบ API Key ไม่สำเร็จ");
     } finally {
-      setBusy(false);
+      setBusyProvider(null);
     }
   }
 
   async function signOut() {
-    if (busy) return;
+    if (busy || busyProvider) return;
     setBusy(true);
     setError("");
     try {
@@ -138,8 +189,9 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
       });
       if (!response.ok) throw new Error("Unable to sign out.");
       setAuth({ authenticated: false, user: null });
-      setCredential(null);
-      setApiKey("");
+      setCredentials(null);
+      setReplicateKey("");
+      setOpenAiKey("");
       setMessage("ออกจากระบบแล้ว");
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "ออกจากระบบไม่สำเร็จ");
@@ -147,6 +199,8 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
       setBusy(false);
     }
   }
+
+  const anyBusy = busy || busyProvider !== null;
 
   return (
     <section
@@ -166,7 +220,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
         <div>
           <strong style={{ display: "block", fontSize: 12, color: "#172554" }}>AI Provider</strong>
           <span style={{ display: "block", marginTop: 2, fontSize: 10, color: "#64748b" }}>
-            Google Account + Replicate BYOK
+            Google Account · OpenAI + Replicate BYOK
           </span>
         </div>
         {onClose ? (
@@ -203,13 +257,11 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
               lineHeight: 1.45,
             }}
           >
-            Login ด้วย Google เพื่อผูก Replicate Key กับบัญชีของคุณและใช้งานข้าม Session ได้อย่างปลอดภัย
+            Login ด้วย Google เพื่อผูก OpenAI / Replicate Key กับบัญชีของคุณและใช้งานข้าม Session
+            ได้อย่างปลอดภัย
           </div>
           <p style={{ margin: "12px 0 0", fontSize: 10, lineHeight: 1.45, color: "#64748b" }}>
-            กรุณา Login ด้วย Google จากปุ่ม Profile มุมขวาบนก่อนจัดการ Replicate Key
-          </p>
-          <p style={{ margin: "10px 0 0", fontSize: 9.5, lineHeight: 1.45, color: "#64748b" }}>
-            ArtShift จะได้รับเฉพาะข้อมูลบัญชีพื้นฐานจาก Google เช่น email และชื่อ ไม่ได้รับ Google password
+            กรุณา Login ด้วย Google จากปุ่ม Profile มุมขวาบนก่อนจัดการ API Key
           </p>
         </>
       ) : (
@@ -254,12 +306,12 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
             <button
               type="button"
               onClick={() => void signOut()}
-              disabled={busy}
+              disabled={anyBusy}
               style={{
                 border: 0,
                 background: "transparent",
                 color: "#64748b",
-                cursor: busy ? "default" : "pointer",
+                cursor: anyBusy ? "default" : "pointer",
                 fontSize: 9.5,
               }}
             >
@@ -267,92 +319,39 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
             </button>
           </div>
 
-          <div
-            style={{
-              marginTop: 12,
-              padding: "7px 9px",
-              borderRadius: 7,
-              background: credential?.configured ? "#ecfdf5" : "#f8fafc",
-              border: `1px solid ${credential?.configured ? "#a7f3d0" : "#e2e8f0"}`,
-              color: credential?.configured ? "#065f46" : "#475569",
-              fontSize: 10,
-            }}
-            aria-live="polite"
-          >
-            {credential?.configured
-              ? `Replicate connected · ${credential.keyHint}`
-              : "ยังไม่ได้เชื่อมต่อ Replicate"}
-          </div>
+          <ProviderKeyBlock
+            title="OpenAI API Key"
+            hint="ใช้สร้างภาพ GPT Image 2.5 Sunburst · รองรับ 3:1"
+            placeholder="sk-..."
+            createUrl="https://platform.openai.com/api-keys"
+            createLabel="Create an OpenAI Key ↗"
+            value={openAiKey}
+            onChange={setOpenAiKey}
+            credential={credentials?.openai ?? null}
+            busy={busyProvider === "openai"}
+            disabled={anyBusy}
+            onSave={() => void connectProvider("openai")}
+            onRemove={() => void removeProvider("openai")}
+          />
 
-          <label style={{ display: "block", marginTop: 12, fontSize: 10, color: "#475569" }}>
-            Replicate API Key
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void connectReplicate();
-              }}
-              placeholder="r8_..."
-              autoComplete="new-password"
-              spellCheck={false}
-              aria-label="Replicate API Key"
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: 5,
-                boxSizing: "border-box",
-                border: "1px solid #cbd5e1",
-                borderRadius: 6,
-                padding: "8px 9px",
-                fontSize: 11,
-                color: "#0f172a",
-                outline: "none",
-              }}
-            />
-          </label>
-
-          <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
-            <button
-              type="button"
-              onClick={() => void connectReplicate()}
-              disabled={busy || !apiKey}
-              style={{
-                flex: 1,
-                border: 0,
-                borderRadius: 6,
-                padding: "7px 8px",
-                background: busy || !apiKey ? "#cbd5e1" : "#4f46e5",
-                color: "#ffffff",
-                cursor: busy || !apiKey ? "default" : "pointer",
-                fontSize: 10,
-                fontWeight: 700,
-              }}
-            >
-              {busy ? "Checking…" : "Test & save"}
-            </button>
-            {credential?.configured ? (
-              <button
-                type="button"
-                onClick={() => void removeReplicate()}
-                disabled={busy}
-                style={{
-                  border: "1px solid #fecaca",
-                  borderRadius: 6,
-                  padding: "7px 8px",
-                  background: "#fff1f2",
-                  color: "#b91c1c",
-                  cursor: busy ? "default" : "pointer",
-                  fontSize: 10,
-                }}
-              >
-                Remove
-              </button>
-            ) : null}
-          </div>
+          <ProviderKeyBlock
+            title="Replicate API Key"
+            hint="ใช้กับ vectorize / upscale และเป็น fallback"
+            placeholder="r8_..."
+            createUrl="https://replicate.com/account/api-tokens"
+            createLabel="Create a Replicate Key ↗"
+            value={replicateKey}
+            onChange={setReplicateKey}
+            credential={credentials?.replicate ?? null}
+            busy={busyProvider === "replicate"}
+            disabled={anyBusy}
+            onSave={() => void connectProvider("replicate")}
+            onRemove={() => void removeProvider("replicate")}
+          />
 
           <p style={{ margin: "10px 0 0", fontSize: 9.5, lineHeight: 1.45, color: "#64748b" }}>
-            Key จะถูกเข้ารหัสบน server และผูกกับ Google Account ไม่เก็บใน Browser storage หรือส่งเข้า Prompt
+            Key จะถูกเข้ารหัสบน server และผูกกับ Google Account ไม่เก็บใน Browser storage หรือส่งเข้า
+            Prompt
           </p>
         </>
       )}
@@ -361,15 +360,132 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
         <p style={{ margin: "8px 0 0", fontSize: 10, color: "#047857" }}>{message}</p>
       ) : null}
       {error ? <p style={{ margin: "8px 0 0", fontSize: 10, color: "#b91c1c" }}>{error}</p> : null}
+    </section>
+  );
+}
+
+function ProviderKeyBlock({
+  title,
+  hint,
+  placeholder,
+  createUrl,
+  createLabel,
+  value,
+  onChange,
+  credential,
+  busy,
+  disabled,
+  onSave,
+  onRemove,
+}: {
+  title: string;
+  hint: string;
+  placeholder: string;
+  createUrl: string;
+  createLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  credential: CredentialState | null;
+  busy: boolean;
+  disabled: boolean;
+  onSave: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div
+        style={{
+          padding: "7px 9px",
+          borderRadius: 7,
+          background: credential?.configured ? "#ecfdf5" : "#f8fafc",
+          border: `1px solid ${credential?.configured ? "#a7f3d0" : "#e2e8f0"}`,
+          color: credential?.configured ? "#065f46" : "#475569",
+          fontSize: 10,
+        }}
+        aria-live="polite"
+      >
+        {credential?.configured
+          ? `${title.replace(" API Key", "")} connected · ${credential.keyHint}`
+          : `ยังไม่ได้เชื่อมต่อ ${title.replace(" API Key", "")}`}
+      </div>
+      <p style={{ margin: "6px 0 0", fontSize: 9.5, color: "#64748b", lineHeight: 1.4 }}>{hint}</p>
+
+      <label style={{ display: "block", marginTop: 8, fontSize: 10, color: "#475569" }}>
+        {title}
+        <input
+          type="password"
+          value={value}
+          onChange={(event) => onChange(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") onSave();
+          }}
+          placeholder={placeholder}
+          autoComplete="new-password"
+          spellCheck={false}
+          aria-label={title}
+          style={{
+            display: "block",
+            width: "100%",
+            marginTop: 5,
+            boxSizing: "border-box",
+            border: "1px solid #cbd5e1",
+            borderRadius: 6,
+            padding: "8px 9px",
+            fontSize: 11,
+            color: "#0f172a",
+            outline: "none",
+          }}
+        />
+      </label>
+
+      <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={disabled || !value}
+          style={{
+            flex: 1,
+            border: 0,
+            borderRadius: 6,
+            padding: "7px 8px",
+            background: disabled || !value ? "#cbd5e1" : "#4f46e5",
+            color: "#ffffff",
+            cursor: disabled || !value ? "default" : "pointer",
+            fontSize: 10,
+            fontWeight: 700,
+          }}
+        >
+          {busy ? "Checking…" : "Test & save"}
+        </button>
+        {credential?.configured ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={disabled}
+            style={{
+              border: "1px solid #fecaca",
+              borderRadius: 6,
+              padding: "7px 8px",
+              background: "#fff1f2",
+              color: "#b91c1c",
+              cursor: disabled ? "default" : "pointer",
+              fontSize: 10,
+            }}
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+
       <a
-        href="https://replicate.com/account/api-tokens"
+        href={createUrl}
         target="_blank"
         rel="noreferrer"
-        style={{ display: "inline-block", marginTop: 9, fontSize: 9.5, color: "#4f46e5" }}
+        style={{ display: "inline-block", marginTop: 8, fontSize: 9.5, color: "#4f46e5" }}
       >
-        Create a Replicate Key ↗
+        {createLabel}
       </a>
-    </section>
+    </div>
   );
 }
 

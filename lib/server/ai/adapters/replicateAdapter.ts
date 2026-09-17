@@ -905,6 +905,13 @@ async function assertRecraftProviderResponse(response: Response): Promise<void> 
       retryAfterSeconds: retryAfter,
     });
   }
+  if (response.status === 422) {
+    throw new AiRuntimeError(
+      "INVALID_INPUT",
+      errorText || "Replicate rejected this image request (invalid input).",
+      { provider: "replicate" },
+    );
+  }
   throw new AiRuntimeError("PROVIDER_UNAVAILABLE", errorText || "Replicate is temporarily unavailable.", {
     provider: "replicate",
   });
