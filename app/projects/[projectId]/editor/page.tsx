@@ -66,6 +66,9 @@ const CampaignStudioModal = dynamic(() => import("@/components/Campaign/Campaign
 });
 const TemplateBrowser = dynamic(() => import("@/components/TemplateBrowser"), { ssr: false });
 const ModelManagerPanel = dynamic(() => import("@/components/ModelManagerPanel"), { ssr: false });
+const RasterStudioShell = dynamic(() => import("@/components/RasterStudio/RasterStudioShell"), {
+  ssr: false,
+});
 
 /* ——— Slide background palette ——— */
 const SLIDE_BG_PALETTE = [
@@ -1298,6 +1301,8 @@ export default function ProjectEditorPage() {
           onClose={() => setAiImageModalOpen(false)}
         />
       )}
+
+      <RasterStudioShell />
     </div>
   );
 }

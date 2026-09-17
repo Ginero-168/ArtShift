@@ -44,6 +44,7 @@ import {
 } from "@/lib/engine/gestureController";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
 import { fileToDataURL, getImageCache, loadDataURL } from "@/lib/engine/imageCache";
+import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import {
   getInteractiveElements,
   getLayerForObject,
@@ -1027,7 +1028,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
       if (hit.type === "image") {
-        openImageBrowser(hit.id);
+        openRasterStudioForElement(hit);
         return;
       }
       if (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond") {
@@ -1702,7 +1703,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 } else if (el?.type === "text") {
                   setEditingTextId(el.id);
                 } else if (el?.type === "image") {
-                  openImageBrowser(el.id);
+                  openRasterStudioForElement(el);
                 } else if (el?.type === "path") {
                   setTool("directSelect");
                   setEditingPathId(el.id);

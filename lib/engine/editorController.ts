@@ -1,5 +1,6 @@
 import { appendRasterMaskStroke } from "../raster/mask";
 import type { RasterSelection, RasterSelectionOperation } from "../raster/selection";
+import { buildRasterStudioCommitPatch } from "../raster/studio/types";
 import type { RasterMaskStroke, RasterRetouchEdit } from "../raster/types";
 import { applySelection } from "./selection";
 import type { Tool } from "./store";
@@ -47,6 +48,20 @@ export type EditorController = {
   currentSelection(): ReadonlySet<string>;
   /** Place one image into one frame as one editor operation. */
   commitFrameDrop(frameId: string, imageId: string, fileId: string): boolean;
+  /**
+   * Commit a Raster Studio Smart Object revision: swap fileId / natural size,
+   * clear baked overlays, and leave placement untouched (one history entry).
+   */
+  commitRasterRevision(
+    imageId: string,
+    revision: {
+      fileId: string;
+      naturalWidth: number;
+      naturalHeight: number;
+      bakePolicy?: "flatten-overlays";
+    },
+    label?: string,
+  ): boolean;
   commitBlockLayout(id: string): void;
   /** Return the active Selection only when it belongs to the requested image. */
   selectionForImage(
@@ -150,6 +165,20 @@ export function createEditorController(actions: EditorControllerActions): Editor
       actions.setFrameImage(frame.id, fileId);
       actions.deleteElements([image.id]);
       actions.selectOnly([frame.id]);
+      return true;
+    },
+
+    commitRasterRevision(imageId, revision, label = "update raster revision") {
+      const image = imageFor(imageId);
+      if (!image || !revision.fileId) return false;
+      const patch = buildRasterStudioCommitPatch({
+        elementId: image.id,
+        fileId: revision.fileId,
+        naturalWidth: revision.naturalWidth,
+        naturalHeight: revision.naturalHeight,
+        bakePolicy: revision.bakePolicy ?? "flatten-overlays",
+      });
+      actions.updateElements([{ id: image.id, patch }], label);
       return true;
     },
 
