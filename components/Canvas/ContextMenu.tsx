@@ -13,6 +13,7 @@ import { usePresetStore } from "@/lib/engine/presetStore";
 import { useEngine } from "@/lib/engine/store";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
 import { selectionForImage } from "@/lib/raster/activeSelection";
+import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 
 type Props = {
   /** Screen position (CSS px relative to viewport). */
@@ -131,6 +132,21 @@ export default function ContextMenu({ position, onClose }: Props) {
     );
 
     if (ids.length === 1) {
+      const slide = useEngine
+        .getState()
+        .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
+      const selected = slide?.elements.find((e) => e.id === ids[0]);
+      if (selected?.type === "image") {
+        items.push(
+          { kind: "sep" },
+          {
+            kind: "item",
+            label: "Edit Raster",
+            hint: "Double-click",
+            onClick: () => openRasterStudioForElement(selected),
+          },
+        );
+      }
       items.push(
         { kind: "sep" },
         {
@@ -138,11 +154,11 @@ export default function ContextMenu({ position, onClose }: Props) {
           label: "Edit Vector Points",
           hint: "Double-click",
           onClick: () => {
-            const slide = useEngine
+            const currentSlide = useEngine
               .getState()
               .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
-            if (!slide || ids.length !== 1) return;
-            const el = slide.elements.find((e) => e.id === ids[0]);
+            if (!currentSlide || ids.length !== 1) return;
+            const el = currentSlide.elements.find((e) => e.id === ids[0]);
             if (!el) return;
             if (el.type !== "path") {
               const converted = convertElementToVectorPath(el);

@@ -12,6 +12,7 @@ import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { convertImageToBrief } from "@/lib/ai/briefGenerator";
 import { nextThaiFontCssFamily } from "@/lib/fonts";
+import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
@@ -274,6 +275,9 @@ export default function ObjectContextBar({
       }
     }
   } else if (first.type === "image") {
+    controls.push(
+      action("Edit Raster", () => openRasterStudioForElement(first)),
+    );
     controls.push(
       action(IMAGE_ACTION_LABELS.upscale, toggleUpscale, false, activeImageTool === "upscale"),
     );

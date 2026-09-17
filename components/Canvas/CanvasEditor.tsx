@@ -44,6 +44,7 @@ import {
 } from "@/lib/engine/gestureController";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
 import { fileToDataURL, getImageCache, loadDataURL } from "@/lib/engine/imageCache";
+import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import {
   getInteractiveElements,
   getLayerForObject,
@@ -221,6 +222,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const layerFilter = useEngine((s) => s.layerFilter);
   const lineSubtype = useEngine((s) => s.lineSubtype);
   const setTool = useEngine((s) => s.setTool);
+  const setEditorMode = useEngine((s) => s.setEditorMode);
   const croppingImageId = useEngine((s) => s.croppingImageId);
   const setCroppingImageId = useEngine((s) => s.setCroppingImageId);
   const addElement = useEngine((s) => s.addElement);
@@ -715,6 +717,32 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
 
+      // Pixel tools live in Raster Studio (Smart Object). Redirect instead of
+      // painting on the design canvas.
+      const PIXEL_STUDIO_TOOLS = new Set<Tool>([
+        "rasterBrush",
+        "rasterPencil",
+        "rasterEraser",
+        "rasterMarquee",
+        "rasterEllipse",
+        "rasterLasso",
+        "rasterPolygonLasso",
+        "rasterMagicWand",
+        "rasterQuickSelection",
+        "rasterHealing",
+        "rasterClone",
+      ]);
+      if (PIXEL_STUDIO_TOOLS.has(tool)) {
+        const hit = pickTopMost(p, slide);
+        if (hit?.type === "image") {
+          selectOnly([hit.id]);
+          openRasterStudioForElement(hit);
+          setEditorMode("vector");
+          setTool("select");
+        }
+        return;
+      }
+
       if (isRasterPaintTool(tool)) {
         const hit = pickTopMost(p, slide);
         if (hit?.type !== "image") return;
@@ -1027,7 +1055,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
       if (hit.type === "image") {
-        openImageBrowser(hit.id);
+        openRasterStudioForElement(hit);
         return;
       }
       if (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond") {
@@ -1702,7 +1730,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 } else if (el?.type === "text") {
                   setEditingTextId(el.id);
                 } else if (el?.type === "image") {
-                  openImageBrowser(el.id);
+                  openRasterStudioForElement(el);
                 } else if (el?.type === "path") {
                   setTool("directSelect");
                   setEditingPathId(el.id);
