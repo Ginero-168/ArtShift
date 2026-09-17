@@ -4,8 +4,12 @@ import { useEffect } from "react";
 import { useEngine } from "@/lib/engine/store";
 import { selectionForImage } from "@/lib/raster/activeSelection";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
+import {
+  isStudioRasterTool,
+  openRasterStudioForElement,
+  useRasterStudioSession,
+} from "@/lib/raster/studio/sessionStore";
 import { RASTER_TOOL_HOTKEYS, VECTOR_TOOL_HOTKEYS } from "./rasterHotkeys";
-import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 
 /** True when the event target is (or is inside) a text-editing field. */
 export function isEditableHotkeyTarget(target: EventTarget | null): boolean {
@@ -165,14 +169,35 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
   if (!letter) return;
   // Raster Studio owns its own tool shortcuts while open.
   if (useRasterStudioSession.getState().open) return;
-  const toolHotkeys = st.editorMode === "raster" ? RASTER_TOOL_HOTKEYS : VECTOR_TOOL_HOTKEYS;
-  const match = toolHotkeys.find(
+
+  const vectorMatch = VECTOR_TOOL_HOTKEYS.find(
     (shortcut) => shortcut.key === letter && Boolean(shortcut.shiftKey) === event.shiftKey,
   );
-  if (!match) return;
+  if (vectorMatch) {
+    event.preventDefault();
+    st.setEditorMode("vector");
+    st.setTool(vectorMatch.id);
+    return;
+  }
+
+  const rasterMatch = RASTER_TOOL_HOTKEYS.find(
+    (shortcut) => shortcut.key === letter && Boolean(shortcut.shiftKey) === event.shiftKey,
+  );
+  if (!rasterMatch) return;
+
+  const slide = st.currentSlide();
+  const selectedImage = slide?.elements.find(
+    (el) => el.type === "image" && st.selectedIds.has(el.id) && !el.isDeleted,
+  );
+  if (!selectedImage || selectedImage.type !== "image") return;
 
   event.preventDefault();
-  st.setTool(match.id);
+  openRasterStudioForElement(selectedImage);
+  if (isStudioRasterTool(rasterMatch.id)) {
+    useRasterStudioSession.getState().setStudioTool(rasterMatch.id);
+  }
+  st.setEditorMode("vector");
+  st.setTool("select");
 }
 
 /** Canvas / editor keyboard shortcuts (undo, clipboard, tools, delete). */

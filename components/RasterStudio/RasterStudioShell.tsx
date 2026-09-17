@@ -50,30 +50,37 @@ export default function RasterStudioShell() {
       ? "rasterBrush"
       : isRasterPaintTool(studioTool) ||
           isRasterRetouchTool(studioTool) ||
-          studioTool === "rasterMagicWand"
+          studioTool === "rasterMagicWand" ||
+          studioTool === "rasterQuickSelection"
         ? studioTool
         : "rasterBrush";
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
+      const st = useEngine.getState();
+      const slide = st.currentSlide();
+      const image = slide?.elements.find(
+        (el): el is ImageElement =>
+          Boolean(payload && el.id === payload.elementId && el.type === "image"),
+      );
+
       if (event.key === "Escape" && !saving) {
+        // Prefer canceling selection / polygon before closing the studio.
+        if (image && st.activeRasterSelection?.imageId === image.id) {
+          event.preventDefault();
+          st.clearRasterSelection(image.id);
+          return;
+        }
         event.preventDefault();
         close();
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
-        const st = useEngine.getState();
-        const slide = st.currentSlide();
-        const image = slide?.elements.find(
-          (el): el is ImageElement =>
-            Boolean(payload && el.id === payload.elementId && el.type === "image"),
-        );
-        const selection = image
-          ? st.activeRasterSelection?.imageId === image.id
+        const selection =
+          image && st.activeRasterSelection?.imageId === image.id
             ? st.activeRasterSelection.selection
-            : undefined
-          : undefined;
+            : undefined;
         if (image && selection) {
           event.preventDefault();
           const stroke = createRasterStroke(
@@ -101,13 +108,16 @@ export default function RasterStudioShell() {
         setStudioTool("rasterEraser");
       } else if (code === "KeyM") {
         event.preventDefault();
-        setStudioTool("rasterMarquee");
+        setStudioTool(event.shiftKey ? "rasterEllipse" : "rasterMarquee");
       } else if (code === "KeyL") {
         event.preventDefault();
-        setStudioTool("rasterLasso");
+        setStudioTool(event.shiftKey ? "rasterPolygonLasso" : "rasterLasso");
       } else if (code === "KeyW") {
         event.preventDefault();
         setStudioTool("rasterMagicWand");
+      } else if (code === "KeyQ") {
+        event.preventDefault();
+        setStudioTool("rasterQuickSelection");
       } else if (code === "KeyJ") {
         event.preventDefault();
         setStudioTool("rasterHealing");

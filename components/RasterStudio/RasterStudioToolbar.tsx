@@ -9,6 +9,7 @@ import {
   IconFreedraw,
   IconHand,
   IconHealing,
+  IconHexagon,
   IconPencil,
   IconSquare,
   IconWand,
@@ -29,7 +30,19 @@ const TOOLS: Array<{
   { id: "rasterMarquee", label: "Rect", title: "Rectangular selection (M)", icon: IconSquare },
   { id: "rasterEllipse", label: "Ellipse", title: "Elliptical selection", icon: IconCircle },
   { id: "rasterLasso", label: "Lasso", title: "Freehand lasso (L)", icon: IconFreedraw },
+  {
+    id: "rasterPolygonLasso",
+    label: "Poly",
+    title: "Polygon lasso · click points, Enter/double-click to close (Shift+L)",
+    icon: IconHexagon,
+  },
   { id: "rasterMagicWand", label: "Wand", title: "Magic Wand (W)", icon: IconWand },
+  {
+    id: "rasterQuickSelection",
+    label: "Quick",
+    title: "Quick Select brush",
+    icon: IconBrush,
+  },
   { id: "rasterHealing", label: "Heal", title: "Healing brush (J)", icon: IconHealing },
   { id: "rasterClone", label: "Clone", title: "Clone stamp · Alt-click source (S)", icon: IconClone },
 ];

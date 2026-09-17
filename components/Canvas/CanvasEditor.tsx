@@ -222,6 +222,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const layerFilter = useEngine((s) => s.layerFilter);
   const lineSubtype = useEngine((s) => s.lineSubtype);
   const setTool = useEngine((s) => s.setTool);
+  const setEditorMode = useEngine((s) => s.setEditorMode);
   const croppingImageId = useEngine((s) => s.croppingImageId);
   const setCroppingImageId = useEngine((s) => s.setCroppingImageId);
   const addElement = useEngine((s) => s.addElement);
@@ -713,6 +714,32 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         const hit = pickTopMost(p, slide);
         if (hit) deleteElements([hit.id]);
         dragRef.current = { kind: "erase" };
+        return;
+      }
+
+      // Pixel tools live in Raster Studio (Smart Object). Redirect instead of
+      // painting on the design canvas.
+      const PIXEL_STUDIO_TOOLS = new Set<Tool>([
+        "rasterBrush",
+        "rasterPencil",
+        "rasterEraser",
+        "rasterMarquee",
+        "rasterEllipse",
+        "rasterLasso",
+        "rasterPolygonLasso",
+        "rasterMagicWand",
+        "rasterQuickSelection",
+        "rasterHealing",
+        "rasterClone",
+      ]);
+      if (PIXEL_STUDIO_TOOLS.has(tool)) {
+        const hit = pickTopMost(p, slide);
+        if (hit?.type === "image") {
+          selectOnly([hit.id]);
+          openRasterStudioForElement(hit);
+          setEditorMode("vector");
+          setTool("select");
+        }
         return;
       }
 

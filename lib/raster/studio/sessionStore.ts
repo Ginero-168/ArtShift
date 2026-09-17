@@ -15,7 +15,9 @@ export type StudioRasterTool =
   | "rasterMarquee"
   | "rasterEllipse"
   | "rasterLasso"
+  | "rasterPolygonLasso"
   | "rasterMagicWand"
+  | "rasterQuickSelection"
   | "rasterHealing"
   | "rasterClone"
   | "hand";
@@ -45,7 +47,9 @@ export function isStudioRasterTool(tool: Tool | string): tool is StudioRasterToo
     tool === "rasterMarquee" ||
     tool === "rasterEllipse" ||
     tool === "rasterLasso" ||
+    tool === "rasterPolygonLasso" ||
     tool === "rasterMagicWand" ||
+    tool === "rasterQuickSelection" ||
     tool === "rasterHealing" ||
     tool === "rasterClone" ||
     tool === "hand"

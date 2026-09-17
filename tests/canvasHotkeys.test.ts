@@ -5,6 +5,7 @@ import { useEngine } from "@/lib/engine/store";
 import { ENGINE_SCHEMA_VERSION, type ImageElement } from "@/lib/engine/types";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { createRasterSelectionOperation } from "@/lib/raster/selection";
+import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 
 describe("Canvas hotkeys", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -304,10 +305,29 @@ describe("Canvas hotkeys", () => {
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
   });
 
-  it("switches raster tools using physical key codes under Thai IME", () => {
-    useEngine.getState().setEditorMode("raster");
+  it("opens Raster Studio for selected image when a raster tool key is pressed", () => {
+    const st = useEngine.getState();
+    const image = createImage({
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 80,
+      fileId: "hotkey-image",
+      naturalWidth: 100,
+      naturalHeight: 80,
+    });
+    st.addElement(image);
+    st.selectOnly([image.id]);
+
+    // Thai Kedmanee: physical B often reports a Thai vowel while code stays KeyB.
     handleCanvasHotkey(new KeyboardEvent("keydown", { key: "ิ", code: "KeyB" }));
-    expect(useEngine.getState().tool).toBe("rasterBrush");
+
+    const studio = useRasterStudioSession.getState();
+    expect(studio.open).toBe(true);
+    expect(studio.payload?.elementId).toBe(image.id);
+    expect(studio.studioTool).toBe("rasterBrush");
+    expect(useEngine.getState().tool).toBe("select");
+    studio.close();
   });
 
   it.each([
