@@ -5,6 +5,7 @@ import { useEngine } from "@/lib/engine/store";
 import { selectionForImage } from "@/lib/raster/activeSelection";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
 import { RASTER_TOOL_HOTKEYS, VECTOR_TOOL_HOTKEYS } from "./rasterHotkeys";
+import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 
 /** True when the event target is (or is inside) a text-editing field. */
 export function isEditableHotkeyTarget(target: EventTarget | null): boolean {
@@ -162,6 +163,8 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
   }
 
   if (!letter) return;
+  // Raster Studio owns its own tool shortcuts while open.
+  if (useRasterStudioSession.getState().open) return;
   const toolHotkeys = st.editorMode === "raster" ? RASTER_TOOL_HOTKEYS : VECTOR_TOOL_HOTKEYS;
   const match = toolHotkeys.find(
     (shortcut) => shortcut.key === letter && Boolean(shortcut.shiftKey) === event.shiftKey,

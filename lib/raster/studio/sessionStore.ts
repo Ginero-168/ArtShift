@@ -1,11 +1,26 @@
 "use client";
 
-import { create } from "zustand";
+import type { Tool } from "@/lib/engine/store";
 import {
   buildRasterStudioOpenPayload,
   type RasterStudioOpenPayload,
 } from "@/lib/raster/studio/types";
 import type { ImageElement } from "@/lib/engine/types";
+import { create } from "zustand";
+
+export type StudioRasterTool =
+  | "rasterBrush"
+  | "rasterPencil"
+  | "rasterEraser"
+  | "rasterMarquee"
+  | "rasterEllipse"
+  | "rasterLasso"
+  | "rasterMagicWand"
+  | "rasterHealing"
+  | "rasterClone"
+  | "hand";
+
+const DEFAULT_STUDIO_TOOL: StudioRasterTool = "rasterBrush";
 
 type RasterStudioSessionState = {
   open: boolean;
@@ -13,12 +28,29 @@ type RasterStudioSessionState = {
   dirty: boolean;
   saving: boolean;
   error: string | null;
+  studioTool: StudioRasterTool;
   openFromImage: (image: ImageElement) => void;
   setDirty: (dirty: boolean) => void;
   setSaving: (saving: boolean) => void;
   setError: (error: string | null) => void;
+  setStudioTool: (tool: StudioRasterTool) => void;
   close: () => void;
 };
+
+export function isStudioRasterTool(tool: Tool | string): tool is StudioRasterTool {
+  return (
+    tool === "rasterBrush" ||
+    tool === "rasterPencil" ||
+    tool === "rasterEraser" ||
+    tool === "rasterMarquee" ||
+    tool === "rasterEllipse" ||
+    tool === "rasterLasso" ||
+    tool === "rasterMagicWand" ||
+    tool === "rasterHealing" ||
+    tool === "rasterClone" ||
+    tool === "hand"
+  );
+}
 
 /**
  * UI session for Raster Studio. Document truth stays in the engine store;
@@ -30,6 +62,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set) => 
   dirty: false,
   saving: false,
   error: null,
+  studioTool: DEFAULT_STUDIO_TOOL,
   openFromImage: (image) => {
     const payload = buildRasterStudioOpenPayload(image);
     const hasOverlays = Boolean(
@@ -44,11 +77,13 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set) => 
       dirty: hasOverlays,
       saving: false,
       error: null,
+      studioTool: DEFAULT_STUDIO_TOOL,
     });
   },
   setDirty: (dirty) => set({ dirty }),
   setSaving: (saving) => set({ saving }),
   setError: (error) => set({ error }),
+  setStudioTool: (studioTool) => set({ studioTool }),
   close: () =>
     set({
       open: false,
@@ -56,6 +91,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set) => 
       dirty: false,
       saving: false,
       error: null,
+      studioTool: DEFAULT_STUDIO_TOOL,
     }),
 }));
 

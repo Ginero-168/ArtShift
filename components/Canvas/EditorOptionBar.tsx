@@ -5,32 +5,26 @@ import { IconBrief } from "@/components/icons";
 import { convertImageToBrief } from "@/lib/ai/briefGenerator";
 import { reportAIError } from "@/lib/ai/progressReporter";
 import type { ImageElement } from "@/lib/engine/types";
-import { type EditorMode, useEngine } from "@/lib/engine/store";
-import RasterToolOptions from "./RasterToolOptions";
+import { useEngine } from "@/lib/engine/store";
+import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
+import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 import {
   COMMON_TOOL_DEFINITIONS,
-  RASTER_TOOL_DEFINITIONS,
-  TOOLS_WITH_OPTIONS,
   VECTOR_TOOL_DEFINITIONS,
 } from "./toolRegistry";
 
-const MODE_OPTIONS: Array<{ id: EditorMode; label: string; title: string }> = [
-  { id: "raster", label: "Raster", title: "Raster image editing tools" },
-  { id: "vector", label: "Vector", title: "Vector object editing tools" },
-];
-
-const modeButtonStyle = (active: boolean, mode: EditorMode) => ({
+const modeButtonStyle = (active: boolean, tone: "raster" | "vector") => ({
   height: 28,
   padding: "0 8px",
   border: "none",
   borderRadius: 6,
   background: active
-    ? mode === "raster"
+    ? tone === "raster"
       ? "rgba(22, 163, 74, 0.13)"
       : "rgba(79, 70, 229, 0.13)"
     : "transparent",
   color: active
-    ? mode === "raster"
+    ? tone === "raster"
       ? "#15803d"
       : "var(--accent, #4f46e5)"
     : "var(--ink-muted, #6b7280)",
@@ -62,23 +56,43 @@ const toolButtonStyle = (active: boolean) => ({
 });
 
 export default function EditorOptionBar() {
-  const editorMode = useEngine((state) => state.editorMode);
-  const setEditorMode = useEngine((state) => state.setEditorMode);
   const tool = useEngine((state) => state.tool);
   const setTool = useEngine((state) => state.setTool);
-  const tools = [
-    ...COMMON_TOOL_DEFINITIONS,
-    ...(editorMode === "raster" ? RASTER_TOOL_DEFINITIONS : VECTOR_TOOL_DEFINITIONS),
-  ];
+  const setEditorMode = useEngine((state) => state.setEditorMode);
+  const studioOpen = useRasterStudioSession((state) => state.open);
+  const tools = [...COMMON_TOOL_DEFINITIONS, ...VECTOR_TOOL_DEFINITIONS];
 
   const [briefBusy, setBriefBusy] = useState(false);
+
+  const openSelectedRasterStudio = () => {
+    const state = useEngine.getState();
+    const slide = state.currentSlide();
+    if (!slide) return;
+    const selectedImage = slide.elements.find(
+      (el): el is ImageElement =>
+        el.type === "image" && state.selectedIds.has(el.id) && !el.isDeleted,
+    );
+    if (!selectedImage) {
+      reportAIError({
+        taskId: `raster-studio-${crypto.randomUUID()}`,
+        operation: "Raster Studio",
+        message: "เลือกรูปภาพบน Canvas ก่อน แล้วเปิด Raster Studio นะคะ",
+      });
+      return;
+    }
+    setEditorMode("vector");
+    setTool("select");
+    openRasterStudioForElement(selectedImage);
+  };
+
   const handleToolbarConvertToBrief = async () => {
     if (briefBusy) return;
     const state = useEngine.getState();
     const slide = state.currentSlide();
     if (!slide) return;
     const selectedImage = slide.elements.find(
-      (el): el is ImageElement => el.type === "image" && state.selectedIds.has(el.id) && !el.isDeleted,
+      (el): el is ImageElement =>
+        el.type === "image" && state.selectedIds.has(el.id) && !el.isDeleted,
     );
     const anyImage = slide.elements.find(
       (el): el is ImageElement => el.type === "image" && !el.isDeleted,
@@ -106,7 +120,7 @@ export default function EditorOptionBar() {
     <div
       className="editor-option-bar"
       role="toolbar"
-      aria-label={`${editorMode} editing tools`}
+      aria-label="Vector editing tools"
       style={{
         display: "flex",
         alignItems: "center",
@@ -127,24 +141,28 @@ export default function EditorOptionBar() {
         aria-label="Editing mode"
         style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}
       >
-        {MODE_OPTIONS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            title={option.title}
-            aria-pressed={editorMode === option.id}
-            onClick={() => setEditorMode(option.id)}
-            style={modeButtonStyle(editorMode === option.id, option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
+        <button
+          type="button"
+          title="Open Raster Studio for the selected image"
+          aria-pressed={studioOpen}
+          onClick={openSelectedRasterStudio}
+          style={modeButtonStyle(studioOpen, "raster")}
+        >
+          Raster Studio
+        </button>
+        <button
+          type="button"
+          title="Vector object editing tools"
+          aria-pressed={!studioOpen}
+          onClick={() => {
+            setEditorMode("vector");
+            if (tool.startsWith("raster")) setTool("select");
+          }}
+          style={modeButtonStyle(!studioOpen, "vector")}
+        >
+          Vector
+        </button>
       </div>
-
-      <span
-        aria-hidden="true"
-        style={{ width: 1, height: 20, margin: "0 3px", background: "var(--stroke, #e5e7eb)" }}
-      />
 
       <span
         aria-hidden="true"
@@ -153,7 +171,7 @@ export default function EditorOptionBar() {
 
       <div
         role="group"
-        aria-label={`${editorMode} tools`}
+        aria-label="Vector tools"
         style={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}
       >
         {tools.map((option) => {
@@ -165,7 +183,10 @@ export default function EditorOptionBar() {
               title={option.title}
               aria-label={option.title}
               aria-pressed={tool === option.id}
-              onClick={() => setTool(option.id)}
+              onClick={() => {
+                setEditorMode("vector");
+                setTool(option.id);
+              }}
               style={toolButtonStyle(tool === option.id)}
             >
               <Icon size={15} />
@@ -197,21 +218,6 @@ export default function EditorOptionBar() {
         <IconBrief size={15} />
         <span>{briefBusy ? "Briefing..." : "Brief"}</span>
       </button>
-
-      {editorMode === "raster" && TOOLS_WITH_OPTIONS.has(tool) ? (
-        <>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 1,
-              height: 28,
-              margin: "0 4px",
-              background: "var(--stroke, #e5e7eb)",
-            }}
-          />
-          <RasterToolOptions tool={tool} />
-        </>
-      ) : null}
     </div>
   );
 }
