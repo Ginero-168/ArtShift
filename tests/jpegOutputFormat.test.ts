@@ -31,11 +31,14 @@ describe("JPEG Output Format for AI Generated Images", () => {
     expect(autoCropSource).toContain('outCanvas.toDataURL("image/jpeg"');
   });
 
-  it("verifies ChatThread displays JPEG format badge and removed bottom-right download button", () => {
+  it("verifies chat result thumbs have no download button (JPEG conversion stays on the adapter)", () => {
     const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
+    const resultSource = readFileSync("components/AI/ChatImageResult.tsx", "utf8");
 
-    expect(threadSource).toContain("JPEG format badge");
+    expect(threadSource).toContain("ChatResultImageThumb");
     expect(threadSource).not.toContain("Download JPEG button");
     expect(threadSource).not.toContain("<DownloadIcon");
+    expect(resultSource).not.toContain("<DownloadIcon");
+    expect(resultSource).toContain("formatAspectOrientationLabel");
   });
 });

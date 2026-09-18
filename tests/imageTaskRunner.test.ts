@@ -193,9 +193,9 @@ describe("context-aware image task runner", () => {
       width: 300,
       height: 450,
       fileId: "source-file",
+      naturalWidth: 900,
+      naturalHeight: 1350,
     });
-    source.naturalWidth = 900;
-    source.naturalHeight = 1350;
     useEngine.getState().addElements([source]);
     const ref = {
       objectId: source.id,

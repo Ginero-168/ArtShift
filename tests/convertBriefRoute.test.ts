@@ -112,8 +112,9 @@ describe("Convert to Brief API Parser", () => {
     expect(parsed?.badge?.shape).toBe("ellipse");
     expect(parsed?.subtextCard?.text).toBe("เปิดรับความสุขกับทุกครอบครัวไปด้วยกัน");
 
-    // Also verifies backward-compatible synthesized partitions
-    expect(parsed?.backgroundPartitions.length).toBeGreaterThanOrEqual(2);
+    // Scene notes stay on named fields; partitions are not synthesized from hero/background.
+    expect(parsed?.backgroundPartitions).toHaveLength(0);
+    // Headline, badge, and subtext still synthesize focal objects when none are provided.
     expect(parsed?.focalObjects.length).toBeGreaterThanOrEqual(3);
   });
 
