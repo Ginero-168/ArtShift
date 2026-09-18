@@ -139,7 +139,11 @@ The current milestone targets the high-frequency production work around book ads
 
 ## Dependency note
 
-Production audit currently reports two high-severity advisories inherited through `pptxgenjs` → `image-size`; no fixed upstream release is available. Do not use `npm audit fix --force`, because its suggested downgrade is a breaking PPTX change. The PPTX server adapter now enforces a bounded request, document/object budgets, strict PNG/JPEG/WebP byte signatures, and a base64 allowlist before PptxGenJS sees input. Keep this exception under review when upgrading PPTX export.
+`next` is on **15.5.25** (Maintenance LTS), which patches [GHSA-p293-qw3h-jr36](https://github.com/advisories/GHSA-p293-qw3h-jr36) and [GHSA-2xp9-vwfh-vxw4](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4) without jumping to Next 16.
+
+Production audit still reports high-severity advisories inherited through `pptxgenjs` → `image-size`; no fixed upstream release is available. Do not use `npm audit fix --force`, because its suggested downgrade is a breaking PPTX change. The PPTX server adapter now enforces a bounded request, document/object budgets, strict PNG/JPEG/WebP byte signatures, and a base64 allowlist before PptxGenJS sees input. Keep this exception under review when upgrading PPTX export.
+
+`@huggingface/transformers` still pulls `sharp` / `adm-zip` / `onnxruntime-node` advisories. `npm audit fix --force` would jump transformers to 4.3.0 (breaking). The repo already overrides `sharp` and `adm-zip`; leave those until an upstream transformers patch.
 
 ---
 
