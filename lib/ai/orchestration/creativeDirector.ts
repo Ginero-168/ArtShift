@@ -653,9 +653,10 @@ function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<stri
       : typeof normalized.refinedPrompt === "string" && normalized.refinedPrompt.trim()
         ? normalized.refinedPrompt.trim().slice(0, 200)
         : "สร้างรูปภาพตามคำขอ";
-  if (!Array.isArray(normalized.reviewCriteria) || normalized.reviewCriteria.length === 0) {
-    normalized.reviewCriteria = [`ภาพต้องตรงกับคำอธิบาย: ${fallbackSummary}`];
-  }
+  normalized.reviewCriteria = normalizeReviewCriteria(
+    normalized.reviewCriteria,
+    fallbackSummary,
+  );
   if (normalized.search === undefined || !isRecord(normalized.search)) {
     normalized.search = { required: false, queries: [], sources: [] };
   }
@@ -1189,6 +1190,15 @@ export function parseCreativeDirection(
   if (!isStringArray(value.knowledgeSkillIds, 8, 100)) {
     return invalidDirection("knowledgeSkillIds is missing or not a string array");
   }
+  const criteriaFallback =
+    typeof value.summary === "string" && value.summary.trim()
+      ? value.summary.trim()
+      : typeof value.refinedPrompt === "string" && value.refinedPrompt.trim()
+        ? value.refinedPrompt.trim()
+        : typeof input.prompt === "string"
+          ? input.prompt
+          : "สร้างรูปภาพตามคำขอ";
+  value.reviewCriteria = normalizeReviewCriteria(value.reviewCriteria, criteriaFallback);
   if (!isStringArray(value.reviewCriteria, 8, 500, 1)) {
     return invalidDirection("reviewCriteria is missing or empty or invalid");
   }
@@ -1611,6 +1621,26 @@ function isStringArray(
     value.length <= maxItems &&
     value.every((item) => isBoundedString(item, maxLength))
   );
+}
+
+/**
+ * Coerce model reviewCriteria into the schema bounds (1–8 items, ≤500 chars).
+ * Mix/long briefs often produced one oversized criterion that failed validation.
+ */
+function normalizeReviewCriteria(value: unknown, fallbackSummary: string): string[] {
+  const rawItems: unknown[] = Array.isArray(value)
+    ? value
+    : typeof value === "string" && value.trim()
+      ? [value]
+      : [];
+  const cleaned = rawItems
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0)
+    .map((item) => (item.length > 500 ? `${item.slice(0, 497)}...` : item))
+    .slice(0, 8);
+  if (cleaned.length > 0) return cleaned;
+  const summary = fallbackSummary.trim().slice(0, 200) || "สร้างรูปภาพตามคำขอ";
+  return [`ภาพต้องตรงกับคำอธิบาย: ${summary}`];
 }
 
 function boundedInteger(value: number, min: number, max: number): number {

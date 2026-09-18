@@ -721,6 +721,69 @@ describe("gpt-oss-120b Creative Director", () => {
     });
   });
 
+  it("sanitizes oversized or empty reviewCriteria instead of failing Mix plans", async () => {
+    const longSummary =
+      "สร้างภาพใหม่ภาพเดียวทันทีโดยผสมภาพที่เลือกทั้งหมดเข้าด้วยกัน " + "ก".repeat(480);
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: "",
+        toolCalls: [
+          {
+            id: "call-1",
+            name: "propose_creative_direction",
+            input: {
+              kind: "image-task",
+              summary: longSummary,
+              refinedPrompt: "A fused cinematic scene combining both references into one balanced composition",
+              specialist: "image_generator",
+              capability: "IMAGE_DEFAULT",
+              modelAlias: "image-general",
+              knowledgeSkillIds: [],
+              reviewCriteria: [`ภาพต้องตรงกับคำอธิบาย: ${longSummary}`],
+              search: { required: false, queries: [], sources: [] },
+              outputCount: 1,
+            },
+          },
+        ],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: "" },
+      },
+      metadata: {},
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: longSummary,
+        canvasSummary: { objectCount: 2, selectedCount: 2, width: 1024, height: 1024 },
+        referenceAnalyses: [
+          {
+            caption: "fruit stall",
+            objects: ["fruit"],
+            visibleText: "",
+            appearanceNotes: [],
+            limitations: [],
+          },
+          {
+            caption: "orange cat",
+            objects: ["cat"],
+            visibleText: "",
+            appearanceNotes: [],
+            limitations: [],
+          },
+        ],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result.kind).toBe("image-task");
+    if (result.kind === "image-task") {
+      expect(result.reviewCriteria.length).toBeGreaterThan(0);
+      expect(result.reviewCriteria.every((c) => c.length <= 500)).toBe(true);
+    }
+  });
+
   it("recovers unparsed truncated envelope ending mid-word in reviewCriteria (production issue)", async () => {
     const prodEnvelope =
       '{"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"propose_creative_direction","input":{"kind":"image-task","summary":"สร้างรูปแมว","refinedPrompt":"A cute cat, highly detailed, realistic, studio lighting, natural pose, soft fur texture, expressive eyes, clean background.","specialist":"image_generator","capability":"IMAGE_DEFAULT","modelAlias":"image-general","knowledgeSkillIds":[],"reviewCriteria":["ภาพแมวมีความชัดเจนและมีรายละเอียดสูง","องค์ประกอบของแมวสมจริงและดูเป็นธรรมชาติ","แส';
