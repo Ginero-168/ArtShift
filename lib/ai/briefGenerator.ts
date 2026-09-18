@@ -18,6 +18,8 @@ import { reportAIError, reportAIResult } from "@/lib/ai/progressReporter";
 export type ConvertToBriefOptions = {
   signal?: AbortSignal;
   onProgress?: (status: string) => void;
+  /** Required for the cloud vision request. Toolbar clicks should pass true. */
+  cloudConsent?: boolean;
 };
 
 /** Always cloud vision quality — never local analyzer. */
@@ -65,11 +67,17 @@ export function getImageDataUrlFromElement(element: ImageElement): string | null
 async function fetchBriefDataOnce(
   dataUrl: string,
   signal?: AbortSignal,
+  cloudConsent?: boolean,
 ): Promise<ConvertToBriefData> {
+  if (cloudConsent !== true) {
+    const err = new Error("Cloud consent is required before Convert to Brief.");
+    (err as Error & { retryable?: boolean }).retryable = false;
+    throw err;
+  }
   const res = await fetch("/api/ai/convert-to-brief", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: dataUrl }),
+    body: JSON.stringify({ image: dataUrl, cloudConsent: true }),
     signal,
   });
 
@@ -98,13 +106,19 @@ export async function fetchBriefDataForImage(
   dataUrl: string,
   signal?: AbortSignal,
   onAttempt?: (attempt: number, maxAttempts: number) => void,
+  options?: { cloudConsent?: boolean },
 ): Promise<ConvertToBriefData> {
+  if (options?.cloudConsent !== true) {
+    const err = new Error("Cloud consent is required before Convert to Brief.");
+    (err as Error & { retryable?: boolean }).retryable = false;
+    throw err;
+  }
   let lastError: unknown;
   for (let attempt = 1; attempt <= CLOUD_BRIEF_ATTEMPTS; attempt++) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     onAttempt?.(attempt, CLOUD_BRIEF_ATTEMPTS);
     try {
-      return await fetchBriefDataOnce(dataUrl, signal);
+      return await fetchBriefDataOnce(dataUrl, signal, true);
     } catch (error) {
       lastError = error;
       if (error instanceof DOMException && error.name === "AbortError") throw error;
@@ -551,6 +565,15 @@ export async function convertImageToBrief(
   imageElement: ImageElement,
   options: ConvertToBriefOptions = {},
 ): Promise<EngineElement[]> {
+  if (options.cloudConsent !== true) {
+    const message = "Cloud consent is required before Convert to Brief.";
+    reportAIError({
+      taskId: `brief-${crypto.randomUUID()}`,
+      operation: "Convert to Brief",
+      message,
+    });
+    throw new Error(message);
+  }
   options.onProgress?.("กำลังเตรียมรูปภาพอ้างอิง...");
   const dataUrl = getImageDataUrlFromElement(imageElement);
   if (!dataUrl) {
@@ -594,6 +617,7 @@ export async function convertImageToBrief(
             0.15 + attempt * 0.15,
           );
         },
+        { cloudConsent: true },
       );
 
       if (!isUsableBriefLayout(briefData)) {

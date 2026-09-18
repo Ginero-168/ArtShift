@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
+import { describe, expect, it } from "vitest";
 
 describe("Auto Save Status Indicator in Editor Header", () => {
   const editorSource = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
@@ -17,10 +17,10 @@ describe("Auto Save Status Indicator in Editor Header", () => {
     expect(editorSource).toContain("function AutoSaveIndicator");
     expect(editorSource).toContain("กำลัง Save");
     expect(editorSource).toContain("Save แล้ว");
-    
+
     // Check SVG spinner for saving
     expect(editorSource).toContain("auto-save-spin");
-    
+
     // Check SVG checkmark for saved
     expect(editorSource).toContain('d="m8.5 12.2 2.3 2.3 4.7-4.7"');
 
@@ -34,13 +34,14 @@ describe("Auto Save Status Indicator in Editor Header", () => {
     expect(globalsCss).toContain(".auto-save-spin");
     expect(globalsCss).toContain(".auto-save-indicator.is-saving");
     expect(globalsCss).toContain(".auto-save-indicator.is-saved");
+    expect(globalsCss).toContain(".auto-save-indicator.is-error");
 
     // Colors: Amber for saving, Emerald for saved
     expect(globalsCss).toContain("#d97706");
     expect(globalsCss).toContain("#059669");
   });
 
-  it("triggers saveStatus transition to 'saving' and then 'saved' during document autosave and rename blur", () => {
+  it("does not claim saved while the title input is still being typed", () => {
     // Typing the title alone must not claim a save is in progress.
     const onChangeBlock = editorSource.slice(
       editorSource.indexOf("onChange={(e) => {"),
@@ -49,9 +50,8 @@ describe("Auto Save Status Indicator in Editor Header", () => {
     expect(onChangeBlock).toContain("setProjectName(e.target.value)");
     expect(onChangeBlock).not.toContain('setSaveStatus("saving")');
 
-    // Rename blur / handleRename owns the saving → saved transition for titles.
-    expect(editorSource).toContain("async (name: string)");
-    expect(editorSource).toContain('setSaveStatus("saving")');
-    expect(editorSource).toContain('setSaveStatus("saved")');
+    expect(editorSource).toContain("createProjectAutosave");
+    expect(editorSource).toContain("handlePageLeave");
+    expect(editorSource).toContain("Save ไม่สำเร็จ");
   });
 });

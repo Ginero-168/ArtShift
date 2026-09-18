@@ -47,9 +47,7 @@ export type AllProjectsArchive = {
   projects: ProjectArchive[];
 };
 
-export type ProjectSaveResult =
-  | { ok: true; savedAt: number }
-  | { ok: false; message: string };
+export type ProjectSaveResult = { ok: true; savedAt: number } | { ok: false; message: string };
 
 export interface ProjectStoreBackend {
   list(ownerKey?: string): Promise<ProjectMetadata[]>;
@@ -240,7 +238,9 @@ class MemoryProjectBackend implements ProjectStoreBackend {
   async list(ownerKey?: string): Promise<ProjectMetadata[]> {
     const list = Array.from(this.projects.values());
     const filtered = ownerKey ? list.filter((p) => p.ownerKey === ownerKey) : list;
-    return filtered.sort((a, b) => (b.lastOpenedAt || b.updatedAt) - (a.lastOpenedAt || a.updatedAt));
+    return filtered.sort(
+      (a, b) => (b.lastOpenedAt || b.updatedAt) - (a.lastOpenedAt || a.updatedAt),
+    );
   }
 
   async get(projectId: string): Promise<ProjectMetadata | null> {
@@ -310,6 +310,7 @@ class MemoryProjectBackend implements ProjectStoreBackend {
 
 class ResilientProjectStore {
   private backend: ProjectStoreBackend;
+  private saveQueues = new Map<string, Promise<ProjectSaveResult>>();
 
   constructor(backendOverride?: ProjectStoreBackend) {
     if (backendOverride) {
@@ -449,7 +450,41 @@ class ResilientProjectStore {
     doc: EngineDoc,
     options?: { thumbnail?: string },
   ): Promise<ProjectSaveResult> {
+    const previous =
+      this.saveQueues.get(projectId) ??
+      Promise.resolve({ ok: true, savedAt: 0 } as ProjectSaveResult);
+    const operation = previous.then(
+      () => this.persistProjectDocument(projectId, doc, options),
+      () => this.persistProjectDocument(projectId, doc, options),
+    );
+    this.saveQueues.set(
+      projectId,
+      operation.catch((error) => ({
+        ok: false as const,
+        message:
+          error instanceof Error && error.message
+            ? error.message
+            : "Failed to save project document.",
+      })),
+    );
+    return operation;
+  }
+
+  private async persistProjectDocument(
+    projectId: string,
+    doc: EngineDoc,
+    options?: { thumbnail?: string },
+  ): Promise<ProjectSaveResult> {
     try {
+      const existing = await this.backend.getDocument(projectId);
+      if (
+        existing &&
+        typeof existing.doc.updatedAt === "number" &&
+        typeof doc.updatedAt === "number" &&
+        existing.doc.updatedAt > doc.updatedAt
+      ) {
+        return { ok: true, savedAt: existing.doc.updatedAt };
+      }
       const meta = await this.getProject(projectId);
       const ownerKey = meta?.ownerKey || "local-default";
       const serialized = serializeWithImages(doc);
@@ -604,7 +639,8 @@ class ResilientProjectStore {
     const legacyDoc = await this.detectLegacyWorkspace();
     if (!legacyDoc) return null;
 
-    const title = legacyDoc.title && legacyDoc.title !== "Untitled" ? legacyDoc.title : "Imported Artwork";
+    const title =
+      legacyDoc.title && legacyDoc.title !== "Untitled" ? legacyDoc.title : "Imported Artwork";
     const metadata = await this.createProject({
       name: title,
       doc: legacyDoc,

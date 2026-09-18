@@ -27,9 +27,7 @@ describe("Convert to Brief cloud retry (no local fallback)", () => {
           success: true,
           result: {
             aspectRatio: { width: 1000, height: 700 },
-            backgroundPartitions: [
-              { name: "พื้นหลัง", box: [0, 0, 1000, 1000], color: "#e2e8f0" },
-            ],
+            backgroundPartitions: [{ name: "พื้นหลัง", box: [0, 0, 1000, 1000], color: "#e2e8f0" }],
             dividers: [],
             focalObjects: [],
             texts: [],
@@ -39,12 +37,30 @@ describe("Convert to Brief cloud retry (no local fallback)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const attempts: number[] = [];
-    const result = await fetchBriefDataForImage("data:image/png;base64,aaa", undefined, (n) => {
-      attempts.push(n);
-    });
+    const result = await fetchBriefDataForImage(
+      "data:image/png;base64,aaa",
+      undefined,
+      (n) => {
+        attempts.push(n);
+      },
+      { cloudConsent: true },
+    );
     expect(isUsableBriefLayout(result)).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(attempts).toEqual([1, 2]);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      cloudConsent: true,
+    });
+  });
+
+  it("does not fetch without explicit cloud consent", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchBriefDataForImage("data:image/png;base64,aaa")).rejects.toThrow(
+      "Cloud consent is required",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("fails only after exactly 3 cloud attempts with no local fallback", async () => {
@@ -55,7 +71,11 @@ describe("Convert to Brief cloud retry (no local fallback)", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(fetchBriefDataForImage("data:image/png;base64,aaa")).rejects.toThrow();
+    await expect(
+      fetchBriefDataForImage("data:image/png;base64,aaa", undefined, undefined, {
+        cloudConsent: true,
+      }),
+    ).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

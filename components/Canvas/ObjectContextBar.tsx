@@ -243,7 +243,7 @@ export default function ObjectContextBar({
     if (briefBusy) return;
     setBriefBusy(true);
     try {
-      await convertImageToBrief(imgEl);
+      await convertImageToBrief(imgEl, { cloudConsent: true });
     } catch {
       // convertImageToBrief already reports the failure to AI Assistance Chat.
     } finally {

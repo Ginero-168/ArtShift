@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import {
+  getAccountReplicateToken,
   getCredentialStatus,
   getSessionReplicateToken,
   validateReplicateApiKey,
@@ -27,6 +28,17 @@ describe("user Replicate credentials", () => {
       updatedAt: null,
     });
     expect(getSessionReplicateToken(request())).toBeUndefined();
+  });
+
+  it("does not treat REPLICATE_API_TOKEN as a per-account BYOK credential", () => {
+    const previous = process.env.REPLICATE_API_TOKEN;
+    process.env.REPLICATE_API_TOKEN = "r8_env_should_not_count_as_byok";
+    try {
+      expect(getAccountReplicateToken(request())).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.REPLICATE_API_TOKEN;
+      else process.env.REPLICATE_API_TOKEN = previous;
+    }
   });
 });
 

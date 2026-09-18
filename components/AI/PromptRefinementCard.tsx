@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { IconClose, IconPenEdit, IconWand } from "@/components/icons";
+import { promptHelperThumbPath } from "@/lib/ai/orchestration/promptHelperThumbManifest";
+import { requestPromptHelperThumbGeneration } from "@/lib/ai/orchestration/promptHelperThumbsClient";
+import {
+  resolveOptionFallbackPreview,
+  type OptionPreview,
+} from "@/lib/ai/orchestration/promptOptionCatalog";
 import {
   buildRefinedPromptString,
   buildRefinementOrchestratorLocks,
   type PromptRefinementCardData,
   type RefinementOption,
 } from "@/lib/ai/orchestration/promptRefinement";
-import {
-  resolveOptionFallbackPreview,
-  type OptionPreview,
-} from "@/lib/ai/orchestration/promptOptionCatalog";
-import { promptHelperThumbPath } from "@/lib/ai/orchestration/promptHelperThumbManifest";
 
 export interface PromptRefinementCardProps {
   data: PromptRefinementCardData;
@@ -87,11 +88,9 @@ export default function PromptRefinementCard({
 
     async function ensureAndPoll() {
       try {
-        await fetch("/api/ai/prompt-helper/thumbs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ optionIds: ids }),
-        });
+        // Paid Replicate generation requires explicit cloud consent. Listing existing
+        // on-disk thumbs still works without it (local-first Helper).
+        await requestPromptHelperThumbGeneration(ids);
       } catch {
         // Helper still works with SVG/swatch fallbacks.
       }

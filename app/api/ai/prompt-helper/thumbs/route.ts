@@ -4,8 +4,12 @@ import {
   listExistingPromptHelperThumbIds,
 } from "@/lib/ai/orchestration/promptHelperThumbsEnsure";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
+import {
+  requireAuthenticatedAccount,
+  requireEndUserCloudAi,
+} from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
-import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { getUserAccount } from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +31,9 @@ export async function GET(req: NextRequest) {
       { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
     );
   }
+
+  const access = requireAuthenticatedAccount(req);
+  if (!access.ok) return access.response;
 
   const idsParam = req.nextUrl.searchParams.get("ids");
   const existing = await listExistingPromptHelperThumbIds();
@@ -64,22 +71,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const optionIds = Array.isArray((raw as { optionIds?: unknown })?.optionIds)
-    ? ((raw as { optionIds: unknown[] }).optionIds.filter(
+  const body =
+    raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const optionIds = Array.isArray(body.optionIds)
+    ? body.optionIds.filter(
         (id): id is string => typeof id === "string" && id.length > 0 && id.length < 80,
-      ) as string[])
+      )
     : [];
 
   if (optionIds.length === 0) {
     return NextResponse.json({ error: "optionIds required" }, { status: 400 });
   }
 
-  const token =
-    getSessionReplicateToken(req) || process.env.REPLICATE_API_TOKEN || null;
+  const access = requireEndUserCloudAi(req, body.cloudConsent);
+  if (!access.ok) return access.response;
 
   const result = await ensurePromptHelperThumbs({
     optionIds: optionIds.slice(0, 80),
-    token,
+    token: access.replicateToken,
     maxQueue: 24,
   });
 
