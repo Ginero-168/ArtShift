@@ -1,15 +1,17 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { generateCampaignBatch } from "@/lib/campaign/generator";
 import { runCampaignPreflight } from "@/lib/campaign/preflight";
 import { CAMPAIGN_CHANNELS, type CampaignTemplateId } from "@/lib/campaign/types";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
+import {
+  CATALOG_WEBHOOK_MAX_BODY_BYTES,
+  CATALOG_WEBHOOK_MAX_BOOKS,
+  CATALOG_WEBHOOK_SECRET_HEADER,
+  catalogWebhookSecretConfigured,
+  catalogWebhookSecretMatches,
+} from "@/lib/server/catalogWebhook";
 
 export const dynamic = "force-dynamic";
-
-export const CATALOG_WEBHOOK_MAX_BODY_BYTES = 256 * 1024;
-export const CATALOG_WEBHOOK_MAX_BOOKS = 50;
-export const CATALOG_WEBHOOK_SECRET_HEADER = "x-catalog-webhook-secret";
 
 const ALLOWED_TEMPLATE_IDS = new Set<CampaignTemplateId>([
   "launch-hero",
@@ -17,18 +19,6 @@ const ALLOWED_TEMPLATE_IDS = new Set<CampaignTemplateId>([
   "showcase-3d",
   "quote-review",
 ]);
-
-export function catalogWebhookSecretConfigured(): boolean {
-  return Boolean(process.env.CATALOG_WEBHOOK_SECRET?.trim());
-}
-
-export function catalogWebhookSecretMatches(provided: string | null | undefined): boolean {
-  const expected = process.env.CATALOG_WEBHOOK_SECRET?.trim() ?? "";
-  if (!expected || typeof provided !== "string" || !provided) return false;
-  const left = createHash("sha256").update(expected).digest();
-  const right = createHash("sha256").update(provided).digest();
-  return timingSafeEqual(left, right);
-}
 
 function extractProvidedSecret(request: NextRequest, body: Record<string, unknown>): string | null {
   const header =

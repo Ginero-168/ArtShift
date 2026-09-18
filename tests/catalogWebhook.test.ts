@@ -1,11 +1,11 @@
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_BOOK_COVER_DATA_URL } from "../lib/campaign/generator";
+import { POST } from "../app/api/catalog/webhook/route";
 import {
   CATALOG_WEBHOOK_MAX_BODY_BYTES,
   CATALOG_WEBHOOK_SECRET_HEADER,
-  POST,
-} from "../app/api/catalog/webhook/route";
+} from "../lib/server/catalogWebhook";
 
 const SECRET = "catalog-test-secret";
 
