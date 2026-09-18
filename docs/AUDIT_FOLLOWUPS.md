@@ -4,7 +4,7 @@ Short list of known remaining work after PRs #4–#6 landed on `main`.
 
 ## This follow-up
 
-- **Next.js 15.5.25** — Maintenance LTS patch for [GHSA-p293-qw3h-jr36](https://github.com/advisories/GHSA-p293-qw3h-jr36) and [GHSA-2xp9-vwfh-vxw4](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4). Stays on 15.5.x (Node `>=22.18.0 <23`); Next 16 is not required for these advisories.
+- **Next.js 15.5.25** — Maintenance LTS patch for [GHSA-p293-qw3h-jr36](https://github.com/advisories/GHSA-p293-qw3h-jr36) and [GHSA-2xp9-vwfh-vxw4](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4). Stays on 15.5.x (Node `>=22.18.0 <23`); Next 16 is not required for these advisories. Typed routes in this line reject extra runtime exports from `route.ts`; catalog webhook helpers live in `lib/server/catalogWebhook.ts`.
 
 ## Still red / deferred
 
