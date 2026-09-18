@@ -12,7 +12,23 @@
 
 import { getCached, loadDataURL } from "./imageCache";
 import { normalizeDocumentLayers } from "./layers";
-import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineSlide } from "./types";
+import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineElement, type EngineSlide } from "./types";
+
+export class MissingSerializedImageError extends Error {
+  readonly fileIds: string[];
+
+  constructor(fileIds: string[]) {
+    const preview = fileIds.slice(0, 3).join(", ");
+    const suffix = fileIds.length > 3 ? "…" : "";
+    super(
+      `Cannot save: missing image data for ${fileIds.length} live file${
+        fileIds.length === 1 ? "" : "s"
+      } (${preview}${suffix}).`,
+    );
+    this.name = "MissingSerializedImageError";
+    this.fileIds = fileIds;
+  }
+}
 
 export type SerializedDoc = {
   doc: EngineDoc;
@@ -43,33 +59,57 @@ export function toJSON(doc: EngineDoc): EngineDoc {
   };
 }
 
-export function serializeWithImages(doc: EngineDoc): SerializedDoc {
-  const files: Record<string, string> = {};
+export function listLiveImageFileIds(doc: EngineDoc): string[] {
+  const ids = new Set<string>();
   for (const sl of doc.slides) {
     for (const el of sl.elements) {
-      if (el.isDeleted) continue;
-      if (el.type === "image" || el.type === "bookMockup") {
-        const cached = getCached(el.fileId);
-        if (cached?.dataURL) {
-          files[el.fileId] = cached.dataURL;
-        } else if (
-          typeof el.fileId === "string" &&
-          (el.fileId.startsWith("data:") || el.fileId.startsWith("http://") || el.fileId.startsWith("https://"))
-        ) {
-          files[el.fileId] = el.fileId;
-        }
-      } else if (el.type === "frame" && el.imageFileId) {
-        const cached = getCached(el.imageFileId);
-        if (cached?.dataURL) {
-          files[el.imageFileId] = cached.dataURL;
-        } else if (
-          typeof el.imageFileId === "string" &&
-          (el.imageFileId.startsWith("data:") || el.imageFileId.startsWith("http://") || el.imageFileId.startsWith("https://"))
-        ) {
-          files[el.imageFileId] = el.imageFileId;
-        }
-      }
+      const fileId = liveImageFileId(el);
+      if (fileId) ids.add(fileId);
     }
+  }
+  return [...ids];
+}
+
+export function missingSerializedImageFileIds(
+  doc: EngineDoc,
+  files: Record<string, string>,
+): string[] {
+  return listLiveImageFileIds(doc).filter((fileId) => !files[fileId]);
+}
+
+function liveImageFileId(el: EngineElement): string | null {
+  if (el.isDeleted) return null;
+  if (el.type === "image" || el.type === "bookMockup") {
+    return typeof el.fileId === "string" && el.fileId.trim() ? el.fileId : null;
+  }
+  if (el.type === "frame" && typeof el.imageFileId === "string" && el.imageFileId.trim()) {
+    return el.imageFileId;
+  }
+  return null;
+}
+
+function resolveImageFile(fileId: string): string | undefined {
+  const cached = getCached(fileId);
+  if (cached?.dataURL) return cached.dataURL;
+  if (fileId.startsWith("data:") || fileId.startsWith("http://") || fileId.startsWith("https://")) {
+    return fileId;
+  }
+  return undefined;
+}
+
+export function serializeWithImages(
+  doc: EngineDoc,
+  extraFiles: Record<string, string> = {},
+): SerializedDoc {
+  const files: Record<string, string> = { ...extraFiles };
+  for (const fileId of listLiveImageFileIds(doc)) {
+    if (files[fileId]) continue;
+    const resolved = resolveImageFile(fileId);
+    if (resolved) files[fileId] = resolved;
+  }
+  const missing = missingSerializedImageFileIds(doc, files);
+  if (missing.length > 0) {
+    throw new MissingSerializedImageError(missing);
   }
   return { doc: toJSON(doc), files };
 }

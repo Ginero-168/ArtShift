@@ -16,17 +16,33 @@ export type ServerAiCredentials = {
 };
 
 export function createServerAiRuntime(credentials: ServerAiCredentials = {}): RoutedAiRuntime {
+  // End-user runtimes (accountId set) must not inherit deploy env BYOK keys.
+  // Ops/unscoped runtimes may still use process.env for local/dev adapters.
+  const isEndUser = Boolean(credentials.accountId);
+  const openAiApiKey = isEndUser
+    ? credentials.openAiApiKey || ""
+    : (credentials.openAiApiKey ?? process.env.OPENAI_API_KEY);
+  const replicateToken = isEndUser
+    ? credentials.replicateToken
+    : (credentials.replicateToken ?? process.env.REPLICATE_API_TOKEN);
   const routeEnv = {
     ...process.env,
-    ...(credentials.openAiApiKey ? { OPENAI_API_KEY: credentials.openAiApiKey } : {}),
-    ...(credentials.replicateToken ? { REPLICATE_API_TOKEN: credentials.replicateToken } : {}),
+    ...(isEndUser
+      ? {
+          OPENAI_API_KEY: credentials.openAiApiKey || "",
+          REPLICATE_API_TOKEN: credentials.replicateToken || "",
+        }
+      : {
+          ...(credentials.openAiApiKey ? { OPENAI_API_KEY: credentials.openAiApiKey } : {}),
+          ...(credentials.replicateToken ? { REPLICATE_API_TOKEN: credentials.replicateToken } : {}),
+        }),
   };
   return new RoutedAiRuntime({
     adapters: [
       new AnthropicAiAdapter(),
-      new ReplicateAiAdapter(credentials.replicateToken),
+      new ReplicateAiAdapter(replicateToken),
       new GoogleAiAdapter(),
-      new OpenAiAdapter(credentials.openAiApiKey ?? process.env.OPENAI_API_KEY),
+      new OpenAiAdapter(openAiApiKey),
     ],
     routes: createAiRouteTable(routeEnv),
     defaultProfiles: AI_DEFAULT_PROFILES,

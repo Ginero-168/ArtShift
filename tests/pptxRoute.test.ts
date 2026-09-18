@@ -55,4 +55,27 @@ describe("PPTX export route boundary", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("exports frames from rasterizedImages instead of dropping them", async () => {
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const { createEmptyEngineDoc } = await import("@/lib/engine/store");
+    const { createFrame, createText } = await import("@/lib/engine/factory");
+    const doc = createEmptyEngineDoc("Frames");
+    const frame = createFrame({ x: 40, y: 40, width: 400, height: 240, name: "Hero" });
+    const child = createText({ x: 80, y: 80, text: "Clipped", width: 200 });
+    frame.childIds = [child.id];
+    doc.slides[0].elements = [frame, child];
+    doc.slides[0].layers[0].objectIds = [frame.id, child.id];
+
+    const response = await POST(
+      request(JSON.stringify({ doc, rasterizedImages: { [frame.id]: png } })),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    );
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+  });
 });

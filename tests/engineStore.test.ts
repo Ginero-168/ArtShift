@@ -11,6 +11,7 @@ import { getHexGridDimensions } from "@/lib/engine/hexLayout";
 import { useEngine } from "@/lib/engine/store";
 import { measureTextElementHeight } from "@/lib/engine/textLayout";
 import { ENGINE_SCHEMA_VERSION } from "@/lib/engine/types";
+import { createRasterSelectionOperation } from "@/lib/raster/selection";
 
 describe("engine store", () => {
   beforeEach(() => {
@@ -581,5 +582,43 @@ describe("engine store", () => {
 
     st.setLayerFilter("all");
     expect(useEngine.getState().layerFilter).toBe("all");
+  });
+
+  it("keeps an active raster selection when undoing a later document mutation", () => {
+    const st = useEngine.getState();
+    st.setLayerMode(st.activeLayerId, "free");
+    const image = createImage({
+      x: 20,
+      y: 20,
+      width: 200,
+      height: 160,
+      fileId: "undo-selection-image",
+      naturalWidth: 200,
+      naturalHeight: 160,
+    });
+    st.addElement(image);
+    st.applyRasterSelection(
+      image.id,
+      createRasterSelectionOperation("replace", {
+        kind: "rect",
+        x: 0.1,
+        y: 0.1,
+        width: 0.4,
+        height: 0.4,
+      }),
+      image.width,
+      image.height,
+    );
+    expect(useEngine.getState().activeRasterSelection?.imageId).toBe(image.id);
+
+    st.addElement(
+      createText({ x: 400, y: 40, text: "later mutation", width: 160 }),
+      "add caption",
+    );
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(2);
+
+    useEngine.getState().undo();
+    expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
+    expect(useEngine.getState().activeRasterSelection?.imageId).toBe(image.id);
   });
 });

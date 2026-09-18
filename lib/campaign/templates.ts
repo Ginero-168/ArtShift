@@ -487,8 +487,8 @@ function buildSalePromo(
   const { width: W, height: H, ratio } = channel;
   const elements: EngineElement[] = [];
 
-  const discountBadge = book.discountText || "ลดพิเศษ 15%";
-  const salePrice = book.salePrice ? `฿${book.salePrice}` : "฿249";
+  const discountBadge = book.discountText || "ลดพิเศษ";
+  const salePrice = book.salePrice ? `฿${book.salePrice}` : "";
   const listPrice = book.listPrice ? `ปกติ ฿${book.listPrice}` : "";
   const cta = book.ctaText || "ช้อปด่วนก่อนหมดโปร";
 
@@ -556,16 +556,18 @@ function buildSalePromo(
     priceBox.roughness = 0;
     elements.push(priceBox);
 
-    const saleText = createText({
-      x: rightX + 24,
-      y: Math.round(H * 0.55),
-      text: salePrice,
-      fontSize: 54,
-      width: 220,
-    });
-    saleText.strokeColor = colors.saleText;
-    saleText.fontStyle = "bold";
-    elements.push(saleText);
+    if (salePrice) {
+      const saleText = createText({
+        x: rightX + 24,
+        y: Math.round(H * 0.55),
+        text: salePrice,
+        fontSize: 54,
+        width: 220,
+      });
+      saleText.strokeColor = colors.saleText;
+      saleText.fontStyle = "bold";
+      elements.push(saleText);
+    }
 
     if (listPrice) {
       const listText = createText({
@@ -645,19 +647,21 @@ function buildSalePromo(
       title.fontStyle = "bold";
       elements.push(title);
 
-      // Sale Price + Original
+      // Sale Price + Original (omit invented commercial numbers)
       const priceText = [salePrice, listPrice].filter(Boolean).join("  ");
-      const priceEl = createText({
-        x: Math.round(W * 0.08),
-        y: Math.round(H * 0.74),
-        text: priceText,
-        fontSize: 48,
-        width: Math.round(W * 0.84),
-      });
-      priceEl.textAlign = "center";
-      priceEl.strokeColor = colors.saleText;
-      priceEl.fontStyle = "bold";
-      elements.push(priceEl);
+      if (priceText) {
+        const priceEl = createText({
+          x: Math.round(W * 0.08),
+          y: Math.round(H * 0.74),
+          text: priceText,
+          fontSize: 48,
+          width: Math.round(W * 0.84),
+        });
+        priceEl.textAlign = "center";
+        priceEl.strokeColor = colors.saleText;
+        priceEl.fontStyle = "bold";
+        elements.push(priceEl);
+      }
 
       // CTA
       const ctaBtn = createText({
@@ -704,16 +708,18 @@ function buildSalePromo(
       title.fontStyle = "bold";
       elements.push(title);
 
-      const saleEl = createText({
-        x: rightX,
-        y: Math.round(H * 0.54),
-        text: salePrice,
-        fontSize: 48,
-        width: rightW,
-      });
-      saleEl.strokeColor = colors.saleText;
-      saleEl.fontStyle = "bold";
-      elements.push(saleEl);
+      if (salePrice) {
+        const saleEl = createText({
+          x: rightX,
+          y: Math.round(H * 0.54),
+          text: salePrice,
+          fontSize: 48,
+          width: rightW,
+        });
+        saleEl.strokeColor = colors.saleText;
+        saleEl.fontStyle = "bold";
+        elements.push(saleEl);
+      }
 
       if (listPrice) {
         const listEl = createText({

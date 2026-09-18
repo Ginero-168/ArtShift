@@ -359,8 +359,8 @@ class ResilientProjectStore {
     doc.title = name;
     doc.updatedAt = now;
 
-    const serialized = serializeWithImages(doc);
-    const combinedFiles = { ...serialized.files, ...(options?.files || {}) };
+    const serialized = serializeWithImages(doc, options?.files);
+    const combinedFiles = serialized.files;
 
     let initialThumbnail: string | undefined;
     if (typeof document !== "undefined" && doc.slides?.[0]) {

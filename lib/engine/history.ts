@@ -27,7 +27,11 @@ export type HistoryEntry = {
 
 export type HistoryTransition = {
   doc: EngineDoc;
-  /** `undefined` means this older/document-only entry has no selection snapshot. */
+  /**
+   * Raster-selection snapshot for this entry.
+   * `undefined` means the entry did not record selection — callers must leave
+   * the current overlay unchanged instead of clearing it.
+   */
   rasterSelection: ActiveRasterSelection | undefined;
 };
 

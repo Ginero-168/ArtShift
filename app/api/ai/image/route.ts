@@ -93,9 +93,9 @@ export async function POST(req: NextRequest) {
   });
   const allowProviderFallback = imageGenerationFallbackEnabled(
     {
-      ...process.env,
-      ...(openAiApiKey ? { OPENAI_API_KEY: openAiApiKey } : {}),
-      ...(replicateToken ? { REPLICATE_API_TOKEN: replicateToken } : {}),
+      IMAGE_GENERATION_PROVIDER: process.env.IMAGE_GENERATION_PROVIDER,
+      OPENAI_API_KEY: openAiApiKey || "",
+      REPLICATE_API_TOKEN: replicateToken || "",
     },
     replicateToken,
   );

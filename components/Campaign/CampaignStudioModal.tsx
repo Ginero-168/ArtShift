@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconCheck, IconClose } from "@/components/icons";
 import { exportCampaignBatchToZip, type ZipFolderStructure } from "@/lib/campaign/exportZip";
 import { type GeneratedBatchItem, generateCampaignBatch } from "@/lib/campaign/generator";
@@ -64,6 +64,8 @@ export default function CampaignStudioModal({ isOpen, onClose, onLoadIntoCanvas 
   const [preflightReport, setPreflightReport] = useState<PreflightReport | null>(null);
   const [exportProgress, setExportProgress] = useState<BatchExportProgress | null>(null);
   const [folderStructure, setFolderStructure] = useState<ZipFolderStructure>("by-book");
+  const batchRequestIdRef = useRef(0);
+  const batchAbortRef = useRef<AbortController | null>(null);
 
   // Parse CSV
   const { headers, rows } = useMemo(() => parseCSV(csvText), [csvText]);
@@ -86,20 +88,32 @@ export default function CampaignStudioModal({ isOpen, onClose, onLoadIntoCanvas 
     return CAMPAIGN_CHANNELS.filter((c) => selectedChannelIds.includes(c.id));
   }, [selectedChannelIds]);
 
-  // Re-generate batch when entering step 3
+  // Re-generate batch when entering step 3; ignore stale results from older runs.
   useEffect(() => {
-    if (step === 3 && records.length > 0 && activeChannels.length > 0) {
-      setIsGenerating(true);
-      generateCampaignBatch(records, selectedTemplate, activeChannels, selectedTheme)
-        .then((items) => {
-          setGeneratedBatch(items);
-          const report = runCampaignPreflight(items);
-          setPreflightReport(report);
-        })
-        .finally(() => {
-          setIsGenerating(false);
-        });
+    if (step !== 3 || records.length === 0 || activeChannels.length === 0) {
+      return;
     }
+    const requestId = ++batchRequestIdRef.current;
+    batchAbortRef.current?.abort();
+    const controller = new AbortController();
+    batchAbortRef.current = controller;
+    setIsGenerating(true);
+    generateCampaignBatch(records, selectedTemplate, activeChannels, selectedTheme)
+      .then((items) => {
+        if (requestId !== batchRequestIdRef.current || controller.signal.aborted) return;
+        setGeneratedBatch(items);
+        setPreflightReport(runCampaignPreflight(items));
+      })
+      .catch((error) => {
+        if (requestId !== batchRequestIdRef.current || controller.signal.aborted) return;
+        console.error("Campaign batch generation failed:", error);
+      })
+      .finally(() => {
+        if (requestId === batchRequestIdRef.current) setIsGenerating(false);
+      });
+    return () => {
+      controller.abort();
+    };
   }, [step, records, selectedTemplate, activeChannels, selectedTheme]);
 
   if (!isOpen) return null;

@@ -19,6 +19,7 @@ import {
   IconWarning,
 } from "@/components/icons";
 import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
+import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
 import {
   ASPECT_RATIOS,
   type AspectRatioOption,
@@ -127,9 +128,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
       return;
     }
 
-    // window.confirm removed per user request:
-    // ส่ง prompt ไปยัง Gemini 3 Flash Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
-    const consent = true;
+    const consent = ensureCloudConsent();
     if (!consent) return;
 
     generationAbortRef.current?.abort();
@@ -158,7 +157,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
         {
           imageConversation: true,
           pendingClarification: pending,
-          cloudConsent: true,
+          cloudConsent: consent,
           signal: controller.signal,
         },
       );

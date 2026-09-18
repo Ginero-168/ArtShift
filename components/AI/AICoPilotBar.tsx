@@ -54,6 +54,7 @@ import {
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { formatImageCompletionReply, buildImageCompletionSummary } from "@/lib/ai/imageCompletionReply";
+import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
 import {
   formatFriendlyAspectRatio,
   formatHumanThoughtText,
@@ -326,10 +327,27 @@ export default function AICoPilotBar() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const cloudConsent = ensureCloudConsent();
+    if (!cloudConsent) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content:
+            "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director ครับ แชทแบบ local บน Canvas ยังใช้ได้ตามปกติ",
+          timestamp: Date.now(),
+        },
+      ]);
+      setIsExecutingPlan(false);
+      setBusy(false);
+      return;
+    }
+
     try {
       const finishedPlan = await runSequentialExecutionPlan(pendingSequentialPlan, {
         signal: controller.signal,
-        cloudConsent: true,
+        cloudConsent,
         onStepProgress: (updatedPlan, step) => {
           setPendingSequentialPlan({ ...updatedPlan });
           const action: SubAgentActionLog = {
@@ -408,6 +426,7 @@ export default function AICoPilotBar() {
     const basePrompt = currentPrompt || "สร้างภาพ";
     const baseline = createPromptRefinement(basePrompt);
     setPromptRefinementData(baseline);
+    if (!ensureCloudConsent()) return;
     try {
       const res = await fetch("/api/ai/prompt-helper/plan", {
         method: "POST",
@@ -554,6 +573,10 @@ export default function AICoPilotBar() {
           throw new Error("ไม่พบข้อมูลภาพต้นทางใน cache — เลือกรูปบน Canvas แล้วลองอีกครั้ง");
         }
         const ratio = parseExpandRatioFromText(promptToSend);
+        const cloudConsent = ensureCloudConsent();
+        if (!cloudConsent) {
+          throw new Error("ยังไม่ได้รับอนุญาตให้ส่งภาพไปขยายที่ Image Model");
+        }
         setLiveAssistantState({
           stage: "generating",
           prompt: promptToSend,
@@ -566,7 +589,7 @@ export default function AICoPilotBar() {
           ratioHeight: ratio.ratioHeight,
           scenePrompt: promptToSend,
           quality: selectedQuality === "auto" ? "high" : selectedQuality,
-          cloudConsent: true,
+          cloudConsent,
           signal: controller.signal,
           onProgress: (progress) => {
             setLiveAssistantState((prev) =>
@@ -768,7 +791,7 @@ export default function AICoPilotBar() {
           let resolvedModelLabel = DEFAULT_CREATING_MODEL_LABEL;
           // Creative Director disclosure copy:
           // งานนี้จะส่งคำสั่งไปยัง Gemini 3 Flash Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
-          const consent = true;
+          const consent = ensureCloudConsent();
           if (!consent) {
             directorAction.status = "error";
             directorAction.stage = "cancelled";
@@ -795,7 +818,7 @@ export default function AICoPilotBar() {
                   },
                   referenceAnalyses: analysesForTurn,
                 },
-                { signal: controller.signal, cloudConsent: true },
+                { signal: controller.signal, cloudConsent: consent },
               ).catch((dirErr) => {
                 if (
                   (dirErr as Error).name !== "AbortError" &&
@@ -959,11 +982,11 @@ export default function AICoPilotBar() {
 
                 const runResult = await runContextAwareImageRun(imageRun, refsForTurn, {
                   signal: controller.signal,
-                  cloudConsent: true,
+                  cloudConsent: consent,
                   reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
                     reviewRemoteCreativeOutput(
                       { prompt, reviewCriteria, outputAnalysis },
-                      { signal, cloudConsent: true },
+                      { signal, cloudConsent: consent },
                     ),
                   onUpdate: (update) => {
                     imageTaskAction.description = `${update.message} · สำเร็จ ${update.completedCount}/${update.requestedOutputCount}`;
@@ -1400,7 +1423,7 @@ export default function AICoPilotBar() {
             .slice(-10),
           { role: "user", content: promptToSend },
         ];
-        const remoteConsent = true;
+        const remoteConsent = ensureCloudConsent();
         if (!remoteConsent) {
           remoteActions[0] = {
             ...remoteActions[0],
@@ -1424,7 +1447,7 @@ export default function AICoPilotBar() {
               },
               referenceAnalyses: analysesForTurn,
             },
-            { signal: controller.signal, cloudConsent: true },
+            { signal: controller.signal, cloudConsent: remoteConsent },
           );
 
           if (result.kind === "design-plan") {
@@ -1529,11 +1552,11 @@ export default function AICoPilotBar() {
             upsertCurrentAction(remoteActions[0]);
             const generated = await runContextAwareImageTask(directedTask, refsForTurn, {
               signal: controller.signal,
-              cloudConsent: true,
+              cloudConsent: remoteConsent,
               reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
                 reviewRemoteCreativeOutput(
                   { prompt, reviewCriteria, outputAnalysis },
-                  { signal, cloudConsent: true },
+                  { signal, cloudConsent: remoteConsent },
                 ),
               onUpdate: (update) => {
                 remoteActions[0] = {

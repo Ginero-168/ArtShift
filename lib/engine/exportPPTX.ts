@@ -6,7 +6,7 @@
 
 import { type RenderCtx, renderElement } from "../renderer/canvas";
 import { getRenderableElements } from "./layers";
-import type { EngineDoc, EngineElement, ImageElement } from "./types";
+import type { EngineDoc, EngineElement, EngineSlide, FrameElement, ImageElement } from "./types";
 
 export type PptxSlideTransform = {
   scale: number;
@@ -144,6 +144,73 @@ export function shouldRasterizeImageForPptx(el: ImageElement): boolean {
   );
 }
 
+/** Frame child ids that must be composited (clipped) instead of exported raw. */
+export function getPptxClippedChildIds(slide: EngineSlide): Set<string> {
+  const ids = new Set<string>();
+  for (const el of slide.elements) {
+    if (el.isDeleted || el.type !== "frame") continue;
+    for (const childId of el.childIds) ids.add(childId);
+  }
+  return ids;
+}
+
+export function shouldRasterizeElementForPptx(
+  el: EngineElement,
+  clippedChildIds: Set<string>,
+): boolean {
+  if (el.type === "frame" || clippedChildIds.has(el.id)) return true;
+  if (el.type === "text") return false;
+  if (el.type === "image") return false;
+  return !(
+    (el.type === "rect" || el.type === "ellipse" || el.type === "diamond") &&
+    el.roughness === 0
+  );
+}
+
+/**
+ * Rasterize a frame together with children clipped to the frame shape, so PPTX
+ * does not drop the container or export clipped objects unmasked.
+ */
+async function rasterizeFrameComposite(
+  frame: FrameElement,
+  slide: EngineSlide,
+  images?: Map<string, HTMLImageElement>,
+): Promise<string> {
+  const pad = 4;
+  const scale = 2;
+  const w = frame.width + pad * 2;
+  const h = frame.height + pad * 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No 2D context");
+  ctx.scale(scale, scale);
+  ctx.translate(pad - frame.x, pad - frame.y);
+  renderElement(frame, { ctx, images } as RenderCtx);
+
+  const children = frame.childIds
+    .map((id) => slide.elements.find((candidate) => candidate.id === id))
+    .filter((child): child is EngineElement =>
+      child != null && !child.isDeleted && child.hidden !== true,
+    );
+
+  if (children.length > 0) {
+    ctx.save();
+    ctx.translate(frame.x, frame.y);
+    ctx.beginPath();
+    ctx.rect(0, 0, frame.width, frame.height);
+    ctx.clip();
+    ctx.translate(-frame.x, -frame.y);
+    for (const child of children) {
+      renderElement(child, { ctx, images } as RenderCtx);
+    }
+    ctx.restore();
+  }
+
+  return canvas.toDataURL("image/png");
+}
+
 async function toDataUrl(src: string): Promise<string> {
   if (src.startsWith("data:")) return src;
   const res = await fetch(src, { mode: "cors" });
@@ -162,10 +229,20 @@ async function toDataUrl(src: string): Promise<string> {
 export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
   const rasterizedImages: Record<string, string> = {};
 
-  // Pre-rasterize rough/complex elements and convert image assets to Data URLs on client
+  // Pre-rasterize frames, clipped children, rough/complex elements, and images.
   for (const slide of doc.slides) {
     const ordered = getRenderableElements(slide);
+    const clippedChildIds = getPptxClippedChildIds(slide);
     for (const el of ordered) {
+      if (clippedChildIds.has(el.id)) continue;
+      if (el.type === "frame") {
+        try {
+          rasterizedImages[el.id] = await rasterizeFrameComposite(el, slide, images);
+        } catch {
+          // skip if failed
+        }
+        continue;
+      }
       if (el.type === "image") {
         const ie = el as ImageElement;
         const img = images?.get(ie.fileId);
@@ -178,13 +255,7 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
             // skip if failed
           }
         }
-      } else if (
-        el.type !== "text" &&
-        !(
-          (el.type === "rect" || el.type === "ellipse" || el.type === "diamond") &&
-          el.roughness === 0
-        )
-      ) {
+      } else if (shouldRasterizeElementForPptx(el, clippedChildIds)) {
         try {
           rasterizedImages[el.id] = await rasterizeElement(el, images);
         } catch {

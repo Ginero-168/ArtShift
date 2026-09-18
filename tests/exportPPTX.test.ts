@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getPptxSlideTransform, shouldRasterizeImageForPptx } from "@/lib/engine/exportPPTX";
-import { createImage } from "@/lib/engine/factory";
+import { getPptxClippedChildIds, getPptxSlideTransform, shouldRasterizeElementForPptx, shouldRasterizeImageForPptx } from "@/lib/engine/exportPPTX";
+import { createFrame, createImage, createText } from "@/lib/engine/factory";
+import type { EngineSlide } from "@/lib/engine/types";
 
 describe("PPTX mixed-ratio export", () => {
   it("centers a portrait artwork in a landscape deck without distortion", () => {
@@ -69,5 +70,36 @@ describe("PPTX mixed-ratio export", () => {
         ],
       }),
     ).toBe(true);
+  });
+
+  it("treats frames and clipped children as rasterized PPTX objects", () => {
+    const frame = createFrame({
+      x: 40,
+      y: 40,
+      width: 400,
+      height: 240,
+      name: "Hero frame",
+    });
+    const child = createText({
+      x: 60,
+      y: 70,
+      text: "Inside the frame",
+      width: 200,
+    });
+    frame.childIds = [child.id];
+    const slide = {
+      id: "slide-1",
+      name: "Slide 1",
+      background: "#fff",
+      width: 1920,
+      height: 1080,
+      elements: [frame, child],
+      layers: [],
+    } as EngineSlide;
+
+    const clipped = getPptxClippedChildIds(slide);
+    expect(clipped.has(child.id)).toBe(true);
+    expect(shouldRasterizeElementForPptx(frame, clipped)).toBe(true);
+    expect(shouldRasterizeElementForPptx(child, clipped)).toBe(true);
   });
 });
