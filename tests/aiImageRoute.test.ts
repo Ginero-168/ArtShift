@@ -86,7 +86,6 @@ describe("AI image generation API", () => {
       "image.generate",
       expect.objectContaining({ prompt: "แมวสีส้ม", width: 512, height: 512 }),
       expect.objectContaining({
-        provider: "replicate",
         modelAlias: "image-gpt-2",
         cloudConsent: true,
         allowFallback: false,

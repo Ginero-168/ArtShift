@@ -4,14 +4,20 @@ import { describe, expect, it } from "vitest";
 describe("Chat Image Drag and Drop to Canvas", () => {
   it("verifies ChatThread AI generated images and reference previews are draggable with proper payloads", () => {
     const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
+    const resultSource = readFileSync("components/AI/ChatImageResult.tsx", "utf8");
 
-    // Assistant generated images
+    // User-attached reference previews in ChatThread
     expect(threadSource).toContain("draggable={true}");
     expect(threadSource).toContain("application/x-artshift-chat-image");
     expect(threadSource).toContain("artshift/file-id");
     expect(threadSource).toContain("text/uri-list");
-    expect(threadSource).toContain("cursor: \"grab\"");
-    expect(threadSource).toContain("ลากไปวางบน Canvas ได้");
+    expect(threadSource).toContain('cursor: "grab"');
+    expect(threadSource).toContain("ลากไปวางบน Canvas");
+
+    // Generated result thumbs live in ChatImageResult
+    expect(resultSource).toContain("application/x-artshift-chat-image");
+    expect(resultSource).toContain("artshift/file-id");
+    expect(resultSource).toContain("text/uri-list");
   });
 
   it("verifies StagedVariationsCard candidates are draggable to canvas", () => {

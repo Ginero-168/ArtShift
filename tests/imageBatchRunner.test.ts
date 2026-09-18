@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CreativeDirection } from "@/lib/ai/orchestration/creativeDirector";
 import {
+  type DirectedImageRun,
   MAX_IMAGE_OUTPUTS_PER_BATCH,
   planImageBatches,
   runContextAwareImageRun,
@@ -258,13 +259,31 @@ describe("image batch runner & multi-image orchestration", () => {
     });
 
     it("cancels gracefully and stops subsequent batches when abort signal triggers", async () => {
-      const count = 7; // 2 batches: batch 1 (5 items), batch 2 (2 items)
-      const multiBatchDirection: Extract<CreativeDirection, { kind: "image-task" }> = {
-        ...baseDirection,
+      // createDirectedImageRun caps a run at MAX_IMAGE_OUTPUTS_PER_BATCH (5).
+      // Build a 7-item plan directly so the runner's next-batch abort path is still covered.
+      const count = 7;
+      const template = createDirectedImageRun(baseInput, baseDirection);
+      const batches = planImageBatches(count);
+      const run: DirectedImageRun = {
+        id: "abort-run",
         requestedOutputCount: count,
-        outputBriefs: Array.from({ length: count }, (_, i) => `Prompt ${i + 1}`),
+        maxBatchSize: MAX_IMAGE_OUTPUTS_PER_BATCH,
+        totalBatches: batches.length,
+        estimatedMaxCostUsd: 0,
+        batches,
+        tasks: Array.from({ length: count }, (_, i) => ({
+          ...template.tasks[0],
+          id: `abort-task-${i + 1}`,
+          imageRun: {
+            runId: "abort-run",
+            outputIndex: i + 1,
+            requestedOutputCount: count,
+            batchIndex: batches.findIndex((b) => b.itemIndexes.includes(i)) + 1,
+            totalBatches: batches.length,
+            maxBatchSize: MAX_IMAGE_OUTPUTS_PER_BATCH,
+          },
+        })),
       };
-      const run = createDirectedImageRun(baseInput, multiBatchDirection);
       expect(run.totalBatches).toBe(2);
 
       const abortController = new AbortController();

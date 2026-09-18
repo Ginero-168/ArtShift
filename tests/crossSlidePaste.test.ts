@@ -53,6 +53,8 @@ function twoSlideDoc() {
         ],
       },
     ],
+    snapGrid: null,
+    workspaceStrictness: 1,
     updatedAt: Date.now(),
   };
 }
