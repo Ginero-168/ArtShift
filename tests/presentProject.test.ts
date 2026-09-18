@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadPresentDocument } from "@/lib/project/presentProject";
 import { createTestProjectStore } from "@/lib/project/projectStore";
 
 describe("present project loader", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns empty when no projects exist", async () => {
     const store = createTestProjectStore();
     await expect(loadPresentDocument(store)).resolves.toEqual({ status: "empty" });
@@ -23,8 +27,11 @@ describe("present project loader", () => {
   });
 
   it("falls back to the last-opened project", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
     const store = createTestProjectStore();
     await store.createProject({ name: "Older" });
+    vi.setSystemTime(new Date("2026-09-01T00:00:01Z"));
     const latest = await store.createProject({ name: "Newer" });
     const result = await loadPresentDocument(store);
     expect(result).toMatchObject({ status: "loaded", projectId: latest.id });
