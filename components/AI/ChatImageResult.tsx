@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CloseIcon, ImageSparkleIcon } from "@/components/AI/ChatIcons";
 import { IconClose, IconSparkles } from "@/components/icons";
 import type { CoPilotMessageImage } from "@/lib/ai/coPilot";
@@ -74,13 +75,7 @@ function OverlayIconButton({
   );
 }
 
-export function ImageExpandOverlay({
-  url,
-  onClose,
-}: {
-  url: string;
-  onClose: () => void;
-}) {
+export function ImageExpandOverlay({ url, onClose }: { url: string; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -454,10 +449,7 @@ export function ChatResultImageThumb({
             </OverlayIconButton>
           </span>
           <span style={{ pointerEvents: "auto" }}>
-            <OverlayIconButton
-              label="โครงสร้าง Prompt"
-              onClick={() => setShowStructure(true)}
-            >
+            <OverlayIconButton label="โครงสร้าง Prompt" onClick={() => setShowStructure(true)}>
               <IconSparkles size={13} />
             </OverlayIconButton>
           </span>

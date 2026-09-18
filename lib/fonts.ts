@@ -17,11 +17,7 @@ export type ThaiFontDef = {
 
 const THAI_FALLBACK = "'Noto Sans Thai', 'Sarabun', system-ui, sans-serif";
 
-function def(
-  family: string,
-  category: ThaiFontDef["category"],
-  weights: number[],
-): ThaiFontDef {
+function def(family: string, category: ThaiFontDef["category"], weights: number[]): ThaiFontDef {
   return {
     family,
     cssFamily: `'${family}', ${THAI_FALLBACK}`,

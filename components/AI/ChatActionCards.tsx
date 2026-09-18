@@ -1,8 +1,4 @@
 import React from "react";
-import type { PlanProposal } from "@/lib/designAgent/contracts";
-import type { SequentialExecutionPlan } from "@/lib/ai/orchestration/turnOrchestrator";
-import type { CoPilotErrorCard } from "@/lib/ai/coPilot";
-import { summarizePlanForReview } from "@/lib/designAgent/planReview";
 import {
   BoltIcon,
   CheckIcon,
@@ -12,10 +8,14 @@ import {
   SpinnerIcon,
 } from "@/components/AI/ChatIcons";
 import PromptRefinementCard from "@/components/AI/PromptRefinementCard";
-import {
+import type { CoPilotErrorCard } from "@/lib/ai/coPilot";
+import type {
   buildRefinementOrchestratorLocks,
-  type PromptRefinementCardData,
+  PromptRefinementCardData,
 } from "@/lib/ai/orchestration/promptRefinement";
+import type { SequentialExecutionPlan } from "@/lib/ai/orchestration/turnOrchestrator";
+import type { PlanProposal } from "@/lib/designAgent/contracts";
+import { summarizePlanForReview } from "@/lib/designAgent/planReview";
 
 export type StagedVariationCard = {
   id: string;
@@ -260,9 +260,7 @@ export function SequentialPlanCard({
         fontSize: 11,
       }}
     >
-      <div
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <BoltIcon style={{ color: "#7c3aed" }} />
           <strong style={{ fontSize: 11.5, color: "#581c87" }}>
@@ -619,9 +617,7 @@ export interface ChatActionCardsProps {
   onGenerateFromRefinement?: (prompt: string) => void;
   onApplyRefinementToComposer?: (prompt: string) => void;
   onDismissRefinement?: () => void;
-  onRefinementLocksChange?: (
-    locks: ReturnType<typeof buildRefinementOrchestratorLocks>,
-  ) => void;
+  onRefinementLocksChange?: (locks: ReturnType<typeof buildRefinementOrchestratorLocks>) => void;
 
   pendingPlan?: PlanProposal | null;
   busy?: boolean;
@@ -667,15 +663,18 @@ export default function ChatActionCards({
 }: ChatActionCardsProps) {
   return (
     <>
-      {promptRefinementData && onGenerateFromRefinement && onApplyRefinementToComposer && onDismissRefinement && (
-        <PromptRefinementCard
-          data={promptRefinementData}
-          onGenerate={onGenerateFromRefinement}
-          onApplyToComposer={onApplyRefinementToComposer}
-          onDismiss={onDismissRefinement}
-          onLocksChange={onRefinementLocksChange}
-        />
-      )}
+      {promptRefinementData &&
+        onGenerateFromRefinement &&
+        onApplyRefinementToComposer &&
+        onDismissRefinement && (
+          <PromptRefinementCard
+            data={promptRefinementData}
+            onGenerate={onGenerateFromRefinement}
+            onApplyToComposer={onApplyRefinementToComposer}
+            onDismiss={onDismissRefinement}
+            onLocksChange={onRefinementLocksChange}
+          />
+        )}
 
       {pendingPlan && onApplyPendingPlan && onDiscardPendingPlan && (
         <ApprovalPlanProposalCard

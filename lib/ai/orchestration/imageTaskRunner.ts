@@ -16,29 +16,19 @@ import {
   getGenerationPreviewBounds,
   getVisibleWorldBounds,
 } from "@/lib/engine/generationPlacement";
-import { preloadDataURL, loadDataURL } from "@/lib/engine/imageCache";
+import { loadDataURL, preloadDataURL } from "@/lib/engine/imageCache";
 import { getProcessingPreviewById } from "@/lib/engine/processingPreview";
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
-import {
-  visionCaption,
-  visionDetect,
-  visionOcr,
-} from "@/lib/vision/visionEngine";
+import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 import { runBriefQualityGate } from "./briefQualityGate";
-import type {
-  CreativeOutputReview,
-  CriterionEvidenceStatus,
-} from "./creativeDirector";
+import type { CreativeOutputReview, CriterionEvidenceStatus } from "./creativeDirector";
 import { autoCropImageToTargetRatio } from "./imageAutoCrop";
 import { expandImageToAspectRatio } from "./imageExpand";
 import { deriveGeneratedImageName } from "./imageNaming";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
-import {
-  type GeneratedOutputAnalysis,
-  runGeneratedImageQualityGate,
-} from "./resultQualityGate";
+import { type GeneratedOutputAnalysis, runGeneratedImageQualityGate } from "./resultQualityGate";
 import {
   type AiTask,
   type AiTaskEvent,
@@ -109,9 +99,7 @@ export async function runContextAwareImageTask(
   assertAiTaskHarness(initialTask);
   registerAiTask(initialTask);
   if (initialTask.cloudConsentRequired && options.cloudConsent !== true) {
-    throw new Error(
-      "Explicit cloud consent is required before starting this task",
-    );
+    throw new Error("Explicit cloud consent is required before starting this task");
   }
   let task = initialTask;
   if (!task.history.some((event) => event.type === "intent.assessed")) {
@@ -121,8 +109,7 @@ export async function runContextAwareImageTask(
     dataUrl: string;
     mimeType?: "image/png" | "image/jpeg" | "image/webp";
   }>;
-  const effectiveRefs =
-    refs && refs.length > 0 ? refs : (task.selectedImages ?? []);
+  const effectiveRefs = refs && refs.length > 0 ? refs : (task.selectedImages ?? []);
   try {
     inputImages = resolveReferenceImages(effectiveRefs);
   } catch (error) {
@@ -130,17 +117,12 @@ export async function runContextAwareImageTask(
       type: "task.failed",
       reason: "Selected reference was stale before execution",
     });
-    task = transition(
-      task,
-      { type: "failed", reason: errorMessage(error) },
-      options,
-      {
-        stage: "failed",
-        message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
-        attempt: task.attempt,
-        quality: task.quality,
-      },
-    );
+    task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
+      stage: "failed",
+      message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
+      attempt: task.attempt,
+      quality: task.quality,
+    });
     throw attachTaskSnapshot(error, task);
   }
   const initialState = useEngine.getState();
@@ -150,8 +132,7 @@ export async function runContextAwareImageTask(
     slideId: initialState.currentSlideId,
     revision: initialState.doc.updatedAt,
   };
-  let dimensions =
-    task.requestedDimensions ?? resolveImageGenerationDimensions(task.prompt);
+  let dimensions = task.requestedDimensions ?? resolveImageGenerationDimensions(task.prompt);
   if (
     !task.requestedDimensions &&
     effectiveRefs.length > 0 &&
@@ -190,9 +171,7 @@ export async function runContextAwareImageTask(
   const sourceElement = resolveSourceElementBounds(effectiveRefs, initialSlide);
   const previewSize = {
     width:
-      dimensions.ratioClamped && dimensions.printWidth
-        ? dimensions.printWidth
-        : dimensions.width,
+      dimensions.ratioClamped && dimensions.printWidth ? dimensions.printWidth : dimensions.width,
     height:
       dimensions.ratioClamped && dimensions.printHeight
         ? dimensions.printHeight
@@ -295,10 +274,8 @@ export async function runContextAwareImageTask(
           // filled 3:1 first; after quality gates we side-panel expand + stitch
           // to the true print canvas (no empty bars, no over-crop).
           let generated = generatedRaw;
-          const targetRatio =
-            dimensions.width / Math.max(1, dimensions.height);
-          const generatedRatio =
-            generatedRaw.width / Math.max(1, generatedRaw.height);
+          const targetRatio = dimensions.width / Math.max(1, dimensions.height);
+          const generatedRatio = generatedRaw.width / Math.max(1, generatedRaw.height);
           if (Math.abs(generatedRatio - targetRatio) > 0.03) {
             const cropped = await autoCropImageToTargetRatio(
               generatedRaw.dataUrl,
@@ -325,9 +302,7 @@ export async function runContextAwareImageTask(
             outputCount: 1,
           });
           if (!technicalGate.passed) {
-            qualityRepairInstruction = buildQualityRepairInstruction(
-              technicalGate.blockers,
-            );
+            qualityRepairInstruction = buildQualityRepairInstruction(technicalGate.blockers);
             throw new Error(
               `Generated image failed the visual quality gate: ${technicalGate.blockers.join(" ")}`,
             );
@@ -342,9 +317,7 @@ export async function runContextAwareImageTask(
             submittedReferenceCount: inputImages.length,
           });
           if (!briefGate.passed) {
-            qualityRepairInstruction = buildQualityRepairInstruction(
-              briefGate.blockers,
-            );
+            qualityRepairInstruction = buildQualityRepairInstruction(briefGate.blockers);
             throw new Error(
               `Generated image failed the brief quality gate: ${briefGate.blockers.join(" ")}`,
             );
@@ -369,9 +342,7 @@ export async function runContextAwareImageTask(
             task.selectedImages.length > 0;
           if (requiresLocalOutputReview) {
             try {
-              outputAnalysis = await (
-                options.analyzeOutput ?? analyzeGeneratedOutput
-              )(
+              outputAnalysis = await (options.analyzeOutput ?? analyzeGeneratedOutput)(
                 generated.dataUrl,
                 generated.fileId,
                 generated.width,
@@ -379,8 +350,7 @@ export async function runContextAwareImageTask(
                 executionSignal,
                 {
                   needDetection: Boolean(
-                    task.requiredSubjects?.length ||
-                    task.selectedImages.length > 0,
+                    task.requiredSubjects?.length || task.selectedImages.length > 0,
                   ),
                   needOcr: Boolean(task.requiredText?.trim()),
                 },
@@ -397,8 +367,7 @@ export async function runContextAwareImageTask(
           } else {
             context.update({
               progress: 0.7,
-              message:
-                "ไม่มี hard semantic constraint จึงใช้การตรวจทางเทคนิคต่อ",
+              message: "ไม่มี hard semantic constraint จึงใช้การตรวจทางเทคนิคต่อ",
             });
           }
           const semanticGate = runGeneratedImageQualityGate({
@@ -413,9 +382,7 @@ export async function runContextAwareImageTask(
             technicalFallback,
           });
           if (!semanticGate.passed) {
-            qualityRepairInstruction = buildQualityRepairInstruction(
-              semanticGate.blockers,
-            );
+            qualityRepairInstruction = buildQualityRepairInstruction(semanticGate.blockers);
             throw new Error(
               `Generated image failed the semantic quality gate: ${semanticGate.blockers.join(" ")}`,
             );
@@ -429,17 +396,11 @@ export async function runContextAwareImageTask(
                 let reviewTimer: ReturnType<typeof setTimeout> | undefined;
                 const reviewTimeoutPromise = new Promise<never>((_, reject) => {
                   reviewTimer = setTimeout(() => {
-                    reject(
-                      new Error("Creative Director review pass timed out"),
-                    );
+                    reject(new Error("Creative Director review pass timed out"));
                   }, REVIEW_TIMEOUT_MS);
-                  executionSignal.addEventListener(
-                    "abort",
-                    () => clearTimeout(reviewTimer),
-                    {
-                      once: true,
-                    },
-                  );
+                  executionSignal.addEventListener("abort", () => clearTimeout(reviewTimer), {
+                    once: true,
+                  });
                 });
                 const reviewExecutionPromise = (async () => {
                   try {
@@ -453,10 +414,7 @@ export async function runContextAwareImageTask(
                     if (reviewTimer) clearTimeout(reviewTimer);
                   }
                 })();
-                directorReview = await Promise.race([
-                  reviewExecutionPromise,
-                  reviewTimeoutPromise,
-                ]);
+                directorReview = await Promise.race([reviewExecutionPromise, reviewTimeoutPromise]);
               } catch (reviewError) {
                 if (isAbortError(reviewError)) throw reviewError;
                 console.warn(
@@ -468,8 +426,7 @@ export async function runContextAwareImageTask(
                   passed: false,
                   status: "unavailable",
                   reason:
-                    (reviewError as Error).message ||
-                    "Creative Director review pass unavailable",
+                    (reviewError as Error).message || "Creative Director review pass unavailable",
                   criteriaEvidence: criteria.map((criterion) => ({
                     criterion,
                     status: "unavailable" as CriterionEvidenceStatus,
@@ -573,15 +530,9 @@ export async function runContextAwareImageTask(
           });
           const state = useEngine.getState();
           const slide = state.currentSlide();
-          assertCommitTarget(
-            state,
-            targetSnapshot,
-            refs,
-            Boolean(task.imageRun),
-          );
+          assertCommitTarget(state, targetSnapshot, refs, Boolean(task.imageRun));
           if (!slide) throw new Error("ไม่พบ Canvas ที่กำลังใช้งาน");
-          if (slide.layers.length === 0)
-            throw new Error("ไม่พบ Layer สำหรับวางผลลัพธ์บน Canvas");
+          if (slide.layers.length === 0) throw new Error("ไม่พบ Layer สำหรับวางผลลัพธ์บน Canvas");
           const historyBeforeCommit = state.history.past.length;
           const currentPreview = getProcessingPreviewById(context.id);
           const currentViewport = getCanvasViewport() ?? viewport;
@@ -638,8 +589,7 @@ export async function runContextAwareImageTask(
             });
             task = appendAiTaskEvent(task, {
               type: "task.succeeded",
-              summary:
-                "Generated image passed quality, preload, and staged for user preview",
+              summary: "Generated image passed quality, preload, and staged for user preview",
             });
             task = transition(task, { type: "succeeded" }, options, {
               stage: "succeeded",
@@ -662,10 +612,7 @@ export async function runContextAwareImageTask(
             return;
           }
 
-          const elementName = deriveGeneratedImageName(
-            task.summary,
-            task.prompt,
-          );
+          const elementName = deriveGeneratedImageName(task.summary, task.prompt);
           const element = createImage({
             x: finalBounds.x,
             y: finalBounds.y,
@@ -681,22 +628,15 @@ export async function runContextAwareImageTask(
           const afterCommit = useEngine.getState();
           const inserted = afterCommit
             .currentSlide()
-            ?.elements.some(
-              (candidate) =>
-                candidate.id === element.id && !candidate.isDeleted,
-            );
-          if (
-            !inserted ||
-            afterCommit.history.past.length !== historyBeforeCommit + 1
-          ) {
+            ?.elements.some((candidate) => candidate.id === element.id && !candidate.isDeleted);
+          if (!inserted || afterCommit.history.past.length !== historyBeforeCommit + 1) {
             throw new Error("Canvas commit was not applied atomically");
           }
           task = appendAiTaskEvent(task, { type: "commit.completed", attempt });
           state.selectOnly([element.id]);
           task = appendAiTaskEvent(task, {
             type: "task.succeeded",
-            summary:
-              "Generated image passed quality, preload, and atomic commit checks",
+            summary: "Generated image passed quality, preload, and atomic commit checks",
           });
           task = transition(task, { type: "succeeded" }, options, {
             stage: "succeeded",
@@ -719,9 +659,7 @@ export async function runContextAwareImageTask(
           if (isAbortError(error)) throw error;
           const kind = classifyFailure(error);
           if (kind === "quality" && !qualityRepairInstruction) {
-            qualityRepairInstruction = buildQualityRepairInstruction([
-              errorMessage(error),
-            ]);
+            qualityRepairInstruction = buildQualityRepairInstruction([errorMessage(error)]);
           }
           if (kind === "provider_error") {
             if (isAlreadyOrchestratedPrompt(task.prompt)) {
@@ -731,9 +669,7 @@ export async function runContextAwareImageTask(
               const streamlined = streamlinePromptForImageGen(task.prompt);
               qualityRepairInstruction = `Streamlined prompt: ${streamlined}`;
             } else {
-              const minimal =
-                cleanImagePrompt(task.prompt) ||
-                "flat 2D graphic design artwork";
+              const minimal = cleanImagePrompt(task.prompt) || "flat 2D graphic design artwork";
               qualityRepairInstruction = `Streamlined prompt: ${minimal}`;
             }
           }
@@ -754,10 +690,7 @@ export async function runContextAwareImageTask(
             action: recovery.action,
             reason: recovery.reason,
           });
-          if (
-            recovery.action === "outcome-unknown" ||
-            recovery.action === "resume"
-          ) {
+          if (recovery.action === "outcome-unknown" || recovery.action === "resume") {
             const predictionId = predictionIdFromError(error);
             task = appendAiTaskEvent(task, {
               type: "task.outcome-unknown",
@@ -776,8 +709,7 @@ export async function runContextAwareImageTask(
               options,
               {
                 stage: "outcome-unknown",
-                message:
-                  "ผลลัพธ์จาก AI provider ยังยืนยันไม่ได้ จึงไม่สร้างคำขอซ้ำ",
+                message: "ผลลัพธ์จาก AI provider ยังยืนยันไม่ได้ จึงไม่สร้างคำขอซ้ำ",
                 attempt,
                 quality: task.quality,
               },
@@ -792,31 +724,21 @@ export async function runContextAwareImageTask(
             throw outcomeError;
           }
           if (recovery.action === "retry") {
-            task = transition(
-              task,
-              { type: "failed", reason: errorMessage(error) },
-              options,
-              {
-                stage: "failed",
-                message: `ครั้งที่ ${attempt} ไม่ผ่าน: ${recovery.reason}`,
-                attempt,
-                quality: task.quality,
-              },
-            );
-            task = transition(
-              task,
-              { type: "retry", reason: recovery.reason },
-              options,
-              {
-                stage: "retrying",
-                message:
-                  kind === "provider_error"
-                    ? `รอบก่อนหน้าไม่สำเร็จ ระบบกำลังปรับปรุงคำขออัตโนมัติและสร้างภาพใหม่ (ครั้งที่ ${recovery.nextAttempt}/${task.maxAttempts})…`
-                    : `กำลังแก้ปัญหาและลองใหม่: ${recovery.reason}`,
-                attempt,
-                quality: task.quality,
-              },
-            );
+            task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
+              stage: "failed",
+              message: `ครั้งที่ ${attempt} ไม่ผ่าน: ${recovery.reason}`,
+              attempt,
+              quality: task.quality,
+            });
+            task = transition(task, { type: "retry", reason: recovery.reason }, options, {
+              stage: "retrying",
+              message:
+                kind === "provider_error"
+                  ? `รอบก่อนหน้าไม่สำเร็จ ระบบกำลังปรับปรุงคำขออัตโนมัติและสร้างภาพใหม่ (ครั้งที่ ${recovery.nextAttempt}/${task.maxAttempts})…`
+                  : `กำลังแก้ปัญหาและลองใหม่: ${recovery.reason}`,
+              attempt,
+              quality: task.quality,
+            });
             context.update({
               progress: 0,
               message:
@@ -830,17 +752,12 @@ export async function runContextAwareImageTask(
             type: "task.failed",
             reason: "Task execution failed before commit",
           });
-          task = transition(
-            task,
-            { type: "failed", reason: errorMessage(error) },
-            options,
-            {
-              stage: "failed",
-              message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
-              attempt,
-              quality: task.quality,
-            },
-          );
+          task = transition(task, { type: "failed", reason: errorMessage(error) }, options, {
+            stage: "failed",
+            message: `Task ไม่สำเร็จ: ${errorMessage(error)}`,
+            attempt,
+            quality: task.quality,
+          });
           throw attachTaskSnapshot(error, task);
         }
       }
@@ -855,17 +772,12 @@ export async function runContextAwareImageTask(
         type: "task.cancelled",
         reason: "Task cancelled before commit",
       });
-      task = transition(
-        task,
-        { type: "cancelled", reason: "ผู้ใช้ยกเลิก" },
-        options,
-        {
-          stage: "cancelled",
-          message: "ยกเลิก Task แล้ว และไม่มีการเปลี่ยนแปลงบน Canvas",
-          attempt: task.attempt,
-          quality: task.quality,
-        },
-      );
+      task = transition(task, { type: "cancelled", reason: "ผู้ใช้ยกเลิก" }, options, {
+        stage: "cancelled",
+        message: "ยกเลิก Task แล้ว และไม่มีการเปลี่ยนแปลงบน Canvas",
+        attempt: task.attempt,
+        quality: task.quality,
+      });
       throw attachTaskSnapshot(error, task);
     }
     throw error;
@@ -875,23 +787,15 @@ export async function runContextAwareImageTask(
       type: "task.cancelled",
       reason: "Task cancelled before queue execution",
     });
-    task = transition(
-      task,
-      { type: "cancelled", reason: "ผู้ใช้ยกเลิกก่อนเริ่มงาน" },
-      options,
-      {
-        stage: "cancelled",
-        message: "ยกเลิก Task ที่รอคิวแล้ว และไม่มีการเปลี่ยนแปลงบน Canvas",
-        attempt: task.attempt,
-        quality: task.quality,
-      },
-    );
+    task = transition(task, { type: "cancelled", reason: "ผู้ใช้ยกเลิกก่อนเริ่มงาน" }, options, {
+      stage: "cancelled",
+      message: "ยกเลิก Task ที่รอคิวแล้ว และไม่มีการเปลี่ยนแปลงบน Canvas",
+      attempt: task.attempt,
+      quality: task.quality,
+    });
     throw attachTaskSnapshot(createAbortError(), task);
   }
-  if (!committed)
-    throw lastError instanceof Error
-      ? lastError
-      : new Error("AI Task ไม่ได้สร้างผลลัพธ์");
+  if (!committed) throw lastError instanceof Error ? lastError : new Error("AI Task ไม่ได้สร้างผลลัพธ์");
   return committed;
 }
 
@@ -904,9 +808,7 @@ function resolveReferenceImages(
   if (refs.length === 0) return [];
   const slide = useEngine.getState().currentSlide();
   return refs.map((ref) => {
-    const element = slide?.elements.find(
-      (candidate) => candidate.id === ref.objectId,
-    );
+    const element = slide?.elements.find((candidate) => candidate.id === ref.objectId);
     const elFileId =
       element && "fileId" in element
         ? (element as any).fileId
@@ -914,15 +816,11 @@ function resolveReferenceImages(
           ? (element as any).imageFileId
           : undefined;
     if (
-      (element?.type !== "image" &&
-        element?.type !== "bookMockup" &&
-        element?.type !== "frame") ||
+      (element?.type !== "image" && element?.type !== "bookMockup" && element?.type !== "frame") ||
       element?.version !== ref.elementVersion ||
       elFileId !== ref.fileId
     ) {
-      throw new Error(
-        `selected image changed before execution: ${ref.displayName}`,
-      );
+      throw new Error(`selected image changed before execution: ${ref.displayName}`);
     }
     const composerRef: ComposerImageRef =
       "sourceWidth" in ref
@@ -939,9 +837,11 @@ function resolveReferenceImages(
             angle: element.angle ?? 0,
           };
     const rendered = renderVisibleReference(composerRef);
-    const mimeType = rendered.dataUrl.match(
-      /^data:(image\/(?:png|jpeg|webp));base64,/u,
-    )?.[1] as "image/png" | "image/jpeg" | "image/webp" | undefined;
+    const mimeType = rendered.dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,/u)?.[1] as
+      | "image/png"
+      | "image/jpeg"
+      | "image/webp"
+      | undefined;
     return { dataUrl: rendered.dataUrl, ...(mimeType ? { mimeType } : {}) };
   });
 }
@@ -969,16 +869,12 @@ function assertCommitTarget(
     state.currentSlideId !== snapshot.slideId ||
     (!allowPeerDocRevision && state.doc.updatedAt !== snapshot.revision)
   ) {
-    throw new Error(
-      "Canvas target changed before commit; please resend the task",
-    );
+    throw new Error("Canvas target changed before commit; please resend the task");
   }
   const slide = state.currentSlide();
   if (!slide) throw new Error("Canvas target disappeared before commit");
   for (const ref of refs) {
-    const element = slide.elements.find(
-      (candidate) => candidate.id === ref.objectId,
-    );
+    const element = slide.elements.find((candidate) => candidate.id === ref.objectId);
     const elFileId =
       element && "fileId" in element
         ? (element as any).fileId
@@ -986,15 +882,11 @@ function assertCommitTarget(
           ? (element as any).imageFileId
           : undefined;
     if (
-      (element?.type !== "image" &&
-        element?.type !== "bookMockup" &&
-        element?.type !== "frame") ||
+      (element?.type !== "image" && element?.type !== "bookMockup" && element?.type !== "frame") ||
       element.version !== ref.elementVersion ||
       elFileId !== ref.fileId
     ) {
-      throw new Error(
-        `selected image changed before commit: ${ref.displayName}`,
-      );
+      throw new Error(`selected image changed before commit: ${ref.displayName}`);
     }
   }
 }
@@ -1016,9 +908,7 @@ export function classifyFailure(error: unknown): RecoveryFailureKind {
     return "safety";
   if (
     message.includes("provider") &&
-    (message.includes("credential") ||
-      message.includes("auth") ||
-      message.includes("key"))
+    (message.includes("credential") || message.includes("auth") || message.includes("key"))
   )
     return "auth";
   if (
@@ -1027,8 +917,7 @@ export function classifyFailure(error: unknown): RecoveryFailureKind {
     message.includes("commit was not applied")
   )
     return "invalid_input";
-  if (message.includes("invalid") || message.includes("unsupported"))
-    return "invalid_input";
+  if (message.includes("invalid") || message.includes("unsupported")) return "invalid_input";
   if (message.includes("budget") || message.includes("cost")) return "budget";
   if (
     message.includes("quality gate") ||
@@ -1053,11 +942,7 @@ export function classifyFailure(error: unknown): RecoveryFailureKind {
     message.includes("ai image studio failed")
   )
     return "provider_error";
-  if (
-    message.includes("network") ||
-    message.includes("reach") ||
-    message.includes("timeout")
-  )
+  if (message.includes("network") || message.includes("reach") || message.includes("timeout"))
     return "network";
   return "capability";
 }
@@ -1065,18 +950,13 @@ export function classifyFailure(error: unknown): RecoveryFailureKind {
 function buildQualityRepairInstruction(blockers: readonly string[]): string {
   const diagnosis = blockers
     .join(" ")
-    .replace(
-      /data:image\/[^\s]+|https?:\/\/[^\s]+|bearer\s+\S+/giu,
-      "[REDACTED]",
-    )
+    .replace(/data:image\/[^\s]+|https?:\/\/[^\s]+|bearer\s+\S+/giu, "[REDACTED]")
     .slice(0, 360);
   return `Regenerate with a materially different composition and correct the prior quality-gate finding: ${diagnosis}`;
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
+  return error instanceof Error ? error.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
 }
 
 async function analyzeGeneratedOutput(
@@ -1109,9 +989,7 @@ async function analyzeGeneratedOutput(
 
       const [caption, detection, visibleText] = await Promise.all([
         visionCaption(dataURL, "normal"),
-        needDetection
-          ? visionDetect(dataURL)
-          : Promise.resolve({ objects: [] }),
+        needDetection ? visionDetect(dataURL) : Promise.resolve({ objects: [] }),
         needOcr ? visionOcr(dataURL) : Promise.resolve(""),
       ]);
       throwIfAborted(signal);
@@ -1150,12 +1028,9 @@ function attachTaskSnapshot(error: unknown, task: AiTask): Error {
 }
 
 function createOutcomeUnknownError(task: AiTask, predictionId?: string): Error {
-  const error = new Error(
-    "AI provider result is uncertain; no duplicate request was created.",
-  );
+  const error = new Error("AI provider result is uncertain; no duplicate request was created.");
   error.name = "OutcomeUnknownError";
-  if (predictionId)
-    Object.defineProperty(error, "predictionId", { value: predictionId });
+  if (predictionId) Object.defineProperty(error, "predictionId", { value: predictionId });
   return attachTaskSnapshot(error, task);
 }
 
@@ -1165,16 +1040,13 @@ function createAbortError(): Error {
   return error;
 }
 
-function isOutcomeUnknownError(
-  error: unknown,
-): error is Error & { predictionId?: string } {
+function isOutcomeUnknownError(error: unknown): error is Error & { predictionId?: string } {
   return error instanceof Error && error.name === "OutcomeUnknownError";
 }
 
 function predictionIdFromError(error: unknown): string | undefined {
   if (!isOutcomeUnknownError(error)) return undefined;
-  return typeof error.predictionId === "string" &&
-    error.predictionId.length <= 256
+  return typeof error.predictionId === "string" && error.predictionId.length <= 256
     ? error.predictionId
     : undefined;
 }
@@ -1212,16 +1084,12 @@ export function computeMultiImagePlacement(
     return baseBounds;
   }
 
-  const count = Math.max(
-    1,
-    Math.min(5, Math.floor(placement.requestedOutputCount)),
-  );
+  const count = Math.max(1, Math.min(5, Math.floor(placement.requestedOutputCount)));
   const rawIndex = placement.outputIndex ?? 1;
   const zeroIndex = rawIndex >= 1 ? rawIndex - 1 : rawIndex;
   const index = Math.max(0, Math.min(count - 1, Math.floor(zeroIndex)));
 
-  const aspectRatio =
-    baseBounds.height > 0 ? baseBounds.width / baseBounds.height : 1;
+  const aspectRatio = baseBounds.height > 0 ? baseBounds.width / baseBounds.height : 1;
   const padding = 32;
   const gap = count > 3 ? 20 : 28;
 
@@ -1247,10 +1115,8 @@ export function computeMultiImagePlacement(
   const totalRowW = count * targetW + totalGap;
   const centerX = baseBounds.x + baseBounds.width / 2;
   const centerY = baseBounds.y + baseBounds.height / 2;
-  const startX =
-    layout === "anchor" ? baseBounds.x : centerX - totalRowW / 2;
-  const startY =
-    layout === "anchor" ? baseBounds.y : centerY - targetH / 2;
+  const startX = layout === "anchor" ? baseBounds.x : centerX - totalRowW / 2;
+  const startY = layout === "anchor" ? baseBounds.y : centerY - targetH / 2;
 
   const x = Math.round(startX + index * (targetW + gap));
   const y = Math.round(startY);

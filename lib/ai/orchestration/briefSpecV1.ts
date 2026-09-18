@@ -17,8 +17,20 @@ export type ReferenceImageType =
 
 export interface BriefTaskSpec {
   type: "image_generation" | "image_edit" | "image_variation";
-  use_case: "commercial_advertising" | "editorial" | "product_showcase" | "social_media" | "personal";
-  output_type: "poster" | "publishing_poster" | "banner" | "shelf_sign" | "artwork" | "illustration" | "photo";
+  use_case:
+    | "commercial_advertising"
+    | "editorial"
+    | "product_showcase"
+    | "social_media"
+    | "personal";
+  output_type:
+    | "poster"
+    | "publishing_poster"
+    | "banner"
+    | "shelf_sign"
+    | "artwork"
+    | "illustration"
+    | "photo";
 }
 
 export interface BriefSubjectSpec {

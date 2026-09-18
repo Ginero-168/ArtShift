@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { getObjectContextIconName } from "@/components/Canvas/objectContextIconRegistry";
 import { createImage } from "@/lib/engine/factory";
+import { mergeSelectedImages } from "@/lib/engine/mergeElements";
 import { useEngine } from "@/lib/engine/store";
 import { ENGINE_SCHEMA_VERSION } from "@/lib/engine/types";
-import { getObjectContextIconName } from "@/components/Canvas/objectContextIconRegistry";
-import { mergeSelectedImages } from "@/lib/engine/mergeElements";
 
 describe("merge elements pipeline", () => {
   beforeEach(() => {

@@ -16,9 +16,9 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
     const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
 
     expect(barSource).toContain('title: "Image Analyzer (วิเคราะห์ภาพต้นฉบับ)"');
-    expect(barSource).toContain("analysisAction.status = \"success\";");
+    expect(barSource).toContain('analysisAction.status = "success";');
     expect(barSource).toContain('title: "Creative Director (Gemini 3 Flash)"');
-    expect(barSource).toContain("directorAction.status = \"success\";");
+    expect(barSource).toContain('directorAction.status = "success";');
     expect(barSource).toContain("const imageTaskAction: SubAgentActionLog = {");
     expect(barSource).toContain("formatHumanThoughtText");
     expect(barSource).toContain("buildImageCompletionSummary");

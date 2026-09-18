@@ -29,10 +29,7 @@ describe("Chat Message Copy & Clean Paste with Name Tag", () => {
   });
 
   it("builds copy text with Name Tag prepended if image was attached via selection", () => {
-    const copyText = buildPromptWithTagsForCopy(
-      "ปรับโทนแสงให้เป็นช่วง Golden hour",
-      [sampleRef],
-    );
+    const copyText = buildPromptWithTagsForCopy("ปรับโทนแสงให้เป็นช่วง Golden hour", [sampleRef]);
     expect(copyText).toBe("@[ภาพทิวทัศน์ภูเขา:img-mountain-01] ปรับโทนแสงให้เป็นช่วง Golden hour");
   });
 
@@ -94,7 +91,7 @@ describe("Chat Message Copy & Clean Paste with Name Tag", () => {
   it("verifies ChatIcons contains ChatCopyIcon with overlapping rectangles", () => {
     const iconsSource = readFileSync("components/AI/ChatIcons.tsx", "utf8");
     expect(iconsSource).toContain("export function ChatCopyIcon");
-    expect(iconsSource).toContain("<rect width=\"12.5\" height=\"12.5\"");
+    expect(iconsSource).toContain('<rect width="12.5" height="12.5"');
   });
 
   it("verifies ChatThread renders copy message button with ChatCopyIcon, white background, and data-testid", () => {
@@ -109,13 +106,13 @@ describe("Chat Message Copy & Clean Paste with Name Tag", () => {
   it("verifies InlineTagEditor strips formatting on paste and parses Name Tags", () => {
     const editorSource = readFileSync("components/AI/InlineTagEditor.tsx", "utf8");
     expect(editorSource).toContain("onPaste={handlePaste}");
-    expect(editorSource).toContain("e.clipboardData.getData(\"text/plain\")");
+    expect(editorSource).toContain('e.clipboardData.getData("text/plain")');
     expect(editorSource).toContain(".artshift-inline-editor *");
     expect(editorSource).toContain("color: inherit !important;");
   });
 
   it("verifies InlineTagRenderer allows text selection on tag pills so Name Tag is not skipped", () => {
     const rendererSource = readFileSync("components/AI/InlineTagRenderer.tsx", "utf8");
-    expect(rendererSource).toContain("userSelect: \"text\"");
+    expect(rendererSource).toContain('userSelect: "text"');
   });
 });

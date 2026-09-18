@@ -85,10 +85,12 @@ describe("appearance Phase 1 foundation", () => {
   });
 
   it("exposes capabilities by element type", () => {
-    expect(appearanceCapabilities(createRect({ x: 0, y: 0, width: 1, height: 1 })).multipleFills).toBe(
+    expect(
+      appearanceCapabilities(createRect({ x: 0, y: 0, width: 1, height: 1 })).multipleFills,
+    ).toBe(true);
+    expect(appearanceCapabilities(createText({ x: 0, y: 0, width: 40, text: "Hi" })).fills).toBe(
       true,
     );
-    expect(appearanceCapabilities(createText({ x: 0, y: 0, width: 40, text: "Hi" })).fills).toBe(true);
     const image = createImage({
       x: 0,
       y: 0,

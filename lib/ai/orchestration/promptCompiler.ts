@@ -28,7 +28,10 @@ export function compileBriefToPrompt(brief: ImageGenerationBriefV1): string {
   if (brief.subject.primary_subject) {
     conceptLines.push(brief.subject.primary_subject + ".");
   }
-  if (brief.visual_direction.concept && !conceptLines.some((l) => l.includes(brief.visual_direction.concept))) {
+  if (
+    brief.visual_direction.concept &&
+    !conceptLines.some((l) => l.includes(brief.visual_direction.concept))
+  ) {
     conceptLines.push(`Centered around ${brief.visual_direction.concept}.`);
   }
   sections.push({ title: "MAIN CONCEPT", lines: conceptLines });
@@ -140,7 +143,5 @@ export function compileBriefToPrompt(brief: ImageGenerationBriefV1): string {
   sections.push({ title: "QUALITY", lines: qualityLines });
 
   // Compile formatted output with double linebreaks between sections
-  return sections
-    .map((sec) => `[${sec.title}]\n\n${sec.lines.join("\n\n")}`)
-    .join("\n\n\n");
+  return sections.map((sec) => `[${sec.title}]\n\n${sec.lines.join("\n\n")}`).join("\n\n\n");
 }

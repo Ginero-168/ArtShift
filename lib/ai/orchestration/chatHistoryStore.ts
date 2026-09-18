@@ -158,7 +158,9 @@ export function clearChatHistorySnapshot(projectId: string): void {
   }
 }
 
-export function readProjectIdFromPath(pathname = typeof window !== "undefined" ? window.location.pathname : ""): string {
+export function readProjectIdFromPath(
+  pathname = typeof window !== "undefined" ? window.location.pathname : "",
+): string {
   const match = pathname.match(/\/projects\/([^/]+)\/editor(?:\/|$)/);
   return match?.[1] ? decodeURIComponent(match[1]) : "";
 }

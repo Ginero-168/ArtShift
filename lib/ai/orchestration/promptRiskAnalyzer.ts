@@ -87,9 +87,7 @@ export function analyzePromptRisk(
   // 1.2 Minors / Child Safety
   const hasChildMention = /(?:child|kid|minor|baby|infant|toddler|เด็ก|ทารก|เยาวชน)/i.test(lower);
   const hasSexualizedOrExplicit =
-    /(?:nude|naked|erotic|sexual|nsfw|โป๊|เปลือย|แก้ผ้า|อนาจาร|fetish|lingerie|underwear)/i.test(
-      lower,
-    );
+    /(?:nude|naked|erotic|sexual|nsfw|โป๊|เปลือย|แก้ผ้า|อนาจาร|fetish|lingerie|underwear)/i.test(lower);
   if (hasChildMention && hasSexualizedOrExplicit) {
     issues.push({
       category: "minors",
@@ -219,7 +217,9 @@ export function analyzePromptRisk(
       severity: "low",
       text: "Generic logo synthesis requested inside diffusion model",
     });
-    actions.push("Reserve clean area for vector logo composite rather than diffusion text rendering");
+    actions.push(
+      "Reserve clean area for vector logo composite rather than diffusion text rendering",
+    );
     baseRiskScore += 15;
   }
 
@@ -242,14 +242,16 @@ export function analyzePromptRisk(
   }
 
   // 2.3 Artist Style
-  const artistStyleMatch =
-    /(?:in the style of|style of|สไตล์ของ|ภาพวาดแบบ)\s*([^,.\n]+)/iu.exec(
-      prompt,
-    );
+  const artistStyleMatch = /(?:in the style of|style of|สไตล์ของ|ภาพวาดแบบ)\s*([^,.\n]+)/iu.exec(
+    prompt,
+  );
   if (artistStyleMatch) {
     const candidateArtist = artistStyleMatch[1].trim().toLowerCase();
     const isKnownArtist = KNOWN_ARTISTS.some((a) => candidateArtist.includes(a));
-    if (isKnownArtist || /(?:greg|mucha|ghibli|rutkowski|artgerm|picasso|van gogh)/i.test(candidateArtist)) {
+    if (
+      isKnownArtist ||
+      /(?:greg|mucha|ghibli|rutkowski|artgerm|picasso|van gogh)/i.test(candidateArtist)
+    ) {
       issues.push({
         category: "artist_style",
         severity: "low",
@@ -267,9 +269,7 @@ export function analyzePromptRisk(
   // -------------------------------------------------------------
   const containsThaiText = /[\u0E00-\u0E7F]/.test(prompt);
   const containsLongQuotes = /["“'「][^"”'」]{6,}["”'」]/.test(prompt);
-  const containsCtaOrPrice = /(?:ราคา|บาท|\bthb\b|\bfree\b|cta|ซื้อเลย|ลดราคา|isbn|วันที่)/i.test(
-    lower,
-  );
+  const containsCtaOrPrice = /(?:ราคา|บาท|\bthb\b|\bfree\b|cta|ซื้อเลย|ลดราคา|isbn|วันที่)/i.test(lower);
   const wantsBubble = /(?:bubble|บอลลูน|กล่องคำพูด)/i.test(lower);
 
   if (containsThaiText || containsLongQuotes || containsCtaOrPrice || wantsBubble) {
@@ -287,9 +287,7 @@ export function analyzePromptRisk(
   // 4. Real Persons / Public Figures
   // -------------------------------------------------------------
   const hasCelebrityOrPublicFigure =
-    /(?:elon musk|donald trump|taylor swift|นายกรัฐมนตรี|บิ๊กตู่|ทักษิณ|ลิซ่า|lisa blackpink)/i.test(
-      lower,
-    );
+    /(?:elon musk|donald trump|taylor swift|นายกรัฐมนตรี|บิ๊กตู่|ทักษิณ|ลิซ่า|lisa blackpink)/i.test(lower);
   if (hasCelebrityOrPublicFigure) {
     issues.push({
       category: "real_person",

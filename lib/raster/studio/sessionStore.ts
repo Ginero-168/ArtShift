@@ -1,12 +1,12 @@
 "use client";
 
+import { create } from "zustand";
 import type { Tool } from "@/lib/engine/store";
+import type { ImageElement } from "@/lib/engine/types";
 import {
   buildRasterStudioOpenPayload,
   type RasterStudioOpenPayload,
 } from "@/lib/raster/studio/types";
-import type { ImageElement } from "@/lib/engine/types";
-import { create } from "zustand";
 
 export type StudioRasterTool =
   | "rasterBrush"

@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { convertImageToBrief } from "@/lib/ai/briefGenerator";
+import { IMAGE_MIX_PROMPT, requestCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import { unionBBox } from "@/lib/engine/bounds";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
@@ -11,11 +13,6 @@ import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/o
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
-import { convertImageToBrief } from "@/lib/ai/briefGenerator";
-import {
-  IMAGE_MIX_PROMPT,
-  requestCoPilotExternalTurn,
-} from "@/lib/ai/coPilotRequestBus";
 import { nextThaiFontCssFamily } from "@/lib/fonts";
 import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import { getObjectContextIcon } from "./objectContextIcons";
@@ -285,11 +282,16 @@ export default function ObjectContextBar({
     if (selectionGroups.canUngroup) {
       controls.push(action("Ungroup", () => ungroupElements(ids)));
     }
-    controls.push(action(mergeBusy ? "Merging..." : "Merge", () => void handleMergeElements(), false, mergeBusy));
+    controls.push(
+      action(
+        mergeBusy ? "Merging..." : "Merge",
+        () => void handleMergeElements(),
+        false,
+        mergeBusy,
+      ),
+    );
     if (selectedImageIds.length >= 2) {
-      controls.push(
-        action(mixBusy ? "Mixing..." : "Mix", () => handleMixImages(), false, mixBusy),
-      );
+      controls.push(action(mixBusy ? "Mixing..." : "Mix", () => handleMixImages(), false, mixBusy));
     }
     if (allShapes && !selectionGroups.isSingleGroup) {
       controls.push(action("Unite", () => applyBooleanOperation("union")));
@@ -300,9 +302,7 @@ export default function ObjectContextBar({
       controls.push(action("Divide", () => applyBooleanOperation("divide")));
     }
   } else if (first.type === "image") {
-    controls.push(
-      action("Edit Raster", () => openRasterStudioForElement(first)),
-    );
+    controls.push(action("Edit Raster", () => openRasterStudioForElement(first)));
     controls.push(
       action(IMAGE_ACTION_LABELS.upscale, toggleUpscale, false, activeImageTool === "upscale"),
     );

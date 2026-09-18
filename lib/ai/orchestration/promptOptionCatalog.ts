@@ -32,7 +32,15 @@ export type CatalogOption = {
   modifier: string;
   preview: OptionPreview;
   /** Which variant axis this option belongs to (methodology Layer 2) */
-  axis?: "tone" | "background" | "camera" | "style" | "mood" | "structure" | "density" | "signature";
+  axis?:
+    | "tone"
+    | "background"
+    | "camera"
+    | "style"
+    | "mood"
+    | "structure"
+    | "density"
+    | "signature";
 };
 
 /** Layer-1 Shared Anchors inferred from the brief (locked — not pickable variants). */

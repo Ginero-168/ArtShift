@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
+import { describe, expect, it } from "vitest";
 import { getObjectContextIconName } from "@/components/Canvas/objectContextIconRegistry";
 
 describe("ObjectContextBar Hook Rules and Convert to Brief Action", () => {
@@ -10,12 +10,16 @@ describe("ObjectContextBar Hook Rules and Convert to Brief Action", () => {
     expect(earlyReturnIndex).toBeGreaterThan(0);
 
     // briefBusy useState hook must appear before the early return statement
-    const briefBusyHookIndex = fileContent.indexOf("const [briefBusy, setBriefBusy] = useState(false);");
+    const briefBusyHookIndex = fileContent.indexOf(
+      "const [briefBusy, setBriefBusy] = useState(false);",
+    );
     expect(briefBusyHookIndex).toBeGreaterThan(0);
     expect(briefBusyHookIndex).toBeLessThan(earlyReturnIndex);
 
     // activeImageTool useState hook must also appear before early return
-    const activeToolIndex = fileContent.indexOf("const [activeImageTool, setActiveImageTool] = useState");
+    const activeToolIndex = fileContent.indexOf(
+      "const [activeImageTool, setActiveImageTool] = useState",
+    );
     expect(activeToolIndex).toBeGreaterThan(0);
     expect(activeToolIndex).toBeLessThan(earlyReturnIndex);
 
@@ -35,8 +39,12 @@ describe("ObjectContextBar Hook Rules and Convert to Brief Action", () => {
   });
 
   it("places Convert to Brief action after Vectorize on image selection toolbar", () => {
-    const vectorizeIndex = fileContent.indexOf("controls.push(\n      action(VECTORIZE_GROUP_LABEL");
-    const briefIndex = fileContent.indexOf('controls.push(\n      action(\n        briefBusy ? "Creating Brief..." : "Convert to Brief"');
+    const vectorizeIndex = fileContent.indexOf(
+      "controls.push(\n      action(VECTORIZE_GROUP_LABEL",
+    );
+    const briefIndex = fileContent.indexOf(
+      'controls.push(\n      action(\n        briefBusy ? "Creating Brief..." : "Convert to Brief"',
+    );
     expect(vectorizeIndex).toBeGreaterThan(0);
     expect(briefIndex).toBeGreaterThan(vectorizeIndex);
   });

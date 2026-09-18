@@ -11,7 +11,10 @@ export type ParsedVisionResponse = {
 export function parseVisionResponse(raw: string): ParsedVisionResponse {
   let cleaned = raw.trim();
   if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    cleaned = cleaned
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/, "")
+      .trim();
   }
   try {
     const json = JSON.parse(cleaned) as Record<string, unknown>;
@@ -23,9 +26,7 @@ export function parseVisionResponse(raw: string): ParsedVisionResponse {
       objects: Array.isArray(json.objects) ? json.objects.map(String) : [],
       visibleText: typeof json.visibleText === "string" ? json.visibleText : "",
       style: typeof json.style === "string" ? json.style : undefined,
-      dominantColors: Array.isArray(json.dominantColors)
-        ? json.dominantColors.map(String)
-        : [],
+      dominantColors: Array.isArray(json.dominantColors) ? json.dominantColors.map(String) : [],
       layoutNotes: typeof json.layoutNotes === "string" ? json.layoutNotes : undefined,
       inconsistencies,
     };

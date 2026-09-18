@@ -155,14 +155,8 @@ export function chooseImageRoute(
   // 1. User override check
   if (features.requestedModelAlias) {
     const alias = features.requestedModelAlias;
-    const capability =
-      alias === "image-precision"
-        ? "IMAGE_PRECISION"
-        : "IMAGE_GENERAL";
-    const modelAlias =
-      alias === "image-precision"
-        ? "image-precision"
-        : "image-general";
+    const capability = alias === "image-precision" ? "IMAGE_PRECISION" : "IMAGE_GENERAL";
+    const modelAlias = alias === "image-precision" ? "image-precision" : "image-general";
     return {
       capabilityAlias: capability,
       modelAlias,
@@ -340,9 +334,10 @@ export function escalateRoute(
       capabilityAlias: "IMAGE_PRECISION",
       modelAlias: "image-precision",
       renderQuality: "high",
-      reasonCodes: failureReason === "preservation-miss"
-        ? ["ESCALATION_PRESERVATION_MISS"]
-        : ["ESCALATION_DETAIL_MISS"],
+      reasonCodes:
+        failureReason === "preservation-miss"
+          ? ["ESCALATION_PRESERVATION_MISS"]
+          : ["ESCALATION_DETAIL_MISS"],
       maxSemanticAttempts: 2,
       fallbackPolicy: "same-capability-only",
     };
@@ -355,9 +350,10 @@ export function escalateRoute(
         capabilityAlias: "IMAGE_PRECISION",
         modelAlias: "image-precision",
         renderQuality: "xhigh",
-        reasonCodes: failureReason === "preservation-miss"
-          ? ["ESCALATION_PRESERVATION_MISS"]
-          : ["ESCALATION_FIDELITY_MISS"],
+        reasonCodes:
+          failureReason === "preservation-miss"
+            ? ["ESCALATION_PRESERVATION_MISS"]
+            : ["ESCALATION_FIDELITY_MISS"],
         maxSemanticAttempts: 1,
         fallbackPolicy: "same-capability-only",
       };
@@ -444,9 +440,7 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
   const requiresHighQuality =
     input.finalUse ||
     input.taskClass === "complex" ||
-    /(?:print|พิมพ์|signage|ป้าย|masterwork|hyper-detailed|ละเอียดสูง|ultra-detailed|8k)/iu.test(
-      prompt,
-    );
+    /(?:print|พิมพ์|signage|ป้าย|masterwork|hyper-detailed|ละเอียดสูง|ultra-detailed|8k)/iu.test(prompt);
 
   if (requiresHighQuality) {
     return {
@@ -460,9 +454,7 @@ export function chooseImageQuality(input: ImageQualityInput): ImageQualityDecisi
   const requiresMediumQuality =
     input.hasReference ||
     input.requiresExactText ||
-    /(?:product|สินค้า|packaging|บรรจุภัณฑ์|typography|ข้อความ|poster|โปสเตอร์|โลโก้|logo)/iu.test(
-      prompt,
-    );
+    /(?:product|สินค้า|packaging|บรรจุภัณฑ์|typography|ข้อความ|poster|โปสเตอร์|โลโก้|logo)/iu.test(prompt);
 
   if (requiresMediumQuality) {
     return {

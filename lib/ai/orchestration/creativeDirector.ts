@@ -1,3 +1,4 @@
+import { extractRequestedSizeSpecsFromText } from "@/lib/ai/imageGeneration";
 import type {
   AiAssistantChatInput,
   AiExecution,
@@ -12,7 +13,6 @@ import {
   requirePlanApproval,
 } from "@/lib/designAgent/contracts";
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
-import { extractRequestedSizeSpecsFromText } from "@/lib/ai/imageGeneration";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
 import {
   CREATING_MODEL_CATALOG,
@@ -369,7 +369,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "NAME TAG REFERENCE PRESERVATION & MODIFICATION PROTOCOL:",
   "When the user references one or more canvas elements using Name Tags (e.g. @[Name:id] or @Name or @รูป...):",
   "  - The referenced images are extracted from the canvas and supplied directly as input_images to the image model IN THE SAME ORDER as the Name Tags / reference list.",
-  "  - Each Name Tag has a display name that MUST be preserved in refinedPrompt as a human label (e.g. Reference 1 \"merged-image.png\"). Never treat tagged images as anonymous blobs.",
+  '  - Each Name Tag has a display name that MUST be preserved in refinedPrompt as a human label (e.g. Reference 1 "merged-image.png"). Never treat tagged images as anonymous blobs.',
   "  - Infer role from the surrounding clause: สไตล์/style → STYLE reference; บรีฟ/Layout/composition → LAYOUT/BRIEF reference; แก้ไข/subject → SUBJECT reference.",
   "  - CRITICAL: refinedPrompt MUST NEVER contain raw @[Name:id], bare UUIDs, or unparsed Name Tag syntax. Rewrite tags into natural English referring to Reference N by display name and role.",
   "  - For image editing tasks (e.g. 'แก้ไขรูป @tag', 'เพิ่ม... ในรูป @tag', 'ลบ... จาก @tag', 'เปลี่ยน... ใน @tag'): Select specialist 'image_editor', and formulate refinedPrompt to describe the exact desired modifications relative to the referenced input image.",
@@ -482,7 +482,7 @@ export async function prepareCreativeDirection(
     (input.referenceAnalyses && input.referenceAnalyses.length > 0) || hasInlineTags
       ? synthesizePromptWithInlineTags(
           input.prompt,
-          ((input.referenceAnalyses as unknown as ImageReferenceAnalysis[]) || []),
+          (input.referenceAnalyses as unknown as ImageReferenceAnalysis[]) || [],
         )
       : null;
   const referenceBlock = formattedReferences
@@ -653,10 +653,7 @@ function normalizeModelImageTaskInput(raw: Record<string, unknown>): Record<stri
       : typeof normalized.refinedPrompt === "string" && normalized.refinedPrompt.trim()
         ? normalized.refinedPrompt.trim().slice(0, 200)
         : "สร้างรูปภาพตามคำขอ";
-  normalized.reviewCriteria = normalizeReviewCriteria(
-    normalized.reviewCriteria,
-    fallbackSummary,
-  );
+  normalized.reviewCriteria = normalizeReviewCriteria(normalized.reviewCriteria, fallbackSummary);
   if (normalized.search === undefined || !isRecord(normalized.search)) {
     normalized.search = { required: false, queries: [], sources: [] };
   }
@@ -798,7 +795,11 @@ async function executeDirectorPass(
               callInput.kind === "answer" ||
               Boolean(callInput.refinedPrompt)))
         ) {
-          return parseCreativeDirection(normalizeModelImageTaskInput(callInput), input, knowledgeIds);
+          return parseCreativeDirection(
+            normalizeModelImageTaskInput(callInput),
+            input,
+            knowledgeIds,
+          );
         }
         if (callName === DESIGN_PLAN_TOOL.name) {
           return parseDesignPlan(callInput, input);
@@ -814,11 +815,15 @@ async function executeDirectorPass(
       if (
         candidateRecord.kind === "image-task" ||
         candidateRecord.kind === "clarification" ||
-        Boolean(candidateRecord.refinedPrompt) ||
+        candidateRecord.refinedPrompt ||
         candidateRecord.specialist === "image_generator"
       ) {
         try {
-          return parseCreativeDirection(normalizeModelImageTaskInput(candidateRecord), input, knowledgeIds);
+          return parseCreativeDirection(
+            normalizeModelImageTaskInput(candidateRecord),
+            input,
+            knowledgeIds,
+          );
         } catch {
           // Fall through to unparsed text extraction
         }
@@ -1020,9 +1025,21 @@ function parseNumberWord(val: string): number | undefined {
   const digit = parseInt(v, 10);
   if (!isNaN(digit)) return digit;
   const map: Record<string, number> = {
-    "๑": 1, "๒": 2, "๓": 3, "๔": 4, "๕": 5,
-    "หนึ่ง": 1, "สอง": 2, "สาม": 3, "สี่": 4, "ห้า": 5,
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "๑": 1,
+    "๒": 2,
+    "๓": 3,
+    "๔": 4,
+    "๕": 5,
+    หนึ่ง: 1,
+    สอง: 2,
+    สาม: 3,
+    สี่: 4,
+    ห้า: 5,
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
   };
   return map[v];
 }
@@ -1032,7 +1049,9 @@ function parseNumberWord(val: string): number | undefined {
  * (e.g. "ขอตัวเลือก 3 แบบ", "สร้างมา 3 รูป", "ขอ 3 แบบ", "เอา 3 ตัวเลือก", "3 variations")
  * while strictly ignoring input reference phrases (e.g. "จาก 2 ปกนี้", "จาก 3 รูปนี้").
  */
-export function extractExplicitRequestedOutputCount(prompt: string | undefined): number | undefined {
+export function extractExplicitRequestedOutputCount(
+  prompt: string | undefined,
+): number | undefined {
   if (!prompt || typeof prompt !== "string") return undefined;
   const text = prompt.trim();
   if (!text) return undefined;
@@ -1099,7 +1118,8 @@ export function parseCreativeDirection(
     else if (value.plan || Array.isArray(value.steps)) value.kind = "sequential-plan";
     else if (value.text) value.kind = "answer";
     else if (value.question) value.kind = "clarification";
-    else if (value.refinedPrompt || value.specialist || value.outputCount) value.kind = "image-task";
+    else if (value.refinedPrompt || value.specialist || value.outputCount)
+      value.kind = "image-task";
   }
   if (value.kind === "design-plan") {
     const proposal = parsePlanProposal(value.proposal);
@@ -1268,11 +1288,7 @@ export function parseCreativeDirection(
     references: (input.referenceAnalyses || []).map((r) => {
       const inferred = (r.objectId && tagRoles.get(r.objectId)) || "subject";
       const role =
-        inferred === "layout"
-          ? "composition"
-          : inferred === "style"
-            ? "style"
-            : "subject";
+        inferred === "layout" ? "composition" : inferred === "style" ? "style" : "subject";
       return {
         assetRef: r.displayName || r.objectId || "ref",
         role,
@@ -1292,7 +1308,9 @@ export function parseCreativeDirection(
       : computedDetail;
 
   const precisionScore =
-    typeof value.precisionScore === "number" && value.precisionScore >= 0 && value.precisionScore <= 10
+    typeof value.precisionScore === "number" &&
+    value.precisionScore >= 0 &&
+    value.precisionScore <= 10
       ? Math.round(value.precisionScore)
       : computedPrecision;
 
@@ -1314,7 +1332,9 @@ export function parseCreativeDirection(
     resolvedModelAlias,
   );
   if (!modelResolution.ok) {
-    return invalidDirection(`model ${resolvedModelAlias} is not available: ${modelResolution.reason}`);
+    return invalidDirection(
+      `model ${resolvedModelAlias} is not available: ${modelResolution.reason}`,
+    );
   }
 
   if (specialist === "image_editor" && capability !== "IMAGE_EDIT") {
@@ -1358,7 +1378,11 @@ export function parseCreativeDirection(
     ),
     specialist,
     capability,
-    modelAlias: resolvedModelAlias as "image-general" | "image-fast" | "image-precision" | "image-gpt-2",
+    modelAlias: resolvedModelAlias as
+      | "image-general"
+      | "image-fast"
+      | "image-precision"
+      | "image-gpt-2",
     detailScore,
     precisionScore,
     knowledgeSkillIds: [...new Set(finalKnowledgeIds)],
@@ -1849,8 +1873,9 @@ export function extractDirectionFromUnparsedText(
     if (standardMatch?.[1]) {
       refinedPrompt = standardMatch[1];
     } else {
-      const openMatch =
-        /"refinedPrompt"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+      const openMatch = /"refinedPrompt"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(
+        text,
+      );
       if (openMatch?.[1]) {
         refinedPrompt = openMatch[1];
       }
@@ -1937,8 +1962,7 @@ export function extractDirectionFromUnparsedText(
       const question = qMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
       const options: string[] = [];
       const optBlock =
-        /"options"\s*:\s*\[(.*?)\]/s.exec(text) ??
-        /"options"\s*:\s*\[([\s\S]*)$/.exec(text);
+        /"options"\s*:\s*\[(.*?)\]/s.exec(text) ?? /"options"\s*:\s*\[([\s\S]*)$/.exec(text);
       if (optBlock?.[1]) {
         const itemRegex = /"((?:[^"\\]|\\.)*)"/g;
         let m = itemRegex.exec(optBlock[1]);

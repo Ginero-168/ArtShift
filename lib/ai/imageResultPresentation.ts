@@ -3,10 +3,7 @@
  * aspect badges, prompt-structure fields, and post-gen summary copy.
  */
 
-import {
-  extractPhysicalPrintSizeCm,
-  formatPrintUpscaleHint,
-} from "@/lib/ai/printUpscaleGuidance";
+import { extractPhysicalPrintSizeCm, formatPrintUpscaleHint } from "@/lib/ai/printUpscaleGuidance";
 
 function stripComposerMentions(subject: string): string {
   return subject
@@ -16,9 +13,7 @@ function stripComposerMentions(subject: string): string {
 }
 
 function stripOutputBriefPrefix(brief: string): string {
-  return brief
-    .replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "")
-    .trim();
+  return brief.replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "").trim();
 }
 
 export type ImageResultField = {
@@ -114,8 +109,7 @@ function inferColorPalette(source: string): string {
 function inferStyle(source: string): string {
   if (/(?:cyber|ไซเบอร์)/i.test(source)) return "สไตล์ไซเบอร์โมเดิร์น";
   if (/(?:painterly|brush|ฝีแปรง|ภาพวาด)/i.test(source)) return "สไตล์ภาพวาดศิลปะ";
-  if (/(?:photoreal|photo.?real|ถ่ายจริง|photography)/i.test(source))
-    return "สไตล์ถ่ายภาพสมจริง";
+  if (/(?:photoreal|photo.?real|ถ่ายจริง|photography)/i.test(source)) return "สไตล์ถ่ายภาพสมจริง";
   if (/(?:illustration|วาดเส้น|flat design|graphic)/i.test(source)) return "สไตล์กราฟิก/ภาพประกอบ";
   if (/(?:anime|อนิเมะ|cartoon|การ์ตูน)/i.test(source)) return "สไตล์การ์ตูน/อนิเมะ";
   return "สไตล์ที่เข้ากับคอนเซปต์";
@@ -141,18 +135,13 @@ function inferLighting(source: string): string {
 function inferArtStyle(source: string): string {
   if (/(?:brush|texture|painterly|ฝีแปรง|เนื้อสี)/i.test(source))
     return "สไตล์ภาพวาดศิลปะ มีเนื้อสีและฝีแปรงที่มีเอกลักษณ์";
-  if (/(?:photoreal|photography|ถ่ายจริง)/i.test(source))
-    return "สไตล์ภาพถ่ายความละเอียดสูง คมชัดสมจริง";
+  if (/(?:photoreal|photography|ถ่ายจริง)/i.test(source)) return "สไตล์ภาพถ่ายความละเอียดสูง คมชัดสมจริง";
   if (/(?:vector|flat 2d|graphic design)/i.test(source))
     return "สไตล์กราฟิกแบน เรียบคม สำหรับงานออกแบบ";
   return "สไตล์ที่รักษาเอกลักษณ์ของงาน";
 }
 
-function inferScene(
-  userPrompt: string,
-  summary?: string,
-  brief?: string,
-): string {
+function inferScene(userPrompt: string, summary?: string, brief?: string): string {
   const fromBrief = brief ? stripOutputBriefPrefix(brief) : "";
   if (fromBrief && fromBrief.length >= 4) {
     return `สร้างรูป${fromBrief}`;
@@ -245,9 +234,7 @@ export function buildImageResultSummary(opts: BuildImageResultSummaryOptions): I
   // Prefer a neutral title for multi-size runs so we don't claim e.g. "…16:9"
   // when that size failed and only other ratios landed.
   const titleBit =
-    succeededAspects.length > 1
-      ? cleanSubject || "ภาพ"
-      : firstBrief || cleanSubject || "ภาพ";
+    succeededAspects.length > 1 ? cleanSubject || "ภาพ" : firstBrief || cleanSubject || "ภาพ";
 
   const headline = opts.isEdit
     ? `เสร็จแล้ว ปรับแต่ง "${titleBit}" เรียบร้อย ${opts.count} รูป`
@@ -257,9 +244,13 @@ export function buildImageResultSummary(opts: BuildImageResultSummaryOptions): I
     .filter(Boolean)
     .join("\n");
   const primaryRatio =
-    succeededAspects[0] ||
-    formatFriendlyAspectRatio(opts.width, opts.height, opts.aspectRatio);
-  const printSource = [opts.printSizeSource, opts.userPrompt, opts.summary, ...(opts.outputBriefs ?? [])]
+    succeededAspects[0] || formatFriendlyAspectRatio(opts.width, opts.height, opts.aspectRatio);
+  const printSource = [
+    opts.printSizeSource,
+    opts.userPrompt,
+    opts.summary,
+    ...(opts.outputBriefs ?? []),
+  ]
     .filter(Boolean)
     .join("\n");
   const printSize = extractPhysicalPrintSizeCm(printSource);
@@ -308,8 +299,7 @@ export function buildImageResultSummary(opts: BuildImageResultSummaryOptions): I
   const modelPill = opts.modelLabel
     ? `${opts.modelLabel}${qualityLabel === "auto" ? " Auto" : ` ${qualityLabel}`}`
     : undefined;
-  const ratioPill =
-    succeededAspects.length > 1 ? succeededAspects.join(" · ") : primaryRatio;
+  const ratioPill = succeededAspects.length > 1 ? succeededAspects.join(" · ") : primaryRatio;
   const pills = [modelPill, ratioPill, qualityLabel].filter(Boolean) as string[];
 
   let printHint: string | undefined;
@@ -374,9 +364,7 @@ export function formatHumanThoughtText(opts: {
 
   if (opts.isEdit) {
     const editBit =
-      cleanSummary && cleanSummary.length > 5
-        ? cleanSummary
-        : cleanPrompt || "ตามคำขอ";
+      cleanSummary && cleanSummary.length > 5 ? cleanSummary : cleanPrompt || "ตามคำขอ";
     return `จะปรับแต่งภาพตาม "${firstSentence(editBit, 100)}" โดยคงแสง เงา และบรรยากาศเดิมให้ดูเป็นธรรมชาติ`;
   }
 
@@ -388,9 +376,7 @@ export function formatHumanThoughtText(opts: {
         : "ภาพตามคำขอ";
 
   const countClause =
-    count === 1
-      ? "ภาพเดียวชัดเจนแล้ว เลยสร้างตรงๆ ได้เลย"
-      : `จะสร้าง ${count} ภาพในทิศทางเดียวกัน`;
+    count === 1 ? "ภาพเดียวชัดเจนแล้ว เลยสร้างตรงๆ ได้เลย" : `จะสร้าง ${count} ภาพในทิศทางเดียวกัน`;
 
   if (sizeClause) {
     return `จะสร้าง "${subject}" ให้เลยนะครับ ${sizeClause} ${countClause}`;

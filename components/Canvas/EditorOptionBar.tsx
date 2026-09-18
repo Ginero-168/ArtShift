@@ -4,14 +4,13 @@ import { useState } from "react";
 import { IconBrief } from "@/components/icons";
 import { convertImageToBrief } from "@/lib/ai/briefGenerator";
 import { reportAIError } from "@/lib/ai/progressReporter";
-import type { ImageElement } from "@/lib/engine/types";
 import { useEngine } from "@/lib/engine/store";
-import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
-import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
+import type { ImageElement } from "@/lib/engine/types";
 import {
-  COMMON_TOOL_DEFINITIONS,
-  VECTOR_TOOL_DEFINITIONS,
-} from "./toolRegistry";
+  openRasterStudioForElement,
+  useRasterStudioSession,
+} from "@/lib/raster/studio/sessionStore";
+import { COMMON_TOOL_DEFINITIONS, VECTOR_TOOL_DEFINITIONS } from "./toolRegistry";
 
 const modeButtonStyle = (active: boolean, tone: "raster" | "vector") => ({
   height: 28,

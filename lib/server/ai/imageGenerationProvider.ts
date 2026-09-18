@@ -21,7 +21,5 @@ export function imageGenerationFallbackEnabled(
   sessionReplicateToken?: string,
 ): boolean {
   if (resolveImageGenerationBackend(environment) !== "openai") return false;
-  return Boolean(
-    sessionReplicateToken?.trim() || environment.REPLICATE_API_TOKEN?.trim(),
-  );
+  return Boolean(sessionReplicateToken?.trim() || environment.REPLICATE_API_TOKEN?.trim());
 }

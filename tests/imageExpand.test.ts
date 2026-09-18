@@ -65,9 +65,7 @@ describe("image expand (any ratio beyond 3:1)", () => {
     expect(layout.topGap).toBe(0);
     expect(layout.bottomGap).toBe(0);
     expect(layout.center.height).toBe(layout.targetHeight);
-    expect(layout.leftGap + layout.center.width + layout.rightGap).toBe(
-      layout.targetWidth,
-    );
+    expect(layout.leftGap + layout.center.width + layout.rightGap).toBe(layout.targetWidth);
   });
 
   it("plans vertical top/bottom gaps for 7:29", () => {
@@ -79,9 +77,7 @@ describe("image expand (any ratio beyond 3:1)", () => {
     expect(layout.leftGap).toBe(0);
     expect(layout.rightGap).toBe(0);
     expect(layout.center.width).toBe(layout.targetWidth);
-    expect(layout.topGap + layout.center.height + layout.bottomGap).toBe(
-      layout.targetHeight,
-    );
+    expect(layout.topGap + layout.center.height + layout.bottomGap).toBe(layout.targetHeight);
   });
 
   it("boosts thin side panels to a legal generation size", () => {
@@ -111,8 +107,7 @@ describe("image expand (any ratio beyond 3:1)", () => {
     expect(vertical.fillSize + vertical.seedSize).toBe(vertical.height);
     expect(vertical.seedSize).toBeGreaterThan(vertical.fillSize * 0.8);
     expect(
-      Math.max(vertical.width, vertical.height) /
-        Math.min(vertical.width, vertical.height),
+      Math.max(vertical.width, vertical.height) / Math.min(vertical.width, vertical.height),
     ).toBeLessThanOrEqual(3.01);
   });
 

@@ -42,10 +42,7 @@ describe("CoPilot Error Diagnosis", () => {
   });
 
   it("diagnoses rate limit error", () => {
-    const diagnosis = diagnoseOrchestratorError(
-      "Rate limit exceeded (429)",
-      "สร้างรูปแมว",
-    );
+    const diagnosis = diagnoseOrchestratorError("Rate limit exceeded (429)", "สร้างรูปแมว");
 
     expect(diagnosis.shortReason).toContain("Rate limit");
     expect(diagnosis.reply).toContain("เรียกใช้งานถี่เกินไป");
@@ -64,10 +61,16 @@ describe("CoPilot Error Diagnosis", () => {
 
     expect(diagnosis.errorCard).toBeDefined();
     expect(diagnosis.errorCard?.title).toBe("Request violates content policy");
-    expect(diagnosis.errorCard?.description).toContain("Your request violates the AI provider's content policy.");
+    expect(diagnosis.errorCard?.description).toContain(
+      "Your request violates the AI provider's content policy.",
+    );
     expect(diagnosis.errorCard?.actionText).toBe("Edit my prompt");
-    expect(diagnosis.reply).toContain("The system blocked the direct reference to *Avengers: Endgame* because of copyright/IP policy.");
-    expect(diagnosis.reply).toContain("I can still give your cat an epic final-battlefield background — stormy sky, ruins, heroic cinematic atmosphere — while keeping the same cat in front. Shall I go ahead with that?");
+    expect(diagnosis.reply).toContain(
+      "The system blocked the direct reference to *Avengers: Endgame* because of copyright/IP policy.",
+    );
+    expect(diagnosis.reply).toContain(
+      "I can still give your cat an epic final-battlefield background — stormy sky, ruins, heroic cinematic atmosphere — while keeping the same cat in front. Shall I go ahead with that?",
+    );
     expect(diagnosis.suggestions).toContain("✨ Yes, go ahead with that");
   });
 });

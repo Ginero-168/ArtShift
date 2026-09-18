@@ -1,5 +1,5 @@
-export { appearanceCapabilities, type AppearanceCapability } from "./capabilities";
 export { appearancePadding } from "./bounds";
+export { type AppearanceCapability, appearanceCapabilities } from "./capabilities";
 export { changeAppearance } from "./commands";
 export { appearanceFingerprint } from "./fingerprints";
 export { appearanceToLegacyPatch, readAppearance } from "./legacyAdapter";

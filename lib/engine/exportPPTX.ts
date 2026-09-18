@@ -191,8 +191,8 @@ async function rasterizeFrameComposite(
 
   const children = frame.childIds
     .map((id) => slide.elements.find((candidate) => candidate.id === id))
-    .filter((child): child is EngineElement =>
-      child != null && !child.isDeleted && child.hidden !== true,
+    .filter(
+      (child): child is EngineElement => child != null && !child.isDeleted && child.hidden !== true,
     );
 
   if (children.length > 0) {

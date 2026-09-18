@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getPptxClippedChildIds, getPptxSlideTransform, shouldRasterizeElementForPptx, shouldRasterizeImageForPptx } from "@/lib/engine/exportPPTX";
+import {
+  getPptxClippedChildIds,
+  getPptxSlideTransform,
+  shouldRasterizeElementForPptx,
+  shouldRasterizeImageForPptx,
+} from "@/lib/engine/exportPPTX";
 import { createFrame, createImage, createText } from "@/lib/engine/factory";
 import type { EngineSlide } from "@/lib/engine/types";
 

@@ -3,8 +3,8 @@ import {
   ASPECT_RATIOS,
   cleanImagePrompt,
   generateAIImage,
-  isImageGenerationPrompt,
   isImageEditPrompt,
+  isImageGenerationPrompt,
 } from "@/lib/ai/imageGeneration";
 
 describe("GPT Image 2 generation client", () => {

@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  PROMPT_HELPER_VARIANT_SYSTEM,
+  parsePromptHelperVariantPlan,
+} from "@/lib/ai/orchestration/promptHelperVariantPlan";
+import { resolveOptionPreview } from "@/lib/ai/orchestration/promptOptionCatalog";
+import {
   applyPromptHelperVariantPlan,
   createPromptRefinement,
   listPromptHelperCatalogAxes,
 } from "@/lib/ai/orchestration/promptRefinement";
-import {
-  parsePromptHelperVariantPlan,
-  PROMPT_HELPER_VARIANT_SYSTEM,
-} from "@/lib/ai/orchestration/promptHelperVariantPlan";
-import { resolveOptionPreview } from "@/lib/ai/orchestration/promptOptionCatalog";
 
 describe("prompt helper variant plan", () => {
   it("parses Gemini JSON plans and ignores junk", () => {

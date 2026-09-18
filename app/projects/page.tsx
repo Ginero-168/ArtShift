@@ -873,9 +873,7 @@ export default function ProjectsPage() {
             }}
           >
             {/* Slot 1: New Project Button */}
-            {!searchQuery && (
-              <NewProjectGridCard onClick={handleCreateProject} />
-            )}
+            {!searchQuery && <NewProjectGridCard onClick={handleCreateProject} />}
 
             {/* Slots 2..N: Project Cards */}
             {filteredProjects.map((p) => {

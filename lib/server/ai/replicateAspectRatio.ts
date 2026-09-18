@@ -7,10 +7,7 @@
  * allowed value while keeping named ratios when the caller already used one.
  */
 
-import {
-  isPixelAspectToken,
-  resolveGenerationSizeFromRatio,
-} from "@/lib/ai/generationSize";
+import { isPixelAspectToken, resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
 
 /** Exact values accepted by Replicate `input.aspect_ratio` (GPT Image family). */
 export const REPLICATE_GPT_IMAGE_ASPECT_RATIOS = [

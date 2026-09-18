@@ -102,7 +102,10 @@ async function hashString(s: string): Promise<string> {
   return h.toString(16);
 }
 
-export async function preloadDataURL(dataURL: string, explicitFileId?: string): Promise<CachedImage> {
+export async function preloadDataURL(
+  dataURL: string,
+  explicitFileId?: string,
+): Promise<CachedImage> {
   return loadDataURL(dataURL, explicitFileId);
 }
 

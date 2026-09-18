@@ -9,8 +9,7 @@ const visionOcrMock = vi.hoisted(() => vi.fn());
 const expandImageMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/ai/imageGeneration")>();
+  const actual = await importOriginal<typeof import("@/lib/ai/imageGeneration")>();
   return {
     ...actual,
     generateAIImage: generateImageMock,
@@ -42,17 +41,11 @@ import {
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import type { AiTaskPlan } from "@/lib/ai/orchestration/taskMachine";
 import { createAiTask, getAiTask } from "@/lib/ai/orchestration/taskMachine";
-import {
-  clearCanvasViewport,
-  publishCanvasViewport,
-} from "@/lib/engine/canvasViewport";
+import { clearCanvasViewport, publishCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
 import { createHistory } from "@/lib/engine/history";
 import { createEngineLayer } from "@/lib/engine/layers";
-import {
-  getProcessingPreviewById,
-  getProcessingPreviews,
-} from "@/lib/engine/processingPreview";
+import { getProcessingPreviewById, getProcessingPreviews } from "@/lib/engine/processingPreview";
 import { useEngine } from "@/lib/engine/store";
 
 const plan: AiTaskPlan = {
@@ -258,8 +251,7 @@ describe("context-aware image task runner", () => {
     } as const;
     publishCanvasViewport(initialViewport);
 
-    let previewDuringGeneration:
-      ReturnType<typeof getProcessingPreviewById> | undefined;
+    let previewDuringGeneration: ReturnType<typeof getProcessingPreviewById> | undefined;
     generateImageMock.mockImplementationOnce(async () => {
       const previews = getProcessingPreviews();
       expect(previews).toHaveLength(1);
@@ -310,8 +302,7 @@ describe("context-aware image task runner", () => {
       .mockResolvedValueOnce({
         passed: false,
         summary: "The product is too small in the frame.",
-        repairInstruction:
-          "Make the product the dominant subject with clearer hierarchy.",
+        repairInstruction: "Make the product the dominant subject with clearer hierarchy.",
       })
       .mockResolvedValueOnce({
         passed: true,
@@ -339,16 +330,14 @@ describe("context-aware image task runner", () => {
     expect(generateImageMock.mock.calls[1]?.[0]?.prompt).toContain(
       "Make the product the dominant subject",
     );
-    expect(
-      result.task.history.filter((event) => event.type === "director.reviewed"),
-    ).toHaveLength(2);
+    expect(result.task.history.filter((event) => event.type === "director.reviewed")).toHaveLength(
+      2,
+    );
   });
 
   it("performs one diagnosed quality retry and no more", async () => {
     generateImageMock
-      .mockRejectedValueOnce(
-        new Error("Generated image failed the visual quality gate"),
-      )
+      .mockRejectedValueOnce(new Error("Generated image failed the visual quality gate"))
       .mockResolvedValueOnce({
         dataUrl: "data:image/png;base64,AA==",
         fileId: "generated-file-2",
@@ -377,12 +366,8 @@ describe("context-aware image task runner", () => {
     const retryPrompt = generateImageMock.mock.calls[1]?.[0]?.prompt;
     expect(retryPrompt).toBeTypeOf("string");
     expect(retryPrompt).not.toBe(firstPrompt);
-    expect(generateImageMock.mock.calls[0]?.[0]).not.toHaveProperty(
-      "maxCostUsd",
-    );
-    expect(generateImageMock.mock.calls[1]?.[0]).not.toHaveProperty(
-      "maxCostUsd",
-    );
+    expect(generateImageMock.mock.calls[0]?.[0]).not.toHaveProperty("maxCostUsd");
+    expect(generateImageMock.mock.calls[1]?.[0]).not.toHaveProperty("maxCostUsd");
     expect(events).toContain("retrying");
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
   });
@@ -481,17 +466,13 @@ describe("context-aware image task runner", () => {
 
     expect(generateImageMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        inputImages: [
-          { dataUrl: "data:image/png;base64,REF", mimeType: "image/png" },
-        ],
+        inputImages: [{ dataUrl: "data:image/png;base64,REF", mimeType: "image/png" }],
         quality: "high",
       }),
       expect.any(AbortSignal),
     );
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(2);
-    expect(useEngine.getState().currentSlide()?.elements[0]?.id).toBe(
-      "source-image",
-    );
+    expect(useEngine.getState().currentSlide()?.elements[0]?.id).toBe("source-image");
   });
 
   it("fails closed when the selected element version changes before execution", async () => {
@@ -608,11 +589,9 @@ describe("context-aware image task runner", () => {
       runContextAwareImageTask(staleTask, [staleRef], { cloudConsent: true }),
     ).rejects.toMatchObject({ task: { status: "failed" } });
     expect(getAiTask(staleTask.id)?.status).toBe("failed");
-    expect(
-      getAiTask(staleTask.id)?.history.some(
-        (event) => event.type === "task.failed",
-      ),
-    ).toBe(true);
+    expect(getAiTask(staleTask.id)?.history.some((event) => event.type === "task.failed")).toBe(
+      true,
+    );
   });
 
   it("preserves a typed provider outcome-unknown without retrying", async () => {
@@ -631,19 +610,15 @@ describe("context-aware image task runner", () => {
 
     expect(generateImageMock).toHaveBeenCalledTimes(1);
     expect(getAiTask(plan.id)?.status).toBe("outcome-unknown");
-    expect(
-      getAiTask(plan.id)?.history.some(
-        (event) => event.type === "task.outcome-unknown",
-      ),
-    ).toBe(true);
+    expect(getAiTask(plan.id)?.history.some((event) => event.type === "task.outcome-unknown")).toBe(
+      true,
+    );
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
     expect(useEngine.getState().history.past).toHaveLength(0);
   });
 
   it("requires explicit consent before queueing a cloud task", async () => {
-    await expect(
-      runContextAwareImageTask(createAiTask(plan), []),
-    ).rejects.toThrow("consent");
+    await expect(runContextAwareImageTask(createAiTask(plan), [])).rejects.toThrow("consent");
 
     expect(generateImageMock).not.toHaveBeenCalled();
     expect(getProcessingPreviews()).toHaveLength(0);
@@ -689,11 +664,7 @@ describe("context-aware image task runner", () => {
     ).rejects.toMatchObject({ name: "AbortError" });
 
     expect(getAiTask(plan.id)?.status).toBe("cancelled");
-    expect(
-      getAiTask(plan.id)?.history.some(
-        (event) => event.type === "task.cancelled",
-      ),
-    ).toBe(true);
+    expect(getAiTask(plan.id)?.history.some((event) => event.type === "task.cancelled")).toBe(true);
     expect(getProcessingPreviews()).toHaveLength(0);
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(0);
     expect(useEngine.getState().history.past).toHaveLength(0);
@@ -741,9 +712,7 @@ describe("context-aware image task runner", () => {
 
     expect(result.dataUrl).toBe("data:image/png;base64,AA==");
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
-    const reviewEvent = result.task.history.find(
-      (e) => e.type === "director.reviewed",
-    );
+    const reviewEvent = result.task.history.find((e) => e.type === "director.reviewed");
     expect(reviewEvent).toBeDefined();
     expect(reviewEvent?.status).toBe("unavailable");
   });

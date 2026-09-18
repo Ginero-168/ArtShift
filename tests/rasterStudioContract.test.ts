@@ -91,13 +91,15 @@ describe("Raster Studio Smart Object contract", () => {
       },
     ];
 
-    const updateElements = vi.fn((patches: Array<{ id: string; patch: Record<string, unknown> }>) => {
-      const patch = patches[0]?.patch ?? {};
-      Object.assign(image, patch);
-      if ("rasterMask" in patch && patch.rasterMask === undefined) {
-        delete image.rasterMask;
-      }
-    });
+    const updateElements = vi.fn(
+      (patches: Array<{ id: string; patch: Record<string, unknown> }>) => {
+        const patch = patches[0]?.patch ?? {};
+        Object.assign(image, patch);
+        if ("rasterMask" in patch && patch.rasterMask === undefined) {
+          delete image.rasterMask;
+        }
+      },
+    );
 
     const controller = createEditorController({
       currentSlide: () => ({ elements: [image] }) as never,

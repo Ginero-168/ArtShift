@@ -6,8 +6,8 @@ import {
   clearChatHistorySnapshot,
   loadChatHistorySnapshot,
   readProjectIdFromPath,
-  saveChatHistorySnapshot,
   sanitizeMessageForPersist,
+  saveChatHistorySnapshot,
   trimMessagesForPersist,
 } from "@/lib/ai/orchestration/chatHistoryStore";
 

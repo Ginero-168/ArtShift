@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { IconChevronDown, IconLayoutGrid, IconSearch, IconSparkles } from "@/components/icons";
+import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import {
   BUILDER_BLOCK_MIME,
   BUILDER_BLOCKS,
@@ -18,7 +19,6 @@ import {
   createVectorPathFromIcon,
   type VectorIconDefinition,
 } from "@/lib/builder/vectorIconLibrary";
-import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";

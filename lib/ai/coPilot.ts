@@ -11,6 +11,12 @@ import {
 } from "@/lib/ai/imageGeneration";
 import type { ImageResultSummary } from "@/lib/ai/imageResultPresentation";
 import {
+  composeFollowUpDirectorPrompt,
+  extractPriorImageGenerationContext,
+  isImageFollowUpPrompt,
+  type PriorImageGenerationContext,
+} from "@/lib/ai/orchestration/chatContinuity";
+import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
@@ -21,12 +27,6 @@ import {
   type ComposerImageRef,
 } from "@/lib/ai/orchestration/imageReferences";
 import { extractInlineTagRefs } from "@/lib/ai/orchestration/inlineTagSynthesis";
-import {
-  composeFollowUpDirectorPrompt,
-  extractPriorImageGenerationContext,
-  isImageFollowUpPrompt,
-  type PriorImageGenerationContext,
-} from "@/lib/ai/orchestration/chatContinuity";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { analyzeImageReferences } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
@@ -338,7 +338,9 @@ export async function executeCoPilotInstruction(
       const direction = await prepareRemoteCreativeDirection(
         {
           prompt: directorPrompt,
-          conversationHistory: history.map((m) => ({ role: m.role, content: m.content })).slice(-12),
+          conversationHistory: history
+            .map((m) => ({ role: m.role, content: m.content }))
+            .slice(-12),
           canvasSummary: {
             objectCount: context.elementCount,
             selectedCount: context.selectedIds.length,
@@ -495,10 +497,7 @@ export async function executeCoPilotInstruction(
           reply:
             "ตอนนี้ยังยืนยันผลลัพธ์จาก AI provider ไม่ได้ครับ ผมจะไม่สร้างงานซ้ำอัตโนมัติจนกว่าจะตรวจสอบงานเดิมได้",
           actions,
-          suggestions: [
-            "ตรวจสอบสถานะ provider ก่อนลองใหม่",
-            "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่",
-          ],
+          suggestions: ["ตรวจสอบสถานะ provider ก่อนลองใหม่", "ลองใหม่หลังยืนยันว่าไม่มีงานเดิมค้างอยู่"],
         };
       }
       if (wasCancelled) {
@@ -542,12 +541,14 @@ export async function executeCoPilotInstruction(
       // Find targeted image from inline tags, selected image, or first image on canvas
       const slide = st.doc.slides.find((s) => s.id === st.currentSlideId) || st.doc.slides[0];
       const elements = (slide?.elements ?? []).filter((e) => !e.isDeleted);
-      const targetImg = (
-        (inlineObjectIds.length > 0 &&
-          elements.find((e) => (inlineObjectIds.includes(e.id) || inlineObjectIds.includes(e.name || "")) && (e.type === "image" || e.type === "frame" || e.type === "bookMockup"))) ||
+      const targetImg = ((inlineObjectIds.length > 0 &&
+        elements.find(
+          (e) =>
+            (inlineObjectIds.includes(e.id) || inlineObjectIds.includes(e.name || "")) &&
+            (e.type === "image" || e.type === "frame" || e.type === "bookMockup"),
+        )) ||
         elements.find((e) => st.selectedIds.has(e.id) && e.type === "image") ||
-        elements.find((e) => e.type === "image")
-      ) as ImageElement | undefined;
+        elements.find((e) => e.type === "image")) as ImageElement | undefined;
 
       if (!targetImg) {
         updateActionStatus(act, "error", "No image found on canvas to remove background.");
@@ -623,16 +624,14 @@ export async function executeCoPilotInstruction(
     try {
       const slide = st.doc.slides.find((s) => s.id === st.currentSlideId) || st.doc.slides[0];
       const elements = (slide?.elements ?? []).filter((e) => !e.isDeleted);
-      const targetImg = (
-        (inlineObjectIds.length > 0 &&
-          elements.find(
-            (e) =>
-              (inlineObjectIds.includes(e.id) || inlineObjectIds.includes(e.name || "")) &&
-              (e.type === "image" || e.type === "frame" || e.type === "bookMockup"),
-          )) ||
+      const targetImg = ((inlineObjectIds.length > 0 &&
+        elements.find(
+          (e) =>
+            (inlineObjectIds.includes(e.id) || inlineObjectIds.includes(e.name || "")) &&
+            (e.type === "image" || e.type === "frame" || e.type === "bookMockup"),
+        )) ||
         elements.find((e) => st.selectedIds.has(e.id) && e.type === "image") ||
-        elements.find((e) => e.type === "image")
-      ) as ImageElement | undefined;
+        elements.find((e) => e.type === "image")) as ImageElement | undefined;
 
       if (!targetImg) {
         updateActionStatus(act, "error", "No image found on canvas to vectorize.");
@@ -906,8 +905,9 @@ export function diagnoseOrchestratorError(
       detectedSubjectTh = "ตัวละคร";
     }
 
-    const isBackgroundRequest =
-      /ฉากหลัง|scene|background|ฉาก|วิว|environment|setting/i.test(userPrompt);
+    const isBackgroundRequest = /ฉากหลัง|scene|background|ฉาก|วิว|environment|setting/i.test(
+      userPrompt,
+    );
 
     const errorCard: CoPilotErrorCard = {
       title: "Request violates content policy",
@@ -935,14 +935,12 @@ export function diagnoseOrchestratorError(
           "✏️ Edit prompt",
         ];
       } else {
-        alternativeEn = "an original ensemble of heroic warriors in futuristic tactical battle suits";
-        alternativePrompt = "A team of original heroic superheroes in advanced high-tech battle armor and tactical suits";
+        alternativeEn =
+          "an original ensemble of heroic warriors in futuristic tactical battle suits";
+        alternativePrompt =
+          "A team of original heroic superheroes in advanced high-tech battle armor and tactical suits";
         samplePromptTh = "กลุ่มซูเปอร์ฮีโร่สไตล์ออริจินัลในชุดเกราะและสูทไฮเทคเพื่อการต่อสู้สุดอลังการ";
-        suggestions = [
-          "✨ Yes, go ahead with that",
-          "🦸 สร้างทีมฮีโร่ออริจินัล",
-          "✏️ Edit prompt",
-        ];
+        suggestions = ["✨ Yes, go ahead with that", "🦸 สร้างทีมฮีโร่ออริจินัล", "✏️ Edit prompt"];
       }
     } else if (/spider[- ]?man|spiderman|สไปเดอร์แมน/i.test(userPrompt)) {
       entityName = "Spider-Man";
@@ -950,8 +948,7 @@ export function diagnoseOrchestratorError(
         "an original superhero in a modern red-and-blue bodysuit with web-pattern accents, swinging between skyscrapers in a dramatic metropolis";
       alternativePrompt =
         "An original acrobatic superhero in a sleek red and dark blue athletic suit with subtle geometric webbing, swinging between sunlit skyscrapers in a sprawling modern city";
-      samplePromptTh =
-        "ซูเปอร์ฮีโร่ในชุดบอดี้สูทโทนสีแดง-น้ำเงิน สไตล์คอมิกส์โมเดิร์น กำลังโหนตัวระหว่างตึกสูงในมหานคร";
+      samplePromptTh = "ซูเปอร์ฮีโร่ในชุดบอดี้สูทโทนสีแดง-น้ำเงิน สไตล์คอมิกส์โมเดิร์น กำลังโหนตัวระหว่างตึกสูงในมหานคร";
       suggestions = [
         "✨ Yes, go ahead with that",
         "🦸 สร้างฮีโร่ชุดแดงน้ำเงิน (เลี่ยงลิขสิทธิ์)",
@@ -978,8 +975,7 @@ export function diagnoseOrchestratorError(
         "an original dark vigilante in tactical black armor with a flowing cape, standing atop a gothic skyscraper at night";
       alternativePrompt =
         "An original nocturnal vigilante in matte black tactical armor with a flowing practical cape, standing atop a gargoyle on a gothic cathedral at night";
-      samplePromptTh =
-        "อัศวินรัตติกาลในชุดเกราะสีดำทมิฬ ผ้าคลุมยาว กำลังยืนตรวจตราบนยอดตึกสูงในเมืองโกธิคยามค่ำคืน";
+      samplePromptTh = "อัศวินรัตติกาลในชุดเกราะสีดำทมิฬ ผ้าคลุมยาว กำลังยืนตรวจตราบนยอดตึกสูงในเมืองโกธิคยามค่ำคืน";
       suggestions = [
         "✨ Yes, go ahead with that",
         "🦇 สร้างอัศวินรัตติกาล (เลี่ยงลิขสิทธิ์)",
@@ -993,15 +989,13 @@ export function diagnoseOrchestratorError(
         alternativePrompt = `A stunning cinematic atmospheric background inspired by this aesthetic behind a ${detectedSubjectEn}`;
         samplePromptTh = `ฉากหลังบรรยากาศอลังการสไตล์ออริจินัล โดยมี${detectedSubjectTh}อยู่ด้านหน้า`;
       } else {
-        alternativeEn = "an original character with distinctive styling, detailed costume, and heroic atmosphere";
-        alternativePrompt = "An original character with detailed creative costume, artistic lighting, and distinct visual personality";
+        alternativeEn =
+          "an original character with distinctive styling, detailed costume, and heroic atmosphere";
+        alternativePrompt =
+          "An original character with detailed creative costume, artistic lighting, and distinct visual personality";
         samplePromptTh = "ตัวละครสไตล์ออริจินัล พร้อมเครื่องแต่งกายและโทนสีที่เป็นเอกลักษณ์";
       }
-      suggestions = [
-        "✨ Yes, go ahead with that",
-        "🎨 สร้างสไตล์ออริจินัล",
-        "✏️ Edit prompt",
-      ];
+      suggestions = ["✨ Yes, go ahead with that", "🎨 สร้างสไตล์ออริจินัล", "✏️ Edit prompt"];
     }
 
     let reply = "";
@@ -1079,8 +1073,7 @@ export function diagnoseOrchestratorError(
       suggestions: ["⏳ ลองใหม่อีกครั้งใน 10 วินาที", "✏️ ปรับปรุงคำขอก่อนส่ง"],
       errorCard: {
         title: "คำขอเกินขีดจำกัดชั่วคราว (Rate limit)",
-        description:
-          "ระบบถูกเรียกใช้งานถี่เกินไป คุณสามารถปรับแต่งคำขอในช่องพิมพ์แล้วลองส่งใหม่ได้ครับ",
+        description: "ระบบถูกเรียกใช้งานถี่เกินไป คุณสามารถปรับแต่งคำขอในช่องพิมพ์แล้วลองส่งใหม่ได้ครับ",
         actionText: "✏️ ปรับปรุงคำขอก่อนส่ง",
         promptToEdit: userPrompt,
       },

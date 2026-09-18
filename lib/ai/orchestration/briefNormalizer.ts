@@ -5,10 +5,7 @@
  * and executes "Rewrite before Reject" transformations.
  */
 
-import type {
-  ImageGenerationBriefV1,
-  ReferenceImageType,
-} from "./briefSpecV1";
+import type { ImageGenerationBriefV1, ReferenceImageType } from "./briefSpecV1";
 import { analyzePromptRisk } from "./promptRiskAnalyzer";
 
 export interface BriefNormalizerOptions {
@@ -43,16 +40,16 @@ export function normalizeUserBriefToV1(
     const matched = brandMatch[0].toLowerCase();
     brandName = matched.includes("welearn") || matched.includes("วีเลิร์น") ? "Welearn" : matched;
   }
-  const wantsExactLogo =
-    /(?:โลโก้|logo|brand mark)/i.test(prompt) || brandPresent;
+  const wantsExactLogo = /(?:โลโก้|logo|brand mark)/i.test(prompt) || brandPresent;
 
   // 3. Identify Text & Typography requirements
   const hasThai = /[\u0E00-\u0E7F]/.test(prompt);
   const quotes: string[] = [];
   const quoteRegex = /["“'「]([^"”'」]+)["”'」]/g;
-  let qMatch: RegExpExecArray | null;
-  while ((qMatch = quoteRegex.exec(prompt)) !== null) {
+  let qMatch = quoteRegex.exec(prompt);
+  while (qMatch) {
     quotes.push(qMatch[1].trim());
+    qMatch = quoteRegex.exec(prompt);
   }
 
   const exactText: string[] = [...quotes];
@@ -63,11 +60,13 @@ export function normalizeUserBriefToV1(
     }
   }
 
-  const textRequired = exactText.length > 0 || /(?:ข้อความ|พาดหัว|title|ชื่อเรื่อง|headline)/i.test(prompt);
+  const textRequired =
+    exactText.length > 0 || /(?:ข้อความ|พาดหัว|title|ชื่อเรื่อง|headline)/i.test(prompt);
 
   // 4. Identify Signage / Shelf / Poster / Banner Output Types
   const isShelfSign = /(?:ป้ายหมวด|ป้ายติดบนชั้น|ชั้นวางหนังสือ|shelf\s*sign|shelf\s*header)/i.test(prompt);
-  const isPoster = /(?:โปสเตอร์|poster|publishing\s*poster)/i.test(prompt) || /welearn/i.test(prompt);
+  const isPoster =
+    /(?:โปสเตอร์|poster|publishing\s*poster)/i.test(prompt) || /welearn/i.test(prompt);
   const isBanner = /(?:แบนเนอร์|banner|ป้ายขนาด)/i.test(prompt);
 
   let outputType: ImageGenerationBriefV1["task"]["output_type"] = "poster";
@@ -170,9 +169,7 @@ export function normalizeUserBriefToV1(
       lighting: isManifestTheme
         ? "cinematic red and gold volumetric glow, soft atmospheric illumination"
         : "commercial studio lighting with crisp rim highlights",
-      background: isManifestTheme
-        ? "deep matte obsidian black"
-        : "clean minimal studio backdrop",
+      background: isManifestTheme ? "deep matte obsidian black" : "clean minimal studio backdrop",
       color_palette: colorPalette.length > 0 ? colorPalette : ["neutral studio palette"],
       material: isManifestTheme ? ["matte black texture", "metallic gold accents"] : [],
       effects,
@@ -203,7 +200,9 @@ export function normalizeUserBriefToV1(
     },
     reference_images: {
       provided: options.hasReference ?? false,
-      reference_type: options.referenceTypes ?? (options.hasReference ? ["STYLE_REFERENCE", "COLOR_REFERENCE"] : []),
+      reference_type:
+        options.referenceTypes ??
+        (options.hasReference ? ["STYLE_REFERENCE", "COLOR_REFERENCE"] : []),
       preserve_identity: false,
       preserve_composition: true,
       preserve_product: false,

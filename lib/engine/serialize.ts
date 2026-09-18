@@ -12,7 +12,12 @@
 
 import { getCached, loadDataURL } from "./imageCache";
 import { normalizeDocumentLayers } from "./layers";
-import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineElement, type EngineSlide } from "./types";
+import {
+  ENGINE_SCHEMA_VERSION,
+  type EngineDoc,
+  type EngineElement,
+  type EngineSlide,
+} from "./types";
 
 export class MissingSerializedImageError extends Error {
   readonly fileIds: string[];

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { formatDisplayPrompt, parseInlineTagTokens } from "@/lib/ai/orchestration/inlineTagSynthesis";
+import {
+  formatDisplayPrompt,
+  parseInlineTagTokens,
+} from "@/lib/ai/orchestration/inlineTagSynthesis";
 
 describe("Chat Composer Tag & Formatting Enhancements", () => {
   it("parses and formats display prompt cleanly with name tags", () => {

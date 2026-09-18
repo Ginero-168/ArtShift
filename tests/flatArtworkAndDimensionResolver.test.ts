@@ -10,7 +10,7 @@ import { retrieveDesignKnowledge } from "@/lib/ai/knowledge/designKnowledge";
 describe("Physical Dimension and Aspect Ratio Resolver", () => {
   it("resolves 60x20cm shelf sign prompt to a native 3:1 banner (2048x688)", () => {
     const prompt =
-      'ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือใส่ Logo สำนักพิมพ์ Welearn โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn และใส่โลโก้สำนักพิมพ์ ป้ายขนาด 60x20cm.';
+      "ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือใส่ Logo สำนักพิมพ์ Welearn โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn และใส่โลโก้สำนักพิมพ์ ป้ายขนาด 60x20cm.";
     const dimensions = resolveImageGenerationDimensions(prompt);
 
     expect(dimensions.width).toBe(2048);
@@ -113,7 +113,7 @@ describe("Physical Dimension and Aspect Ratio Resolver", () => {
 
 describe("Anti-Mockup & Flat 2D Graphic Design Prompt Synthesis", () => {
   const userPrompt =
-    'ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือใส่ Logo สำนักพิมพ์ Welearn โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn และใส่โลโก้สำนักพิมพ์ ป้ายขนาด 60x20cm.';
+    "ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือใส่ Logo สำนักพิมพ์ Welearn โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn และใส่โลโก้สำนักพิมพ์ ป้ายขนาด 60x20cm.";
 
   it("enforces flat 2D graphic design artwork and strict anti-mockup rules", () => {
     const streamlined = streamlinePromptForImageGen(userPrompt);
@@ -139,7 +139,9 @@ describe("Anti-Mockup & Flat 2D Graphic Design Prompt Synthesis", () => {
     expect(streamlined).toContain('"Welearn"');
 
     // Dynamic Asymmetry & Rich Editorial Content (Anti-stiff, anti-bullseye)
-    expect(streamlined).toContain("dynamic asymmetric wide panoramic banner composition (rule-of-thirds) avoiding dead-center bullseye symmetry");
+    expect(streamlined).toContain(
+      "dynamic asymmetric wide panoramic banner composition (rule-of-thirds) avoiding dead-center bullseye symmetry",
+    );
     expect(streamlined).toContain("rich editorial typography layout with clear hierarchy");
     expect(streamlined).toContain("The Magic of Affirmation");
     expect(streamlined).toContain("เมื่อคำพูดและความคิดของคุณ กำหนดอนาคตได้");
@@ -157,10 +159,7 @@ describe("Anti-Mockup & Flat 2D Graphic Design Prompt Synthesis", () => {
 
 describe("Signage & Banner Design Knowledge Retrieval", () => {
   it("retrieves signage-banner skill for shelf signage prompt", () => {
-    const results = retrieveDesignKnowledge(
-      "ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือ ป้ายขนาด 60x20cm",
-      3,
-    );
+    const results = retrieveDesignKnowledge("ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือ ป้ายขนาด 60x20cm", 3);
 
     expect(results.some((r) => r.id === "signage-banner")).toBe(true);
     const signageSkill = results.find((r) => r.id === "signage-banner");

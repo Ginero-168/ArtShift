@@ -5,10 +5,7 @@
 
 import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  listPromptHelperThumbEntries,
-  promptHelperThumbPrompt,
-} from "./promptHelperThumbPrompts";
+import { listPromptHelperThumbEntries, promptHelperThumbPrompt } from "./promptHelperThumbPrompts";
 
 const OUT_DIR = path.join(process.cwd(), "public/prompt-helper/thumbs");
 const MANIFEST_JSON = path.join(process.cwd(), "public/prompt-helper/manifest.json");

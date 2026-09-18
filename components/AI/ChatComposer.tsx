@@ -600,9 +600,7 @@ export default function ChatComposer({
 
         {/* Selected Quality Hint */}
         {selectedQuality !== "auto" && (
-          <div style={{ fontSize: 10.5, color: "#94a3b8" }}>
-            {`${activeOption.price} / run`}
-          </div>
+          <div style={{ fontSize: 10.5, color: "#94a3b8" }}>{`${activeOption.price} / run`}</div>
         )}
       </div>
     </div>

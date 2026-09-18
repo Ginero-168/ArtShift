@@ -3,9 +3,7 @@
  * No HTML passthrough — text is escaped via React text nodes.
  */
 
-export type ChatMdInline =
-  | { type: "text"; text: string }
-  | { type: "bold"; text: string };
+export type ChatMdInline = { type: "text"; text: string } | { type: "bold"; text: string };
 
 export type ChatMdBlock =
   | { type: "heading"; level: 1 | 2 | 3; inlines: ChatMdInline[] }
@@ -19,13 +17,14 @@ export function parseChatMdInlines(text: string): ChatMdInline[] {
   const out: ChatMdInline[] = [];
   let last = 0;
   BOLD_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = BOLD_RE.exec(text)) !== null) {
+  let match = BOLD_RE.exec(text);
+  while (match) {
     if (match.index > last) {
       out.push({ type: "text", text: text.slice(last, match.index) });
     }
     out.push({ type: "bold", text: match[1] ?? "" });
     last = match.index + match[0].length;
+    match = BOLD_RE.exec(text);
   }
   if (last < text.length) out.push({ type: "text", text: text.slice(last) });
   if (out.length === 0 && text) out.push({ type: "text", text });
@@ -53,9 +52,7 @@ function bulletBody(line: string): string {
 
 /** Detect content that benefits from markdown-lite rendering. */
 export function looksLikeChatMarkdown(content: string): boolean {
-  return /(^|\n)\s{0,3}#{1,3}\s+\S|(^|\n)\s*([-*•]|\d+\.)\s+\S|\*\*[^*\n]+\*\*/.test(
-    content,
-  );
+  return /(^|\n)\s{0,3}#{1,3}\s+\S|(^|\n)\s*([-*•]|\d+\.)\s+\S|\*\*[^*\n]+\*\*/.test(content);
 }
 
 export function parseChatMarkdown(content: string): ChatMdBlock[] {
@@ -103,12 +100,7 @@ export function parseChatMarkdown(content: string): ChatMdBlock[] {
     while (i < lines.length) {
       const next = lines[i] ?? "";
       const nextTrim = next.trim();
-      if (
-        !nextTrim ||
-        isRule(nextTrim) ||
-        headingLevel(nextTrim) ||
-        isBullet(next)
-      ) {
+      if (!nextTrim || isRule(nextTrim) || headingLevel(nextTrim) || isBullet(next)) {
         break;
       }
       para.push(nextTrim);

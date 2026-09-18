@@ -27,8 +27,7 @@ export type InlinePromptSynthesis = {
 
 // @[Name:id] matches anywhere (composer often glues tags to Thai words).
 // Bare @Name still requires a soft boundary so emails are not treated as tags.
-const CANONICAL_TAG_REGEX =
-  /(?:@\[([^\]]+)\]|(?:^|(?<=\s|[([{"']))@([A-Za-z0-9_\u0E00-\u0E7F]+))/g;
+const CANONICAL_TAG_REGEX = /(?:@\[([^\]]+)\]|(?:^|(?<=\s|[([{"']))@([A-Za-z0-9_\u0E00-\u0E7F]+))/g;
 
 /**
  * Parses prompt text into text segments and inline tag tokens.
@@ -121,9 +120,7 @@ export type InlineTagReferenceRole = "style" | "layout" | "subject" | "reference
  * Infers how each Name Tag should be used from surrounding clause language
  * (e.g. "จากสไตล์นี้ @A" → style, "Layout จากรูปนี้ @B" → layout).
  */
-export function inferInlineTagRoles(
-  text: string,
-): Map<string, InlineTagReferenceRole> {
+export function inferInlineTagRoles(text: string): Map<string, InlineTagReferenceRole> {
   const roles = new Map<string, InlineTagReferenceRole>();
   const segments = parseInlineTagTokens(text);
   let preceding = "";
@@ -142,14 +139,10 @@ export function inferInlineTagRoles(
     ) {
       role = "style";
     } else if (
-      /(?:layout|เลย์เอาต์|เลย์เอาท์|โครง|composition|template|บรีฟ|brief|โครงสร้าง|กราฟิก)/iu.test(
-        window,
-      )
+      /(?:layout|เลย์เอาต์|เลย์เอาท์|โครง|composition|template|บรีฟ|brief|โครงสร้าง|กราฟิก)/iu.test(window)
     ) {
       role = "layout";
-    } else if (
-      /(?:แก้ไข|แก้รูป|edit|retouch|subject|ตัวแบบ|คนนี้|รูปนี้|ภาพนี้|อิงจาก|จากรูป)/iu.test(window)
-    ) {
+    } else if (/(?:แก้ไข|แก้รูป|edit|retouch|subject|ตัวแบบ|คนนี้|รูปนี้|ภาพนี้|อิงจาก|จากรูป)/iu.test(window)) {
       role = "subject";
     }
     if (!roles.has(seg.objectId)) {
@@ -363,7 +356,6 @@ export function buildPromptWithTagsForCopy(
   return rebuilt;
 }
 
-
 /**
  * Synthesizes inline tags with their full visual analyses, generating:
  * 1. Semantic mapping linking the sentence structure to visual features
@@ -507,7 +499,10 @@ export function synthesizePromptWithInlineTags(
 export function cleanTechnicalPromptText(text: string): string {
   let s = (text || "").trim();
   // Strip common technical prefixes
-  s = s.replace(/^(?:Edit|แก้ไข|ปรับแต่ง)\s+(?:ภาพ|รูป|image)?\s*(?:@\[[^\]]+\]|@[^\s]+|[^\s]+)?\s*(?:ด้วย\s*(?:Prompt|คำสั่ง)\s*:\s*|with\s+prompt\s*:\s*)/iu, "");
+  s = s.replace(
+    /^(?:Edit|แก้ไข|ปรับแต่ง)\s+(?:ภาพ|รูป|image)?\s*(?:@\[[^\]]+\]|@[^\s]+|[^\s]+)?\s*(?:ด้วย\s*(?:Prompt|คำสั่ง)\s*:\s*|with\s+prompt\s*:\s*)/iu,
+    "",
+  );
   s = s.replace(/^Edit\s+image\s+.*?with\s+prompt\s*:\s*/iu, "");
   s = s.replace(/^propose_creative_direction\s*:\s*/iu, "");
   s = s.replace(/^propose_design_plan\s*:\s*/iu, "");
@@ -524,4 +519,3 @@ export function cleanTechnicalPromptText(text: string): string {
   }
   return s.trim();
 }
-

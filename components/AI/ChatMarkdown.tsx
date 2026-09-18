@@ -2,9 +2,9 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import {
+  type ChatMdInline,
   looksLikeChatMarkdown,
   parseChatMarkdown,
-  type ChatMdInline,
 } from "@/lib/ai/chatMarkdownLite";
 
 type Props = {
@@ -29,9 +29,7 @@ function renderInlines(inlines: ChatMdInline[], keyPrefix: string): ReactNode[] 
 
 export default function ChatMarkdown({ content, style, enableMarkdown = true }: Props) {
   if (!enableMarkdown || !looksLikeChatMarkdown(content)) {
-    return (
-      <span style={{ whiteSpace: "pre-wrap", ...style }}>{content}</span>
-    );
+    return <span style={{ whiteSpace: "pre-wrap", ...style }}>{content}</span>;
   }
 
   const blocks = parseChatMarkdown(content);

@@ -1,15 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
+  buildPromptHelperVariantUserMessage,
+  PROMPT_HELPER_VARIANT_SYSTEM,
+  parsePromptHelperVariantPlan,
+} from "@/lib/ai/orchestration/promptHelperVariantPlan";
+import {
   applyPromptHelperVariantPlan,
   createPromptRefinement,
   listPromptHelperCatalogAxes,
   type PromptRefinementCardData,
 } from "@/lib/ai/orchestration/promptRefinement";
-import {
-  buildPromptHelperVariantUserMessage,
-  parsePromptHelperVariantPlan,
-  PROMPT_HELPER_VARIANT_SYSTEM,
-} from "@/lib/ai/orchestration/promptHelperVariantPlan";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
@@ -53,10 +53,7 @@ export async function POST(req: NextRequest) {
     );
   }
   if (!isRecord(raw) || raw.cloudConsent !== true) {
-    return NextResponse.json(
-      { error: "Explicit cloud consent is required." },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Explicit cloud consent is required." }, { status: 403 });
   }
 
   const prompt = typeof raw.prompt === "string" ? raw.prompt.trim() : "";

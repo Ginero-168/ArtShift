@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  isBroadImagePrompt,
-  createPromptRefinement,
   buildRefinedPromptString,
   buildRefinementOrchestratorLocks,
+  createPromptRefinement,
+  isBroadImagePrompt,
 } from "../lib/ai/orchestration/promptRefinement";
 
 describe("promptRefinement", () => {
@@ -18,9 +18,7 @@ describe("promptRefinement", () => {
 
     it("rejects prompts that are already detailed or specific", () => {
       expect(
-        isBroadImagePrompt(
-          "สร้างรูปแมวสีส้ม ขนฟู นั่งอยู่บนโซฟากำมะหยี่สีเขียว สไตล์ photorealistic 8k",
-        ),
+        isBroadImagePrompt("สร้างรูปแมวสีส้ม ขนฟู นั่งอยู่บนโซฟากำมะหยี่สีเขียว สไตล์ photorealistic 8k"),
       ).toBe(false);
       expect(
         isBroadImagePrompt(
@@ -37,9 +35,7 @@ describe("promptRefinement", () => {
 
     it("opens helper for brand/shelf briefs even when long", () => {
       expect(
-        isBroadImagePrompt(
-          "ออกแบบป้ายหมวดหนังสือ ป้ายขนาด 60x20cm ใส่โลโก้แบรนด์ จากปกหนังสือสองเล่ม",
-        ),
+        isBroadImagePrompt("ออกแบบป้ายหมวดหนังสือ ป้ายขนาด 60x20cm ใส่โลโก้แบรนด์ จากปกหนังสือสองเล่ม"),
       ).toBe(true);
     });
   });
@@ -74,9 +70,7 @@ describe("promptRefinement", () => {
     });
 
     it("creates brand-variant mode with Shared Anchors for shelf/ad briefs", () => {
-      const refinement = createPromptRefinement(
-        "ออกแบบป้ายหมวด ขนาด 60x20cm ใส่โลโก้แบรนด์",
-      );
+      const refinement = createPromptRefinement("ออกแบบป้ายหมวด ขนาด 60x20cm ใส่โลโก้แบรนด์");
       expect(refinement.mode).toBe("brand-variant");
       expect(refinement.subjectType).toBe("brand");
       expect(refinement.sharedAnchors.some((a) => a.id === "ratio")).toBe(true);
@@ -125,9 +119,7 @@ describe("promptRefinement", () => {
 
   describe("buildRefinementOrchestratorLocks", () => {
     it("exports Shared Anchors + Variant picks for Orchestrator continuity", () => {
-      const refinement = createPromptRefinement(
-        "ออกแบบป้ายหมวด ขนาด 60x20cm ใส่โลโก้แบรนด์",
-      );
+      const refinement = createPromptRefinement("ออกแบบป้ายหมวด ขนาด 60x20cm ใส่โลโก้แบรนด์");
       const locks = buildRefinementOrchestratorLocks(refinement, {
         mood: "mood_premium",
         structure: "struct_split",

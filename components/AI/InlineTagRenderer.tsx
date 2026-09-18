@@ -81,10 +81,8 @@ export default function InlineTagRenderer({
           elements,
         );
 
-        let dataUrl = matchedRef.fileId
-          ? getCached(matchedRef.fileId)?.dataURL
-          : undefined;
-        let effectiveFileId = matchedRef.fileId || undefined;
+        const dataUrl = matchedRef.fileId ? getCached(matchedRef.fileId)?.dataURL : undefined;
+        const effectiveFileId = matchedRef.fileId || undefined;
 
         const activeRef = activePreviewId === seg.objectId ? matchedRef : null;
         const _activeDataUrl = activeRef

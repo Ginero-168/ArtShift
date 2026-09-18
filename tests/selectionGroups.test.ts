@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createRect } from "@/lib/engine/factory";
-import {
-  analyzeSelectionGroups,
-  buildLayerHierarchy,
-} from "@/lib/engine/selectionGroups";
+import { analyzeSelectionGroups, buildLayerHierarchy } from "@/lib/engine/selectionGroups";
 
 describe("analyzeSelectionGroups", () => {
   it("offers Ungroup for a single shared group", () => {

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { getObjectContextIconName } from "@/components/Canvas/objectContextIconRegistry";
 import {
   IMAGE_MIX_PROMPT,
   requestCoPilotExternalTurn,
   subscribeCoPilotExternalTurn,
 } from "@/lib/ai/coPilotRequestBus";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
-import { getObjectContextIconName } from "@/components/Canvas/objectContextIconRegistry";
 
 describe("coPilot external Mix turn", () => {
   it("delivers Mix requests to subscribers with image ids", () => {

@@ -122,7 +122,11 @@ const CAMERA_ANGLES: Opt[] = [
 ];
 
 const ART_STYLES: Opt[] = [
-  { id: "photorealistic", label: "ภาพถ่ายสมจริง", modifier: "สไตล์ภาพถ่ายสมจริง (Photorealistic) รายละเอียดคมชัดสูง" },
+  {
+    id: "photorealistic",
+    label: "ภาพถ่ายสมจริง",
+    modifier: "สไตล์ภาพถ่ายสมจริง (Photorealistic) รายละเอียดคมชัดสูง",
+  },
   { id: "anime", label: "อนิเมะญี่ปุ่น", modifier: "สไตล์อนิเมะญี่ปุ่น สีสันสดใส ลายเส้นสะอาด" },
   { id: "3d", label: "3D Animation", modifier: "สไตล์ 3D Animation น่ารัก มีมิติ" },
   { id: "watercolor", label: "ภาพวาดสีน้ำ", modifier: "สไตล์ภาพวาดสีน้ำ ละมุนตา พริ้วไหว" },
@@ -195,7 +199,11 @@ const PORTRAIT_CAMERA: Opt[] = [
 
 const LANDSCAPE_SCENERY: Opt[] = [
   { id: "sunset", label: "พระอาทิตย์ตกริมทะเล", modifier: "พระอาทิตย์ตกริมชายหาด ท้องฟ้าไล่เฉดสีส้มชมพูทอง" },
-  { id: "mountain-mist", label: "ภูเขาเคล้าสายหมอก", modifier: "เทือกเขาสลับซับซ้อน ท่ามกลางหมอกยามเช้าตรู่" },
+  {
+    id: "mountain-mist",
+    label: "ภูเขาเคล้าสายหมอก",
+    modifier: "เทือกเขาสลับซับซ้อน ท่ามกลางหมอกยามเช้าตรู่",
+  },
   { id: "forest", label: "ป่าเขียวขจี", modifier: "ป่าไม้อุดมสมบูรณ์ แสงแดดส่องผ่านยอดไม้ลงสู่ลำธาร" },
   { id: "meadow", label: "ทุ่งดอกไม้", modifier: "ทุ่งหญ้าและดอกไม้ป่าหลากสีสัน พริ้วไหว" },
   { id: "waterfall", label: "น้ำตก", modifier: "น้ำตกสูง พร้าวน้ำขาวใส โอบด้วยหินเขียว" },
@@ -230,11 +238,31 @@ const LANDSCAPE_CAMERA: Opt[] = [
 ];
 
 const GENERIC_TONES: Opt[] = [
-  { id: "vibrant", label: "สีสดใส มีพลัง", character: "จัดจ้าน", modifier: "โทนสีสดใสจัดจ้าน มีพลังดึงดูดสายตา" },
-  { id: "pastel", label: "พาสเทล ละมุน", character: "นุ่มนวล", modifier: "โทนสีพาสเทล นุ่มนวล อ่อนโยนสบายตา" },
-  { id: "earth", label: "เอิร์ธโทน อบอุ่น", character: "ธรรมชาติ", modifier: "โทนสีเอิร์ธโทน ธรรมชาติ สบายใจ" },
+  {
+    id: "vibrant",
+    label: "สีสดใส มีพลัง",
+    character: "จัดจ้าน",
+    modifier: "โทนสีสดใสจัดจ้าน มีพลังดึงดูดสายตา",
+  },
+  {
+    id: "pastel",
+    label: "พาสเทล ละมุน",
+    character: "นุ่มนวล",
+    modifier: "โทนสีพาสเทล นุ่มนวล อ่อนโยนสบายตา",
+  },
+  {
+    id: "earth",
+    label: "เอิร์ธโทน อบอุ่น",
+    character: "ธรรมชาติ",
+    modifier: "โทนสีเอิร์ธโทน ธรรมชาติ สบายใจ",
+  },
   { id: "dark", label: "ดาร์ก โมเดิร์น", character: "หรูเข้ม", modifier: "โทนสีเข้มหรูหรา สไตล์ดาร์กโมเดิร์น" },
-  { id: "neon", label: "นีออน ล้ำยุค", character: "เรืองแสง", modifier: "โทนสีนีออนเรืองแสง สไตล์ไซเบอร์โมเดิร์น" },
+  {
+    id: "neon",
+    label: "นีออน ล้ำยุค",
+    character: "เรืองแสง",
+    modifier: "โทนสีนีออนเรืองแสง สไตล์ไซเบอร์โมเดิร์น",
+  },
   { id: "monochrome", label: "ขาวดำ", character: "โมโน", modifier: "โทนขาวดำคลาสสิก คอนทราสต์ชัด" },
   { id: "warm", label: "วอร์มโทน", character: "อุ่น", modifier: "โทนอุ่นส้มทอง บรรยากาศอบอุ่น" },
   { id: "cool", label: "คูลโทน", character: "เย็น", modifier: "โทนเย็นฟ้าเขียว สงบตา" },
@@ -248,10 +276,30 @@ const GENERIC_TONES: Opt[] = [
 ];
 
 const GENERIC_BACKGROUNDS: Opt[] = [
-  { id: "studio", label: "สตูดิโอมินิมอล", character: "คลีน", modifier: "ฉากหลังสตูดิโอคลีน สไตล์มินิมอล สะอาดตา" },
-  { id: "nature", label: "ธรรมชาติกลางแจ้ง", character: "กลางแจ้ง", modifier: "ฉากธรรมชาติกลางแจ้ง มีแสงแดดสดใส" },
-  { id: "room", label: "บรรยากาศในห้อง", character: "อินดอร์", modifier: "ฉากบรรยากาศภายในห้องตกแต่งสไตล์โมเดิร์น" },
-  { id: "abstract", label: "แอบสแตรกต์ โบเก้", character: "โบเก้", modifier: "ฉากหลังแอบสแตรกต์พร้อมแสงโบเก้หลากสีนุ่มนวล" },
+  {
+    id: "studio",
+    label: "สตูดิโอมินิมอล",
+    character: "คลีน",
+    modifier: "ฉากหลังสตูดิโอคลีน สไตล์มินิมอล สะอาดตา",
+  },
+  {
+    id: "nature",
+    label: "ธรรมชาติกลางแจ้ง",
+    character: "กลางแจ้ง",
+    modifier: "ฉากธรรมชาติกลางแจ้ง มีแสงแดดสดใส",
+  },
+  {
+    id: "room",
+    label: "บรรยากาศในห้อง",
+    character: "อินดอร์",
+    modifier: "ฉากบรรยากาศภายในห้องตกแต่งสไตล์โมเดิร์น",
+  },
+  {
+    id: "abstract",
+    label: "แอบสแตรกต์ โบเก้",
+    character: "โบเก้",
+    modifier: "ฉากหลังแอบสแตรกต์พร้อมแสงโบเก้หลากสีนุ่มนวล",
+  },
   { id: "city", label: "เมือง", character: "เออร์บัน", modifier: "ฉากเมืองสตรีทโมเดิร์น" },
   { id: "beach", label: "ชายหาด", character: "ทะเล", modifier: "ฉากชายหาดแสงธรรมชาติ" },
   { id: "office", label: "ออฟฟิศ", character: "ทำงาน", modifier: "ฉากออฟฟิศกระจกโมเดิร์น" },
@@ -265,12 +313,7 @@ const GENERIC_BACKGROUNDS: Opt[] = [
   { id: "park", label: "สวนสาธารณะ", character: "พาร์ค", modifier: "ฉากสวนสาธารณะร่มรื่น" },
 ];
 
-function dim(
-  id: string,
-  title: string,
-  options: Opt[],
-  hint?: string,
-): OptionSetDimension {
+function dim(id: string, title: string, options: Opt[], hint?: string): OptionSetDimension {
   return { id, title, hint, options };
 }
 

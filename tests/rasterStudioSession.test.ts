@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createImage } from "@/lib/engine/factory";
-import {
-  isStudioRasterTool,
-  useRasterStudioSession,
-} from "@/lib/raster/studio/sessionStore";
+import { isStudioRasterTool, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 
 describe("Raster Studio session tools", () => {
   it("opens with brush as the default studio tool", () => {

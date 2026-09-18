@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ContentPolicyErrorCard } from "@/components/AI/ChatActionCards";
 import {
-  ChatResultImageThumb,
-  ImageResultSummaryBlock,
-} from "@/components/AI/ChatImageResult";
-import {
   ChatCopyIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -16,6 +12,7 @@ import {
   ThumbsUpIcon,
   TrashIcon,
 } from "@/components/AI/ChatIcons";
+import { ChatResultImageThumb, ImageResultSummaryBlock } from "@/components/AI/ChatImageResult";
 import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
 import {
   IconCamera,
@@ -30,9 +27,7 @@ import {
 import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
 import { DEFAULT_CREATING_MODEL_LABEL } from "@/lib/ai/orchestration/creatingModelCatalog";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
-import {
-  resolveComposerImageRef,
-} from "@/lib/ai/orchestration/imageReferences";
+import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import {
   buildPromptWithTagsForCopy as buildCanonicalPromptWithTags,
   cleanTechnicalPromptText,
@@ -299,7 +294,11 @@ export function CollapsibleThought({
   }, [customMessages, isLive]);
 
   const liveLine = React.useMemo(() => {
-    if (statusMessage && !statusMessage.startsWith("กำลังจัดเตรียม") && !statusMessage.startsWith("กำลังวิเคราะห์บริบท")) {
+    if (
+      statusMessage &&
+      !statusMessage.startsWith("กำลังจัดเตรียม") &&
+      !statusMessage.startsWith("กำลังวิเคราะห์บริบท")
+    ) {
       return statusMessage;
     }
     if (messageList.length === 0) return "";
@@ -608,9 +607,7 @@ export default function ChatThread({
                     const segments = parseInlineTagTokens(msg.content);
                     const tagSegs = segments.filter((s): s is InlineTagToken => s.type === "tag");
                     if (tagSegs.length > 0) {
-                      const elements = useEngine
-                        .getState()
-                        .doc.slides.flatMap((s) => s.elements);
+                      const elements = useEngine.getState().doc.slides.flatMap((s) => s.elements);
                       effectiveRefs = tagSegs.map((t: InlineTagToken) =>
                         resolveComposerImageRef(t.objectId, t.displayName, [], elements),
                       );
@@ -820,43 +817,43 @@ export default function ChatThread({
               {msg.resultSummary && !msg.isError ? (
                 <ImageResultSummaryBlock summary={msg.resultSummary} />
               ) : (
-              <div
-                style={{
-                  alignSelf: "flex-start",
-                  maxWidth: "92%",
-                  padding: "8px 12px",
-                  borderRadius: "3px 14px 14px 14px",
-                  background: msg.isError ? "#fff1f2" : "#f8fafc",
-                  color: msg.isError ? "#991b1b" : "#1e293b",
-                  fontSize: 12.5,
-                  lineHeight: 1.55,
-                  wordBreak: "break-word",
-                  border: msg.isError ? "1px solid #fecdd3" : "1px solid #f1f5f9",
-                  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
-                }}
-              >
-                <InlineTagRenderer
-                  theme="light"
-                  content={msg.content}
-                  imageRefs={
-                    msg.imageRefs ||
-                    (msg.images
-                      ? msg.images.map((im) => ({
-                          objectId: im.fileId || "",
-                          elementVersion: 1,
-                          fileId: im.fileId || "",
-                          displayName: im.label || "ภาพ",
-                          sourceWidth: im.width || 1024,
-                          sourceHeight: im.height || 1024,
-                          width: im.width || 1024,
-                          height: im.height || 1024,
-                          angle: 0,
-                        }))
-                      : undefined)
-                  }
-                  onSelect={(fileId) => onSelectCanvasImage(fileId)}
-                />
-              </div>
+                <div
+                  style={{
+                    alignSelf: "flex-start",
+                    maxWidth: "92%",
+                    padding: "8px 12px",
+                    borderRadius: "3px 14px 14px 14px",
+                    background: msg.isError ? "#fff1f2" : "#f8fafc",
+                    color: msg.isError ? "#991b1b" : "#1e293b",
+                    fontSize: 12.5,
+                    lineHeight: 1.55,
+                    wordBreak: "break-word",
+                    border: msg.isError ? "1px solid #fecdd3" : "1px solid #f1f5f9",
+                    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
+                  }}
+                >
+                  <InlineTagRenderer
+                    theme="light"
+                    content={msg.content}
+                    imageRefs={
+                      msg.imageRefs ||
+                      (msg.images
+                        ? msg.images.map((im) => ({
+                            objectId: im.fileId || "",
+                            elementVersion: 1,
+                            fileId: im.fileId || "",
+                            displayName: im.label || "ภาพ",
+                            sourceWidth: im.width || 1024,
+                            sourceHeight: im.height || 1024,
+                            width: im.width || 1024,
+                            height: im.height || 1024,
+                            angle: 0,
+                          }))
+                        : undefined)
+                    }
+                    onSelect={(fileId) => onSelectCanvasImage(fileId)}
+                  />
+                </div>
               )}
 
               {/* Suggestion Chips */}

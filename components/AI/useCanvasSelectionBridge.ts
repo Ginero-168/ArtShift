@@ -175,7 +175,7 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
       const el = currentSlide.elements.find(
         (item: any) =>
           !item.isDeleted &&
-          ((item.type === "image" || item.type === "bookMockup") && item.fileId === fileId ||
+          (((item.type === "image" || item.type === "bookMockup") && item.fileId === fileId) ||
             (item.type === "frame" && item.imageFileId === fileId)),
       );
       if (el) {
@@ -193,18 +193,17 @@ export function useCanvasSelectionBridge(): CanvasSelectionBridge {
         } catch {
           // ignore viewport zoom failures
         }
-        const match =
-          allSlideImageRefs.find((r: any) => r.objectId === el.id) || {
-            objectId: el.id,
-            elementVersion: el.version,
-            fileId: (el as any).fileId || (el as any).imageFileId,
-            displayName: (el as any).sourceName || el.name || "Image",
-            sourceWidth: (el as any).naturalWidth || el.width,
-            sourceHeight: (el as any).naturalHeight || el.height,
-            width: el.width,
-            height: el.height,
-            angle: el.angle,
-          };
+        const match = allSlideImageRefs.find((r: any) => r.objectId === el.id) || {
+          objectId: el.id,
+          elementVersion: el.version,
+          fileId: (el as any).fileId || (el as any).imageFileId,
+          displayName: (el as any).sourceName || el.name || "Image",
+          sourceWidth: (el as any).naturalWidth || el.width,
+          sourceHeight: (el as any).naturalHeight || el.height,
+          width: el.width,
+          height: el.height,
+          angle: el.angle,
+        };
         editorRef.current?.insertTag(match);
       }
     },

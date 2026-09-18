@@ -176,10 +176,7 @@ function saveProviderApiKey(
   writeStore(store);
 }
 
-function readProviderApiKey(
-  accountId: string,
-  provider: AiCredentialProvider,
-): string | undefined {
+function readProviderApiKey(accountId: string, provider: AiCredentialProvider): string | undefined {
   const record = readStore().credentials[credentialKey(accountId, provider)];
   if (record?.provider !== provider) return undefined;
   return decryptCredential(accountId, provider, record);

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { BookMockupSection } from "@/components/Canvas/PropertiesPanel/BookMockupSection";
+import FontFamilyPicker from "@/components/FontFamilyPicker";
 import {
   IconAlignBottom,
   IconAlignCenterH,
@@ -52,7 +53,6 @@ import type {
 } from "@/lib/engine/types";
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
 import { convertElementToVectorPath, smoothVectorPathNodes } from "@/lib/engine/vectorPath";
-import FontFamilyPicker from "@/components/FontFamilyPicker";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
@@ -1273,13 +1273,13 @@ function TextOptions({
           onChange={(event) => apply(withSafeHeight({ text: event.currentTarget.value }), "text")}
         />
       </label>
-      <label className={styles.field}>
+      <div className={styles.field}>
         <span>Typeface</span>
         <FontFamilyPicker
           value={text.fontFamily}
           onChange={(fontFamily) => apply({ fontFamily }, "font family")}
         />
-      </label>
+      </div>
       <div className={styles.numberGrid}>
         <NumberField
           label="Size"
