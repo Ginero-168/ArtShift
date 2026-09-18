@@ -62,7 +62,8 @@ export default function PromptRefinementCard({
   };
 
   const isBrand = data.mode === "brand-variant";
-  const [thumbEpoch, setThumbEpoch] = useState(0);
+  /** Cache-bust only for ids that were missing and later became ready — never remount already-visible thumbs. */
+  const [thumbVersions, setThumbVersions] = useState<Record<string, number>>({});
   const optionIds = data.dimensions.flatMap((dim) => dim.options.map((o) => o.id));
   const optionIdsKey = optionIds.join(",");
 
@@ -70,6 +71,19 @@ export default function PromptRefinementCard({
     let cancelled = false;
     const ids = optionIdsKey.split(",").filter(Boolean);
     if (ids.length === 0) return;
+
+    const knownReady = new Set<string>();
+    const seenMissing = new Set<string>();
+
+    async function fetchReady(wanted: string[]): Promise<string[]> {
+      if (wanted.length === 0) return [];
+      const res = await fetch(
+        `/api/ai/prompt-helper/thumbs?ids=${encodeURIComponent(wanted.slice(0, 80).join(","))}`,
+      );
+      if (!res.ok) return [];
+      const body = (await res.json().catch(() => null)) as { ready?: string[] } | null;
+      return Array.isArray(body?.ready) ? body.ready : [];
+    }
 
     async function ensureAndPoll() {
       try {
@@ -81,19 +95,42 @@ export default function PromptRefinementCard({
       } catch {
         // Helper still works with SVG/swatch fallbacks.
       }
+      if (cancelled) return;
 
-      for (let i = 0; i < 18; i++) {
+      // Snapshot what's already on disk — do NOT bump versions (avoids flicker).
+      try {
+        const ready = await fetchReady(ids);
+        for (const id of ready) knownReady.add(id);
+      } catch {
+        // ignore
+      }
+
+      let missing = ids.filter((id) => !knownReady.has(id));
+      for (const id of missing) seenMissing.add(id);
+      if (missing.length === 0) return;
+
+      for (let i = 0; i < 24; i++) {
         await new Promise((r) => setTimeout(r, 4000));
         if (cancelled) return;
+
+        // Only poll ids still missing — skip chips that already have files.
+        missing = ids.filter((id) => !knownReady.has(id));
+        if (missing.length === 0) return;
+
         try {
-          const res = await fetch(
-            `/api/ai/prompt-helper/thumbs?ids=${encodeURIComponent(ids.slice(0, 60).join(","))}`,
+          const ready = await fetchReady(missing);
+          const newlyReady = ready.filter(
+            (id) => seenMissing.has(id) && !knownReady.has(id),
           );
-          if (!res.ok) continue;
-          const body = (await res.json()) as { ready?: string[] };
-          if ((body.ready?.length ?? 0) > 0) {
-            setThumbEpoch((n) => n + 1);
-          }
+          if (newlyReady.length === 0) continue;
+
+          const stamp = Date.now();
+          for (const id of newlyReady) knownReady.add(id);
+          setThumbVersions((prev) => {
+            const next = { ...prev };
+            for (const id of newlyReady) next[id] = stamp;
+            return next;
+          });
         } catch {
           // ignore poll errors
         }
@@ -255,7 +292,7 @@ export default function PromptRefinementCard({
               options={dim.options}
               selectedOptionId={selectedOptionId}
               visual={dim.options.some((o) => o.preview)}
-              thumbEpoch={thumbEpoch}
+              thumbVersions={thumbVersions}
               onClear={() => handleClearDimension(dim.id)}
               onToggleOption={(optId) => handleToggleOption(dim.id, optId)}
             />
@@ -358,7 +395,7 @@ interface DimensionRowProps {
   options: RefinementOption[];
   selectedOptionId: string | null;
   visual: boolean;
-  thumbEpoch: number;
+  thumbVersions: Record<string, number>;
   onClear: () => void;
   onToggleOption: (id: string) => void;
 }
@@ -369,7 +406,7 @@ function DimensionRow({
   options,
   selectedOptionId,
   visual,
-  thumbEpoch,
+  thumbVersions,
   onClear,
   onToggleOption,
 }: DimensionRowProps) {
@@ -444,7 +481,7 @@ function DimensionRow({
                   option={opt}
                   selected={isSelected}
                   onToggle={() => onToggleOption(opt.id)}
-                  thumbEpoch={thumbEpoch}
+                  thumbVersion={thumbVersions[opt.id]}
                 />
               );
             }
@@ -524,12 +561,12 @@ function ThumbnailOption({
   option,
   selected,
   onToggle,
-  thumbEpoch,
+  thumbVersion,
 }: {
   option: RefinementOption;
   selected: boolean;
   onToggle: () => void;
-  thumbEpoch: number;
+  thumbVersion?: number;
 }) {
   return (
     <button
@@ -556,7 +593,7 @@ function ThumbnailOption({
         optionId={option.id}
         preview={option.preview}
         selected={selected}
-        thumbEpoch={thumbEpoch}
+        thumbVersion={thumbVersion}
       />
       <div
         style={{
@@ -595,18 +632,19 @@ function OptionPreviewSurface({
   optionId,
   preview,
   selected,
-  thumbEpoch,
+  thumbVersion,
 }: {
   optionId: string;
   preview?: OptionPreview;
   selected: boolean;
-  thumbEpoch: number;
+  thumbVersion?: number;
 }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setFailed(false);
-  }, [optionId, thumbEpoch]);
+    // Retry only when this option's thumb was newly generated (version appears/changes).
+    if (thumbVersion != null) setFailed(false);
+  }, [optionId, thumbVersion]);
 
   const frameStyle = {
     height: 28,
@@ -618,15 +656,19 @@ function OptionPreviewSurface({
   };
 
   const fallback = resolveOptionFallbackPreview(optionId);
-  const thumbSrc = `${promptHelperThumbPath(optionId)}?v=${thumbEpoch}`;
+  const baseSrc =
+    preview?.kind === "image" ? preview.src : promptHelperThumbPath(optionId);
+  // Stable URL when already on disk; cache-bust only after a missing→ready transition.
+  const thumbSrc =
+    thumbVersion != null ? `${baseSrc}?v=${thumbVersion}` : baseSrc;
 
   if (!failed) {
     return (
       <div style={frameStyle}>
-        {/* Catalog thumbs are static VPS assets under /prompt-helper/thumbs */}
+        {/* Catalog thumbs are served via /api/ai/prompt-helper/thumbs/:id */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={preview?.kind === "image" ? `${preview.src}?v=${thumbEpoch}` : thumbSrc}
+          src={thumbSrc}
           alt={preview?.kind === "image" ? preview.alt || "" : ""}
           width={52}
           height={28}
