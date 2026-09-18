@@ -7,6 +7,7 @@ import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences"
 import { parseInlineTagTokens } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
+import ChatMarkdown from "./ChatMarkdown";
 import ImageReferencePreview from "./ImageReferencePreview";
 
 type Props = {
@@ -40,7 +41,7 @@ export default function InlineTagRenderer({
   const hasTags = segments.some((s) => s.type === "tag");
 
   if (!hasTags) {
-    return <span style={style}>{content}</span>;
+    return <ChatMarkdown content={content} style={style} />;
   }
 
   const cancelClose = () => {
@@ -68,7 +69,7 @@ export default function InlineTagRenderer({
     <span style={{ display: "inline", ...style }}>
       {segments.map((seg, idx) => {
         if (seg.type === "text") {
-          return <span key={`text-${idx}`}>{seg.text}</span>;
+          return <ChatMarkdown key={`text-${idx}`} content={seg.text} />;
         }
 
         // Tag segment — prefer objectId; never grab the first same-named image.

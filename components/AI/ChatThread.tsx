@@ -829,7 +829,7 @@ export default function ChatThread({
                   background: msg.isError ? "#fff1f2" : "#f8fafc",
                   color: msg.isError ? "#991b1b" : "#1e293b",
                   fontSize: 12.5,
-                  lineHeight: 1.5,
+                  lineHeight: 1.55,
                   wordBreak: "break-word",
                   border: msg.isError ? "1px solid #fecdd3" : "1px solid #f1f5f9",
                   boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
