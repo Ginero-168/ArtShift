@@ -1362,6 +1362,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
               (el) =>
                 !el.isDeleted &&
                 el.type === "frame" &&
+                !el.imageFileId &&
                 el.id !== movedId &&
                 p.x >= el.x &&
                 p.x <= el.x + el.width &&

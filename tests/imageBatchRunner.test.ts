@@ -95,8 +95,11 @@ describe("image batch runner & multi-image orchestration", () => {
       // Each consecutive item must have x >= previous.x + previous.width (no overlap!)
       expect(placements[1].x).toBeGreaterThanOrEqual(placements[0].x + placements[0].width);
       expect(placements[2].x).toBeGreaterThanOrEqual(placements[1].x + placements[1].width);
-      // All items stay within slide width (1920)
-      expect(placements[2].x + placements[2].width).toBeLessThanOrEqual(1920);
+      // Row is centered on the viewport-anchored base bounds
+      const totalW =
+        placements[2].x + placements[2].width - placements[0].x;
+      const rowCenter = placements[0].x + totalW / 2;
+      expect(rowCenter).toBeCloseTo(base.x + base.width / 2, 0);
     });
 
     it("scales down proportionally when 5 images exceed available width", () => {
@@ -106,9 +109,10 @@ describe("image batch runner & multi-image orchestration", () => {
         computeMultiImagePlacement(base, { outputIndex, requestedOutputCount: count }, 1000, 1000),
       );
 
-      // Total row must fit within slide width 1000
+      // Total row must fit within the available viewport width
+      const first = placements[0];
       const last = placements[4];
-      expect(last.x + last.width).toBeLessThanOrEqual(1000);
+      expect(last.x + last.width - first.x).toBeLessThanOrEqual(1000);
       for (let i = 1; i < count; i++) {
         expect(placements[i].x).toBeGreaterThanOrEqual(
           placements[i - 1].x + placements[i - 1].width,

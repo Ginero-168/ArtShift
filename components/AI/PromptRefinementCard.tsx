@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconClose, IconPenEdit, IconWand } from "@/components/icons";
 import {
   buildRefinedPromptString,
@@ -6,7 +6,11 @@ import {
   type PromptRefinementCardData,
   type RefinementOption,
 } from "@/lib/ai/orchestration/promptRefinement";
-import type { OptionPreview } from "@/lib/ai/orchestration/promptOptionCatalog";
+import {
+  resolveOptionFallbackPreview,
+  type OptionPreview,
+} from "@/lib/ai/orchestration/promptOptionCatalog";
+import { promptHelperThumbPath } from "@/lib/ai/orchestration/promptHelperThumbManifest";
 
 export interface PromptRefinementCardProps {
   data: PromptRefinementCardData;
@@ -58,6 +62,49 @@ export default function PromptRefinementCard({
   };
 
   const isBrand = data.mode === "brand-variant";
+  const [thumbEpoch, setThumbEpoch] = useState(0);
+  const optionIds = data.dimensions.flatMap((dim) => dim.options.map((o) => o.id));
+  const optionIdsKey = optionIds.join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = optionIdsKey.split(",").filter(Boolean);
+    if (ids.length === 0) return;
+
+    async function ensureAndPoll() {
+      try {
+        await fetch("/api/ai/prompt-helper/thumbs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ optionIds: ids }),
+        });
+      } catch {
+        // Helper still works with SVG/swatch fallbacks.
+      }
+
+      for (let i = 0; i < 18; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        if (cancelled) return;
+        try {
+          const res = await fetch(
+            `/api/ai/prompt-helper/thumbs?ids=${encodeURIComponent(ids.slice(0, 60).join(","))}`,
+          );
+          if (!res.ok) continue;
+          const body = (await res.json()) as { ready?: string[] };
+          if ((body.ready?.length ?? 0) > 0) {
+            setThumbEpoch((n) => n + 1);
+          }
+        } catch {
+          // ignore poll errors
+        }
+      }
+    }
+
+    void ensureAndPoll();
+    return () => {
+      cancelled = true;
+    };
+  }, [data.id, optionIdsKey]);
 
   return (
     <div
@@ -208,6 +255,7 @@ export default function PromptRefinementCard({
               options={dim.options}
               selectedOptionId={selectedOptionId}
               visual={dim.options.some((o) => o.preview)}
+              thumbEpoch={thumbEpoch}
               onClear={() => handleClearDimension(dim.id)}
               onToggleOption={(optId) => handleToggleOption(dim.id, optId)}
             />
@@ -310,6 +358,7 @@ interface DimensionRowProps {
   options: RefinementOption[];
   selectedOptionId: string | null;
   visual: boolean;
+  thumbEpoch: number;
   onClear: () => void;
   onToggleOption: (id: string) => void;
 }
@@ -320,6 +369,7 @@ function DimensionRow({
   options,
   selectedOptionId,
   visual,
+  thumbEpoch,
   onClear,
   onToggleOption,
 }: DimensionRowProps) {
@@ -341,7 +391,7 @@ function DimensionRow({
         <button
           type="button"
           aria-label={`Scroll ${title} left`}
-          onClick={() => handleScroll(visual ? -160 : -120)}
+          onClick={() => handleScroll(visual ? -140 : -120)}
           style={navBtnStyle}
         >
           ‹
@@ -352,7 +402,7 @@ function DimensionRow({
           style={{
             display: "flex",
             alignItems: visual ? "stretch" : "center",
-            gap: 6,
+            gap: 5,
             overflowX: "auto",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
@@ -367,9 +417,9 @@ function DimensionRow({
             style={{
               flexShrink: 0,
               alignSelf: visual ? "center" : undefined,
-              minWidth: visual ? 36 : 24,
-              height: visual ? 36 : 22,
-              padding: visual ? "0 8px" : "0 6px",
+              minWidth: visual ? 28 : 24,
+              height: visual ? 28 : 22,
+              padding: visual ? "0 6px" : "0 6px",
               borderRadius: 6,
               border: isCleared ? "1px solid #dc2626" : "1px solid #fecaca",
               background: isCleared ? "#dc2626" : "#fef2f2",
@@ -394,6 +444,7 @@ function DimensionRow({
                   option={opt}
                   selected={isSelected}
                   onToggle={() => onToggleOption(opt.id)}
+                  thumbEpoch={thumbEpoch}
                 />
               );
             }
@@ -473,10 +524,12 @@ function ThumbnailOption({
   option,
   selected,
   onToggle,
+  thumbEpoch,
 }: {
   option: RefinementOption;
   selected: boolean;
   onToggle: () => void;
+  thumbEpoch: number;
 }) {
   return (
     <button
@@ -486,35 +539,32 @@ function ThumbnailOption({
       title={option.modifier}
       style={{
         flexShrink: 0,
-        width: 76,
-        borderRadius: 8,
+        width: 56,
+        borderRadius: 7,
         border: selected ? "2px solid #0284c7" : "1px solid #e2e8f0",
         background: selected ? "#f0f9ff" : "#ffffff",
-        padding: 3,
+        padding: 2,
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 2,
         textAlign: "left",
         boxShadow: selected ? "0 0 0 1px rgba(2,132,199,0.25)" : "none",
       }}
     >
       <OptionPreviewSurface
-        preview={
-          option.preview ?? {
-            kind: "swatch",
-            colors: ["#e2e8f0", "#f8fafc"],
-          }
-        }
+        optionId={option.id}
+        preview={option.preview}
         selected={selected}
+        thumbEpoch={thumbEpoch}
       />
       <div
         style={{
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: selected ? 700 : 600,
           color: selected ? "#0369a1" : "#334155",
-          lineHeight: 1.2,
-          padding: "0 2px",
+          lineHeight: 1.15,
+          padding: "0 1px",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -525,10 +575,10 @@ function ThumbnailOption({
       {option.character && (
         <div
           style={{
-            fontSize: 9,
+            fontSize: 8,
             color: "#94a3b8",
-            padding: "0 2px 1px",
-            lineHeight: 1.2,
+            padding: "0 1px 1px",
+            lineHeight: 1.1,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -542,41 +592,55 @@ function ThumbnailOption({
 }
 
 function OptionPreviewSurface({
+  optionId,
   preview,
   selected,
+  thumbEpoch,
 }: {
-  preview: OptionPreview;
+  optionId: string;
+  preview?: OptionPreview;
   selected: boolean;
+  thumbEpoch: number;
 }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [optionId, thumbEpoch]);
+
   const frameStyle = {
-    height: 40,
-    borderRadius: 5,
+    height: 28,
+    borderRadius: 4,
     overflow: "hidden" as const,
     border: selected ? "1px solid #7dd3fc" : "1px solid rgba(15,23,42,0.06)",
     lineHeight: 0,
     background: "#f8fafc",
   };
 
-  if (preview.kind === "image") {
+  const fallback = resolveOptionFallbackPreview(optionId);
+  const thumbSrc = `${promptHelperThumbPath(optionId)}?v=${thumbEpoch}`;
+
+  if (!failed) {
     return (
       <div style={frameStyle}>
         {/* Catalog thumbs are static VPS assets under /prompt-helper/thumbs */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={preview.src}
-          alt={preview.alt || ""}
-          width={70}
-          height={40}
-          style={{ width: "100%", height: 40, objectFit: "cover", display: "block" }}
+          src={preview?.kind === "image" ? `${preview.src}?v=${thumbEpoch}` : thumbSrc}
+          alt={preview?.kind === "image" ? preview.alt || "" : ""}
+          width={52}
+          height={28}
+          style={{ width: "100%", height: 28, objectFit: "cover", display: "block" }}
           loading="lazy"
           decoding="async"
+          onError={() => setFailed(true)}
         />
       </div>
     );
   }
 
-  if (preview.kind === "swatch") {
-    const gradient = `linear-gradient(135deg, ${preview.colors.join(", ")})`;
+  if (fallback.kind === "swatch") {
+    const gradient = `linear-gradient(135deg, ${fallback.colors.join(", ")})`;
     return (
       <div
         style={{
@@ -587,11 +651,15 @@ function OptionPreviewSurface({
     );
   }
 
-  return (
-    <div
-      style={frameStyle}
-      // Catalog SVGs are authored in-repo (no user HTML).
-      dangerouslySetInnerHTML={{ __html: preview.svg }}
-    />
-  );
+  if (fallback.kind === "svg") {
+    return (
+      <div
+        style={frameStyle}
+        // Catalog SVGs are authored in-repo (no user HTML).
+        dangerouslySetInnerHTML={{ __html: fallback.svg }}
+      />
+    );
+  }
+
+  return <div style={frameStyle} />;
 }

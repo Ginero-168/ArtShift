@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   IconChevronDown,
   IconEye,
@@ -10,12 +10,14 @@ import {
   IconTrash,
   IconUnlock,
 } from "@/components/icons";
-import { getCompositionSlotLabel, groupCompositionLayers } from "@/lib/engine/compositionTree";
 import { getElementDefaultName } from "@/lib/engine/layers";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
-import { inferSemanticMetadata } from "@/lib/engine/smartLayout";
+import {
+  buildLayerHierarchy,
+  type LayerTreeNode,
+} from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
-import type { LayerMode } from "@/lib/engine/types";
+import type { EngineElement, LayerMode } from "@/lib/engine/types";
 import AutoLayoutAction from "./AutoLayoutAction";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
@@ -58,15 +60,14 @@ export default function LayerPanel() {
       .filter((element) => !element.isDeleted)
       .sort((a, b) => (b.z ?? 0) - (a.z ?? 0));
   }, [slide]);
-  const layerEntries = useMemo(() => groupCompositionLayers(objectLayers), [objectLayers]);
+  const layerTree = useMemo(() => buildLayerHierarchy(objectLayers), [objectLayers]);
 
-  const renderElement = (element: (typeof objectLayers)[number]) => {
+  const renderElement = (element: EngineElement, depth = 0) => {
     const isSelected = selectedIds.has(element.id);
     const mode: LayerMode = element.layoutMode ?? "block";
     const isVisible = !element.hidden;
     const isLocked = element.locked === true;
     const displayName = getElementDefaultName(element);
-    const semanticRole = element.semantic?.role ?? inferSemanticMetadata(element).role;
     const isDragging = draggedId === element.id;
     const isDragOver = dragOverId === element.id && draggedId !== element.id;
 
@@ -75,6 +76,8 @@ export default function LayerPanel() {
         className={`${styles.objectLayerCard} ${isSelected ? styles.selectedObjectCard : ""} ${!isVisible ? styles.hiddenLayer : ""} ${isDragging ? styles.layerDragging : ""} ${isDragOver ? styles.layerDragOver : ""}`}
         key={element.id}
         data-mode={mode}
+        data-depth={depth}
+        style={{ marginLeft: depth > 0 ? depth * 10 : undefined }}
         draggable
         aria-label={`${displayName} layer`}
         onDragStart={(event) => {
@@ -112,7 +115,7 @@ export default function LayerPanel() {
             title="Drag to reorder layer"
             onClick={(event) => event.stopPropagation()}
           >
-            <IconGripVertical size={13} />
+            <IconGripVertical size={11} />
           </div>
           <span className={styles.objectIconBox} data-mode={mode}>
             <BlockIcon
@@ -120,7 +123,7 @@ export default function LayerPanel() {
                 (element.builderKind ??
                   element.type) as import("@/lib/builder/blocks").BuilderBlockKind
               }
-              size={14}
+              size={11}
             />
           </span>
           <div className={styles.objectNameContainer}>
@@ -148,7 +151,7 @@ export default function LayerPanel() {
             ) : (
               <span
                 className={styles.objectNameText}
-                title={`Semantic role: ${semanticRole}. Double-click to rename`}
+                title="Double-click to rename"
                 onDoubleClick={(event) => {
                   event.stopPropagation();
                   setEditingElementId(element.id);
@@ -171,7 +174,7 @@ export default function LayerPanel() {
               title={`Click to switch to ${mode === "block" ? "Free" : "Block"} mode`}
               aria-label={`${displayName}: switch to ${mode === "block" ? "Free" : "Block"} mode`}
             >
-              {mode === "block" ? "BLOCK" : "FREE"}
+              {mode === "block" ? "B" : "F"}
             </button>
             <button
               type="button"
@@ -183,7 +186,7 @@ export default function LayerPanel() {
               title={isVisible ? "Hide object" : "Show object"}
               aria-label={isVisible ? `Hide ${displayName}` : `Show ${displayName}`}
             >
-              {isVisible ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+              {isVisible ? <IconEye size={11} /> : <IconEyeOff size={11} />}
             </button>
             <button
               type="button"
@@ -195,7 +198,7 @@ export default function LayerPanel() {
               title={isLocked ? "Unlock object" : "Lock object"}
               aria-label={isLocked ? `Unlock ${displayName}` : `Lock ${displayName}`}
             >
-              {isLocked ? <IconLock size={12} /> : <IconUnlock size={12} />}
+              {isLocked ? <IconLock size={10} /> : <IconUnlock size={10} />}
             </button>
             <button
               type="button"
@@ -207,7 +210,7 @@ export default function LayerPanel() {
               title="Delete object"
               aria-label={`Delete ${displayName}`}
             >
-              <IconTrash size={12} />
+              <IconTrash size={10} />
             </button>
           </div>
         </div>
@@ -215,10 +218,62 @@ export default function LayerPanel() {
     );
   };
 
+  const renderNode = (node: LayerTreeNode, depth = 0): ReactNode => {
+    if (node.kind === "element") return renderElement(node.element, depth);
+
+    const collapsed = collapsedGroups[node.groupId] === true;
+    const allSelected =
+      node.memberIds.length > 0 && node.memberIds.every((id) => selectedIds.has(id));
+
+    return (
+      <div
+        className={`${styles.compositionLayerGroup} ${allSelected ? styles.compositionGroupSelected : ""}`}
+        key={node.groupId}
+        style={{ marginLeft: depth > 0 ? depth * 10 : undefined }}
+      >
+        <button
+          type="button"
+          className={styles.compositionGroupHeader}
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${node.label}`}
+          title="Click to collapse or expand. Double-click to select group."
+          onClick={() =>
+            setCollapsedGroups((current) => ({
+              ...current,
+              [node.groupId]: !collapsed,
+            }))
+          }
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            selectOnly(node.memberIds);
+          }}
+        >
+          <span
+            aria-hidden="true"
+            className={styles.compositionGroupChevron}
+            style={{ transform: collapsed ? "rotate(-90deg)" : "none" }}
+          >
+            <IconChevronDown size={10} />
+          </span>
+          <strong>{node.label}</strong>
+          <small>
+            {node.memberIds.length}
+            {allSelected ? " · selected" : ""}
+          </small>
+        </button>
+        {!collapsed ? (
+          <div className={styles.compositionLayerChildren}>
+            {node.children.map((child) => renderNode(child, depth + 1))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className={styles.layerDock}>
       {open ? (
-        <aside className={styles.layerDrawer} aria-label="Layers">
+        <aside className={`${styles.layerDrawer} ${styles.layerDrawerCompact}`} aria-label="Layers">
           <div className={styles.layerDrawerHeader}>
             <div>
               <span className={styles.kicker}>ORGANIZE</span>
@@ -232,56 +287,7 @@ export default function LayerPanel() {
           </div>
 
           <div className={styles.layerScroll}>
-            {layerEntries.map((entry) => {
-              if (entry.kind === "element") return renderElement(entry.element);
-              const collapsed = collapsedGroups[entry.key] === true;
-              const groupName = entry.blockId
-                .replace(/[-_]+/g, " ")
-                .replace(/\b\w/g, (character) => character.toUpperCase());
-              const allSelected = entry.elements.every((element) => selectedIds.has(element.id));
-              return (
-                <div className={styles.compositionLayerGroup} key={entry.key}>
-                  <button
-                    type="button"
-                    className={styles.compositionGroupHeader}
-                    aria-expanded={!collapsed}
-                    aria-label={`${collapsed ? "Expand" : "Collapse"} ${groupName} composition group`}
-                    title="Click to collapse or expand. Double-click to select all slots."
-                    onClick={() =>
-                      setCollapsedGroups((current) => ({ ...current, [entry.key]: !collapsed }))
-                    }
-                    onDoubleClick={() => selectOnly(entry.elements.map((element) => element.id))}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        display: "inline-flex",
-                        transform: collapsed ? "rotate(-90deg)" : "none",
-                        transition: "transform 0.15s ease",
-                      }}
-                    >
-                      <IconChevronDown size={11} />
-                    </span>
-                    <strong>{groupName} composition</strong>
-                    <small>
-                      {entry.elements.length} slots{allSelected ? " · selected" : ""}
-                    </small>
-                  </button>
-                  {!collapsed ? (
-                    <div className={styles.compositionLayerChildren}>
-                      {entry.elements.map((element) => (
-                        <div key={element.id}>
-                          <span className={styles.compositionSlotLabel}>
-                            {getCompositionSlotLabel(element)}
-                          </span>
-                          {renderElement(element)}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+            {layerTree.map((node) => renderNode(node))}
             {!objectLayers.length ? (
               <p className={styles.empty}>No matching layers or objects.</p>
             ) : null}

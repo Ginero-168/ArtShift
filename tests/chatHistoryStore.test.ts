@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe("chat history persistence", () => {
-  it("strips progress rows and data-URL image payloads", () => {
+  it("strips progress rows and ephemeral image payloads", () => {
     const progress: CoPilotMessage = {
       id: "p1",
       role: "system",
@@ -33,6 +33,7 @@ describe("chat history persistence", () => {
       timestamp: 2,
       images: [
         { url: "data:image/png;base64,AAA", fileId: "file-1", width: 100, height: 100 },
+        { url: "blob:https://example/abc", fileId: "file-blob" },
         { url: "https://cdn.example/x.png", fileId: "file-2" },
       ],
     };
@@ -41,6 +42,7 @@ describe("chat history persistence", () => {
     const cleaned = sanitizeMessageForPersist(withDataUrl);
     expect(cleaned?.images).toEqual([
       { url: "", fileId: "file-1", width: 100, height: 100 },
+      { url: "", fileId: "file-blob" },
       { url: "https://cdn.example/x.png", fileId: "file-2" },
     ]);
   });

@@ -1454,57 +1454,69 @@
 }
 
 .layerDrawer .layerScroll {
-  padding: 8px 11px 14px;
+  padding: 6px 8px 10px;
+}
+
+.layerDrawerCompact .layerDrawerHeader {
+  padding: 8px 10px 6px;
+}
+
+.layerDrawerCompact .layerDrawerHeader h2 {
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .objectLayerCard {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   overflow: hidden;
-  border-radius: 6px;
-  border: 1px solid #bfdbfe;
-  border-left: 3.5px solid #3b82f6;
-  background: #eff6ff;
-  transition: all 120ms ease;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  border-left: 2.5px solid #3b82f6;
+  background: #f8fafc;
+  transition: background-color 100ms ease, border-color 100ms ease;
   cursor: pointer;
 }
 
 .objectLayerCard[data-mode="free"] {
   border-color: #fed7aa;
   border-left-color: #f97316;
-  background: #fff7ed;
+  background: #fffaf5;
 }
 
 .objectLayerCard:hover {
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  background: #f1f5f9;
+  box-shadow: none;
 }
 
 .objectLayerCard.selectedObjectCard {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
 }
 
 .objectLayerCard[data-mode="free"].selectedObjectCard {
   border-color: #f97316;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.35);
+  background: #fff7ed;
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.35);
 }
 
 .objectLayerRow {
-  height: 32px;
+  height: 24px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 5px;
+  gap: 3px;
+  padding: 0 3px;
 }
 
 .layerDragHandle {
-  width: 18px;
-  height: 22px;
+  width: 14px;
+  height: 18px;
   display: grid;
   place-items: center;
   color: #94a3b8;
   cursor: grab;
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: 3px;
   transition: color 120ms ease, background-color 120ms ease;
   user-select: none;
 }
@@ -1524,17 +1536,17 @@
 }
 
 .layerDragOver {
-  outline: 2px dashed #3b82f6 !important;
-  outline-offset: 1px;
+  outline: 1.5px dashed #3b82f6 !important;
+  outline-offset: 0;
 }
 
 .objectIconBox {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #dbeafe;
   color: #1d4ed8;
 }
@@ -1553,8 +1565,8 @@
 
 .objectNameText {
   color: #1e293b;
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1563,34 +1575,36 @@
 
 .layerNameInput {
   width: 100%;
-  height: 22px;
-  font-size: 9.5px;
-  font-weight: 700;
+  height: 18px;
+  font-size: 10px;
+  font-weight: 600;
   color: #1e293b;
   background: #ffffff;
   border: 1px solid #3b82f6;
   border-radius: 3px;
-  padding: 0 4px;
+  padding: 0 3px;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
 
 .objectLayerActions {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 1px;
   flex-shrink: 0;
 }
 
 .modeBadgeButton {
-  height: 20px;
+  height: 16px;
+  min-width: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 0 5px;
+  justify-content: center;
+  gap: 0;
+  padding: 0 3px;
   border-radius: 3px;
   font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   cursor: pointer;
   transition: all 120ms ease;
@@ -1619,8 +1633,8 @@
 }
 
 .layerIconButton {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border: 0;
   background: transparent;
   color: #64748b;
@@ -1709,39 +1723,51 @@
 }
 
 .compositionLayerGroup {
-  margin-bottom: 7px;
+  margin-bottom: 3px;
   overflow: hidden;
-  border: 1px solid #d9e1ef;
-  border-radius: 7px;
-  background: #f8faff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f8fafc;
+}
+
+.compositionGroupSelected {
+  border-color: #93c5fd;
+  background: #eff6ff;
 }
 
 .compositionGroupHeader {
   width: 100%;
-  min-height: 30px;
-  padding: 6px 8px;
+  min-height: 22px;
+  padding: 2px 6px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   border: 0;
-  background: #eef3ff;
+  background: #eef2ff;
   color: #263b69;
   text-align: left;
   cursor: pointer;
 }
 
+.compositionGroupChevron {
+  display: inline-flex;
+  transition: transform 0.12s ease;
+}
+
 .compositionGroupHeader strong {
   flex: 1;
   font-size: 10px;
+  font-weight: 600;
 }
 
 .compositionGroupHeader small {
   color: #71809b;
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .compositionLayerChildren {
-  padding: 5px 5px 2px;
+  padding: 2px 3px 2px 4px;
+  border-top: 1px solid #e8eef8;
 }
 
 .compositionLayerChildren > div {
@@ -1751,8 +1777,8 @@
 .compositionSlotLabel {
   position: absolute;
   z-index: 1;
-  top: 4px;
-  left: 34px;
+  top: 2px;
+  left: 28px;
   color: #71809b;
   font-size: 8px;
   pointer-events: none;

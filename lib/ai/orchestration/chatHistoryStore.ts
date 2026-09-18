@@ -22,9 +22,10 @@ function storageKey(projectId: string): string {
   return `${CHAT_HISTORY_STORAGE_PREFIX}${projectId}`;
 }
 
-function stripDataUrl(url: string | undefined): string | undefined {
+/** Drop payloads that die across reloads or blow localStorage. */
+function stripEphemeralUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
-  if (url.startsWith("data:")) return undefined;
+  if (url.startsWith("data:") || url.startsWith("blob:")) return undefined;
   return url;
 }
 
@@ -33,7 +34,7 @@ export function sanitizeMessageForPersist(message: CoPilotMessage): CoPilotMessa
   if (message.kind === "progress") return null;
   const images = message.images
     ?.map((image) => {
-      const url = stripDataUrl(image.url);
+      const url = stripEphemeralUrl(image.url);
       if (!url && !image.fileId) return null;
       return {
         ...image,

@@ -39,6 +39,7 @@ export type ObjectContextIconName =
   | "minus-back"
   | "divide"
   | "merge"
+  | "mix"
   | "brief"
   | "object";
 
@@ -87,6 +88,8 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   Divide: "divide",
   Merge: "merge",
   "Merging...": "merge",
+  Mix: "mix",
+  "Mixing...": "mix",
   "Convert to frame": "frame",
   Object: "object",
 });

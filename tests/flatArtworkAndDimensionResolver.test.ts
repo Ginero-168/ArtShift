@@ -37,7 +37,7 @@ describe("Physical Dimension and Aspect Ratio Resolver", () => {
   });
 
   it("resolves explicit 3:1 / พาโนรามา to native panoramic pixels", () => {
-    expect(resolveImageGenerationDimensions("ภาพ 3:1")).toEqual({
+    expect(resolveImageGenerationDimensions("ภาพ 3:1")).toMatchObject({
       width: 2048,
       height: 688,
       aspectRatio: "2048x688",

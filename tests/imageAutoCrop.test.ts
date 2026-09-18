@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeCropBounds, isLetterboxPixel } from "@/lib/ai/orchestration/imageAutoCrop";
+import {
+  computeCoverCropBounds,
+  computeCropBounds,
+  isLetterboxPixel,
+} from "@/lib/ai/orchestration/imageAutoCrop";
 
 describe("Image Auto-Crop & Letterbox Trimming", () => {
   it("treats near-white padding as a letterbox bar", () => {
@@ -69,5 +73,15 @@ describe("Image Auto-Crop & Letterbox Trimming", () => {
     expect(bounds.cropHeight).toBe(1024);
     expect(bounds.cropX).toBe(0);
     expect(bounds.cropY).toBe(0);
+  });
+
+  it("covers 3:1 art into a true 29×7 print frame by cropping top/bottom", () => {
+    // 2048×688 ≈ 3:1 → print 2048×494 ≈ 29:7
+    const crop = computeCoverCropBounds(2048, 688, 2048, 494);
+    expect(crop.sx).toBe(0);
+    expect(crop.sw).toBe(2048);
+    expect(crop.sh).toBe(494);
+    expect(crop.sy).toBeGreaterThan(0);
+    expect(crop.sy + crop.sh).toBeLessThanOrEqual(688);
   });
 });

@@ -131,4 +131,39 @@ describe("EditorController", () => {
     expect(deleteElements).toHaveBeenCalledWith([image.id]);
     expect(selectOnly).toHaveBeenCalledWith([frame.id]);
   });
+
+  it("rejects image-to-frame drop when the frame already has an image", () => {
+    const frame = createFrame({
+      x: 0,
+      y: 0,
+      width: 240,
+      height: 180,
+      imageFileId: "occupied-file",
+    });
+    const image = createImage({
+      x: 20,
+      y: 20,
+      width: 120,
+      height: 120,
+      fileId: "image-2",
+      naturalWidth: 120,
+      naturalHeight: 120,
+    });
+    const setFrameImage = vi.fn();
+    const deleteElements = vi.fn();
+    const selectOnly = vi.fn();
+    const controller = createEditorController({
+      currentSlide: () => ({ elements: [frame, image] }) as never,
+      updateElements: vi.fn(),
+      applyRasterSelection: vi.fn(),
+      setFrameImage,
+      deleteElements,
+      selectOnly,
+    });
+
+    expect(controller.commitFrameDrop(frame.id, image.id, "image-2")).toBe(false);
+    expect(setFrameImage).not.toHaveBeenCalled();
+    expect(deleteElements).not.toHaveBeenCalled();
+    expect(selectOnly).not.toHaveBeenCalled();
+  });
 });

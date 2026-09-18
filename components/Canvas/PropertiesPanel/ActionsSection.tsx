@@ -19,6 +19,7 @@ import {
   IconTrash,
 } from "@/components/icons";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
+import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement } from "@/lib/engine/types";
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
@@ -27,6 +28,7 @@ import { AlignBtn, alignElements, distributeElements, IconBtn, Section } from ".
 export function ActionsSection({ selected }: { selected: EngineElement[] }) {
   const ids = selected.map((el) => el.id);
   const slide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
+  const selectionGroups = useMemo(() => analyzeSelectionGroups(selected), [selected]);
   const bringToFront = useEngine((s) => s.bringToFront);
   const sendToBack = useEngine((s) => s.sendToBack);
   const bringForward = useEngine((s) => s.bringForward);
@@ -349,12 +351,12 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
           <IconBtn onClick={() => deleteElements(ids)} title="Delete" danger>
             <IconTrash size={14} />
           </IconBtn>
-          {selected.length > 1 && (
+          {selectionGroups.canGroup && (
             <IconBtn onClick={() => groupElements(ids)} title="Group">
               <IconGroup size={14} />
             </IconBtn>
           )}
-          {selected.some((el) => el.groupIds.length > 0) && (
+          {selectionGroups.canUngroup && (
             <IconBtn onClick={() => ungroupElements(ids)} title="Ungroup">
               <IconLink size={14} />
             </IconBtn>

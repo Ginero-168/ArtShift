@@ -7,6 +7,11 @@ export type AiTaskDimensions = {
   width: number;
   height: number;
   aspectRatio: AiImageAspectRatio;
+  /** True when generation size was clamped to the model 3:1 max. */
+  ratioClamped?: boolean;
+  /** True print canvas when ratio exceeds 3:1 — expand+stitch into this after generate. */
+  printWidth?: number;
+  printHeight?: number;
 };
 
 export type AiTaskStatus =

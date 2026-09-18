@@ -31,6 +31,10 @@ import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/
 import { DEFAULT_CREATING_MODEL_LABEL } from "@/lib/ai/orchestration/creatingModelCatalog";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import {
+  resolveComposerImageRef,
+} from "@/lib/ai/orchestration/imageReferences";
+import {
+  buildPromptWithTagsForCopy as buildCanonicalPromptWithTags,
   cleanTechnicalPromptText,
   type InlineTagToken,
   parseInlineTagTokens,
@@ -436,26 +440,7 @@ export function CollapsibleThought({
 }
 
 export function buildPromptWithTagsForCopy(msg: CoPilotMessage): string {
-  let content = msg.content || "";
-  if (msg.imageRefs && msg.imageRefs.length > 0) {
-    const missingRefs: ComposerImageRef[] = [];
-    for (const ref of msg.imageRefs) {
-      const tagId = ref.objectId;
-      const tagName = ref.displayName;
-      const hasTag =
-        content.includes(`:${tagId}]`) ||
-        content.includes(`@[${tagName}`) ||
-        content.includes(`@${tagName}`);
-      if (!hasTag) {
-        missingRefs.push(ref);
-      }
-    }
-    if (missingRefs.length > 0) {
-      const prefix = missingRefs.map((r) => `@[${r.displayName}:${r.objectId}]`).join(" ");
-      content = `${prefix} ${content}`.trim();
-    }
-  }
-  return content;
+  return buildCanonicalPromptWithTags(msg.content || "", msg.imageRefs);
 }
 
 export default function ChatThread({
@@ -623,24 +608,12 @@ export default function ChatThread({
                     const segments = parseInlineTagTokens(msg.content);
                     const tagSegs = segments.filter((s): s is InlineTagToken => s.type === "tag");
                     if (tagSegs.length > 0) {
-                      const slide = useEngine.getState().currentSlide();
-                      effectiveRefs = tagSegs.map((t: InlineTagToken) => {
-                        const el = slide?.elements.find(
-                          (e: any) =>
-                            !e.isDeleted && (e.id === t.objectId || e.name === t.displayName),
-                        );
-                        return {
-                          objectId: t.objectId,
-                          elementVersion: el?.version || 1,
-                          fileId: (el as any)?.fileId || (el as any)?.imageFileId || t.objectId,
-                          displayName: t.displayName,
-                          sourceWidth: (el as any)?.naturalWidth || 800,
-                          sourceHeight: (el as any)?.naturalHeight || 600,
-                          width: el?.width || 800,
-                          height: el?.height || 600,
-                          angle: el?.angle || 0,
-                        };
-                      });
+                      const elements = useEngine
+                        .getState()
+                        .doc.slides.flatMap((s) => s.elements);
+                      effectiveRefs = tagSegs.map((t: InlineTagToken) =>
+                        resolveComposerImageRef(t.objectId, t.displayName, [], elements),
+                      );
                     }
                   }
                   return effectiveRefs && effectiveRefs.length > 0 ? (

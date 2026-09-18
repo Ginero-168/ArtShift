@@ -36,12 +36,25 @@ describe("Chat Message Copy & Clean Paste with Name Tag", () => {
     expect(copyText).toBe("@[ภาพทิวทัศน์ภูเขา:img-mountain-01] ปรับโทนแสงให้เป็นช่วง Golden hour");
   });
 
-  it("builds copy text cleanly for plain text message without images", () => {
-    const copyText = buildPromptWithTagsForCopy(
-      "สร้างรูปแมวส้มนั่งบนเบาะนุ่มๆ",
-      undefined,
-    );
-    expect(copyText).toBe("สร้างรูปแมวส้มนั่งบนเบาะนุ่มๆ");
+  it("rewrites bare @Name tags to canonical @[Name:objectId] using imageRefs", () => {
+    const copyText = buildPromptWithTagsForCopy("@Photo ปรับไซส์อีก 4 Sizes ที่เหลือตามนี้", [
+      {
+        objectId: "uuid-sushi-1",
+        displayName: "Photo",
+      },
+    ]);
+    expect(copyText).toBe("@[Photo:uuid-sushi-1] ปรับไซส์อีก 4 Sizes ที่เหลือตามนี้");
+  });
+
+  it("does not bind a bare @Photo to the wrong image when multiple Photos exist", () => {
+    const copyText = buildPromptWithTagsForCopy("@Photo ทำต่อ", [
+      { objectId: "id-a", displayName: "Photo" },
+      { objectId: "id-b", displayName: "Photo" },
+    ]);
+    // Ambiguous — leave unresolved rather than picking the wrong Photo.
+    expect(copyText).toBe("@[Photo:Photo] ทำต่อ");
+    expect(copyText).not.toContain("id-a");
+    expect(copyText).not.toContain("id-b");
   });
 
   it("parses copied prompt with Name Tag cleanly into tag and text segments", () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconChevronDown, IconLayoutGrid, IconSearch, IconSparkles } from "@/components/icons";
 import {
   BUILDER_BLOCK_MIME,
@@ -18,6 +18,7 @@ import {
   createVectorPathFromIcon,
   type VectorIconDefinition,
 } from "@/lib/builder/vectorIconLibrary";
+import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
@@ -78,6 +79,12 @@ export default function BlockLibrary() {
   const [query, setQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<LibraryTab>("assistant");
+
+  useEffect(() => {
+    return subscribeCoPilotExternalTurn((request) => {
+      if (request.openAssistant !== false) setActiveTab("assistant");
+    });
+  }, []);
   const [isIconModalOpen, setIsIconModalOpen] = useState(false);
 
   const filtered = useMemo(() => {

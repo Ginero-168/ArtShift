@@ -6,6 +6,7 @@ const getCachedMock = vi.hoisted(() => vi.fn());
 const visionCaptionMock = vi.hoisted(() => vi.fn());
 const visionDetectMock = vi.hoisted(() => vi.fn());
 const visionOcrMock = vi.hoisted(() => vi.fn());
+const expandImageMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
   const actual =
@@ -21,6 +22,9 @@ vi.mock("@/lib/ai/imageGeneration", async (importOriginal) => {
     }),
   };
 });
+vi.mock("@/lib/ai/orchestration/imageExpand", () => ({
+  expandImageToAspectRatio: expandImageMock,
+}));
 vi.mock("@/lib/engine/imageCache", () => ({
   getCached: getCachedMock,
   preloadDataURL: preloadDataURLMock,
@@ -104,6 +108,7 @@ describe("context-aware image task runner", () => {
     clearCanvasViewport();
     resetEngine();
     generateImageMock.mockReset();
+    expandImageMock.mockReset();
     preloadDataURLMock.mockReset();
     getCachedMock.mockReset();
     getCachedMock.mockReturnValue(undefined);
@@ -787,5 +792,174 @@ describe("context-aware image task runner", () => {
     expect(result.height).toBe(688);
     const inserted = useEngine.getState().currentSlide()?.elements[0];
     expect(inserted?.type).toBe("image");
+  });
+
+  it("expands clamped >3:1 generations (e.g. 29×7) to the print canvas after quality gates", async () => {
+    generateImageMock.mockResolvedValueOnce({
+      dataUrl: "data:image/png;base64,AA==",
+      fileId: "center-3x1",
+      width: 2048,
+      height: 688,
+      seed: 0,
+      model: "openai/gpt-image-2",
+      prompt: "Shelftalk 29x7 cm",
+    });
+    expandImageMock.mockResolvedValueOnce({
+      dataUrl: "data:image/png;base64,EXPANDED==",
+      fileId: "expanded-29x7",
+      width: 2848,
+      height: 688,
+      layout: {
+        axis: "horizontal",
+        targetWidth: 2848,
+        targetHeight: 688,
+        center: { x: 400, y: 0, width: 2048, height: 688 },
+        leftGap: 400,
+        rightGap: 400,
+        topGap: 0,
+        bottomGap: 0,
+      },
+    });
+    preloadDataURLMock.mockResolvedValueOnce({
+      dataURL: "data:image/png;base64,EXPANDED==",
+      fileId: "expanded-29x7",
+      img: {} as HTMLImageElement,
+      width: 2848,
+      height: 688,
+    });
+
+    const ultraWideTask = createAiTask({
+      ...plan,
+      id: "ultra-wide-29x7-task",
+      prompt: "สร้าง shelftalk 29x7 cm",
+      requestedDimensions: {
+        width: 2048,
+        height: 688,
+        aspectRatio: "2048x688",
+        ratioClamped: true,
+        printWidth: 2848,
+        printHeight: 688,
+      },
+    });
+
+    const result = await runContextAwareImageTask(ultraWideTask, [], {
+      cloudConsent: true,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        width: 2048,
+        height: 688,
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(expandImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ratioWidth: 2848,
+        ratioHeight: 688,
+        sourceDataUrl: "data:image/png;base64,AA==",
+      }),
+    );
+    expect(result.width).toBe(2848);
+    expect(result.height).toBe(688);
+    expect(result.width / result.height).toBeCloseTo(29 / 7, 1);
+  });
+
+  it("does not expand when ratio is within the 3:1 model cap", async () => {
+    generateImageMock.mockResolvedValueOnce({
+      dataUrl: "data:image/png;base64,AA==",
+      fileId: "native-3x1-b",
+      width: 2048,
+      height: 688,
+      seed: 0,
+      model: "openai/gpt-image-2",
+      prompt: "ป้าย 60x20cm",
+    });
+    preloadDataURLMock.mockResolvedValueOnce({
+      dataURL: "data:image/png;base64,AA==",
+      fileId: "native-3x1-b",
+      img: {} as HTMLImageElement,
+      width: 2048,
+      height: 688,
+    });
+
+    const withinCapTask = createAiTask({
+      ...plan,
+      id: "within-cap-3x1-task",
+      requestedDimensions: {
+        width: 2048,
+        height: 688,
+        aspectRatio: "2048x688",
+        ratioClamped: false,
+        printWidth: 2048,
+        printHeight: 688,
+      },
+    });
+
+    await runContextAwareImageTask(withinCapTask, [], { cloudConsent: true });
+    expect(expandImageMock).not.toHaveBeenCalled();
+  });
+
+  it("expands clamped ultra-tall generations (e.g. 7×29) to the print canvas", async () => {
+    generateImageMock.mockResolvedValueOnce({
+      dataUrl: "data:image/png;base64,AA==",
+      fileId: "center-1x3",
+      width: 688,
+      height: 2048,
+      seed: 0,
+      model: "openai/gpt-image-2",
+      prompt: "ป้ายแนวตั้ง 7x29 cm",
+    });
+    expandImageMock.mockResolvedValueOnce({
+      dataUrl: "data:image/png;base64,EXPANDED-TALL==",
+      fileId: "expanded-7x29",
+      width: 688,
+      height: 2848,
+      layout: {
+        axis: "vertical",
+        targetWidth: 688,
+        targetHeight: 2848,
+        center: { x: 0, y: 400, width: 688, height: 2048 },
+        leftGap: 0,
+        rightGap: 0,
+        topGap: 400,
+        bottomGap: 400,
+      },
+    });
+    preloadDataURLMock.mockResolvedValueOnce({
+      dataURL: "data:image/png;base64,EXPANDED-TALL==",
+      fileId: "expanded-7x29",
+      img: {} as HTMLImageElement,
+      width: 688,
+      height: 2848,
+    });
+
+    const ultraTallTask = createAiTask({
+      ...plan,
+      id: "ultra-tall-7x29-task",
+      prompt: "สร้างป้ายแนวตั้ง 7x29 cm",
+      requestedDimensions: {
+        width: 688,
+        height: 2048,
+        aspectRatio: "688x2048",
+        ratioClamped: true,
+        printWidth: 688,
+        printHeight: 2848,
+      },
+    });
+
+    const result = await runContextAwareImageTask(ultraTallTask, [], {
+      cloudConsent: true,
+    });
+
+    expect(expandImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ratioWidth: 688,
+        ratioHeight: 2848,
+      }),
+    );
+    expect(result.width).toBe(688);
+    expect(result.height).toBe(2848);
+    expect(result.height / result.width).toBeCloseTo(29 / 7, 1);
   });
 });

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconCamera } from "@/components/icons";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
+import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { parseInlineTagTokens } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
@@ -70,43 +71,19 @@ export default function InlineTagRenderer({
           return <span key={`text-${idx}`}>{seg.text}</span>;
         }
 
-        // Tag segment
-        let matchedRef = imageRefs.find(
-          (r) =>
-            r.objectId === seg.objectId ||
-            r.displayName.toLowerCase() === seg.displayName.toLowerCase(),
+        // Tag segment — prefer objectId; never grab the first same-named image.
+        const elements = useEngine.getState().doc.slides.flatMap((s) => s.elements);
+        const matchedRef = resolveComposerImageRef(
+          seg.objectId,
+          seg.displayName,
+          imageRefs,
+          elements,
         );
 
-        let dataUrl = matchedRef ? getCached(matchedRef.fileId)?.dataURL : undefined;
-        let effectiveFileId = matchedRef?.fileId;
-
-        // Fallback: search current slide elements if not in passed imageRefs (supports image, bookMockup, frame)
-        if (!dataUrl) {
-          const slide = useEngine.getState().currentSlide();
-          const el = slide?.elements.find(
-            (candidate: any) =>
-              !candidate.isDeleted &&
-              (candidate.id === seg.objectId || candidate.name === seg.displayName),
-          );
-          const fid = (el as any)?.fileId || (el as any)?.imageFileId;
-          if (el && fid && typeof fid === "string") {
-            effectiveFileId = fid;
-            dataUrl = getCached(effectiveFileId)?.dataURL;
-            if (!matchedRef) {
-              matchedRef = {
-                objectId: el.id,
-                elementVersion: el.version,
-                fileId: effectiveFileId,
-                displayName: (el as any).sourceName || el.name || seg.displayName,
-                sourceWidth: (el as any).naturalWidth || el.width,
-                sourceHeight: (el as any).naturalHeight || el.height,
-                width: el.width,
-                height: el.height,
-                angle: el.angle,
-              };
-            }
-          }
-        }
+        let dataUrl = matchedRef.fileId
+          ? getCached(matchedRef.fileId)?.dataURL
+          : undefined;
+        let effectiveFileId = matchedRef.fileId || undefined;
 
         const activeRef = activePreviewId === seg.objectId ? matchedRef : null;
         const _activeDataUrl = activeRef

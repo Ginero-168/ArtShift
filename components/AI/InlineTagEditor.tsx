@@ -2,6 +2,10 @@
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
+import {
+  resolveComposerImageRef,
+  uniqueComposerImageRefsByName,
+} from "@/lib/ai/orchestration/imageReferences";
 import { parseInlineTagTokens } from "@/lib/ai/orchestration/inlineTagSynthesis";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
@@ -248,42 +252,8 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
 
   const resolveImageRef = useCallback(
     (objectId: string, displayName: string): ComposerImageRef => {
-      const found = availableImages.find(
-        (img) => img.objectId === objectId || img.displayName.toLowerCase() === displayName.toLowerCase(),
-      );
-      if (found) return found;
-
-      const slide = useEngine.getState().currentSlide();
-      const el = slide?.elements.find(
-        (candidate) =>
-          !candidate.isDeleted &&
-          (candidate.id === objectId || candidate.name === displayName),
-      );
-      if (el && "fileId" in el && typeof (el as any).fileId === "string") {
-        return {
-          objectId: el.id,
-          elementVersion: el.version,
-          fileId: (el as any).fileId || "",
-          displayName: (el as any).sourceName || el.name || displayName,
-          sourceWidth: (el as any).naturalWidth || el.width,
-          sourceHeight: (el as any).naturalHeight || el.height,
-          width: el.width,
-          height: el.height,
-          angle: el.angle,
-        };
-      }
-
-      return {
-        objectId: objectId || `img-${Date.now()}`,
-        elementVersion: 1,
-        fileId: objectId,
-        displayName: displayName || "Image",
-        sourceWidth: 100,
-        sourceHeight: 100,
-        width: 100,
-        height: 100,
-        angle: 0,
-      };
+      const elements = useEngine.getState().doc.slides.flatMap((s) => s.elements);
+      return resolveComposerImageRef(objectId, displayName, availableImages, elements);
     },
     [availableImages],
   );
@@ -675,7 +645,8 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         } else {
           const text = seg.text;
           if (availableImages.length > 0 && text.includes("@")) {
-            const sortedImages = [...availableImages].sort(
+            const uniqueByName = uniqueComposerImageRefsByName(availableImages);
+            const sortedImages = [...uniqueByName.values()].sort(
               (a, b) => b.displayName.length - a.displayName.length,
             );
             let remaining = text;

@@ -42,10 +42,18 @@ describe("resolveGenerationSizeFromRatio", () => {
     });
   });
 
-  it("clamps ratios beyond the model 3:1 limit", () => {
-    const clamped = resolveGenerationSizeFromRatio(4, 1);
+  it("clamps generation to 3:1 but keeps a true print canvas for expand+stitch", () => {
+    const clamped = resolveGenerationSizeFromRatio(29, 7);
     expect(clamped.ratioClamped).toBe(true);
     expect(clamped.width / clamped.height).toBeLessThanOrEqual(3.01);
+    expect(clamped.printWidth / clamped.printHeight).toBeCloseTo(29 / 7, 2);
+    expect(clamped.printWidth / clamped.printHeight).toBeGreaterThan(3.05);
+
+    const tall = resolveGenerationSizeFromRatio(7, 29);
+    expect(tall.ratioClamped).toBe(true);
+    expect(tall.height / tall.width).toBeLessThanOrEqual(3.01);
+    expect(tall.printHeight / tall.printWidth).toBeCloseTo(29 / 7, 2);
+    expect(tall.printHeight / tall.printWidth).toBeGreaterThan(3.05);
   });
 });
 
@@ -59,6 +67,20 @@ describe("resolveImageGenerationDimensions (any size)", () => {
     expect(resolveImageGenerationDimensions("ป้าย 60x20cm").aspectRatio).toBe("2048x688");
     expect(resolveImageGenerationDimensions("ภาพ 2:1").aspectRatio).toBe("2048x1024");
     expect(resolveImageGenerationDimensions("ภาพ 5:2").aspectRatio).toBe("2048x816");
+  });
+
+  it("keeps a true 29x7 print canvas when generation clamps to 3:1", () => {
+    const dims = resolveImageGenerationDimensions("Shelftalk 29x7 cm");
+    expect(dims.ratioClamped).toBe(true);
+    expect(dims.width / dims.height).toBeLessThanOrEqual(3.01);
+    expect(dims.printWidth! / dims.printHeight!).toBeCloseTo(29 / 7, 2);
+  });
+
+  it("keeps a true 7x29 print canvas when generation clamps to 1:3", () => {
+    const dims = resolveImageGenerationDimensions("ป้ายแนวตั้ง 7x29 cm");
+    expect(dims.ratioClamped).toBe(true);
+    expect(dims.height / dims.width).toBeLessThanOrEqual(3.01);
+    expect(dims.printHeight! / dims.printWidth!).toBeCloseTo(29 / 7, 2);
   });
 
   it("still honors standard named ratios", () => {

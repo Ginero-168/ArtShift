@@ -10,6 +10,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePresetStore } from "@/lib/engine/presetStore";
+import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
 import { selectionForImage } from "@/lib/raster/activeSelection";
@@ -174,11 +175,19 @@ export default function ContextMenu({ position, onClose }: Props) {
       );
     }
     if (ids.length > 1) {
-      items.push(
-        { kind: "sep" },
-        { kind: "item", label: "Group", onClick: () => groupElements(ids) },
-        { kind: "item", label: "Ungroup", onClick: () => ungroupElements(ids) },
-      );
+      const slide = useEngine
+        .getState()
+        .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
+      const selectedElements =
+        slide?.elements.filter((el) => ids.includes(el.id) && !el.isDeleted) ?? [];
+      const groupActions = analyzeSelectionGroups(selectedElements);
+      items.push({ kind: "sep" });
+      if (groupActions.canGroup) {
+        items.push({ kind: "item", label: "Group", onClick: () => groupElements(ids) });
+      }
+      if (groupActions.canUngroup) {
+        items.push({ kind: "item", label: "Ungroup", onClick: () => ungroupElements(ids) });
+      }
     }
     items.push(
       { kind: "sep" },

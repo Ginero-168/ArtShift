@@ -78,6 +78,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid reference image payload." }, { status: 400 });
   }
   const inputImages = parsedInputImages.value;
+  const parsedMask = parseMaskImage(body.mask);
+  if (!parsedMask.ok) {
+    return NextResponse.json({ error: "Invalid mask image payload." }, { status: 400 });
+  }
+  const mask = parsedMask.value;
   const enhance = body.enhance !== false;
   const replicateToken = getSessionReplicateToken(req);
   const openAiApiKey = getSessionOpenAiToken(req);
@@ -133,6 +138,7 @@ export async function POST(req: NextRequest) {
         aspectRatio,
         quality: quality.value,
         inputImages,
+        ...(mask ? { mask } : {}),
         enhance: false,
         modelAlias: requestedModelAlias,
       },
@@ -271,4 +277,42 @@ function parseInputImages(value: unknown): ParsedInputImages {
     });
   }
   return { ok: true, value: parsed };
+}
+
+type ParsedMask =
+  | {
+      ok: true;
+      value: { dataUrl: string; mimeType?: "image/jpeg" | "image/png" | "image/webp" } | undefined;
+    }
+  | { ok: false };
+
+/** Single RGBA mask for OpenAI edits (α=0 = edit). Optional. */
+function parseMaskImage(value: unknown): ParsedMask {
+  if (value === undefined || value === null) return { ok: true, value: undefined };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false };
+  const record = value as Record<string, unknown>;
+  if (typeof record.dataUrl !== "string" || record.dataUrl.length > 7_000_000) {
+    return { ok: false };
+  }
+  const match = INPUT_IMAGE_DATA_URL.exec(record.dataUrl);
+  if (!match) return { ok: false };
+  const encodedBytes = Math.floor((match[2].length * 3) / 4);
+  if (encodedBytes > MAX_INPUT_IMAGE_BYTES) return { ok: false };
+  const mimeType = record.mimeType;
+  if (
+    mimeType !== undefined &&
+    mimeType !== "image/jpeg" &&
+    mimeType !== "image/png" &&
+    mimeType !== "image/webp"
+  ) {
+    return { ok: false };
+  }
+  if (mimeType !== undefined && mimeType !== match[1]) return { ok: false };
+  return {
+    ok: true,
+    value: {
+      dataUrl: record.dataUrl,
+      ...(mimeType ? { mimeType } : { mimeType: match[1] as "image/jpeg" | "image/png" | "image/webp" }),
+    },
+  };
 }

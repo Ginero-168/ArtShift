@@ -12,7 +12,11 @@ import {
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import { prepareRemoteCreativeDirection, reviewRemoteCreativeOutput } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
-import { deriveGeneratedImageName } from "@/lib/ai/orchestration/imageNaming";
+import {
+  expandImageToAspectRatio,
+  isExpandAspectPrompt,
+  parseExpandRatioFromText,
+} from "@/lib/ai/orchestration/imageExpand";
 import { buildComposerImageSelectionFromIds, snapshotComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
 import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
 import { cleanTechnicalPromptText, extractInlineTagRefs } from "@/lib/ai/orchestration/inlineTagSynthesis";
@@ -29,6 +33,7 @@ import {
   readProjectIdFromPath,
   saveChatHistorySnapshot,
 } from "@/lib/ai/orchestration/chatHistoryStore";
+import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import {
   buildRefinementOrchestratorLocks,
@@ -60,11 +65,13 @@ import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
 import { summarizePlanForReview } from "@/lib/designAgent/planReview";
 import { applyAiPlan } from "@/lib/engine/applyAiPlan";
-import { createFrame, createImage } from "@/lib/engine/factory";
-import { preloadDataURL } from "@/lib/engine/imageCache";
+import { getCanvasViewport } from "@/lib/engine/canvasViewport";
+import { createImage } from "@/lib/engine/factory";
+import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
+import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
-import { calculateGhostBounds } from "@/lib/renderer/ghostOverlay";
 
+/** @deprecated Staging tray removed — kept for test/type imports. */
 export type { StagedVariationCard };
 
 function extractSubject(prompt: string, summary?: string): string {
@@ -183,7 +190,6 @@ export default function AICoPilotBar() {
   const [selectedQuality, setSelectedQuality] = useState<QualitySelection>(
     () => restoredChat?.selectedQuality ?? "auto",
   );
-  const [stagedVariations, setStagedVariations] = useState<StagedVariationCard[]>([]);
   const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(
     () => restoredChat?.pendingClarification ?? null,
   );
@@ -218,7 +224,6 @@ export default function AICoPilotBar() {
   const handleClearHistory = () => {
     setMessages([createDefaultGreeting()]);
     setPendingClarification(null);
-    setStagedVariations([]);
     setPromptRefinementData(null);
     setInput("");
     if (projectId) clearChatHistorySnapshot(projectId);
@@ -226,8 +231,14 @@ export default function AICoPilotBar() {
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const handleSendRef = useRef<
+    (
+      customPrompt?: string,
+      skipRefinementCheck?: boolean,
+      turnOptions?: { imageObjectIds?: readonly string[] },
+    ) => Promise<void>
+  >(async () => {});
   const lastAlternativePromptRef = useRef<string | null>(null);
-  const activeHoveredVariationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -306,110 +317,7 @@ export default function AICoPilotBar() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, currentActions, streamingText, stagedVariations, pendingSequentialPlan]);
-
-  const handleVariationHover = (card: StagedVariationCard) => {
-    activeHoveredVariationIdRef.current = card.id;
-    const currentSlide = useEngine.getState().currentSlide();
-    if (!currentSlide) return;
-    const bounds = calculateGhostBounds(
-      currentSlide.width,
-      currentSlide.height,
-      card.width || 1024,
-      card.height || 1024,
-      "center",
-    );
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = card.url || `/api/ai/image/cache?fileId=${card.fileId}`;
-    const setOverlay = () => {
-      if (activeHoveredVariationIdRef.current !== card.id) return;
-      useEngine.getState().setGhostOverlay({
-        variationId: card.id,
-        image: img,
-        x: bounds.x,
-        y: bounds.y,
-        width: bounds.width,
-        height: bounds.height,
-        opacity: 0.85,
-        label: card.label || "Candidate Variation",
-      });
-    };
-    if (img.complete) {
-      setOverlay();
-    } else {
-      img.onload = setOverlay;
-    }
-  };
-
-  const handleVariationLeave = () => {
-    activeHoveredVariationIdRef.current = null;
-    useEngine.getState().clearGhostOverlay();
-  };
-
-  const commitVariationToCanvas = async (card: StagedVariationCard) => {
-    // ORCH-03/04: Prevent duplicate apply of already committed card
-    if (card.status === "accepted") return;
-    useEngine.getState().clearGhostOverlay();
-    const state = useEngine.getState();
-    const targetSlide = card.targetSlideId
-      ? (state.doc.slides.find((s) => s.id === card.targetSlideId) ?? state.currentSlide())
-      : state.currentSlide();
-    if (!targetSlide) return;
-    const bounds = calculateGhostBounds(
-      targetSlide.width,
-      targetSlide.height,
-      card.width || 1024,
-      card.height || 1024,
-      "center",
-    );
-    let fileId = card.fileId;
-    let naturalWidth = card.width || 1024;
-    let naturalHeight = card.height || 1024;
-    if (card.url && (!fileId || fileId.startsWith("var-"))) {
-      try {
-        const cached = await preloadDataURL(card.url);
-        fileId = cached.fileId;
-        naturalWidth = cached.width;
-        naturalHeight = cached.height;
-      } catch {
-        // fallback
-      }
-    }
-    const targetRatio = (card.width || 1024) / Math.max(1, card.height || 1024);
-    const needsFrame = Math.abs(targetRatio - naturalWidth / Math.max(1, naturalHeight)) > 0.04;
-    const elementName = deriveGeneratedImageName(card.label);
-    const element = needsFrame
-      ? createFrame({
-          x: bounds.x,
-          y: bounds.y,
-          width: bounds.width,
-          height: bounds.height,
-          name: `${elementName} (Frame)`,
-          shape: "rect",
-          imageFileId: fileId,
-        })
-      : createImage({
-          x: bounds.x,
-          y: bounds.y,
-          width: bounds.width,
-          height: bounds.height,
-          fileId,
-          naturalWidth,
-          naturalHeight,
-          name: elementName,
-          sourceName: elementName,
-        });
-    state.addElement(element, `Place candidate variation ${card.label || card.id}`);
-    setStagedVariations((prev) =>
-      prev.map((v) => (v.id === card.id ? { ...v, status: "accepted" as const } : v)),
-    );
-  };
-
-  const dismissVariation = (cardId: string) => {
-    useEngine.getState().clearGhostOverlay();
-    setStagedVariations((prev) => prev.filter((v) => v.id !== cardId));
-  };
+  }, [messages, currentActions, streamingText, pendingSequentialPlan]);
 
   const executeSequentialPlan = async () => {
     if (!pendingSequentialPlan || isExecutingPlan) return;
@@ -518,7 +426,11 @@ export default function AICoPilotBar() {
     }
   };
 
-  const handleSend = async (customPrompt?: string, _skipRefinementCheck?: boolean) => {
+  const handleSend = async (
+    customPrompt?: string,
+    _skipRefinementCheck?: boolean,
+    turnOptions?: { imageObjectIds?: readonly string[] },
+  ) => {
     const rawPrompt = (customPrompt ?? editorRef.current?.getValue() ?? input).trim();
     if (!rawPrompt || busy) return;
 
@@ -563,13 +475,19 @@ export default function AICoPilotBar() {
 
     const inlineTagRefs = extractInlineTagRefs(rawPrompt);
     const inlineObjectIds = inlineTagRefs.map((tag) => tag.objectId);
+    const forcedImageIds = turnOptions?.imageObjectIds?.filter(Boolean) ?? [];
+    if (forcedImageIds.length > 0) {
+      setAttachedImageIds([...forcedImageIds]);
+    }
     const selectionIds =
-      inlineTagRefs.length > 0
-        ? [
-            ...inlineTagRefs.map((tag) => `@[${tag.displayName}:${tag.objectId}]`),
-            ...attachedImageIds.filter((id) => !inlineObjectIds.includes(id)),
-          ]
-        : attachedImageIds;
+      forcedImageIds.length > 0
+        ? [...forcedImageIds]
+        : inlineTagRefs.length > 0
+          ? [
+              ...inlineTagRefs.map((tag) => `@[${tag.displayName}:${tag.objectId}]`),
+              ...attachedImageIds.filter((id) => !inlineObjectIds.includes(id)),
+            ]
+          : attachedImageIds;
     const effectiveSelection = buildComposerImageSelectionFromIds(
       slide?.elements ?? [],
       selectionIds,
@@ -628,6 +546,87 @@ export default function AICoPilotBar() {
     });
 
     try {
+      // Ultra-wide expand (>3:1 only, e.g. 29×7): side-panel stitch — skip director.
+      if (refsForTurn.length > 0 && isExpandAspectPrompt(promptToSend)) {
+        const sourceRef = refsForTurn[0]!;
+        const sourceDataUrl = getCached(sourceRef.fileId)?.dataURL;
+        if (!sourceDataUrl) {
+          throw new Error("ไม่พบข้อมูลภาพต้นทางใน cache — เลือกรูปบน Canvas แล้วลองอีกครั้ง");
+        }
+        const ratio = parseExpandRatioFromText(promptToSend);
+        setLiveAssistantState({
+          stage: "generating",
+          prompt: promptToSend,
+          isEdit: true,
+          statusMessage: `กำลังขยายเป็น ${ratio.ratioWidth}×${ratio.ratioHeight} (เกินเพดาน 3:1 — ต่อข้างแล้วประกอบ)…`,
+        });
+        const expanded = await expandImageToAspectRatio({
+          sourceDataUrl,
+          ratioWidth: ratio.ratioWidth,
+          ratioHeight: ratio.ratioHeight,
+          scenePrompt: promptToSend,
+          quality: selectedQuality === "auto" ? "high" : selectedQuality,
+          cloudConsent: true,
+          signal: controller.signal,
+          onProgress: (progress) => {
+            setLiveAssistantState((prev) =>
+              prev ? { ...prev, statusMessage: progress.message } : prev,
+            );
+          },
+        });
+        const viewport =
+          getCanvasViewport() ??
+          ({
+            width: expanded.width,
+            height: expanded.height,
+            scale: 1,
+            tx: 0,
+            ty: 0,
+            slideWidth: useEngine.getState().doc.width,
+            slideHeight: useEngine.getState().doc.height,
+          } as const);
+        const bounds = getGenerationPreviewBounds(viewport, {
+          width: expanded.width,
+          height: expanded.height,
+        });
+        const element = createImage({
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          fileId: expanded.fileId,
+          naturalWidth: expanded.width,
+          naturalHeight: expanded.height,
+          name: `Expanded ${ratio.ratioWidth}x${ratio.ratioHeight}`,
+          sourceName: `Expanded ${ratio.ratioWidth}x${ratio.ratioHeight}`,
+        });
+        useEngine.getState().addElement(element, "AI expand ultra-wide banner");
+        useEngine.getState().selectOnly([element.id]);
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: `ขยายเป็นสัดส่วน ${ratio.ratioWidth}:${ratio.ratioHeight} แล้วครับ (${expanded.width}×${expanded.height}px) — โมเดลทำได้สูงสุด 3:1 จึงต่อซ้าย–ขวาแล้วประกอบเป็นแถบพิมพ์จริง`,
+            timestamp: Date.now(),
+            images: [
+              {
+                url: expanded.dataUrl,
+                fileId: expanded.fileId,
+                width: expanded.width,
+                height: expanded.height,
+                label: `${ratio.ratioWidth}x${ratio.ratioHeight}`,
+              },
+            ],
+            suggestions: ["Upscale ให้คมขึ้น", "ปรับโทนต่อ", "↶ Undo"],
+          },
+        ]);
+        setLiveAssistantState(null);
+        setBusy(false);
+        abortRef.current = null;
+        return;
+      }
+
       let analysesForTurn: ImageReferenceAnalysis[] = pending
         ? pending.analyses.map((analysis) => ({ ...analysis, ref: { ...analysis.ref } }))
         : [];
@@ -958,11 +957,9 @@ export default function AICoPilotBar() {
                   actions: [...actions],
                 });
 
-                const isMultiOutput = imageRun.requestedOutputCount > 1;
                 const runResult = await runContextAwareImageRun(imageRun, refsForTurn, {
                   signal: controller.signal,
                   cloudConsent: true,
-                  stageOnly: isMultiOutput,
                   reviewOutput: ({ prompt, reviewCriteria, outputAnalysis, signal }) =>
                     reviewRemoteCreativeOutput(
                       { prompt, reviewCriteria, outputAnalysis },
@@ -1169,31 +1166,6 @@ export default function AICoPilotBar() {
                       });
                     reply += `\n\n⚠️ สร้างไม่ครบ ${runResult.completedCount}/${imageRun.requestedOutputCount} — ขาด: ${failedDetails.join(", ")} กดสร้างภาพที่เหลือใหม่ได้ครับ`;
                     completionSuggestions = ["🔄 สร้างภาพที่เหลือใหม่", ...completionSuggestions];
-                  }
-
-                  if (isMultiOutput) {
-                    const newStaged: StagedVariationCard[] = runResult.items
-                      .filter((i) => i.status === "succeeded" && Boolean(i.result?.dataUrl))
-                      .map((i) => {
-                        const task = imageRun.tasks[i.outputIndex - 1];
-                        const brief = direction.outputBriefs?.[i.outputIndex - 1];
-                        const ratio = task?.requestedDimensions?.aspectRatio;
-                        return {
-                          id: `var-${Date.now()}-${i.outputIndex}`,
-                          fileId: i.result?.fileId || `img-${i.outputIndex}`,
-                          url: i.result?.dataUrl || "",
-                          width: i.result?.width || 1024,
-                          height: i.result?.height || 1024,
-                          label:
-                            (brief && brief.trim()) ||
-                            (ratio ? `ขนาด ${ratio}` : `ตัวเลือกที่ ${i.outputIndex}`),
-                          status: "staged" as const,
-                          targetSlideId: slide?.id,
-                        };
-                      });
-                    setStagedVariations(newStaged);
-                    reply +=
-                      "\n\n💡 เลื่อนเมาส์เหนือตัวเลือกใน Staging Tray ด้านล่างเพื่อดู Ghost Preview บน Canvas หรือกด Apply ภาพที่ต้องการลงชิ้นงานได้เลยครับ";
                   }
 
                   const locksFromHelper = pendingRefinementLocksRef.current;
@@ -1663,6 +1635,17 @@ export default function AICoPilotBar() {
       setStreamingText("");
     }
   };
+  handleSendRef.current = handleSend;
+
+  useEffect(() => {
+    return subscribeCoPilotExternalTurn((request) => {
+      const ids = [...request.imageObjectIds];
+      if (ids.length > 0) {
+        useEngine.getState().selectOnly(ids);
+      }
+      void handleSendRef.current(request.prompt, true, { imageObjectIds: ids });
+    });
+  }, []);
 
   const applyPendingPlan = () => {
     if (!pendingPlan || busy) return;
@@ -1783,15 +1766,6 @@ export default function AICoPilotBar() {
           isExecutingPlan={isExecutingPlan}
           onExecuteSequentialPlan={executeSequentialPlan}
           onDiscardSequentialPlan={() => setPendingSequentialPlan(null)}
-          stagedVariations={stagedVariations}
-          onVariationHover={handleVariationHover}
-          onVariationLeave={handleVariationLeave}
-          onCommitVariation={commitVariationToCanvas}
-          onDismissVariation={dismissVariation}
-          onClearVariationsTray={() => {
-            useEngine.getState().clearGhostOverlay();
-            setStagedVariations([]);
-          }}
         />
       </ChatThread>
 

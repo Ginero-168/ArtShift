@@ -8,9 +8,14 @@ import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
 import { mergeSelectedElements, mergeSelectedImages } from "@/lib/engine/mergeElements";
 import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/objectContext";
+import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { convertImageToBrief } from "@/lib/ai/briefGenerator";
+import {
+  IMAGE_MIX_PROMPT,
+  requestCoPilotExternalTurn,
+} from "@/lib/ai/coPilotRequestBus";
 import { nextThaiFontCssFamily } from "@/lib/fonts";
 import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import { getObjectContextIcon } from "./objectContextIcons";
@@ -193,21 +198,27 @@ export default function ObjectContextBar({
   const [activeImageTool, setActiveImageTool] = useState<ImageActionId | null>(null);
   const [briefBusy, setBriefBusy] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
+  const [mixBusy, setMixBusy] = useState(false);
   useEffect(() => {
     if (!firstId) {
       setActiveImageTool(null);
       setBriefBusy(false);
       setMergeBusy(false);
+      setMixBusy(false);
       return;
     }
     setActiveImageTool(null);
     setBriefBusy(false);
     setMergeBusy(false);
+    setMixBusy(false);
   }, [firstId]);
 
   if (isDragging || !first) return null;
 
   const ids = selected.map((element) => element.id);
+  const selectedImageIds = selected
+    .filter((element): element is ImageElement => element.type === "image")
+    .map((element) => element.id);
   const { category } = getObjectContextCategory(selected);
   const apply = (patch: Partial<EngineElement>, label: string) =>
     updateElements(
@@ -226,9 +237,7 @@ export default function ObjectContextBar({
   const toggleVectorize = () =>
     setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
-  const isGroup =
-    selected.length > 1 &&
-    selected.some((element) => element.groupIds && element.groupIds.length > 0);
+  const selectionGroups = analyzeSelectionGroups(selected);
 
   const handleConvertToBrief = async (imgEl: ImageElement) => {
     if (briefBusy) return;
@@ -254,25 +263,41 @@ export default function ObjectContextBar({
     }
   };
 
+  const handleMixImages = () => {
+    if (selectedImageIds.length < 2 || mixBusy) return;
+    setMixBusy(true);
+    useEngine.getState().selectOnly(selectedImageIds);
+    requestCoPilotExternalTurn({
+      prompt: IMAGE_MIX_PROMPT,
+      imageObjectIds: selectedImageIds,
+      openAssistant: true,
+    });
+    // Chat owns the long-running turn; release the Option Bar spinner shortly.
+    window.setTimeout(() => setMixBusy(false), 600);
+  };
+
   if (selected.length > 1) {
-    if (isGroup) {
-      controls.push(action(mergeBusy ? "Merging..." : "Merge", () => void handleMergeElements(), false, mergeBusy));
-      controls.push(action("Ungroup", () => ungroupElements(ids)));
-      controls.push(action("Align", () => alignSelectedElements("center")));
-      controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
-    } else {
-      controls.push(action("Align", () => alignSelectedElements("center")));
-      controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
+    controls.push(action("Align", () => alignSelectedElements("center")));
+    controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
+    if (selectionGroups.canGroup) {
       controls.push(action("Group", () => groupElements(ids)));
-      controls.push(action(mergeBusy ? "Merging..." : "Merge", () => void handleMergeElements(), false, mergeBusy));
-      if (allShapes) {
-        controls.push(action("Unite", () => applyBooleanOperation("union")));
-        controls.push(action("Minus Front", () => applyBooleanOperation("subtract")));
-        controls.push(action("Intersect", () => applyBooleanOperation("intersect")));
-        controls.push(action("Exclude", () => applyBooleanOperation("exclude")));
-        controls.push(action("Minus Back", () => applyBooleanOperation("minusBack")));
-        controls.push(action("Divide", () => applyBooleanOperation("divide")));
-      }
+    }
+    if (selectionGroups.canUngroup) {
+      controls.push(action("Ungroup", () => ungroupElements(ids)));
+    }
+    controls.push(action(mergeBusy ? "Merging..." : "Merge", () => void handleMergeElements(), false, mergeBusy));
+    if (selectedImageIds.length >= 2) {
+      controls.push(
+        action(mixBusy ? "Mixing..." : "Mix", () => handleMixImages(), false, mixBusy),
+      );
+    }
+    if (allShapes && !selectionGroups.isSingleGroup) {
+      controls.push(action("Unite", () => applyBooleanOperation("union")));
+      controls.push(action("Minus Front", () => applyBooleanOperation("subtract")));
+      controls.push(action("Intersect", () => applyBooleanOperation("intersect")));
+      controls.push(action("Exclude", () => applyBooleanOperation("exclude")));
+      controls.push(action("Minus Back", () => applyBooleanOperation("minusBack")));
+      controls.push(action("Divide", () => applyBooleanOperation("divide")));
     }
   } else if (first.type === "image") {
     controls.push(
@@ -406,7 +431,11 @@ export default function ObjectContextBar({
 
   if (controls.length === 0) return null;
 
-  const displayCategory = isGroup ? "Group" : (category ?? "Object");
+  const displayCategory = selectionGroups.isSingleGroup
+    ? "Group"
+    : selectionGroups.canGroup && selected.some((el) => (el.groupIds?.length ?? 0) > 0)
+      ? "Selection"
+      : (category ?? "Object");
 
   return (
     <div

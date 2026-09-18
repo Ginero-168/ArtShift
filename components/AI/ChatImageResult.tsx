@@ -11,6 +11,8 @@ import {
   type PromptStructureSection,
 } from "@/lib/ai/imageResultPresentation";
 import type { PriorImageGenerationContext } from "@/lib/ai/orchestration/chatContinuity";
+import { resolveChatImageSrc } from "@/lib/ai/orchestration/chatImageResolve";
+import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
 
 function ExpandArrowsIcon({ size = 14 }: { size?: number }) {
   return (
@@ -359,9 +361,13 @@ export function ChatResultImageThumb({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showStructure, setShowStructure] = useState(false);
+  const [, bumpCache] = useState(0);
+  useEffect(() => subscribeImageCache(() => bumpCache((v) => v + 1)), []);
 
-  const width = image.width || generationContext?.width || 1024;
-  const height = image.height || generationContext?.height || 1024;
+  const src = resolveChatImageSrc(image);
+  const cached = image.fileId ? getCached(image.fileId) : undefined;
+  const width = image.width || cached?.width || generationContext?.width || 1024;
+  const height = image.height || cached?.height || generationContext?.height || 1024;
   const orientation = formatAspectOrientationLabel(width, height);
   const maxWidth = imageCount === 1 ? (width / height >= 1.6 ? 220 : 168) : 132;
 
@@ -386,17 +392,19 @@ export function ChatResultImageThumb({
     <>
       <div
         onClick={() => onSelect(image.fileId)}
-        draggable={true}
+        draggable={Boolean(src || image.fileId)}
         onDragStart={(e) => {
           e.dataTransfer.setData(
             "application/x-artshift-chat-image",
-            JSON.stringify({ fileId: image.fileId, url: image.url }),
+            JSON.stringify({ fileId: image.fileId, url: src }),
           );
           if (image.fileId) {
             e.dataTransfer.setData("artshift/file-id", image.fileId);
           }
-          e.dataTransfer.setData("text/uri-list", image.url);
-          e.dataTransfer.setData("text/plain", image.url);
+          if (src) {
+            e.dataTransfer.setData("text/uri-list", src);
+            e.dataTransfer.setData("text/plain", src);
+          }
           e.dataTransfer.effectAllowed = "copy";
         }}
         title="คลิกเพื่อซูมหารูปบน Canvas · ปุ่มซ้ายบนขยาย · ปุ่มขวาบนดูโครงสร้าง Prompt"
@@ -436,7 +444,12 @@ export function ChatResultImageThumb({
           }}
         >
           <span style={{ pointerEvents: "auto" }}>
-            <OverlayIconButton label="ขยายรูป" onClick={() => setExpanded(true)}>
+            <OverlayIconButton
+              label="ขยายรูป"
+              onClick={() => {
+                if (src) setExpanded(true);
+              }}
+            >
               <ExpandArrowsIcon size={13} />
             </OverlayIconButton>
           </span>
@@ -466,26 +479,43 @@ export function ChatResultImageThumb({
           {orientation}
         </span>
 
-        {/* biome-ignore lint/performance/noImgElement: Direct chat message image rendering */}
-        <img
-          src={image.url}
-          alt="AI Generation result"
-          draggable={false}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-            pointerEvents: "none",
-          }}
-        />
+        {src ? (
+          // biome-ignore lint/performance/noImgElement: Direct chat message image rendering
+          <img
+            src={src}
+            alt="AI Generation result"
+            draggable={false}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+              pointerEvents: "none",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#94a3b8",
+              fontSize: 11,
+              background: "#1e293b",
+            }}
+          >
+            กำลังโหลดภาพ...
+          </div>
+        )}
       </div>
 
-      {expanded ? <ImageExpandOverlay url={image.url} onClose={() => setExpanded(false)} /> : null}
+      {expanded && src ? <ImageExpandOverlay url={src} onClose={() => setExpanded(false)} /> : null}
       {showStructure ? (
         <PromptStructureModal
           sections={structure}
-          thumbUrl={image.url}
+          thumbUrl={src || undefined}
           onClose={() => setShowStructure(false)}
         />
       ) : null}

@@ -263,6 +263,12 @@ export class OpenAiAdapter implements AiProviderAdapter {
       const blob = new Blob([bytes], { type: mimeType });
       form.append("image[]", blob, `reference-${index}.${mimeType.split("/")[1] ?? "png"}`);
     }
+    if (input.mask?.dataUrl) {
+      const { mimeType, base64 } = splitDataUrl(input.mask.dataUrl);
+      const bytes = Buffer.from(base64, "base64");
+      const blob = new Blob([bytes], { type: mimeType || "image/png" });
+      form.append("mask", blob, `mask.${(mimeType || "image/png").split("/")[1] ?? "png"}`);
+    }
     return fetch("https://api.openai.com/v1/images/edits", {
       method: "POST",
       headers: { Authorization: `Bearer ${this.apiKey}` },

@@ -17,40 +17,45 @@ describe("generation preview placement", () => {
     slideHeight: 1080,
   };
 
-  it("computes the visible world intersection", () => {
+  it("computes the full viewport frustum in world space", () => {
     expect(getVisibleWorldBounds(viewport)).toEqual({
-      x: 0,
-      y: 0,
-      width: 1560,
-      height: 980,
+      x: -40,
+      y: -20,
+      width: 1600,
+      height: 1000,
     });
   });
 
-  it("fits the known output inside the visible Canvas area", () => {
+  it("fits the known output inside the visible viewport (not locked to canvas)", () => {
+    const visible = getVisibleWorldBounds(viewport);
     const bounds = getGenerationPreviewBounds(viewport, {
       width: 1024,
       height: 1536,
     });
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.y).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.slideWidth);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.slideHeight);
+    expect(bounds.x).toBeGreaterThanOrEqual(visible.x);
+    expect(bounds.y).toBeGreaterThanOrEqual(visible.y);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(visible.x + visible.width);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(visible.y + visible.height);
     expect(bounds.width / bounds.height).toBeCloseTo(1024 / 1536, 3);
   });
 
-  it("keeps a readable size when the visible Canvas intersection shrinks after a pan", () => {
+  it("can place outside the slide when the viewport is panned off-canvas", () => {
     const pannedAway = {
       ...viewport,
       tx: -2000,
       ty: -1500,
     };
     const visible = getVisibleWorldBounds(pannedAway);
-    expect(visible.width * visible.height).toBe(0);
+    expect(visible.x).toBeGreaterThan(0);
+    expect(visible.width).toBeGreaterThan(0);
 
     const bounds = getGenerationPreviewBounds(pannedAway, { width: 1024, height: 1024 });
     expect(bounds.width).toBeGreaterThan(40);
     expect(bounds.height).toBeGreaterThan(40);
     expect(bounds.width / bounds.height).toBeCloseTo(1, 3);
+    // Centered in viewport — may sit outside the slide rectangle.
+    expect(bounds.x + bounds.width / 2).toBeCloseTo(visible.x + visible.width / 2, 0);
+    expect(bounds.y + bounds.height / 2).toBeCloseTo(visible.y + visible.height / 2, 0);
   });
 
   it("places generate previews beside the source like other processing preloads", () => {

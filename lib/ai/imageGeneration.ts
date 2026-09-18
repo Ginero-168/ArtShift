@@ -48,6 +48,8 @@ export type RequestedSizeSpec = {
   height: number;
   aspectRatio: AiImageAspectRatio;
   ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
   /** Original mention, e.g. "16:9" or "53x20". */
   label: string;
   sourceWidth: number;
@@ -72,6 +74,8 @@ function resolveColonRatioDimensions(
   height: number;
   aspectRatio: AiImageAspectRatio;
   ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
 } {
   // Prefer named presets for common social/print ratios.
   return resolveImageGenerationDimensions(`${ratioWidth}:${ratioHeight}`);
@@ -100,6 +104,8 @@ export function extractDimensionSpecsFromText(text?: string): RequestedSizeSpec[
       height: resolved.height,
       aspectRatio: resolved.aspectRatio,
       ratioClamped: resolved.ratioClamped,
+      printWidth: resolved.printWidth,
+      printHeight: resolved.printHeight,
       label: `${sourceWidth}x${sourceHeight}`,
       sourceWidth,
       sourceHeight,
@@ -132,6 +138,8 @@ export function extractAspectRatioSpecsFromText(text?: string): RequestedSizeSpe
       height: resolved.height,
       aspectRatio: resolved.aspectRatio,
       ratioClamped: resolved.ratioClamped,
+      printWidth: resolved.printWidth,
+      printHeight: resolved.printHeight,
       label: `${sourceWidth}:${sourceHeight}`,
       sourceWidth,
       sourceHeight,
@@ -162,6 +170,8 @@ export function resolveImageGenerationDimensions(prompt: string): {
   height: number;
   aspectRatio: AiImageAspectRatio;
   ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
 } {
   const value = prompt.toLocaleLowerCase();
 
@@ -180,6 +190,8 @@ export function resolveImageGenerationDimensions(prompt: string): {
         height: resolved.height,
         aspectRatio: resolved.aspectRatio,
         ratioClamped: resolved.ratioClamped,
+        printWidth: resolved.printWidth,
+        printHeight: resolved.printHeight,
       };
     }
   }
@@ -210,6 +222,8 @@ export function resolveImageGenerationDimensions(prompt: string): {
         height: resolved.height,
         aspectRatio: resolved.aspectRatio,
         ratioClamped: resolved.ratioClamped,
+        printWidth: resolved.printWidth,
+        printHeight: resolved.printHeight,
       };
     }
   }
@@ -221,6 +235,8 @@ export function resolveImageGenerationDimensions(prompt: string): {
       height: resolved.height,
       aspectRatio: resolved.aspectRatio,
       ratioClamped: resolved.ratioClamped,
+      printWidth: resolved.printWidth,
+      printHeight: resolved.printHeight,
     };
   }
   if (/(?:vertical\s+skyscraper)/iu.test(value)) {
@@ -230,6 +246,8 @@ export function resolveImageGenerationDimensions(prompt: string): {
       height: resolved.height,
       aspectRatio: resolved.aspectRatio,
       ratioClamped: resolved.ratioClamped,
+      printWidth: resolved.printWidth,
+      printHeight: resolved.printHeight,
     };
   }
   if (/(?:แนวตั้ง|\bvertical\b|portrait\s+(?:mode|orientation|ratio)|\bportrait\b(?!\s+of\b|\s+photo|\s+shot|\s+picture))/iu.test(value)) {
@@ -247,6 +265,8 @@ export function resolveDimensionsFromPixelSize(width: number, height: number): {
   height: number;
   aspectRatio: AiImageAspectRatio;
   ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
 } {
   const resolved = resolveGenerationSizeFromRatio(width, height);
   return {
@@ -254,6 +274,8 @@ export function resolveDimensionsFromPixelSize(width: number, height: number): {
     height: resolved.height,
     aspectRatio: resolved.aspectRatio,
     ratioClamped: resolved.ratioClamped,
+    printWidth: resolved.printWidth,
+    printHeight: resolved.printHeight,
   };
 }
 
@@ -268,6 +290,11 @@ export interface ImageGenerationOptions {
     dataUrl: string;
     mimeType?: "image/jpeg" | "image/png" | "image/webp";
   }>;
+  /** RGBA mask for OpenAI edits (α=0 = regenerate). */
+  mask?: {
+    dataUrl: string;
+    mimeType?: "image/jpeg" | "image/png" | "image/webp";
+  };
   cloudConsent?: boolean;
   seed?: number;
   enhance?: boolean;
@@ -407,7 +434,12 @@ export function isImageGenerationPrompt(userPrompt: string): boolean {
     prompt.includes("image of") ||
     prompt.includes("infographic") ||
     prompt.includes("อินโฟกราฟิก") ||
-    prompt.includes("information graphic")
+    prompt.includes("information graphic") ||
+    prompt.includes("ผสมภาพ") ||
+    prompt.includes("ผสมรูป") ||
+    /\bmix\b/u.test(prompt) ||
+    /\bfuse\b/u.test(prompt) ||
+    /\bblend\b/u.test(prompt)
   );
 }
 

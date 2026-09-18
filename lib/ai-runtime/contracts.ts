@@ -152,6 +152,11 @@ export type AiImageGenerateInput = {
   /** Background mode. Defaults to "opaque". */
   background?: "auto" | "opaque" | "transparent";
   inputImages?: AiImageInput[];
+  /**
+   * Optional RGBA mask for OpenAI `/images/edits` (α=0 = edit region).
+   * Ignored on providers that do not support masks (e.g. Replicate GPT Image).
+   */
+  mask?: AiImageInput;
   cloudConsent?: boolean;
   enhance?: boolean;
   seed?: number;

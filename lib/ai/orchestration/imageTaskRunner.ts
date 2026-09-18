@@ -14,6 +14,7 @@ import { createImage } from "@/lib/engine/factory";
 import {
   getGenerationPreviewBesideSource,
   getGenerationPreviewBounds,
+  getVisibleWorldBounds,
 } from "@/lib/engine/generationPlacement";
 import { preloadDataURL, loadDataURL } from "@/lib/engine/imageCache";
 import { getProcessingPreviewById } from "@/lib/engine/processingPreview";
@@ -30,6 +31,7 @@ import type {
   CriterionEvidenceStatus,
 } from "./creativeDirector";
 import { autoCropImageToTargetRatio } from "./imageAutoCrop";
+import { expandImageToAspectRatio } from "./imageExpand";
 import { deriveGeneratedImageName } from "./imageNaming";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
@@ -186,10 +188,21 @@ export async function runContextAwareImageTask(
       slideHeight: useEngine.getState().doc.height,
     } as const);
   const sourceElement = resolveSourceElementBounds(effectiveRefs, initialSlide);
+  const previewSize = {
+    width:
+      dimensions.ratioClamped && dimensions.printWidth
+        ? dimensions.printWidth
+        : dimensions.width,
+    height:
+      dimensions.ratioClamped && dimensions.printHeight
+        ? dimensions.printHeight
+        : dimensions.height,
+  };
   const previewBounds = sourceElement
-    ? getGenerationPreviewBesideSource(sourceElement, dimensions)
-    : getGenerationPreviewBounds(viewport, dimensions);
+    ? getGenerationPreviewBesideSource(sourceElement, previewSize)
+    : getGenerationPreviewBounds(viewport, previewSize);
   const previewLayout = sourceElement ? "anchor" : "center";
+  const viewportWorld = getVisibleWorldBounds(viewport);
   let committed: ContextAwareTaskResult | null = null;
   let lastError: unknown;
   let qualityRepairInstruction: string | undefined;
@@ -210,8 +223,8 @@ export async function runContextAwareImageTask(
   const previewPlacement = computeMultiImagePlacement(
     previewBounds,
     options.placement,
-    initialSlide?.width ?? 1920,
-    initialSlide?.height ?? 1080,
+    viewportWorld.width,
+    viewportWorld.height,
     previewLayout,
   );
 
@@ -276,12 +289,11 @@ export async function runContextAwareImageTask(
           );
           throwIfAborted(executionSignal);
 
-          // Replicate GPT Image only accepts a fixed aspect enum. We request the
-          // nearest legal size upstream, then crop to the user's print/target
-          // ratio so banners fill edge-to-edge (except ratios beyond the model
-          // 3:1 cap, e.g. 29×7cm, which still need slight side padding).
-          // generateAIImage returns natural bitmap size — never trust provider
-          // metadata alone, or square outputs skip crop when the task asked wide.
+          // Replicate / OpenAI: request legal size, then crop provider output to the
+          // generation target so banners fill edge-to-edge.
+          // Ratios beyond the model 3:1 cap (e.g. 29×7cm ≈ 4.14:1) generate as
+          // filled 3:1 first; after quality gates we side-panel expand + stitch
+          // to the true print canvas (no empty bars, no over-crop).
           let generated = generatedRaw;
           const targetRatio =
             dimensions.width / Math.max(1, dimensions.height);
@@ -500,6 +512,48 @@ export async function runContextAwareImageTask(
             progress: 0.78,
             message: "ตรวจผลลัพธ์เทียบกับ brief แล้ว",
           });
+
+          // Any print ratio beyond the model 3:1 cap (ultra-wide OR ultra-tall):
+          // expand overflowing edges and stitch to the true print canvas.
+          const printW = dimensions.printWidth;
+          const printH = dimensions.printHeight;
+          if (
+            dimensions.ratioClamped === true &&
+            typeof printW === "number" &&
+            typeof printH === "number" &&
+            printW > 0 &&
+            printH > 0 &&
+            Math.max(printW, printH) / Math.min(printW, printH) > 3.01
+          ) {
+            context.update({
+              progress: 0.82,
+              message: `กำลังขยายขอบเป็นสัดส่วนพิมพ์ ${printW}×${printH}…`,
+            });
+            const expanded = await expandImageToAspectRatio({
+              sourceDataUrl: generated.dataUrl,
+              ratioWidth: printW,
+              ratioHeight: printH,
+              scenePrompt: task.prompt,
+              quality: task.quality === "auto" ? "high" : task.quality,
+              cloudConsent: options.cloudConsent === true,
+              signal: executionSignal,
+              onProgress: (progress) => {
+                context.update({
+                  progress: 0.82,
+                  message: progress.message,
+                });
+              },
+            });
+            throwIfAborted(executionSignal);
+            generated = {
+              ...generated,
+              dataUrl: expanded.dataUrl,
+              fileId: expanded.fileId,
+              width: expanded.width,
+              height: expanded.height,
+            };
+          }
+
           const preloaded = await preloadDataURL(generated.dataUrl);
           throwIfAborted(executionSignal);
           task = appendAiTaskEvent(task, {
@@ -531,19 +585,21 @@ export async function runContextAwareImageTask(
           const historyBeforeCommit = state.history.past.length;
           const currentPreview = getProcessingPreviewById(context.id);
           const currentViewport = getCanvasViewport() ?? viewport;
-          const baseBounds = getGenerationPreviewBounds(
-            {
-              ...currentViewport,
-              slideWidth: slide.width,
-              slideHeight: slide.height,
-            },
-            { width: preloaded.width, height: preloaded.height },
-          );
+          const viewportForBounds = {
+            ...currentViewport,
+            slideWidth: slide.width,
+            slideHeight: slide.height,
+          };
+          const baseBounds = getGenerationPreviewBounds(viewportForBounds, {
+            width: preloaded.width,
+            height: preloaded.height,
+          });
+          const currentViewportWorld = getVisibleWorldBounds(viewportForBounds);
           const computedBounds = computeMultiImagePlacement(
             baseBounds,
             options.placement,
-            slide.width,
-            slide.height,
+            currentViewportWorld.width,
+            currentViewportWorld.height,
             previewLayout,
           );
           // Keep the committed image aligned with the stable generate preview.
@@ -1148,8 +1204,8 @@ function resolveSourceElementBounds(
 export function computeMultiImagePlacement(
   baseBounds: { x: number; y: number; width: number; height: number },
   placement: { outputIndex: number; requestedOutputCount: number } | undefined,
-  slideWidth: number,
-  slideHeight: number,
+  availableWidth: number,
+  availableHeight: number,
   layout: "center" | "anchor" = "center",
 ): { x: number; y: number; width: number; height: number } {
   if (!placement || placement.requestedOutputCount <= 1) {
@@ -1169,8 +1225,8 @@ export function computeMultiImagePlacement(
   const padding = 32;
   const gap = count > 3 ? 20 : 28;
 
-  const maxAvailW = Math.max(100, slideWidth - padding * 2);
-  const maxAvailH = Math.max(100, slideHeight - padding * 2);
+  const maxAvailW = Math.max(100, availableWidth - padding * 2);
+  const maxAvailH = Math.max(100, availableHeight - padding * 2);
 
   let targetW = baseBounds.width;
   let targetH = baseBounds.height;
@@ -1189,14 +1245,12 @@ export function computeMultiImagePlacement(
   }
 
   const totalRowW = count * targetW + totalGap;
+  const centerX = baseBounds.x + baseBounds.width / 2;
+  const centerY = baseBounds.y + baseBounds.height / 2;
   const startX =
-    layout === "anchor"
-      ? baseBounds.x
-      : Math.max(padding, (slideWidth - totalRowW) / 2);
+    layout === "anchor" ? baseBounds.x : centerX - totalRowW / 2;
   const startY =
-    layout === "anchor"
-      ? baseBounds.y
-      : Math.max(padding, (slideHeight - targetH) / 2);
+    layout === "anchor" ? baseBounds.y : centerY - targetH / 2;
 
   const x = Math.round(startX + index * (targetW + gap));
   const y = Math.round(startY);

@@ -56,6 +56,8 @@ export function usePasteDrop(
         (el) =>
           !el.isDeleted &&
           el.type === "frame" &&
+          // Occupied frames reject external drops until Detach.
+          !el.imageFileId &&
           world.x >= el.x &&
           world.x <= el.x + el.width &&
           world.y >= el.y &&

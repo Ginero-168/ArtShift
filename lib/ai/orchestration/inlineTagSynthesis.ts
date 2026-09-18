@@ -298,34 +298,69 @@ export function formatDisplayPrompt(text: string): string {
 
 /**
  * Builds a prompt string including all referenced image Name Tags suitable for copying.
- * Preserves existing tags in text, and prepends missing tags from imageRefs.
+ * Rewrites bare `@Name` / ambiguous tags into canonical `@[Name:objectId]` using imageRefs
+ * so paste always targets the same canvas object as the original prompt.
  */
 export function buildPromptWithTagsForCopy(
   content: string,
   imageRefs?: readonly { objectId: string; displayName: string }[],
 ): string {
-  let result = content || "";
-  if (imageRefs && imageRefs.length > 0) {
-    const missingRefs: { objectId: string; displayName: string }[] = [];
-    for (const ref of imageRefs) {
-      const tagId = ref.objectId;
-      const tagName = ref.displayName;
-      const hasTag =
-        result.includes(`:${tagId}]`) ||
-        result.includes(`@[${tagName}`) ||
-        result.includes(`@${tagName}`);
-      if (!hasTag) {
-        missingRefs.push(ref);
-      }
+  const refs = imageRefs ?? [];
+  const byId = new Map(refs.map((ref) => [ref.objectId, ref]));
+  const nameCounts = new Map<string, number>();
+  for (const ref of refs) {
+    const key = ref.displayName.toLowerCase();
+    nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+  }
+  const uniqueByName = new Map<string, { objectId: string; displayName: string }>();
+  for (const ref of refs) {
+    const key = ref.displayName.toLowerCase();
+    if (nameCounts.get(key) === 1) uniqueByName.set(key, ref);
+  }
+
+  const segments = parseInlineTagTokens(content || "");
+  let rebuilt = "";
+  const usedIds = new Set<string>();
+  const usedNames = new Set<string>();
+
+  for (const seg of segments) {
+    if (seg.type === "text") {
+      rebuilt += seg.text;
+      continue;
     }
-    if (missingRefs.length > 0) {
-      const prefix = missingRefs
-        .map((r) => `@[${r.displayName}:${r.objectId}]`)
-        .join(" ");
-      result = `${prefix} ${result}`.trim();
+
+    const explicitId = Boolean(seg.objectId) && seg.objectId !== seg.displayName;
+    const fromId = explicitId ? byId.get(seg.objectId) : undefined;
+    const fromName = uniqueByName.get(seg.displayName.toLowerCase());
+    const resolved = fromId ?? (!explicitId ? fromName : undefined);
+
+    if (resolved) {
+      rebuilt += `@[${resolved.displayName}:${resolved.objectId}]`;
+      usedIds.add(resolved.objectId);
+      usedNames.add(resolved.displayName.toLowerCase());
+    } else if (explicitId) {
+      rebuilt += `@[${seg.displayName}:${seg.objectId}]`;
+      usedIds.add(seg.objectId);
+      usedNames.add(seg.displayName.toLowerCase());
+    } else {
+      // Ambiguous bare name — keep token; do not invent an id.
+      rebuilt += `@[${seg.displayName}:${seg.objectId}]`;
+      usedIds.add(seg.objectId);
+      usedNames.add(seg.displayName.toLowerCase());
     }
   }
-  return result;
+
+  const missing = refs.filter((ref) => {
+    if (usedIds.has(ref.objectId)) return false;
+    // Name already present as a tag (even unresolved) — don't duplicate wrong candidates.
+    if (usedNames.has(ref.displayName.toLowerCase())) return false;
+    return true;
+  });
+  if (missing.length > 0) {
+    const prefix = missing.map((r) => `@[${r.displayName}:${r.objectId}]`).join(" ");
+    rebuilt = `${prefix} ${rebuilt}`.trim();
+  }
+  return rebuilt;
 }
 
 

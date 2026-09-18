@@ -48,9 +48,13 @@ describe("ObjectContextBar Hook Rules and Convert to Brief Action", () => {
     expect(fileContent).toContain("{label}");
   });
 
-  it("provides Merge and Ungroup controls when a group is selected", () => {
-    expect(fileContent).toContain('if (isGroup) {');
+  it("provides Merge, Mix, and group actions for multi-selection", () => {
     expect(fileContent).toContain('mergeBusy ? "Merging..." : "Merge"');
-    expect(fileContent).toContain('controls.push(action("Ungroup", () => ungroupElements(ids)));');
+    expect(fileContent).toContain('mixBusy ? "Mixing..." : "Mix"');
+    expect(fileContent).toContain("requestCoPilotExternalTurn");
+    expect(fileContent).toContain("IMAGE_MIX_PROMPT");
+    expect(fileContent).toContain("selectedImageIds.length >= 2");
+    expect(fileContent).toContain("selectionGroups.canUngroup");
+    expect(fileContent).toContain("selectionGroups.canGroup");
   });
 });

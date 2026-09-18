@@ -347,16 +347,24 @@ export function createDirectedImageRun(
           width: briefDims.width,
           height: briefDims.height,
           aspectRatio: briefDims.aspectRatio,
+          ratioClamped: briefDims.ratioClamped,
+          printWidth: briefDims.printWidth,
+          printHeight: briefDims.printHeight,
         }
       : listDims
         ? {
             width: listDims.width,
             height: listDims.height,
             aspectRatio: listDims.aspectRatio,
+            ratioClamped: listDims.ratioClamped,
+            printWidth: listDims.printWidth,
+            printHeight: listDims.printHeight,
           }
         : baseTask.requestedDimensions;
     const ratioClause = dims
-      ? ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}). Fill the full frame edge-to-edge; no letterboxing.`
+      ? dims.ratioClamped
+        ? ` Target generation size ${dims.width}×${dims.height} (model max 3:1). The pipeline will then expand the overflowing edges (left/right or top/bottom) and stitch to the true print canvas ${dims.printWidth}×${dims.printHeight}. Deliver a filled edge-to-edge ≤3:1 center panel — no empty bars and no extra crop into a narrower strip.`
+        : ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}). Fill the full frame edge-to-edge; no letterboxing.`
       : "";
     const taskPrompt =
       count === 1

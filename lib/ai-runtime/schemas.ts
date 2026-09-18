@@ -74,6 +74,12 @@ const ImageGenerateInputSchema = v.strictObject({
       v.maxLength(4),
     ),
   ),
+  mask: v.optional(
+    v.strictObject({
+      dataUrl: DataUrlSchema,
+      mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
+    }),
+  ),
   cloudConsent: v.optional(v.boolean()),
   aspectRatio: v.optional(
     v.pipe(

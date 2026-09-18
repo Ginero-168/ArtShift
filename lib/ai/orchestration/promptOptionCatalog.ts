@@ -64,6 +64,130 @@ export const OPTION_PREVIEW_LIBRARY: Record<string, OptionPreview> = {
   "brown-color": { kind: "swatch", colors: ["#78350F", "#B45309", "#FCD34D"] },
   "white-color": { kind: "swatch", colors: ["#FFFFFF", "#F1F5F9"] },
 
+  // —— Extra color / fur tones ——
+  cream: { kind: "swatch", colors: ["#FEF3C7", "#FDE68A", "#F8FAFC"] },
+  silver: { kind: "swatch", colors: ["#CBD5E1", "#94A3B8", "#F8FAFC"] },
+  chocolate: { kind: "swatch", colors: ["#78350F", "#92400E", "#D97706"] },
+  "blue-gray": { kind: "swatch", colors: ["#64748B", "#94A3B8", "#E2E8F0"] },
+  "ginger-white": { kind: "swatch", colors: ["#F97316", "#FFFFFF", "#FED7AA"] },
+  tuxedo: { kind: "swatch", colors: ["#111827", "#FFFFFF", "#6B7280"] },
+  tortoiseshell: { kind: "swatch", colors: ["#F97316", "#111827", "#B45309"] },
+  smoke: { kind: "swatch", colors: ["#374151", "#9CA3AF", "#F3F4F6"] },
+  cinnamon: { kind: "swatch", colors: ["#C2410C", "#EA580C", "#FDBA74"] },
+  "red-brown": { kind: "swatch", colors: ["#9A3412", "#C2410C", "#FDBA74"] },
+  brindle: { kind: "swatch", colors: ["#78350F", "#1C1917", "#A8A29E"] },
+  spotted: { kind: "swatch", colors: ["#FFFFFF", "#111827", "#E5E7EB"] },
+  tricolor: { kind: "swatch", colors: ["#111827", "#B45309", "#FFFFFF"] },
+  sable: { kind: "swatch", colors: ["#92400E", "#D97706", "#1C1917"] },
+  "blue-merle": { kind: "swatch", colors: ["#64748B", "#1E293B", "#E2E8F0"] },
+  fawn: { kind: "swatch", colors: ["#D6B48C", "#E7D3B0", "#F5E6D3"] },
+  liver: { kind: "swatch", colors: ["#7C2D12", "#9A3412", "#C4A484"] },
+  apricot: { kind: "swatch", colors: ["#FDBA74", "#FED7AA", "#FFF7ED"] },
+  monochrome: { kind: "swatch", colors: ["#000000", "#6B7280", "#FFFFFF"] },
+  warm: { kind: "swatch", colors: ["#F97316", "#FBBF24", "#FDE68A"] },
+  cool: { kind: "swatch", colors: ["#0EA5E9", "#14B8A6", "#E0F2FE"] },
+  muted: { kind: "swatch", colors: ["#A8A29E", "#D6D3D1", "#E7E5E4"] },
+  "high-contrast": { kind: "swatch", colors: ["#000000", "#FFFFFF"] },
+  "golden-hour": { kind: "swatch", colors: ["#F59E0B", "#FBBF24", "#FDE68A"] },
+  blueprint: { kind: "swatch", colors: ["#1E3A8A", "#3B82F6", "#DBEAFE"] },
+  candy: { kind: "swatch", colors: ["#F472B6", "#A78BFA", "#FDE047"] },
+  sepia: { kind: "swatch", colors: ["#78350F", "#A16207", "#FEF3C7"] },
+  ice: { kind: "swatch", colors: ["#F0F9FF", "#BAE6FD", "#E0F2FE"] },
+
+  // —— Breed placeholders (until jpg lands) ——
+  shorthair: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FEF3C7"/><ellipse cx="32" cy="22" rx="14" ry="12" fill="#FDBA74"/><circle cx="26" cy="20" r="2" fill="#0F172A"/><circle cx="38" cy="20" r="2" fill="#0F172A"/>`,
+    ),
+  },
+  scottish: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#E0E7FF"/><ellipse cx="32" cy="22" rx="14" ry="12" fill="#94A3B8"/><path d="M18 14 L22 20" stroke="#64748B" stroke-width="2"/><path d="M46 14 L42 20" stroke="#64748B" stroke-width="2"/>`,
+    ),
+  },
+  british: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#F1F5F9"/><ellipse cx="32" cy="22" rx="15" ry="13" fill="#94A3B8"/><circle cx="26" cy="20" r="2.5" fill="#0F172A"/><circle cx="38" cy="20" r="2.5" fill="#0F172A"/>`,
+    ),
+  },
+  persian: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FEF3C7"/><ellipse cx="32" cy="22" rx="16" ry="14" fill="#E7E5E4"/><circle cx="26" cy="20" r="2" fill="#0F172A"/><circle cx="38" cy="20" r="2" fill="#0F172A"/>`,
+    ),
+  },
+  siamese: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FEF9C3"/><ellipse cx="32" cy="22" rx="12" ry="11" fill="#FEF3C7"/><ellipse cx="22" cy="16" rx="5" ry="6" fill="#78350F"/><ellipse cx="42" cy="16" rx="5" ry="6" fill="#78350F"/><circle cx="26" cy="20" r="2" fill="#38BDF8"/><circle cx="38" cy="20" r="2" fill="#38BDF8"/>`,
+    ),
+  },
+  golden: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FEF3C7"/><ellipse cx="32" cy="24" rx="14" ry="11" fill="#EAB308"/><ellipse cx="18" cy="18" rx="5" ry="7" fill="#CA8A04"/><ellipse cx="46" cy="18" rx="5" ry="7" fill="#CA8A04"/>`,
+    ),
+  },
+  corgi: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FFEDD5"/><ellipse cx="32" cy="26" rx="16" ry="9" fill="#F97316"/><ellipse cx="18" cy="14" rx="5" ry="8" fill="#FB923C"/><ellipse cx="46" cy="14" rx="5" ry="8" fill="#FB923C"/>`,
+    ),
+  },
+  shiba: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FEF3C7"/><ellipse cx="32" cy="24" rx="13" ry="11" fill="#EA580C"/><circle cx="26" cy="22" r="2" fill="#0F172A"/><circle cx="38" cy="22" r="2" fill="#0F172A"/>`,
+    ),
+  },
+  poodle: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#F8FAFC"/><circle cx="32" cy="20" r="12" fill="#E2E8F0"/><circle cx="22" cy="12" r="5" fill="#CBD5E1"/><circle cx="42" cy="12" r="5" fill="#CBD5E1"/>`,
+    ),
+  },
+  husky: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#E0F2FE"/><ellipse cx="32" cy="22" rx="13" ry="12" fill="#F8FAFC"/><circle cx="26" cy="20" r="2.5" fill="#38BDF8"/><circle cx="38" cy="20" r="2.5" fill="#38BDF8"/>`,
+    ),
+  },
+
+  // —— Style extras ——
+  pixel: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#1E1B4B"/><rect x="20" y="10" width="8" height="8" fill="#A78BFA"/><rect x="28" y="18" width="8" height="8" fill="#F472B6"/><rect x="36" y="10" width="8" height="8" fill="#34D399"/>`,
+    ),
+  },
+  comic: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FEF08A"/><rect x="10" y="8" width="44" height="24" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/><path d="M20 28 L16 36 L28 28" fill="#FFFFFF" stroke="#0F172A"/>`,
+    ),
+  },
+  clay: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FFE4E6"/><ellipse cx="32" cy="22" rx="14" ry="12" fill="#FB7185"/><ellipse cx="28" cy="18" rx="4" ry="3" fill="#FDA4AF"/>`,
+    ),
+  },
+  ink: {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FAFAF9"/><path d="M12 30 Q24 8 40 22 T58 14" fill="none" stroke="#0F172A" stroke-width="3"/>`,
+    ),
+  },
+  "pastel-art": {
+    kind: "svg",
+    svg: svg(
+      `<rect width="64" height="40" fill="#FDF4FF"/><circle cx="24" cy="18" r="10" fill="#F9A8D4" opacity=".7"/><circle cx="42" cy="24" r="10" fill="#C4B5FD" opacity=".7"/>`,
+    ),
+  },
+
   // —— Background structure ——
   studio: {
     kind: "svg",
@@ -402,11 +526,23 @@ export const OPTION_PREVIEW_LIBRARY: Record<string, OptionPreview> = {
 };
 
 export function resolveOptionPreview(optionId: string): OptionPreview | undefined {
-  const src = promptHelperThumbSrc(optionId);
-  if (src) {
-    return { kind: "image", src, alt: optionId };
-  }
-  return OPTION_PREVIEW_LIBRARY[optionId];
+  // Always prefer the canonical thumb URL. UI falls back to SVG/swatch on load error
+  // so newly generated files appear on the next open (or after a mid-session poll).
+  return {
+    kind: "image",
+    src: promptHelperThumbSrc(optionId) || `/prompt-helper/thumbs/${optionId}.jpg`,
+    alt: optionId,
+  };
+}
+
+/** SVG/swatch chip when the jpg is missing. */
+export function resolveOptionFallbackPreview(optionId: string): OptionPreview {
+  return (
+    OPTION_PREVIEW_LIBRARY[optionId] ?? {
+      kind: "swatch",
+      colors: ["#e2e8f0", "#f8fafc", "#cbd5e1"],
+    }
+  );
 }
 
 /** Detect brand / shelf-sign / ad briefs that need Shared Anchor + Variant mode. */

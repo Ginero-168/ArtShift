@@ -177,6 +177,142 @@ export async function autoCropImageToTargetRatio(
   });
 }
 
+/**
+ * Cover-fit a generated bitmap into a print frame (e.g. 3:1 art → 29×7cm).
+ * Fills the frame edge-to-edge by cropping overflow — for ultra-wide print
+ * that means trim top/bottom, never leave empty left/right bars.
+ */
+export function computeCoverCropBounds(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): { sx: number; sy: number; sw: number; sh: number } {
+  const targetRatio = targetWidth / Math.max(1, targetHeight);
+  const sourceRatio = sourceWidth / Math.max(1, sourceHeight);
+
+  if (Math.abs(sourceRatio - targetRatio) <= 0.03) {
+    return { sx: 0, sy: 0, sw: sourceWidth, sh: sourceHeight };
+  }
+
+  if (sourceRatio < targetRatio) {
+    // Source is taller than the print frame → crop top/bottom (usable banners).
+    const sh = Math.max(1, Math.round(sourceWidth / targetRatio));
+    const sy = Math.max(0, Math.floor((sourceHeight - sh) / 2));
+    return { sx: 0, sy, sw: sourceWidth, sh: Math.min(sh, sourceHeight - sy) };
+  }
+
+  // Source is wider than the print frame → crop left/right.
+  const sw = Math.max(1, Math.round(sourceHeight * targetRatio));
+  const sx = Math.max(0, Math.floor((sourceWidth - sw) / 2));
+  return { sx, sy: 0, sw: Math.min(sw, sourceWidth - sx), sh: sourceHeight };
+}
+
+/** @deprecated Prefer computeCoverCropBounds — contain/pad left empty side bars. */
+export function computePadBounds(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): { drawX: number; drawY: number; drawWidth: number; drawHeight: number } {
+  const scale = Math.min(
+    targetWidth / Math.max(1, sourceWidth),
+    targetHeight / Math.max(1, sourceHeight),
+  );
+  const drawWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const drawHeight = Math.max(1, Math.round(sourceHeight * scale));
+  return {
+    drawX: Math.max(0, Math.floor((targetWidth - drawWidth) / 2)),
+    drawY: Math.max(0, Math.floor((targetHeight - drawHeight) / 2)),
+    drawWidth,
+    drawHeight,
+  };
+}
+
+/**
+ * Cover the true print canvas with generated art (crop top/bottom for ultra-wide).
+ * Replaces contain/pad which left unusable white side bars on 29×7cm etc.
+ */
+export async function coverImageToTargetRatio(
+  dataUrl: string,
+  targetWidth: number,
+  targetHeight: number,
+): Promise<AutoCropResult> {
+  if (
+    typeof window === "undefined" ||
+    typeof document === "undefined" ||
+    !dataUrl.startsWith("data:image/")
+  ) {
+    return { dataUrl, width: targetWidth, height: targetHeight, wasCropped: false };
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const sourceWidth = img.naturalWidth || img.width;
+      const sourceHeight = img.naturalHeight || img.height;
+      const sourceRatio = sourceWidth / Math.max(1, sourceHeight);
+      const targetRatio = targetWidth / Math.max(1, targetHeight);
+
+      if (Math.abs(sourceRatio - targetRatio) <= 0.03) {
+        resolve({ dataUrl, width: sourceWidth, height: sourceHeight, wasCropped: false });
+        return;
+      }
+
+      const outCanvas = document.createElement("canvas");
+      outCanvas.width = targetWidth;
+      outCanvas.height = targetHeight;
+      const outCtx = outCanvas.getContext("2d");
+      if (!outCtx) {
+        resolve({ dataUrl, width: sourceWidth, height: sourceHeight, wasCropped: false });
+        return;
+      }
+
+      const crop = computeCoverCropBounds(
+        sourceWidth,
+        sourceHeight,
+        targetWidth,
+        targetHeight,
+      );
+      outCtx.drawImage(
+        img,
+        crop.sx,
+        crop.sy,
+        crop.sw,
+        crop.sh,
+        0,
+        0,
+        targetWidth,
+        targetHeight,
+      );
+
+      resolve({
+        dataUrl: outCanvas.toDataURL("image/jpeg", 0.95),
+        width: targetWidth,
+        height: targetHeight,
+        wasCropped: true,
+      });
+    };
+
+    img.onerror = () => {
+      resolve({ dataUrl, width: targetWidth, height: targetHeight, wasCropped: false });
+    };
+
+    img.src = dataUrl;
+  });
+}
+
+/** @deprecated Use coverImageToTargetRatio — pad left unusable side bars. */
+export async function padImageToTargetRatio(
+  dataUrl: string,
+  targetWidth: number,
+  targetHeight: number,
+  _options?: { barColor?: string },
+): Promise<AutoCropResult> {
+  return coverImageToTargetRatio(dataUrl, targetWidth, targetHeight);
+}
+
 /** True for solid black or near-white padding bars (common GPT Image letterboxing). */
 export function isLetterboxPixel(r: number, g: number, b: number): boolean {
   const dark = r < 30 && g < 30 && b < 30;

@@ -1229,6 +1229,22 @@ export const IconMerge = (p: Props) =>
     p,
   );
 
+/** Two images overlapping into one — Mix / compose. */
+export const IconMix = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <circle cx="9" cy="12" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="15" cy="12" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M12 7.2c1.4 1.2 1.4 8.4 0 9.6-1.4-1.2-1.4-8.4 0-9.6Z"
+        fill="currentColor"
+        opacity="0.35"
+      />
+    </>,
+    p,
+  );
+
 export const IconZap = (p: Props) =>
   svg(
     p.size,
