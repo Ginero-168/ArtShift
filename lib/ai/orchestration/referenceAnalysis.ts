@@ -1,5 +1,9 @@
 import { getAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
+import {
+  parseVisionResponse,
+  visionExtrasAsAppearanceNotes,
+} from "./cloudVisionParser";
 import type { ComposerImageRef } from "./imageReferences";
 import { renderVisibleReference } from "./visibleReferenceRenderer";
 
@@ -12,6 +16,13 @@ export type ImageReferenceAnalysis = {
   transparency: "none" | "partial" | "unknown";
   appearanceNotes: string[];
   limitations: string[];
+};
+
+export type CloudVisionTurboResult = {
+  caption: string;
+  objects: string[];
+  visibleText: string;
+  appearanceNotes?: string[];
 };
 
 export type ImageReferenceAnalyzers = {
@@ -30,18 +41,18 @@ export type ImageReferenceAnalyzers = {
     dataUrl: string,
     signal: AbortSignal,
     onProgress?: (stage: string, progress: number) => void,
-  ) => Promise<{ caption: string; objects: string[]; visibleText: string } | null>;
+  ) => Promise<CloudVisionTurboResult | null>;
 };
 
 export async function tryCloudVisionTurbo(
   dataUrl: string,
   signal: AbortSignal,
   onProgress?: (stage: string, progress: number) => void,
-): Promise<{ caption: string; objects: string[]; visibleText: string } | null> {
+): Promise<CloudVisionTurboResult | null> {
   if (typeof fetch === "undefined") return null;
   try {
     onProgress?.("Cloud Vision Turbo ⚡ กำลังวิเคราะห์", 0.3);
-    const timeoutSignal = AbortSignal.timeout ? AbortSignal.timeout(12_000) : undefined;
+    const timeoutSignal = AbortSignal.timeout ? AbortSignal.timeout(22_000) : undefined;
     const combinedSignal =
       timeoutSignal && typeof (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any === "function"
         ? (AbortSignal as unknown as { any: (signals: AbortSignal[]) => AbortSignal }).any([signal, timeoutSignal])
@@ -58,10 +69,12 @@ export async function tryCloudVisionTurbo(
     const data = await res.json();
     if (data.success && data.result) {
       onProgress?.("Cloud Vision Turbo ⚡ วิเคราะห์เสร็จสิ้น", 0.95);
+      const parsed = parseVisionResponse(JSON.stringify(data.result));
       return {
-        caption: typeof data.result.caption === "string" ? data.result.caption : "",
-        objects: Array.isArray(data.result.objects) ? data.result.objects.map(String) : [],
-        visibleText: typeof data.result.visibleText === "string" ? data.result.visibleText : "",
+        caption: parsed.caption,
+        objects: parsed.objects,
+        visibleText: parsed.visibleText,
+        appearanceNotes: visionExtrasAsAppearanceNotes(parsed),
       };
     }
   } catch {
@@ -93,6 +106,7 @@ export async function analyzeImageReference(
   let caption = "";
   let objects: string[] = [];
   let visibleText = "";
+  let turboNotes: string[] = [];
 
   // 1. Cloud Vision Turbo Fast-Lane (if available on analyzers)
   let turboSuccess = false;
@@ -102,6 +116,7 @@ export async function analyzeImageReference(
       caption = turboResult.caption;
       objects = turboResult.objects;
       visibleText = turboResult.visibleText;
+      turboNotes = turboResult.appearanceNotes ?? [];
       turboSuccess = true;
     }
   }
@@ -147,6 +162,7 @@ export async function analyzeImageReference(
     appearanceNotes: [
       `Canvas placement ${Math.round(ref.width)} × ${Math.round(ref.height)} px`,
       `rotation ${Math.round((ref.angle * 180) / Math.PI)}°`,
+      ...turboNotes,
     ],
     limitations: [
       ...visible.limitations,

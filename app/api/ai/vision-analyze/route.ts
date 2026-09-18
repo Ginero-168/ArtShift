@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { parseVisionResponse } from "@/lib/ai/orchestration/cloudVisionParser";
+import { UNIFIED_VISION_PROMPT } from "@/lib/ai/orchestration/visionAnalyzePrompt";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
@@ -10,15 +11,6 @@ export const dynamic = "force-dynamic";
 
 const limiter = new RateLimiter(30, 60_000);
 const MAX_REQUEST_BODY_BYTES = 20 * 1024 * 1024;
-
-const UNIFIED_VISION_PROMPT = `Analyze this image in detail for a graphic design tool. Return a strictly valid JSON object ONLY (no markdown formatting, no codeblocks) with the following structure:
-{
-  "caption": "Detailed visual description of the subject, scene, layout, composition, lighting, art style, and mood",
-  "objects": ["list of main visually distinct objects, elements, or graphic parts identified in the image"],
-  "visibleText": "All visible words, letters, labels, or typography seen in the image accurately transcribed in reading order",
-  "style": "Graphic style (e.g. 2D flat graphic, minimalist vector, realistic photograph, banner, etc.)",
-  "dominantColors": ["#hex1", "#hex2", "#hex3"]
-}`;
 
 export async function POST(req: NextRequest) {
   const account = getUserAccount(req);
@@ -66,7 +58,7 @@ export async function POST(req: NextRequest) {
       {
         profile: "quality",
         signal: req.signal,
-        timeoutMs: 15_000,
+        timeoutMs: 25_000,
         cloudConsent: true,
         allowFallback: true,
       },

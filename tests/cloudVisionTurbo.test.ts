@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseVisionResponse } from "@/lib/ai/orchestration/cloudVisionParser";
+import {
+  parseVisionResponse,
+  visionExtrasAsAppearanceNotes,
+} from "@/lib/ai/orchestration/cloudVisionParser";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import {
   analyzeImageReference,
@@ -50,6 +53,24 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       expect(parsed.dominantColors).toEqual(["#ffffff", "#000000"]);
     });
 
+    it("keeps layout notes and inconsistencies from richer vision JSON", () => {
+      const json = JSON.stringify({
+        caption: "Top: logo. Middle: 50 baht badge. Bottom: T&Cs two columns.",
+        objects: ["Naiin logo", "mug: Good Books Better Days :)"],
+        visibleText: "Exclusive for\nMitrtown Office Tower\n50 บาท",
+        style: "square promo coupon",
+        dominantColors: ["#1e3a8a", "#facc15"],
+        layoutNotes: "White T&C frame at bottom, 2 columns",
+        inconsistencies: ["Header says Mitrtown; T&Cs say The Street Ratchada"],
+      });
+      const parsed = parseVisionResponse(json);
+      expect(parsed.layoutNotes).toContain("2 columns");
+      expect(parsed.inconsistencies?.[0]).toMatch(/Ratchada/);
+      const notes = visionExtrasAsAppearanceNotes(parsed);
+      expect(notes.some((n) => n.startsWith("Inconsistency:"))).toBe(true);
+      expect(notes.some((n) => n.startsWith("Layout:"))).toBe(true);
+    });
+
     it("strips markdown codeblock delimiters before parsing JSON", () => {
       const wrapped = "```json\n" + JSON.stringify({
         caption: "Wrapped caption",
@@ -95,6 +116,7 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
           caption: "Turbo caption result",
           objects: ["sign", "logo"],
           visibleText: "Welearn Book Shop",
+          appearanceNotes: [],
         });
       } finally {
         globalThis.fetch = originalFetch;

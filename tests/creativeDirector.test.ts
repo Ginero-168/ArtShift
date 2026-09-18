@@ -78,6 +78,13 @@ describe("gpt-oss-120b Creative Director", () => {
     expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Review");
   });
 
+  it("requires inventory-style answers for image analysis requests", () => {
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("IMAGE ANALYSIS ANSWER PROTOCOL");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("วิเคราะห์รูปนี้");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Do NOT lead with mood");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Full readable text");
+  });
+
   it("always executes the brain on the quality profile", async () => {
     const execute = vi.fn().mockResolvedValue(toolResult);
     const signal = new AbortController().signal;

@@ -213,7 +213,7 @@ const CREATIVE_DIRECTION_TOOL = {
     additionalProperties: false,
     properties: {
       kind: { type: "string", enum: ["answer", "clarification", "image-task"] },
-      text: { type: "string", minLength: 1, maxLength: 8_000 },
+      text: { type: "string", minLength: 1, maxLength: 12_000 },
       question: { type: "string", minLength: 1, maxLength: 1_000 },
       options: { type: "array", maxItems: 4, items: { type: "string", maxLength: 500 } },
       outputCount: { type: "integer", minimum: 1, maximum: 5 },
@@ -347,6 +347,17 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Choose one allowlisted specialist and capability. Respect an explicit user model preference only when that model is listed as available.",
   "For supported Canvas edits, call propose_design_plan with exact current ids and a complete atomic command plan. Ask one focused clarification only when a missing fact materially changes the result.",
   "For image creation or image editing, call propose_creative_direction. For an answer that needs no execution, return answer. Never return competing plans or call both planning tools in one turn.",
+  "IMAGE ANALYSIS ANSWER PROTOCOL (when the user asks to analyze / describe / inventory an attached image — e.g. 'วิเคราะห์รูปนี้', 'มีอะไรบ้าง', 'อ่านข้อความในรูป', 'what's in this image'):",
+  "  - Return kind: answer (do NOT start image generation).",
+  "  - Use Vision OCR + caption + objects as ground truth. Prefer exact visible text over paraphrase. Never invent text that Vision did not report.",
+  "  - Structure the reply in the user's language with clear headings and bullets, roughly:",
+  "      1) Overview — what the piece is (poster/coupon/ad), approximate aspect, brand/color system.",
+  "      2) Elements by zone (top → middle → bottom): logo, headlines, badges, props (book spines, mug text, icons), background scene.",
+  "      3) Full readable text — transcribe slogans, prices, conditions, fine print from Vision OCR; keep bullet lists intact.",
+  "      4) Observations — flag contradictions across regions (e.g. branch name in header vs T&Cs) when evidence supports it.",
+  "      5) Offer next help — edit the image, recreate the coupon, or extract text for reuse.",
+  "  - Do NOT lead with mood/emotion marketing copy. Mood is optional and secondary.",
+  "  - Be thorough: inventory first, interpretation second. Longer structured answers are preferred over a short 4-point vibe summary.",
   "When the user attaches reference images or name tags, analyze their visual details, detected titles, OCR text, and objects to guide the design. If the user asks to create an ad, poster, or new image referencing the tagged subject, choose image_generator and incorporate the title, key messaging, and visual theme into refinedPrompt.",
   "NAME TAG REFERENCE PRESERVATION & MODIFICATION PROTOCOL:",
   "When the user references one or more canvas elements using Name Tags (e.g. @[Name:id] or @Name or @รูป...):",
@@ -452,6 +463,10 @@ export async function prepareCreativeDirection(
     input.referenceAnalyses,
     input.prompt,
   );
+  const wantsImageInventory =
+    /วิเคราะห์|มีอะไรบ้าง|อ่านข้อความ|ocr|what's in|what is in|describe (this )?image|inventory/iu.test(
+      input.prompt,
+    );
   const hasInlineTags = /@[^\s]+/u.test(input.prompt);
   const inlineSynthesis =
     (input.referenceAnalyses && input.referenceAnalyses.length > 0) || hasInlineTags
@@ -460,6 +475,11 @@ export async function prepareCreativeDirection(
           ((input.referenceAnalyses as unknown as ImageReferenceAnalysis[]) || []),
         )
       : null;
+  const referenceBlock = formattedReferences
+    ? wantsImageInventory
+      ? `\n\n=== ATTACHED IMAGE(S) TO INVENTORY ===\nFollow IMAGE ANALYSIS ANSWER PROTOCOL. Use the OCR transcript and spatial inventory below as authoritative evidence. Reply as a thorough structured inventory — do not generate a new image.\n${formattedReferences}`
+      : `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Each has a display name and inferred role. Analyze and incorporate them into your creative direction. In refinedPrompt, refer to Reference N by display name + role only — never emit @[Name:id] or UUIDs. Images are also supplied as input_images in this same order:\n${formattedReferences}`
+    : "";
   const messages: AiAssistantChatInput["messages"] = [
     ...normalizeConversationHistory(input.conversationHistory, input.prompt),
     {
@@ -469,11 +489,7 @@ export async function prepareCreativeDirection(
           type: "text",
           text: `User request:\n${input.prompt.slice(0, 20_000)}${
             inlineSynthesis?.semanticMappingText ? `\n\n${inlineSynthesis.semanticMappingText}` : ""
-          }${
-            formattedReferences
-              ? `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Each has a display name and inferred role. Analyze and incorporate them into your creative direction. In refinedPrompt, refer to Reference N by display name + role only — never emit @[Name:id] or UUIDs. Images are also supplied as input_images in this same order:\n${formattedReferences}`
-              : ""
-          }`,
+          }${referenceBlock}`,
         },
         {
           type: "text",
@@ -837,7 +853,7 @@ async function executeDirectorPass(
       );
       return invalidDirection("Unparsed tool call envelope in model text");
     }
-    if (text && text.length <= 8_000) {
+    if (text && text.length <= 12_000) {
       return { kind: "answer", text };
     }
     return invalidDirection();
@@ -1087,8 +1103,8 @@ export function parseCreativeDirection(
     return { kind: "sequential-plan", plan: val.plan };
   }
   if (value.kind === "answer") {
-    if (!isBoundedString(value.text, 8_000)) {
-      return invalidDirection("answer text is invalid or exceeds 8000 chars");
+    if (!isBoundedString(value.text, 12_000)) {
+      return invalidDirection("answer text is invalid or exceeds 12000 chars");
     }
     return { kind: "answer", text: value.text.trim() };
   }
@@ -1482,19 +1498,35 @@ function formatReferenceAnalysesForPrompt(
 ): string {
   if (!values.length) return "";
   const roles = inferInlineTagRoles(userPrompt);
+  const wantsInventory =
+    /วิเคราะห์|มีอะไรบ้าง|อ่านข้อความ|ocr|what's in|what is in|describe (this )?image|inventory/iu.test(
+      userPrompt,
+    );
   return values
     .map((val, idx) => {
       const title = val.displayName ? `"${val.displayName}"` : `Image ${idx + 1}`;
       const role = (val.objectId && roles.get(val.objectId)) || "reference";
       const lines = [`- Reference ${idx + 1} (${title}, role: ${role}):`];
       if (val.objectId) lines.push(`  • Object ID: ${val.objectId}`);
-      if (val.caption) lines.push(`  • Visual Summary: ${val.caption}`);
-      if (val.visibleText) lines.push(`  • Text on Image (OCR): "${val.visibleText}"`);
+      if (val.caption) {
+        lines.push(
+          wantsInventory
+            ? `  • Spatial / visual inventory: ${val.caption}`
+            : `  • Visual Summary: ${val.caption}`,
+        );
+      }
+      if (val.visibleText) {
+        lines.push(
+          wantsInventory
+            ? `  • Full OCR transcript (authoritative — quote exactly):\n${val.visibleText}`
+            : `  • Text on Image (OCR): "${val.visibleText}"`,
+        );
+      }
       if (val.objects?.length) lines.push(`  • Detected Objects: ${val.objects.join(", ")}`);
       if (val.dimensions)
         lines.push(`  • Dimensions: ${val.dimensions.width}×${val.dimensions.height}`);
       if (val.appearanceNotes?.length)
-        lines.push(`  • Appearance: ${val.appearanceNotes.join("; ")}`);
+        lines.push(`  • Appearance / layout notes: ${val.appearanceNotes.join("; ")}`);
       return lines.join("\n");
     })
     .join("\n\n");
@@ -1504,11 +1536,11 @@ function normalizeReferenceAnalyses(values: CreativeDirectorInput["referenceAnal
   return values.slice(0, 4).map((value) => ({
     ...(value.displayName ? { displayName: value.displayName.slice(0, 500) } : {}),
     ...(value.objectId ? { objectId: value.objectId.slice(0, 200) } : {}),
-    caption: value.caption.slice(0, 2_000),
-    objects: value.objects.slice(0, 50).map((item) => item.slice(0, 200)),
-    visibleText: value.visibleText.slice(0, 2_000),
+    caption: value.caption.slice(0, 6_000),
+    objects: value.objects.slice(0, 80).map((item) => item.slice(0, 300)),
+    visibleText: value.visibleText.slice(0, 12_000),
     dimensions: value.dimensions,
-    appearanceNotes: value.appearanceNotes.slice(0, 20).map((item) => item.slice(0, 300)),
+    appearanceNotes: value.appearanceNotes.slice(0, 40).map((item) => item.slice(0, 500)),
     limitations: value.limitations.slice(0, 20).map((item) => item.slice(0, 300)),
   }));
 }
