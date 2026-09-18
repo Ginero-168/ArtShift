@@ -1,13 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  BRIEF_VISION_PROMPT,
-  isUsableBriefLayout,
-  parseBriefResponse,
-} from "@/lib/ai/briefParser";
+import { BRIEF_VISION_PROMPT, isUsableBriefLayout, parseBriefResponse } from "@/lib/ai/briefParser";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
+import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
-import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { getUserAccount } from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,10 +47,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Valid image data URL is required." }, { status: 400 });
   }
 
-  const replicateToken = getSessionReplicateToken(req) || process.env.REPLICATE_API_TOKEN;
+  const access = requireEndUserCloudAi(req, body.cloudConsent);
+  if (!access.ok) return access.response;
+
   const ai = getServerAiRuntime({
-    replicateToken,
-    accountId: account?.id,
+    replicateToken: access.replicateToken,
+    accountId: access.account.id,
   });
 
   try {
@@ -69,6 +68,7 @@ export async function POST(req: NextRequest) {
         timeoutMs: 35_000,
         cloudConsent: true,
         allowFallback: false,
+        accountId: access.account.id,
       },
     );
 

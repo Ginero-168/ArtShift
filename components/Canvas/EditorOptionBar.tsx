@@ -108,7 +108,7 @@ export default function EditorOptionBar() {
     }
     setBriefBusy(true);
     try {
-      await convertImageToBrief(targetImage);
+      await convertImageToBrief(targetImage, { cloudConsent: true });
     } catch {
       // convertImageToBrief already reports the failure to AI Assistance Chat.
     } finally {

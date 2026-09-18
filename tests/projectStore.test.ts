@@ -104,7 +104,9 @@ describe("Multi-Project Store & Local Isolation", () => {
     const importedRecord = await store.loadProjectDocument(importedMeta.id);
     expect(importedRecord).not.toBeNull();
     expect(importedRecord!.doc.slides[0].background).toBe("#ff0077");
-    expect(importedRecord!.files["asset-123"]).toBe("data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==");
+    expect(importedRecord!.files["asset-123"]).toBe(
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
+    );
   });
 
   it("exports all projects into a single archive", async () => {
@@ -116,5 +118,58 @@ describe("Multi-Project Store & Local Isolation", () => {
     expect(bundleJson).toContain("artshift-all-projects-v1");
     expect(bundleJson).toContain("Deck A");
     expect(bundleJson).toContain("Deck B");
+  });
+
+  it("serializes overlapping saves and keeps the newest document", async () => {
+    const store = createTestProjectStore();
+    const project = await store.createProject({ name: "Race" });
+    const base = (await store.loadProjectDocument(project.id))!.doc;
+    const older = {
+      ...base,
+      title: "older revision",
+      slides: [...base.slides],
+      updatedAt: base.updatedAt + 10,
+    };
+    const newer = {
+      ...base,
+      title: "newer revision",
+      slides: [...base.slides],
+      updatedAt: base.updatedAt + 20,
+    };
+
+    const first = store.saveProjectDocument(project.id, older);
+    const second = store.saveProjectDocument(project.id, newer);
+    await Promise.all([first, second]);
+
+    const loaded = await store.loadProjectDocument(project.id);
+    expect(loaded!.doc.title).toBe("newer revision");
+    expect(loaded!.doc.updatedAt).toBe(newer.updatedAt);
+  });
+
+  it("rejects a stale document so it cannot overwrite a newer saved revision", async () => {
+    const store = createTestProjectStore();
+    const project = await store.createProject({ name: "Stale" });
+    const base = (await store.loadProjectDocument(project.id))!.doc;
+    const newer = {
+      ...base,
+      title: "kept",
+      slides: [...base.slides],
+      updatedAt: base.updatedAt + 50,
+    };
+    const older = {
+      ...base,
+      title: "stale",
+      slides: [...base.slides],
+      updatedAt: base.updatedAt + 10,
+    };
+
+    const newest = await store.saveProjectDocument(project.id, newer);
+    expect(newest.ok).toBe(true);
+    const stale = await store.saveProjectDocument(project.id, older);
+    expect(stale.ok).toBe(true);
+
+    const loaded = await store.loadProjectDocument(project.id);
+    expect(loaded!.doc.title).toBe("kept");
+    expect(loaded!.doc.updatedAt).toBe(newer.updatedAt);
   });
 });

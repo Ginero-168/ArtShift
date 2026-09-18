@@ -1,9 +1,6 @@
 import { getAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
-import {
-  parseVisionResponse,
-  visionExtrasAsAppearanceNotes,
-} from "./cloudVisionParser";
+import { parseVisionResponse, visionExtrasAsAppearanceNotes } from "./cloudVisionParser";
 import type { ComposerImageRef } from "./imageReferences";
 import { renderVisibleReference } from "./visibleReferenceRenderer";
 
@@ -48,20 +45,27 @@ export async function tryCloudVisionTurbo(
   dataUrl: string,
   signal: AbortSignal,
   onProgress?: (stage: string, progress: number) => void,
+  options?: { cloudConsent?: boolean },
 ): Promise<CloudVisionTurboResult | null> {
+  if (options?.cloudConsent !== true) return null;
   if (typeof fetch === "undefined") return null;
   try {
     onProgress?.("Cloud Vision Turbo ⚡ กำลังวิเคราะห์", 0.3);
     const timeoutSignal = AbortSignal.timeout ? AbortSignal.timeout(22_000) : undefined;
     const combinedSignal =
-      timeoutSignal && typeof (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any === "function"
-        ? (AbortSignal as unknown as { any: (signals: AbortSignal[]) => AbortSignal }).any([signal, timeoutSignal])
+      timeoutSignal &&
+      typeof (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any ===
+        "function"
+        ? (AbortSignal as unknown as { any: (signals: AbortSignal[]) => AbortSignal }).any([
+            signal,
+            timeoutSignal,
+          ])
         : signal;
 
     const res = await fetch("/api/ai/vision-analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: dataUrl }),
+      body: JSON.stringify({ image: dataUrl, cloudConsent: true }),
       signal: combinedSignal,
     });
 
@@ -83,6 +87,10 @@ export async function tryCloudVisionTurbo(
   return null;
 }
 
+export type AnalyzeImageReferenceOptions = {
+  cloudConsent?: boolean;
+};
+
 const defaultAnalyzers: ImageReferenceAnalyzers = {
   caption: async (dataUrl, _mode, onProgress) =>
     visionCaption(dataUrl, "detailed", (progress) => onProgress?.(progress)),
@@ -90,14 +98,26 @@ const defaultAnalyzers: ImageReferenceAnalyzers = {
     visionDetect(dataUrl, (progress) => onProgress?.(progress)),
   ocr: async (dataUrl, onProgress) => visionOcr(dataUrl, (progress) => onProgress?.(progress)),
   asset: getAssetAnalysis,
-  turbo: tryCloudVisionTurbo,
 };
+
+function analyzersForConsent(
+  analyzers: ImageReferenceAnalyzers,
+  cloudConsent: boolean,
+): ImageReferenceAnalyzers {
+  if (analyzers !== defaultAnalyzers) return analyzers;
+  return {
+    ...analyzers,
+    turbo: (dataUrl, signal, onProgress) =>
+      tryCloudVisionTurbo(dataUrl, signal, onProgress, { cloudConsent }),
+  };
+}
 
 export async function analyzeImageReference(
   ref: ComposerImageRef,
   signal: AbortSignal,
   onProgress?: (stage: string, progress: number) => void,
   analyzers: ImageReferenceAnalyzers = defaultAnalyzers,
+  options?: AnalyzeImageReferenceOptions,
 ): Promise<ImageReferenceAnalysis> {
   throwIfAborted(signal);
   const visible = renderVisibleReference(ref);
@@ -108,11 +128,16 @@ export async function analyzeImageReference(
   let visibleText = "";
   let turboNotes: string[] = [];
 
-  // 1. Cloud Vision Turbo Fast-Lane (if available on analyzers)
+  const resolvedAnalyzers = analyzersForConsent(analyzers, options?.cloudConsent === true);
+
+  // 1. Cloud Vision Turbo Fast-Lane (only when explicit consent is present)
   let turboSuccess = false;
-  if (analyzers.turbo) {
-    const turboResult = await analyzers.turbo(visible.dataUrl, signal, onProgress);
-    if (turboResult && (turboResult.caption || turboResult.visibleText || turboResult.objects.length > 0)) {
+  if (resolvedAnalyzers.turbo) {
+    const turboResult = await resolvedAnalyzers.turbo(visible.dataUrl, signal, onProgress);
+    if (
+      turboResult &&
+      (turboResult.caption || turboResult.visibleText || turboResult.objects.length > 0)
+    ) {
       caption = turboResult.caption;
       objects = turboResult.objects;
       visibleText = turboResult.visibleText;
@@ -178,6 +203,7 @@ export async function analyzeImageReferences(
   signal: AbortSignal,
   onProgress?: (completed: number, total: number, stage: string) => void,
   analyzers: ImageReferenceAnalyzers = defaultAnalyzers,
+  options?: AnalyzeImageReferenceOptions,
 ): Promise<ImageReferenceAnalysis[]> {
   throwIfAborted(signal);
   return Promise.all(
@@ -187,6 +213,7 @@ export async function analyzeImageReferences(
         signal,
         (stage, progress) => onProgress?.(index + progress, refs.length, stage),
         analyzers,
+        options,
       ),
     ),
   );

@@ -72,11 +72,14 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
     });
 
     it("strips markdown codeblock delimiters before parsing JSON", () => {
-      const wrapped = "```json\n" + JSON.stringify({
-        caption: "Wrapped caption",
-        objects: ["logo"],
-        visibleText: "Welearn",
-      }) + "\n```";
+      const wrapped =
+        "```json\n" +
+        JSON.stringify({
+          caption: "Wrapped caption",
+          objects: ["logo"],
+          visibleText: "Welearn",
+        }) +
+        "\n```";
       const parsed = parseVisionResponse(wrapped);
 
       expect(parsed.caption).toBe("Wrapped caption");
@@ -95,7 +98,22 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
   });
 
   describe("tryCloudVisionTurbo fetch client", () => {
-    it("calls /api/ai/vision-analyze and returns structured data on success", async () => {
+    it("does not call cloud vision without explicit consent", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn() as unknown as typeof fetch;
+      try {
+        const result = await tryCloudVisionTurbo(
+          "data:image/jpeg;base64,TEST",
+          new AbortController().signal,
+        );
+        expect(result).toBeNull();
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("calls /api/ai/vision-analyze with cloudConsent and returns structured data on success", async () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn(async () => ({
         ok: true,
@@ -110,8 +128,23 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       })) as unknown as typeof fetch;
 
       try {
-        const result = await tryCloudVisionTurbo("data:image/jpeg;base64,TEST", new AbortController().signal);
+        const result = await tryCloudVisionTurbo(
+          "data:image/jpeg;base64,TEST",
+          new AbortController().signal,
+          undefined,
+          { cloudConsent: true },
+        );
 
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          "/api/ai/vision-analyze",
+          expect.objectContaining({
+            method: "POST",
+            body: JSON.stringify({
+              image: "data:image/jpeg;base64,TEST",
+              cloudConsent: true,
+            }),
+          }),
+        );
         expect(result).toEqual({
           caption: "Turbo caption result",
           objects: ["sign", "logo"],
@@ -130,7 +163,12 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       }) as unknown as typeof fetch;
 
       try {
-        const result = await tryCloudVisionTurbo("data:image/jpeg;base64,TEST", new AbortController().signal);
+        const result = await tryCloudVisionTurbo(
+          "data:image/jpeg;base64,TEST",
+          new AbortController().signal,
+          undefined,
+          { cloudConsent: true },
+        );
 
         expect(result).toBeNull();
       } finally {
@@ -150,18 +188,13 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       const mockDetect = vi.fn();
       const mockOcr = vi.fn();
 
-      const result = await analyzeImageReference(
-        mockRef,
-        new AbortController().signal,
-        undefined,
-        {
-          caption: mockCaption,
-          detect: mockDetect,
-          ocr: mockOcr,
-          asset: () => undefined,
-          turbo: mockTurbo,
-        },
-      );
+      const result = await analyzeImageReference(mockRef, new AbortController().signal, undefined, {
+        caption: mockCaption,
+        detect: mockDetect,
+        ocr: mockOcr,
+        asset: () => undefined,
+        turbo: mockTurbo,
+      });
 
       expect(mockTurbo).toHaveBeenCalledTimes(1);
       expect(mockCaption).not.toHaveBeenCalled();
@@ -178,18 +211,13 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       const mockDetect = vi.fn(async () => ({ objects: [{ label: "fallback-obj" }] }));
       const mockOcr = vi.fn(async () => "FALLBACK TEXT");
 
-      const result = await analyzeImageReference(
-        mockRef,
-        new AbortController().signal,
-        undefined,
-        {
-          caption: mockCaption,
-          detect: mockDetect,
-          ocr: mockOcr,
-          asset: () => undefined,
-          turbo: mockTurbo,
-        },
-      );
+      const result = await analyzeImageReference(mockRef, new AbortController().signal, undefined, {
+        caption: mockCaption,
+        detect: mockDetect,
+        ocr: mockOcr,
+        asset: () => undefined,
+        turbo: mockTurbo,
+      });
 
       expect(mockTurbo).toHaveBeenCalledTimes(1);
       expect(mockCaption).toHaveBeenCalledTimes(1);

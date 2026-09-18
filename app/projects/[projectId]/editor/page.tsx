@@ -54,6 +54,7 @@ import { usePresetStore } from "@/lib/engine/presetStore";
 import { createEmptyEngineDoc, useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
 import { loadThaiFonts } from "@/lib/fonts";
+import { createProjectAutosave, type ProjectAutosaveStatus } from "@/lib/project/projectAutosave";
 import { type ProjectMetadata, projectStore } from "@/lib/project/projectStore";
 import { useStore } from "@/lib/store";
 
@@ -82,12 +83,14 @@ const SLIDE_BG_PALETTE = [
 ];
 
 /* ——— Auto Save Status Indicator ——— */
-function AutoSaveIndicator({ status }: { status: "saving" | "saved" }) {
+function AutoSaveIndicator({ status }: { status: ProjectAutosaveStatus }) {
   const isSaving = status === "saving";
-  const label = isSaving ? "กำลัง Save" : "Save แล้ว";
+  const isError = status === "error";
+  const label = isSaving ? "กำลัง Save" : isError ? "Save ไม่สำเร็จ" : "Save แล้ว";
+  const stateClass = isSaving ? "is-saving" : isError ? "is-error" : "is-saved";
   return (
     <div
-      className={`auto-save-indicator ${isSaving ? "is-saving" : "is-saved"}`}
+      className={`auto-save-indicator ${stateClass}`}
       data-status={status}
       role="status"
       aria-live="polite"
@@ -115,6 +118,27 @@ function AutoSaveIndicator({ status }: { status: "saving" | "saved" }) {
             strokeWidth="2.5"
           />
           <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2.5" />
+        </svg>
+      ) : isError ? (
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeOpacity="0.35"
+          />
+          <path d="M9 9l6 6M15 9l-6 6" strokeWidth="2.2" />
         </svg>
       ) : (
         <svg
@@ -175,7 +199,7 @@ export default function ProjectEditorPage() {
   const [loaded, setLoaded] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"saving" | "saved">("saved");
+  const [saveStatus, setSaveStatus] = useState<ProjectAutosaveStatus>("saved");
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -189,7 +213,7 @@ export default function ProjectEditorPage() {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const projectNameMeasureRef = useRef<HTMLSpanElement | null>(null);
   const persistedRevision = useRef<number | null>(null);
-  const saveRequest = useRef(0);
+  const autosaveRef = useRef<ReturnType<typeof createProjectAutosave> | null>(null);
 
   const canvasEditorRef = useRef<CanvasEditorHandle | null>(null);
   const [zoomScale, setZoomScale] = useState(1);
@@ -290,36 +314,61 @@ export default function ProjectEditorPage() {
     };
   }, [projectName]);
 
-  // Scoped Auto-save
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Scoped Auto-save: debounce the UI, serialize IndexedDB writes, persist current engine state.
   useEffect(() => {
     if (!loaded || !projectId || notFound) return;
+    const controller = createProjectAutosave({
+      getDoc: () => useEngine.getState().doc,
+      save: async (id, doc) => {
+        const result = await projectStore.saveProjectDocument(id, doc);
+        if (result.ok) persistedRevision.current = doc.updatedAt;
+        return result;
+      },
+      onStatus: (status, error) => {
+        setSaveStatus(status);
+        setSaveError(error);
+      },
+    });
+    autosaveRef.current = controller;
+    if (persistedRevision.current != null) controller.markPersisted(persistedRevision.current);
     const unsubscribe = useEngine.subscribe((state, previous) => {
       if (state.doc.updatedAt === previous.doc.updatedAt) return;
       if (persistedRevision.current === state.doc.updatedAt) return;
-      setSaveStatus("saving");
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      const request = ++saveRequest.current;
-      const nextDoc = state.doc;
-      saveTimer.current = setTimeout(async () => {
-        const revision = nextDoc.updatedAt;
-        const result = await projectStore.saveProjectDocument(projectId, nextDoc);
-        if (request !== saveRequest.current) return;
-        if (result.ok) {
-          persistedRevision.current = revision;
-          setSaveError(null);
-          setSaveStatus("saved");
-        } else {
-          setSaveError(result.message);
-          setSaveStatus("saved");
-        }
-      }, 500);
+      controller.schedule(projectId);
     });
+    const onPageLeave = (event: Event) => {
+      controller.handlePageLeave(projectId, event instanceof BeforeUnloadEvent ? event : undefined);
+    };
+    window.addEventListener("beforeunload", onPageLeave);
+    window.addEventListener("pagehide", onPageLeave);
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
       unsubscribe();
+      window.removeEventListener("beforeunload", onPageLeave);
+      window.removeEventListener("pagehide", onPageLeave);
+      if (autosaveRef.current === controller) autosaveRef.current = null;
+      controller.dispose();
     };
   }, [loaded, projectId, notFound]);
+
+  async function persistCurrentDoc() {
+    if (!projectId || notFound) {
+      return { ok: false as const, message: "Project is not available." };
+    }
+    const controller = autosaveRef.current;
+    if (controller) return controller.flush(projectId);
+    setSaveStatus("saving");
+    const doc = useEngine.getState().doc;
+    const result = await projectStore.saveProjectDocument(projectId, doc);
+    if (result.ok) {
+      persistedRevision.current = doc.updatedAt;
+      setSaveStatus("saved");
+      setSaveError(null);
+    } else {
+      setSaveStatus("error");
+      setSaveError(result.message);
+    }
+    return result;
+  }
 
   // Rename handling
   const handleRename = async (name: string) => {
@@ -330,10 +379,11 @@ export default function ProjectEditorPage() {
     try {
       await projectStore.renameProject(projectId, finalName);
       setDocTitle(finalName);
+      setSaveError(null);
       setSaveStatus("saved");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to rename project");
-      setSaveStatus("saved");
+      setSaveStatus("error");
     }
   };
 
@@ -354,9 +404,7 @@ export default function ProjectEditorPage() {
     const engineDoc = await importLegacyStoreDocument();
     loadDoc(engineDoc);
     if (projectId) {
-      setSaveStatus("saving");
-      await projectStore.saveProjectDocument(projectId, engineDoc);
-      setSaveStatus("saved");
+      await persistCurrentDoc();
     }
     setMenuOpen(false);
   }
@@ -420,10 +468,7 @@ export default function ProjectEditorPage() {
     };
     loadDoc(updatedDoc);
     if (projectId) {
-      setSaveStatus("saving");
-      void projectStore.saveProjectDocument(projectId, updatedDoc).then(() => {
-        setSaveStatus("saved");
-      });
+      void persistCurrentDoc();
     }
     setCampaignStudioOpen(false);
   }
@@ -433,9 +478,7 @@ export default function ProjectEditorPage() {
       const emptyDoc = createEmptyEngineDoc(projectName);
       loadDoc(emptyDoc);
       if (projectId) {
-        setSaveStatus("saving");
-        await projectStore.saveProjectDocument(projectId, emptyDoc);
-        setSaveStatus("saved");
+        await persistCurrentDoc();
       }
       setMenuOpen(false);
     }
@@ -676,7 +719,7 @@ export default function ProjectEditorPage() {
                       const emptyDoc = createEmptyEngineDoc(projectName);
                       loadDoc(emptyDoc);
                       if (projectId) {
-                        await projectStore.saveProjectDocument(projectId, emptyDoc);
+                        await persistCurrentDoc();
                       }
                       setSettingsOpen(false);
                     }
@@ -1273,7 +1316,6 @@ export default function ProjectEditorPage() {
               ))}
             </div>
           </div>
-
         </div>
         <BuilderInspector />
       </div>

@@ -8,9 +8,9 @@ import {
   getReplicateCredentialStatus,
   readOpenAiApiKey,
   readReplicateApiKey,
+  type StoredCredentialStatus,
   saveOpenAiApiKey,
   saveReplicateApiKey,
-  type StoredCredentialStatus,
 } from "@/lib/server/auth/accountStore";
 import { getAuthenticatedAccount } from "@/lib/server/auth/session";
 
@@ -54,15 +54,21 @@ export function getUserAccount(request: NextRequest): AccountPublic | null {
   return getAuthenticatedAccount(request);
 }
 
-export function getSessionReplicateToken(request: NextRequest): string | undefined {
+export function getAccountReplicateToken(request: NextRequest): string | undefined {
   const account = getAuthenticatedAccount(request);
   if (!account) return undefined;
   try {
-    const token = readReplicateApiKey(account.id);
-    if (token) return token;
+    return readReplicateApiKey(account.id) || undefined;
   } catch {
-    // fallback
+    return undefined;
   }
+}
+
+export function getSessionReplicateToken(request: NextRequest): string | undefined {
+  const accountToken = getAccountReplicateToken(request);
+  if (accountToken) return accountToken;
+  const account = getAuthenticatedAccount(request);
+  if (!account) return undefined;
   return process.env.REPLICATE_API_TOKEN;
 }
 

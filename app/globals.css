@@ -327,6 +327,10 @@ button {
   color: #059669;
 }
 
+.auto-save-indicator.is-error {
+  color: #dc2626;
+}
+
 [data-theme="dark"] .auto-save-indicator.is-saving,
 .theme-dark .auto-save-indicator.is-saving {
   color: #fbbf24;
@@ -335,6 +339,11 @@ button {
 [data-theme="dark"] .auto-save-indicator.is-saved,
 .theme-dark .auto-save-indicator.is-saved {
   color: #34d399;
+}
+
+[data-theme="dark"] .auto-save-indicator.is-error,
+.theme-dark .auto-save-indicator.is-error {
+  color: #f87171;
 }
 
 

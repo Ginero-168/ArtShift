@@ -66,7 +66,9 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
 
     // NO "ArtShift" brand text in topbar header
     // The topbar header section must not have <span>ArtShift</span>
-    const headerSectionMatch = editorSource.match(/<header className="topbar">([\s\S]*?)<\/header>/);
+    const headerSectionMatch = editorSource.match(
+      /<header className="topbar">([\s\S]*?)<\/header>/,
+    );
     expect(headerSectionMatch).toBeTruthy();
     const headerHtml = headerSectionMatch ? headerSectionMatch[1] : "";
     expect(headerHtml).not.toContain("ArtShift");
@@ -87,7 +89,8 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
     expect(editorSource).toContain("Save แล้ว");
 
     // Autosave is scoped to projectId
-    expect(editorSource).toContain("projectStore.saveProjectDocument(projectId, nextDoc)");
+    expect(editorSource).toContain("createProjectAutosave");
+    expect(editorSource).toContain("projectStore.saveProjectDocument");
 
     // Not found state handled without auto-creating
     expect(editorSource).toContain("ไม่พบโปรเจกต์นี้");
