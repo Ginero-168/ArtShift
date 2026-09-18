@@ -87,9 +87,7 @@ describe("Canvas hotkeys", () => {
       mode === "paint" ? "paint image pixels" : "erase image pixels",
     );
 
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true }));
 
     const currentImage = () =>
       useEngine
@@ -119,9 +117,7 @@ describe("Canvas hotkeys", () => {
     st.updateElements([{ id: text.id, patch: { text: "หลังแก้" } }], "edit text");
 
     // Thai Kedmanee: physical Z key often reports key="ผ" while code stays KeyZ.
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "ผ", code: "KeyZ", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "ผ", code: "KeyZ", metaKey: true }));
 
     const current = useEngine
       .getState()
@@ -138,28 +134,23 @@ describe("Canvas hotkeys", () => {
     st.addElement(b);
     st.selectOnly([a.id]);
 
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "a", code: "KeyA", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "a", code: "KeyA", metaKey: true }));
     expect(useEngine.getState().selectedIds.size).toBe(2);
 
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "c", code: "KeyC", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "c", code: "KeyC", metaKey: true }));
     expect(useEngine.getState().clipboard?.length).toBe(2);
 
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "v", code: "KeyV", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "v", code: "KeyV", metaKey: true }));
     expect(
-      useEngine.getState().currentSlide()?.elements.filter((el) => !el.isDeleted),
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.filter((el) => !el.isDeleted),
     ).toHaveLength(4);
 
     const selected = Array.from(useEngine.getState().selectedIds);
     expect(selected.length).toBeGreaterThan(0);
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "x", code: "KeyX", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "x", code: "KeyX", metaKey: true }));
     const remaining = useEngine
       .getState()
       .currentSlide()
@@ -171,9 +162,7 @@ describe("Canvas hotkeys", () => {
     const a = createText({ x: 10, y: 10, text: "A" });
     useEngine.getState().addElement(a);
     useEngine.getState().selectOnly([a.id]);
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "c", code: "KeyC", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "c", code: "KeyC", metaKey: true }));
 
     const withClip = new KeyboardEvent("keydown", {
       key: "v",
@@ -185,7 +174,10 @@ describe("Canvas hotkeys", () => {
     handleCanvasHotkey(withClip);
     expect(preventedWithClip).toHaveBeenCalled();
     expect(
-      useEngine.getState().currentSlide()?.elements.filter((el) => !el.isDeleted),
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.filter((el) => !el.isDeleted),
     ).toHaveLength(2);
 
     useEngine.setState({ clipboard: null });
@@ -207,12 +199,13 @@ describe("Canvas hotkeys", () => {
     st.addElement(text);
     st.selectOnly([text.id]);
 
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "d", code: "KeyD", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "d", code: "KeyD", metaKey: true }));
 
     expect(
-      useEngine.getState().currentSlide()?.elements.filter((el) => !el.isDeleted),
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.filter((el) => !el.isDeleted),
     ).toHaveLength(2);
   });
 
@@ -296,9 +289,7 @@ describe("Canvas hotkeys", () => {
       100,
     );
 
-    handleCanvasHotkey(
-      new KeyboardEvent("keydown", { key: "d", code: "KeyD", metaKey: true }),
-    );
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "d", code: "KeyD", metaKey: true }));
 
     expect(useEngine.getState().activeRasterSelection).toBeNull();
   });

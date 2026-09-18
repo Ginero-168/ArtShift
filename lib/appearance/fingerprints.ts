@@ -17,8 +17,7 @@ export function appearanceFingerprint(appearance: Appearance): string {
     `o${appearance.opacity}`,
     `b${appearance.blendMode}`,
     ...appearance.items.map(
-      (item) =>
-        `${item.kind}:${item.id}:${item.visible ? 1 : 0}:${item.opacity}:${paintKey(item)}`,
+      (item) => `${item.kind}:${item.id}:${item.visible ? 1 : 0}:${item.opacity}:${paintKey(item)}`,
     ),
   ];
   return parts.join("|");

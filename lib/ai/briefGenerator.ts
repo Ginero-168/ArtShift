@@ -1,5 +1,16 @@
-import { getCached } from "@/lib/engine/imageCache";
+import {
+  BRIEF_GUIDE_FILL,
+  styleBriefGuideShape,
+  styleBriefGuideText,
+} from "@/lib/ai/briefGuideStyle";
+import {
+  type ConvertToBriefData,
+  isUsableBriefLayout,
+  resolveFooterBarDirection,
+} from "@/lib/ai/briefParser";
+import { reportAIError, reportAIResult } from "@/lib/ai/progressReporter";
 import { createEllipse, createRect, createText } from "@/lib/engine/factory";
+import { getCached } from "@/lib/engine/imageCache";
 import {
   getProcessingPreviewBounds,
   getProcessingPreviewPlacement,
@@ -7,13 +18,6 @@ import {
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, EngineSlide, ImageElement } from "@/lib/engine/types";
-import {
-  BRIEF_GUIDE_FILL,
-  styleBriefGuideShape,
-  styleBriefGuideText,
-} from "@/lib/ai/briefGuideStyle";
-import { type ConvertToBriefData, isUsableBriefLayout, resolveFooterBarDirection } from "@/lib/ai/briefParser";
-import { reportAIError, reportAIResult } from "@/lib/ai/progressReporter";
 
 export type ConvertToBriefOptions = {
   signal?: AbortSignal;
@@ -25,8 +29,7 @@ export type ConvertToBriefOptions = {
 /** Always cloud vision quality — never local analyzer. */
 export const CLOUD_BRIEF_ATTEMPTS = 3;
 const CLOUD_RETRY_BASE_MS = 700;
-const BRIEF_FAILURE_AFTER_RETRIES =
-  "สร้างบรีฟไม่สำเร็จหลังลองใหม่อัตโนมัติ 3 ครั้ง กรุณาลองอีกครั้งนะคะ";
+const BRIEF_FAILURE_AFTER_RETRIES = "สร้างบรีฟไม่สำเร็จหลังลองใหม่อัตโนมัติ 3 ครั้ง กรุณาลองอีกครั้งนะคะ";
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -143,7 +146,9 @@ export function generateBriefElements(
   const slideH = slide?.height ?? 1080;
 
   // Position: use targetBounds if provided (e.g. from dragged preview!), else to the right of the reference image
-  let targetX = targetBounds ? Math.round(targetBounds.x) : Math.round(imageElement.x + imageElement.width + gap);
+  let targetX = targetBounds
+    ? Math.round(targetBounds.x)
+    : Math.round(imageElement.x + imageElement.width + gap);
   let targetY = targetBounds ? Math.round(targetBounds.y) : Math.round(imageElement.y);
 
   // If placement overflows slide horizontally, place below if there is room (only when not explicitly positioned)
@@ -171,13 +176,13 @@ export function generateBriefElements(
 
   const hasArtDirection = Boolean(
     data.heroSubject ||
-    data.backgroundZone ||
-    data.headlineCard ||
-    data.badge ||
-    data.subtextCard ||
-    (data.featureTags && data.featureTags.length > 0) ||
-    data.brandLogo ||
-    data.footerBar
+      data.backgroundZone ||
+      data.headlineCard ||
+      data.badge ||
+      data.subtextCard ||
+      (data.featureTags && data.featureTags.length > 0) ||
+      data.brandLogo ||
+      data.footerBar,
   );
 
   const renderedTexts = new Set<string>();
@@ -193,8 +198,14 @@ export function generateBriefElements(
       const hlGroupId = crypto.randomUUID();
       const hx = targetX + Math.round((data.headlineCard.box[1] / 1000) * targetWidth);
       const hy = targetY + Math.round((data.headlineCard.box[0] / 1000) * targetHeight);
-      const hw = Math.max(10, Math.round(((data.headlineCard.box[3] - data.headlineCard.box[1]) / 1000) * targetWidth));
-      const hh = Math.max(10, Math.round(((data.headlineCard.box[2] - data.headlineCard.box[0]) / 1000) * targetHeight));
+      const hw = Math.max(
+        10,
+        Math.round(((data.headlineCard.box[3] - data.headlineCard.box[1]) / 1000) * targetWidth),
+      );
+      const hh = Math.max(
+        10,
+        Math.round(((data.headlineCard.box[2] - data.headlineCard.box[0]) / 1000) * targetHeight),
+      );
 
       const hlRect = createRect({ x: hx, y: hy, width: hw, height: hh });
       styleBriefGuideShape(hlRect, BRIEF_GUIDE_FILL.card);
@@ -228,8 +239,14 @@ export function generateBriefElements(
       const badgeGroupId = crypto.randomUUID();
       const bx = targetX + Math.round((data.badge.box[1] / 1000) * targetWidth);
       const by = targetY + Math.round((data.badge.box[0] / 1000) * targetHeight);
-      const bw = Math.max(16, Math.round(((data.badge.box[3] - data.badge.box[1]) / 1000) * targetWidth));
-      const bh = Math.max(16, Math.round(((data.badge.box[2] - data.badge.box[0]) / 1000) * targetHeight));
+      const bw = Math.max(
+        16,
+        Math.round(((data.badge.box[3] - data.badge.box[1]) / 1000) * targetWidth),
+      );
+      const bh = Math.max(
+        16,
+        Math.round(((data.badge.box[2] - data.badge.box[0]) / 1000) * targetHeight),
+      );
 
       const badgeShape =
         data.badge.shape === "rect"
@@ -266,8 +283,14 @@ export function generateBriefElements(
       const stGroupId = crypto.randomUUID();
       const stx = targetX + Math.round((data.subtextCard.box[1] / 1000) * targetWidth);
       const sty = targetY + Math.round((data.subtextCard.box[0] / 1000) * targetHeight);
-      const stw = Math.max(20, Math.round(((data.subtextCard.box[3] - data.subtextCard.box[1]) / 1000) * targetWidth));
-      const sth = Math.max(14, Math.round(((data.subtextCard.box[2] - data.subtextCard.box[0]) / 1000) * targetHeight));
+      const stw = Math.max(
+        20,
+        Math.round(((data.subtextCard.box[3] - data.subtextCard.box[1]) / 1000) * targetWidth),
+      );
+      const sth = Math.max(
+        14,
+        Math.round(((data.subtextCard.box[2] - data.subtextCard.box[0]) / 1000) * targetHeight),
+      );
 
       const stRect = createRect({ x: stx, y: sty, width: stw, height: sth });
       styleBriefGuideShape(stRect, BRIEF_GUIDE_FILL.card);
@@ -335,8 +358,14 @@ export function generateBriefElements(
       const logoGroupId = crypto.randomUUID();
       const lx = targetX + Math.round((data.brandLogo.box[1] / 1000) * targetWidth);
       const ly = targetY + Math.round((data.brandLogo.box[0] / 1000) * targetHeight);
-      const lw = Math.max(30, Math.round(((data.brandLogo.box[3] - data.brandLogo.box[1]) / 1000) * targetWidth));
-      const lh = Math.max(16, Math.round(((data.brandLogo.box[2] - data.brandLogo.box[0]) / 1000) * targetHeight));
+      const lw = Math.max(
+        30,
+        Math.round(((data.brandLogo.box[3] - data.brandLogo.box[1]) / 1000) * targetWidth),
+      );
+      const lh = Math.max(
+        16,
+        Math.round(((data.brandLogo.box[2] - data.brandLogo.box[0]) / 1000) * targetHeight),
+      );
 
       const logoRect = createRect({ x: lx, y: ly, width: lw, height: lh });
       styleBriefGuideShape(logoRect, BRIEF_GUIDE_FILL.logo);
@@ -351,7 +380,9 @@ export function generateBriefElements(
 
       const logoText = createText({
         x: lx + 4,
-        y: Math.round(ly + Math.max(2, (lh - logoFontSize * (data.brandLogo.subtext ? 2.2 : 1.3)) / 2)),
+        y: Math.round(
+          ly + Math.max(2, (lh - logoFontSize * (data.brandLogo.subtext ? 2.2 : 1.3)) / 2),
+        ),
         width: Math.max(20, lw - 8),
         text: logoDisplayText,
         fontSize: logoFontSize,
@@ -371,8 +402,14 @@ export function generateBriefElements(
       const footerGroupId = crypto.randomUUID();
       const fx = targetX + Math.round((data.footerBar.box[1] / 1000) * targetWidth);
       const fy = targetY + Math.round((data.footerBar.box[0] / 1000) * targetHeight);
-      const fw = Math.max(30, Math.round(((data.footerBar.box[3] - data.footerBar.box[1]) / 1000) * targetWidth));
-      const fh = Math.max(20, Math.round(((data.footerBar.box[2] - data.footerBar.box[0]) / 1000) * targetHeight));
+      const fw = Math.max(
+        30,
+        Math.round(((data.footerBar.box[3] - data.footerBar.box[1]) / 1000) * targetWidth),
+      );
+      const fh = Math.max(
+        20,
+        Math.round(((data.footerBar.box[2] - data.footerBar.box[0]) / 1000) * targetHeight),
+      );
 
       const footerRect = createRect({ x: fx, y: fy, width: fw, height: fh });
       styleBriefGuideShape(footerRect, BRIEF_GUIDE_FILL.footer);
@@ -437,8 +474,14 @@ export function generateBriefElements(
       const partGroupId = crypto.randomUUID();
       const px = targetX + Math.round((partition.box[1] / 1000) * targetWidth);
       const py = targetY + Math.round((partition.box[0] / 1000) * targetHeight);
-      const pw = Math.max(4, Math.round(((partition.box[3] - partition.box[1]) / 1000) * targetWidth));
-      const ph = Math.max(4, Math.round(((partition.box[2] - partition.box[0]) / 1000) * targetHeight));
+      const pw = Math.max(
+        4,
+        Math.round(((partition.box[3] - partition.box[1]) / 1000) * targetWidth),
+      );
+      const ph = Math.max(
+        4,
+        Math.round(((partition.box[2] - partition.box[0]) / 1000) * targetHeight),
+      );
 
       const pRect = createRect({
         x: px,

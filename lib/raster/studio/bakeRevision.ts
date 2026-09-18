@@ -7,7 +7,7 @@
  */
 
 import type { ImageElement } from "@/lib/engine/types";
-import { renderElement, type RenderCtx } from "@/lib/renderer/canvas";
+import { type RenderCtx, renderElement } from "@/lib/renderer/canvas";
 
 export type BakedRasterRevision = {
   dataURL: string;

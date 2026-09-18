@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  hasStoredCloudConsent,
-  setAccountCloudConsent,
-} from "@/lib/ai/cloudConsent";
+import { hasStoredCloudConsent, setAccountCloudConsent } from "@/lib/ai/cloudConsent";
 
 type AuthUser = {
   id: string;
@@ -172,9 +169,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
       }
       setCredentials(payload.credentials);
       setMessage(
-        provider === "openai"
-          ? "ลบ OpenAI Key ออกจากบัญชีแล้ว"
-          : "ลบ Replicate Key ออกจากบัญชีแล้ว",
+        provider === "openai" ? "ลบ OpenAI Key ออกจากบัญชีแล้ว" : "ลบ Replicate Key ออกจากบัญชีแล้ว",
       );
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "ลบ API Key ไม่สำเร็จ");
@@ -263,8 +258,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
               lineHeight: 1.45,
             }}
           >
-            Login ด้วย Google เพื่อผูก OpenAI / Replicate Key กับบัญชีของคุณและใช้งานข้าม Session
-            ได้อย่างปลอดภัย
+            Login ด้วย Google เพื่อผูก OpenAI / Replicate Key กับบัญชีของคุณและใช้งานข้าม Session ได้อย่างปลอดภัย
           </div>
           <p style={{ margin: "12px 0 0", fontSize: 10, lineHeight: 1.45, color: "#64748b" }}>
             กรุณา Login ด้วย Google จากปุ่ม Profile มุมขวาบนก่อนจัดการ API Key
@@ -356,8 +350,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
           />
 
           <p style={{ margin: "10px 0 0", fontSize: 9.5, lineHeight: 1.45, color: "#64748b" }}>
-            Key จะถูกเข้ารหัสบน server และผูกกับ Google Account ไม่เก็บใน Browser storage หรือส่งเข้า
-            Prompt
+            Key จะถูกเข้ารหัสบน server และผูกกับ Google Account ไม่เก็บใน Browser storage หรือส่งเข้า Prompt
           </p>
 
           <label

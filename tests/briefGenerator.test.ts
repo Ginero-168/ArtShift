@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
+import { describe, expect, it } from "vitest";
 import { generateBriefElements } from "@/lib/ai/briefGenerator";
-import { resolveFooterBarDirection, type ConvertToBriefData } from "@/lib/ai/briefParser";
+import { type ConvertToBriefData, resolveFooterBarDirection } from "@/lib/ai/briefParser";
 import type { ImageElement } from "@/lib/engine/types";
 
 describe("Brief Generator Service & Layout Geometry", () => {
@@ -143,7 +143,9 @@ describe("Brief Generator Service & Layout Geometry", () => {
   it("omits hard divider lines so guide strokes are not copied into generations", () => {
     const elements = generateBriefElements(sampleBriefData, mockImageElement);
     expect(elements.some((e) => e.name === "เส้นแบ่งโซน")).toBe(false);
-    expect(elements.filter((e) => e.type !== "text").every((e) => (e.strokeWidth ?? 0) > 0)).toBe(true);
+    expect(elements.filter((e) => e.type !== "text").every((e) => (e.strokeWidth ?? 0) > 0)).toBe(
+      true,
+    );
   });
 
   it("groups all generated brief elements together under a unified groupId", () => {
@@ -158,7 +160,12 @@ describe("Brief Generator Service & Layout Geometry", () => {
 
   it("respects targetBounds from dragged preload card placement", () => {
     const draggedBounds = { x: 1200, y: 350, width: 600, height: 400 };
-    const elements = generateBriefElements(sampleBriefData, mockImageElement, undefined, draggedBounds);
+    const elements = generateBriefElements(
+      sampleBriefData,
+      mockImageElement,
+      undefined,
+      draggedBounds,
+    );
     const outerFrame = elements.find((e) => e.name === "Brief Frame");
 
     expect(outerFrame).toBeDefined();
@@ -175,7 +182,10 @@ describe("Brief Generator Service & Layout Geometry", () => {
     expect(briefGenSource).toContain('label: "Convert to Brief"');
     expect(briefGenSource).toContain("getProcessingPreviewPlacement");
 
-    const previewOverlaySource = readFileSync("components/Canvas/ProcessingPreviewOverlay.tsx", "utf8");
+    const previewOverlaySource = readFileSync(
+      "components/Canvas/ProcessingPreviewOverlay.tsx",
+      "utf8",
+    );
     expect(previewOverlaySource).toContain('brief: "#6366f1"');
     expect(previewOverlaySource).toContain("IconBrief");
   });
@@ -225,12 +235,14 @@ describe("Brief Generator Service & Layout Geometry", () => {
     expect(elements.some((e) => e.name?.startsWith("Background Label:"))).toBe(false);
     expect(
       elements.some(
-        (e) => e.type === "text" && String((e as { text?: string }).text || "").includes("รูปภาพเด็กชาย"),
+        (e) =>
+          e.type === "text" && String((e as { text?: string }).text || "").includes("รูปภาพเด็กชาย"),
       ),
     ).toBe(false);
     expect(
       elements.some(
-        (e) => e.type === "text" && String((e as { text?: string }).text || "") === "พื้นหลังเป็นภาพสวนน้ำ",
+        (e) =>
+          e.type === "text" && String((e as { text?: string }).text || "") === "พื้นหลังเป็นภาพสวนน้ำ",
       ),
     ).toBe(false);
 
@@ -324,9 +336,7 @@ describe("Brief Generator Service & Layout Geometry", () => {
     expect(elements.find((e) => e.name?.startsWith("Background Zone"))).toBeUndefined();
     expect(
       elements.some(
-        (e) =>
-          e.type === "text" &&
-          String((e as { text?: string }).text || "").includes("เด็กชาย"),
+        (e) => e.type === "text" && String((e as { text?: string }).text || "").includes("เด็กชาย"),
       ),
     ).toBe(false);
     // Verify Category Pills (Feature Tags)
@@ -461,6 +471,3 @@ describe("Brief Generator Service & Layout Geometry", () => {
     expect(priceText?.groupIds[1]).toBe(masterGroupId);
   });
 });
-
-
-

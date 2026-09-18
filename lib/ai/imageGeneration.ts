@@ -3,8 +3,8 @@
  * The server routes every generation request to the server-owned GPT Image 2 route.
  */
 
-import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
+import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { loadDataURL } from "@/lib/engine/imageCache";
 import { GPT_IMAGE_2_MAX_COST_USD } from "./pricing";
 import { runVisualQualityGate } from "./visualQualityGate";
@@ -61,8 +61,12 @@ export function hasExplicitDimensionsInText(text?: string): boolean {
   const val = text.toLocaleLowerCase();
   return (
     textHasDimensionPair(val) ||
-    /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|1\s*:\s*1)\b/u.test(val) ||
-    /(?:60x20|120x40|2048x688|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|landscape|portrait|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(val)
+    /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|1\s*:\s*1)\b/u.test(
+      val,
+    ) ||
+    /(?:60x20|120x40|2048x688|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|landscape|portrait|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(
+      val,
+    )
   );
 }
 
@@ -89,10 +93,12 @@ export function extractDimensionSpecsFromText(text?: string): RequestedSizeSpec[
   if (!text || typeof text !== "string") return [];
   const specs: RequestedSizeSpec[] = [];
   DIMENSION_PAIR_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = DIMENSION_PAIR_RE.exec(text)) !== null) {
-    const sourceWidth = parseFloat(match[1] ?? "");
-    const sourceHeight = parseFloat(match[2] ?? "");
+  let match = DIMENSION_PAIR_RE.exec(text);
+  while (match) {
+    const current = match;
+    match = DIMENSION_PAIR_RE.exec(text);
+    const sourceWidth = parseFloat(current[1] ?? "");
+    const sourceHeight = parseFloat(current[2] ?? "");
     if (!(sourceWidth > 0) || !(sourceHeight > 0)) continue;
     const prev = specs[specs.length - 1];
     if (prev && prev.sourceWidth === sourceWidth && prev.sourceHeight === sourceHeight) {
@@ -123,10 +129,12 @@ export function extractAspectRatioSpecsFromText(text?: string): RequestedSizeSpe
   const specs: RequestedSizeSpec[] = [];
   const seen = new Set<string>();
   COLON_RATIO_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = COLON_RATIO_RE.exec(text)) !== null) {
-    const sourceWidth = Number(match[1]);
-    const sourceHeight = Number(match[2]);
+  let match = COLON_RATIO_RE.exec(text);
+  while (match) {
+    const current = match;
+    match = COLON_RATIO_RE.exec(text);
+    const sourceWidth = Number(current[1]);
+    const sourceHeight = Number(current[2]);
     if (!(sourceWidth > 0) || !(sourceHeight > 0)) continue;
     // Skip clock-like or version-like tokens (e.g. 2024:01) — keep realistic aspect nums.
     if (sourceWidth > 64 || sourceHeight > 64) continue;
@@ -157,9 +165,7 @@ export function extractRequestedSizeSpecsFromText(text?: string): RequestedSizeS
   const fromPixels = extractDimensionSpecsFromText(text);
   if (fromPixels.length > 0) {
     const seen = new Set(fromPixels.map((s) => s.aspectRatio));
-    const extras = extractAspectRatioSpecsFromText(text).filter(
-      (s) => !seen.has(s.aspectRatio),
-    );
+    const extras = extractAspectRatioSpecsFromText(text).filter((s) => !seen.has(s.aspectRatio));
     return [...fromPixels, ...extras];
   }
   return extractAspectRatioSpecsFromText(text);
@@ -250,7 +256,11 @@ export function resolveImageGenerationDimensions(prompt: string): {
       printHeight: resolved.printHeight,
     };
   }
-  if (/(?:แนวตั้ง|\bvertical\b|portrait\s+(?:mode|orientation|ratio)|\bportrait\b(?!\s+of\b|\s+photo|\s+shot|\s+picture))/iu.test(value)) {
+  if (
+    /(?:แนวตั้ง|\bvertical\b|portrait\s+(?:mode|orientation|ratio)|\bportrait\b(?!\s+of\b|\s+photo|\s+shot|\s+picture))/iu.test(
+      value,
+    )
+  ) {
     return { width: 720, height: 1280, aspectRatio: "9:16" };
   }
   if (/(?:แนวนอน|\bhorizontal\b|landscape)/iu.test(value)) {
@@ -260,7 +270,10 @@ export function resolveImageGenerationDimensions(prompt: string): {
 }
 
 /** Map an arbitrary pixel size onto a legal native generation size (same ratio). */
-export function resolveDimensionsFromPixelSize(width: number, height: number): {
+export function resolveDimensionsFromPixelSize(
+  width: number,
+  height: number,
+): {
   width: number;
   height: number;
   aspectRatio: AiImageAspectRatio;

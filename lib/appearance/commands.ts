@@ -1,16 +1,7 @@
 import type { EngineElement } from "@/lib/engine/types";
 import { appearanceToLegacyPatch, readAppearance } from "./legacyAdapter";
-import {
-  normalizeAppearance,
-  normalizeItem,
-  validateAppearance,
-} from "./normalize";
-import type {
-  Appearance,
-  AppearanceError,
-  AppearanceItem,
-  AppearanceOperation,
-} from "./types";
+import { normalizeAppearance, normalizeItem, validateAppearance } from "./normalize";
+import type { Appearance, AppearanceError, AppearanceItem, AppearanceOperation } from "./types";
 import { APPEARANCE_MAX_ITEMS } from "./types";
 
 export type AppearanceChangeResult =

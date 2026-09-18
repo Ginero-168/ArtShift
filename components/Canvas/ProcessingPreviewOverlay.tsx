@@ -1,7 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { IconBrief, IconPenTool, IconScissors, IconSparkles, IconWand, IconZap } from "@/components/icons";
+import {
+  IconBrief,
+  IconPenTool,
+  IconScissors,
+  IconSparkles,
+  IconWand,
+  IconZap,
+} from "@/components/icons";
 import {
   type ProcessingPreview,
   type ProcessingPreviewKind,

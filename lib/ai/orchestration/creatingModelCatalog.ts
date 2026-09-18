@@ -65,8 +65,7 @@ export const CREATING_MODEL_CATALOG: readonly CreatingModelEntry[] = [
     capabilities: ["generate", "edit"],
     supportedQualities: GPT_IMAGE_25_QUALITIES,
     role: "creating",
-    notes:
-      "Legacy compatibility alias for image-general. Resolves to GPT Image 2.5 Sunburst.",
+    notes: "Legacy compatibility alias for image-general. Resolves to GPT Image 2.5 Sunburst.",
   },
   {
     alias: "image-fast",
@@ -76,8 +75,7 @@ export const CREATING_MODEL_CATALOG: readonly CreatingModelEntry[] = [
     capabilities: ["generate", "edit"],
     supportedQualities: GPT_IMAGE_25_QUALITIES,
     role: "creating",
-    notes:
-      "Fast lane alias resolving directly to GPT Image 2.5 Sunburst. Flare is retired.",
+    notes: "Fast lane alias resolving directly to GPT Image 2.5 Sunburst. Flare is retired.",
   },
   {
     alias: "image-precision",

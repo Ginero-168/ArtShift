@@ -281,7 +281,8 @@ describe("context-aware turn orchestrator", () => {
       outputCount: 1,
       requestedOutputCount: 1,
       summary: "สร้างภาพแมวเพิ่ม",
-      refinedPrompt: "Photoreal Scottish Fold cat on a sofa, soft window light, playful pose variation",
+      refinedPrompt:
+        "Photoreal Scottish Fold cat on a sofa, soft window light, playful pose variation",
       specialist: "image_generator",
       capability: "IMAGE_DEFAULT",
       modelAlias: "image-gpt-2",
@@ -571,4 +572,3 @@ describe("context-aware turn orchestrator", () => {
     ]);
   });
 });
-

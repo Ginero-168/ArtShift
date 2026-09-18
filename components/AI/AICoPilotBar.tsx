@@ -5,21 +5,24 @@ import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatA
 import ChatComposer, { type QualitySelection } from "@/components/AI/ChatComposer";
 import ChatThread from "@/components/AI/ChatThread";
 import { useCanvasSelectionBridge } from "@/components/AI/useCanvasSelectionBridge";
+import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
 import {
-  type CoPilotMessage, diagnoseOrchestratorError, executeCoPilotInstruction,
-  isToolCoPilotPrompt, type SubAgentActionLog,
+  type CoPilotMessage,
+  diagnoseOrchestratorError,
+  executeCoPilotInstruction,
+  isToolCoPilotPrompt,
+  type SubAgentActionLog,
 } from "@/lib/ai/coPilot";
-import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
-import { prepareRemoteCreativeDirection, reviewRemoteCreativeOutput } from "@/lib/ai/orchestration/creativeDirectorClient";
-import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
+import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import {
-  expandImageToAspectRatio,
-  isExpandAspectPrompt,
-  parseExpandRatioFromText,
-} from "@/lib/ai/orchestration/imageExpand";
-import { buildComposerImageSelectionFromIds, snapshotComposerImageRefs } from "@/lib/ai/orchestration/imageReferences";
-import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
-import { cleanTechnicalPromptText, extractInlineTagRefs } from "@/lib/ai/orchestration/inlineTagSynthesis";
+  buildImageCompletionSummary,
+  formatImageCompletionReply,
+} from "@/lib/ai/imageCompletionReply";
+import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
+import {
+  formatFriendlyAspectRatio,
+  formatHumanThoughtText,
+} from "@/lib/ai/imageResultPresentation";
 import {
   composeFollowUpDirectorPrompt,
   extractPriorImageGenerationContext,
@@ -33,32 +36,52 @@ import {
   readProjectIdFromPath,
   saveChatHistorySnapshot,
 } from "@/lib/ai/orchestration/chatHistoryStore";
-import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
-import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
-import {
-  buildRefinementOrchestratorLocks,
-  createPromptRefinement,
-  isBroadImagePrompt,
-  type PromptRefinementCardData,
-} from "@/lib/ai/orchestration/promptRefinement";
-import { inferSharedAnchors } from "@/lib/ai/orchestration/promptOptionCatalog";
-import { analyzeImageReferences, type ImageReferenceAnalysis } from "@/lib/ai/orchestration/referenceAnalysis";
 import {
   DEFAULT_CREATING_MODEL_LABEL,
   formatCreatingModelLabel,
 } from "@/lib/ai/orchestration/creatingModelCatalog";
 import {
-  type ContextAwareTurnResult, createDirectedImageRun, createDirectedImageTask,
-  isCanvasInventoryPrompt, type PendingClarification, prepareContextAwareTurn,
-  runSequentialExecutionPlan, type SequentialExecutionPlan,
+  prepareRemoteCreativeDirection,
+  reviewRemoteCreativeOutput,
+} from "@/lib/ai/orchestration/creativeDirectorClient";
+import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
+import {
+  expandImageToAspectRatio,
+  isExpandAspectPrompt,
+  parseExpandRatioFromText,
+} from "@/lib/ai/orchestration/imageExpand";
+import {
+  buildComposerImageSelectionFromIds,
+  snapshotComposerImageRefs,
+} from "@/lib/ai/orchestration/imageReferences";
+import { runContextAwareImageTask } from "@/lib/ai/orchestration/imageTaskRunner";
+import {
+  cleanTechnicalPromptText,
+  extractInlineTagRefs,
+} from "@/lib/ai/orchestration/inlineTagSynthesis";
+import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
+import { inferSharedAnchors } from "@/lib/ai/orchestration/promptOptionCatalog";
+import {
+  type buildRefinementOrchestratorLocks,
+  createPromptRefinement,
+  isBroadImagePrompt,
+  type PromptRefinementCardData,
+} from "@/lib/ai/orchestration/promptRefinement";
+import {
+  analyzeImageReferences,
+  type ImageReferenceAnalysis,
+} from "@/lib/ai/orchestration/referenceAnalysis";
+import {
+  type ContextAwareTurnResult,
+  createDirectedImageRun,
+  createDirectedImageTask,
+  isCanvasInventoryPrompt,
+  type PendingClarification,
+  prepareContextAwareTurn,
+  runSequentialExecutionPlan,
+  type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
-import { formatImageCompletionReply, buildImageCompletionSummary } from "@/lib/ai/imageCompletionReply";
-import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
-import {
-  formatFriendlyAspectRatio,
-  formatHumanThoughtText,
-} from "@/lib/ai/imageResultPresentation";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
 import { buildDesignAgentContext, type ClientChatMessage } from "@/lib/designAgent/client";
@@ -80,29 +103,50 @@ function extractSubject(prompt: string, summary?: string): string {
   if (effectivePrompt.includes("User reply:")) {
     effectivePrompt = effectivePrompt.slice(effectivePrompt.lastIndexOf("User reply:") + 11).trim();
   } else if (effectivePrompt.includes("\n\n")) {
-    const segments = effectivePrompt.split("\n\n").map((s) => s.trim()).filter(Boolean);
+    const segments = effectivePrompt
+      .split("\n\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
     effectivePrompt = segments[segments.length - 1] || effectivePrompt;
   }
-  effectivePrompt = effectivePrompt.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim();
+  effectivePrompt = effectivePrompt
+    .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
+    .replace(/@[^\s]+/g, "")
+    .trim();
 
   if (summary && summary.trim().length > 0 && !summary.includes("Director question:")) {
     let cleanFromSummary = cleanTechnicalPromptText(summary);
     if (cleanFromSummary.includes("User reply:")) {
-      cleanFromSummary = cleanFromSummary.slice(cleanFromSummary.lastIndexOf("User reply:") + 11).trim();
+      cleanFromSummary = cleanFromSummary
+        .slice(cleanFromSummary.lastIndexOf("User reply:") + 11)
+        .trim();
     }
-    cleanFromSummary = cleanFromSummary.replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "").replace(/@[^\s]+/g, "").trim()
-      .replace(/^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu, "")
+    cleanFromSummary = cleanFromSummary
+      .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
+      .replace(/@[^\s]+/g, "")
+      .trim()
+      .replace(
+        /^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu,
+        "",
+      )
       .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
       .replace(/^(?:รูปภาพ|ภาพ|รูป)\s*/iu, "")
       .replace(/\s*(?:ตามที่ขอ|เรียบร้อยแล้ว|สมจริง|สวยๆ|สไตล์.*|ในฉาก.*)\s*$/iu, "")
       .trim();
-    if (cleanFromSummary.length > 0 && cleanFromSummary.length < 60 && !cleanFromSummary.includes("\n")) {
+    if (
+      cleanFromSummary.length > 0 &&
+      cleanFromSummary.length < 60 &&
+      !cleanFromSummary.includes("\n")
+    ) {
       return cleanFromSummary;
     }
   }
 
   let cleaned = effectivePrompt
-    .replace(/^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu, "")
+    .replace(
+      /^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu,
+      "",
+    )
     .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
     .replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง|ด้วยนะ|ด้วยครับ|ด้วยค่ะ|ด้วย)\s*$/iu, "")
     .trim();
@@ -486,7 +530,8 @@ export default function AICoPilotBar() {
       }));
     const priorGeneration: PriorImageGenerationContext | null =
       extractPriorImageGenerationContext(historyForContinuity);
-    const isFollowUpTurn = !pending && isImageFollowUpPrompt(promptToSend) && Boolean(priorGeneration);
+    const isFollowUpTurn =
+      !pending && isImageFollowUpPrompt(promptToSend) && Boolean(priorGeneration);
     const directorPrompt =
       isFollowUpTurn && priorGeneration
         ? composeFollowUpDirectorPrompt(promptToSend, priorGeneration)
@@ -804,10 +849,12 @@ export default function AICoPilotBar() {
                 {
                   prompt: directorPrompt,
                   conversationHistory: historyForContinuity
-                    .map((message): ClientChatMessage => ({
-                      role: message.role,
-                      content: message.content,
-                    }))
+                    .map(
+                      (message): ClientChatMessage => ({
+                        role: message.role,
+                        content: message.content,
+                      }),
+                    )
                     .slice(-12),
                   designContext: buildDesignAgentContext(),
                   canvasSummary: {
@@ -945,9 +992,7 @@ export default function AICoPilotBar() {
                   direction.summary,
                   count,
                   isEditTurn,
-                  plannedAspects.length > 1
-                    ? undefined
-                    : imageRun.tasks[0]?.requestedDimensions,
+                  plannedAspects.length > 1 ? undefined : imageRun.tasks[0]?.requestedDimensions,
                   plannedAspects,
                 );
                 const modelName = formatCreatingModelLabel(direction.modelAlias);
@@ -1120,9 +1165,7 @@ export default function AICoPilotBar() {
                     )
                     .filter((ratio): ratio is string => Boolean(ratio));
                   const failedAspects = runResult.items
-                    .filter(
-                      (i) => i.status === "failed" || i.status === "outcome-unknown",
-                    )
+                    .filter((i) => i.status === "failed" || i.status === "outcome-unknown")
                     .map(
                       (i) =>
                         imageRun.tasks[i.outputIndex - 1]?.requestedDimensions?.aspectRatio ||
@@ -1173,13 +1216,11 @@ export default function AICoPilotBar() {
                   ];
                   if (partialFailureCount > 0) {
                     const failedDetails = runResult.items
-                      .filter(
-                        (i) => i.status === "failed" || i.status === "outcome-unknown",
-                      )
+                      .filter((i) => i.status === "failed" || i.status === "outcome-unknown")
                       .map((i) => {
                         const ratio =
-                          imageRun.tasks[i.outputIndex - 1]?.requestedDimensions
-                            ?.aspectRatio || `รูปที่ ${i.outputIndex}`;
+                          imageRun.tasks[i.outputIndex - 1]?.requestedDimensions?.aspectRatio ||
+                          `รูปที่ ${i.outputIndex}`;
                         const err = i.error || "";
                         const isPolicy =
                           /sensitive|policy|flagged|safety|nsfw|content filter/i.test(err);
@@ -1197,9 +1238,7 @@ export default function AICoPilotBar() {
                     locksFromHelper?.sharedAnchors ??
                     priorGeneration?.sharedAnchors ??
                     inferSharedAnchors(
-                      isFollowUpTurn
-                        ? priorGeneration?.userPrompt || promptToSend
-                        : promptToSend,
+                      isFollowUpTurn ? priorGeneration?.userPrompt || promptToSend : promptToSend,
                     );
                   const continuedVariants =
                     locksFromHelper?.variantSelections ?? priorGeneration?.variantSelections;
@@ -1230,8 +1269,7 @@ export default function AICoPilotBar() {
                           firstSucceeded?.result?.height ??
                           firstSucceededTask?.requestedDimensions?.height ??
                           1024,
-                        aspectRatio:
-                          firstSucceededTask?.requestedDimensions?.aspectRatio ?? "1:1",
+                        aspectRatio: firstSucceededTask?.requestedDimensions?.aspectRatio ?? "1:1",
                         refinementMode:
                           locksFromHelper?.refinementMode ??
                           priorGeneration?.refinementMode ??
@@ -1627,9 +1665,7 @@ export default function AICoPilotBar() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: reply,
-        toolLabel: remoteGeneratedImages
-          ? formatCreatingModelLabel(remoteModelAlias)
-          : undefined,
+        toolLabel: remoteGeneratedImages ? formatCreatingModelLabel(remoteModelAlias) : undefined,
         images: remoteGeneratedImages,
         resultSummary: remoteResultSummary,
         qualityLabel: remoteGeneratedImages ? selectedQuality : undefined,
@@ -1705,10 +1741,18 @@ export default function AICoPilotBar() {
   return (
     <div
       style={{
-        position: "relative", width: "100%", height: "100%", minHeight: 0,
-        display: "flex", flexDirection: "column", pointerEvents: "auto", overflow: "hidden",
-        background: "#ffffff", color: "#0f172a",
-        fontFamily: 'Sarabun, "Noto Sans Thai", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        pointerEvents: "auto",
+        overflow: "hidden",
+        background: "#ffffff",
+        color: "#0f172a",
+        fontFamily:
+          'Sarabun, "Noto Sans Thai", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       <style>{`
@@ -1731,8 +1775,16 @@ export default function AICoPilotBar() {
         scrollRef={scrollRef}
         onSelectCanvasImage={handleSelectCanvasImage}
         onSelectSuggestion={(sug, errorCard) => {
-          const isEditAction = sug.startsWith("✏️") || /(?:ปรับแต่ง|ปรับปรุง|แก้ไขคำขอ|Edit prompt|แก้ brief)/i.test(sug);
-          const fallbackUserPrompt = errorCard?.promptToEdit || messages.slice().reverse().find((m) => m.role === "user")?.content || editorRef.current?.getValue() || input;
+          const isEditAction =
+            sug.startsWith("✏️") || /(?:ปรับแต่ง|ปรับปรุง|แก้ไขคำขอ|Edit prompt|แก้ brief)/i.test(sug);
+          const fallbackUserPrompt =
+            errorCard?.promptToEdit ||
+            messages
+              .slice()
+              .reverse()
+              .find((m) => m.role === "user")?.content ||
+            editorRef.current?.getValue() ||
+            input;
           if (isEditAction) {
             if (fallbackUserPrompt) {
               setInput(fallbackUserPrompt);
@@ -1742,9 +1794,13 @@ export default function AICoPilotBar() {
             }
             return;
           }
-          const isRetryAction = sug.startsWith("🔄") || /(?:ลองสร้างใหม่อีกครั้ง|ลองใหม่อีกครั้ง|สร้างภาพที่เหลือใหม่)/i.test(sug);
+          const isRetryAction =
+            sug.startsWith("🔄") || /(?:ลองสร้างใหม่อีกครั้ง|ลองใหม่อีกครั้ง|สร้างภาพที่เหลือใหม่)/i.test(sug);
           if (isRetryAction) {
-            if (fallbackUserPrompt) { handleSend(fallbackUserPrompt); return; }
+            if (fallbackUserPrompt) {
+              handleSend(fallbackUserPrompt);
+              return;
+            }
           }
           if (sug.includes("ตรวจสอบภาพที่เลือกบน Canvas") || sug.includes("ตรวจสอบภาพที่เลือก")) {
             handleSelectCanvasImage();

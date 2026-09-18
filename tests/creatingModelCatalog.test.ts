@@ -13,11 +13,19 @@ describe("Creating model capability catalog", () => {
     // Default is image-general pointing to Sunburst
     expect(resolveCreatingModel("generate")).toMatchObject({
       ok: true,
-      model: { alias: "image-general", modelId: "openai/gpt-image-2.5-sunburst", status: "available" },
+      model: {
+        alias: "image-general",
+        modelId: "openai/gpt-image-2.5-sunburst",
+        status: "available",
+      },
     });
     expect(resolveCreatingModel("edit")).toMatchObject({
       ok: true,
-      model: { alias: "image-general", modelId: "openai/gpt-image-2.5-sunburst", status: "available" },
+      model: {
+        alias: "image-general",
+        modelId: "openai/gpt-image-2.5-sunburst",
+        status: "available",
+      },
     });
   });
 

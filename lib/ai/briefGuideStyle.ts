@@ -47,9 +47,6 @@ export function styleBriefGuideShape(el: ShapeStyleTarget, _fill?: string): void
   el.roughness = 0;
 }
 
-export function styleBriefGuideText(
-  el: { strokeColor: string },
-  _onDark = false,
-): void {
+export function styleBriefGuideText(el: { strokeColor: string }, _onDark = false): void {
   el.strokeColor = BRIEF_GUIDE_TEXT.default;
 }

@@ -65,17 +65,18 @@ export function buildPromptHelperVariantUserMessage(
   catalog: { axisId: string; options: { id: string; label: string }[] }[],
 ): string {
   const catalogBlock = catalog
-    .map(
-      (axis) =>
-        `${axis.axisId}: ${axis.options.map((o) => `${o.id}(${o.label})`).join(", ")}`,
-    )
+    .map((axis) => `${axis.axisId}: ${axis.options.map((o) => `${o.id}(${o.label})`).join(", ")}`)
     .join("\n");
   return `User prompt:\n${prompt.trim()}\n\nAvailable catalog options by axis:\n${catalogBlock}\n\nPlan Level-2 axes now.`;
 }
 
 export function parsePromptHelperVariantPlan(raw: string): PromptHelperVariantPlan | null {
   try {
-    let clean = raw.trim().replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    const clean = raw
+      .trim()
+      .replace(/```(?:json)?/gi, "")
+      .replace(/```/g, "")
+      .trim();
     const match = clean.match(/\{[\s\S]*\}/);
     if (!match) return null;
     const parsed = JSON.parse(match[0]) as Partial<PromptHelperVariantPlan>;

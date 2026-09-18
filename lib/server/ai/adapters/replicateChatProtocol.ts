@@ -359,8 +359,9 @@ export function extractCreativeDirectionCallInput(text: string): Record<string, 
   if (standardMatch?.[1]) {
     refinedPrompt = standardMatch[1];
   } else {
-    const openMatch =
-      /"refinedPrompt"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(text);
+    const openMatch = /"refinedPrompt"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"[a-zA-Z_]+"|\s*"\}|$)/.exec(
+      text,
+    );
     if (openMatch?.[1]) {
       refinedPrompt = openMatch[1];
     }

@@ -611,10 +611,7 @@ describe("engine store", () => {
     );
     expect(useEngine.getState().activeRasterSelection?.imageId).toBe(image.id);
 
-    st.addElement(
-      createText({ x: 400, y: 40, text: "later mutation", width: 160 }),
-      "add caption",
-    );
+    st.addElement(createText({ x: 400, y: 40, text: "later mutation", width: 160 }), "add caption");
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(2);
 
     useEngine.getState().undo();

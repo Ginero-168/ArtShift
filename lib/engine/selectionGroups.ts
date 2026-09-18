@@ -14,9 +14,7 @@ export type SelectionGroupAnalysis = {
  * - One group (shared top groupId) → Ungroup only
  * - Multiple groups, or group + objects, or loose objects → Group
  */
-export function analyzeSelectionGroups(
-  selected: readonly EngineElement[],
-): SelectionGroupAnalysis {
+export function analyzeSelectionGroups(selected: readonly EngineElement[]): SelectionGroupAnalysis {
   if (selected.length < 2) {
     return {
       canGroup: false,
@@ -60,10 +58,7 @@ export function buildLayerHierarchy(elements: readonly EngineElement[]): LayerTr
   return nestByGroupDepth(elements, 0);
 }
 
-function nestByGroupDepth(
-  elements: readonly EngineElement[],
-  depth: number,
-): LayerTreeNode[] {
+function nestByGroupDepth(elements: readonly EngineElement[], depth: number): LayerTreeNode[] {
   const nodes: LayerTreeNode[] = [];
   const groupMembers = new Map<string, EngineElement[]>();
   const order: Array<{ type: "group"; id: string } | { type: "element"; element: EngineElement }> =

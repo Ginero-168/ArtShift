@@ -97,8 +97,7 @@ describe("image batch runner & multi-image orchestration", () => {
       expect(placements[1].x).toBeGreaterThanOrEqual(placements[0].x + placements[0].width);
       expect(placements[2].x).toBeGreaterThanOrEqual(placements[1].x + placements[1].width);
       // Row is centered on the viewport-anchored base bounds
-      const totalW =
-        placements[2].x + placements[2].width - placements[0].x;
+      const totalW = placements[2].x + placements[2].width - placements[0].x;
       const rowCenter = placements[0].x + totalW / 2;
       expect(rowCenter).toBeCloseTo(base.x + base.width / 2, 0);
     });

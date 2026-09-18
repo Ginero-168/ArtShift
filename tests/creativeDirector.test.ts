@@ -722,8 +722,7 @@ describe("gpt-oss-120b Creative Director", () => {
   });
 
   it("sanitizes oversized or empty reviewCriteria instead of failing Mix plans", async () => {
-    const longSummary =
-      "สร้างภาพใหม่ภาพเดียวทันทีโดยผสมภาพที่เลือกทั้งหมดเข้าด้วยกัน " + "ก".repeat(480);
+    const longSummary = "สร้างภาพใหม่ภาพเดียวทันทีโดยผสมภาพที่เลือกทั้งหมดเข้าด้วยกัน " + "ก".repeat(480);
     const execute = vi.fn().mockResolvedValue({
       output: {
         text: "",
@@ -734,7 +733,8 @@ describe("gpt-oss-120b Creative Director", () => {
             input: {
               kind: "image-task",
               summary: longSummary,
-              refinedPrompt: "A fused cinematic scene combining both references into one balanced composition",
+              refinedPrompt:
+                "A fused cinematic scene combining both references into one balanced composition",
               specialist: "image_generator",
               capability: "IMAGE_DEFAULT",
               modelAlias: "image-general",
@@ -1008,7 +1008,8 @@ describe("gpt-oss-120b Creative Director", () => {
               input: {
                 kind: "image-task",
                 summary: "Complex neon banner with typography",
-                refinedPrompt: "A complex graphic layout with dense text and multiple brand elements",
+                refinedPrompt:
+                  "A complex graphic layout with dense text and multiple brand elements",
                 specialist: "image_generator",
                 capability: "IMAGE_DEFAULT",
                 modelAlias: "image-fast",
@@ -1044,7 +1045,9 @@ describe("gpt-oss-120b Creative Director", () => {
   it("enforces distinction between input reference count and output creation count in system prompt", () => {
     expect(CREATIVE_DIRECTOR_SYSTEM).toContain("CRITICAL INPUT REFERENCES VS OUTPUT QUANTITY RULE");
     expect(CREATIVE_DIRECTOR_SYSTEM).toContain("จาก 2 ปกนี้");
-    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("synthesize both references into ONE unified design artwork");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain(
+      "synthesize both references into ONE unified design artwork",
+    );
   });
 
   it("normalizes requestedOutputCount to 1 when prompt references 2 covers without explicit output quantity request", async () => {
@@ -1189,5 +1192,3 @@ describe("gpt-oss-120b Creative Director", () => {
     }
   });
 });
-
-

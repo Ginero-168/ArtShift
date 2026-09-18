@@ -8,7 +8,7 @@ Short list of known remaining work after PRs #4–#6 landed on `main`.
 
 ## Still red / deferred
 
-- **Lint** — repo-wide Biome (~177 errors on `main`). Do not mass `biome check --write`.
+- **Lint** — CI `npm run lint` is addressed in the stacked Biome PR (format + import-sort on CI paths, plus the 6 remaining error rules). Warnings (`noExplicitAny`, unused imports) remain on purpose.
 - **pptxgenjs → image-size** — high-severity DoS advisories; `npm audit fix --force` would install pptxgenjs 2.2.0 (breaking). Keep the existing PPTX request/signature bounds.
 - **`@huggingface/transformers` → `sharp` / `adm-zip` / `onnxruntime-node`** — remaining high/moderate. `npm audit fix --force` would jump transformers to 4.3.0 (breaking). The repo already overrides `sharp` to `^0.35.3` and `adm-zip` to `^0.6.0`; Next 15.5.25 prefers `sharp ^0.35.4` for AVIF re-enable, but that patch is not taken here because transformers still reports the 4.3.0 major as the audit fix.
 - **Server-side account consent flag** — #5 uses localStorage + session confirm, not an encrypted account record.

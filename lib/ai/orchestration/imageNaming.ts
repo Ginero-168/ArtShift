@@ -25,7 +25,7 @@ export function deriveGeneratedImageName(
   }
 
   // 2. Remove quotation marks, brackets, and markdown formatting
-  cleaned = cleaned.replace(/^["'`“‘\[\(]+|["'`”’\]\)]+$/g, "").trim();
+  cleaned = cleaned.replace(/^["'`“‘[(]+|["'`”’\])]+$/g, "").trim();
 
   // 3. Remove variation tags like "(variation 2)" or "แบบที่ 1"
   cleaned = cleaned.replace(/\(?(variation|แบบที่|ภาพที่)\s*\d+\)?/gi, "").trim();

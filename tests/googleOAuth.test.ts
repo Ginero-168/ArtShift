@@ -4,8 +4,8 @@ import {
   consumeGoogleState,
   createGoogleAuthorizationUrl,
   exchangeGoogleCode,
-  getCanonicalGoogleStartRedirect,
   GOOGLE_STATE_COOKIE,
+  getCanonicalGoogleStartRedirect,
   getGoogleAuthConfig,
   setGoogleStateCookie,
 } from "@/lib/server/auth/google";
@@ -99,9 +99,7 @@ describe("Google OAuth", () => {
         fakeHeaders({ host: "artshift.io", "x-forwarded-host": "artshift.io" }),
       ),
     ).toBe("https://www.artshift.io/api/auth/google/start");
-    expect(
-      getCanonicalGoogleStartRedirect(fakeHeaders({ host: "www.artshift.io" })),
-    ).toBeNull();
+    expect(getCanonicalGoogleStartRedirect(fakeHeaders({ host: "www.artshift.io" }))).toBeNull();
   });
 });
 

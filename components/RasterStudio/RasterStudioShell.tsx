@@ -6,8 +6,8 @@ import RasterToolOptions from "@/components/Canvas/RasterToolOptions";
 import { createEditorController } from "@/lib/engine/editorController";
 import { getImageCache, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
-import type { ImageElement } from "@/lib/engine/types";
 import { isRasterPaintTool, isRasterRetouchTool } from "@/lib/engine/toolBehavior";
+import type { ImageElement } from "@/lib/engine/types";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { bakeImageElementRevision } from "@/lib/raster/studio/bakeRevision";
 import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
@@ -61,9 +61,8 @@ export default function RasterStudioShell() {
     const onKey = (event: KeyboardEvent) => {
       const st = useEngine.getState();
       const slide = st.currentSlide();
-      const image = slide?.elements.find(
-        (el): el is ImageElement =>
-          Boolean(payload && el.id === payload.elementId && el.type === "image"),
+      const image = slide?.elements.find((el): el is ImageElement =>
+        Boolean(payload && el.id === payload.elementId && el.type === "image"),
       );
 
       if (event.key === "Escape" && !saving) {

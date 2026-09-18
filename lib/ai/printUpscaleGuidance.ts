@@ -12,9 +12,7 @@ export type PhysicalPrintSizeCm = {
 export function extractPhysicalPrintSizeCm(text?: string): PhysicalPrintSizeCm | null {
   if (!text) return null;
   const match =
-    /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|ซม\.?|ซม)/iu.exec(
-      text,
-    );
+    /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|ซม\.?|ซม)/iu.exec(text);
   if (!match) return null;
   const widthCm = Number(match[1]);
   const heightCm = Number(match[2]);
@@ -48,10 +46,7 @@ export function recommendUpscaleMegapixelsForPrint(
   return 32;
 }
 
-export function formatPrintUpscaleHint(
-  size: PhysicalPrintSizeCm,
-  outputWidthPx: number,
-): string {
+export function formatPrintUpscaleHint(size: PhysicalPrintSizeCm, outputWidthPx: number): string {
   const dpi = estimatePrintDpi(outputWidthPx, size.widthCm);
   const targetMp = recommendUpscaleMegapixelsForPrint(size.widthCm, size.heightCm, 150);
   return [

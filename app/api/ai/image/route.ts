@@ -5,10 +5,14 @@ import type { AiImageGenerateInput, AiImageRenderQuality } from "@/lib/ai-runtim
 import { isAllowedImageAspectRatio } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
-import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { imageGenerationFallbackEnabled } from "@/lib/server/ai/imageGenerationProvider";
+import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
-import { getSessionOpenAiToken, getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import {
+  getSessionOpenAiToken,
+  getSessionReplicateToken,
+  getUserAccount,
+} from "@/lib/server/ai/userCredentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -312,7 +316,9 @@ function parseMaskImage(value: unknown): ParsedMask {
     ok: true,
     value: {
       dataUrl: record.dataUrl,
-      ...(mimeType ? { mimeType } : { mimeType: match[1] as "image/jpeg" | "image/png" | "image/webp" }),
+      ...(mimeType
+        ? { mimeType }
+        : { mimeType: match[1] as "image/jpeg" | "image/png" | "image/webp" }),
     },
   };
 }

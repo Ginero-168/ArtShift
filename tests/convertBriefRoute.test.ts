@@ -9,12 +9,22 @@ describe("Convert to Brief API Parser", () => {
         { name: "เชฟซูชิ", box: [0, 0, 450, 1000], color: "#e0e7ff", labelPlacement: "top-left" },
         { name: "รูปซูชิ", box: [450, 0, 1000, 1000], color: "#cffafe", labelPlacement: "center" },
       ],
-      dividers: [
-        { start: [0, 450], end: [1000, 450], color: "#000000", strokeWidth: 1.5 },
-      ],
+      dividers: [{ start: [0, 450], end: [1000, 450], color: "#000000", strokeWidth: 1.5 }],
       focalObjects: [
-        { name: "ป้ายราคา", shape: "ellipse", box: [140, 680, 380, 820], color: "#fef08a", text: "ชิ้นละ 10 บาท" },
-        { name: "ป้ายสโลแกน", shape: "ellipse", box: [240, 800, 480, 940], color: "#ffe4e6", text: "อุ่นใจ ใกล้บ้าน" },
+        {
+          name: "ป้ายราคา",
+          shape: "ellipse",
+          box: [140, 680, 380, 820],
+          color: "#fef08a",
+          text: "ชิ้นละ 10 บาท",
+        },
+        {
+          name: "ป้ายสโลแกน",
+          shape: "ellipse",
+          box: [240, 800, 480, 940],
+          color: "#ffe4e6",
+          text: "อุ่นใจ ใกล้บ้าน",
+        },
       ],
       texts: [
         { text: "ชิ้นละ 10 บาท", box: [220, 700, 300, 800], fontSize: 18, align: "center" },
@@ -56,13 +66,15 @@ describe("Convert to Brief API Parser", () => {
   });
 
   it("returns no result when the AI response has no usable layout data", () => {
-    const parsed = parseBriefResponse(JSON.stringify({
-      aspectRatio: { width: 1200, height: 800 },
-      backgroundPartitions: [],
-      dividers: [],
-      focalObjects: [],
-      texts: [],
-    }));
+    const parsed = parseBriefResponse(
+      JSON.stringify({
+        aspectRatio: { width: 1200, height: 800 },
+        backgroundPartitions: [],
+        dividers: [],
+        focalObjects: [],
+        texts: [],
+      }),
+    );
 
     expect(parsed).not.toBeNull();
     expect(isUsableBriefLayout(parsed)).toBe(false);
@@ -105,7 +117,9 @@ describe("Convert to Brief API Parser", () => {
 
     const parsed = parseBriefResponse(rawAiOutput);
     expect(parsed).not.toBeNull();
-    expect(parsed?.heroSubject?.description).toBe("รูปภาพเด็กชาย กำลังยิ้มแย้ม และเล่นน้ำ ขณะใส่ห่วงยางสีน้ำเงิน");
+    expect(parsed?.heroSubject?.description).toBe(
+      "รูปภาพเด็กชาย กำลังยิ้มแย้ม และเล่นน้ำ ขณะใส่ห่วงยางสีน้ำเงิน",
+    );
     expect(parsed?.backgroundZone?.description).toBe("พื้นหลังเป็นภาพสวนน้ำ");
     expect(parsed?.headlineCard?.text).toBe("สวนน้ำ\nเปิดใหม่");
     expect(parsed?.badge?.text).toBe("เปิดแล้ว\nวันนี้");
@@ -205,9 +219,7 @@ describe("Convert to Brief API Parser", () => {
         { text: "SMALL SPLASH BIG DREAMS", box: [620, 220, 700, 520], fontSize: 14 },
         { text: "สวนน้ำ\nเปิดใหม่", box: [40, 40, 200, 460], fontSize: 28 },
       ],
-      intentionalTexts: [
-        { text: "MORE NOISE ON TOWEL", box: [700, 300, 760, 500] },
-      ],
+      intentionalTexts: [{ text: "MORE NOISE ON TOWEL", box: [700, 300, 760, 500] }],
       backgroundPartitions: [],
       dividers: [],
       focalObjects: [

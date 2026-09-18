@@ -154,7 +154,7 @@ export function createEditorController(actions: EditorControllerActions): Editor
         !frame ||
         frame.type !== "frame" ||
         // Occupied frames reject drops until Detach clears imageFileId.
-        Boolean(frame.imageFileId) ||
+        frame.imageFileId ||
         !image ||
         image.id === frame.id ||
         !image.fileId ||

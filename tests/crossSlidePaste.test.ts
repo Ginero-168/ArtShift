@@ -81,9 +81,9 @@ describe("cross-slide clipboard", () => {
     const live = s2?.elements.filter((el) => !el.isDeleted) ?? [];
     expect(live).toHaveLength(1);
     expect(live[0]?.type).toBe("rect");
-    expect(useEngine.getState().doc.slides.find((slide) => slide.id === "s1")?.elements).toHaveLength(
-      1,
-    );
+    expect(
+      useEngine.getState().doc.slides.find((slide) => slide.id === "s1")?.elements,
+    ).toHaveLength(1);
   });
 
   it("cuts from one slide and pastes onto another", () => {

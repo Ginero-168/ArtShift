@@ -9,13 +9,13 @@
  * @see docs/research/image-expand-outpaint-2026-09-18.md
  */
 
-import { generateAIImage } from "@/lib/ai/imageGeneration";
 import {
   GPT_IMAGE_MAX_ASPECT,
   GPT_IMAGE_PREFERRED_LONG_EDGE,
   resolveGenerationSizeFromRatio,
   resolvePrintCanvasSize,
 } from "@/lib/ai/generationSize";
+import { generateAIImage } from "@/lib/ai/imageGeneration";
 import { loadDataURL } from "@/lib/engine/imageCache";
 
 export type ExpandAxis = "horizontal" | "vertical";
@@ -40,10 +40,7 @@ export type ExpandProgress = {
 export type OutpaintSide = "left" | "right" | "top" | "bottom";
 
 /** True when longer:shorter exceeds the GPT Image 3:1 cap (needs edge stitch). */
-export function ratioExceedsModelMax(
-  ratioWidth: number,
-  ratioHeight: number,
-): boolean {
+export function ratioExceedsModelMax(ratioWidth: number, ratioHeight: number): boolean {
   const w = Math.abs(ratioWidth);
   const h = Math.abs(ratioHeight);
   if (!(w > 0) || !(h > 0)) return false;
@@ -51,10 +48,7 @@ export function ratioExceedsModelMax(
 }
 
 /** Which axis must expand past the model cap for this print ratio. */
-export function expandAxisForRatio(
-  ratioWidth: number,
-  ratioHeight: number,
-): ExpandAxis | null {
+export function expandAxisForRatio(ratioWidth: number, ratioHeight: number): ExpandAxis | null {
   const w = Math.abs(ratioWidth);
   const h = Math.abs(ratioHeight);
   if (!(w > 0) || !(h > 0)) return null;
@@ -95,8 +89,7 @@ export function parseExpandRatioFromText(text?: string): {
 } {
   if (!text) return { ratioWidth: 29, ratioHeight: 7 };
 
-  const dim =
-    /(\d+(?:\.\d+)?)\s*(?:x|×)\s*(\d+(?:\.\d+)?)\s*(?:cm|ซม\.?|px)?/iu.exec(text);
+  const dim = /(\d+(?:\.\d+)?)\s*(?:x|×)\s*(\d+(?:\.\d+)?)\s*(?:cm|ซม\.?|px)?/iu.exec(text);
   if (dim) {
     const w = parseFloat(dim[1] ?? "");
     const h = parseFloat(dim[2] ?? "");
@@ -137,12 +130,8 @@ export function planExpandToRatio(
     preferredLongEdge: Math.max(
       GPT_IMAGE_PREFERRED_LONG_EDGE,
       axis === "horizontal"
-        ? Math.round(
-            (sourceWidth * (ratioWidth / Math.max(ratioHeight, 1e-6))) / 3,
-          )
-        : Math.round(
-            (sourceHeight * (ratioHeight / Math.max(ratioWidth, 1e-6))) / 3,
-          ),
+        ? Math.round((sourceWidth * (ratioWidth / Math.max(ratioHeight, 1e-6))) / 3)
+        : Math.round((sourceHeight * (ratioHeight / Math.max(ratioWidth, 1e-6))) / 3),
     ),
   });
 
@@ -328,11 +317,7 @@ function canvasToPngDataUrl(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL("image/png");
 }
 
-function sampleColumnColor(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  height: number,
-): string {
+function sampleColumnColor(ctx: CanvasRenderingContext2D, x: number, height: number): string {
   const sx = Math.max(0, Math.min(ctx.canvas.width - 1, Math.round(x)));
   const data = ctx.getImageData(sx, 0, 1, height).data;
   let r = 0;
@@ -348,11 +333,7 @@ function sampleColumnColor(
   return `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`;
 }
 
-function sampleRowColor(
-  ctx: CanvasRenderingContext2D,
-  y: number,
-  width: number,
-): string {
+function sampleRowColor(ctx: CanvasRenderingContext2D, y: number, width: number): string {
   const sy = Math.max(0, Math.min(ctx.canvas.height - 1, Math.round(y)));
   const data = ctx.getImageData(0, sy, width, 1).data;
   let r = 0;
@@ -391,8 +372,7 @@ export async function buildSideOutpaintPanel(
   const source = await loadHtmlImage(sourceDataUrl);
   const sw = source.naturalWidth || source.width;
   const sh = source.naturalHeight || source.height;
-  const axis: ExpandAxis =
-    side === "left" || side === "right" ? "horizontal" : "vertical";
+  const axis: ExpandAxis = side === "left" || side === "right" ? "horizontal" : "vertical";
   const geometry = planOutpaintPanelGeometry({
     gapSize,
     crossEdge,
@@ -427,17 +407,7 @@ export async function buildSideOutpaintPanel(
     seedCanvas.height = geometry.height;
     const sctx = seedCanvas.getContext("2d");
     if (!sctx) throw new Error("Canvas unavailable for expand seed");
-    sctx.drawImage(
-      source,
-      srcSeedX,
-      0,
-      srcSeedW,
-      sh,
-      0,
-      0,
-      geometry.seedSize,
-      geometry.height,
-    );
+    sctx.drawImage(source, srcSeedX, 0, srcSeedW, sh, 0, 0, geometry.seedSize, geometry.height);
     const edgeX = side === "left" ? 0 : geometry.seedSize - 1;
     const placeholder = sampleColumnColor(sctx, edgeX, geometry.height);
 
@@ -463,17 +433,7 @@ export async function buildSideOutpaintPanel(
     seedCanvas.height = geometry.seedSize;
     const sctx = seedCanvas.getContext("2d");
     if (!sctx) throw new Error("Canvas unavailable for expand seed");
-    sctx.drawImage(
-      source,
-      0,
-      srcSeedY,
-      sw,
-      srcSeedH,
-      0,
-      0,
-      geometry.width,
-      geometry.seedSize,
-    );
+    sctx.drawImage(source, 0, srcSeedY, sw, srcSeedH, 0, 0, geometry.width, geometry.seedSize);
     const edgeY = side === "top" ? 0 : geometry.seedSize - 1;
     const placeholder = sampleRowColor(sctx, edgeY, geometry.width);
 
@@ -656,8 +616,7 @@ async function generateEdgeFill(options: {
     },
     options.signal,
   );
-  const along =
-    options.side === "left" || options.side === "right" ? panel.width : panel.height;
+  const along = options.side === "left" || options.side === "right" ? panel.width : panel.height;
   return cropOutpaintFill(generated.dataUrl, options.side, panel.fillSize, along);
 }
 
@@ -686,9 +645,7 @@ export async function expandImageToAspectRatio(options: {
   report("planning", "กำลังวางแผนขยายขอบที่เกินเพดานโมเดล…");
 
   if (!ratioExceedsModelMax(options.ratioWidth, options.ratioHeight)) {
-    throw new Error(
-      "สัดส่วนนี้ยังอยู่ในเพดาน 3:1 ของโมเดล — ใช้ generate/edit ปกติ ไม่ต้อง stitch ขยายขอบ",
-    );
+    throw new Error("สัดส่วนนี้ยังอยู่ในเพดาน 3:1 ของโมเดล — ใช้ generate/edit ปกติ ไม่ต้อง stitch ขยายขอบ");
   }
 
   const source = await loadHtmlImage(options.sourceDataUrl);
@@ -702,10 +659,7 @@ export async function expandImageToAspectRatio(options: {
   );
 
   const needsExpand =
-    layout.leftGap >= 8 ||
-    layout.rightGap >= 8 ||
-    layout.topGap >= 8 ||
-    layout.bottomGap >= 8;
+    layout.leftGap >= 8 || layout.rightGap >= 8 || layout.topGap >= 8 || layout.bottomGap >= 8;
 
   if (!needsExpand) {
     const cached = await loadDataURL(options.sourceDataUrl);
@@ -771,9 +725,7 @@ export async function expandImageToAspectRatio(options: {
 
   report(
     "stitching",
-    layout.axis === "vertical"
-      ? "กำลังประกอบแถบบน–กลาง–ล่าง…"
-      : "กำลังประกอบแถบซ้าย–กลาง–ขวา…",
+    layout.axis === "vertical" ? "กำลังประกอบแถบบน–กลาง–ล่าง…" : "กำลังประกอบแถบซ้าย–กลาง–ขวา…",
   );
   const stitched = await stitchExpandPanels({
     layout,

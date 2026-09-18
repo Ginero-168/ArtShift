@@ -1,4 +1,9 @@
-import type { BookMockupElement, EngineElement, FrameElement, ImageElement } from "@/lib/engine/types";
+import type {
+  BookMockupElement,
+  EngineElement,
+  FrameElement,
+  ImageElement,
+} from "@/lib/engine/types";
 
 export type ComposerImageRef = {
   objectId: string;
@@ -158,9 +163,7 @@ export function buildComposerImageSelectionFromIds(
   };
 }
 
-export function buildAllSlideImageRefs(
-  elements: readonly EngineElement[],
-): ComposerImageRef[] {
+export function buildAllSlideImageRefs(elements: readonly EngineElement[]): ComposerImageRef[] {
   const imageElements = elements.filter(
     (element) =>
       !element.isDeleted &&

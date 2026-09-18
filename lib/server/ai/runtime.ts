@@ -34,7 +34,9 @@ export function createServerAiRuntime(credentials: ServerAiCredentials = {}): Ro
         }
       : {
           ...(credentials.openAiApiKey ? { OPENAI_API_KEY: credentials.openAiApiKey } : {}),
-          ...(credentials.replicateToken ? { REPLICATE_API_TOKEN: credentials.replicateToken } : {}),
+          ...(credentials.replicateToken
+            ? { REPLICATE_API_TOKEN: credentials.replicateToken }
+            : {}),
         }),
   };
   return new RoutedAiRuntime({

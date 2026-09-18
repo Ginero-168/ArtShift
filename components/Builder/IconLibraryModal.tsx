@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { IconBulb, IconClose, IconSearch, IconSparkles } from "@/components/icons";
 import {
   VECTOR_ICON_CATEGORIES,
   VECTOR_ICONS,
   type VectorIconCategory,
   type VectorIconDefinition,
 } from "@/lib/builder/vectorIconLibrary";
-import { IconSparkles, IconClose, IconSearch, IconBulb } from "@/components/icons";
 
 interface IconLibraryModalProps {
   isOpen: boolean;
@@ -352,7 +352,15 @@ export default function IconLibraryModal({ isOpen, onClose, onSelectIcon }: Icon
             justifyContent: "space-between",
           }}
         >
-          <span style={{ fontSize: 11.5, color: "#64748b", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span
+            style={{
+              fontSize: 11.5,
+              color: "#64748b",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
             <IconBulb size={14} color="#f59e0b" fill="#f59e0b" fillOpacity={0.25} />
             <span>เวกเตอร์ไอคอนสามารถเปลี่ยนสี Fill, Stroke และปรับขนาดได้อิสระที่ Property Panel</span>
           </span>

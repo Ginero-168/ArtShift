@@ -169,7 +169,15 @@ export class OpenAiAdapter implements AiProviderAdapter {
 
     const response =
       input.inputImages?.length && input.inputImages.length > 0
-        ? await this.postImageEdits(input, model, size, quality, background, outputFormat, request.signal)
+        ? await this.postImageEdits(
+            input,
+            model,
+            size,
+            quality,
+            background,
+            outputFormat,
+            request.signal,
+          )
         : await this.postImageGenerations(
             input,
             model,

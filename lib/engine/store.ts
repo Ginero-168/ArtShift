@@ -588,7 +588,12 @@ export const useEngine = create<EngineState>((set, get) => {
       set((state) => {
         const slide = state.doc.slides.find((candidate) => candidate.id === state.currentSlideId);
         if (!slide?.layers.some((layer) => layer.id === id)) return state;
-        return { activeLayerId: id, selectedIds: new Set(), selectionVersion: (state.selectionVersion || 0) + 1, croppingImageId: null };
+        return {
+          activeLayerId: id,
+          selectedIds: new Set(),
+          selectionVersion: (state.selectionVersion || 0) + 1,
+          croppingImageId: null,
+        };
       }),
 
     selectOnly: (ids) =>

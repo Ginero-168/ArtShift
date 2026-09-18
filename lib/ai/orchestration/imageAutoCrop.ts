@@ -34,9 +34,7 @@ export function computeCropBounds(
 
     let cropY: number;
     if (letterboxTop > 0 || letterboxBottom > 0) {
-      const activeContentCenter = Math.round(
-        (letterboxTop + (sourceHeight - letterboxBottom)) / 2,
-      );
+      const activeContentCenter = Math.round((letterboxTop + (sourceHeight - letterboxBottom)) / 2);
       cropY = Math.max(
         0,
         Math.min(sourceHeight - cropHeight, activeContentCenter - Math.floor(cropHeight / 2)),
@@ -269,23 +267,8 @@ export async function coverImageToTargetRatio(
         return;
       }
 
-      const crop = computeCoverCropBounds(
-        sourceWidth,
-        sourceHeight,
-        targetWidth,
-        targetHeight,
-      );
-      outCtx.drawImage(
-        img,
-        crop.sx,
-        crop.sy,
-        crop.sw,
-        crop.sh,
-        0,
-        0,
-        targetWidth,
-        targetHeight,
-      );
+      const crop = computeCoverCropBounds(sourceWidth, sourceHeight, targetWidth, targetHeight);
+      outCtx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, targetWidth, targetHeight);
 
       resolve({
         dataUrl: outCanvas.toDataURL("image/jpeg", 0.95),

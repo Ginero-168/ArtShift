@@ -109,9 +109,7 @@ describe("extractDimensionSpecsFromText", () => {
 
 describe("extractRequestedSizeSpecsFromText", () => {
   it("extracts named aspect ratios listed in one Thai resize ask", () => {
-    const specs = extractRequestedSizeSpecsFromText(
-      "ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที",
-    );
+    const specs = extractRequestedSizeSpecsFromText("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที");
     expect(specs.map((s) => s.aspectRatio)).toEqual(["16:9", "3:4", "9:16"]);
   });
 });
@@ -135,8 +133,6 @@ describe("normalizeReplicateAspectRatio", () => {
 describe("aspectRatioFromDimensions", () => {
   it("emits Replicate-allowed tokens for non-standard sizes", () => {
     expect(aspectRatioFromDimensions(2048, 1024)).toBe("2048x1152");
-    expect(["16:9", "2048x1152", "3840x2160"]).toContain(
-      aspectRatioFromDimensions(1280, 720),
-    );
+    expect(["16:9", "2048x1152", "3840x2160"]).toContain(aspectRatioFromDimensions(1280, 720));
   });
 });

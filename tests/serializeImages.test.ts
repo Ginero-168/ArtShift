@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFrame, createImage } from "@/lib/engine/factory";
-import {
-  MissingSerializedImageError,
-  serializeWithImages,
-} from "@/lib/engine/serialize";
+import { MissingSerializedImageError, serializeWithImages } from "@/lib/engine/serialize";
 import { createEmptyEngineDoc } from "@/lib/engine/store";
 
 describe("serializeWithImages missing binaries", () => {

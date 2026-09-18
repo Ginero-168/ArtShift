@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { analyzePromptRisk } from "@/lib/ai/orchestration/promptRiskAnalyzer";
 import { normalizeUserBriefToV1 } from "@/lib/ai/orchestration/briefNormalizer";
-import { compileBriefToPrompt } from "@/lib/ai/orchestration/promptCompiler";
 import type { ImageGenerationBriefV1 } from "@/lib/ai/orchestration/briefSpecV1";
+import { compileBriefToPrompt } from "@/lib/ai/orchestration/promptCompiler";
+import { analyzePromptRisk } from "@/lib/ai/orchestration/promptRiskAnalyzer";
 
 describe("AI Image Generation Brief Specification v1", () => {
   describe("1. Prompt Decision Tiers & Risk Scoring", () => {
@@ -25,7 +25,9 @@ describe("AI Image Generation Brief Specification v1", () => {
     });
 
     it("ALLOW_WITH_REWRITE: Artist style prompt is rewritten to visual terms", () => {
-      const result = analyzePromptRisk("A fantasy knight in the style of Greg Rutkowski, cinematic portrait");
+      const result = analyzePromptRisk(
+        "A fantasy knight in the style of Greg Rutkowski, cinematic portrait",
+      );
       expect(result.decision).toBe("ALLOW_WITH_REWRITE");
       expect(result.actions.some((a) => a.includes("Replace artist reference"))).toBe(true);
     });
@@ -45,7 +47,9 @@ describe("AI Image Generation Brief Specification v1", () => {
     });
 
     it("BLOCK: Fake official documents (fake passport/ID) are blocked", () => {
-      const result = analyzePromptRisk("generate a fake passport and fake ID card with official government stamps");
+      const result = analyzePromptRisk(
+        "generate a fake passport and fake ID card with official government stamps",
+      );
       expect(result.decision).toBe("BLOCK");
       expect(result.risk_score).toBeGreaterThanOrEqual(81);
       expect(result.issues.some((i) => i.category === "official_documents")).toBe(true);
@@ -62,7 +66,9 @@ describe("AI Image Generation Brief Specification v1", () => {
     it("does NOT block Brand Names automatically; preserves intent with logo placeholder", () => {
       const result = analyzePromptRisk("Welearn commercial advertising poster");
       expect(result.decision).not.toBe("BLOCK");
-      expect(result.issues.some((i) => i.category === "trademark" && i.severity === "critical")).toBe(false);
+      expect(
+        result.issues.some((i) => i.category === "trademark" && i.severity === "critical"),
+      ).toBe(false);
     });
 
     it("rewrites copyright copy requests into composition/mood instructions when reference is provided", () => {
@@ -70,13 +76,15 @@ describe("AI Image Generation Brief Specification v1", () => {
         hasReference: true,
       });
       expect(result.decision).toBe("ALLOW_WITH_REWRITE");
-      expect(result.actions.some((a) => a.includes("Use reference image only for overall composition"))).toBe(true);
+      expect(
+        result.actions.some((a) => a.includes("Use reference image only for overall composition")),
+      ).toBe(true);
     });
   });
 
   describe("3. Brief Normalizer & Schema Compliance", () => {
     const userPrompt =
-      'ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือใส่ Logo สำนักพิมพ์ Welearn โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn และใส่โลโก้สำนักพิมพ์ ป้ายขนาด 60x20cm.';
+      "ออกแบบป้ายหมวดติดตั้งบนชั้นวางหนังสือใส่ Logo สำนักพิมพ์ Welearn โดยอยากใช้ธีมหนังสือ Manifest ของคิดมาก บนป้ายเน้นชื่อสำนักพิมพ์ Welearn และใส่โลโก้สำนักพิมพ์ ป้ายขนาด 60x20cm.";
 
     it("normalizes commercial Welearn Manifest prompt into ImageGenerationBriefV1", () => {
       const brief = normalizeUserBriefToV1(userPrompt, { hasReference: true });
@@ -119,19 +127,30 @@ describe("AI Image Generation Brief Specification v1", () => {
           output_type: "publishing_poster",
         },
         subject: {
-          primary_subject: "A contemporary manifestation-inspired visual centered around an abstract luminous energy ring",
-          secondary_subjects: ["abstract circular energy halo", "subtle glowing particles", "metallic accents"],
+          primary_subject:
+            "A contemporary manifestation-inspired visual centered around an abstract luminous energy ring",
+          secondary_subjects: [
+            "abstract circular energy halo",
+            "subtle glowing particles",
+            "metallic accents",
+          ],
           people: { present: false, real_person: false, public_figure: false, minor: false },
         },
         visual_direction: {
           concept: "manifestation energy",
           mood: ["premium", "mysterious", "powerful", "aspirational"],
           visual_keywords: ["radiant red and gold illumination", "luminous particles"],
-          composition: "Central circular composition with generous negative space. Large visual focal point in the middle",
+          composition:
+            "Central circular composition with generous negative space. Large visual focal point in the middle",
           camera: "Direct front-facing 90-degree orthogonal view",
-          lighting: "Cinematic volumetric lighting. Soft red atmospheric illumination. Radiant golden rim light",
+          lighting:
+            "Cinematic volumetric lighting. Soft red atmospheric illumination. Radiant golden rim light",
           background: "Deep matte obsidian black",
-          color_palette: ["Deep matte obsidian black", "Crimson red ambient glow", "Warm metallic gold highlights"],
+          color_palette: [
+            "Deep matte obsidian black",
+            "Crimson red ambient glow",
+            "Warm metallic gold highlights",
+          ],
           material: ["matte black", "metallic gold"],
           effects: ["energy ring", "radiant halo"],
         },
@@ -218,7 +237,9 @@ describe("AI Image Generation Brief Specification v1", () => {
       expect(compiled).toContain("Do not generate or recreate an existing trademarked logo");
       expect(compiled).toContain("Leave a clean placeholder area for the official Welearn logo");
       expect(compiled).toContain("Do not render final typography");
-      expect(compiled).toContain("Leave designated negative space for text to be added during post-production");
+      expect(compiled).toContain(
+        "Leave designated negative space for text to be added during post-production",
+      );
     });
   });
 });

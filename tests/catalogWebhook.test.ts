@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_BOOK_COVER_DATA_URL } from "../lib/campaign/generator";
 import { POST } from "../app/api/catalog/webhook/route";
+import { DEFAULT_BOOK_COVER_DATA_URL } from "../lib/campaign/generator";
 import {
   CATALOG_WEBHOOK_MAX_BODY_BYTES,
   CATALOG_WEBHOOK_SECRET_HEADER,
@@ -48,7 +48,10 @@ describe("Catalog Ingestion Webhook API", () => {
 
   it("rejects oversized payloads before parsing books", async () => {
     const res = await POST(
-      request({ books: [{ title: "X" }] }, { secret: SECRET, contentLength: CATALOG_WEBHOOK_MAX_BODY_BYTES + 1 }),
+      request(
+        { books: [{ title: "X" }] },
+        { secret: SECRET, contentLength: CATALOG_WEBHOOK_MAX_BODY_BYTES + 1 },
+      ),
     );
     expect(res.status).toBe(413);
   });

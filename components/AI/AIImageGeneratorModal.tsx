@@ -18,8 +18,8 @@ import {
   IconSpinner,
   IconWarning,
 } from "@/components/icons";
-import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
 import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
+import { executeCoPilotInstruction } from "@/lib/ai/coPilot";
 import {
   ASPECT_RATIOS,
   type AspectRatioOption,

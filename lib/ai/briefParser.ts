@@ -106,8 +106,7 @@ export function resolveFooterBarDirection(
     return "row"; // unused when boxes drive placement
   }
 
-  const avgLen =
-    items.reduce((sum, item) => sum + item.text.trim().length, 0) / items.length;
+  const avgLen = items.reduce((sum, item) => sum + item.text.trim().length, 0) / items.length;
   const fontSize = Math.min(12, Math.max(9, Math.round(footerHeightPx * 0.28)));
   const colWidth = footerWidthPx / items.length;
   const fitsInColumns = avgLen * fontSize * 0.55 <= colWidth * 0.9;
@@ -257,7 +256,10 @@ export function filterPhotographicBriefTexts(
 export function parseBriefResponse(raw: string): ConvertToBriefData | null {
   try {
     let clean = raw.trim();
-    clean = clean.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    clean = clean
+      .replace(/```(?:json)?/gi, "")
+      .replace(/```/g, "")
+      .trim();
     // Models sometimes echo `};` from broken prompt examples.
     clean = clean.replace(/;\s*$/g, "").trim();
     const jsonMatch = clean.match(/\{[\s\S]*\}/);
@@ -276,7 +278,7 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
       } catch {
         // Repair pass 2: fix unescaped newlines inside strings
         candidate = candidate.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match) =>
-          match.replace(/\r?\n/g, "\\n")
+          match.replace(/\r?\n/g, "\\n"),
         );
         try {
           parsed = JSON.parse(candidate);
@@ -366,7 +368,10 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
     let featureTags: BriefFeatureTag[] | undefined;
     if (Array.isArray(parsed.featureTags)) {
       featureTags = parsed.featureTags
-        .filter((t: any) => t && typeof t === "object" && t.text && Array.isArray(t.box) && t.box.length === 4)
+        .filter(
+          (t: any) =>
+            t && typeof t === "object" && t.text && Array.isArray(t.box) && t.box.length === 4,
+        )
         .map((t: any) => ({
           text: String(t.text),
           box: t.box as [number, number, number, number],
@@ -421,7 +426,10 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
     const backgroundPartitions: BriefPartition[] = Array.isArray(parsed.backgroundPartitions)
       ? parsed.backgroundPartitions.map((p) => ({
           name: String(p.name || "พื้นที่หลัก"),
-          box: Array.isArray(p.box) && p.box.length === 4 ? (p.box as [number, number, number, number]) : [0, 0, 1000, 1000],
+          box:
+            Array.isArray(p.box) && p.box.length === 4
+              ? (p.box as [number, number, number, number])
+              : [0, 0, 1000, 1000],
           color: String(p.color || "#e0e7ff"),
           labelPlacement: p.labelPlacement || "top-left",
         }))
@@ -444,7 +452,10 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
       ? parsed.focalObjects.map((o) => ({
           name: String(o.name || "วัตถุ"),
           shape: o.shape === "rect" ? "rect" : "ellipse",
-          box: Array.isArray(o.box) && o.box.length === 4 ? (o.box as [number, number, number, number]) : [200, 200, 400, 400],
+          box:
+            Array.isArray(o.box) && o.box.length === 4
+              ? (o.box as [number, number, number, number])
+              : [200, 200, 400, 400],
           color: String(o.color || "#fef08a"),
           text: o.text ? String(o.text) : undefined,
           textColor: o.textColor || "#000000",
@@ -500,7 +511,10 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
     const texts: BriefText[] = Array.isArray(parsed.texts)
       ? parsed.texts.map((t: any) => ({
           text: String(t.text || ""),
-          box: Array.isArray(t.box) && t.box.length === 4 ? (t.box as [number, number, number, number]) : [200, 200, 300, 400],
+          box:
+            Array.isArray(t.box) && t.box.length === 4
+              ? (t.box as [number, number, number, number])
+              : [200, 200, 300, 400],
           fontSize: Number(t.fontSize) || 16,
           color: t.color || "#000000",
           align: t.align || "center",
@@ -510,7 +524,13 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
     // Parse intentionalTexts from the new prompt
     if (Array.isArray(parsed.intentionalTexts)) {
       for (const it of parsed.intentionalTexts) {
-        if (it && typeof it === "object" && it.text && Array.isArray(it.box) && it.box.length === 4) {
+        if (
+          it &&
+          typeof it === "object" &&
+          it.text &&
+          Array.isArray(it.box) &&
+          it.box.length === 4
+        ) {
           texts.push({
             text: String(it.text),
             box: it.box as [number, number, number, number],
@@ -558,4 +578,3 @@ export function parseBriefResponse(raw: string): ConvertToBriefData | null {
     return null;
   }
 }
-

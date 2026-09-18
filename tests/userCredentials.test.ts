@@ -1,4 +1,7 @@
-import type { NextRequest } from "next/server";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { NextRequest, NextResponse } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   getAccountReplicateToken,
@@ -11,10 +14,6 @@ import {
 } from "@/lib/server/ai/userCredentials";
 import { resetAccountStoreForTests, upsertGoogleAccount } from "@/lib/server/auth/accountStore";
 import { setAuthCookie } from "@/lib/server/auth/session";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { NextResponse } from "next/server";
 
 const TOKEN = `r8_${"c".repeat(37)}`;
 let storeDir = "";

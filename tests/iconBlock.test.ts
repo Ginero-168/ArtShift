@@ -1,13 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  BUILDER_BLOCKS,
-  createBuilderBlock,
-} from "@/lib/builder/blocks";
+import { BUILDER_BLOCKS, createBuilderBlock } from "@/lib/builder/blocks";
 import {
   createVectorPathFromIcon,
-  VECTOR_ICONS,
   VECTOR_ICON_CATEGORIES,
+  VECTOR_ICONS,
 } from "@/lib/builder/vectorIconLibrary";
 
 const ARTWORK = { width: 1920, height: 1080 };

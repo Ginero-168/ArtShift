@@ -20,7 +20,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { IconWand } from "@/components/icons";
-import { clearCanvasViewport, publishCanvasViewport, registerFitWorldRectHandler } from "@/lib/engine/canvasViewport";
+import {
+  clearCanvasViewport,
+  publishCanvasViewport,
+  registerFitWorldRectHandler,
+} from "@/lib/engine/canvasViewport";
 import { createEditorController } from "@/lib/engine/editorController";
 import {
   createDiamond,
@@ -44,7 +48,6 @@ import {
 } from "@/lib/engine/gestureController";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
 import { fileToDataURL, getImageCache, loadDataURL } from "@/lib/engine/imageCache";
-import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import {
   getInteractiveElements,
   getLayerForObject,
@@ -98,6 +101,7 @@ import {
   selectionShapeFromPoints,
   worldToImageLocal,
 } from "@/lib/raster/selectionInteraction";
+import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import BindingIndicators from "./BindingIndicators";
 import CanvasRoot, {

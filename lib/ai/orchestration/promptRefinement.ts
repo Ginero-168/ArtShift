@@ -5,20 +5,8 @@
  * - Variant axes (Layer 2) are the only safe differences on follow-ups
  */
 
+import type { SharedAnchorLock, VariantSelectionLock } from "./chatContinuity";
 import { deriveGeneratedImageName } from "./imageNaming";
-import type {
-  SharedAnchorLock,
-  VariantSelectionLock,
-} from "./chatContinuity";
-import {
-  createBrandVariantDimensions,
-  inferSharedAnchors,
-  isBrandVariantBrief,
-  resolveOptionPreview,
-  type OptionPreview,
-  type SharedAnchorHint,
-} from "./promptOptionCatalog";
-import type { PromptHelperVariantPlan } from "./promptHelperVariantPlan";
 import {
   createCatDimensions,
   createDogDimensions,
@@ -26,6 +14,15 @@ import {
   createLandscapeDimensions,
   createPortraitDimensions,
 } from "./promptHelperOptionSets";
+import type { PromptHelperVariantPlan } from "./promptHelperVariantPlan";
+import {
+  createBrandVariantDimensions,
+  inferSharedAnchors,
+  isBrandVariantBrief,
+  type OptionPreview,
+  resolveOptionPreview,
+  type SharedAnchorHint,
+} from "./promptOptionCatalog";
 
 export interface RefinementOption {
   id: string;
@@ -80,7 +77,11 @@ export function isBroadImagePrompt(prompt: string): boolean {
   const trimmed = prompt.trim();
   if (!trimmed) return false;
 
-  if (/^(สวัสดี|hello|hi|hey|ช่วยอะไรได้บ้าง|ทำอะไรได้บ้าง|ลบ|ย้าย|เปลี่ยนสีพื้นหลังสไลด์|แก้ข้อความ|undo|redo)/i.test(trimmed)) {
+  if (
+    /^(สวัสดี|hello|hi|hey|ช่วยอะไรได้บ้าง|ทำอะไรได้บ้าง|ลบ|ย้าย|เปลี่ยนสีพื้นหลังสไลด์|แก้ข้อความ|undo|redo)/i.test(
+      trimmed,
+    )
+  ) {
     return false;
   }
 
@@ -88,12 +89,33 @@ export function isBroadImagePrompt(prompt: string): boolean {
   if (isBrandVariantBrief(trimmed)) return true;
 
   const imageKeywords = [
-    "สร้างรูป", "สร้างภาพ", "วาดรูป", "วาดภาพ", "ขอรูป", "ขอภาพ", "ทำรูป", "ทำภาพ",
-    "รูปแมว", "รูปหมา", "รูปคน", "รูปวิว", "ภาพแมว", "ภาพหมา", "ภาพคน", "ภาพวิว",
-    "draw", "generate", "create image", "paint", "photo of", "picture of",
+    "สร้างรูป",
+    "สร้างภาพ",
+    "วาดรูป",
+    "วาดภาพ",
+    "ขอรูป",
+    "ขอภาพ",
+    "ทำรูป",
+    "ทำภาพ",
+    "รูปแมว",
+    "รูปหมา",
+    "รูปคน",
+    "รูปวิว",
+    "ภาพแมว",
+    "ภาพหมา",
+    "ภาพคน",
+    "ภาพวิว",
+    "draw",
+    "generate",
+    "create image",
+    "paint",
+    "photo of",
+    "picture of",
   ];
 
-  const hasImageKeyword = imageKeywords.some((kw) => trimmed.toLowerCase().includes(kw.toLowerCase()));
+  const hasImageKeyword = imageKeywords.some((kw) =>
+    trimmed.toLowerCase().includes(kw.toLowerCase()),
+  );
   if (!hasImageKeyword) return false;
 
   if (trimmed.length > 100 || trimmed.split(/\s+/).length > 18) {
@@ -217,9 +239,7 @@ export function buildRefinedPromptString(
   const parts: string[] = [base];
 
   if (data.mode === "brand-variant" && data.sharedAnchors.length > 0) {
-    parts.push(
-      `[Shared anchors locked: ${data.sharedAnchors.map((a) => a.label).join(", ")}]`,
-    );
+    parts.push(`[Shared anchors locked: ${data.sharedAnchors.map((a) => a.label).join(", ")}]`);
   }
 
   for (const dim of data.dimensions) {
@@ -297,13 +317,16 @@ export function applyPromptHelperVariantPlan(
     for (const dim of createBrandVariantDimensions()) {
       for (const opt of dim.options) {
         if (!optionPool.has(opt.id)) {
-          optionPool.set(opt.id, withPreview({
-            id: opt.id,
-            label: opt.label,
-            character: opt.character,
-            modifier: opt.modifier,
-            preview: opt.preview,
-          }));
+          optionPool.set(
+            opt.id,
+            withPreview({
+              id: opt.id,
+              label: opt.label,
+              character: opt.character,
+              modifier: opt.modifier,
+              preview: opt.preview,
+            }),
+          );
         }
       }
     }
@@ -332,10 +355,11 @@ export function applyPromptHelperVariantPlan(
       .filter((opt): opt is RefinementOption => Boolean(opt))
       .map(withPreview);
     if (options.length === 0) continue;
-    const meta = existingMeta.get(axis.id) ?? titleByAxis[axis.id] ?? {
-      title: axis.id,
-      hint: undefined,
-    };
+    const meta = existingMeta.get(axis.id) ??
+      titleByAxis[axis.id] ?? {
+        title: axis.id,
+        hint: undefined,
+      };
     nextDimensions.push({
       id: axis.id,
       title: meta.title,
@@ -386,4 +410,3 @@ export function listPromptHelperCatalogAxes(): {
   }
   return [...byId.values()];
 }
-

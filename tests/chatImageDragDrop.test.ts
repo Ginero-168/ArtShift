@@ -32,7 +32,7 @@ describe("Chat Image Drag and Drop to Canvas", () => {
     expect(dropSource).toContain("application/x-artshift-chat-image");
     expect(dropSource).toContain("artshift/file-id");
     expect(dropSource).toContain("text/uri-list");
-    expect(dropSource).toContain("dropEffect = \"copy\"");
+    expect(dropSource).toContain('dropEffect = "copy"');
     expect(dropSource).toContain("handleImageEntry");
   });
 });

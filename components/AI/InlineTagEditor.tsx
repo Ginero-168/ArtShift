@@ -11,7 +11,6 @@ import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import ImageReferencePreview from "./ImageReferencePreview";
 
-
 export type InlineTagEditorHandle = {
   insertTag: (ref: ComposerImageRef) => void;
   getValue: () => string;
@@ -358,7 +357,6 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
     }),
     [insertTagAtCaret, serializeDOM, onChange, resolveImageRef, createTagPillElement],
   );
-
 
   // Filter available images for mention autocomplete
   const filteredMentionImages = availableImages.filter((img) =>

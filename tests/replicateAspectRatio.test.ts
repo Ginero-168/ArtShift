@@ -50,8 +50,6 @@ describe("aspectRatioFromDimensions", () => {
   });
 
   it("keeps 16:9 family for true landscape video ratio", () => {
-    expect(["16:9", "2048x1152", "3840x2160"]).toContain(
-      aspectRatioFromDimensions(1280, 720),
-    );
+    expect(["16:9", "2048x1152", "3840x2160"]).toContain(aspectRatioFromDimensions(1280, 720));
   });
 });

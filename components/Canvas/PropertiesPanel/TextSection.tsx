@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import FontFamilyPicker from "@/components/FontFamilyPicker";
 import { IconEye } from "@/components/icons";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement, TextElement } from "@/lib/engine/types";
-import FontFamilyPicker from "@/components/FontFamilyPicker";
 import { analyzeTextContrastUnderImage } from "@/lib/vision/textContrast";
 import { CompactDropdown, FONT_SIZES, Section } from "./PanelParts";
 

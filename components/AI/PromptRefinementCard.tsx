@@ -3,8 +3,8 @@ import { IconClose, IconPenEdit, IconWand } from "@/components/icons";
 import { promptHelperThumbPath } from "@/lib/ai/orchestration/promptHelperThumbManifest";
 import { requestPromptHelperThumbGeneration } from "@/lib/ai/orchestration/promptHelperThumbsClient";
 import {
-  resolveOptionFallbackPreview,
   type OptionPreview,
+  resolveOptionFallbackPreview,
 } from "@/lib/ai/orchestration/promptOptionCatalog";
 import {
   buildRefinedPromptString,
@@ -19,9 +19,7 @@ export interface PromptRefinementCardProps {
   onApplyToComposer: (refinedPrompt: string) => void;
   onDismiss: () => void;
   /** Optional: receive Layer-1/2 locks so Orchestrator can store them in generationContext */
-  onLocksChange?: (
-    locks: ReturnType<typeof buildRefinementOrchestratorLocks>,
-  ) => void;
+  onLocksChange?: (locks: ReturnType<typeof buildRefinementOrchestratorLocks>) => void;
 }
 
 export default function PromptRefinementCard({
@@ -118,9 +116,7 @@ export default function PromptRefinementCard({
 
         try {
           const ready = await fetchReady(missing);
-          const newlyReady = ready.filter(
-            (id) => seenMissing.has(id) && !knownReady.has(id),
-          );
+          const newlyReady = ready.filter((id) => seenMissing.has(id) && !knownReady.has(id));
           if (newlyReady.length === 0) continue;
 
           const stamp = Date.now();
@@ -655,11 +651,9 @@ function OptionPreviewSurface({
   };
 
   const fallback = resolveOptionFallbackPreview(optionId);
-  const baseSrc =
-    preview?.kind === "image" ? preview.src : promptHelperThumbPath(optionId);
+  const baseSrc = preview?.kind === "image" ? preview.src : promptHelperThumbPath(optionId);
   // Stable URL when already on disk; cache-bust only after a missing→ready transition.
-  const thumbSrc =
-    thumbVersion != null ? `${baseSrc}?v=${thumbVersion}` : baseSrc;
+  const thumbSrc = thumbVersion != null ? `${baseSrc}?v=${thumbVersion}` : baseSrc;
 
   if (!failed) {
     return (
@@ -697,6 +691,7 @@ function OptionPreviewSurface({
       <div
         style={frameStyle}
         // Catalog SVGs are authored in-repo (no user HTML).
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: in-repo catalog SVG fallbacks, not user HTML
         dangerouslySetInnerHTML={{ __html: fallback.svg }}
       />
     );

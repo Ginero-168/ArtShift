@@ -4,9 +4,9 @@
  */
 
 import {
+  type BuildImageResultSummaryOptions,
   buildImageResultSummary,
   formatImageResultSummaryText,
-  type BuildImageResultSummaryOptions,
   type ImageResultSummary,
 } from "@/lib/ai/imageResultPresentation";
 
@@ -18,9 +18,7 @@ export function stripComposerMentions(subject: string): string {
 }
 
 export function stripOutputBriefPrefix(brief: string): string {
-  return brief
-    .replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "")
-    .trim();
+  return brief.replace(/^(?:รูปที่\s*\d+:\s*|(?:ภาพ|รูป)?(?:ที่)?\s*\d+:\s*)/iu, "").trim();
 }
 
 export type ImageCompletionReplyOptions = {

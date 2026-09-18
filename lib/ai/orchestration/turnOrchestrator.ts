@@ -1,16 +1,12 @@
-import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import {
-  GPT_IMAGE_2_ESTIMATED_COST_USD,
   extractRequestedSizeSpecsFromText,
+  GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
   hasExplicitDimensionsInText,
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
-import {
-  type PriorImageGenerationContext,
-  resolveFollowUpDimensions,
-} from "./chatContinuity";
+import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createImage, createText } from "@/lib/engine/factory";
@@ -18,6 +14,7 @@ import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
+import { type PriorImageGenerationContext, resolveFollowUpDimensions } from "./chatContinuity";
 import {
   applyCreativeDirectionToTask,
   type CreativeDirection,
@@ -32,7 +29,6 @@ import {
 } from "./executionGraph";
 
 export { useDirectorSession } from "./sessionState";
-import { deriveGeneratedImageName } from "./imageNaming";
 
 import type { ArtworkExecutionContext, PlanProposal } from "@/lib/designAgent/contracts";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
@@ -41,6 +37,7 @@ import {
   MAX_IMAGE_OUTPUTS_PER_BATCH,
   planImageBatches,
 } from "./imageBatchRunner";
+import { deriveGeneratedImageName } from "./imageNaming";
 import { chooseImageQuality } from "./imageQualityPolicy";
 import { buildComposerImageSelectionFromIds, type ComposerImageRef } from "./imageReferences";
 import { extractInlineTagRefs } from "./inlineTagSynthesis";
@@ -301,7 +298,11 @@ export function createDirectedImageRun(
       1,
       direction.requestedOutputCount && direction.requestedOutputCount > 1
         ? Math.max(direction.requestedOutputCount, sizeListCount ?? 1)
-        : (explicitCount ?? sizeListCount ?? direction.requestedOutputCount ?? direction.outputCount ?? 1),
+        : (explicitCount ??
+            sizeListCount ??
+            direction.requestedOutputCount ??
+            direction.outputCount ??
+            1),
     ),
   );
   const briefs =
@@ -341,7 +342,7 @@ export function createDirectedImageRun(
         ? sizeSpecs[index]
         : sizeSpecs.length === 1
           ? sizeSpecs[0]
-          : sizeSpecs[index] ?? null;
+          : (sizeSpecs[index] ?? null);
     const dims = briefDims
       ? {
           width: briefDims.width,

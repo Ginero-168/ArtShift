@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { formatImageCompletionReply } from "@/lib/ai/imageCompletionReply";
 import {
   estimatePrintDpi,
   extractPhysicalPrintSizeCm,
   formatPrintUpscaleHint,
   recommendUpscaleMegapixelsForPrint,
 } from "@/lib/ai/printUpscaleGuidance";
-import { formatImageCompletionReply } from "@/lib/ai/imageCompletionReply";
 
 describe("printUpscaleGuidance", () => {
   it("extracts physical cm sizes from Thai/English prompts", () => {

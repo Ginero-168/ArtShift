@@ -9,9 +9,7 @@ export type WorldBounds = {
 };
 
 /** Full camera frustum in world space (not clipped to the slide/canvas). */
-export function getVisibleWorldBounds(
-  viewport: CanvasViewportSnapshot,
-): WorldBounds {
+export function getVisibleWorldBounds(viewport: CanvasViewportSnapshot): WorldBounds {
   const scale = Math.max(0.0001, viewport.scale);
   return {
     x: (0 - viewport.tx) / scale,

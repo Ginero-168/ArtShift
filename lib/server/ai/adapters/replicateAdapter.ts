@@ -18,16 +18,16 @@ import type {
   AiProviderResult,
 } from "@/lib/ai-runtime/runtime";
 import {
+  aspectRatioFromDimensions,
+  normalizeReplicateAspectRatio,
+} from "@/lib/server/ai/replicateAspectRatio";
+import {
   parseReplicateAssistantOutput,
   renderConversationPrompt,
   renderGeminiSystemInstruction,
   renderHarmonyPrompt,
 } from "./replicateChatProtocol";
 import { assertProviderResponse, parseObjectProposals, textFromUnknownOutput } from "./shared";
-import {
-  aspectRatioFromDimensions,
-  normalizeReplicateAspectRatio,
-} from "@/lib/server/ai/replicateAspectRatio";
 
 const SUPPORTED_TASKS: AiTaskKind[] = [
   "assistant.chat",
@@ -154,7 +154,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           id: GPT_IMAGE_25_SUNBURST_MODEL,
           alias: "image-fast",
           profile: "quality",
-          pricing: { currency: "USD", perRunUsd: 0.13, note: "Resolves to Sunburst (Flare retired)." },
+          pricing: {
+            currency: "USD",
+            perRunUsd: 0.13,
+            note: "Resolves to Sunburst (Flare retired).",
+          },
         },
         {
           id: GPT_IMAGE_25_SUNBURST_MODEL,
@@ -264,10 +268,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const thinkingBudget =
       options?.reasoning?.mode === "fixed" ? options.reasoning.budgetTokens : undefined;
 
-    const chatMaxTokens = Math.min(
-      MAX_CHAT_OUTPUT_TOKENS,
-      Math.max(256, input.maxTokens ?? 4_096),
-    );
+    const chatMaxTokens = Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 4_096));
     const predictionInput = isGemini
       ? isGemini3
         ? {
@@ -912,9 +913,13 @@ async function assertRecraftProviderResponse(response: Response): Promise<void> 
       { provider: "replicate" },
     );
   }
-  throw new AiRuntimeError("PROVIDER_UNAVAILABLE", errorText || "Replicate is temporarily unavailable.", {
-    provider: "replicate",
-  });
+  throw new AiRuntimeError(
+    "PROVIDER_UNAVAILABLE",
+    errorText || "Replicate is temporarily unavailable.",
+    {
+      provider: "replicate",
+    },
+  );
 }
 
 async function fetchRecraftSvg(outputUrl: string, signal: AbortSignal): Promise<string> {
@@ -1028,9 +1033,8 @@ function createModelInput(
   const prompt = createVisionPrompt(task, input);
   // Brief / structured JSON describe prompts need more room than short captions.
   // 2048 truncates complex ad wireframes mid-JSON and makes every retry fail the same way.
-  const wantsStructuredJson = /return only[\s\S]{0,80}json|strictly valid json|wireframe|aspectRatio/i.test(
-    prompt,
-  );
+  const wantsStructuredJson =
+    /return only[\s\S]{0,80}json|strictly valid json|wireframe|aspectRatio/i.test(prompt);
   const describeMaxTokens = wantsStructuredJson ? 8_192 : 2_048;
   const describeTemperature = wantsStructuredJson || task === "vision.propose" ? 0 : 0.2;
   if (model === GPT_MODEL) {

@@ -76,9 +76,7 @@ describe("/api/ai/key", () => {
   it("verifies and persists an OpenAI key separately from Replicate", async () => {
     const openAiToken = `sk-${"a".repeat(48)}`;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
-    const response = await POST(
-      request({ provider: "openai", apiKey: openAiToken }, authCookie),
-    );
+    const response = await POST(request({ provider: "openai", apiKey: openAiToken }, authCookie));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -109,11 +107,7 @@ function fakeResponse(set: ReturnType<typeof vi.fn>): NextResponse {
   return { cookies: { set } } as unknown as NextResponse;
 }
 
-function request(
-  body?: unknown,
-  cookieValue?: string,
-  deleteProvider?: string,
-): NextRequest {
+function request(body?: unknown, cookieValue?: string, deleteProvider?: string): NextRequest {
   const serialized = body === undefined ? "" : JSON.stringify(body);
   const url = new URL("http://localhost/api/ai/key");
   if (deleteProvider) url.searchParams.set("provider", deleteProvider);

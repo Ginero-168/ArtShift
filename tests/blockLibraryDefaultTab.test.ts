@@ -6,13 +6,17 @@ describe("BlockLibrary Default Tab & Tab Order", () => {
   const cssSource = readFileSync("components/Builder/Builder.module.css", "utf8");
 
   it("initializes activeTab state with 'assistant' so AI Assistance is the default page", () => {
-    expect(librarySource).toContain('const [activeTab, setActiveTab] = useState<LibraryTab>("assistant");');
-    expect(librarySource).not.toContain('const [activeTab, setActiveTab] = useState<LibraryTab>("blocks");');
+    expect(librarySource).toContain(
+      'const [activeTab, setActiveTab] = useState<LibraryTab>("assistant");',
+    );
+    expect(librarySource).not.toContain(
+      'const [activeTab, setActiveTab] = useState<LibraryTab>("blocks");',
+    );
   });
 
   it("places AI Assistance tab before Block tab in the DOM tablist", () => {
-    const assistantIndex = librarySource.indexOf('<span>AI Assistance</span>');
-    const blockIndex = librarySource.indexOf('<span>Block</span>');
+    const assistantIndex = librarySource.indexOf("<span>AI Assistance</span>");
+    const blockIndex = librarySource.indexOf("<span>Block</span>");
 
     expect(assistantIndex).toBeGreaterThan(-1);
     expect(blockIndex).toBeGreaterThan(-1);

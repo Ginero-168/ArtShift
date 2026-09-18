@@ -37,8 +37,7 @@ function legacyFill(element: EngineElement): FillAppearance | null {
     const stops = normalizeStops(
       colors.map((color, index) => ({
         offset:
-          element.gradientStops?.[index] ??
-          (colors.length <= 1 ? 0 : index / (colors.length - 1)),
+          element.gradientStops?.[index] ?? (colors.length <= 1 ? 0 : index / (colors.length - 1)),
         color,
       })),
     );
@@ -172,7 +171,9 @@ export function appearanceToLegacyPatch(appearance: Appearance): Partial<EngineE
     gradientStops: undefined,
   };
 
-  const fill = normalized.items.find((item): item is FillAppearance => item.kind === "fill" && item.visible);
+  const fill = normalized.items.find(
+    (item): item is FillAppearance => item.kind === "fill" && item.visible,
+  );
   if (fill) {
     patch.fillStyle = fill.fillStyle;
     if (fill.paint.type === "solid") {

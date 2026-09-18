@@ -16,15 +16,15 @@ describe("chatMarkdownLite", () => {
 
   it("parses headings, lists, and skips horizontal rules", () => {
     const blocks = parseChatMarkdown(
-      ["### 1. ภาพรวม", "โพสเตอร์ 1:1", "", "---", "", "- โลโก้", "- ส่วนลด **50 บาท**"].join(
-        "\n",
-      ),
+      ["### 1. ภาพรวม", "โพสเตอร์ 1:1", "", "---", "", "- โลโก้", "- ส่วนลด **50 บาท**"].join("\n"),
     );
     expect(blocks[0]).toMatchObject({ type: "heading", level: 3 });
     expect(blocks.some((b) => b.type === "list")).toBe(true);
-    expect(blocks.some((b) => b.type === "heading" && "inlines" in b && b.inlines[0]?.text.includes("ภาพรวม"))).toBe(
-      true,
-    );
+    expect(
+      blocks.some(
+        (b) => b.type === "heading" && "inlines" in b && b.inlines[0]?.text.includes("ภาพรวม"),
+      ),
+    ).toBe(true);
     const list = blocks.find((b) => b.type === "list");
     expect(list?.type === "list" && list.items).toHaveLength(2);
   });

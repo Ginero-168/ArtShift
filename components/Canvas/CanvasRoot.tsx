@@ -57,7 +57,10 @@ export type CanvasRootHandle = {
   /** Programmatically set zoom scale centered on the viewport. */
   setZoom: (scale: number) => void;
   /** Zoom so a world-space rect fills the viewport (with padding). */
-  fitWorldRect: (rect: { x: number; y: number; width: number; height: number }, padding?: number) => void;
+  fitWorldRect: (
+    rect: { x: number; y: number; width: number; height: number },
+    padding?: number,
+  ) => void;
 };
 
 type Props = {

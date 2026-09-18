@@ -1,19 +1,19 @@
 "use client";
 
 import {
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import RasterSelectionOverlay from "@/components/Canvas/RasterSelectionOverlay";
 import { createEditorController } from "@/lib/engine/editorController";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
-import type { ImageElement } from "@/lib/engine/types";
 import { pointerPressure } from "@/lib/engine/toolBehavior";
+import type { ImageElement } from "@/lib/engine/types";
 import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { createRasterRetouchEdit } from "@/lib/raster/retouch";
@@ -21,9 +21,9 @@ import {
   appendRasterPolygonPoint,
   canCommitRasterPolygon,
   createRasterSelectionOperation,
-  selectionModeFromModifiers,
   type RasterSelectionMode,
   type RasterSelectionShape,
+  selectionModeFromModifiers,
 } from "@/lib/raster/selection";
 import {
   createMagicWandSelectionShape,
@@ -33,7 +33,7 @@ import {
   selectionShapeFromPoints,
 } from "@/lib/raster/selectionInteraction";
 import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
-import { renderElement, type RenderCtx } from "@/lib/renderer/canvas";
+import { type RenderCtx, renderElement } from "@/lib/renderer/canvas";
 
 type LocalPoint = [number, number];
 
@@ -373,7 +373,11 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
 
     event.currentTarget.setPointerCapture(event.pointerId);
 
-    if (studioTool === "rasterBrush" || studioTool === "rasterPencil" || studioTool === "rasterEraser") {
+    if (
+      studioTool === "rasterBrush" ||
+      studioTool === "rasterPencil" ||
+      studioTool === "rasterEraser"
+    ) {
       const isPencil = studioTool === "rasterPencil";
       const isEraser = studioTool === "rasterEraser";
       const pressure = pointerPressure(event);
@@ -391,11 +395,19 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       return;
     }
 
-    if (studioTool === "rasterMarquee" || studioTool === "rasterEllipse" || studioTool === "rasterLasso") {
+    if (
+      studioTool === "rasterMarquee" ||
+      studioTool === "rasterEllipse" ||
+      studioTool === "rasterLasso"
+    ) {
       dragRef.current = {
         kind: "selection",
         shape:
-          studioTool === "rasterMarquee" ? "rect" : studioTool === "rasterEllipse" ? "ellipse" : "lasso",
+          studioTool === "rasterMarquee"
+            ? "rect"
+            : studioTool === "rasterEllipse"
+              ? "ellipse"
+              : "lasso",
         localPoints: [local],
         mode: selectionModeFromModifiers(event),
       };
@@ -661,13 +673,11 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
             position: "relative",
             lineHeight: 0,
             borderRadius: 4,
-            boxShadow:
-              "0 0 0 1px var(--stroke, #d1d5db), 0 8px 28px rgba(15, 23, 42, 0.12)",
+            boxShadow: "0 0 0 1px var(--stroke, #d1d5db), 0 8px 28px rgba(15, 23, 42, 0.12)",
             overflow: "hidden",
             // Checkerboard shows through transparent pixels (canvas is cleared, not filled).
             backgroundColor: "#ffffff",
-            backgroundImage:
-              "repeating-conic-gradient(#d1d5db 0% 25%, #ffffff 0% 50%)",
+            backgroundImage: "repeating-conic-gradient(#d1d5db 0% 25%, #ffffff 0% 50%)",
             backgroundSize: "16px 16px",
           }}
         >

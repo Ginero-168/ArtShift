@@ -1,4 +1,4 @@
-import { readFile, access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
@@ -15,10 +15,7 @@ const SAFE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/;
 /** Generous — Helper can request dozens of chips at once. */
 const limiter = new RateLimiter(240, 60_000);
 
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const ip = getClientIp(req);
   const limit = limiter.check(`thumb-file:${ip}`);
   if (!limit.ok) {

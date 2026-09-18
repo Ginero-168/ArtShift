@@ -1,10 +1,19 @@
-import type { ConvertToBriefData, BriefPartition, BriefDivider, BriefObject, BriefText } from "./briefParser";
+import type {
+  BriefDivider,
+  BriefObject,
+  BriefPartition,
+  BriefText,
+  ConvertToBriefData,
+} from "./briefParser";
 
 /**
  * Helper to convert RGB to HEX
  */
 function rgbToHex(r: number, g: number, b: number): string {
-  const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  const toHex = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -96,7 +105,10 @@ function sampleRegionColor(
   y2: number,
   pastelFactor = 0.72,
 ): string {
-  let r = 0, g = 0, b = 0, count = 0;
+  let r = 0,
+    g = 0,
+    b = 0,
+    count = 0;
   for (let y = y1; y < y2; y += 2) {
     for (let x = x1; x < x2; x += 2) {
       const idx = (y * sampleW + x) * 4;
@@ -217,15 +229,24 @@ export async function analyzeImageDynamic(
 
           // Sample colors from each partition
           const leftColor = sampleRegionColor(pixels, sampleW, 0, 0, verticalSplit.splitX, sampleH);
-          const rightColor = sampleRegionColor(pixels, sampleW, verticalSplit.splitX, 0, sampleW, sampleH);
+          const rightColor = sampleRegionColor(
+            pixels,
+            sampleW,
+            verticalSplit.splitX,
+            0,
+            sampleW,
+            sampleH,
+          );
 
           // Search for badge in the upper-right quadrant
           const badge = findBadgeCluster(
-            pixels, sampleW, sampleH,
+            pixels,
+            sampleW,
+            sampleH,
             Math.floor(sampleW * 0.65),
             Math.floor(sampleH * 0.05),
             Math.floor(sampleW * 0.98),
-            Math.floor(sampleH * 0.50),
+            Math.floor(sampleH * 0.5),
           );
 
           const badgeRadius = Math.max(14, Math.round(sampleW * 0.08));
@@ -313,11 +334,20 @@ export async function analyzeImageDynamic(
 
         // Sample colors
         const topColor = sampleRegionColor(pixels, sampleW, 0, 0, sampleW, horizontalSplit.splitY);
-        const bottomColor = sampleRegionColor(pixels, sampleW, 0, horizontalSplit.splitY, sampleW, sampleH);
+        const bottomColor = sampleRegionColor(
+          pixels,
+          sampleW,
+          0,
+          horizontalSplit.splitY,
+          sampleW,
+          sampleH,
+        );
 
         // Search for badge in the upper-right area
         const badge = findBadgeCluster(
-          pixels, sampleW, sampleH,
+          pixels,
+          sampleW,
+          sampleH,
           Math.floor(sampleW * 0.6),
           Math.floor(sampleH * 0.05),
           Math.floor(sampleW * 0.98),

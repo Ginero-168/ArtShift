@@ -149,8 +149,7 @@ function parseDirectorInput(
         : isRecord(candidate.ref) && typeof candidate.ref.objectId === "string"
           ? candidate.ref.objectId
           : undefined;
-    const objectId =
-      rawObjectId && isSafeString(rawObjectId, 200) ? rawObjectId.trim() : undefined;
+    const objectId = rawObjectId && isSafeString(rawObjectId, 200) ? rawObjectId.trim() : undefined;
     referenceAnalyses.push({
       ...(displayName ? { displayName } : {}),
       ...(objectId ? { objectId } : {}),

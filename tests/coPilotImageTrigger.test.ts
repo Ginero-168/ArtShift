@@ -296,13 +296,9 @@ describe("AI Co-Pilot image commands", () => {
       });
     }
 
-    await executeCoPilotInstruction(
-      "สร้างรูปอิงจาก @[Cat Photo:cat-elem-1] ให้ใส่แว่นกันแดด",
-      undefined,
-      {
-        cloudConsent: true,
-      },
-    );
+    await executeCoPilotInstruction("สร้างรูปอิงจาก @[Cat Photo:cat-elem-1] ให้ใส่แว่นกันแดด", undefined, {
+      cloudConsent: true,
+    });
 
     expect(generateImageMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -341,13 +337,9 @@ describe("AI Co-Pilot image commands", () => {
       });
     }
 
-    await executeCoPilotInstruction(
-      "แก้ไขรูป @[Cat Photo] ปรับพื้นหลังเป็นชายหาด",
-      undefined,
-      {
-        cloudConsent: true,
-      },
-    );
+    await executeCoPilotInstruction("แก้ไขรูป @[Cat Photo] ปรับพื้นหลังเป็นชายหาด", undefined, {
+      cloudConsent: true,
+    });
 
     expect(generateImageMock).toHaveBeenCalledWith(
       expect.objectContaining({

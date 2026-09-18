@@ -4,6 +4,7 @@
  * agree on the shape of a "new" element.
  */
 
+import { DEFAULT_THAI_FONT_FAMILY } from "@/lib/fonts";
 import { getTextMinimumHeight, getTextSafePadding } from "./textLayout";
 import type {
   ArrowElement,
@@ -26,7 +27,6 @@ import type {
   VectorPathElement,
 } from "./types";
 import { recomputeVectorPathBounds } from "./vectorPath";
-import { DEFAULT_THAI_FONT_FAMILY } from "@/lib/fonts";
 
 let _seedCounter = 1;
 function nextSeed(): number {

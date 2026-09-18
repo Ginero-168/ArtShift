@@ -1699,4 +1699,3 @@ export const IconBrief = (p: Props) =>
     </>,
     p,
   );
-

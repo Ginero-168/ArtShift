@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   IconChevronDown,
   IconEye,
@@ -12,10 +12,7 @@ import {
 } from "@/components/icons";
 import { getElementDefaultName } from "@/lib/engine/layers";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
-import {
-  buildLayerHierarchy,
-  type LayerTreeNode,
-} from "@/lib/engine/selectionGroups";
+import { buildLayerHierarchy, type LayerTreeNode } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, LayerMode } from "@/lib/engine/types";
 import AutoLayoutAction from "./AutoLayoutAction";

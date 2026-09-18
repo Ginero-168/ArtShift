@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  type ComposerImageRef,
   resolveComposerImageRef,
   uniqueComposerImageRefsByName,
-  type ComposerImageRef,
 } from "@/lib/ai/orchestration/imageReferences";
 
-function ref(partial: Partial<ComposerImageRef> & Pick<ComposerImageRef, "objectId" | "fileId" | "displayName">): ComposerImageRef {
+function ref(
+  partial: Partial<ComposerImageRef> &
+    Pick<ComposerImageRef, "objectId" | "fileId" | "displayName">,
+): ComposerImageRef {
   return {
     elementVersion: 1,
     sourceWidth: 100,
@@ -35,11 +38,7 @@ describe("resolveComposerImageRef", () => {
   });
 
   it("prefers exact objectId even when another image shares the display name", () => {
-    const resolved = resolveComposerImageRef("uuid-photo-b", "Photo", [
-      photoA,
-      photoB,
-      sushi,
-    ]);
+    const resolved = resolveComposerImageRef("uuid-photo-b", "Photo", [photoA, photoB, sushi]);
     expect(resolved.objectId).toBe("uuid-photo-b");
     expect(resolved.fileId).toBe("file-photo-b");
   });
@@ -52,10 +51,7 @@ describe("resolveComposerImageRef", () => {
   });
 
   it("resolves a unique bare name to that single image", () => {
-    const resolved = resolveComposerImageRef("ภาพเซตซูชิ", "ภาพเซตซูชิ", [
-      photoA,
-      sushi,
-    ]);
+    const resolved = resolveComposerImageRef("ภาพเซตซูชิ", "ภาพเซตซูชิ", [photoA, sushi]);
     expect(resolved.fileId).toBe("file-sushi");
     expect(resolved.objectId).toBe("uuid-sushi");
   });

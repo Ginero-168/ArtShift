@@ -44,7 +44,12 @@ const TOOLS: Array<{
     icon: IconBrush,
   },
   { id: "rasterHealing", label: "Heal", title: "Healing brush (J)", icon: IconHealing },
-  { id: "rasterClone", label: "Clone", title: "Clone stamp · Alt-click source (S)", icon: IconClone },
+  {
+    id: "rasterClone",
+    label: "Clone",
+    title: "Clone stamp · Alt-click source (S)",
+    icon: IconClone,
+  },
 ];
 
 export default function RasterStudioToolbar() {
