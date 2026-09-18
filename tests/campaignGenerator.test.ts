@@ -66,4 +66,25 @@ describe("Campaign Batch Slide Generator", () => {
     expect(mockupEl).toBeDefined();
     expect(mockupEl?.type).toBe("bookMockup");
   });
+
+  it("does not invent a sale price or discount percent when catalog data is missing", async () => {
+    const channel = [CAMPAIGN_CHANNELS[0]];
+    const noPrice: BookCampaignRecord[] = [
+      {
+        id: "book-no-price",
+        isbn: "9786161852099",
+        title: "ไม่มีราคา",
+        author: "ผู้แต่ง",
+        coverUrl: DEFAULT_BOOK_COVER_DATA_URL,
+      },
+    ];
+
+    const res = await generateCampaignBatch(noPrice, "sale-promo", channel, "vibrant");
+    const texts = res[0].slide.elements
+      .filter((el) => el.type === "text")
+      .map((el) => (el.type === "text" ? el.text : ""));
+    expect(texts.some((text) => text.includes("฿249"))).toBe(false);
+    expect(texts.some((text) => text.includes("15%"))).toBe(false);
+    expect(texts.some((text) => text.includes("ลดพิเศษ"))).toBe(true);
+  });
 });

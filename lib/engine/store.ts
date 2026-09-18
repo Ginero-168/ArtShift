@@ -1780,7 +1780,9 @@ export const useEngine = create<EngineState>((set, get) => {
         ),
         selectedIds: new Set(),
         activeRasterSelection:
-          transition.rasterSelection === undefined ? null : transition.rasterSelection,
+          transition.rasterSelection === undefined
+            ? s.activeRasterSelection
+            : transition.rasterSelection,
       });
     },
     redo: () => {
@@ -1799,7 +1801,9 @@ export const useEngine = create<EngineState>((set, get) => {
         ),
         selectedIds: new Set(),
         activeRasterSelection:
-          transition.rasterSelection === undefined ? null : transition.rasterSelection,
+          transition.rasterSelection === undefined
+            ? s.activeRasterSelection
+            : transition.rasterSelection,
       });
     },
 

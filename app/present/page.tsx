@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loadEngine } from "@/lib/engine/persist";
+import { getImageCache } from "@/lib/engine/imageCache";
 import type { EngineDoc } from "@/lib/engine/types";
+import { loadPresentDocument } from "@/lib/project/presentProject";
+import { projectStore } from "@/lib/project/projectStore";
 import { renderSlide } from "@/lib/renderer/canvas";
 
 export default function PresentPage() {
@@ -13,10 +15,21 @@ export default function PresentPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    loadEngine().then((result) => {
-      if (result.status === "loaded" || result.status === "recovered") setDoc(result.doc);
-      else if (result.status === "corrupt") setLoadError(result.message);
-      else setLoadError("No Artwork is available to present.");
+    const projectId = new URLSearchParams(window.location.search).get("projectId");
+    loadPresentDocument(projectStore, projectId).then((result) => {
+      if (result.status === "loaded") {
+        setDoc(result.doc);
+        return;
+      }
+      if (result.status === "missing") {
+        setLoadError(
+          `Project ${result.projectId} was not found in local storage. Open it from Projects, then present again.`,
+        );
+        return;
+      }
+      setLoadError(
+        "No project is available to present. Open a project from /projects first — Present reads the last opened ArtShift project, not the legacy workspace.",
+      );
     });
   }, []);
 
@@ -37,7 +50,6 @@ export default function PresentPage() {
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Fit slide to viewport.
     const pad = 40;
     const scale = Math.min((w - pad) / slide.width, (h - pad) / slide.height);
     const tx = (w - slide.width * scale) / 2;
@@ -48,7 +60,9 @@ export default function PresentPage() {
     ctx.save();
     ctx.translate(tx, ty);
     ctx.scale(scale, scale);
-    renderSlide(slide, { ctx, images: new Map() }, slide.width, slide.height);
+    renderSlide(slide, { ctx, images: getImageCache() }, slide.width, slide.height, {
+      showFrames: true,
+    });
     ctx.restore();
   }, [slide]);
 
@@ -66,7 +80,7 @@ export default function PresentPage() {
         e.preventDefault();
         setIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === "Escape") {
-        window.location.href = "/";
+        window.location.href = "/projects";
       }
     }
     window.addEventListener("keydown", onKey);
@@ -79,13 +93,22 @@ export default function PresentPage() {
         style={{
           height: "100vh",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           background: "#111",
           color: "#fff",
+          gap: 16,
+          padding: 24,
+          textAlign: "center",
         }}
       >
-        {loadError ?? "Loading…"}
+        <p style={{ maxWidth: 480, lineHeight: 1.5 }}>{loadError ?? "Loading…"}</p>
+        {loadError ? (
+          <a href="/projects" style={{ color: "#93c5fd", fontSize: 14 }}>
+            Back to Projects
+          </a>
+        ) : null}
       </div>
     );
   }
@@ -114,7 +137,6 @@ export default function PresentPage() {
     >
       <canvas ref={canvasRef} style={{ position: "absolute", inset: 0 }} />
 
-      {/* Controls */}
       <div
         style={{
           position: "absolute",
@@ -165,7 +187,7 @@ export default function PresentPage() {
         </button>
         <button
           onClick={() => {
-            window.location.href = "/";
+            window.location.href = "/projects";
           }}
           style={{
             background: "none",

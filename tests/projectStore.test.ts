@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createImage } from "@/lib/engine/factory";
 import { createEmptyEngineDoc } from "@/lib/engine/store";
 import { createTestProjectStore, type ProjectMetadata } from "@/lib/project/projectStore";
 
@@ -171,5 +172,28 @@ describe("Multi-Project Store & Local Isolation", () => {
     const loaded = await store.loadProjectDocument(project.id);
     expect(loaded!.doc.title).toBe("kept");
     expect(loaded!.doc.updatedAt).toBe(newer.updatedAt);
+  });
+
+  it("fails save with an error status when a live image binary is missing", async () => {
+    const store = createTestProjectStore();
+    const project = await store.createProject({ name: "Needs images" });
+    const doc = (await store.loadProjectDocument(project.id))!.doc;
+    doc.slides[0].elements.push(
+      createImage({
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 80,
+        fileId: "not-in-files-map",
+        naturalWidth: 80,
+        naturalHeight: 80,
+      }),
+    );
+
+    const result = await store.saveProjectDocument(project.id, doc);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toMatch(/missing image data/);
+    }
   });
 });

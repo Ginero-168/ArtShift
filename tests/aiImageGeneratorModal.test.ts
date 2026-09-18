@@ -6,8 +6,9 @@ const source = readFileSync("components/AI/AIImageGeneratorModal.tsx", "utf8");
 describe("AI image studio orchestration seam", () => {
   it("routes generation through the context-aware copilot instead of direct Canvas mutation", () => {
     expect(source).toContain("executeCoPilotInstruction");
-    expect(source).toContain("window.confirm");
-    expect(source).toContain("Gemini 3 Flash Creative Director");
+    expect(source).toContain("ensureCloudConsent");
+    expect(source).toContain("cloudConsent: consent");
+    expect(source).not.toContain("const consent = true");
     expect(source).not.toContain("generateAIImage");
     expect(source).not.toContain("addElement(");
     expect(source).not.toContain("enqueueAssetAnalysis(");

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import PptxGenJS from "pptxgenjs";
-import { getPptxSlideTransform } from "@/lib/engine/exportPPTX";
+import { getPptxClippedChildIds, getPptxSlideTransform } from "@/lib/engine/exportPPTX";
 import { getRenderableElements } from "@/lib/engine/layers";
 import { PPTX_EXPORT_LIMITS, parsePptxExportPayload } from "@/lib/engine/pptxPayload";
 import type { ImageElement, TextElement } from "@/lib/engine/types";
@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
       const scaled = (value: number) => value * transform.scale;
 
       const ordered = getRenderableElements(slide);
+      const clippedChildIds = getPptxClippedChildIds(slide);
 
       for (const el of ordered) {
-        if (el.type === "frame") continue;
+        if (clippedChildIds.has(el.id)) continue;
 
         const common = {
           x: px(tx(el.x)),

@@ -10,6 +10,7 @@ vi.mock("@/lib/server/ai/runtime", () => ({
 vi.mock("@/lib/server/ai/userCredentials", () => ({
   getUserAccount: () => accountMock.value,
   getSessionReplicateToken: () => undefined,
+  getSessionOpenAiToken: () => undefined,
 }));
 
 import { GPT_IMAGE_2_EXECUTION_TIMEOUT_MS } from "@/lib/ai/runtimeLimits";

@@ -1,16 +1,36 @@
 import type { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   getAccountReplicateToken,
   getCredentialStatus,
+  getOpsEnvOpenAiToken,
+  getOpsEnvReplicateToken,
+  getSessionOpenAiToken,
   getSessionReplicateToken,
   validateReplicateApiKey,
 } from "@/lib/server/ai/userCredentials";
-import { AUTH_SESSION_COOKIE } from "@/lib/server/auth/session";
+import { resetAccountStoreForTests, upsertGoogleAccount } from "@/lib/server/auth/accountStore";
+import { setAuthCookie } from "@/lib/server/auth/session";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { NextResponse } from "next/server";
 
 const TOKEN = `r8_${"c".repeat(37)}`;
+let storeDir = "";
 
 describe("user Replicate credentials", () => {
+  beforeAll(() => {
+    storeDir = mkdtempSync(join(tmpdir(), "artshift-byok-cred-"));
+    process.env.ARTSHIFT_ACCOUNT_STORE_PATH = join(storeDir, "store.json");
+  });
+
+  afterAll(() => {
+    resetAccountStoreForTests();
+    delete process.env.ARTSHIFT_ACCOUNT_STORE_PATH;
+    rmSync(storeDir, { recursive: true, force: true });
+  });
+
   it("validates the Replicate token format without normalization", () => {
     expect(validateReplicateApiKey(TOKEN)).toEqual({ ok: true, value: TOKEN });
     expect(validateReplicateApiKey(` ${TOKEN}`)).toMatchObject({ ok: false });
@@ -40,10 +60,42 @@ describe("user Replicate credentials", () => {
       else process.env.REPLICATE_API_TOKEN = previous;
     }
   });
+
+  it("does not return deploy env tokens for a signed-in account without BYOK", () => {
+    const previousReplicate = process.env.REPLICATE_API_TOKEN;
+    const previousOpenAi = process.env.OPENAI_API_KEY;
+    process.env.REPLICATE_API_TOKEN = "r8_env_must_not_leak";
+    process.env.OPENAI_API_KEY = "sk-env-must-not-leak";
+    try {
+      const account = upsertGoogleAccount({
+        sub: "byok-no-key",
+        email: "byok@example.com",
+        emailVerified: true,
+      });
+      const set = vi.fn();
+      setAuthCookie({ cookies: { set } } as unknown as NextResponse, account.id);
+      const cookie = set.mock.calls[0]?.[0] as { name: string; value: string };
+      const authed = request(cookie.name, cookie.value);
+
+      expect(getSessionReplicateToken(authed)).toBeUndefined();
+      expect(getSessionOpenAiToken(authed)).toBeUndefined();
+      expect(getAccountReplicateToken(authed)).toBeUndefined();
+      expect(getOpsEnvReplicateToken()).toBe("r8_env_must_not_leak");
+      expect(getOpsEnvOpenAiToken()).toBe("sk-env-must-not-leak");
+    } finally {
+      if (previousReplicate === undefined) delete process.env.REPLICATE_API_TOKEN;
+      else process.env.REPLICATE_API_TOKEN = previousReplicate;
+      if (previousOpenAi === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousOpenAi;
+    }
+  });
 });
 
-function request(): NextRequest {
+function request(cookieName?: string, cookieValue?: string): NextRequest {
   return {
-    cookies: { get: (name: string) => (name === AUTH_SESSION_COOKIE ? undefined : undefined) },
+    cookies: {
+      get: (name: string) =>
+        cookieName && name === cookieName ? { name, value: cookieValue } : undefined,
+    },
   } as unknown as NextRequest;
 }

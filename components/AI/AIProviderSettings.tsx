@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  hasStoredCloudConsent,
+  setAccountCloudConsent,
+} from "@/lib/ai/cloudConsent";
 
 type AuthUser = {
   id: string;
@@ -44,12 +48,14 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
   const [busyProvider, setBusyProvider] = useState<"replicate" | "openai" | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [cloudConsent, setCloudConsent] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Account bootstrap runs once on mount.
   useEffect(() => {
     let cancelled = false;
     const callbackMessage = readCallbackMessage();
     if (callbackMessage && !cancelled) setMessage(callbackMessage);
+    setCloudConsent(hasStoredCloudConsent());
     void loadAccount().finally(() => {
       if (!cancelled) setBusy(false);
     });
@@ -353,6 +359,39 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
             Key จะถูกเข้ารหัสบน server และผูกกับ Google Account ไม่เก็บใน Browser storage หรือส่งเข้า
             Prompt
           </p>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              marginTop: 12,
+              padding: "8px 9px",
+              borderRadius: 7,
+              background: cloudConsent ? "#ecfdf5" : "#f8fafc",
+              border: `1px solid ${cloudConsent ? "#a7f3d0" : "#e2e8f0"}`,
+              fontSize: 10,
+              color: "#334155",
+              lineHeight: 1.45,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={cloudConsent}
+              onChange={(event) => {
+                const granted = event.currentTarget.checked;
+                setCloudConsent(granted);
+                setAccountCloudConsent(granted);
+              }}
+              style={{ marginTop: 2 }}
+              aria-label="Allow sending prompts and images to cloud AI"
+            />
+            <span>
+              อนุญาตให้ส่ง prompt และภาพไปยัง cloud AI (Creative Director / Image Model)
+              โดยไม่ต้องยืนยันทุกครั้ง
+            </span>
+          </label>
         </>
       )}
 

@@ -91,6 +91,8 @@ export async function POST(req: NextRequest) {
         profile: "quality",
         accountId: account.id,
         signal: req.signal,
+        cloudConsent: true,
+        allowFallback: false,
         reasoning: { mode: "off" },
       },
     );

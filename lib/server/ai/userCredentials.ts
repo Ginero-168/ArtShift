@@ -64,24 +64,43 @@ export function getAccountReplicateToken(request: NextRequest): string | undefin
   }
 }
 
+/**
+ * End-user Replicate credential for the signed-in account.
+ * Never falls back to `process.env.REPLICATE_API_TOKEN`.
+ */
 export function getSessionReplicateToken(request: NextRequest): string | undefined {
-  const accountToken = getAccountReplicateToken(request);
-  if (accountToken) return accountToken;
-  const account = getAuthenticatedAccount(request);
-  if (!account) return undefined;
-  return process.env.REPLICATE_API_TOKEN;
+  return getAccountReplicateToken(request);
 }
 
+/**
+ * End-user OpenAI credential for the signed-in account.
+ * Never falls back to `process.env.OPENAI_API_KEY`.
+ */
 export function getSessionOpenAiToken(request: NextRequest): string | undefined {
   const account = getAuthenticatedAccount(request);
   if (!account) return undefined;
   try {
-    const token = readOpenAiApiKey(account.id);
-    if (token) return token;
+    return readOpenAiApiKey(account.id) || undefined;
   } catch {
-    // fallback
+    return undefined;
   }
-  return process.env.OPENAI_API_KEY;
+}
+
+/**
+ * Ops/deploy-only env token. Do not call from end-user AI routes.
+ * Used by the unscoped server runtime (`getServerAiRuntime()` with no account).
+ */
+export function getOpsEnvReplicateToken(): string | undefined {
+  const token = process.env.REPLICATE_API_TOKEN?.trim();
+  return token || undefined;
+}
+
+/**
+ * Ops/deploy-only env token. Do not call from end-user AI routes.
+ */
+export function getOpsEnvOpenAiToken(): string | undefined {
+  const token = process.env.OPENAI_API_KEY?.trim();
+  return token || undefined;
 }
 
 export function getCredentialStatus(request: NextRequest): CredentialStatus {
