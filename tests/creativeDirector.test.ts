@@ -85,6 +85,8 @@ describe("gpt-oss-120b Creative Director", () => {
     expect(CREATIVE_DIRECTOR_SYSTEM).toContain("READABILITY FORMAT");
     expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Do NOT use # ## ### markdown headings");
     expect(CREATIVE_DIRECTOR_SYSTEM).toContain("Avoid a separate wall-of-text");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("MIX / FUSE PROTOCOL");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("never kind: answer");
   });
 
   it("always executes the brain on the quality profile", async () => {

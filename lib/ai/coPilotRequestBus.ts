@@ -32,6 +32,6 @@ export function subscribeCoPilotExternalTurn(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Default Mix brief — analyze refs and fuse into one new image (not a collage). */
+/** Default Mix brief — fuse refs into one new image immediately (not analysis-only). */
 export const IMAGE_MIX_PROMPT =
-  "ผสมภาพที่เลือกให้เป็นภาพใหม่ภาพเดียว วิเคราะห์จุดเด่นของแต่ละภาพ (หัวเรื่อง สไตล์ แสง สี องค์ประกอบ) แล้วรวมจุดที่เข้ากันได้ดีที่สุดให้กลมกลืน เป็นฉากเดียวที่สมดุล เก็บเอกลักษณ์สำคัญจากทุกภาพต้นทางไว้ ไม่ทำคอลลาจ แบ่งครึ่งจอ หรือวางภาพข้างกัน";
+  "สร้างภาพใหม่ภาพเดียวทันทีโดยผสมภาพที่เลือกทั้งหมดเข้าด้วยกัน ให้เป็นฉากเดียวที่กลมกลืน สมดุล เก็บเอกลักษณ์สำคัญจากทุกภาพต้นทาง (หัวเรื่อง สไตล์ แสง สี องค์ประกอบ) ไว้ในผลลัพธ์เดียวกัน ห้ามคอลลาจ ห้ามแบ่งครึ่งจอ ห้ามวางภาพข้างกัน และห้ามตอบแค่วิเคราะห์โดยไม่สร้างภาพ";

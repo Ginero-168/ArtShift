@@ -348,7 +348,9 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "For supported Canvas edits, call propose_design_plan with exact current ids and a complete atomic command plan. Ask one focused clarification only when a missing fact materially changes the result.",
   "For image creation or image editing, call propose_creative_direction. For an answer that needs no execution, return answer. Never return competing plans or call both planning tools in one turn.",
   "IMAGE ANALYSIS ANSWER PROTOCOL (when the user asks to analyze / describe / inventory an attached image — e.g. 'วิเคราะห์รูปนี้', 'มีอะไรบ้าง', 'อ่านข้อความในรูป', 'what's in this image'):",
-  "  - Return kind: answer (do NOT start image generation).",
+  "  - ONLY when the request is analysis/description alone (no create/mix/generate/edit).",
+  "  - If the same message also asks to สร้าง / ผสม / Mix / generate / create / compose / แก้ไข a new or fused image: IGNORE this protocol — choose image_generator or image_editor and generate immediately. Use Vision only as planning evidence inside refinedPrompt.",
+  "  - Return kind: answer (do NOT start image generation) for analysis-only asks.",
   "  - Use Vision OCR + caption + objects as ground truth. Prefer exact visible text over paraphrase. Never invent text that Vision did not report.",
   "  - READABILITY FORMAT (match a clean chat inventory — scannable, not a dense report dump):",
   "      * Write in the user's language with short section titles such as ภาพรวม / องค์ประกอบในรูป / ฉากหลัง / ข้อสังเกต.",
@@ -360,6 +362,9 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - Content coverage still matters: overview, elements by zone with readable text, background props, contradictions when evidence supports them, then a short offer to edit / recreate / copy text.",
   "  - Do NOT lead with mood/emotion marketing copy. Mood is optional and secondary.",
   "  - Thorough but readable beats a short vibe summary AND beats an over-formatted dump.",
+  "MIX / FUSE PROTOCOL (Option Bar Mix or prompts like 'ผสมภาพ', 'สร้างภาพใหม่จากหลายภาพ'):",
+  "  - Always return kind: image-task with specialist image_generator immediately after Vision — never kind: answer.",
+  "  - Fuse all attached references into ONE cohesive new scene (requestedOutputCount: 1). Preserve key identity cues from each ref. No collage, split-screen, or side-by-side panels.",
   "When the user attaches reference images or name tags, analyze their visual details, detected titles, OCR text, and objects to guide the design. If the user asks to create an ad, poster, or new image referencing the tagged subject, choose image_generator and incorporate the title, key messaging, and visual theme into refinedPrompt.",
   "NAME TAG REFERENCE PRESERVATION & MODIFICATION PROTOCOL:",
   "When the user references one or more canvas elements using Name Tags (e.g. @[Name:id] or @Name or @รูป...):",
@@ -467,6 +472,9 @@ export async function prepareCreativeDirection(
   );
   const wantsImageInventory =
     /วิเคราะห์|มีอะไรบ้าง|อ่านข้อความ|ocr|what's in|what is in|describe (this )?image|inventory/iu.test(
+      input.prompt,
+    ) &&
+    !/(สร้างภาพ|สร้างรูป|ผสมภาพ|ผสมรูป|\bmix\b|generate|create (a |an |the )?(new )?image|compose|fuse|รวมภาพ)/iu.test(
       input.prompt,
     );
   const hasInlineTags = /@[^\s]+/u.test(input.prompt);
@@ -1502,6 +1510,9 @@ function formatReferenceAnalysesForPrompt(
   const roles = inferInlineTagRoles(userPrompt);
   const wantsInventory =
     /วิเคราะห์|มีอะไรบ้าง|อ่านข้อความ|ocr|what's in|what is in|describe (this )?image|inventory/iu.test(
+      userPrompt,
+    ) &&
+    !/(สร้างภาพ|สร้างรูป|ผสมภาพ|ผสมรูป|\bmix\b|generate|create (a |an |the )?(new )?image|compose|fuse|รวมภาพ)/iu.test(
       userPrompt,
     );
   return values

@@ -26,6 +26,8 @@ describe("coPilot external Mix turn", () => {
 
   it("treats the Mix brief as an image-generation prompt", () => {
     expect(isImageGenerationPrompt(IMAGE_MIX_PROMPT)).toBe(true);
+    expect(IMAGE_MIX_PROMPT).toMatch(/สร้างภาพใหม่/);
+    expect(IMAGE_MIX_PROMPT).toMatch(/ห้ามตอบแค่วิเคราะห์/);
   });
 
   it("maps Mix Option Bar labels to the mix icon", () => {
