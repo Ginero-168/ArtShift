@@ -1,5 +1,4 @@
 import { recomputeArrowBindings } from "./binding";
-import { reflowBlockObjects, remapBlockLayersToArtwork } from "./layers";
 import { isMediaElement } from "./mediaLayout";
 import type { EngineElement, EngineSlide, WorkspaceStrictness } from "./types";
 
@@ -7,15 +6,13 @@ export function resizeArtworkSlide(
   slide: EngineSlide,
   width: number,
   height: number,
-  strictness: WorkspaceStrictness,
+  _strictness: WorkspaceStrictness,
   resizeContents = true,
 ): EngineSlide {
   const safeWidth = Math.max(64, Math.min(10000, Math.round(width)));
   const safeHeight = Math.max(64, Math.min(10000, Math.round(height)));
   if (!resizeContents) {
-    return recomputeArrowBindings(
-      reflowBlockObjects(remapBlockLayersToArtwork(slide, safeWidth, safeHeight), strictness),
-    );
+    return recomputeArrowBindings({ ...slide, width: safeWidth, height: safeHeight });
   }
 
   const scaleX = safeWidth / Math.max(1, slide.width);
@@ -47,6 +44,10 @@ export function resizeArtworkSlide(
     }
     return next;
   });
-  const resized = remapBlockLayersToArtwork({ ...slide, elements: scaled }, safeWidth, safeHeight);
-  return recomputeArrowBindings(reflowBlockObjects(resized, strictness));
+  return recomputeArrowBindings({
+    ...slide,
+    width: safeWidth,
+    height: safeHeight,
+    elements: scaled,
+  });
 }

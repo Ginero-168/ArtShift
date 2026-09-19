@@ -39,7 +39,6 @@ import { type AlignMode, alignElements, type DistributeAxis, distributeElements 
 import { recomputeArrowBindings } from "./binding";
 import { createImage } from "./factory";
 import { convertShapeToFrame, isConvertibleShape } from "./frameMask";
-import { blockRectForPlacement, getHexGridDimensions } from "./hexLayout";
 import {
   createHistory,
   type HistoryState,
@@ -51,7 +50,6 @@ import { getCached } from "./imageCache";
 import { createInteractionController, type PreviewPatch } from "./interactionController";
 import {
   addObjectToLayer,
-  commitBlockObject,
   convertLayerMode,
   createEngineLayer,
   getInteractiveElements,
@@ -60,13 +58,10 @@ import {
   moveElementZ,
   moveObjectsToLayer as moveObjectsToLayerModel,
   normalizeDocumentLayers,
-  reflowBlockObjects,
   reorderElementsInSlide,
-  setBlockPlacement,
   setElementLocked,
   setElementVisibility,
   setObjectLayoutMode,
-  toggleObjectLayoutMode,
 } from "./layers";
 import { isMediaElement, normalizeMediaPatch } from "./mediaLayout";
 import { resizeArtworkSlide } from "./resizeArtwork";
@@ -335,8 +330,6 @@ function isVectorTool(tool: Tool): boolean {
 }
 
 function newSlide(name: string): EngineSlide {
-  // Absolute placement is the least surprising default for a precision editor.
-  // Block layout remains available as an explicit Layer-level behavior.
   const layer = createEngineLayer("free", { name: "Free layer 1" });
   return {
     id: crypto.randomUUID(),
@@ -394,7 +387,7 @@ export const useEngine = create<EngineState>((set, get) => {
     tool: "select" as Tool,
     clipboard: null as EngineElement[] | null,
     history: createHistory(),
-    showHexGrid: true,
+    showHexGrid: false,
     layerFilter: "all" as LayerFilter,
     smartArrangePreview: null,
     activeGhostOverlay: null,
@@ -699,32 +692,20 @@ export const useEngine = create<EngineState>((set, get) => {
       });
     },
 
-    commitBlockLayout: (id) => {
-      set((cur) =>
-        mapCurrentSlide(cur, (sl) =>
-          recomputeArrowBindings(commitBlockObject(sl, id, cur.doc.workspaceStrictness)),
-        ),
-      );
+    commitBlockLayout: (_id) => {
+      return;
     },
 
-    updateBlockPlacement: (id, patch) => {
-      const s = get();
-      pushHistory(s.history, s.doc, "resize block");
-      set((cur) =>
-        mapCurrentSlide(cur, (current) =>
-          recomputeArrowBindings(
-            setBlockPlacement(current, id, patch, cur.doc.workspaceStrictness),
-          ),
-        ),
-      );
+    updateBlockPlacement: (_id, _patch) => {
+      return;
     },
 
-    addLayer: (mode) => {
+    addLayer: (_mode) => {
       const s = get();
       const slide = s.currentSlide();
-      const sameModeCount = slide?.layers.filter((layer) => layer.mode === mode).length ?? 0;
-      const layer = createEngineLayer(mode, {
-        name: `${mode === "block" ? "Block" : "Free"} layer ${sameModeCount + 1}`,
+      const sameModeCount = slide?.layers.filter((layer) => layer.mode === "free").length ?? 0;
+      const layer = createEngineLayer("free", {
+        name: `Free layer ${sameModeCount + 1}`,
         z: nextLayerZ(slide?.layers ?? []),
       });
       pushHistory(s.history, s.doc, "add layer");
@@ -757,6 +738,7 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     setLayerMode: (id, mode) => {
+      if (mode === "block") return;
       const s = get();
       const layer = s.currentSlide()?.layers.find((candidate) => candidate.id === id);
       if (!layer || layer.mode === mode) return;
@@ -847,25 +829,12 @@ export const useEngine = create<EngineState>((set, get) => {
       }));
     },
 
-    toggleObjectLayoutMode: (elementId) => {
-      const s = get();
-      const slide = s.currentSlide();
-      if (!slide) return;
-      const element = slide.elements.find((e) => e.id === elementId);
-      if (!element) return;
-      const currentMode = element.layoutMode ?? "block";
-      const nextMode = currentMode === "block" ? "free" : "block";
-      pushHistory(s.history, s.doc, `change to ${nextMode}`);
-      set((cur) =>
-        mapCurrentSlide(cur, (sl) =>
-          recomputeArrowBindings(
-            toggleObjectLayoutMode(sl, elementId, cur.doc.workspaceStrictness),
-          ),
-        ),
-      );
+    toggleObjectLayoutMode: (_elementId) => {
+      return;
     },
 
     setObjectLayoutMode: (elementId, mode) => {
+      if (mode === "block") return;
       const s = get();
       const slide = s.currentSlide();
       if (!slide) return;
@@ -985,9 +954,7 @@ export const useEngine = create<EngineState>((set, get) => {
           workspaceStrictness: effectiveStrictness,
           strictnessLevel: level,
           strictnessValues: nextValues,
-          slides: cur.doc.slides.map((slide) =>
-            recomputeArrowBindings(reflowBlockObjects(slide, effectiveStrictness)),
-          ),
+          slides: cur.doc.slides,
           updatedAt: Date.now(),
         },
       }));
@@ -1011,9 +978,7 @@ export const useEngine = create<EngineState>((set, get) => {
           ...cur.doc,
           workspaceStrictness: effectiveStrictness,
           strictnessValues: nextValues,
-          slides: cur.doc.slides.map((slide) =>
-            recomputeArrowBindings(reflowBlockObjects(slide, effectiveStrictness)),
-          ),
+          slides: cur.doc.slides,
           updatedAt: Date.now(),
         },
       }));
@@ -1826,6 +1791,8 @@ export const useEngine = create<EngineState>((set, get) => {
         smartArrangePreview: null,
         croppingImageId: null,
         activeRasterSelection: null,
+        showHexGrid: false,
+        layerFilter: "all",
       });
     },
     setDocTitle: (title) => {
@@ -1973,13 +1940,12 @@ function nextRevision(previous: number): number {
 function applyElementPatches(
   slide: EngineSlide,
   patches: Array<{ id: string; patch: Partial<EngineElement> }>,
-  strictness: WorkspaceStrictness,
+  _strictness: WorkspaceStrictness,
 ): EngineSlide {
   const normalizedPatches = patches.map((item) => {
     const element = slide.elements.find((candidate) => candidate.id === item.id);
     if (!element) return item;
-    const layer = getLayerForObject(slide, element.id);
-    if (element.type === "text" && layer?.mode !== "block" && !element.containerId) {
+    if (element.type === "text" && !element.containerId) {
       const next = { ...element, ...item.patch } as TextElement;
       return {
         ...item,
@@ -1990,14 +1956,9 @@ function applyElementPatches(
       };
     }
     if (!isMediaElement(element)) return item;
-    const placement = layer?.mode === "block" ? layer.placements[element.id] : undefined;
-    const container = placement
-      ? blockRectForPlacement(placement, slide.width, slide.height)
-      : undefined;
     return {
       ...item,
       patch: normalizeMediaPatch(element, item.patch, {
-        container,
         artwork: { x: 0, y: 0, width: slide.width, height: slide.height },
       }),
     };
@@ -2023,7 +1984,6 @@ function applyElementPatches(
     }
   }
   const allPatches = [...normalizedPatches, ...additionalPatches];
-  const patchedIds = new Set(allPatches.map((item) => item.id));
   const patchedSlide: EngineSlide = {
     ...slide,
     elements: slide.elements.map((element) => {
@@ -2039,7 +1999,7 @@ function applyElementPatches(
         : element;
     }),
   };
-  return recomputeArrowBindings(growBlockTextPlacements(patchedSlide, patchedIds, strictness));
+  return recomputeArrowBindings(patchedSlide);
 }
 
 const VIEWPORT_ONLY_PATCH_KEYS = new Set([
@@ -2061,56 +2021,4 @@ const VIEWPORT_ONLY_PATCH_KEYS = new Set([
 
 function shouldInvalidateElementRender(patch: Partial<EngineElement>): boolean {
   return Object.keys(patch).some((key) => !VIEWPORT_ONLY_PATCH_KEYS.has(key));
-}
-
-function growBlockTextPlacements(
-  slide: EngineSlide,
-  patchedIds: Set<string>,
-  strictness: WorkspaceStrictness,
-): EngineSlide {
-  const grid = getHexGridDimensions(slide.width, slide.height);
-  const byId = new Map(slide.elements.map((element) => [element.id, element]));
-  let changed = false;
-  const heightUpdates = new Map<string, number>();
-  const layers = slide.layers.map((layer) => {
-    if (layer.mode !== "block") return layer;
-    const placements = { ...layer.placements };
-    let layerChanged = false;
-    for (const id of layer.objectIds) {
-      if (!patchedIds.has(id)) continue;
-      const element = byId.get(id);
-      const placement = placements[id];
-      if (element?.type !== "text" || !placement) continue;
-      const rect = blockRectForPlacement(placement, slide.width, slide.height);
-      const requiredHeight = measureTextElementHeight({
-        ...element,
-        width: rect.width,
-        height: rect.height,
-      });
-      let rowSpan = placement.rowSpan;
-      const maxRowSpan = Math.max(1, grid.rows - placement.row);
-      while (
-        rowSpan < maxRowSpan &&
-        blockRectForPlacement({ ...placement, rowSpan }, slide.width, slide.height).height <
-          requiredHeight
-      ) {
-        rowSpan += 1;
-      }
-      if (rowSpan !== placement.rowSpan) {
-        placements[id] = { ...placement, rowSpan };
-        layerChanged = true;
-        changed = true;
-        heightUpdates.set(id, Math.max(element.height, requiredHeight));
-      }
-    }
-    return layerChanged ? { ...layer, placements } : layer;
-  });
-  if (!changed) return slide;
-  const elements = slide.elements.map((element) => {
-    const height = heightUpdates.get(element.id);
-    return height
-      ? ({ ...element, height, version: (element.version ?? 0) + 1 } as EngineElement)
-      : element;
-  });
-  return reflowBlockObjects({ ...slide, layers, elements }, strictness);
 }

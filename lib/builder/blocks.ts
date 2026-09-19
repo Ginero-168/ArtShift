@@ -604,6 +604,7 @@ export function createBuilderBlock(
   const element = makeElement(kind, rect);
   if (isMediaElement(element)) Object.assign(element, fitMediaElementToRect(element, rect));
   element.builderKind = kind;
+  element.layoutMode = "free";
   return element;
 }
 

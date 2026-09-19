@@ -144,7 +144,7 @@ export type BaseElement = {
   };
   /** Non-destructive compositing mode used when drawing this Object. */
   blendMode?: "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
-  /** Layout mode for this individual object: "block" (Hex grid flow) or "free" (freeform floating). */
+  /** @deprecated P0: persisted as "free". Block/hex mode is retired at runtime. */
   layoutMode?: LayerMode;
   /** Human-readable label for this object layer. */
   name?: string;
@@ -408,15 +408,16 @@ export type EngineElementType = EngineElement["type"];
 // ——— Document container ———————————————————————————————————————————
 
 /**
- * A real layer container. Placement behavior, visibility, and locking belong
- * here so any number of objects can move between Block and Free together.
+ * A real layer container. Visibility, locking, and z-order belong here.
+ * P0: `mode` is always "free" after normalize; `placements` is empty.
  */
 export type EngineLayer = {
   id: LayerId;
   name: string;
+  /** @deprecated P0: always "free" after schema v6 normalize. */
   mode: LayerMode;
   objectIds: ElementId[];
-  /** Block placements are keyed by object id; Free layers keep this empty. */
+  /** @deprecated P0: cleared on load. Kept for v1–v5 migration only. */
   placements: Record<ElementId, BlockPlacement>;
   visible: boolean;
   locked: boolean;
@@ -452,4 +453,5 @@ export type EngineDoc = {
   schemaVersion: number;
 };
 
-export const ENGINE_SCHEMA_VERSION = 5;
+/** v6: bake Block/hex placements into Free pixel geometry and stop writing cells. */
+export const ENGINE_SCHEMA_VERSION = 6;

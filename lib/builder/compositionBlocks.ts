@@ -112,7 +112,7 @@ export function createCompositionBlock(
             : "secondary",
       constraints: { preserveAspectRatio: slot.kind === "image" },
     };
-    if (slot.kind === "image") element.layoutMode = "free";
+    element.layoutMode = "free";
     slots[slot.id] = element.id;
     return element;
   });
