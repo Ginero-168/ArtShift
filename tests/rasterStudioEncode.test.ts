@@ -5,6 +5,7 @@ import {
   encodeImageData,
   encodeImageDataToPngDataUrl,
   PNG_DATA_URL_PREFIX,
+  pngDataUrlToArrayBuffer,
   WEBP_DATA_URL_PREFIX,
 } from "@/lib/raster/studio/encodeRevision";
 import {
@@ -22,6 +23,13 @@ describe("Raster Studio Phase 3 encode", () => {
     const bytes = Uint8Array.from([1, 2, 3, 4]);
     expect(arrayBufferToPngDataUrl(bytes.buffer)).toBe(
       `${PNG_DATA_URL_PREFIX}${btoa(String.fromCharCode(1, 2, 3, 4))}`,
+    );
+  });
+
+  it("converts a PNG data URL back to the same bytes", () => {
+    const bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    expect(new Uint8Array(pngDataUrlToArrayBuffer(arrayBufferToPngDataUrl(bytes.buffer)))).toEqual(
+      bytes,
     );
   });
 
