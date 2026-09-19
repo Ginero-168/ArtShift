@@ -393,6 +393,41 @@ describe("GoogleAiAdapter assistant.chat & schema compiler", () => {
       });
     });
 
+    it("requests application/json when jsonObject is set", async () => {
+      let sentBody: Record<string, unknown> = {};
+      globalThis.fetch = vi.fn().mockImplementation(async (_url, init) => {
+        sentBody = JSON.parse((init as RequestInit).body as string);
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: { parts: [{ text: '{"keyword":"Bangkok"}' }] },
+                finishReason: "STOP",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      });
+
+      const adapter = new GoogleAiAdapter("test-key", "gemini-2.5-flash");
+      const result = await adapter.execute({
+        task: "assistant.chat",
+        model: "gemini-2.5-flash",
+        signal: new AbortController().signal,
+        input: {
+          messages: [{ role: "user", content: "Keyword: Bangkok" }],
+          jsonObject: true,
+        },
+        options: { reasoning: { mode: "off" } },
+      });
+
+      expect((sentBody.generationConfig as Record<string, unknown>).responseMimeType).toBe(
+        "application/json",
+      );
+      expect(result.output.text).toBe('{"keyword":"Bangkok"}');
+    });
+
     it("throws POLICY_DENIED when candidate finishReason is SAFETY", async () => {
       globalThis.fetch = vi.fn().mockImplementation(async () => {
         return new Response(

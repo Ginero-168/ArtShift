@@ -312,7 +312,17 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         provider: this.id,
       });
     }
-    const parsed = parseReplicateAssistantOutput(raw, input.tools ?? []);
+    const parsed = input.jsonObject
+      ? {
+          output: {
+            text: raw,
+            stopReason: "end_turn" as const,
+            assistantMessage: { role: "assistant" as const, content: raw },
+            toolCalls: [],
+          },
+          warnings: [] as string[],
+        }
+      : parseReplicateAssistantOutput(raw, input.tools ?? []);
     request.onTextDelta?.(parsed.output.text);
     const metrics = completed.metrics ?? {};
     return {

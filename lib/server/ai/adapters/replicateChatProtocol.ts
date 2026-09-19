@@ -40,15 +40,7 @@ export function renderHarmonyPrompt(input: AiAssistantChatInput): string {
   const developer = [
     input.system?.trim() || "You are the ArtShift in-app design assistant.",
     renderToolSection(input.tools ?? []),
-    [
-      "# ArtShift response contract",
-      "Return exactly one JSON object in the final response and no markdown.",
-      'For a normal reply use {"kind":"text","text":"..."}.',
-      'For tool calls use {"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"exact_tool_name","input":{}}]}.',
-      "When calling propose_creative_direction with image-task, include: summary, refinedPrompt, specialist, capability, modelAlias, knowledgeSkillIds, reviewCriteria, search, outputCount.",
-      "Only call a tool listed in the ArtShift tools section.",
-      "Never mutate the document yourself; return a proposal/tool call for ArtShift to validate.",
-    ].join("\n"),
+    renderResponseContract(input, "harmony"),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -64,19 +56,42 @@ export function renderGeminiSystemInstruction(input: AiAssistantChatInput): stri
   return [
     input.system?.trim() || "You are the ArtShift in-app design assistant.",
     renderToolSection(input.tools ?? []),
-    [
-      "# ArtShift response contract",
-      "CRITICAL: You MUST always produce a non-empty text response. Never return an empty output under any circumstances.",
-      "Return exactly one JSON object in the final response and no markdown.",
-      'For a normal reply use {"kind":"text","text":"..."}.',
-      'For tool calls use {"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"exact_tool_name","input":{}}]}.',
-      "Only call a tool listed in the ArtShift tools section.",
-      "Never mutate the document yourself; return a proposal/tool call for ArtShift to validate.",
-      'If uncertain, always return at minimum {"kind":"text","text":"I understand your request."}.',
-    ].join("\n"),
+    renderResponseContract(input, "gemini"),
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+function renderResponseContract(input: AiAssistantChatInput, flavor: "gemini" | "harmony"): string {
+  if (input.jsonObject) {
+    return [
+      "# ArtShift JSON response contract",
+      "Return exactly one JSON object that satisfies the instructions above.",
+      "No markdown fences, no prose before or after the object.",
+      'Do not wrap the object in an ArtShift {"kind":"text","text":"..."} envelope.',
+    ].join("\n");
+  }
+  if (flavor === "harmony") {
+    return [
+      "# ArtShift response contract",
+      "Return exactly one JSON object in the final response and no markdown.",
+      'For a normal reply use {"kind":"text","text":"..."}.',
+      'For tool calls use {"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"exact_tool_name","input":{}}]}.',
+      "When calling propose_creative_direction with image-task, include: summary, refinedPrompt, specialist, capability, modelAlias, knowledgeSkillIds, reviewCriteria, search, outputCount.",
+      "Only call a tool listed in the ArtShift tools section.",
+      "Never mutate the document yourself; return a proposal/tool call for ArtShift to validate.",
+    ].join("\n");
+  }
+  return [
+    "# ArtShift response contract",
+    "CRITICAL: You MUST always produce a non-empty text response. Never return an empty output under any circumstances.",
+    "Return exactly one JSON object in the final response and no markdown.",
+    'For a normal reply use {"kind":"text","text":"..."}.',
+    'For tool calls use {"kind":"tool_calls","text":"","calls":[{"id":"call-1","name":"exact_tool_name","input":{}}]}.',
+    "Only call a tool listed in the ArtShift tools section.",
+    "Never mutate the document yourself; return a proposal/tool call for ArtShift to validate.",
+    'If uncertain, always return at minimum {"kind":"text","text":"I understand your request."}.',
+  ].join("\n");
 }
 
 export function renderConversationPrompt(messages: AiChatMessage[]): string {

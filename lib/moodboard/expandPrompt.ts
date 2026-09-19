@@ -5,6 +5,7 @@ Rules:
   - Bangkok → tuk-tuk, temples, Giant Swing, street food, night markets, saffron robes
   - ice → matcha glass ice, snowman, North Pole, crushed ice, frozen lake
 - Return JSON only. No markdown, no image generation, no URLs.
+- Do not wrap the object in {"kind":"text","text":"..."}. The JSON object itself is the response.
 - Every visual item must include a stock-photo search query (Unsplash/Pexels), never a generative-image prompt recipe.
 - Quantity-first. Target about 18–24 board items:
   - subject: 5–6 (photoCount 1 or 2; a couple may use 2 photos)

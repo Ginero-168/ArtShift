@@ -44,6 +44,12 @@ export type AiAssistantChatInput = {
   system?: string;
   tools?: AiToolDefinition[];
   maxTokens?: number;
+  /**
+   * When true, adapters request JSON-only decoding (when the provider supports it)
+   * and return the raw model text instead of the ArtShift `{"kind":"text","text"}`
+   * chat envelope. Use for structured JSON tasks such as Moodboard expand.
+   */
+  jsonObject?: boolean;
 };
 
 export type AiAssistantChatOutput = {

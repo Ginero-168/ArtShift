@@ -428,6 +428,52 @@ describe("Replicate AI adapter", () => {
     expect(body.input.max_output_tokens).toBeGreaterThanOrEqual(4_096);
   });
 
+  it("returns raw JSON text for jsonObject chat and skips the kind/text contract", async () => {
+    const pack = {
+      keyword: "Bangkok",
+      associations: ["tuk-tuk"],
+      roles: { subject: [{ label: "tuk-tuk", query: "bangkok tuk-tuk", photoCount: 1 }] },
+    };
+    const raw = JSON.stringify({ kind: "text", text: "Expanded.", ...pack });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-moodboard-json-1",
+          model: "google/gemini-2.5-flash",
+          status: "succeeded",
+          output: [raw],
+          metrics: { input_token_count: 80, output_token_count: 40, predict_time: 0.4 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "assistant.chat",
+      input: {
+        system: "Return moodboard JSON only.",
+        messages: [{ role: "user", content: "Keyword: Bangkok" }],
+        jsonObject: true,
+      },
+      model: "google/gemini-2.5-flash",
+      options: { reasoning: { mode: "off" } },
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output.text).toBe(raw);
+    expect(result.output.text).toContain('"keyword":"Bangkok"');
+    expect(result.output.toolCalls).toEqual([]);
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.input.system_instruction).toContain("ArtShift JSON response contract");
+    expect(body.input.system_instruction).toContain("Do not wrap the object");
+    expect(body.input.system_instruction).not.toContain("For a normal reply use");
+    expect(body.input.dynamic_thinking).toBe(false);
+  });
+
   it("executes google/gemini-2.5-flash prompt enhancement", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

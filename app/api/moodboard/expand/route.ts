@@ -4,6 +4,7 @@ import {
   moodboardExpandUserPrompt,
 } from "@/lib/moodboard/expandPrompt";
 import { parseMoodboardExpandJson } from "@/lib/moodboard/expandSchema";
+import { safeModelTextPreview } from "@/lib/moodboard/json";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
         system: MOODBOARD_EXPAND_SYSTEM_PROMPT,
         messages: [{ role: "user", content: moodboardExpandUserPrompt(keyword) }],
         maxTokens: 2200,
+        jsonObject: true,
       },
       {
         profile: "quality",
@@ -87,13 +89,35 @@ export async function POST(req: NextRequest) {
         cache: false,
         accountId: access.account.id,
         signal: req.signal,
+        reasoning: { mode: "off" },
       },
     );
 
-    const parsed = parseMoodboardExpandJson(execution.output?.text ?? "");
+    const texts = collectChatOutputTexts(execution.output);
+    let parsed = parseMoodboardExpandJson(texts[0] ?? "");
     if (!parsed.ok) {
+      for (const text of texts.slice(1)) {
+        parsed = parseMoodboardExpandJson(text);
+        if (parsed.ok) break;
+      }
+    }
+    if (
+      !parsed.ok &&
+      isRecord(execution.output) &&
+      (typeof execution.output.keyword === "string" || isRecord(execution.output.roles))
+    ) {
+      parsed = parseMoodboardExpandJson(execution.output);
+    }
+    if (!parsed.ok) {
+      const preview = safeModelTextPreview(texts[0] ?? "");
       return NextResponse.json(
-        { error: { code: "PROVIDER_SCHEMA", message: parsed.reason } },
+        {
+          error: {
+            code: "PROVIDER_SCHEMA",
+            message: `${parsed.reason} Raw preview: ${preview}`,
+            preview,
+          },
+        },
         { status: 502 },
       );
     }
@@ -108,6 +132,34 @@ export async function POST(req: NextRequest) {
       { status: 502 },
     );
   }
+}
+
+function collectChatOutputTexts(output: unknown): string[] {
+  const texts: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    texts.push(trimmed);
+  };
+
+  if (!isRecord(output)) return texts;
+  push(output.text);
+  push(output.output_text);
+  const message = output.assistantMessage;
+  if (isRecord(message)) {
+    if (typeof message.content === "string") push(message.content);
+    if (Array.isArray(message.content)) {
+      for (const block of message.content) {
+        if (isRecord(block) && (block.type === "text" || typeof block.text === "string")) {
+          push(block.text);
+        }
+      }
+    }
+  }
+  return texts;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

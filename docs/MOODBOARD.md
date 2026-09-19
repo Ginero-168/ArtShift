@@ -21,6 +21,7 @@ Keyword → **LLM vibe/association expansion** → structure into **Subject / Se
 4. Each visual item gets a stock query → `/api/stock` only
 5. On failure: placeholder + retry — never gen-image fallback
 6. Requires auth + cloudConsent + BYOK for LLM step; stock uses existing stock keys
+7. Expand chat uses JSON-only mode (`assistant.chat` `jsonObject`) and parses the first JSON object from noisy model text. Parse failures return 502 with a short secret-redacted raw preview.
 
 ## Smart play (keep light)
 

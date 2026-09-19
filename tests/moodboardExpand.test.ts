@@ -7,6 +7,7 @@ import {
   plannedBoardItemCount,
 } from "@/lib/moodboard/expandSchema";
 import { fillMoodboardFromPack } from "@/lib/moodboard/fill";
+import { parseJsonCandidate, safeModelTextPreview } from "@/lib/moodboard/json";
 
 const SAMPLE = {
   keyword: "Bangkok",
@@ -74,6 +75,52 @@ describe("moodboard expand JSON shape", () => {
     expect(parseMoodboardExpandJson({ keyword: "ice" }).ok).toBe(false);
   });
 
+  it("extracts the first JSON object from leading prose", () => {
+    const messy = `Sure — here is a Bangkok moodboard pack.\n${JSON.stringify(SAMPLE)}\nLet me know if you want more night-market shots.`;
+    const parsed = parseMoodboardExpandJson(messy);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.pack.keyword).toBe("Bangkok");
+    expect(parsed.pack.roles.subject[0]?.label).toBe("tuk-tuk");
+  });
+
+  it("tolerates trailing commas in role arrays", () => {
+    const withCommas = JSON.stringify(SAMPLE)
+      .replace(/\}(\s*)\]/g, "},$1]")
+      .replace(/\](\s*)\}/g, "],$1}");
+    const parsed = parseMoodboardExpandJson(withCommas);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.pack.keyword).toBe("Bangkok");
+  });
+
+  it("unwraps the ArtShift kind/text envelope when JSON is inside text", () => {
+    const envelope = JSON.stringify({
+      kind: "text",
+      text: `Here you go:\n\`\`\`json\n${JSON.stringify(SAMPLE)}\n\`\`\``,
+    });
+    const parsed = parseMoodboardExpandJson(envelope);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.pack.keyword).toBe("Bangkok");
+    expect(parsed.pack.roles.setting.some((item) => item.label === "Giant Swing")).toBe(true);
+  });
+
+  it("keeps sibling keyword/roles when the chat envelope wraps the pack", () => {
+    const envelope = { kind: "text", text: "Expanded Bangkok.", ...SAMPLE };
+    const parsed = parseMoodboardExpandJson(envelope);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.pack.associations).toContain("tuk-tuk");
+  });
+
+  it("parses a double-encoded JSON string", () => {
+    const parsed = parseMoodboardExpandJson(JSON.stringify(JSON.stringify(SAMPLE)));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.pack.keyword).toBe("Bangkok");
+  });
+
   it("fills placeholders when stock is missing and never mentions gen-image paths", async () => {
     const parsed = parseMoodboardExpandJson(SAMPLE);
     expect(parsed.ok).toBe(true);
@@ -96,5 +143,20 @@ describe("moodboard expand JSON shape", () => {
       expect(src).not.toContain("generateAIImage");
     }
     expect(stockSrc).toContain("/api/stock");
+  });
+
+  it("extracts the first balanced object and redacts secrets in previews", () => {
+    const extracted = parseJsonCandidate(
+      'Note: ignore {"noise":true} after the pack.\n{"keyword":"Bangkok","keep":true} trailing prose',
+    );
+    expect(extracted).toEqual({ noise: true });
+
+    const preview = safeModelTextPreview(
+      "Expanded Bangkok. token=r8_account-token Bearer abc.def more text",
+    );
+    expect(preview).toContain("Expanded Bangkok.");
+    expect(preview).not.toContain("r8_account-token");
+    expect(preview).toContain("[redacted]");
+    expect(safeModelTextPreview("")).toBe("(empty)");
   });
 });

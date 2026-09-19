@@ -41,7 +41,38 @@ const ROLE_SET = new Set<string>(MOODBOARD_ROLES);
 export function parseMoodboardExpandJson(
   raw: unknown,
 ): MoodboardExpandValidation | MoodboardExpandInvalid {
-  const candidate = typeof raw === "string" ? parseJsonCandidate(raw) : raw;
+  const candidates = collectExpandCandidates(raw);
+  let lastReason = "Expand response is not a JSON object.";
+  for (const candidate of candidates) {
+    const parsed = parseExpandObject(candidate);
+    if (parsed.ok) return parsed;
+    lastReason = parsed.reason;
+  }
+  return { ok: false, reason: lastReason };
+}
+
+function collectExpandCandidates(raw: unknown): unknown[] {
+  const values: unknown[] = [];
+  const seen = new Set<unknown>();
+  const push = (value: unknown) => {
+    if (value === null || value === undefined || seen.has(value)) return;
+    seen.add(value);
+    values.push(value);
+  };
+
+  const parsed = typeof raw === "string" ? parseJsonCandidate(raw) : raw;
+  push(parsed);
+
+  if (isRecord(parsed)) {
+    if (typeof parsed.text === "string") push(parseJsonCandidate(parsed.text));
+    if (typeof parsed.output === "string") push(parseJsonCandidate(parsed.output));
+    if (typeof parsed.output_text === "string") push(parseJsonCandidate(parsed.output_text));
+  }
+
+  return values;
+}
+
+function parseExpandObject(candidate: unknown): MoodboardExpandValidation | MoodboardExpandInvalid {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
     return { ok: false, reason: "Expand response is not a JSON object." };
   }

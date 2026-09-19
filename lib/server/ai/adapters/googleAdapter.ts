@@ -532,6 +532,7 @@ function createGeminiChatBody(
     temperature: 0.2,
     maxOutputTokens: Math.min(65_536, Math.max(1, input.maxTokens ?? 8_192)),
     ...(thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget } } : {}),
+    ...(input.jsonObject ? { responseMimeType: "application/json" } : {}),
   };
 
   const body: Record<string, unknown> = {

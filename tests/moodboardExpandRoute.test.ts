@@ -109,13 +109,46 @@ describe("Moodboard expand API", () => {
       "assistant.chat",
       expect.objectContaining({
         system: expect.stringContaining("stock-photo search query"),
+        jsonObject: true,
       }),
       expect.objectContaining({
         cloudConsent: true,
         allowFallback: false,
         accountId: "account-test",
+        reasoning: { mode: "off" },
       }),
     );
     expect(runtimeMock.execute.mock.calls.every((call) => call[0] !== "image.generate")).toBe(true);
+  });
+
+  it("parses fenced model output from assistant.chat text", async () => {
+    runtimeMock.execute.mockResolvedValue({
+      output: {
+        text: `Here is the pack\n\`\`\`json\n${JSON.stringify(PACK)}\n\`\`\``,
+        assistantMessage: { role: "assistant", content: "" },
+      },
+      metadata: { provider: "replicate", model: "mock", durationMs: 9, usage: {}, warnings: [] },
+    });
+    const response = await POST(request({ keyword: "ice", cloudConsent: true }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).pack.keyword).toBe("ice");
+  });
+
+  it("returns a 502 with a truncated raw preview when chat text is not JSON", async () => {
+    runtimeMock.execute.mockResolvedValue({
+      output: {
+        text: "Sure, I expanded Bangkok into tuk-tuks and temples. r8_account-token should stay hidden.",
+      },
+      metadata: { provider: "replicate", model: "mock", durationMs: 4, usage: {}, warnings: [] },
+    });
+    const response = await POST(request({ keyword: "Bangkok", cloudConsent: true }));
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body.error.code).toBe("PROVIDER_SCHEMA");
+    expect(body.error.message).toContain("Expand response is not a JSON object.");
+    expect(body.error.message).toContain("Raw preview:");
+    expect(body.error.preview).toContain("tuk-tuks");
+    expect(body.error.preview).not.toContain("r8_account-token");
+    expect(body.error.preview).toContain("[redacted]");
   });
 });
