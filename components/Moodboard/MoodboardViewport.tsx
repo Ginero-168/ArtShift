@@ -2,16 +2,13 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { ViewTransform } from "@/components/Canvas/CanvasRoot";
+import { BUILDER_BLOCK_MIME } from "@/lib/builder/blocks";
 import { fileToDataURL, isSupportedImageFile, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { MoodboardItem } from "@/lib/engine/types";
-import { copyMoodboardItemsToArtworkSlide } from "@/lib/moodboard/copyToSlide";
-import { expandActiveMoodboard } from "@/lib/moodboard/expandClient";
 import { createMoodboardItem, createMoodboardNote } from "@/lib/moodboard/factory";
-import { nextMoodboardDropPoint } from "@/lib/moodboard/placement";
 import { classifyReferenceUrl, saveMoodboardReference } from "@/lib/moodboard/referenceStore";
 import { isMoodboardSlide } from "@/lib/moodboard/types";
-import { ReferencePanel } from "./ReferencePanel";
 
 export type MoodboardViewportHandle = {
   resetView: () => void;
@@ -44,13 +41,8 @@ const MoodboardViewport = forwardRef<
   MoodboardViewportHandle,
   {
     onViewChange?: (view: ViewTransform) => void;
-    referencesOpen?: boolean;
-    onReferencesOpenChange?: (open: boolean) => void;
   }
->(function MoodboardViewport(
-  { onViewChange, referencesOpen = false, onReferencesOpenChange },
-  ref,
-) {
+>(function MoodboardViewport({ onViewChange }, ref) {
   const slide = useEngine((s) =>
     s.doc.slides.find((candidate) => candidate.id === s.currentSlideId),
   );
@@ -65,10 +57,6 @@ const MoodboardViewport = forwardRef<
   const items = board?.items ?? [];
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const [keyword, setKeyword] = useState(board?.keyword ?? "");
-  const [expanding, setExpanding] = useState(false);
-  const [expandError, setExpandError] = useState("");
-  const [copyMessage, setCopyMessage] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const viewRef = useRef({
@@ -107,10 +95,6 @@ const MoodboardViewport = forwardRef<
     setSize({ w: el.clientWidth, h: el.clientHeight });
     return () => ro.disconnect();
   }, []);
-
-  useEffect(() => {
-    setKeyword(board?.keyword ?? "");
-  }, [board?.keyword]);
 
   useEffect(() => {
     onViewChange?.(viewRef.current);
@@ -286,22 +270,6 @@ const MoodboardViewport = forwardRef<
     return () => window.removeEventListener("paste", onPaste);
   }, [centerWorld, placeImageFile, placeImageUrl]);
 
-  async function handleExpand() {
-    if (expanding) return;
-    setExpanding(true);
-    setExpandError("");
-    const result = await expandActiveMoodboard(keyword);
-    if (!result.ok) setExpandError(result.message);
-    setExpanding(false);
-  }
-
-  async function handleCopyToSlide() {
-    const result = await copyMoodboardItemsToArtworkSlide();
-    setCopyMessage(
-      result.ok ? `Copied ${result.elementCount} objects to a new slide` : result.message,
-    );
-  }
-
   if (!isMoodboardSlide(slide)) return null;
 
   return (
@@ -407,6 +375,11 @@ const MoodboardViewport = forwardRef<
       onDrop={async (event) => {
         event.preventDefault();
         const world = clientToWorld(event.clientX, event.clientY);
+        const blockKind = event.dataTransfer.getData(BUILDER_BLOCK_MIME);
+        if (blockKind === "note") {
+          addMoodboardItem(createMoodboardNote("Note", world.x, world.y), "add note");
+          return;
+        }
         const uri =
           event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
         if (uri.startsWith("https://")) {
@@ -510,128 +483,6 @@ const MoodboardViewport = forwardRef<
         ))}
       </div>
 
-      <div
-        style={{
-          position: "absolute",
-          top: 10,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 12,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "8px 10px",
-          background: "rgba(255,255,255,0.96)",
-          border: "1px solid #e5e7eb",
-          borderRadius: 10,
-          boxShadow: "0 8px 24px rgba(15, 23, 42, 0.08)",
-        }}
-      >
-        <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") void handleExpand();
-          }}
-          placeholder="Keyword → vibe labels (Bangkok, ice…)"
-          aria-label="Moodboard keyword"
-          style={{
-            width: 280,
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            padding: "7px 10px",
-            fontSize: 13,
-            outline: "none",
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => void handleExpand()}
-          disabled={expanding}
-          style={{
-            border: "none",
-            background: "#111827",
-            color: "#fff",
-            borderRadius: 8,
-            padding: "7px 12px",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: expanding ? "wait" : "pointer",
-          }}
-        >
-          {expanding ? "Expanding…" : "Expand"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            const world = centerWorld();
-            addMoodboardItem(createMoodboardNote("Note", world.x, world.y), "add sticky note");
-          }}
-          style={{
-            border: "1px solid #e5e7eb",
-            background: "#fff",
-            borderRadius: 8,
-            padding: "7px 10px",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          + Note
-        </button>
-        <button
-          type="button"
-          onClick={() => onReferencesOpenChange?.(!referencesOpen)}
-          style={{
-            border: "1px solid #e5e7eb",
-            background: referencesOpen ? "#eef2ff" : "#fff",
-            borderRadius: 8,
-            padding: "7px 10px",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          References
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleCopyToSlide()}
-          style={{
-            border: "1px solid #c7d2fe",
-            background: "#eef2ff",
-            color: "#3730a3",
-            borderRadius: 8,
-            padding: "7px 10px",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Copy to slide
-        </button>
-      </div>
-
-      {expandError || copyMessage ? (
-        <div
-          style={{
-            position: "absolute",
-            top: 58,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 12,
-            background: expandError ? "#fef2f2" : "#ecfdf5",
-            color: expandError ? "#b91c1c" : "#047857",
-            border: `1px solid ${expandError ? "#fecaca" : "#a7f3d0"}`,
-            borderRadius: 8,
-            padding: "6px 10px",
-            fontSize: 12,
-          }}
-        >
-          {expandError || copyMessage}
-        </div>
-      ) : null}
-
       {!items.length ? (
         <div
           style={{
@@ -646,17 +497,11 @@ const MoodboardViewport = forwardRef<
         >
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Infinite artboard</div>
           <div style={{ fontSize: 13, maxWidth: 400, lineHeight: 1.5 }}>
-            Drop, paste, or import your own photos. Expand a keyword for vibe labels — it will not
-            auto-fill stock. Copy selected objects onto a normal artwork slide when you are ready.
+            Drop or paste photos, add a Note from Block, or open Pinterest to place Pins you already
+            saved. Copy to a normal artwork slide from the menu when you are ready.
           </div>
         </div>
       ) : null}
-
-      <ReferencePanel
-        open={referencesOpen}
-        onClose={() => onReferencesOpenChange?.(false)}
-        dropOrigin={nextMoodboardDropPoint(items, { x: 80, y: 80 })}
-      />
     </div>
   );
 });

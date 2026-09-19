@@ -37,6 +37,7 @@ export const BUILDER_BLOCK_MIME = "application/x-artshift-block";
 
 export type BuilderBlockKind =
   | "text"
+  | "note"
   | "icon"
   | "frameCircle"
   | "framePolaroid"
@@ -108,6 +109,17 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     colSpan: 7,
     rowSpan: 3,
     minColSpan: 4,
+    minRowSpan: 2,
+  },
+  {
+    kind: "note",
+    label: "Note",
+    description: "Sticky note on the artboard",
+    category: "Content",
+    glyph: "N",
+    colSpan: 4,
+    rowSpan: 3,
+    minColSpan: 3,
     minRowSpan: 2,
   },
   {
@@ -611,6 +623,17 @@ function makeElement(kind: BuilderBlockKind, rect: BentoRect): EngineElement {
   switch (kind) {
     case "text":
       return createTextFromPreset(rect, DEFAULT_TEXT_PRESET_ID);
+    case "note":
+      return styleText(rect, "Note", 22, {
+        fontStyle: "normal",
+        textAlign: "left",
+        verticalAlign: "top",
+        strokeColor: "transparent",
+        backgroundColor: "#f8fafc",
+        padding: 16,
+        cornerRadius: 8,
+        name: "Note",
+      });
     case "icon": {
       const size = Math.min(rect.width, rect.height, 120);
       const el = createVectorPathFromWorldNodes(

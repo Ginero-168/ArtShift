@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test("creates a frameless Moodboard slide from the rail", async ({ page }) => {
+test("Moodboard reuses editor chrome, Pinterest panel, and Block Note", async ({ page }) => {
   page.on("pageerror", (error) => {
     console.log("pageerror", error.message);
   });
@@ -36,35 +36,39 @@ test("creates a frameless Moodboard slide from the rail", async ({ page }) => {
 
   await page.getByTitle("Expand slides").click();
   await expect(page.getByRole("button", { name: "+ Moodboard" })).toBeVisible();
-  await page.screenshot({
-    path: `${ARTIFACT_DIR}/moodboard_rail_before_create.png`,
-    fullPage: true,
-  });
-
   await page.getByRole("button", { name: "+ Moodboard" }).click();
 
-  await expect(page.getByLabel("Moodboard keyword")).toBeVisible();
-  await expect(page.getByText("Infinite artboard", { exact: true })).toBeVisible();
   await expect(page.locator("[data-moodboard-viewport]")).toBeVisible();
-  await expect(page.getByRole("toolbar", { name: "Moodboard tools" })).toBeVisible();
-  await expect(page.getByRole("toolbar", { name: "Vector editing tools" })).toHaveCount(0);
+  await expect(page.getByText("Infinite artboard", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Moodboard keyword")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("toolbar", { name: "Vector editing tools" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "AI Assistance" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Block" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Pinterest" })).toBeVisible();
   await expect(page.getByText("✨ AI Image Studio (GPT Image 2 · low)")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "+ Note" }).click();
+  await page.getByRole("tab", { name: "Block" }).click();
+  await page.getByRole("button", { name: "Note", exact: true }).click();
   await expect(page.locator("[data-moodboard-item]")).toHaveCount(1);
   await expect(page.locator("[data-moodboard-item]")).toHaveAttribute("data-rotation", "0");
 
-  await page.getByRole("button", { name: "References" }).click();
-  await expect(page.locator("[data-moodboard-reference-panel]")).toBeVisible();
-  await page.getByRole("button", { name: "Pinterest" }).click();
-  await expect(page.getByText(/blocked_pending_app_review|does not scrape/i)).toBeVisible();
+  await page.getByRole("tab", { name: "Pinterest" }).click();
+  await expect(page.locator("[data-pinterest-panel]")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pinterest" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("tab", { name: "Pins" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Boards" })).toBeVisible();
+  await page.getByRole("button", { name: "Pinterest menu" }).click();
+  await expect(page.getByRole("button", { name: /Disconnect/ })).toBeVisible();
 
   await page.screenshot({
-    path: `${ARTIFACT_DIR}/moodboard_infinite_artboard_with_note.png`,
+    path: `${ARTIFACT_DIR}/moodboard_pinterest_panel.png`,
     fullPage: true,
   });
 
-  await page.getByRole("button", { name: "Copy to slide" }).first().click();
+  await page.getByTitle("Menu").click();
+  await page.getByText("Copy moodboard to slide").click();
   await expect(page.locator("[data-moodboard-viewport]")).toHaveCount(0, { timeout: 10_000 });
   await expect(page.getByRole("toolbar", { name: "Vector editing tools" })).toBeVisible();
   await page.screenshot({

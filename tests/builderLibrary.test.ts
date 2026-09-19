@@ -31,6 +31,20 @@ describe("Builder element library", () => {
     if (text.type === "text") expect(text.textPreset).toBe("title");
   });
 
+  it("exposes a Note block that creates an upright note-styled text element", () => {
+    const def = BUILDER_BLOCKS.find((block) => block.kind === "note");
+    expect(def?.label).toBe("Note");
+    expect(def?.category).toBe("Content");
+    const note = createBuilderBlock("note", ARTWORK);
+    expect(note.type).toBe("text");
+    expect(note.builderKind).toBe("note");
+    expect(note.angle ?? 0).toBe(0);
+    if (note.type === "text") {
+      expect(note.text).toBe("Note");
+      expect(note.backgroundColor).toBe("#f8fafc");
+    }
+  });
+
   it("changes a Text preset without replacing the user's content", () => {
     const text = createBuilderBlock("text", ARTWORK);
     expect(text.type).toBe("text");

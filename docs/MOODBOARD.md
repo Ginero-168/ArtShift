@@ -4,7 +4,7 @@
 
 ## North star
 
-Moodboard is an **infinite artboard** that reuses the normal canvas toolchain (select, move, resize, layers, properties, chat). Designers place **their own reference images**. Keyword **Expand** only produces vibe labels and structure — it does **not** auto-pull stock photos.
+Moodboard is an **infinite artboard** that reuses the **normal editor chrome** (chat, Option Bar, Block library, layers, properties). Designers place **their own reference images**. There is **no top-center Expand search bar**.
 
 **No SerpAPI.** **No generative images** on Moodboard. **Images stay upright** (rotation locked at 0°).
 
@@ -21,33 +21,31 @@ The designer finds and selects images. ArtShift does not scrape Google or Pinter
 
 1. **Local upload / drag-drop / paste** of PNG, JPEG, WebP onto the infinite board
 2. **Image URL paste** (`https://…`) onto the board
-3. **References panel** — a local tray of saved URLs and uploads, with **Add to board**
-4. **Pinterest tab** — paste a Pin or `pinimg.com` URL the user already saved
+3. **Pinterest panel** in the left workspace switcher (Pinterest logo tab next to AI Assistance / Block)
+4. **Note** block in the Block library (same insert path as other blocks)
 
-### Pinterest first slice (honest)
+### Pinterest panel (honest)
 
-Official saved-Pins / board APIs need a reviewed Pinterest developer app (`blocked_pending_app_review`). This MVP:
+The panel matches the dark Pins | Boards mock: Sign-in, then masonry Pins, refresh, ⋯, and **Disconnect**.
 
-- classifies `pinterest.*` / `pinimg.com` URLs
-- stores them locally in `artshift.moodboard.references.v1`
+Official saved-Pins / board APIs need a reviewed Pinterest developer app (`blocked_pending_app_review`). This slice:
+
+- Sign-in starts a **local session** (OAuth start returns 501 until `PINTEREST_CLIENT_ID` exists *and* the app is reviewed)
+- classifies `pinterest.*` / `pinimg.com` URLs the user pastes
+- stores them in `artshift.moodboard.references.v1` and shows them as a masonry grid
+- Boards tab explains the official API blocker
 - does **not** scrape Pinterest or Google Images
 - does **not** call SerpAPI
 
-OAuth / official board sync can plug into the same panel later.
+`GET /api/pinterest/status` reports `oauthConfigured` and the official-API status.
 
-## Expand (structure only)
+## Expand (structure only, no search UI)
 
-1. LLM expands a keyword into lateral associations
-2. Bucket into Subject / Setting / Prop / Mood / Color (quantity-first, ~18–24 **labels**)
-3. Place upright notes/chips on the artboard — **no `/api/stock` call**
-4. Requires auth + cloudConsent + BYOK for the LLM step
-5. Expand chat uses JSON-only mode (`assistant.chat` `jsonObject`, up to 65535 Gemini output tokens). Truncated JSON is repaired when possible.
-
-`/api/stock` (Unsplash / Pexels / Google CSE) remains for other surfaces such as the AI image panel. Moodboard Expand does not use it.
+The LLM expand route still exists for later use. It is **not** shown as a top-center keyword bar. Expand never calls `/api/stock`.
 
 ## Copy to a normal artwork slide
 
-- Toolbar **Copy to slide** (also `Ctrl/Cmd+Shift+C`)
+- Menu **Copy moodboard to slide** (also `Ctrl/Cmd+Shift+C`)
 - Copies **selected** items, or **all** items if nothing is selected
 - Creates a new `artwork` slide and adds `EngineElement`s (`createImage` / `createText`) with the same name, size, and upright transform
 - After copy, layers / option bar / properties on that slide are the normal artwork tools
@@ -62,9 +60,11 @@ OAuth / official board sync can plug into the same panel later.
 ## Acceptance
 
 - [x] No SerpAPI path in Moodboard, `/api/stock`, env, or docs
-- [x] Expand yields vibe labels in 5 roles and does not fetch stock
+- [x] Expand API exists but is not a top-center search bar
 - [x] Upright media only
-- [x] Drop / paste / URL / reference panel intake
-- [x] Documented Pinterest limitation + usable paste tray
+- [x] Drop / paste / URL / Pinterest panel intake
+- [x] Pinterest Sign-in + Pins/Boards shell; official API blocker documented
+- [x] Note available in the Block library
+- [x] Normal editor chrome (chat, Option Bar, layers, properties) on Moodboard
 - [x] Copy to artwork slide
 - [x] Artwork slides unchanged

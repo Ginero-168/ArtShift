@@ -2,7 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { IconChevronDown, IconLayoutGrid, IconSearch, IconSparkles } from "@/components/icons";
+import {
+  IconChevronDown,
+  IconLayoutGrid,
+  IconPinterest,
+  IconSearch,
+  IconSparkles,
+} from "@/components/icons";
+import PinterestPanel from "@/components/Moodboard/PinterestPanel";
 import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import {
   BUILDER_BLOCK_MIME,
@@ -20,13 +27,16 @@ import {
   type VectorIconDefinition,
 } from "@/lib/builder/vectorIconLibrary";
 import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
+import { createMoodboardNote } from "@/lib/moodboard/factory";
+import { nextMoodboardDropPoint } from "@/lib/moodboard/placement";
+import { isMoodboardSlide } from "@/lib/moodboard/types";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 import IconLibraryModal from "./IconLibraryModal";
 
 const AIAssistancePanel = dynamic(() => import("@/components/AI/AICoPilotBar"), { ssr: false });
 
-type LibraryTab = "blocks" | "assistant";
+type LibraryTab = "blocks" | "assistant" | "pinterest";
 
 const CATEGORIES: BuilderBlockDefinition["category"][] = [
   "Content",
@@ -75,6 +85,7 @@ export default function BlockLibrary() {
   const lineSubtype = useEngine((state) => state.lineSubtype);
   const setLineSubtype = useEngine((state) => state.setLineSubtype);
   const addElement = useEngine((state) => state.addElement);
+  const addMoodboardItem = useEngine((state) => state.addMoodboardItem);
   const insertCompositionBlock = useEngine((state) => state.insertCompositionBlock);
   const [query, setQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -142,6 +153,13 @@ export default function BlockLibrary() {
     }
 
     if (!slide) return;
+    if (block.kind === "note" && isMoodboardSlide(slide)) {
+      const point = nextMoodboardDropPoint(slide.moodboard?.items ?? []);
+      const note = createMoodboardNote("Note", point.x, point.y);
+      addMoodboardItem(note, "add note");
+      useEngine.getState().selectOnly([note.id]);
+      return;
+    }
     const element = createBuilderBlock(block.kind, {
       width: slide.width,
       height: slide.height,
@@ -161,7 +179,7 @@ export default function BlockLibrary() {
 
   return (
     <aside
-      className={`${styles.library} ${activeTab === "assistant" ? styles.libraryAssistantActive : ""}`}
+      className={`${styles.library} ${activeTab === "assistant" ? styles.libraryAssistantActive : ""} ${activeTab === "pinterest" ? styles.libraryPinterestActive : ""}`}
       aria-label="Blocks and AI Assistance"
     >
       <div className={styles.libraryTabs} role="tablist" aria-label="Workspace tools">
@@ -188,6 +206,17 @@ export default function BlockLibrary() {
             <IconLayoutGrid size={14} color="currentColor" />
           </span>
           <span>Block</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "pinterest"}
+          aria-label="Pinterest"
+          title="Pinterest"
+          className={`${styles.libraryTab} ${styles.libraryTabPinterest} ${activeTab === "pinterest" ? styles.libraryTabActive : ""}`}
+          onClick={() => setActiveTab("pinterest")}
+        >
+          <IconPinterest size={18} />
         </button>
       </div>
 
@@ -299,6 +328,13 @@ export default function BlockLibrary() {
         hidden={activeTab !== "assistant"}
       >
         <AIAssistancePanel />
+      </div>
+
+      <div
+        className={`${styles.libraryTabPanel} ${styles.assistantTabPanel}`}
+        hidden={activeTab !== "pinterest"}
+      >
+        <PinterestPanel />
       </div>
 
       <IconLibraryModal

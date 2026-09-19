@@ -38,9 +38,6 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "@/components/icons";
-import MoodboardInspector from "@/components/Moodboard/MoodboardInspector";
-import MoodboardLayers from "@/components/Moodboard/MoodboardLayers";
-import MoodboardOptionBar from "@/components/Moodboard/MoodboardOptionBar";
 import MoodboardViewport, {
   type MoodboardViewportHandle,
 } from "@/components/Moodboard/MoodboardViewport";
@@ -60,6 +57,7 @@ import { usePresetStore } from "@/lib/engine/presetStore";
 import { createEmptyEngineDoc, useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
 import { loadThaiFonts } from "@/lib/fonts";
+import { copyMoodboardItemsToArtworkSlide } from "@/lib/moodboard/copyToSlide";
 import { isMoodboardSlide } from "@/lib/moodboard/types";
 import { createProjectAutosave, type ProjectAutosaveStatus } from "@/lib/project/projectAutosave";
 import { type ProjectMetadata, projectStore } from "@/lib/project/projectStore";
@@ -233,7 +231,6 @@ export default function ProjectEditorPage() {
     if (isMoodboard) moodboardRef.current?.setZoom(scale);
     else canvasEditorRef.current?.setZoom(scale);
   };
-  const [moodboardReferencesOpen, setMoodboardReferencesOpen] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomDropdownOpen, setZoomDropdownOpen] = useState(false);
   const [_zoomInputText, setZoomInputText] = useState("");
@@ -700,20 +697,7 @@ export default function ProjectEditorPage() {
         </div>
 
         <div className="topbar-center">
-          {isMoodboard ? (
-            <MoodboardOptionBar
-              onAddNote={() => {
-                moodboardRef.current?.addNoteAtCenter();
-              }}
-              onAddImageFile={(file) => {
-                void moodboardRef.current?.addImageFileAtCenter(file);
-              }}
-              onToggleReferences={() => setMoodboardReferencesOpen((open) => !open)}
-              referencesOpen={moodboardReferencesOpen}
-            />
-          ) : (
-            <EditorOptionBar />
-          )}
+          <EditorOptionBar />
         </div>
 
         <div className="topbar-right">
@@ -894,23 +878,18 @@ export default function ProjectEditorPage() {
       {/* ——— Main area ——— */}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <SlideRail />
-        {isMoodboard ? null : <BlockLibrary />}
+        <BlockLibrary />
         <div
           style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}
           className="canvas-stage"
         >
           {loaded &&
             (isMoodboard ? (
-              <MoodboardViewport
-                ref={moodboardRef}
-                onViewChange={(v) => setZoomScale(v.scale)}
-                referencesOpen={moodboardReferencesOpen}
-                onReferencesOpenChange={setMoodboardReferencesOpen}
-              />
+              <MoodboardViewport ref={moodboardRef} onViewChange={(v) => setZoomScale(v.scale)} />
             ) : (
               <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
             ))}
-          {isMoodboard ? <MoodboardLayers /> : <LayerPanel />}
+          <LayerPanel />
 
           {/* ——— Left toolbar (top-left of workspace) ——— */}
           <div
@@ -1027,6 +1006,15 @@ export default function ProjectEditorPage() {
                       }}
                     />
                     {/* Present */}
+                    {isMoodboard ? (
+                      <HamburgerItem
+                        label="Copy moodboard to slide"
+                        onClick={() => {
+                          void copyMoodboardItemsToArtworkSlide();
+                          setMenuOpen(false);
+                        }}
+                      />
+                    ) : null}
                     <HamburgerItem
                       label="Present"
                       onClick={() => {
@@ -1303,66 +1291,62 @@ export default function ProjectEditorPage() {
               }}
             />
 
-            {isMoodboard ? null : (
-              <>
-                {/* 2. Hex Grid Toggle */}
+            {/* 2. Hex Grid Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowHexGrid(!showHexGrid)}
+              title={showHexGrid ? "Hide Grid" : "Show Grid"}
+              style={{
+                width: 24,
+                height: 24,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 4,
+                border: "none",
+                background: showHexGrid ? "var(--surface-hover, #e0e7ff)" : "transparent",
+                color: showHexGrid ? "var(--accent, #4338ca)" : "var(--ink-muted, #9ca3af)",
+                cursor: "pointer",
+              }}
+            >
+              <IconGrid size={13} />
+            </button>
+
+            <div
+              style={{
+                width: 1,
+                height: 16,
+                background: "var(--stroke, #e5e7eb)",
+                margin: "0 2px",
+              }}
+            />
+
+            {/* 3. Layer Filter Selector */}
+            <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {(["all", "block", "free"] as const).map((mode) => (
                 <button
+                  key={mode}
                   type="button"
-                  onClick={() => setShowHexGrid(!showHexGrid)}
-                  title={showHexGrid ? "Hide Grid" : "Show Grid"}
+                  onClick={() => setLayerFilter(mode)}
                   style={{
-                    width: 24,
-                    height: 24,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    padding: "2px 6px",
                     borderRadius: 4,
                     border: "none",
-                    background: showHexGrid ? "var(--surface-hover, #e0e7ff)" : "transparent",
-                    color: showHexGrid ? "var(--accent, #4338ca)" : "var(--ink-muted, #9ca3af)",
+                    background: layerFilter === mode ? "var(--accent, #6366f1)" : "transparent",
+                    color: layerFilter === mode ? "#ffffff" : "var(--ink-muted, #6b7280)",
+                    fontSize: 10,
+                    fontWeight: 600,
                     cursor: "pointer",
+                    textTransform: "capitalize",
                   }}
                 >
-                  <IconGrid size={13} />
+                  {mode}
                 </button>
-
-                <div
-                  style={{
-                    width: 1,
-                    height: 16,
-                    background: "var(--stroke, #e5e7eb)",
-                    margin: "0 2px",
-                  }}
-                />
-
-                {/* 3. Layer Filter Selector */}
-                <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  {(["all", "block", "free"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setLayerFilter(mode)}
-                      style={{
-                        padding: "2px 6px",
-                        borderRadius: 4,
-                        border: "none",
-                        background: layerFilter === mode ? "var(--accent, #6366f1)" : "transparent",
-                        color: layerFilter === mode ? "#ffffff" : "var(--ink-muted, #6b7280)",
-                        fontSize: 10,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+              ))}
+            </div>
           </div>
         </div>
-        {isMoodboard ? <MoodboardInspector /> : <BuilderInspector />}
+        <BuilderInspector />
       </div>
 
       {/* ——— Modals ——— */}
