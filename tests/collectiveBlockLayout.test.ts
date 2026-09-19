@@ -8,7 +8,7 @@ function slideWithSeparateBlockLayers(): EngineSlide {
     createRect({ x: 10, y: 10, width: 240, height: 180 }),
     createRect({ x: 10, y: 10, width: 240, height: 180 }),
     createRect({ x: 10, y: 10, width: 240, height: 180 }),
-  ].map((element) => ({ ...element, layoutMode: "block" as const }));
+  ];
   return {
     id: "slide",
     name: "Slide",
@@ -19,7 +19,7 @@ function slideWithSeparateBlockLayers(): EngineSlide {
     layers: elements.map((element, index) => ({
       id: element.id,
       name: element.name ?? `Object ${index}`,
-      mode: "block" as const,
+      mode: "block",
       objectIds: [element.id],
       placements: {
         [element.id]: { col: 0, row: 0, colSpan: 4, rowSpan: 3 },
@@ -28,10 +28,10 @@ function slideWithSeparateBlockLayers(): EngineSlide {
       locked: false,
       z: index + 1,
     })),
-  };
+  } as unknown as EngineSlide;
 }
 
-describe("collective Block layout (P0 bake)", () => {
+describe("collective Block layout (bake on load)", () => {
   it("keeps overlapping geometry when Block layers flatten to Free", () => {
     const source = slideWithSeparateBlockLayers();
     const doc = {
@@ -46,7 +46,10 @@ describe("collective Block layout (P0 bake)", () => {
       schemaVersion: 5,
     } satisfies EngineDoc;
     const result = normalizeDocumentLayers(doc).slides[0];
-    expect(result.layers.every((layer) => layer.mode === "free")).toBe(true);
+    for (const layer of result.layers) {
+      expect("mode" in layer).toBe(false);
+      expect("placements" in layer).toBe(false);
+    }
     const rects = result.elements.map((element) => ({ x: element.x, y: element.y }));
     expect(new Set(rects.map((rect) => `${rect.x}:${rect.y}`)).size).toBe(1);
     expect(rects.every((rect) => rect.x === 10 && rect.y === 10)).toBe(true);
@@ -74,7 +77,7 @@ describe("collective Block layout (P0 bake)", () => {
     for (const element of result.elements) {
       expect(element.width).toBe(original.get(element.id)?.width);
       expect(element.height).toBe(original.get(element.id)?.height);
-      expect(element.layoutMode).toBe("free");
+      expect("layoutMode" in element).toBe(false);
     }
   });
 });

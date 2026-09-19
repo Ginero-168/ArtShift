@@ -25,7 +25,6 @@ import {
   useState,
 } from "react";
 import { unionBBox } from "@/lib/engine/bounds";
-import { cellsForPlacement, getAllHexCells, getHexMetrics } from "@/lib/engine/hexLayout";
 import { createPointerGestureRouter } from "@/lib/engine/pointerGestureRouter";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
 import { subscribeFontsLoaded } from "@/lib/fonts";
@@ -75,10 +74,6 @@ type Props = {
   snapGrid?: number | null;
   /** Highlighted ids (rendered as a selection outline). */
   selectedIds?: ReadonlySet<string>;
-  /** The selected Layer controls whether Hex placement UI is visible. */
-  activeLayerId?: string;
-  /** When false, the hex block grid overlay is hidden. */
-  showHexGrid?: boolean;
   className?: string;
   /** When true, any pointer drag pans the viewport (hand tool mode). */
   handActive?: boolean;
@@ -110,8 +105,6 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     images,
     snapGrid,
     selectedIds,
-    activeLayerId,
-    showHexGrid = true,
     className,
     handActive,
     toolCursor,
@@ -243,10 +236,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
     renderSlide(slide, { ctx, images, deferRasterJobs: true }, slideW, slideH, {
       showFrames: true,
-      afterBackground: () =>
-        showHexGrid
-          ? drawHexPlacementUI(ctx, slide, activeLayerId, selectedIds, view.scale)
-          : undefined,
+      afterBackground: undefined,
     });
     if (draftElement) renderElement(draftElement, { ctx, images, deferRasterJobs: true });
     if (ghostOverlay) drawGhostVariationOverlay(ghostOverlay, { ctx, images });
@@ -385,8 +375,6 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     draftElement,
     selectedIds,
     snapGrid,
-    activeLayerId,
-    showHexGrid,
     rasterMaskVersion,
     ghostOverlay,
   ]);
@@ -688,56 +676,6 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     </div>
   );
 });
-
-function drawHexPlacementUI(
-  ctx: CanvasRenderingContext2D,
-  slide: EngineSlide,
-  _activeLayerId: string | undefined,
-  selectedIds: ReadonlySet<string> | undefined,
-  scale: number,
-) {
-  const blockLayers = slide.layers.filter((candidate) => candidate.mode === "block");
-  const grid = getHexMetrics(slide.width, slide.height);
-
-  const stateByCell = new Map<string, "occupied" | "selected">();
-  for (const layer of blockLayers) {
-    for (const objectId of layer.objectIds) {
-      const placement = layer.placements[objectId];
-      if (!placement) continue;
-      const state = selectedIds?.has(objectId) ? "selected" : "occupied";
-      for (const cell of cellsForPlacement(placement, grid)) {
-        const key = `${cell.col}:${cell.row}`;
-        if (state === "selected" || !stateByCell.has(key)) stateByCell.set(key, state);
-      }
-    }
-  }
-
-  ctx.save();
-  ctx.lineWidth = Math.max(0.75, 0.85 / Math.max(scale, 0.01));
-  const cells = getAllHexCells(slide.width, slide.height);
-  for (const cell of cells) {
-    const state = stateByCell.get(`${cell.col}:${cell.row}`);
-    if (state === "selected") {
-      ctx.fillStyle = "rgba(24, 89, 255, 0.085)";
-      ctx.strokeStyle = "rgba(24, 89, 255, 0.38)";
-    } else if (state === "occupied") {
-      ctx.fillStyle = "rgba(24, 89, 255, 0.04)";
-      ctx.strokeStyle = "rgba(24, 89, 255, 0.2)";
-    } else {
-      ctx.fillStyle = "rgba(51, 79, 134, 0.012)";
-      ctx.strokeStyle = "rgba(51, 79, 134, 0.12)";
-    }
-    ctx.beginPath();
-    cell.points.forEach((point, index) => {
-      if (index === 0) ctx.moveTo(point.x, point.y);
-      else ctx.lineTo(point.x, point.y);
-    });
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.restore();
-}
 
 export default CanvasRoot;
 

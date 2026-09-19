@@ -3,54 +3,66 @@ import {
   blockPlacementForRect,
   blockRectForPlacement,
   getHexGridDimensions,
+  type LegacyBlockPlacement,
   normalizeBlockPlacement,
   REFERENCE_HEX_GRID,
   reflowBlockItems,
   remapBlockPlacement,
-} from "./hexLayout";
+} from "./legacyBlockMigrate";
 import { fitMediaElementToRect, isMediaElement } from "./mediaLayout";
 import {
-  type BlockPlacement,
   ENGINE_SCHEMA_VERSION,
   type EngineDoc,
   type EngineElement,
   type EngineLayer,
   type EngineSlide,
-  type LayerMode,
-  type WorkspaceStrictness,
 } from "./types";
 
+type LayerOptions = Partial<Pick<EngineLayer, "name" | "z" | "visible" | "locked">>;
+type WorkingLayer = EngineLayer & {
+  mode?: string;
+  placements?: Record<string, LegacyBlockPlacement>;
+};
+type WorkingElement = EngineElement & {
+  layoutMode?: string;
+  bento?: LegacyBlockPlacement;
+  visible?: boolean;
+};
+
 export function createEngineLayer(
-  mode: LayerMode,
-  options: Partial<Pick<EngineLayer, "name" | "z" | "visible" | "locked">> = {},
+  modeOrOptions?: string | LayerOptions,
+  options: LayerOptions = {},
 ): EngineLayer {
-  // Honor `mode` so v1–v5 fixtures can still be constructed; persist/load flattens to Free.
+  const opts =
+    typeof modeOrOptions === "object" && modeOrOptions !== null ? modeOrOptions : options;
   return {
     id: crypto.randomUUID(),
-    name: options.name ?? (mode === "block" ? "Block layer" : "Free layer"),
-    mode,
+    name: opts.name ?? "Layer",
     objectIds: [],
-    placements: {},
-    visible: options.visible ?? true,
-    locked: options.locked ?? false,
-    z: options.z ?? 1,
+    visible: opts.visible ?? true,
+    locked: opts.locked ?? false,
+    z: opts.z ?? 1,
   };
 }
 
-/** Bake Block/hex occupancy into Free pixels. Leaves x/y/width/height untouched. */
+function cleanLayer(layer: WorkingLayer): EngineLayer {
+  return {
+    id: layer.id,
+    name: layer.name,
+    objectIds: layer.objectIds ?? [],
+    visible: layer.visible !== false,
+    locked: layer.locked === true,
+    z: Number.isFinite(layer.z) ? layer.z : 1,
+  };
+}
+
+/** Bake leftover Block/hex fields away. Leaves x/y/width/height untouched. */
 export function flattenBlockLayoutToFree(slide: EngineSlide): EngineSlide {
-  let changed = false;
-  const layers = slide.layers.map((layer) => {
-    if (layer.mode === "free" && Object.keys(layer.placements).length === 0) return layer;
-    changed = true;
-    return { ...layer, mode: "free" as const, placements: {} };
-  });
-  const elements = slide.elements.map((element) => {
-    if (element.layoutMode === "free") return element;
-    changed = true;
-    return { ...element, layoutMode: "free" as const } as EngineElement;
-  });
-  return changed ? { ...slide, layers, elements } : slide;
+  return {
+    ...slide,
+    layers: slide.layers.map((layer) => cleanLayer(layer as WorkingLayer)),
+    elements: slide.elements.map((element) => stripLegacyPlacement(element)),
+  };
 }
 
 /** Normalize persisted documents and migrate their Block grid when the schema changes. */
@@ -104,16 +116,19 @@ export function normalizeSlideLayers(
 
   const claimed = new Set<string>();
   const layers = inputLayers.map((layer, index) => {
-    const objectIds = (layer.objectIds ?? []).filter((id) => {
+    const incoming = layer as WorkingLayer;
+    const objectIds = (incoming.objectIds ?? []).filter((id) => {
       if (!elementIds.has(id) || claimed.has(id)) return false;
       claimed.add(id);
       return true;
     });
-    const placements: Record<string, BlockPlacement> = {};
-    if (layer.mode === "block") {
+    const placements: Record<string, LegacyBlockPlacement> = {};
+    if (incoming.mode === "block") {
       for (const id of objectIds) {
-        const element = elements.find((candidate) => candidate.id === id);
-        const existing = layer.placements?.[id] ?? element?.bento;
+        const element = elements.find((candidate) => candidate.id === id) as
+          | WorkingElement
+          | undefined;
+        const existing = incoming.placements?.[id] ?? element?.bento;
         if (existing) {
           const referencePlacement =
             legacyGrid && element?.bento ? expandLegacyPlacement(existing) : existing;
@@ -124,33 +139,39 @@ export function normalizeSlideLayers(
       }
     }
     return {
-      id: layer.id || crypto.randomUUID(),
-      name: layer.name || `${layer.mode === "block" ? "Block" : "Free"} layer ${index + 1}`,
-      mode: layer.mode === "block" ? "block" : "free",
+      id: incoming.id || crypto.randomUUID(),
+      name: incoming.name || `Layer ${index + 1}`,
       objectIds,
+      visible: incoming.visible !== false,
+      locked: incoming.locked === true,
+      z: Number.isFinite(incoming.z) ? incoming.z : index + 1,
+      mode: incoming.mode === "block" ? "block" : "free",
       placements,
-      visible: layer.visible !== false,
-      locked: layer.locked === true,
-      z: Number.isFinite(layer.z) ? layer.z : index + 1,
-    } satisfies EngineLayer;
+    } satisfies WorkingLayer;
   });
 
   const orphans = elements.filter((element) => !claimed.has(element.id));
   if (orphans.length) {
-    for (const orphan of orphans) {
-      const mode: LayerMode = orphan.layoutMode ?? (orphan.bento ? "block" : "free");
-      const orphanLayer = createEngineLayer(mode, {
-        name: orphan.name || getElementDefaultName(orphan),
-        z: nextLayerZ(layers),
-      });
-      orphanLayer.id = orphan.id;
-      orphanLayer.objectIds = [orphan.id];
+    for (const orphan of orphans as WorkingElement[]) {
+      const mode = orphan.layoutMode ?? (orphan.bento ? "block" : "free");
+      const orphanLayer: WorkingLayer = {
+        ...createEngineLayer({
+          name: orphan.name || getElementDefaultName(orphan),
+          z: nextLayerZ(layers),
+        }),
+        id: orphan.id,
+        objectIds: [orphan.id],
+        mode,
+        placements: {},
+      };
       if (mode === "block") {
-        orphanLayer.placements[orphan.id] = normalizeBlockPlacement(
-          orphan.bento ??
-            blockPlacementForRect(orphan, slide.width, slide.height, placementSeed(orphan)),
-          targetGrid,
-        );
+        orphanLayer.placements = {
+          [orphan.id]: normalizeBlockPlacement(
+            orphan.bento ??
+              blockPlacementForRect(orphan, slide.width, slide.height, placementSeed(orphan)),
+            targetGrid,
+          ),
+        };
       }
       layers.push(orphanLayer);
     }
@@ -170,7 +191,6 @@ export function normalizeSlideLayers(
         : (element.name ?? getElementDefaultName(element));
       return {
         ...stripLegacyPlacement(element),
-        layoutMode: element.layoutMode ?? layer?.mode ?? "block",
         name: cleanName,
         locked: element.locked === true || layer?.locked === true,
         hidden: element.hidden === true || layer?.visible === false,
@@ -255,16 +275,6 @@ export function isObjectLocked(
   return Boolean(layer?.locked);
 }
 
-export function isObjectBlock(
-  slide: Pick<EngineSlide, "layers" | "elements">,
-  objectId: string,
-): boolean {
-  const element = slide.elements.find((candidate) => candidate.id === objectId);
-  if (element?.layoutMode) return element.layoutMode === "block";
-  const layer = getLayerForObject(slide, objectId);
-  return layer ? layer.mode === "block" : false;
-}
-
 export function setElementVisibility(
   slide: EngineSlide,
   objectId: string,
@@ -295,36 +305,6 @@ export function setElementLocked(
       layer.id === objectId && layer.objectIds.length <= 1 ? { ...layer, locked } : layer,
     ),
   };
-}
-
-export function toggleObjectLayoutMode(
-  slide: EngineSlide,
-  objectId: string,
-  _strictness: WorkspaceStrictness,
-): EngineSlide {
-  // P0: Block mode is retired. Switching back to hex occupancy is disabled.
-  return setObjectLayoutMode(slide, objectId, "free", 1);
-}
-
-export function setObjectLayoutMode(
-  slide: EngineSlide,
-  objectId: string,
-  mode: LayerMode,
-  _strictness: WorkspaceStrictness,
-): EngineSlide {
-  if (mode === "block") return slide;
-  const element = slide.elements.find((candidate) => candidate.id === objectId);
-  if (!element) return slide;
-  const currentLayer = getLayerForObject(slide, objectId);
-  if (currentLayer?.mode === "free" && element.layoutMode === "free") {
-    return slide;
-  }
-  return flattenBlockLayoutToFree({
-    ...slide,
-    elements: slide.elements.map((el) =>
-      el.id === objectId ? { ...el, layoutMode: "free", version: el.version + 1 } : el,
-    ),
-  });
 }
 
 export function moveElementZ(
@@ -439,9 +419,8 @@ export function addObjectToLayer(
   slide: EngineSlide,
   element: EngineElement,
   layerId: string,
-  _strictness: WorkspaceStrictness,
 ): EngineSlide {
-  const fallback = slide.layers[0] ?? createEngineLayer("free", { name: "Free layer 1" });
+  const fallback = slide.layers[0] ?? createEngineLayer({ name: "Layer 1" });
   const layers = slide.layers.length ? slide.layers : [fallback];
   const target = layers.find((layer) => layer.id === layerId) ?? fallback;
   const strippedElement = stripLegacyPlacement(element);
@@ -452,21 +431,17 @@ export function addObjectToLayer(
       } as EngineElement)
     : strippedElement;
 
-  cleanElement.layoutMode = "free";
-
   const next: EngineSlide = {
     ...slide,
     layers: layers.map((layer) =>
       layer.id === target.id
         ? {
-            ...layer,
-            mode: "free",
+            ...cleanLayer(layer as WorkingLayer),
             objectIds: layer.objectIds.includes(cleanElement.id)
               ? layer.objectIds
               : [...layer.objectIds, cleanElement.id],
-            placements: {},
           }
-        : layer,
+        : cleanLayer(layer as WorkingLayer),
     ),
     elements: [
       ...slide.elements.filter((candidate) => candidate.id !== cleanElement.id),
@@ -481,11 +456,8 @@ export function removeObjectFromLayer(slide: EngineSlide, objectId: string): Eng
   const next = {
     ...slide,
     layers: slide.layers.map((layer) => ({
-      ...layer,
+      ...cleanLayer(layer as WorkingLayer),
       objectIds: layer.objectIds.filter((id) => id !== objectId),
-      placements: Object.fromEntries(
-        Object.entries(layer.placements).filter(([id]) => id !== objectId),
-      ),
     })),
   };
   return normalizeSlideLayers(next);
@@ -516,70 +488,40 @@ export function reorderLayers(slide: EngineSlide, orderedLayerIds: string[]): En
   return normalizeSlideLayers({ ...slide, layers: reordered });
 }
 
-export function convertLayerMode(
-  slide: EngineSlide,
-  layerId: string,
-  mode: LayerMode,
-  _strictness: WorkspaceStrictness,
-): EngineSlide {
-  const layer = slide.layers.find((candidate) => candidate.id === layerId);
-  if (!layer) return slide;
-  // P0: refuse Block re-entry. Requested "block" is treated as a no-op.
-  if (mode === "block") return slide;
-  if (layer.mode === "free" && Object.keys(layer.placements).length === 0) return slide;
-  return {
-    ...slide,
-    elements: slide.elements.map((el) =>
-      layer.objectIds.includes(el.id) ? { ...el, layoutMode: "free" } : el,
-    ),
-    layers: slide.layers.map((candidate) =>
-      candidate.id === layerId ? { ...candidate, mode: "free", placements: {} } : candidate,
-    ),
-  };
-}
-
 export function moveObjectsToLayer(
   slide: EngineSlide,
   objectIds: string[],
   layerId: string,
-  _strictness: WorkspaceStrictness,
 ): EngineSlide {
   const target = slide.layers.find((layer) => layer.id === layerId);
   if (!target || !objectIds.length) return slide;
   const ids = new Set(objectIds);
   const byId = new Map(slide.elements.map((element) => [element.id, element]));
   const layers = slide.layers.map((layer) => {
-    const retained = layer.objectIds.filter((id) => !ids.has(id));
-    if (layer.id !== target.id) {
-      return { ...layer, mode: "free" as const, objectIds: retained, placements: {} };
-    }
+    const cleaned = cleanLayer(layer as WorkingLayer);
+    const retained = cleaned.objectIds.filter((id) => !ids.has(id));
+    if (layer.id !== target.id) return { ...cleaned, objectIds: retained };
     return {
-      ...layer,
-      mode: "free" as const,
+      ...cleaned,
       objectIds: [...retained, ...[...ids].filter((id) => byId.has(id))],
-      placements: {},
     };
   });
-  return flattenBlockLayoutToFree({
-    ...slide,
-    elements: slide.elements.map((el) => (ids.has(el.id) ? { ...el, layoutMode: "free" } : el)),
-    layers,
-  });
+  return flattenBlockLayoutToFree({ ...slide, layers });
 }
 
-export function reflowBlockObjects(
+function reflowBlockObjects(
   slide: EngineSlide,
-  strictness: WorkspaceStrictness,
+  strictness: number,
   options: {
     anchorId?: string;
     anchorRect?: BlockRect;
-    anchorPlacement?: BlockPlacement;
+    anchorPlacement?: LegacyBlockPlacement;
   } = {},
 ): EngineSlide {
   const grid = getHexGridDimensions(slide.width, slide.height);
   const nextElements = new Map(slide.elements.map((el) => [el.id, el]));
-  const blockItems: Array<{ id: string; placement: BlockPlacement }> = [];
-  for (const layer of slide.layers) {
+  const blockItems: Array<{ id: string; placement: LegacyBlockPlacement }> = [];
+  for (const layer of slide.layers as WorkingLayer[]) {
     if (layer.mode !== "block") continue;
     for (const id of layer.objectIds) {
       const element = slide.elements.find(
@@ -588,7 +530,7 @@ export function reflowBlockObjects(
       if (!element) continue;
       blockItems.push({
         id,
-        placement: layer.placements[id]
+        placement: layer.placements?.[id]
           ? normalizeBlockPlacement(layer.placements[id], grid)
           : normalizeBlockPlacement(
               blockPlacementForRect(element, slide.width, slide.height, placementSeed(element)),
@@ -613,7 +555,7 @@ export function reflowBlockObjects(
     grid,
   });
 
-  const nextLayers = slide.layers.map((layer) => {
+  const nextLayers = (slide.layers as WorkingLayer[]).map((layer) => {
     if (layer.mode !== "block") return layer;
     const nextPlacements = { ...layer.placements };
     for (const id of layer.objectIds) {
@@ -646,32 +588,6 @@ export function reflowBlockObjects(
     layers: nextLayers,
     elements: Array.from(nextElements.values()),
   };
-}
-
-export function commitBlockObject(
-  slide: EngineSlide,
-  _objectId: string,
-  _strictness: WorkspaceStrictness,
-): EngineSlide {
-  return slide;
-}
-
-export function setBlockPlacement(
-  slide: EngineSlide,
-  _objectId: string,
-  _placement: Partial<BlockPlacement>,
-  _strictness: WorkspaceStrictness,
-): EngineSlide {
-  return slide;
-}
-
-/** P0: artwork resize no longer remaps hex cells. */
-export function remapBlockLayersToArtwork(
-  slide: EngineSlide,
-  width: number,
-  height: number,
-): EngineSlide {
-  return { ...slide, width, height };
 }
 
 export function getElementDefaultName(element: EngineElement): string {
@@ -715,10 +631,8 @@ export function getElementDefaultName(element: EngineElement): string {
   return "Object";
 }
 
-export function normalizeStrictness(value: unknown): WorkspaceStrictness {
-  return typeof value === "number" && Number.isFinite(value) && value >= 1
-    ? (value as WorkspaceStrictness)
-    : 1;
+export function normalizeStrictness(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1 ? value : 1;
 }
 
 function migrateObjectOwnedPlacement(
@@ -730,16 +644,16 @@ function migrateObjectOwnedPlacement(
     return {
       ...slide,
       elements: [],
-      layers: [createEngineLayer("free", { name: "Free layer 1" })],
+      layers: [createEngineLayer({ name: "Layer 1" })],
     };
   }
 
   const groups = new Map<
     string,
-    { mode: LayerMode; visible: boolean; locked: boolean; ids: string[] }
+    { mode: string; visible: boolean; locked: boolean; ids: string[] }
   >();
-  for (const element of slide.elements) {
-    const mode: LayerMode = element.layoutMode ?? (element.bento ? "block" : "free");
+  for (const element of slide.elements as WorkingElement[]) {
+    const mode = element.layoutMode ?? (element.bento ? "block" : "free");
     const visible = element.visible !== false;
     const locked = element.locked === true;
     const key = `${mode}:${visible}:${locked}`;
@@ -749,26 +663,30 @@ function migrateObjectOwnedPlacement(
   }
 
   let z = 1;
-  let blockIndex = 0;
-  let freeIndex = 0;
   const targetGrid = getHexGridDimensions(slide.width, slide.height);
-  const layers: EngineLayer[] = [];
+  const layers: WorkingLayer[] = [];
   for (const group of groups.values()) {
-    const index = group.mode === "block" ? ++blockIndex : ++freeIndex;
-    const layer = createEngineLayer(group.mode, {
-      name: `${group.mode === "block" ? "Block" : "Free"} layer ${index}`,
-      visible: group.visible,
-      locked: group.locked,
-      z: z++,
-    });
-    layer.objectIds = group.ids;
+    const layer: WorkingLayer = {
+      ...createEngineLayer({
+        name: "Layer",
+        visible: group.visible,
+        locked: group.locked,
+        z: z++,
+      }),
+      objectIds: group.ids,
+      mode: group.mode,
+      placements: {},
+    };
     if (group.mode === "block") {
       for (const id of group.ids) {
-        const element = slide.elements.find((candidate) => candidate.id === id);
+        const element = slide.elements.find((candidate) => candidate.id === id) as
+          | WorkingElement
+          | undefined;
         if (!element?.bento) continue;
         const referencePlacement = legacyGrid
           ? expandLegacyPlacement(element.bento)
           : element.bento;
+        layer.placements = layer.placements ?? {};
         layer.placements[id] = adaptiveGridMigration
           ? remapBlockPlacement(referencePlacement, REFERENCE_HEX_GRID, targetGrid)
           : normalizeBlockPlacement(referencePlacement, targetGrid);
@@ -782,14 +700,13 @@ function migrateObjectOwnedPlacement(
     layers,
     elements: slide.elements.map((element) => ({
       ...stripLegacyPlacement(element),
-      layoutMode: element.layoutMode ?? (element.bento ? "block" : "free"),
       visible: true,
       locked: false,
     })),
   };
 }
 
-function expandLegacyPlacement(placement: BlockPlacement): BlockPlacement {
+function expandLegacyPlacement(placement: LegacyBlockPlacement): LegacyBlockPlacement {
   return {
     ...placement,
     col: placement.col * 2,
@@ -799,15 +716,15 @@ function expandLegacyPlacement(placement: BlockPlacement): BlockPlacement {
 }
 
 function stripLegacyPlacement(element: EngineElement): EngineElement {
-  if (!element.bento) return element;
-  const { bento: _bento, ...rest } = element;
+  const working = element as WorkingElement;
+  const { bento, layoutMode: _layoutMode, ...rest } = working;
   return {
     ...rest,
-    builderKind: element.builderKind ?? element.bento.kind,
+    builderKind: element.builderKind ?? bento?.kind,
   } as EngineElement;
 }
 
-function placementSeed(element: EngineElement): BlockPlacement {
+function placementSeed(element: EngineElement): LegacyBlockPlacement {
   return {
     col: 0,
     row: 0,

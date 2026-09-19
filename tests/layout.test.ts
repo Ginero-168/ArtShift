@@ -3,16 +3,25 @@ import { createBuilderBlock } from "@/lib/builder/blocks";
 import { createRect, createText } from "@/lib/engine/factory";
 import {
   addObjectToLayer,
-  convertLayerMode,
   createEngineLayer,
   moveObjectsToLayer,
   normalizeDocumentLayers,
 } from "@/lib/engine/layers";
-import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineSlide } from "@/lib/engine/types";
+import {
+  ENGINE_SCHEMA_VERSION,
+  type EngineDoc,
+  type EngineLayer,
+  type EngineSlide,
+} from "@/lib/engine/types";
 
 const ARTWORK = { width: 1200, height: 1200 };
 
-function emptySlide(layers = [createEngineLayer("free", { name: "Free layer 1" })]): EngineSlide {
+type LegacyLayer = EngineLayer & {
+  mode?: string;
+  placements?: Record<string, { col: number; row: number; colSpan: number; rowSpan: number }>;
+};
+
+function emptySlide(layers = [createEngineLayer("free", { name: "Layer 1" })]): EngineSlide {
   return {
     id: "slide",
     name: "Slide",
@@ -23,15 +32,29 @@ function emptySlide(layers = [createEngineLayer("free", { name: "Free layer 1" }
   };
 }
 
+function assertNoHexFields(slide: EngineSlide) {
+  for (const layer of slide.layers) {
+    expect("mode" in layer).toBe(false);
+    expect("placements" in layer).toBe(false);
+  }
+  for (const element of slide.elements) {
+    expect("layoutMode" in element).toBe(false);
+    expect("bento" in element).toBe(false);
+  }
+}
+
 describe("Layer-owned placement", () => {
-  it("keeps Block identity independent from Layer type", () => {
+  it("keeps Block library identity independent from hex layout", () => {
     const block = createBuilderBlock("heading", {
       ...ARTWORK,
       point: { x: 600, y: 600 },
     });
 
     expect(block.builderKind).toBe("heading");
-    expect(block.bento).toBeUndefined();
+    expect("bento" in block).toBe(false);
+    expect("layoutMode" in block).toBe(false);
+    expect(block.width).toBeGreaterThan(0);
+    expect(block.height).toBeGreaterThan(0);
   });
 
   it("lets one Layer own several Objects", () => {
@@ -39,33 +62,26 @@ describe("Layer-owned placement", () => {
     let slide = emptySlide([layer]);
     const heading = createText({ x: 100, y: 100, width: 400, height: 120, text: "Heading" });
     const subtitle = createText({ x: 100, y: 240, width: 400, height: 80, text: "Subtitle" });
-    slide = addObjectToLayer(slide, heading, layer.id, 1);
-    slide = addObjectToLayer(slide, subtitle, layer.id, 1);
+    slide = addObjectToLayer(slide, heading, layer.id);
+    slide = addObjectToLayer(slide, subtitle, layer.id);
 
     expect(slide.layers[0].objectIds).toEqual([heading.id, subtitle.id]);
   });
 
-  it("refuses to convert a Layer back to Block and keeps Free geometry", () => {
+  it("keeps Free geometry when adding objects to a layer", () => {
     const layer = createEngineLayer("free", { name: "Copy" });
     let slide = emptySlide([layer]);
     const heading = createText({ x: 80, y: 90, width: 440, height: 140, text: "Heading" });
     const subtitle = createText({ x: 640, y: 90, width: 320, height: 100, text: "Subtitle" });
-    slide = addObjectToLayer(slide, heading, layer.id, 1);
-    slide = addObjectToLayer(slide, subtitle, layer.id, 1);
-    const geometry = slide.elements.map(({ id, x, y, width, height }) => ({
-      id,
-      x,
-      y,
-      width,
-      height,
-    }));
-
-    const blocked = convertLayerMode(slide, layer.id, "block", 1);
-    expect(blocked.layers[0].mode).toBe("free");
-    expect(blocked.layers[0].placements).toEqual({});
+    slide = addObjectToLayer(slide, heading, layer.id);
+    slide = addObjectToLayer(slide, subtitle, layer.id);
     expect(
-      blocked.elements.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })),
-    ).toEqual(geometry);
+      slide.elements.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })),
+    ).toEqual([
+      { id: heading.id, x: 80, y: 90, width: 440, height: 140 },
+      { id: subtitle.id, x: 640, y: 90, width: 320, height: 100 },
+    ]);
+    assertNoHexFields(slide);
   });
 
   it("moves multiple selected Objects into another Layer", () => {
@@ -74,23 +90,26 @@ describe("Layer-owned placement", () => {
     let slide = emptySlide([source, target]);
     const a = createText({ x: 40, y: 40, text: "A" });
     const b = createText({ x: 400, y: 40, text: "B" });
-    slide = addObjectToLayer(slide, a, source.id, 1);
-    slide = addObjectToLayer(slide, b, source.id, 1);
-    slide = moveObjectsToLayer(slide, [a.id, b.id], target.id, 1);
+    slide = addObjectToLayer(slide, a, source.id);
+    slide = addObjectToLayer(slide, b, source.id);
+    slide = moveObjectsToLayer(slide, [a.id, b.id], target.id);
 
     expect(slide.layers.find((layer) => layer.id === source.id)?.objectIds).toEqual([]);
     expect(slide.layers.find((layer) => layer.id === target.id)?.objectIds).toEqual([a.id, b.id]);
+    assertNoHexFields(slide);
   });
 
   it("keeps overlapping Block objects where they were when baking to Free", () => {
-    const lower = createEngineLayer("block", { name: "Lower", z: 1 });
-    const upper = createEngineLayer("block", { name: "Upper", z: 2 });
+    const lower = createEngineLayer("block", { name: "Lower", z: 1 }) as LegacyLayer;
+    const upper = createEngineLayer("block", { name: "Upper", z: 2 }) as LegacyLayer;
     const lowerObject = createRect({ x: 40, y: 40, width: 200, height: 200 });
     const upperObject = createRect({ x: 40, y: 40, width: 200, height: 200 });
     lower.objectIds = [lowerObject.id];
     upper.objectIds = [upperObject.id];
-    lower.placements[lowerObject.id] = { col: 2, row: 2, colSpan: 4, rowSpan: 4 };
-    upper.placements[upperObject.id] = { col: 2, row: 2, colSpan: 4, rowSpan: 4 };
+    lower.mode = "block";
+    upper.mode = "block";
+    lower.placements = { [lowerObject.id]: { col: 2, row: 2, colSpan: 4, rowSpan: 4 } };
+    upper.placements = { [upperObject.id]: { col: 2, row: 2, colSpan: 4, rowSpan: 4 } };
 
     const migrated = normalizeDocumentLayers({
       id: "doc-overlap",
@@ -104,15 +123,14 @@ describe("Layer-owned placement", () => {
       schemaVersion: 5,
     });
     const slide = migrated.slides[0];
-    expect(slide.layers.every((layer) => layer.mode === "free")).toBe(true);
-    expect(slide.layers.every((layer) => Object.keys(layer.placements).length === 0)).toBe(true);
+    assertNoHexFields(slide);
     expect(slide.elements[0]).toMatchObject({ x: 40, y: 40, width: 200, height: 200 });
     expect(slide.elements[1]).toMatchObject({ x: 40, y: 40, width: 200, height: 200 });
   });
 
   it("migrates schema-v1 Object placement into Layer containers", () => {
     const grid = createText({ x: 0, y: 0, text: "Grid" });
-    grid.bento = { col: 2, row: 3, colSpan: 4, rowSpan: 2 };
+    Object.assign(grid, { bento: { col: 2, row: 3, colSpan: 4, rowSpan: 2 } });
     const free = createText({ x: 500, y: 200, text: "Free" });
     const legacy = {
       id: "doc",
@@ -128,22 +146,21 @@ describe("Layer-owned placement", () => {
     const migrated = normalizeDocumentLayers(legacy);
     const slide = migrated.slides[0];
     expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
-    expect(slide.layers.every((layer) => layer.mode === "free")).toBe(true);
-    expect(slide.layers.every((layer) => Object.keys(layer.placements).length === 0)).toBe(true);
+    assertNoHexFields(slide);
     expect(slide.elements.map((element) => element.id).sort()).toEqual([free.id, grid.id].sort());
     const bakedGrid = slide.elements.find((element) => element.id === grid.id);
-    expect(bakedGrid?.layoutMode).toBe("free");
     expect(bakedGrid?.x).toBeGreaterThanOrEqual(0);
     expect(bakedGrid?.y).toBeGreaterThanOrEqual(0);
     const bakedFree = slide.elements.find((element) => element.id === free.id);
-    expect(bakedFree).toMatchObject({ x: 500, y: 200, layoutMode: "free" });
+    expect(bakedFree).toMatchObject({ x: 500, y: 200 });
   });
 
   it("migrates schema-v2 Block placement from the reference grid to a portrait grid", () => {
     const block = createText({ x: 100, y: 100, width: 600, height: 300, text: "Portrait" });
-    const layer = createEngineLayer("block", { name: "Legacy Block" });
+    const layer = createEngineLayer("block", { name: "Legacy Block" }) as LegacyLayer;
     layer.objectIds = [block.id];
-    layer.placements[block.id] = { col: 6, row: 3, colSpan: 12, rowSpan: 6 };
+    layer.mode = "block";
+    layer.placements = { [block.id]: { col: 6, row: 3, colSpan: 12, rowSpan: 6 } };
     const portraitSlide: EngineSlide = {
       ...emptySlide([layer]),
       width: 1080,
@@ -166,9 +183,7 @@ describe("Layer-owned placement", () => {
     const slide = migrated.slides[0];
     const element = slide.elements[0];
     expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
-    expect(slide.layers[0].mode).toBe("free");
-    expect(slide.layers[0].placements).toEqual({});
-    expect(element.layoutMode).toBe("free");
+    assertNoHexFields(slide);
     expect(element.x).toBeGreaterThanOrEqual(0);
     expect(element.y).toBeGreaterThanOrEqual(0);
     expect(element.x + element.width).toBeLessThanOrEqual(slide.width);

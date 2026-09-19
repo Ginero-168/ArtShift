@@ -54,10 +54,8 @@ describe("interactive elements", () => {
       layers: [
         {
           id: "layer-1",
-          name: "Free layer 1",
-          mode: "free",
+          name: "Layer 1",
           objectIds: [visible.id, hidden.id],
-          placements: {},
           visible: true,
           locked: false,
           z: 1,

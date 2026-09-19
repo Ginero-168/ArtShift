@@ -31,6 +31,17 @@ describe("Builder element library", () => {
     if (text.type === "text") expect(text.textPreset).toBe("title");
   });
 
+  it("sizes library recipes from explicit 1920×1080 pixel defaults", () => {
+    const text = getBuilderBlockDefinition("text");
+    expect(text).toMatchObject({ defaultWidth: 1120, defaultHeight: 270 });
+    const inserted = createBuilderBlock("text", ARTWORK);
+    expect(inserted.width).toBe(1120);
+    expect(inserted.height).toBe(270);
+    const scaled = createBuilderBlock("cta", { width: 960, height: 540 });
+    expect(scaled.width).toBe(320);
+    expect(scaled.height).toBe(45);
+  });
+
   it("changes a Text preset without replacing the user's content", () => {
     const text = createBuilderBlock("text", ARTWORK);
     expect(text.type).toBe("text");

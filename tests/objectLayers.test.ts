@@ -6,11 +6,9 @@ import {
   isObjectVisible,
   moveElementZ,
   normalizeSlideLayers,
-  reflowBlockObjects,
   reorderElementsInSlide,
   setElementLocked,
   setElementVisibility,
-  toggleObjectLayoutMode,
 } from "@/lib/engine/layers";
 import type { EngineSlide } from "@/lib/engine/types";
 
@@ -18,15 +16,12 @@ describe("1 Object = 1 Layer Architecture", () => {
   function createTestSlide(): EngineSlide {
     const el1 = createRect({ x: 100, y: 100, width: 200, height: 150 });
     el1.name = "Background Card";
-    el1.layoutMode = "block";
 
     const el2 = createText({ x: 120, y: 120, text: "Heading Text" });
     el2.name = "Main Heading";
-    el2.layoutMode = "block";
 
     const el3 = createFrame({ x: 400, y: 100, width: 300, height: 300 });
     el3.name = "Profile Photo Frame";
-    el3.layoutMode = "free";
 
     return flattenBlockLayoutToFree(
       normalizeSlideLayers({
@@ -40,9 +35,7 @@ describe("1 Object = 1 Layer Architecture", () => {
           {
             id: el1.id,
             name: el1.name,
-            mode: "block",
             objectIds: [el1.id],
-            placements: {},
             visible: true,
             locked: false,
             z: 1,
@@ -50,9 +43,7 @@ describe("1 Object = 1 Layer Architecture", () => {
           {
             id: el2.id,
             name: el2.name,
-            mode: "block",
             objectIds: [el2.id],
-            placements: {},
             visible: true,
             locked: false,
             z: 2,
@@ -60,9 +51,7 @@ describe("1 Object = 1 Layer Architecture", () => {
           {
             id: el3.id,
             name: el3.name,
-            mode: "free",
             objectIds: [el3.id],
-            placements: {},
             visible: true,
             locked: false,
             z: 3,
@@ -78,58 +67,10 @@ describe("1 Object = 1 Layer Architecture", () => {
     expect(slide.layers[0].id).toBe(slide.elements[0].id);
     expect(slide.layers[1].id).toBe(slide.elements[1].id);
     expect(slide.layers[2].id).toBe(slide.elements[2].id);
-
-    expect(slide.layers[0].mode).toBe("free");
-    expect(slide.layers[1].mode).toBe("free");
-    expect(slide.layers[2].mode).toBe("free");
-  });
-
-  it("refuses to toggle an object back into Block mode", () => {
-    const slide = createTestSlide();
-    const targetId = slide.elements[0].id;
-
-    const freeSlide = toggleObjectLayoutMode(slide, targetId, 1);
-    const freeEl = freeSlide.elements.find((e) => e.id === targetId);
-    const freeLayer = freeSlide.layers.find((l) => l.id === targetId);
-    expect(freeEl?.layoutMode).toBe("free");
-    expect(freeLayer?.mode).toBe("free");
-    expect(freeLayer?.placements[targetId]).toBeUndefined();
-  });
-
-  it("keeps every object on Free after a no-op layout toggle", () => {
-    const slide = createTestSlide();
-    const id0 = slide.elements[0].id;
-    const id1 = slide.elements[1].id;
-    const id2 = slide.elements[2].id;
-
-    expect(slide.elements.find((e) => e.id === id0)?.layoutMode).toBe("free");
-    expect(slide.elements.find((e) => e.id === id1)?.layoutMode).toBe("free");
-    expect(slide.elements.find((e) => e.id === id2)?.layoutMode).toBe("free");
-
-    const toggled = toggleObjectLayoutMode(slide, id0, 1);
-    expect(toggled.elements.find((e) => e.id === id0)?.layoutMode).toBe("free");
-    expect(toggled.elements.find((e) => e.id === id1)?.layoutMode).toBe("free");
-    expect(toggled.elements.find((e) => e.id === id2)?.layoutMode).toBe("free");
-  });
-
-  it("leaves Free object geometry untouched when leftover reflow is invoked", () => {
-    const slide = createTestSlide();
-    const freeObj = slide.elements.find((e) => e.layoutMode === "free");
-    expect(freeObj).toBeDefined();
-    const originalFreePos = {
-      x: freeObj!.x,
-      y: freeObj!.y,
-      width: freeObj!.width,
-      height: freeObj!.height,
-    };
-
-    const reflowed = reflowBlockObjects(slide, 1);
-    const afterFreeObj = reflowed.elements.find((e) => e.id === freeObj!.id);
-
-    expect(afterFreeObj?.x).toBe(originalFreePos.x);
-    expect(afterFreeObj?.y).toBe(originalFreePos.y);
-    expect(afterFreeObj?.width).toBe(originalFreePos.width);
-    expect(afterFreeObj?.height).toBe(originalFreePos.height);
+    for (const layer of slide.layers) {
+      expect("mode" in layer).toBe(false);
+      expect("placements" in layer).toBe(false);
+    }
   });
 
   it("supports individual object visibility toggling", () => {
@@ -167,29 +108,27 @@ describe("1 Object = 1 Layer Architecture", () => {
     const firstId = slide.elements[0].id;
     const secondId = slide.elements[1].id;
 
-    // Move first element forward
     const forwardSlide = moveElementZ(slide, firstId, "forward");
     expect(forwardSlide.elements[0].id).toBe(secondId);
     expect(forwardSlide.elements[1].id).toBe(firstId);
 
-    // Move it back
     const backwardSlide = moveElementZ(forwardSlide, firstId, "backward");
     expect(backwardSlide.elements[0].id).toBe(firstId);
     expect(backwardSlide.elements[1].id).toBe(secondId);
   });
 
-  it("preserves Free layoutMode when reordering layers", () => {
+  it("preserves object identity when reordering layers", () => {
     const slide = createTestSlide();
-    expect(slide.elements[0].layoutMode).toBe("free");
-    expect(slide.elements[1].layoutMode).toBe("free");
-    expect(slide.elements[2].layoutMode).toBe("free");
-
     const freeId = slide.elements[2].id;
     const moved = moveElementZ(slide, freeId, "backward");
 
-    expect(moved.elements.find((e) => e.id === slide.elements[0].id)?.layoutMode).toBe("free");
-    expect(moved.elements.find((e) => e.id === slide.elements[1].id)?.layoutMode).toBe("free");
-    expect(moved.elements.find((e) => e.id === freeId)?.layoutMode).toBe("free");
+    expect(moved.elements.find((e) => e.id === slide.elements[0].id)?.id).toBe(
+      slide.elements[0].id,
+    );
+    expect(moved.elements.find((e) => e.id === slide.elements[1].id)?.id).toBe(
+      slide.elements[1].id,
+    );
+    expect(moved.elements.find((e) => e.id === freeId)?.id).toBe(freeId);
   });
 
   it("reorders elements to arbitrary target positions via drag and drop", () => {
@@ -198,7 +137,6 @@ describe("1 Object = 1 Layer Architecture", () => {
     const id1 = slide.elements[1].id;
     const id2 = slide.elements[2].id;
 
-    // Drag element id2 to the top position (id0's position in UI list)
     const reordered = reorderElementsInSlide(slide, id2, id0);
     const z0 = reordered.elements.find((e) => e.id === id0)?.z ?? 0;
     const z1 = reordered.elements.find((e) => e.id === id1)?.z ?? 0;

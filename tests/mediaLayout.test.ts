@@ -78,11 +78,11 @@ describe("image-like object geometry", () => {
       ...LANDSCAPE,
     };
 
-    slide = addObjectToLayer(slide, image, layer.id, 1);
+    slide = addObjectToLayer(slide, image, layer.id);
 
     const added = slide.elements.find((element) => element.id === image.id)!;
-    expect(slide.layers[0].mode).toBe("free");
-    expect(slide.layers[0].placements).toEqual({});
+    expect("mode" in slide.layers[0]).toBe(false);
+    expect("placements" in slide.layers[0]).toBe(false);
     expect(added.width / added.height).toBeCloseTo(2 / 3, 4);
   });
 

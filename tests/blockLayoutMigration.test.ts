@@ -7,9 +7,7 @@ import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineSlide } from "@/lib/e
 function v5BlockDoc(): EngineDoc {
   const a = createRect({ x: 120, y: 80, width: 400, height: 220 });
   const b = createText({ x: 560, y: 90, width: 300, height: 80, text: "Headline" });
-  a.layoutMode = "block";
-  b.layoutMode = "block";
-  const slide: EngineSlide = {
+  const slide = {
     id: "slide",
     name: "Slide",
     background: "#fff",
@@ -37,7 +35,7 @@ function v5BlockDoc(): EngineDoc {
     title: "V5 Block",
     width: 1920,
     height: 1080,
-    slides: [slide],
+    slides: [slide as EngineSlide],
     snapGrid: null,
     workspaceStrictness: 2,
     strictnessLevel: 2,
@@ -47,7 +45,18 @@ function v5BlockDoc(): EngineDoc {
   };
 }
 
-describe("P0 Block → Free migration", () => {
+function assertNoHexFields(slide: EngineSlide) {
+  for (const layer of slide.layers) {
+    expect("mode" in layer).toBe(false);
+    expect("placements" in layer).toBe(false);
+  }
+  for (const element of slide.elements) {
+    expect("layoutMode" in element).toBe(false);
+    expect("bento" in element).toBe(false);
+  }
+}
+
+describe("P0–P2 Block → Free migration", () => {
   it("bakes v5 Block placements into Free pixels and clears cells", () => {
     const source = v5BlockDoc();
     const before = source.slides[0].elements.map((element) => ({
@@ -63,10 +72,8 @@ describe("P0 Block → Free migration", () => {
 
     expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
     expect(slide.layers).toHaveLength(1);
-    expect(slide.layers[0].mode).toBe("free");
-    expect(slide.layers[0].placements).toEqual({});
     expect(slide.layers[0].objectIds).toEqual(source.slides[0].layers[0].objectIds);
-    expect(slide.elements.every((element) => element.layoutMode === "free")).toBe(true);
+    assertNoHexFields(slide);
     expect(
       slide.elements.map((element) => ({
         id: element.id,
@@ -81,10 +88,7 @@ describe("P0 Block → Free migration", () => {
   it("fromJSON of a v5 Block document lands on schema v6 Free geometry", () => {
     const migrated = fromJSON(v5BlockDoc());
     expect(migrated.schemaVersion).toBe(6);
-    expect(migrated.slides[0].layers.every((layer) => layer.mode === "free")).toBe(true);
-    expect(
-      migrated.slides[0].layers.every((layer) => Object.keys(layer.placements).length === 0),
-    ).toBe(true);
+    assertNoHexFields(migrated.slides[0]);
   });
 
   it("flatten is idempotent and does not rewrite pixels", () => {
@@ -97,7 +101,7 @@ describe("P0 Block → Free migration", () => {
       y: slide.elements[0].y,
       width: slide.elements[0].width,
       height: slide.elements[0].height,
-      layoutMode: "free",
     });
+    assertNoHexFields(once);
   });
 });

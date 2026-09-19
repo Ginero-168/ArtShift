@@ -22,10 +22,8 @@ function twoSlideDoc() {
         layers: [
           {
             id: "l1",
-            name: "Free",
-            mode: "free" as const,
+            name: "Layer 1",
             objectIds: [],
-            placements: {},
             visible: true,
             locked: false,
             z: 1,
@@ -42,10 +40,8 @@ function twoSlideDoc() {
         layers: [
           {
             id: "l2",
-            name: "Free",
-            mode: "free" as const,
+            name: "Layer 1",
             objectIds: [],
-            placements: {},
             visible: true,
             locked: false,
             z: 1,

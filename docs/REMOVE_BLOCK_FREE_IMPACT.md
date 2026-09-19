@@ -1,6 +1,6 @@
 # Remove Block/Free (hex) layout — impact inventory
 
-**Status:** P0 in progress on this branch. Schema v6 bakes Block → Free. `hexLayout.ts` is **not** deleted (P2). Residual B/F chrome is disabled, not fully stripped (P1).
+**Status:** P0–P2 complete on this branch. Hex Block/Free is no longer a product feature. Schema v6 bakes old Block files to Free pixels. Hex math remains only as `lib/engine/legacyBlockMigrate.ts` (load-only). This PR stays draft — do **not** merge to `main`.
 
 **No wholesale engine deletion in this PR.** Rollback baseline remains tag `pre-remove-bf-048d9fd`.
 
@@ -311,16 +311,15 @@ git reset --hard pre-remove-bf-048d9fd
 - [x] Note exact `main` HEAD SHA (`048d9fd5219006653269f738e26fc890adbaa33b`).
 - [x] Push annotated tag `pre-remove-bf-048d9fd` on that SHA.
 - [x] Open inventory-only draft PR (this document), then implement P0 on the same branch.
-- [x] Schema v6: bake Block placements → Free pixels; clear `placements`; force `layoutMode` + layer `mode` to `"free"`.
+- [x] Schema v6: bake Block placements → Free pixels; strip `placements` / `layoutMode` / layer `mode`.
 - [x] Runtime no longer writes Block cells (add/paste/resize/AI/library/composition).
-- [x] Disable B/F re-entry in UI (badge is inert **F**; hex overlay + All/Block/Free filter hidden).
-- [x] Tests: v5 Block fixtures bake to Free; hex-collision is no longer product behavior.
+- [x] P1: leftover store APIs, F badge, hex overlay, All/Block/Free filter, and B/F CSS removed.
+- [x] Tests: v5 Block fixtures bake to Free; hex-collision / hex unit tests deleted.
+- [x] Library recipes use explicit 1920×1080 pixel defaults (`defaultWidth` / `defaultHeight`).
+- [x] P2: `hexLayout.ts` renamed to load-only `legacyBlockMigrate.ts`; `LayerMode` / `BlockPlacement` / `BentoBlock` product types deleted.
 - [ ] Confirm nobody is mid-flight on Moodboard PR #9 with shared layer files (do not merge moodboard into a removal branch).
 - [ ] Export / snapshot a handful of real projects that still use Block mode (placements + strictness > 1).
-- [ ] Decide pixel defaults for each `BUILDER_BLOCKS` kind to replace `colSpan` / `rowSpan` (still used for initial recipe *size* only).
-- [ ] P1: strip leftover store APIs / CSS / hex overlay code paths.
-- [ ] P2: delete `hexLayout.ts` and leftover types once v6 is universal.
-- [ ] Do **not** merge any of this work to `main` until humans approve; this PR stays draft until then.
+- [x] Do **not** merge any of this work to `main` until humans approve; this PR stays draft until then.
 
 ---
 
@@ -330,18 +329,25 @@ Block/Free is not a single file. It is a **dual geometry model**: hex `BlockPlac
 
 **Highest coupling:** `hexLayout.ts` ↔ `layers.ts` ↔ `store.ts` ↔ resize ↔ canvas commit. **Highest user-visible risk:** saved documents that only “look right” because reflow/strictness is still live. **Lowest coupling / keep:** Block *library* recipes, frames, groups, moodboard, Smart Arrange pixel math.
 
-Safe order: **tag (done) → inventory (done) → P0 bake-to-Free (this PR) → P1 UI strip → P2 delete engine.**
+Safe order: **tag (done) → inventory (done) → P0 bake-to-Free (done) → P1 UI strip (done) → P2 delete engine (done).**
 
-### P0 shipped on this branch
+### P0–P2 shipped on this branch
 
 - `ENGINE_SCHEMA_VERSION = 6`
 - `flattenBlockLayoutToFree` at the end of `normalizeDocumentLayers` / `fromJSON` / `loadDoc`
-- Store and layer mutators no longer create placements; `setLayerMode("block")` / B/F toggle are no-ops
+- Store no longer exposes `commitBlockLayout`, `updateBlockPlacement`, `setLayerMode`, layout-mode toggles, `showHexGrid`, `layerFilter`, or strictness setters
+- Canvas / Transformer / Layer panel have no Block/Free chrome (no hex overlay, no F badge)
 - Resize scales pixels only
 - AI insert accepts any unlocked layer
-- Library recipes still exist; `createBuilderBlock` still uses hex math for default *size*, then inserts as Free
+- Library recipes still exist; `createBuilderBlock` sizes from explicit 1920×1080 pixels and inserts as Free
+- Hex math lives only in `lib/engine/legacyBlockMigrate.ts` for v1–v5 load; `reflowBlockObjects` is private to that migrate path
 
-### Residual P1 / P2
+### Residual notes (intentionally kept)
 
-- **P1:** remove unused store methods (`commitBlockLayout`, `updateBlockPlacement`, `showHexGrid`, `layerFilter`, strictness setters), Layer panel F badge, inspector FREE chip, CSS, canvas hex overlay
-- **P2:** delete `lib/engine/hexLayout.ts`, `LayerMode` / `BlockPlacement` / `bento`, leftover `reflowBlockObjects` used only by old-schema load, hex unit tests
+- **Block library recipes** (heading, CTA, frames, shapes, badges) and `builderKind`
+- **Frames, groups, moodboard, Smart Arrange** — separate features
+- **Organizational layers** (visibility / lock / z / objectIds)
+- **`legacyBlockMigrate.ts`** — load-only bake of old Block files; not a product engine
+- **Deprecated `workspaceStrictness*` fields** on `EngineDoc` — read on load so old files open; not a product API
+- **Safety tag `pre-remove-bf-048d9fd`** remains the rollback point
+- Moodboard PR #9 is untouched; this PR must not merge to `main` from the agent

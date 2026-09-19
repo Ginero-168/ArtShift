@@ -40,12 +40,10 @@ describe("Publisher Brand Kit", () => {
         {
           id: "l1",
           name: "Layer 1",
-          mode: "free",
           visible: true,
           locked: false,
           z: 0,
           objectIds: [titleEl.id, btnEl.id],
-          placements: {},
         },
       ],
       elements: [titleEl, btnEl],

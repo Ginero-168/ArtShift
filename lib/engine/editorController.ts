@@ -23,7 +23,6 @@ export type EditorControllerActions = {
   setFrameImage?: (frameId: string, imageFileId: string | undefined) => void;
   deleteElements?: (ids: string[]) => void;
   selectOnly?: (ids: string[]) => void;
-  commitBlockLayout?: (id: string) => void;
 };
 
 export type EditorController = {
@@ -62,7 +61,6 @@ export type EditorController = {
     },
     label?: string,
   ): boolean;
-  commitBlockLayout(id: string): void;
   /** Return the active Selection only when it belongs to the requested image. */
   selectionForImage(
     active: { imageId: string; selection: RasterSelection } | null,
@@ -183,10 +181,6 @@ export function createEditorController(actions: EditorControllerActions): Editor
       });
       actions.updateElements([{ id: image.id, patch }], label);
       return true;
-    },
-
-    commitBlockLayout(id) {
-      actions.commitBlockLayout?.(id);
     },
 
     selectionForImage(active, imageId) {

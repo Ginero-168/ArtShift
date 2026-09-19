@@ -48,12 +48,7 @@ import {
 } from "@/lib/engine/gestureController";
 import { pickIntersectRect, pickTopMost } from "@/lib/engine/hitTest";
 import { fileToDataURL, getImageCache, loadDataURL } from "@/lib/engine/imageCache";
-import {
-  getInteractiveElements,
-  getLayerForObject,
-  isObjectBlock,
-  isObjectLocked,
-} from "@/lib/engine/layers";
+import { getInteractiveElements, isObjectLocked } from "@/lib/engine/layers";
 import { getProcessingPreviews, subscribeProcessingPreview } from "@/lib/engine/processingPreview";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { constrainShapeDrag } from "@/lib/engine/shapeDrag";
@@ -216,14 +211,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   { onViewChange },
   ref,
 ) {
-  const rawSlide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
+  const slide = useEngine((s) => s.doc.slides.find((sl) => sl.id === s.currentSlideId));
   const tool = useEngine((s) => s.tool);
   const selectedIds = useEngine((s) => s.selectedIds);
-  const activeLayerId = useEngine((s) => s.activeLayerId);
   const snapGrid = useEngine((s) => s.doc.snapGrid);
-  const showHexGrid = useEngine((s) => s.showHexGrid);
   const activeGhostOverlay = useEngine((s) => s.activeGhostOverlay);
-  const layerFilter = useEngine((s) => s.layerFilter);
   const lineSubtype = useEngine((s) => s.lineSubtype);
   const setTool = useEngine((s) => s.setTool);
   const setEditorMode = useEngine((s) => s.setEditorMode);
@@ -233,7 +225,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
   const previewElements = useEngine((s) => s.previewElements);
   const commitInteraction = useEngine((s) => s.commitInteraction);
-  const commitBlockLayout = useEngine((s) => s.commitBlockLayout);
   const setFrameImage = useEngine((s) => s.setFrameImage);
   const selectOnly = useEngine((s) => s.selectOnly);
   const clearSelection = useEngine((s) => s.clearSelection);
@@ -263,11 +254,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         setFrameImage,
         deleteElements,
         selectOnly,
-        commitBlockLayout,
       }),
     [
       applyRasterSelection,
-      commitBlockLayout,
       currentSelection,
       currentSlide,
       currentTool,
@@ -299,20 +288,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     },
     [editorController],
   );
-
-  // Filter the slide elements by layerFilter ("all" | "block" | "free")
-  const slide = useMemo(() => {
-    if (!rawSlide) return undefined;
-    if (layerFilter === "all") return rawSlide;
-    const filteredElements = rawSlide.elements.filter((el) => {
-      const isBlock = isObjectBlock(rawSlide, el.id);
-      return layerFilter === "block" ? isBlock : !isBlock;
-    });
-    return {
-      ...rawSlide,
-      elements: filteredElements,
-    };
-  }, [rawSlide, layerFilter]);
 
   const rootRef = useRef<CanvasRootHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1380,8 +1355,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           }
         }
 
-        const movedBlockIds = ids.filter((id) => getLayerForObject(slideNow, id)?.mode === "block");
-        for (const id of movedBlockIds) editorController.commitBlockLayout(id);
         return;
       }
       if (d.kind === "rasterPaint") {
@@ -1645,9 +1618,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         ghostOverlay={activeGhostOverlay}
         images={images}
         snapGrid={snapGrid}
-        showHexGrid={showHexGrid}
         selectedIds={editingText ? new Set() : selectedIds}
-        activeLayerId={activeLayerId}
         handActive={tool === "hand"}
         toolCursor={toolToCursor(tool)}
         onPointerDownWorld={onPointerDown}

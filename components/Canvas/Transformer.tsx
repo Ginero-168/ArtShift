@@ -16,12 +16,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { elementWorldBBox, localToWorld, type Rect, unionBBox } from "@/lib/engine/bounds";
 import { pickTopMost } from "@/lib/engine/hitTest";
-import {
-  getInteractiveElements,
-  getLayerForObject,
-  getRenderableElements,
-  isObjectLocked,
-} from "@/lib/engine/layers";
+import { getInteractiveElements, getRenderableElements, isObjectLocked } from "@/lib/engine/layers";
 import { isMediaElement } from "@/lib/engine/mediaLayout";
 import { snapResize } from "@/lib/engine/snap";
 import { useEngine } from "@/lib/engine/store";
@@ -79,7 +74,6 @@ export default function Transformer({
   const checkpointInteraction = useEngine((s) => s.checkpointInteraction);
   const previewElements = useEngine((s) => s.previewElements);
   const commitInteraction = useEngine((s) => s.commitInteraction);
-  const commitBlockLayout = useEngine((s) => s.commitBlockLayout);
 
   const [active, setActive] = useState<HandleId | null>(null);
   const [rotateDeg, setRotateDeg] = useState<number | null>(null);
@@ -606,14 +600,8 @@ export default function Transformer({
         /* ignore */
       }
       if (drag.checkpointed) commitInteraction();
-      if (drag.checkpointed && !isRotateHandle(drag.handle) && slide) {
-        const ids = drag.multi ? drag.multi.originals.map((element) => element.id) : [drag.el.id];
-        for (const id of ids) {
-          if (getLayerForObject(slide, id)?.mode === "block") commitBlockLayout(id);
-        }
-      }
     },
-    [commitBlockLayout, commitInteraction, onGuidesChange, slide],
+    [commitInteraction, onGuidesChange],
   );
 
   if (!bbox || selectedElements.length === 0) return null;

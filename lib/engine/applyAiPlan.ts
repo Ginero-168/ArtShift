@@ -298,7 +298,6 @@ function applyCommand(
       ...(command.payload.fontFamily ? { fontFamily: command.payload.fontFamily } : {}),
     });
     element.z = nextElementZ(slide);
-    element.layoutMode = "free";
     if (command.payload.fill) element.strokeColor = command.payload.fill;
     if (command.payload.textAlign) element.textAlign = command.payload.textAlign;
     slide.elements.push(element);
@@ -313,7 +312,6 @@ function applyCommand(
     }
     const element = createShape(command.payload);
     element.z = nextElementZ(slide);
-    element.layoutMode = "free";
     if (command.payload.fill) element.backgroundColor = command.payload.fill;
     if (command.payload.stroke) element.strokeColor = command.payload.stroke;
     if (command.payload.strokeWidth !== undefined)

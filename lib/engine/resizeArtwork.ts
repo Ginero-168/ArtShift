@@ -1,12 +1,11 @@
 import { recomputeArrowBindings } from "./binding";
 import { isMediaElement } from "./mediaLayout";
-import type { EngineElement, EngineSlide, WorkspaceStrictness } from "./types";
+import type { EngineElement, EngineSlide } from "./types";
 
 export function resizeArtworkSlide(
   slide: EngineSlide,
   width: number,
   height: number,
-  _strictness: WorkspaceStrictness,
   resizeContents = true,
 ): EngineSlide {
   const safeWidth = Math.max(64, Math.min(10000, Math.round(width)));

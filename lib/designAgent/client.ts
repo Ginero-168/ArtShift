@@ -48,7 +48,6 @@ export function buildDesignAgentContext(
       layers: (slide?.layers ?? []).map((layer) => ({
         id: layer.id,
         name: layer.name,
-        mode: layer.mode,
         objectIds: layer.objectIds,
         visible: layer.visible,
         locked: layer.locked,
