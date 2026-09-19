@@ -1,11 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorController } from "@/lib/engine/editorController";
 import { createImage } from "@/lib/engine/factory";
+import { useEngine } from "@/lib/engine/store";
+import { ENGINE_SCHEMA_VERSION, type ImageElement } from "@/lib/engine/types";
 import {
   buildRasterStudioCommitPatch,
   buildRasterStudioDiscardPatch,
   buildRasterStudioOpenPayload,
   placementUnchanged,
+  snapshotImagePlacement,
 } from "@/lib/raster/studio/types";
 
 describe("Raster Studio Smart Object contract", () => {
@@ -40,6 +43,30 @@ describe("Raster Studio Smart Object contract", () => {
       flipY: undefined,
     });
     expect(payload.adjustments).toEqual({ exposure: 10 });
+  });
+
+  it("treats missing and false flip flags as the same placement", () => {
+    expect(
+      placementUnchanged(
+        {
+          x: 1,
+          y: 2,
+          width: 3,
+          height: 4,
+          angle: 0,
+          opacity: 1,
+          flipX: undefined,
+          flipY: undefined,
+        },
+        { x: 1, y: 2, width: 3, height: 4, angle: 0, opacity: 1, flipX: false, flipY: false },
+      ),
+    ).toBe(true);
+    expect(
+      placementUnchanged(
+        { x: 1, y: 2, width: 3, height: 4, angle: 0, opacity: 1, flipX: true },
+        { x: 1, y: 2, width: 3, height: 4, angle: 0, opacity: 1, flipX: false },
+      ),
+    ).toBe(false);
   });
 
   it("commit patch clears overlays and does not include placement keys", () => {
@@ -177,5 +204,139 @@ describe("Raster Studio Smart Object contract", () => {
     expect(patch.rasterMask).toHaveLength(1);
     expect(patch).not.toHaveProperty("x");
     expect(patch).not.toHaveProperty("fileId");
+  });
+});
+
+describe("Raster Studio Save through the real engine store", () => {
+  beforeEach(() => {
+    useEngine.getState().loadDoc({
+      id: "doc1",
+      title: "test",
+      schemaVersion: ENGINE_SCHEMA_VERSION,
+      width: 1920,
+      height: 1080,
+      slides: [
+        {
+          id: "s1",
+          name: "Slide 1",
+          background: "#fff",
+          width: 1920,
+          height: 1080,
+          elements: [],
+          layers: [
+            {
+              id: "layer1",
+              name: "Layer 1",
+              objectIds: [],
+              visible: true,
+              locked: false,
+              z: 1,
+            },
+          ],
+        },
+      ],
+      snapGrid: null,
+      workspaceStrictness: 1,
+      updatedAt: Date.now(),
+    });
+  });
+
+  function commitThroughStore(image: ImageElement, baked: { width: number; height: number }) {
+    useEngine.getState().addElement(image);
+    const placed = useEngine
+      .getState()
+      .currentSlide()
+      ?.elements.find((el) => el.id === image.id) as ImageElement | undefined;
+    if (!placed) throw new Error("image missing after addElement");
+    const before = snapshotImagePlacement(placed);
+    const controller = createEditorController({
+      currentSlide: () => useEngine.getState().currentSlide(),
+      updateElements: useEngine.getState().updateElements,
+      applyRasterSelection: useEngine.getState().applyRasterSelection,
+    });
+    expect(
+      controller.commitRasterRevision(
+        placed.id,
+        {
+          fileId: "baked-revision",
+          naturalWidth: baked.width,
+          naturalHeight: baked.height,
+        },
+        "update raster revision",
+      ),
+    ).toBe(true);
+    const after = useEngine
+      .getState()
+      .currentSlide()
+      ?.elements.find((el) => el.id === placed.id) as ImageElement | undefined;
+    return { before, after };
+  }
+
+  it("keeps placement when bake only changes natural pixel size (same aspect)", () => {
+    const image = createImage({
+      x: 40,
+      y: 60,
+      width: 320,
+      height: 240,
+      fileId: "old-file",
+      naturalWidth: 320,
+      naturalHeight: 240,
+    });
+    const { before, after } = commitThroughStore(image, { width: 640, height: 480 });
+    expect(after).toBeDefined();
+    expect(placementUnchanged(before, after!)).toBe(true);
+    expect(after!.fileId).toBe("baked-revision");
+    expect(after!.naturalWidth).toBe(640);
+    expect(after!.crop).toBeNull();
+  });
+
+  it("does not clamp or rescale an overflowing Smart Object on Save", () => {
+    const image = createImage({
+      x: -80,
+      y: -40,
+      width: 2200,
+      height: 1400,
+      fileId: "overflow-src",
+      naturalWidth: 2200,
+      naturalHeight: 1400,
+    });
+    const { before, after } = commitThroughStore(image, { width: 4400, height: 2800 });
+    expect(after).toBeDefined();
+    expect(placementUnchanged(before, after!)).toBe(true);
+  });
+
+  it("keeps the placed box when crop is cleared and natural size matches the bake", () => {
+    const image = createImage({
+      x: 200,
+      y: 120,
+      width: 400,
+      height: 300,
+      fileId: "cropped-src",
+      naturalWidth: 1600,
+      naturalHeight: 1000,
+    });
+    image.crop = { x: 100, y: 0, width: 800, height: 600 };
+    const { before, after } = commitThroughStore(image, { width: 800, height: 600 });
+    expect(after).toBeDefined();
+    expect(placementUnchanged(before, after!)).toBe(true);
+    expect(after!.crop).toBeNull();
+  });
+
+  it("keeps placement when bake rounding slightly changes natural aspect", () => {
+    const image = createImage({
+      x: 88,
+      y: 64,
+      width: 333.4,
+      height: 250.6,
+      fileId: "frac-src",
+      naturalWidth: 333.4,
+      naturalHeight: 250.6,
+    });
+    const { before, after } = commitThroughStore(image, {
+      width: Math.round(333.4 * 2),
+      height: Math.round(250.6 * 2),
+    });
+    expect(after).toBeDefined();
+    expect(placementUnchanged(before, after!)).toBe(true);
   });
 });

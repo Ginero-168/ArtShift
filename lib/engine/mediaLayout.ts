@@ -152,6 +152,14 @@ export function normalizeMediaPatch(
   }
 
   if (!mediaPatchAffectsAspect(element, patch)) return patch;
+  // Content-only revisions (Raster Studio bake, higher-res swap) change
+  // natural size / clear crop but must not move a box that is already
+  // aspect-correct. Reframing would rewrite x/y/width/height and, when
+  // artwork bounds are passed, clamp overflowing Smart Objects onto the slide.
+  const previousAspect = getMediaAspectRatio(element);
+  if (aspectsClose(previousAspect, aspect) || placedBoxMatchesAspect(element, aspect)) {
+    return patch;
+  }
   const geometry = options.container
     ? fitMediaElementToRect(merged, options.container)
     : reframeMediaAroundCenter(element, aspect, options.artwork);
@@ -167,6 +175,23 @@ function safeAspect(width: number, height: number, fallbackWidth: number, fallba
 
 function validAspect(value: number) {
   return Number.isFinite(value) && value > 0.001 && value < 1000;
+}
+
+function aspectsClose(a: number, b: number, relative = 1e-6): boolean {
+  if (!validAspect(a) || !validAspect(b)) return false;
+  return Math.abs(a - b) <= Math.max(a, b) * relative;
+}
+
+/** True when the placed box already represents `aspect` (1px / 0.1% bake slack). */
+function placedBoxMatchesAspect(rect: MediaRect, aspect: number): boolean {
+  if (!validAspect(aspect)) return false;
+  const width = Math.max(MIN_MEDIA_SIZE, finiteOr(rect.width, MIN_MEDIA_SIZE));
+  const height = Math.max(MIN_MEDIA_SIZE, finiteOr(rect.height, MIN_MEDIA_SIZE));
+  return (
+    aspectsClose(width / height, aspect, 1e-3) ||
+    Math.abs(width / aspect - height) < 1 ||
+    Math.abs(height * aspect - width) < 1
+  );
 }
 
 function finiteOr(value: number, fallback: number) {

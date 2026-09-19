@@ -7,6 +7,7 @@ import {
   fitMediaElementToRect,
   getMediaAspectRatio,
   isMediaElement,
+  normalizeMediaPatch,
 } from "@/lib/engine/mediaLayout";
 import type { EngineSlide } from "@/lib/engine/types";
 
@@ -113,5 +114,73 @@ describe("image-like object geometry", () => {
       expect(fitted.width / fitted.height).toBeCloseTo(getMediaAspectRatio(fitted), 4);
       expect(waste).toBeLessThanOrEqual(1.6);
     }
+  });
+});
+
+describe("normalizeMediaPatch content revisions", () => {
+  const artwork = { x: 0, y: 0, width: 1920, height: 1080 };
+
+  it("does not reframe or clamp when natural size changes but the box already matches", () => {
+    const image = createImage({
+      x: -80,
+      y: -40,
+      width: 2200,
+      height: 1400,
+      fileId: "overflow",
+      naturalWidth: 2200,
+      naturalHeight: 1400,
+    });
+    const patch = normalizeMediaPatch(
+      image,
+      { fileId: "baked", naturalWidth: 4400, naturalHeight: 2800, crop: null },
+      { artwork },
+    );
+    expect(patch).not.toHaveProperty("x");
+    expect(patch).not.toHaveProperty("y");
+    expect(patch).not.toHaveProperty("width");
+    expect(patch).not.toHaveProperty("height");
+  });
+
+  it("does not reframe when bake rounding slightly changes natural aspect", () => {
+    const image = createImage({
+      x: 88,
+      y: 64,
+      width: 333.4,
+      height: 250.6,
+      fileId: "frac",
+      naturalWidth: 333.4,
+      naturalHeight: 250.6,
+    });
+    const patch = normalizeMediaPatch(
+      image,
+      {
+        naturalWidth: Math.round(333.4 * 2),
+        naturalHeight: Math.round(250.6 * 2),
+        crop: null,
+      },
+      { artwork },
+    );
+    expect(patch).not.toHaveProperty("width");
+    expect(patch).not.toHaveProperty("height");
+  });
+
+  it("still reframes when the source aspect actually changes", () => {
+    const image = createImage({
+      x: 100,
+      y: 100,
+      width: 400,
+      height: 300,
+      fileId: "landscape",
+      naturalWidth: 400,
+      naturalHeight: 300,
+    });
+    const patch = normalizeMediaPatch(
+      image,
+      { naturalWidth: 1000, naturalHeight: 1000 },
+      { artwork },
+    );
+    expect(patch.width).toBeDefined();
+    expect(patch.height).toBeDefined();
+    expect((patch.width as number) / (patch.height as number)).toBeCloseTo(1, 5);
   });
 });
