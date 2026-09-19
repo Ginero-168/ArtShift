@@ -1,9 +1,21 @@
 import { getImageCache, loadDataURL } from "../engine/imageCache";
 import type { EngineSlide } from "../engine/types";
+import { renderMoodboardThumbnail } from "../moodboard/render";
+import { isMoodboardSlide } from "../moodboard/types";
 import { getLocalRasterProcessor } from "../raster/localRasterProcessor";
 import { type RenderCtx, renderSlide } from "./canvas";
 
 export function renderSlideThumbnail(slide: EngineSlide, render: RenderCtx) {
+  if (isMoodboardSlide(slide)) {
+    renderMoodboardThumbnail(
+      slide,
+      render.ctx,
+      slide.width,
+      slide.height,
+      render.images ?? getImageCache(),
+    );
+    return;
+  }
   renderSlide(slide, render, slide.width, slide.height, { showFrames: true });
 }
 
@@ -39,6 +51,11 @@ export async function renderSlideToDataUrl(
           loadDataURL(dataURL, fileId).catch(() => null),
         ),
       );
+    }
+
+    if (isMoodboardSlide(slide)) {
+      renderMoodboardThumbnail(slide, ctx, targetWidth, targetHeight, getImageCache());
+      return canvas.toDataURL("image/jpeg", 0.85);
     }
 
     // Draw background

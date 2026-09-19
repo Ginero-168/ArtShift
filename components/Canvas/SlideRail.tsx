@@ -14,6 +14,8 @@ import { IconTrash } from "@/components/icons";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
+import { renderMoodboardThumbnail } from "@/lib/moodboard/render";
+import { isMoodboardSlide } from "@/lib/moodboard/types";
 import { renderSlideThumbnail, renderSlideThumbnailAsync } from "@/lib/renderer/thumbnail";
 
 const THUMB_W = 120;
@@ -23,6 +25,7 @@ export default function SlideRail() {
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const setCurrentSlide = useEngine((s) => s.setCurrentSlide);
   const addSlide = useEngine((s) => s.addSlide);
+  const addMoodboardSlide = useEngine((s) => s.addMoodboardSlide);
   const deleteSlide = useEngine((s) => s.deleteSlide);
   const renameSlide = useEngine((s) => s.renameSlide);
   const reorderSlides = useEngine((s) => s.reorderSlides);
@@ -213,7 +216,7 @@ export default function SlideRail() {
           </button>
 
           <button
-            onClick={addSlide}
+            onClick={() => addSlide("artwork")}
             style={{
               width: 18,
               height: 18,
@@ -229,7 +232,7 @@ export default function SlideRail() {
               lineHeight: 1,
               transition: "all 0.15s ease",
             }}
-            title="Add slide (+)"
+            title="Add artwork slide (+)"
           >
             +
           </button>
@@ -258,6 +261,25 @@ export default function SlideRail() {
           </button>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={addMoodboardSlide}
+        style={{
+          margin: "6px 8px 0",
+          height: 26,
+          borderRadius: 6,
+          border: "1px dashed #c4b8a5",
+          background: "#f4efe6",
+          color: "#5b5246",
+          fontSize: 11,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+        title="Add a frameless Moodboard slide"
+      >
+        + Moodboard
+      </button>
 
       {/* Slide list */}
       <div
@@ -336,7 +358,14 @@ export default function SlideRail() {
           <CtxItem
             label="New Slide"
             onClick={() => {
-              addSlide();
+              addSlide("artwork");
+              setCtxMenu(null);
+            }}
+          />
+          <CtxItem
+            label="+ Moodboard"
+            onClick={() => {
+              addMoodboardSlide();
               setCtxMenu(null);
             }}
           />
@@ -415,19 +444,28 @@ function SlideThumb({
   const isDragging = dragIndex === index;
   const showDropAfter = dragIndex !== null && overIndex === index && overIndex !== dragIndex;
 
+  const moodboard = isMoodboardSlide(slide);
+  const thumbH = moodboard ? 90 : Math.round((THUMB_W * slide.height) / slide.width);
+
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const controller = new AbortController();
     const dpr = window.devicePixelRatio || 1;
-    const thumbH = Math.round((THUMB_W * slide.height) / slide.width);
     canvas.width = Math.round(THUMB_W * dpr);
     canvas.height = Math.round(thumbH * dpr);
+    const context = canvas.getContext("2d");
+    if (moodboard) {
+      if (context) {
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        renderMoodboardThumbnail(slide, context, THUMB_W, thumbH, getImageCache());
+      }
+      return () => controller.abort();
+    }
     void renderSlideThumbnailAsync(slide, canvas, getImageCache(), controller.signal).catch(() => {
       // Preserve the old synchronous path when a browser blocks pixel readback
       // or does not provide a usable Worker/Canvas implementation.
       if (controller.signal.aborted) return;
-      const context = canvas.getContext("2d");
       if (!context) return;
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.fillStyle = slide.background || "#fff";
@@ -438,7 +476,7 @@ function SlideThumb({
       context.restore();
     });
     return () => controller.abort();
-  }, [slide]);
+  }, [moodboard, slide, thumbH]);
 
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
@@ -479,14 +517,18 @@ function SlideThumb({
           position: "relative",
           flex: 1,
           border: active
-            ? "2px solid var(--accent, #6366f1)"
+            ? moodboard
+              ? "2px solid #b45309"
+              : "2px solid var(--accent, #6366f1)"
             : selected
               ? "2px solid #f59e0b"
-              : "1px solid var(--stroke, #e5e7eb)",
-          borderRadius: 4,
+              : moodboard
+                ? "1px dashed #c4b8a5"
+                : "1px solid var(--stroke, #e5e7eb)",
+          borderRadius: moodboard ? 10 : 4,
           overflow: "hidden",
           cursor: "pointer",
-          background: "var(--surface-solid, #fff)",
+          background: moodboard ? "#f4efe6" : "var(--surface-solid, #fff)",
           opacity: isDragging ? 0.4 : 1,
           outline: showDropAfter ? "2px solid #f59e0b" : undefined,
           transition: "border-color 0.1s ease",
@@ -498,10 +540,10 @@ function SlideThumb({
             width: "100%",
             height: "auto",
             display: "block",
-            aspectRatio: `${slide.width} / ${slide.height}`,
+            aspectRatio: moodboard ? "4 / 3" : `${slide.width} / ${slide.height}`,
           }}
         />
-        {/* Dimension label — top-right corner */}
+        {/* Dimension label — artwork only. Moodboard thumbs stay frameless. */}
         <div
           style={{
             position: "absolute",
@@ -509,14 +551,14 @@ function SlideThumb({
             right: 2,
             padding: "1px 3px",
             fontSize: 8,
-            color: "#9ca3af",
+            color: moodboard ? "#92400e" : "#9ca3af",
             background: "rgba(255,255,255,0.7)",
             borderRadius: 2,
             pointerEvents: "none",
             lineHeight: 1,
           }}
         >
-          {slide.width}×{slide.height}
+          {moodboard ? "Mood" : `${slide.width}×${slide.height}`}
         </div>
         {/* Delete button overlay */}
         {onDelete && (

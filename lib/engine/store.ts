@@ -19,13 +19,13 @@ import {
   createCompositionBlock,
   getCompositionBlockDefinition,
 } from "../builder/compositionBlocks";
+import { createEmptyMoodboardState } from "../moodboard/types";
 import {
   type ActiveRasterSelection,
   appendActiveRasterSelection,
   clearActiveRasterSelection,
   setActiveRasterSelection,
 } from "../raster/activeSelection";
-
 import {
   featherRasterSelection,
   invertRasterSelection,
@@ -84,8 +84,11 @@ import {
   type FrameMaskShape,
   type ImageElement,
   type LayerMode,
+  type MoodboardItem,
+  type MoodboardViewport,
   SLIDE_H,
   SLIDE_W,
+  type SlideKind,
   type TextElement,
   type WorkspaceStrictness,
 } from "./types";
@@ -226,7 +229,17 @@ export type EngineState = {
   detachFrameImage: (frameId: string) => void;
   convertShapeToFrame: (elementId: string, imageFileId?: string) => FrameElement | undefined;
 
-  addSlide: () => string;
+  addSlide: (kind?: SlideKind) => string;
+  addMoodboardSlide: () => string;
+  replaceMoodboard: (items: MoodboardItem[], keyword?: string, label?: string) => void;
+  addMoodboardItem: (item: MoodboardItem, label?: string) => void;
+  updateMoodboardItems: (
+    patches: Array<{ id: string; patch: Partial<MoodboardItem> }>,
+    label?: string,
+  ) => void;
+  previewMoodboardItems: (patches: Array<{ id: string; patch: Partial<MoodboardItem> }>) => void;
+  deleteMoodboardItems: (ids: string[]) => void;
+  setMoodboardViewport: (viewport: MoodboardViewport, persist?: boolean) => void;
   deleteSlide: (id: string) => void;
   renameSlide: (id: string, name: string) => void;
   setSlideBackground: (id: string, color: string) => void;
@@ -334,18 +347,20 @@ function isVectorTool(tool: Tool): boolean {
   );
 }
 
-function newSlide(name: string): EngineSlide {
+function newSlide(name: string, kind: SlideKind = "artwork"): EngineSlide {
   // Absolute placement is the least surprising default for a precision editor.
   // Block layout remains available as an explicit Layer-level behavior.
   const layer = createEngineLayer("free", { name: "Free layer 1" });
   return {
     id: crypto.randomUUID(),
     name,
-    background: "#ffffff",
+    kind,
+    background: kind === "moodboard" ? "#f4efe6" : "#ffffff",
     elements: [],
     layers: [layer],
     width: SLIDE_W,
     height: SLIDE_H,
+    moodboard: kind === "moodboard" ? createEmptyMoodboardState() : undefined,
   };
 }
 
@@ -1457,10 +1472,10 @@ export const useEngine = create<EngineState>((set, get) => {
       return frame;
     },
 
-    addSlide: () => {
+    addSlide: (kind: SlideKind = "artwork") => {
       const s = get();
-      pushHistory(s.history, s.doc, "add slide");
-      const sl = newSlide(`${s.doc.slides.length + 1}`);
+      pushHistory(s.history, s.doc, kind === "moodboard" ? "add moodboard" : "add slide");
+      const sl = newSlide(`${s.doc.slides.length + 1}`, kind);
       set((cur) => ({
         doc: { ...cur.doc, slides: [...cur.doc.slides, sl], updatedAt: Date.now() },
         currentSlideId: sl.id,
@@ -1468,6 +1483,87 @@ export const useEngine = create<EngineState>((set, get) => {
         selectedIds: new Set(),
       }));
       return sl.id;
+    },
+
+    addMoodboardSlide: () => get().addSlide("moodboard"),
+
+    replaceMoodboard: (items, keyword, label = "expand moodboard") => {
+      const s = get();
+      const slide = s.currentSlide();
+      if (slide?.kind !== "moodboard") return;
+      pushHistory(s.history, s.doc, label);
+      set((cur) =>
+        mapDoc(cur, (sl) => ({
+          ...sl,
+          moodboard: {
+            viewport: sl.moodboard?.viewport ?? createEmptyMoodboardState().viewport,
+            items,
+            keyword: keyword ?? sl.moodboard?.keyword,
+          },
+        })),
+      );
+    },
+
+    addMoodboardItem: (item, label = "add moodboard item") => {
+      const s = get();
+      if (s.currentSlide()?.kind !== "moodboard") return;
+      pushHistory(s.history, s.doc, label);
+      set((cur) =>
+        mapDoc(cur, (sl) => ({
+          ...sl,
+          moodboard: {
+            viewport: sl.moodboard?.viewport ?? createEmptyMoodboardState().viewport,
+            items: [...(sl.moodboard?.items ?? []), item],
+            keyword: sl.moodboard?.keyword,
+          },
+        })),
+      );
+    },
+
+    updateMoodboardItems: (patches, label = "update moodboard") => {
+      applyMoodboardPatches(set, get, patches, { historyLabel: label });
+    },
+
+    previewMoodboardItems: (patches) => {
+      applyMoodboardPatches(set, get, patches, { persist: false });
+    },
+
+    deleteMoodboardItems: (ids) => {
+      if (!ids.length) return;
+      const s = get();
+      if (s.currentSlide()?.kind !== "moodboard") return;
+      pushHistory(s.history, s.doc, "delete moodboard items");
+      const remove = new Set(ids);
+      set((cur) =>
+        mapDoc(cur, (sl) => ({
+          ...sl,
+          moodboard: {
+            viewport: sl.moodboard?.viewport ?? createEmptyMoodboardState().viewport,
+            items: (sl.moodboard?.items ?? []).filter((item) => !remove.has(item.id)),
+            keyword: sl.moodboard?.keyword,
+          },
+        })),
+      );
+    },
+
+    setMoodboardViewport: (viewport, persist = false) => {
+      set((cur) =>
+        mapDoc(
+          cur,
+          (sl) =>
+            sl.kind === "moodboard"
+              ? {
+                  ...sl,
+                  moodboard: {
+                    viewport,
+                    items: sl.moodboard?.items ?? [],
+                    keyword: sl.moodboard?.keyword,
+                  },
+                }
+              : sl,
+          persist,
+        ),
+      );
     },
 
     groupElements: (ids) => {
@@ -1968,6 +2064,36 @@ function mapCurrentSlide(
 
 function nextRevision(previous: number): number {
   return Math.max(Date.now(), previous + 1);
+}
+
+function applyMoodboardPatches(
+  set: (partial: Partial<EngineState> | ((state: EngineState) => Partial<EngineState>)) => void,
+  get: () => EngineState,
+  patches: Array<{ id: string; patch: Partial<MoodboardItem> }>,
+  options: { historyLabel?: string; persist?: boolean } = {},
+) {
+  if (!patches.length) return;
+  const s = get();
+  if (s.currentSlide()?.kind !== "moodboard") return;
+  if (options.historyLabel) pushHistory(s.history, s.doc, options.historyLabel);
+  const patchMap = new Map(patches.map((patch) => [patch.id, patch.patch]));
+  set((cur) =>
+    mapDoc(
+      cur,
+      (sl) => ({
+        ...sl,
+        moodboard: {
+          viewport: sl.moodboard?.viewport ?? createEmptyMoodboardState().viewport,
+          items: (sl.moodboard?.items ?? []).map((item) => {
+            const patch = patchMap.get(item.id);
+            return patch ? { ...item, ...patch } : item;
+          }),
+          keyword: sl.moodboard?.keyword,
+        },
+      }),
+      options.persist !== false,
+    ),
+  );
 }
 
 function applyElementPatches(

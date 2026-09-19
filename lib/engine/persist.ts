@@ -10,7 +10,12 @@
  */
 
 import { legacyToEngineDoc } from "./adapter";
-import { deserializeWithImages, type SerializedDoc, serializeWithImages } from "./serialize";
+import {
+  deserializeWithImages,
+  listLiveImageFileIds,
+  type SerializedDoc,
+  serializeWithImages,
+} from "./serialize";
 import type { EngineDoc } from "./types";
 
 const LEGACY_ENGINE_KEY = "mighty-slides:engine:v1";
@@ -152,15 +157,8 @@ class IndexedDbBackend implements PersistenceBackend {
     const done = transactionDone(tx);
     const assets = tx.objectStore(ASSET_STORE);
     const assetIdSet = new Set<string>(documentRecord.assetIds ?? []);
-    for (const slide of documentRecord.doc?.slides ?? []) {
-      for (const el of slide.elements ?? []) {
-        if (el.isDeleted) continue;
-        if ((el.type === "image" || el.type === "bookMockup") && (el as any).fileId) {
-          assetIdSet.add((el as any).fileId);
-        } else if (el.type === "frame" && (el as any).imageFileId) {
-          assetIdSet.add((el as any).imageFileId);
-        }
-      }
+    if (documentRecord.doc) {
+      for (const fileId of listLiveImageFileIds(documentRecord.doc)) assetIdSet.add(fileId);
     }
     const records = await Promise.all(
       Array.from(assetIdSet).map((fileId) =>

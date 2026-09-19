@@ -424,12 +424,59 @@ export type EngineLayer = {
   z: number;
 };
 
+export type SlideKind = "artwork" | "moodboard";
+
+export type MoodboardRole = "subject" | "setting" | "prop" | "mood" | "color";
+
+export type MoodboardItemKind = "image" | "note" | "placeholder" | "chip";
+
+export type MoodboardCredit = {
+  photographer?: string;
+  provider?: "unsplash" | "pexels";
+  sourceUrl?: string;
+};
+
+export type MoodboardItem = {
+  id: string;
+  kind: MoodboardItemKind;
+  role?: MoodboardRole;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  /** Remote stock URL or data URL. Prefer `fileId` for dropped/pasted images. */
+  src?: string;
+  fileId?: string;
+  text?: string;
+  query?: string;
+  color?: string;
+  credit?: MoodboardCredit;
+  placeholder?: boolean;
+};
+
+export type MoodboardViewport = {
+  x: number;
+  y: number;
+  zoom: number;
+};
+
+export type MoodboardState = {
+  viewport: MoodboardViewport;
+  items: MoodboardItem[];
+  keyword?: string;
+};
+
 export type EngineSlide = {
   id: string;
   name: string;
   /** Root Artwork id shared by resized variants. Missing means this is a master. */
   variantOf?: string;
   variantLabel?: string;
+  /** Missing kind is migrated to `"artwork"` on load. */
+  kind?: SlideKind;
+  /** Moodboard board state. Not mirrored into `elements[]` in MVP. */
+  moodboard?: MoodboardState;
   background: string;
   elements: EngineElement[];
   layers: EngineLayer[];

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useEngine } from "@/lib/engine/store";
+import { isMoodboardSlide } from "@/lib/moodboard/types";
 import { selectionForImage } from "@/lib/raster/activeSelection";
 import { appendRasterMaskStroke, createRasterStroke } from "@/lib/raster/mask";
 import {
@@ -37,6 +38,33 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
   const selectedIds = st.selectedIds;
   const mod = event.metaKey || event.ctrlKey;
   const letter = letterFromKeyboardEvent(event);
+  const moodboard = isMoodboardSlide(st.currentSlide());
+
+  if (moodboard) {
+    if (mod && event.code === "KeyZ") {
+      event.preventDefault();
+      if (event.shiftKey) st.redo();
+      else st.undo();
+      return;
+    }
+    if (mod && event.code === "KeyY" && event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault();
+      st.redo();
+      return;
+    }
+    if (event.key === "Delete" || event.key === "Backspace") {
+      if (selectedIds.size === 0) return;
+      event.preventDefault();
+      st.deleteMoodboardItems(Array.from(selectedIds));
+      st.selectOnly([]);
+      return;
+    }
+    if (event.code === "Escape") {
+      st.selectOnly([]);
+      return;
+    }
+    return;
+  }
 
   if (mod && !event.altKey) {
     // Undo / Redo — always use physical KeyZ / KeyY (IME-safe).
@@ -193,7 +221,7 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
   const selectedImage = slide?.elements.find(
     (el) => el.type === "image" && st.selectedIds.has(el.id) && !el.isDeleted,
   );
-  if (!selectedImage || selectedImage.type !== "image") return;
+  if (selectedImage?.type !== "image") return;
 
   event.preventDefault();
   openRasterStudioForElement(selectedImage);

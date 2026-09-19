@@ -38,6 +38,9 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "@/components/icons";
+import MoodboardViewport, {
+  type MoodboardViewportHandle,
+} from "@/components/Moodboard/MoodboardViewport";
 import { useAuth } from "@/lib/auth/useAuth";
 import {
   exportAllPNG,
@@ -54,6 +57,7 @@ import { usePresetStore } from "@/lib/engine/presetStore";
 import { createEmptyEngineDoc, useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
 import { loadThaiFonts } from "@/lib/fonts";
+import { isMoodboardSlide } from "@/lib/moodboard/types";
 import { createProjectAutosave, type ProjectAutosaveStatus } from "@/lib/project/projectAutosave";
 import { type ProjectMetadata, projectStore } from "@/lib/project/projectStore";
 import { useStore } from "@/lib/store";
@@ -215,7 +219,12 @@ export default function ProjectEditorPage() {
   const persistedRevision = useRef<number | null>(null);
   const autosaveRef = useRef<ReturnType<typeof createProjectAutosave> | null>(null);
 
-  const canvasEditorRef = useRef<CanvasEditorHandle | null>(null);
+  const canvasEditorRef = useRef<CanvasEditorHandle | MoodboardViewportHandle | null>(null);
+  const currentSlideKind = useEngine((s) => {
+    const slide = s.doc.slides.find((candidate) => candidate.id === s.currentSlideId);
+    return isMoodboardSlide(slide) ? "moodboard" : "artwork";
+  });
+  const isMoodboard = currentSlideKind === "moodboard";
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomDropdownOpen, setZoomDropdownOpen] = useState(false);
   const [_zoomInputText, setZoomInputText] = useState("");
@@ -681,9 +690,7 @@ export default function ProjectEditorPage() {
           )}
         </div>
 
-        <div className="topbar-center">
-          <EditorOptionBar />
-        </div>
+        <div className="topbar-center">{isMoodboard ? null : <EditorOptionBar />}</div>
 
         <div className="topbar-right">
           <button className="ghost-btn" onClick={cycleTheme} title="Toggle theme">
@@ -863,15 +870,21 @@ export default function ProjectEditorPage() {
       {/* ——— Main area ——— */}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <SlideRail />
-        <BlockLibrary />
+        {isMoodboard ? null : <BlockLibrary />}
         <div
           style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}
           className="canvas-stage"
         >
-          {loaded && (
-            <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
-          )}
-          <LayerPanel />
+          {loaded &&
+            (isMoodboard ? (
+              <MoodboardViewport
+                ref={canvasEditorRef}
+                onViewChange={(v) => setZoomScale(v.scale)}
+              />
+            ) : (
+              <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
+            ))}
+          {isMoodboard ? null : <LayerPanel />}
 
           {/* ——— Left toolbar (top-left of workspace) ——— */}
           <div
@@ -969,14 +982,16 @@ export default function ProjectEditorPage() {
                         setMenuOpen(false);
                       }}
                     />
-                    {/* AI Image Studio */}
-                    <HamburgerItem
-                      label="✨ AI Image Studio (GPT Image 2 · low)"
-                      onClick={() => {
-                        useEngine.getState().setAiImageModalOpen(true);
-                        setMenuOpen(false);
-                      }}
-                    />
+                    {/* AI Image Studio — artwork only. Moodboard never fills from gen-image. */}
+                    {isMoodboard ? null : (
+                      <HamburgerItem
+                        label="✨ AI Image Studio (GPT Image 2 · low)"
+                        onClick={() => {
+                          useEngine.getState().setAiImageModalOpen(true);
+                          setMenuOpen(false);
+                        }}
+                      />
+                    )}
                     {/* Campaign Studio */}
                     <HamburgerItem
                       label="Campaign Studio (Batch)"
@@ -1262,62 +1277,66 @@ export default function ProjectEditorPage() {
               }}
             />
 
-            {/* 2. Hex Grid Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowHexGrid(!showHexGrid)}
-              title={showHexGrid ? "Hide Grid" : "Show Grid"}
-              style={{
-                width: 24,
-                height: 24,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 4,
-                border: "none",
-                background: showHexGrid ? "var(--surface-hover, #e0e7ff)" : "transparent",
-                color: showHexGrid ? "var(--accent, #4338ca)" : "var(--ink-muted, #9ca3af)",
-                cursor: "pointer",
-              }}
-            >
-              <IconGrid size={13} />
-            </button>
-
-            <div
-              style={{
-                width: 1,
-                height: 16,
-                background: "var(--stroke, #e5e7eb)",
-                margin: "0 2px",
-              }}
-            />
-
-            {/* 3. Layer Filter Selector */}
-            <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {(["all", "block", "free"] as const).map((mode) => (
+            {isMoodboard ? null : (
+              <>
+                {/* 2. Hex Grid Toggle */}
                 <button
-                  key={mode}
                   type="button"
-                  onClick={() => setLayerFilter(mode)}
+                  onClick={() => setShowHexGrid(!showHexGrid)}
+                  title={showHexGrid ? "Hide Grid" : "Show Grid"}
                   style={{
-                    padding: "2px 6px",
+                    width: 24,
+                    height: 24,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     borderRadius: 4,
                     border: "none",
-                    background: layerFilter === mode ? "var(--accent, #6366f1)" : "transparent",
-                    color: layerFilter === mode ? "#ffffff" : "var(--ink-muted, #6b7280)",
-                    fontSize: 10,
-                    fontWeight: 600,
+                    background: showHexGrid ? "var(--surface-hover, #e0e7ff)" : "transparent",
+                    color: showHexGrid ? "var(--accent, #4338ca)" : "var(--ink-muted, #9ca3af)",
                     cursor: "pointer",
-                    textTransform: "capitalize",
                   }}
                 >
-                  {mode}
+                  <IconGrid size={13} />
                 </button>
-              ))}
-            </div>
+
+                <div
+                  style={{
+                    width: 1,
+                    height: 16,
+                    background: "var(--stroke, #e5e7eb)",
+                    margin: "0 2px",
+                  }}
+                />
+
+                {/* 3. Layer Filter Selector */}
+                <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  {(["all", "block", "free"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setLayerFilter(mode)}
+                      style={{
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        border: "none",
+                        background: layerFilter === mode ? "var(--accent, #6366f1)" : "transparent",
+                        color: layerFilter === mode ? "#ffffff" : "var(--ink-muted, #6b7280)",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
-        <BuilderInspector />
+        {isMoodboard ? null : <BuilderInspector />}
       </div>
 
       {/* ——— Modals ——— */}
@@ -1337,7 +1356,7 @@ export default function ProjectEditorPage() {
         <BrandKitModal isOpen={brandKitOpen} onClose={() => setBrandKitOpen(false)} />
       )}
 
-      {aiImageModalOpen && (
+      {aiImageModalOpen && !isMoodboard && (
         <AIImageGeneratorModal
           isOpen={aiImageModalOpen}
           onClose={() => setAiImageModalOpen(false)}

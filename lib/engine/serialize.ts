@@ -71,6 +71,9 @@ export function listLiveImageFileIds(doc: EngineDoc): string[] {
       const fileId = liveImageFileId(el);
       if (fileId) ids.add(fileId);
     }
+    for (const item of sl.moodboard?.items ?? []) {
+      if (typeof item.fileId === "string" && item.fileId.trim()) ids.add(item.fileId);
+    }
   }
   return [...ids];
 }

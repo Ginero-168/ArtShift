@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getImageCache } from "@/lib/engine/imageCache";
 import type { EngineDoc } from "@/lib/engine/types";
+import { renderMoodboardThumbnail } from "@/lib/moodboard/render";
+import { isMoodboardSlide } from "@/lib/moodboard/types";
 import { loadPresentDocument } from "@/lib/project/presentProject";
 import { projectStore } from "@/lib/project/projectStore";
 import { renderSlide } from "@/lib/renderer/canvas";
@@ -60,9 +62,13 @@ export default function PresentPage() {
     ctx.save();
     ctx.translate(tx, ty);
     ctx.scale(scale, scale);
-    renderSlide(slide, { ctx, images: getImageCache() }, slide.width, slide.height, {
-      showFrames: true,
-    });
+    if (isMoodboardSlide(slide)) {
+      renderMoodboardThumbnail(slide, ctx, slide.width, slide.height, getImageCache());
+    } else {
+      renderSlide(slide, { ctx, images: getImageCache() }, slide.width, slide.height, {
+        showFrames: true,
+      });
+    }
     ctx.restore();
   }, [slide]);
 

@@ -1,3 +1,4 @@
+import { migrateDocumentSlideKinds } from "../moodboard/migrate";
 import {
   type BlockRect,
   blockPlacementForRect,
@@ -43,11 +44,12 @@ export function normalizeDocumentLayers(doc: EngineDoc): EngineDoc {
   const adaptiveGridMigration = sourceVersion < 3;
   const mediaGeometryMigration = sourceVersion < 4;
   const strictness = normalizeStrictness(doc.workspaceStrictness);
+  const withKinds = migrateDocumentSlideKinds(doc);
   return {
-    ...doc,
+    ...withKinds,
     schemaVersion: ENGINE_SCHEMA_VERSION,
     workspaceStrictness: strictness,
-    slides: doc.slides.map((slide) => {
+    slides: withKinds.slides.map((slide) => {
       let normalized = normalizeSlideLayers(slide, legacyGrid, adaptiveGridMigration);
       if (mediaGeometryMigration) {
         normalized = {
