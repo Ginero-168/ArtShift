@@ -17,11 +17,54 @@ export async function searchStockPhoto(
   const trimmed = query.trim();
   if (!trimmed) return null;
 
+  const serpapi = await searchSerpapi(trimmed, fetchImpl);
+  if (serpapi) return serpapi;
   const google = await searchGoogle(trimmed, fetchImpl);
   if (google) return google;
   const unsplash = await searchUnsplash(trimmed, fetchImpl);
   if (unsplash) return unsplash;
   return searchPexels(trimmed, fetchImpl);
+}
+
+async function searchSerpapi(
+  query: string,
+  fetchImpl: StockFetcher,
+): Promise<StockPhotoHit | null> {
+  try {
+    const response = await fetchImpl(
+      `${STOCK_SEARCH_PATH}?source=serpapi&query=${encodeURIComponent(query)}&per_page=1`,
+    );
+    if (!response.ok) return null;
+    return mapSerpapiHit(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+export function mapSerpapiHit(data: unknown): StockPhotoHit | null {
+  if (!isRecord(data) || !Array.isArray(data.images_results)) return null;
+  for (const item of data.images_results) {
+    const hit = mapSerpapiItem(item);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function mapSerpapiItem(item: unknown): StockPhotoHit | null {
+  if (!isRecord(item)) return null;
+  const src = safeHttpsUrl(item.original) ?? safeHttpsUrl(item.original_image);
+  if (!src) return null;
+  const title = asTrimmedString(item.title);
+  const source = asTrimmedString(item.source);
+  return {
+    src,
+    thumb: safeHttpsUrl(item.thumbnail) ?? undefined,
+    credit: {
+      photographer: title || source || undefined,
+      provider: "serpapi",
+      sourceUrl: safeHttpsUrl(item.link) ?? httpsHost(source),
+    },
+  };
 }
 
 async function searchGoogle(query: string, fetchImpl: StockFetcher): Promise<StockPhotoHit | null> {

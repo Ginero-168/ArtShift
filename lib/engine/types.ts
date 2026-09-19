@@ -432,7 +432,7 @@ export type MoodboardItemKind = "image" | "note" | "placeholder" | "chip";
 
 export type MoodboardCredit = {
   photographer?: string;
-  provider?: "unsplash" | "pexels" | "google";
+  provider?: "unsplash" | "pexels" | "google" | "serpapi";
   sourceUrl?: string;
 };
 

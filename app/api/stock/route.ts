@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { buildGoogleCseImageSearchUrl } from "@/lib/server/stock/googleCse";
+import { buildSerpapiGoogleImagesUrl, resolveSerpapiKey } from "@/lib/server/stock/serpapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,26 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const source = searchParams.get("source");
+
+  if (source === "serpapi") {
+    const key = resolveSerpapiKey();
+    if (!key) {
+      return NextResponse.json({ error: "Server missing SERPAPI_API_KEY" }, { status: 500 });
+    }
+    const query = searchParams.get("query") || "";
+    if (!query.trim()) {
+      return NextResponse.json({ error: "Query is required." }, { status: 400 });
+    }
+    const url = buildSerpapiGoogleImagesUrl({ key, query });
+
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch {
+      return NextResponse.json({ error: "Upstream SerpAPI request failed" }, { status: 502 });
+    }
+  }
 
   if (source === "google") {
     const key = process.env.GOOGLE_CSE_API_KEY?.trim() || "";
@@ -85,7 +106,10 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: "Unknown source. Use ?source=google, ?source=unsplash, or ?source=pexels" },
+    {
+      error:
+        "Unknown source. Use ?source=serpapi, ?source=google, ?source=unsplash, or ?source=pexels",
+    },
     { status: 400 },
   );
 }
