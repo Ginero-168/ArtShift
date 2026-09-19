@@ -103,15 +103,43 @@ export function ReferencePanel({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <strong>References</strong>
-        <button type="button" onClick={onClose} style={{ border: "none", background: "none" }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12 }}
+        >
           Close
         </button>
       </div>
       <div style={{ display: "flex", gap: 6, margin: "10px 0" }}>
-        <button type="button" onClick={() => setTab("library")}>
+        <button
+          type="button"
+          onClick={() => setTab("library")}
+          aria-pressed={tab === "library"}
+          style={{
+            border: "1px solid #e5e7eb",
+            background: tab === "library" ? "#111827" : "#fff",
+            color: tab === "library" ? "#fff" : "#111827",
+            borderRadius: 6,
+            padding: "4px 10px",
+            fontSize: 12,
+          }}
+        >
           Library
         </button>
-        <button type="button" onClick={() => setTab("pinterest")}>
+        <button
+          type="button"
+          onClick={() => setTab("pinterest")}
+          aria-pressed={tab === "pinterest"}
+          style={{
+            border: "1px solid #e5e7eb",
+            background: tab === "pinterest" ? "#111827" : "#fff",
+            color: tab === "pinterest" ? "#fff" : "#111827",
+            borderRadius: 6,
+            padding: "4px 10px",
+            fontSize: 12,
+          }}
+        >
           Pinterest
         </button>
       </div>
@@ -143,10 +171,27 @@ export function ReferencePanel({
           onClick={() =>
             void addUrl(url, tab === "pinterest" || isPinterestUrl(url) ? "pinterest" : undefined)
           }
+          style={{
+            border: "1px solid #111827",
+            background: "#111827",
+            color: "#fff",
+            borderRadius: 6,
+            padding: "5px 10px",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
         >
           Save URL
         </button>
-        <label style={{ cursor: "pointer" }}>
+        <label
+          style={{
+            cursor: "pointer",
+            border: "1px solid #e5e7eb",
+            borderRadius: 6,
+            padding: "5px 10px",
+            fontSize: 12,
+          }}
+        >
           Upload
           <input
             type="file"

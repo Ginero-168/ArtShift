@@ -4,24 +4,20 @@ import { useRef, useState } from "react";
 import { copyMoodboardItemsToArtworkSlide } from "@/lib/moodboard/copyToSlide";
 
 const toolButtonStyle = (active: boolean) => ({
-  height: 42,
-  minWidth: 56,
-  padding: "3px 8px 2px",
+  height: 28,
+  padding: "0 10px",
   display: "inline-flex" as const,
   alignItems: "center" as const,
   justifyContent: "center" as const,
-  flexDirection: "column" as const,
-  gap: 1,
   border: "none",
   borderRadius: 6,
   background: active ? "var(--accent, #6366f1)" : "transparent",
   color: active ? "#fff" : "var(--ink, #111827)",
   cursor: "pointer",
-  fontSize: 8,
-  lineHeight: "10px",
+  fontSize: 11,
+  lineHeight: "16px",
   fontWeight: active ? 700 : 600,
   whiteSpace: "nowrap" as const,
-  textAlign: "center" as const,
 });
 
 export default function MoodboardOptionBar({
@@ -106,7 +102,6 @@ export default function MoodboardOptionBar({
         }}
         style={{
           ...toolButtonStyle(false),
-          minWidth: 72,
           color: "var(--accent, #4f46e5)",
           background: "rgba(79, 70, 229, 0.08)",
         }}

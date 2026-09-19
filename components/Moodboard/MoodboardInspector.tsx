@@ -22,9 +22,8 @@ export default function MoodboardInspector() {
       <div className={styles.inspectorScroll}>
         {!item ? (
           <p className={styles.emptyInspector}>
-            Select an object on the infinite artboard. Position, size, and labels use the same
-            fields as artwork slides. Rotation stays at 0°. Copy to slide converts these into normal
-            EngineElements.
+            Select an object to edit X, Y, W, and H. Rotation stays at 0°. Copy to slide turns board
+            items into normal artwork objects.
           </p>
         ) : (
           <>

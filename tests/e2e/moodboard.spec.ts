@@ -44,7 +44,7 @@ test("creates a frameless Moodboard slide from the rail", async ({ page }) => {
   await page.getByRole("button", { name: "+ Moodboard" }).click();
 
   await expect(page.getByLabel("Moodboard keyword")).toBeVisible();
-  await expect(page.getByText("Infinite artboard")).toBeVisible();
+  await expect(page.getByText("Infinite artboard", { exact: true })).toBeVisible();
   await expect(page.locator("[data-moodboard-viewport]")).toBeVisible();
   await expect(page.getByRole("toolbar", { name: "Moodboard tools" })).toBeVisible();
   await expect(page.getByRole("toolbar", { name: "Vector editing tools" })).toHaveCount(0);
@@ -56,7 +56,7 @@ test("creates a frameless Moodboard slide from the rail", async ({ page }) => {
 
   await page.getByRole("button", { name: "References" }).click();
   await expect(page.locator("[data-moodboard-reference-panel]")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Pinterest" })).toBeVisible();
+  await page.getByRole("button", { name: "Pinterest" }).click();
   await expect(page.getByText(/blocked_pending_app_review|does not scrape/i)).toBeVisible();
 
   await page.screenshot({
@@ -67,4 +67,8 @@ test("creates a frameless Moodboard slide from the rail", async ({ page }) => {
   await page.getByRole("button", { name: "Copy to slide" }).first().click();
   await expect(page.locator("[data-moodboard-viewport]")).toHaveCount(0, { timeout: 10_000 });
   await expect(page.getByRole("toolbar", { name: "Vector editing tools" })).toBeVisible();
+  await page.screenshot({
+    path: `${ARTIFACT_DIR}/moodboard_copied_to_artwork_slide.png`,
+    fullPage: true,
+  });
 });
