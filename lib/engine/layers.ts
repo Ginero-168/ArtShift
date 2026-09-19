@@ -1,3 +1,4 @@
+import { hydrateSlideAppearance } from "../appearance/persist";
 import {
   type BlockRect,
   blockPlacementForRect,
@@ -95,7 +96,7 @@ export function normalizeDocumentLayers(doc: EngineDoc): EngineDoc {
       if (adaptiveGridMigration || mediaGeometryMigration) {
         normalized = reflowBlockObjects(normalized, strictness);
       }
-      return flattenBlockLayoutToFree(normalized);
+      return hydrateSlideAppearance(flattenBlockLayoutToFree(normalized));
     }),
   };
 }

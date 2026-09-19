@@ -1,7 +1,7 @@
 /**
  * Canonical Appearance stack types (Illustrator-inspired).
- * Phase 1 keeps legacy EngineElement fields as persistence source of truth;
- * these types are the semantic read/write model for the Appearance module.
+ * Schema v7 persists this object on EngineElement and dual-writes legacy flat
+ * fields (fill/stroke/shadow/glow/opacity/blendMode) for older readers.
  */
 
 import type { ColorAdjustments } from "@/lib/color/adjustments";

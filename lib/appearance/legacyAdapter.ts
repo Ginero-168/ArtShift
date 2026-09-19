@@ -1,5 +1,10 @@
 import type { EngineElement } from "@/lib/engine/types";
-import { emptyAppearance, normalizeAppearance, normalizeStops } from "./normalize";
+import {
+  emptyAppearance,
+  normalizeAppearance,
+  normalizeStops,
+  validateAppearance,
+} from "./normalize";
 import type {
   Appearance,
   AppearanceItem,
@@ -121,11 +126,7 @@ function legacyEffects(element: EngineElement): EffectAppearance[] {
   return effects;
 }
 
-/**
- * Read semantic Appearance from legacy flat EngineElement fields.
- * Does not persist a canonical `appearance` field (that would be engine schema v7).
- */
-export function readAppearance(element: EngineElement): AppearanceSnapshot {
+function collectUnsupported(element: EngineElement): string[] {
   const unsupported: string[] = [];
   if (element.type === "image" && "adjustments" in element && element.adjustments) {
     unsupported.push("image.adjustments");
@@ -133,7 +134,11 @@ export function readAppearance(element: EngineElement): AppearanceSnapshot {
   if (element.type === "image" && "filterBlur" in element && element.filterBlur) {
     unsupported.push("image.filterBlur");
   }
+  return unsupported;
+}
 
+/** Synthesize Appearance from legacy flat fields. Used when `appearance` is absent. */
+export function synthesizeAppearanceFromLegacy(element: EngineElement): AppearanceSnapshot {
   const items: AppearanceItem[] = [];
   const fill = legacyFill(element);
   if (fill) items.push(fill);
@@ -152,8 +157,28 @@ export function readAppearance(element: EngineElement): AppearanceSnapshot {
   return {
     ...appearance,
     fromLegacy: true,
-    unsupported,
+    unsupported: collectUnsupported(element),
   };
+}
+
+/**
+ * Read semantic Appearance. Prefers the persisted `appearance` field (schema v7);
+ * otherwise synthesizes from legacy flat fields.
+ */
+export function readAppearance(element: EngineElement): AppearanceSnapshot {
+  const unsupported = collectUnsupported(element);
+  const stored = element.appearance;
+  if (stored) {
+    try {
+      const appearance = normalizeAppearance(stored);
+      if (!validateAppearance(appearance)) {
+        return { ...appearance, fromLegacy: false, unsupported };
+      }
+    } catch {
+      // Fall through to legacy synthesis; hydrate keeps the raw stored object.
+    }
+  }
+  return synthesizeAppearanceFromLegacy(element);
 }
 
 /** Apply Appearance root + first fill/stroke/effects back onto legacy fields. */

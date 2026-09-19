@@ -122,6 +122,12 @@ export type BaseElement = {
   };
   /** Non-destructive compositing mode used when drawing this Object. */
   blendMode?: "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
+  /**
+   * Canonical Appearance stack (schema v7). Dual-written with the legacy flat
+   * fill/stroke/shadow/glow/opacity/blendMode fields so older readers still work.
+   * Load prefers this object when present; otherwise it is synthesized from legacy fields.
+   */
+  appearance?: import("../appearance/types").Appearance;
   /** Human-readable label for this object layer. */
   name?: string;
   /** When true, this object is hidden from canvas rendering. */
@@ -425,5 +431,8 @@ export type EngineDoc = {
   schemaVersion: number;
 };
 
-/** v6+: Block/hex occupancy is baked to Free pixels on load. Appearance persist is v7. */
-export const ENGINE_SCHEMA_VERSION = 6;
+/**
+ * v6: Block/hex occupancy is baked to Free pixels on load.
+ * v7: persist canonical `appearance` on elements, dual-written to legacy flat fields.
+ */
+export const ENGINE_SCHEMA_VERSION = 7;
