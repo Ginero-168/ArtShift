@@ -3,6 +3,7 @@ import { createEditorController } from "@/lib/engine/editorController";
 import { createImage } from "@/lib/engine/factory";
 import { useEngine } from "@/lib/engine/store";
 import { ENGINE_SCHEMA_VERSION, type ImageElement } from "@/lib/engine/types";
+import { bakeRevisionPixelSize } from "@/lib/raster/studio/bakeRevision";
 import {
   buildRasterStudioCommitPatch,
   buildRasterStudioDiscardPatch,
@@ -271,6 +272,44 @@ describe("Raster Studio Save through the real engine store", () => {
       ?.elements.find((el) => el.id === placed.id) as ImageElement | undefined;
     return { before, after };
   }
+
+  it("keeps the placed box when Save writes bake@2x as the new natural size", () => {
+    // Production handleSave: bakeImageElementRevision(image, cache, 2) then
+    // commitRasterRevision({ naturalWidth: baked.width, naturalHeight: baked.height }).
+    // Typical photo: large source pixels, smaller placed Smart Object.
+    const image = createImage({
+      x: 120,
+      y: 80,
+      width: 480,
+      height: 270,
+      fileId: "photo-src",
+      naturalWidth: 1920,
+      naturalHeight: 1080,
+    });
+    image.opacity = 0.85;
+    image.angle = 0.15;
+    const baked = bakeRevisionPixelSize(image, 2);
+    expect(baked).toEqual({ width: 960, height: 540 });
+
+    const { before, after } = commitThroughStore(image, baked);
+    expect(after).toBeDefined();
+    expect(before).toEqual({
+      x: 120,
+      y: 80,
+      width: 480,
+      height: 270,
+      angle: 0.15,
+      opacity: 0.85,
+      flipX: undefined,
+      flipY: undefined,
+    });
+    expect(placementUnchanged(before, after!)).toBe(true);
+    expect(after!.width).toBe(480);
+    expect(after!.height).toBe(270);
+    expect(after!.naturalWidth).toBe(960);
+    expect(after!.naturalHeight).toBe(540);
+    expect(after!.fileId).toBe("baked-revision");
+  });
 
   it("keeps placement when bake only changes natural pixel size (same aspect)", () => {
     const image = createImage({

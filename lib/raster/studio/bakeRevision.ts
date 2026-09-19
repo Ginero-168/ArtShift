@@ -25,13 +25,26 @@ export type BakedRasterRevision = {
   offscreen: boolean;
 };
 
+/**
+ * Bake canvas size. Save writes these as `naturalWidth` / `naturalHeight`.
+ * They are pixel resolution (display × scale), not the placed Smart Object box.
+ */
+export function bakeRevisionPixelSize(
+  element: Pick<ImageElement, "width" | "height">,
+  scale = 2,
+): { width: number; height: number } {
+  return {
+    width: Math.max(1, Math.round(element.width * scale)),
+    height: Math.max(1, Math.round(element.height * scale)),
+  };
+}
+
 export async function bakeImageElementRevision(
   element: ImageElement,
   images?: Map<string, HTMLImageElement>,
   scale = 2,
 ): Promise<BakedRasterRevision> {
-  const width = Math.max(1, Math.round(element.width * scale));
-  const height = Math.max(1, Math.round(element.height * scale));
+  const { width, height } = bakeRevisionPixelSize(element, scale);
   const surface = createBakeSurface(width, height);
   const ctx = surface.ctx;
 

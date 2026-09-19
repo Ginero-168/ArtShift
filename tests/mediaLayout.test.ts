@@ -7,6 +7,7 @@ import {
   fitMediaElementToRect,
   getMediaAspectRatio,
   isMediaElement,
+  mediaPatchAffectsAspect,
   normalizeMediaPatch,
 } from "@/lib/engine/mediaLayout";
 import type { EngineSlide } from "@/lib/engine/types";
@@ -119,6 +120,25 @@ describe("image-like object geometry", () => {
 
 describe("normalizeMediaPatch content revisions", () => {
   const artwork = { x: 0, y: 0, width: 1920, height: 1080 };
+
+  it("treats a 2× bake natural-size write as aspect-affecting but does not rescale the box", () => {
+    const image = createImage({
+      x: 120,
+      y: 80,
+      width: 480,
+      height: 270,
+      fileId: "photo",
+      naturalWidth: 1920,
+      naturalHeight: 1080,
+    });
+    const bakePatch = { fileId: "baked", naturalWidth: 960, naturalHeight: 540, crop: null };
+    expect(mediaPatchAffectsAspect(image, bakePatch)).toBe(true);
+    const patch = normalizeMediaPatch(image, bakePatch, { artwork });
+    expect(patch).not.toHaveProperty("x");
+    expect(patch).not.toHaveProperty("y");
+    expect(patch).not.toHaveProperty("width");
+    expect(patch).not.toHaveProperty("height");
+  });
 
   it("does not reframe or clamp when natural size changes but the box already matches", () => {
     const image = createImage({
