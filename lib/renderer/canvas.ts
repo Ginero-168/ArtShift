@@ -680,7 +680,11 @@ function applyRasterMask(
     }
     ctx.globalCompositeOperation = stroke.mode === "paint" ? "source-over" : "destination-out";
     ctx.globalAlpha = Math.max(0.05, Math.min(1, stroke.opacity));
-    drawRasterStroke(ctx, stroke, stroke.mode === "paint" ? stroke.color : "#ffffff");
+    drawRasterStroke(
+      ctx,
+      stroke,
+      stroke.mode === "paint" ? (stroke.color ?? "#111827") : "#ffffff",
+    );
   }
   ctx.restore();
 }
@@ -706,18 +710,22 @@ function drawClippedRasterStroke(
     transform.e,
     transform.f,
   );
-  layerContext.globalAlpha = Math.max(0.05, Math.min(1, stroke.opacity));
-  drawRasterStroke(layerContext, stroke, stroke.mode === "paint" ? stroke.color : "#ffffff");
+  layerContext.globalAlpha = 1;
+  drawRasterStroke(
+    layerContext,
+    stroke,
+    stroke.mode === "paint" ? (stroke.color ?? "#111827") : "#ffffff",
+  );
 
   // Keep only the part of the stroke inside the saved Selection.
-  layerContext.globalAlpha = 1;
   layerContext.globalCompositeOperation = "destination-in";
   layerContext.drawImage(selectionMask, 0, 0, element.width, element.height);
 
   // Composite in canvas pixels so the element-local translation is not applied twice.
+  // Opacity is applied once here so overlapping stamps do not stack into rings.
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = Math.max(0.05, Math.min(1, stroke.opacity));
   ctx.globalCompositeOperation = stroke.mode === "paint" ? "source-over" : "destination-out";
   ctx.drawImage(layer, 0, 0);
   ctx.restore();
