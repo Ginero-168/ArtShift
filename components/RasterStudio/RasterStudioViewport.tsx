@@ -101,10 +101,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
   const pan = useRasterStudioSession((s) => s.pan);
   const setZoom = useRasterStudioSession((s) => s.setZoom);
   const setPan = useRasterStudioSession((s) => s.setPan);
-  const setStageSize = useRasterStudioSession((s) => s.setStageSize);
   const setImageSize = useRasterStudioSession((s) => s.setImageSize);
-  const fitView = useRasterStudioSession((s) => s.fitView);
-  const didInitialFit = useRasterStudioSession((s) => s.didInitialFit);
 
   const updateElements = useEngine((s) => s.updateElements);
   const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
@@ -224,20 +221,19 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     const stage = stageRef.current;
     if (!stage) return;
     const report = () => {
-      setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      const session = useRasterStudioSession.getState();
+      session.setStageSize({ width, height });
+      if (!session.didInitialFit && width >= 8 && height >= 8 && session.imageSize.width >= 1) {
+        session.fitView();
+      }
     };
     report();
     const observer = new ResizeObserver(report);
     observer.observe(stage);
     return () => observer.disconnect();
-  }, [setStageSize]);
-
-  useLayoutEffect(() => {
-    if (didInitialFit) return;
-    const stage = stageRef.current;
-    if (!stage || !image || stage.clientWidth < 8 || stage.clientHeight < 8) return;
-    fitView();
-  }, [didInitialFit, fitView, image]);
+  }, [image]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

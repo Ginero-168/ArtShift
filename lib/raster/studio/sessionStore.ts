@@ -155,6 +155,14 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
   setImageSize: (imageSize) => set({ imageSize }),
   fitView: () => {
     const { stageSize, imageSize } = get();
+    if (
+      stageSize.width < 8 ||
+      stageSize.height < 8 ||
+      imageSize.width < 1 ||
+      imageSize.height < 1
+    ) {
+      return;
+    }
     set({
       zoom: fitZoomForStage(stageSize.width, stageSize.height, imageSize.width, imageSize.height),
       pan: { x: 0, y: 0 },
