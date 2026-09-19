@@ -110,6 +110,7 @@ describe("Moodboard expand API", () => {
       expect.objectContaining({
         system: expect.stringContaining("stock-photo search query"),
         jsonObject: true,
+        maxTokens: 8192,
       }),
       expect.objectContaining({
         cloudConsent: true,
@@ -134,7 +135,23 @@ describe("Moodboard expand API", () => {
     expect((await response.json()).pack.keyword).toBe("ice");
   });
 
-  it("returns a 502 with a truncated raw preview when chat text is not JSON", async () => {
+  it("recovers a complete pack when chat text is truncated mid-associations", async () => {
+    runtimeMock.execute.mockResolvedValue({
+      output: {
+        text: '{"keyword":"Bangkok","associations":["saffron robes","tangled power lines","pink taxis","jasmine garlands","gold leaf","plastic stools","neon signs","river ferries","incense smoke","humidity","chili flakes",',
+      },
+      metadata: { provider: "replicate", model: "mock", durationMs: 4, usage: {}, warnings: [] },
+    });
+    const response = await POST(request({ keyword: "Bangkok", cloudConsent: true }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.pack.keyword).toBe("Bangkok");
+    expect(body.pack.roles.subject.length).toBeGreaterThanOrEqual(5);
+    expect(body.pack.roles.color).toHaveLength(5);
+    expect(runtimeMock.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a clear 502 without dumping half JSON when chat text is not a pack", async () => {
     runtimeMock.execute.mockResolvedValue({
       output: {
         text: "Sure, I expanded Bangkok into tuk-tuks and temples. r8_account-token should stay hidden.",
@@ -145,8 +162,8 @@ describe("Moodboard expand API", () => {
     expect(response.status).toBe(502);
     const body = await response.json();
     expect(body.error.code).toBe("PROVIDER_SCHEMA");
-    expect(body.error.message).toContain("Expand response is not a JSON object.");
-    expect(body.error.message).toContain("Raw preview:");
+    expect(body.error.message).toBe("Expand response is not a JSON object.");
+    expect(body.error.message).not.toContain("Raw preview:");
     expect(body.error.preview).toContain("tuk-tuks");
     expect(body.error.preview).not.toContain("r8_account-token");
     expect(body.error.preview).toContain("[redacted]");

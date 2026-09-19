@@ -7,7 +7,7 @@ import {
   plannedBoardItemCount,
 } from "@/lib/moodboard/expandSchema";
 import { fillMoodboardFromPack } from "@/lib/moodboard/fill";
-import { parseJsonCandidate, safeModelTextPreview } from "@/lib/moodboard/json";
+import { looksTruncatedJson, parseJsonCandidate, safeModelTextPreview } from "@/lib/moodboard/json";
 
 const SAMPLE = {
   keyword: "Bangkok",
@@ -67,12 +67,30 @@ describe("moodboard expand JSON shape", () => {
     expect(flattenStockQueries(parsed.pack).every((query) => query.length > 0)).toBe(true);
   });
 
-  it("accepts fenced model output and rejects empty roles", () => {
+  it("accepts fenced model output and rejects keyword-only objects", () => {
     const fenced = parseMoodboardExpandJson(
       `here you go\n\`\`\`json\n${JSON.stringify(SAMPLE)}\n\`\`\``,
     );
     expect(fenced.ok).toBe(true);
     expect(parseMoodboardExpandJson({ keyword: "ice" }).ok).toBe(false);
+  });
+
+  it("repairs truncated Bangkok associations and synthesizes role buckets", () => {
+    const truncated =
+      '{"keyword":"Bangkok","associations":["saffron robes","tangled power lines","pink taxis","jasmine garlands","gold leaf","plastic stools","neon signs","river ferries","incense smoke","humidity","chili flakes",';
+    const parsed = parseMoodboardExpandJson(truncated);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.pack.keyword).toBe("Bangkok");
+    expect(parsed.pack.associations).toContain("saffron robes");
+    expect(parsed.pack.associations).toContain("chili flakes");
+    expect(parsed.pack.roles.subject.length).toBeGreaterThanOrEqual(5);
+    expect(parsed.pack.roles.setting.length).toBeGreaterThanOrEqual(5);
+    expect(parsed.pack.roles.prop.length).toBeGreaterThanOrEqual(4);
+    expect(parsed.pack.roles.mood).toHaveLength(6);
+    expect(parsed.pack.roles.color).toHaveLength(5);
+    expect(plannedBoardItemCount(parsed.pack)).toBeGreaterThanOrEqual(18);
+    expect(parsed.pack.roles.subject[0]?.query).toContain("Bangkok");
   });
 
   it("extracts the first JSON object from leading prose", () => {
@@ -158,5 +176,9 @@ describe("moodboard expand JSON shape", () => {
     expect(preview).not.toContain("r8_account-token");
     expect(preview).toContain("[redacted]");
     expect(safeModelTextPreview("")).toBe("(empty)");
+    expect(
+      looksTruncatedJson('{"keyword":"Bangkok","associations":["saffron robes","chili flakes",'),
+    ).toBe(true);
+    expect(looksTruncatedJson(JSON.stringify(SAMPLE))).toBe(false);
   });
 });

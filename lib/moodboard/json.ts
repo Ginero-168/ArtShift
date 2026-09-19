@@ -55,6 +55,19 @@ function collectJsonAttempts(text: string): string[] {
   return attempts;
 }
 
+export function looksTruncatedJson(text: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const trimmed = text.trim();
+  if (extractFirstJsonValue(trimmed)) return false;
+  const start = firstJsonStart(trimmed);
+  if (start < 0) return false;
+  return (
+    trimmed.includes('"keyword"') ||
+    trimmed.includes('"associations"') ||
+    trimmed.includes('"roles"')
+  );
+}
+
 function tryParseJson(text: string): unknown | undefined {
   try {
     return JSON.parse(text);
@@ -69,7 +82,79 @@ function tryParseJson(text: string): unknown | undefined {
       // continue
     }
   }
+  const repaired = repairTruncatedJson(text);
+  if (repaired && repaired !== text) {
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      // continue
+    }
+    try {
+      return JSON.parse(sanitizeJsonText(repaired));
+    } catch {
+      // continue
+    }
+  }
   return undefined;
+}
+
+/** Close open strings/arrays/objects so a cut-off model reply can parse. */
+export function repairTruncatedJson(str: string): string {
+  if (!str || typeof str !== "string") return str;
+  const startIdx = firstJsonStart(str);
+  if (startIdx < 0) return str;
+
+  const target = str.slice(startIdx);
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < target.length; i++) {
+    const char = target[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === "{" || char === "[") {
+        stack.push(char);
+      } else if (char === "}" && stack[stack.length - 1] === "{") {
+        stack.pop();
+      } else if (char === "]" && stack[stack.length - 1] === "[") {
+        stack.pop();
+      }
+    }
+  }
+
+  let repaired = target;
+  if (inString) {
+    if (repaired.endsWith("\\")) {
+      repaired = repaired.slice(0, -1);
+    }
+    repaired += '"';
+  }
+
+  if (/:\s*$/.test(repaired)) {
+    repaired += "null";
+  }
+
+  repaired = repaired.replace(/,\s*$/, "");
+
+  while (stack.length > 0) {
+    const last = stack.pop();
+    if (last === "{") repaired += "}";
+    else if (last === "[") repaired += "]";
+  }
+
+  return repaired;
 }
 
 /** Tolerate trailing commas before } or ]. */

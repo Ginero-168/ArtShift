@@ -89,7 +89,24 @@ function parseExpandObject(candidate: unknown): MoodboardExpandValidation | Mood
   const color = parseColorChips(rolesRaw.color ?? rolesRaw.colors, MOODBOARD_PACK_COUNTS.color);
 
   if (!subject.length || !setting.length || !prop.length || !mood.length || !color.length) {
-    return { ok: false, reason: "Expand JSON is missing one or more role buckets." };
+    if (associations.length === 0) {
+      return { ok: false, reason: "Expand JSON is missing one or more role buckets." };
+    }
+    const synthesized = synthesizeExpandPack(keyword, associations);
+    return {
+      ok: true,
+      pack: {
+        keyword,
+        associations,
+        roles: {
+          subject: subject.length ? subject : synthesized.roles.subject,
+          setting: setting.length ? setting : synthesized.roles.setting,
+          prop: prop.length ? prop : synthesized.roles.prop,
+          mood: mood.length ? mood : synthesized.roles.mood,
+          color: color.length ? color : synthesized.roles.color,
+        },
+      },
+    };
   }
 
   const pack: MoodboardExpandPack = {
@@ -100,6 +117,34 @@ function parseExpandObject(candidate: unknown): MoodboardExpandValidation | Mood
     roles: { subject, setting, prop, mood, color },
   };
   return { ok: true, pack };
+}
+
+/** Quantity-first roles from vibe phrases when the model omitted or truncated `roles`. */
+export function synthesizeExpandPack(keyword: string, associations: string[]): MoodboardExpandPack {
+  const seeds = uniqueLabels([
+    ...associations,
+    keyword,
+    `${keyword} street`,
+    `${keyword} people`,
+    `${keyword} market`,
+    `${keyword} night`,
+    `${keyword} texture`,
+  ]);
+  let offset = 0;
+  const subject = takeVisuals(seeds, keyword, MOODBOARD_PACK_COUNTS.subject.min, offset, true);
+  offset += subject.length;
+  const setting = takeVisuals(seeds, keyword, MOODBOARD_PACK_COUNTS.setting.min, offset, false);
+  offset += setting.length;
+  const prop = takeVisuals(seeds, keyword, MOODBOARD_PACK_COUNTS.prop.min, offset, false);
+  offset += prop.length;
+  const mood = takeChips(seeds, MOODBOARD_PACK_COUNTS.mood.min, offset);
+  offset += mood.length;
+  const color = takeColorChips(seeds, MOODBOARD_PACK_COUNTS.color.min, offset);
+  return {
+    keyword,
+    associations: associations.length ? associations.slice(0, 24) : seeds.slice(0, 8),
+    roles: { subject, setting, prop, mood, color },
+  };
 }
 
 export function plannedBoardItemCount(pack: MoodboardExpandPack): number {
@@ -200,6 +245,57 @@ function collectAssociationFallback(
   prop: MoodboardExpandVisual[],
 ): string[] {
   return [...subject, ...setting, ...prop].map((item) => item.label);
+}
+
+function takeVisuals(
+  seeds: string[],
+  keyword: string,
+  count: number,
+  offset: number,
+  doubleFirst: boolean,
+): MoodboardExpandVisual[] {
+  const items: MoodboardExpandVisual[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const label = seeds[(offset + i) % seeds.length] ?? keyword;
+    items.push({
+      label,
+      query: `${keyword} ${label}`.trim(),
+      photoCount: doubleFirst && i === 0 ? 2 : 1,
+    });
+  }
+  return items;
+}
+
+function takeChips(seeds: string[], count: number, offset: number): MoodboardExpandChip[] {
+  const items: MoodboardExpandChip[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const label = seeds[(offset + i) % seeds.length] ?? `mood ${i + 1}`;
+    items.push({ label, query: label });
+  }
+  return items;
+}
+
+function takeColorChips(seeds: string[], count: number, offset: number): MoodboardExpandChip[] {
+  const items: MoodboardExpandChip[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const label = seeds[(offset + i) % seeds.length] ?? `color ${i + 1}`;
+    items.push({ label, hex: fallbackColor(i) });
+  }
+  return items;
+}
+
+function uniqueLabels(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const label = value.trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(label);
+  }
+  return result.length ? result : ["reference"];
 }
 
 function asStringList(raw: unknown): string[] {

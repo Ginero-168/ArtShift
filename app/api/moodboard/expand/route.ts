@@ -1,10 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
+  MOODBOARD_EXPAND_MAX_TOKENS,
   MOODBOARD_EXPAND_SYSTEM_PROMPT,
+  moodboardExpandRetryPrompt,
   moodboardExpandUserPrompt,
 } from "@/lib/moodboard/expandPrompt";
 import { parseMoodboardExpandJson } from "@/lib/moodboard/expandSchema";
-import { safeModelTextPreview } from "@/lib/moodboard/json";
+import { looksTruncatedJson, safeModelTextPreview } from "@/lib/moodboard/json";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
@@ -72,46 +74,23 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    const execution = await ai.execute(
-      "assistant.chat",
-      {
-        system: MOODBOARD_EXPAND_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: moodboardExpandUserPrompt(keyword) }],
-        maxTokens: 2200,
-        jsonObject: true,
-      },
-      {
-        profile: "quality",
-        cloudConsent: true,
-        allowFallback: false,
-        timeoutMs: 60_000,
-        maxCostUsd: 0.08,
-        cache: false,
-        accountId: access.account.id,
-        signal: req.signal,
-        reasoning: { mode: "off" },
-      },
-    );
-
-    const texts = collectChatOutputTexts(execution.output);
-    let parsed = parseMoodboardExpandJson(texts[0] ?? "");
-    if (!parsed.ok) {
-      for (const text of texts.slice(1)) {
-        parsed = parseMoodboardExpandJson(text);
-        if (parsed.ok) break;
-      }
-    }
-    const rawOutput: unknown = execution.output;
-    if (!parsed.ok && looksLikeExpandPack(rawOutput)) {
-      parsed = parseMoodboardExpandJson(rawOutput);
+    let execution = await runExpandChat(ai, access.account.id, req.signal, keyword, false);
+    let parsed = parseExpandExecution(execution);
+    if (!parsed.ok && looksTruncatedJson(collectChatOutputTexts(execution.output)[0] ?? "")) {
+      execution = await runExpandChat(ai, access.account.id, req.signal, keyword, true);
+      parsed = parseExpandExecution(execution);
     }
     if (!parsed.ok) {
-      const preview = safeModelTextPreview(texts[0] ?? "");
+      const raw = collectChatOutputTexts(execution.output)[0] ?? "";
+      const preview = safeModelTextPreview(raw);
+      const message = looksTruncatedJson(raw)
+        ? "Expand JSON was cut off before it finished. Try Expand again."
+        : parsed.reason;
       return NextResponse.json(
         {
           error: {
             code: "PROVIDER_SCHEMA",
-            message: `${parsed.reason} Raw preview: ${preview}`,
+            message,
             preview,
           },
         },
@@ -129,6 +108,58 @@ export async function POST(req: NextRequest) {
       { status: 502 },
     );
   }
+}
+
+function runExpandChat(
+  ai: { execute: ReturnType<typeof getServerAiRuntime>["execute"] },
+  accountId: string,
+  signal: AbortSignal,
+  keyword: string,
+  retry: boolean,
+) {
+  return ai.execute(
+    "assistant.chat",
+    {
+      system: MOODBOARD_EXPAND_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: retry ? moodboardExpandRetryPrompt(keyword) : moodboardExpandUserPrompt(keyword),
+        },
+      ],
+      maxTokens: MOODBOARD_EXPAND_MAX_TOKENS,
+      jsonObject: true,
+    },
+    {
+      profile: "quality",
+      cloudConsent: true,
+      allowFallback: false,
+      timeoutMs: 60_000,
+      maxCostUsd: 0.12,
+      cache: false,
+      accountId,
+      signal,
+      reasoning: { mode: "off" },
+    },
+  );
+}
+
+function parseExpandExecution(execution: {
+  output?: unknown;
+}): ReturnType<typeof parseMoodboardExpandJson> {
+  const texts = collectChatOutputTexts(execution.output);
+  let parsed = parseMoodboardExpandJson(texts[0] ?? "");
+  if (!parsed.ok) {
+    for (const text of texts.slice(1)) {
+      parsed = parseMoodboardExpandJson(text);
+      if (parsed.ok) break;
+    }
+  }
+  const rawOutput: unknown = execution.output;
+  if (!parsed.ok && looksLikeExpandPack(rawOutput)) {
+    parsed = parseMoodboardExpandJson(rawOutput);
+  }
+  return parsed;
 }
 
 function collectChatOutputTexts(output: unknown): string[] {
