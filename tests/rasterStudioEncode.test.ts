@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   arrayBufferToPngDataUrl,
   createBakeSurface,
@@ -12,6 +12,10 @@ import {
 } from "@/lib/raster/studio/sessionStore";
 
 describe("Raster Studio Phase 3 encode", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("encodes an ArrayBuffer as a PNG data URL", () => {
     const bytes = Uint8Array.from([1, 2, 3, 4]);
     expect(arrayBufferToPngDataUrl(bytes.buffer)).toBe(
@@ -20,6 +24,16 @@ describe("Raster Studio Phase 3 encode", () => {
   });
 
   it("returns a PNG data URL even when jsquash cannot load", async () => {
+    const fakeCtx = {
+      putImageData: vi.fn(),
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      fakeCtx as unknown as CanvasRenderingContext2D,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      `${PNG_DATA_URL_PREFIX}ZmFrZQ==`,
+    );
+
     const imageData = new ImageData(2, 2);
     const result = await encodeImageDataToPngDataUrl(imageData);
     expect(result.dataURL.startsWith(PNG_DATA_URL_PREFIX)).toBe(true);
@@ -27,6 +41,9 @@ describe("Raster Studio Phase 3 encode", () => {
   });
 
   it("creates a bake surface with documented dimensions", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      {} as CanvasRenderingContext2D,
+    );
     const surface = createBakeSurface(12, 8);
     expect(surface.canvas.width).toBe(12);
     expect(surface.canvas.height).toBe(8);

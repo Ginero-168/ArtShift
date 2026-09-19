@@ -305,6 +305,7 @@ describe("Canvas hotkeys", () => {
 
   it("does not open Raster Studio from a main-canvas raster letter key", () => {
     const st = useEngine.getState();
+    st.setTool("select");
     const image = createImage({
       x: 10,
       y: 10,
