@@ -391,6 +391,26 @@ function LandingPageContent() {
           />
         </div>
       </main>
+
+      <footer
+        style={{
+          padding: "8px 32px 32px",
+          textAlign: "center",
+          zIndex: 10,
+        }}
+      >
+        <Link
+          href="/privacy"
+          style={{
+            color: "#64748b",
+            fontSize: 13,
+            fontWeight: 500,
+            textDecoration: "none",
+          }}
+        >
+          นโยบายความเป็นส่วนตัว
+        </Link>
+      </footer>
     </div>
   );
 }
