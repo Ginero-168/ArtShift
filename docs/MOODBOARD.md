@@ -4,7 +4,7 @@
 
 ## North star
 
-Keyword → **LLM vibe/association expansion** → structure into **Subject / Setting / Prop / Mood / Color** → fill board with **many real stock photos** (Unsplash/Pexels).  
+Keyword → **LLM vibe/association expansion** → structure into **Subject / Setting / Prop / Mood / Color** → fill board with **many real photos** (Google CSE, then Unsplash/Pexels).  
 **No generative images** on Moodboard.
 
 ## Slide model
@@ -22,6 +22,31 @@ Keyword → **LLM vibe/association expansion** → structure into **Subject / Se
 5. On failure: placeholder + retry — never gen-image fallback
 6. Requires auth + cloudConsent + BYOK for LLM step; stock uses existing stock keys
 7. Expand chat uses JSON-only mode (`assistant.chat` `jsonObject`) and parses the first JSON object from noisy model text. Parse failures return 502 with a short secret-redacted raw preview.
+
+## Stock photo sources
+
+`searchStockPhoto` calls `/api/stock` in this order and fail-closes to a placeholder (never a generative image):
+
+1. **Google Custom Search** (`source=google`) when `GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_CX` are set — official Programmable Search JSON API only (`https://www.googleapis.com/customsearch/v1`, `searchType=image`). No HTML scraping of Google Images.
+2. **Unsplash** (`UNSPLASH_ACCESS_KEY`)
+3. **Pexels** (`PEXELS_API_KEY`)
+
+### Configure Google CSE
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create or pick a project and enable **Custom Search API**.
+2. Create an API key. Restrict it to Custom Search API if possible.
+3. At [Programmable Search Engine](https://programmablesearchengine.google.com/) create a search engine.
+   - Turn on **Image search**.
+   - Turn on **Search the entire web** (otherwise results are limited to sites you listed).
+4. Copy the **Search engine ID** (`cx`).
+5. Set both server env vars (VPS / hPanel / `.env.local`) and restart the Node process:
+
+```bash
+GOOGLE_CSE_API_KEY=your-api-key
+GOOGLE_CSE_CX=your-search-engine-id
+```
+
+Credits store `title` (or `displayLink`) as photographer, `provider: "google"`, and `image.contextLink` as `sourceUrl`.
 
 ## Smart play (keep light)
 

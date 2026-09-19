@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
+import { buildGoogleCseImageSearchUrl } from "@/lib/server/stock/googleCse";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,33 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const source = searchParams.get("source");
+
+  if (source === "google") {
+    const key = process.env.GOOGLE_CSE_API_KEY?.trim() || "";
+    const cx = process.env.GOOGLE_CSE_CX?.trim() || "";
+    if (!key || !cx) {
+      return NextResponse.json(
+        { error: "Server missing GOOGLE_CSE_API_KEY or GOOGLE_CSE_CX" },
+        { status: 500 },
+      );
+    }
+    const query = searchParams.get("query") || "";
+    if (!query.trim()) {
+      return NextResponse.json({ error: "Query is required." }, { status: 400 });
+    }
+    const perPageParam = searchParams.get("per_page") || "1";
+    const perPageNum = Number.parseInt(perPageParam, 10);
+    const num = Number.isNaN(perPageNum) || perPageNum <= 0 || perPageNum > 10 ? 1 : perPageNum;
+    const url = buildGoogleCseImageSearchUrl({ key, cx, query, num });
+
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch {
+      return NextResponse.json({ error: "Upstream Google CSE request failed" }, { status: 502 });
+    }
+  }
 
   if (source === "unsplash") {
     const key = process.env.UNSPLASH_ACCESS_KEY || "";
@@ -57,7 +85,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: "Unknown source. Use ?source=unsplash or ?source=pexels" },
+    { error: "Unknown source. Use ?source=google, ?source=unsplash, or ?source=pexels" },
     { status: 400 },
   );
 }

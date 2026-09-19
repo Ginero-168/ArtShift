@@ -58,8 +58,10 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `OPENAI_API_KEY` | Optional direct OpenAI provider adapter |
 | `REPLICATE_GPT_IMAGE_2_VERSION` | Optional pinned version for the fixed GPT Image 2 model |
 | `AI_MONTHLY_BUDGET_USD` | Optional monthly AI budget guard |
-| `UNSPLASH_ACCESS_KEY` | Stock photos |
-| `PEXELS_API_KEY` | Stock photos |
+| `UNSPLASH_ACCESS_KEY` | Stock photos (`/api/stock?source=unsplash`) |
+| `PEXELS_API_KEY` | Stock photos (`/api/stock?source=pexels`) |
+| `GOOGLE_CSE_API_KEY` | Moodboard photos via official Google Custom Search JSON API |
+| `GOOGLE_CSE_CX` | Programmable Search Engine ID (enable Image search + Search the entire web) |
 | `RASTER_API_URL` | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 | `REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION` | Optional pinned version for the Recraft Vectorize alias |
