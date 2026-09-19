@@ -368,9 +368,10 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       overlay.width = source.width;
       overlay.height = source.height;
     }
+    void previewEpoch;
     const sample = cloneSamplePoint(cloneSource, cloneDrag?.localPoints[0] ?? null, hoverLocal);
     paintCloneBlitPreview(overlay, source, sample, hoverLocal, brushSize, brushHardness);
-  }, [brushHardness, brushSize, cloneSource, hoverLocal, image, studioTool, previewEpoch]);
+  }, [brushHardness, brushSize, cloneSource, hoverLocal, image, previewEpoch, studioTool]);
 
   // Clear polygon/quick drafts when switching tools.
   useEffect(() => {
@@ -817,10 +818,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
           image.width,
           image.height,
         );
-        controller.commitRasterSelection(
-          image.id,
-          selectionOperation(drag.mode, shape),
-        );
+        controller.commitRasterSelection(image.id, selectionOperation(drag.mode, shape));
         markSessionEdited();
       }
       setSelectionDraft(null);
@@ -891,10 +889,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
   const showCloneBlit = studioTool === "rasterClone" && Boolean(cloneSource && hoverLocal);
 
   const draftPath =
-    draftPoints &&
-    draftPoints.length > 1 &&
-    studioTool !== "rasterClone" &&
-    !showCloneBlit
+    draftPoints && draftPoints.length > 1 && studioTool !== "rasterClone" && !showCloneBlit
       ? draftPoints.map(([x, y]) => `${x},${y}`).join(" ")
       : null;
 

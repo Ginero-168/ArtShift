@@ -1,10 +1,7 @@
 import type { RasterPixelBuffer } from "./processor";
 
 /** Diffuse known RGB into the inpaint mask (1 = hole). Not clone-stamp. */
-export function fillUnknownFromNeighbors(
-  buffer: RasterPixelBuffer,
-  inpaint: Uint8Array,
-): void {
+export function fillUnknownFromNeighbors(buffer: RasterPixelBuffer, inpaint: Uint8Array): void {
   const { width, height, data } = buffer;
   const unknown = new Uint8Array(width * height);
   for (let i = 0; i < unknown.length; i++) unknown[i] = inpaint[i] > 32 ? 1 : 0;

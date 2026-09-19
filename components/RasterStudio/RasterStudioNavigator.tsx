@@ -64,7 +64,8 @@ export default function RasterStudioNavigator({
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(sourceCanvas, 0, 0, thumb.width, thumb.height);
     }
-  }, [collapsed, imageHeight, imageWidth, revision, sourceCanvas, thumb.height, thumb.width]);
+    void revision;
+  }, [collapsed, revision, sourceCanvas, thumb.height, thumb.width]);
 
   if (collapsed) {
     return (

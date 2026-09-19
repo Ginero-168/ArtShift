@@ -59,14 +59,7 @@ export async function createRasterRetouchEdit(
       // OpenCV is optional. Local blur-blend inpaint is not clone-stamp
       // (no displaced source) and is not claimed as Photoshop Telea parity.
       healFallback = true;
-      output = createLocalInpaintPatch(
-        pixels,
-        bounds,
-        scaledPoints,
-        radiusX,
-        radiusY,
-        hardness,
-      );
+      output = createLocalInpaintPatch(pixels, bounds, scaledPoints, radiusX, radiusY, hardness);
     }
   } else {
     output = createClonePatch(

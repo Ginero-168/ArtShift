@@ -131,7 +131,9 @@ export default function RasterStudioAdjustPanel({ elementId }: { elementId: stri
           ×
         </button>
       </div>
-      <p style={{ margin: "8px 0 12px", fontSize: 11, lineHeight: 1.35, color: studioChrome.muted }}>
+      <p
+        style={{ margin: "8px 0 12px", fontSize: 11, lineHeight: 1.35, color: studioChrome.muted }}
+      >
         Brightness and contrast stay in Studio until Save bakes pixels. Appearance is unchanged.
       </p>
       <label style={sliderLabelStyle}>

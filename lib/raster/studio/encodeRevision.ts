@@ -19,11 +19,7 @@ export const WEBP_DATA_URL_PREFIX = "data:image/webp;base64,";
 
 export type RasterEncodeFormat = "png" | "webp";
 
-export type RasterEncodeEncoder =
-  | "jsquash-png"
-  | "canvas-png"
-  | "jsquash-webp"
-  | "canvas-webp";
+export type RasterEncodeEncoder = "jsquash-png" | "canvas-png" | "jsquash-webp" | "canvas-webp";
 
 export type RasterEncodeResult = {
   dataURL: string;
