@@ -62,6 +62,9 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `PEXELS_API_KEY` | Stock photos (`/api/stock?source=pexels`) — not used by Moodboard Expand |
 | `GOOGLE_CSE_API_KEY` | Official Google Custom Search JSON API — not used by Moodboard Expand |
 | `GOOGLE_CSE_CX` | Programmable Search Engine ID (enable Image search + Search the entire web) |
+| `PINTEREST_CLIENT_ID` | Moodboard Connect Pinterest OAuth client id |
+| `PINTEREST_CLIENT_SECRET` | Moodboard Connect Pinterest OAuth client secret |
+| `PINTEREST_APP_NAME` | Optional Pinterest app display name (default ArtShift) |
 | `RASTER_API_URL` | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 | `REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION` | Optional pinned version for the Recraft Vectorize alias |
@@ -71,6 +74,13 @@ Register this exact Google OAuth redirect URI in Google Cloud Console:
 
 ```text
 https://www.artshift.io/api/auth/google/callback
+```
+
+For Moodboard Connect Pinterest, register this redirect URI on the Pinterest app and grant
+`user_accounts:read`, `boards:read`, `boards:read_secret`, `pins:read`, and `pins:read_secret`:
+
+```text
+https://www.artshift.io/api/pinterest/oauth/callback
 ```
 
 Google Login is the primary account path. Replicate Chat, Design Agent, Replicate-backed Vision and `Recraft Vectorize (Cloud)` use **BYOK**. Do not add a `REPLICATE_API_TOKEN` environment variable. Each user enters their own Replicate API Key in **AI Provider Settings**; ArtShift verifies it over HTTPS and stores it encrypted against the Google account. Google access tokens are discarded after profile verification.

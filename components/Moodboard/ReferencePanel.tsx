@@ -146,9 +146,9 @@ export function ReferencePanel({
 
       {tab === "pinterest" ? (
         <p style={{ color: "#6b7280", lineHeight: 1.45 }}>
-          Official saved-Pins access needs a reviewed Pinterest app (
-          {PINTEREST_API_STATUS.officialSavedPins}). Paste a Pin or <code>pinimg.com</code> URL you
-          already saved. ArtShift does not scrape Pinterest or Google Images.
+          Connect Pinterest in the Pinterest tab for official Pins and boards (
+          {PINTEREST_API_STATUS.officialSavedPins}). Paste here is a fallback for a Pin or{" "}
+          <code>pinimg.com</code> URL you already have. ArtShift does not scrape Pinterest.
         </p>
       ) : (
         <p style={{ color: "#6b7280", lineHeight: 1.45 }}>

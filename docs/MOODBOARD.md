@@ -24,20 +24,26 @@ The designer finds and selects images. ArtShift does not scrape Google or Pinter
 3. **Pinterest panel** in the left workspace switcher (Pinterest logo tab next to AI Assistance / Block)
 4. **Note** block in the Block library (same insert path as other blocks)
 
-### Pinterest panel (honest)
+### Pinterest panel
 
-The panel matches the dark Pins | Boards mock: Sign-in, then masonry Pins, refresh, ⋯, and **Disconnect**.
+Four screens, in order:
 
-Official saved-Pins / board APIs need a reviewed Pinterest developer app (`blocked_pending_app_review`). This slice:
+1. **Disconnected empty state** — dark panel titled Pinterest, centered red P logo, “Not connected to Pinterest yet”, outlined **Connect Pinterest**. No local-session paste tray as the primary path.
+2. **Connect** opens real Pinterest OAuth (`https://www.pinterest.com/oauth/` → `pinterest.com/login`).
+3. **Grant** asks for public + secret boards/pins and the user account. App display name is **ArtShift** unless `PINTEREST_APP_NAME` is set (Pinterest console).
+4. **Connected feed** — Pins | Boards tabs, refresh + ⋯, masonry of the user’s Pins (and boards). **Disconnect** returns to state 1.
 
-- Sign-in starts a **local session** (OAuth start returns 501 until `PINTEREST_CLIENT_ID` exists *and* the app is reviewed)
-- classifies `pinterest.*` / `pinimg.com` URLs the user pastes
-- stores them in `artshift.moodboard.references.v1` and shows them as a masonry grid
-- Boards tab explains the official API blocker
-- does **not** scrape Pinterest or Google Images
-- does **not** call SerpAPI
+`Connect` → `GET /api/pinterest/oauth/start?returnTo=/projects…` → callback `GET /api/pinterest/oauth/callback`. Tokens stay in an encrypted httpOnly cookie (`artshift_pinterest_session`).
 
-`GET /api/pinterest/status` reports `oauthConfigured` and the official-API status.
+Required env:
+
+- `PINTEREST_CLIENT_ID`
+- `PINTEREST_CLIENT_SECRET`
+- `ARTSHIFT_PUBLIC_URL` (redirect `{publicUrl}/api/pinterest/oauth/callback`)
+
+If credentials are missing, the empty state stays on screen; Connect explains setup (start returns 503). Paste / URL import is a labeled **fallback** under ⋯, not the happy path.
+
+`GET /api/pinterest/status` reports `oauthConfigured`, `connected`, and `officialSavedPins: oauth_when_configured`. ArtShift does not scrape Pinterest or Google Images.
 
 ## Expand (structure only, no search UI)
 
@@ -63,7 +69,7 @@ The LLM expand route still exists for later use. It is **not** shown as a top-ce
 - [x] Expand API exists but is not a top-center search bar
 - [x] Upright media only
 - [x] Drop / paste / URL / Pinterest panel intake
-- [x] Pinterest Sign-in + Pins/Boards shell; official API blocker documented
+- [x] Pinterest Connect OAuth + Pins/Boards masonry; Disconnect returns to empty state
 - [x] Note available in the Block library
 - [x] Normal editor chrome (chat, Option Bar, layers, properties) on Moodboard
 - [x] Copy to artwork slide

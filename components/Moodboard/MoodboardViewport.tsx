@@ -497,8 +497,8 @@ const MoodboardViewport = forwardRef<
         >
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Infinite artboard</div>
           <div style={{ fontSize: 13, maxWidth: 400, lineHeight: 1.5 }}>
-            Drop or paste photos, add a Note from Block, or open Pinterest to place Pins you already
-            saved. Copy to a normal artwork slide from the menu when you are ready.
+            Drop or paste photos, add a Note from Block, or Connect Pinterest to place your Pins.
+            Copy to a normal artwork slide from the menu when you are ready.
           </div>
         </div>
       ) : null}

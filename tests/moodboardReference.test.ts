@@ -8,10 +8,10 @@ import {
 } from "@/lib/moodboard/referenceStore";
 
 describe("Pinterest / reference tray", () => {
-  it("documents official saved-Pins as blocked pending app review", () => {
-    expect(PINTEREST_API_STATUS.officialSavedPins).toBe("blocked_pending_app_review");
+  it("documents official saved-Pins as OAuth when configured", () => {
+    expect(PINTEREST_API_STATUS.officialSavedPins).toBe("oauth_when_configured");
     expect(PINTEREST_API_STATUS.scrape).toBe("not_supported");
-    expect(PINTEREST_API_STATUS.userPaste).toBe("supported");
+    expect(PINTEREST_API_STATUS.userPaste).toBe("fallback");
   });
 
   it("classifies Pin and pinimg URLs without scraping", () => {

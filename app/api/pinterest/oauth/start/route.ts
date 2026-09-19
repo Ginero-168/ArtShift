@@ -1,28 +1,36 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { PINTEREST_API_STATUS } from "@/lib/moodboard/pinterest";
+import { jsonNoStore } from "@/lib/server/http";
+import {
+  createPinterestAuthorizationUrl,
+  getPinterestAuthConfig,
+  pinterestSetupMessage,
+  safePinterestReturnTo,
+  setPinterestStateCookie,
+} from "@/lib/server/pinterest/oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const clientId =
-    process.env.PINTEREST_CLIENT_ID?.trim() ||
-    process.env.NEXT_PUBLIC_PINTEREST_CLIENT_ID?.trim() ||
-    "";
-  if (!clientId) {
-    return NextResponse.json(
+export async function GET(req: NextRequest) {
+  const config = getPinterestAuthConfig();
+  if (!config) {
+    return jsonNoStore(
       {
-        error: "Pinterest OAuth is not configured.",
+        error: pinterestSetupMessage(),
+        oauthConfigured: false,
         officialSavedPins: PINTEREST_API_STATUS.officialSavedPins,
       },
-      { status: 501 },
+      { status: 503 },
     );
   }
-  return NextResponse.json(
-    {
-      error: "Pinterest OAuth redirect is reserved until the app passes partner review.",
-      officialSavedPins: PINTEREST_API_STATUS.officialSavedPins,
-    },
-    { status: 501 },
+
+  const flow = createPinterestAuthorizationUrl(
+    config,
+    safePinterestReturnTo(req.nextUrl.searchParams.get("returnTo")),
   );
+  const response = NextResponse.redirect(flow.url, 302);
+  response.headers.set("Cache-Control", "private, no-store");
+  setPinterestStateCookie(response, flow.state, flow.returnTo);
+  return response;
 }

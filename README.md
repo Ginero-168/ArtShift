@@ -68,10 +68,14 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 | `UNSPLASH_ACCESS_KEY` | no | Stock photos (`/api/stock?source=unsplash`) — not used by Moodboard Expand |
 | `PEXELS_API_KEY` | no | Stock photos (`/api/stock?source=pexels`) — not used by Moodboard Expand |
 | `GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | no | Official Custom Search JSON API (`searchType=image`) — not used by Moodboard Expand |
+| `PINTEREST_CLIENT_ID` / `PINTEREST_CLIENT_SECRET` | no | Moodboard Connect Pinterest OAuth. Redirect `{ARTSHIFT_PUBLIC_URL}/api/pinterest/oauth/callback`. Scopes: `user_accounts:read`, `boards:read`, `boards:read_secret`, `pins:read`, `pins:read_secret` |
+| `PINTEREST_APP_NAME` | no | Optional Pinterest-console display name (default ArtShift) |
 | `RASTER_API_URL` | no | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | no | Bearer token for the optional raster provider |
 
 Google Login is the primary account path. ArtShift exposes one **AI Assistance** chat: deterministic edits run locally first, specialized tools use the local asset path, and complex design requests are routed automatically to Design Agent. Replicate Chat, Design Agent, Replicate-backed Vision และ GPT Image 2 generation use the user's own key from **AI Provider Settings**. The key is verified over HTTPS, encrypted at rest with `ARTSHIFT_CREDENTIAL_ENCRYPTION_KEY`, and decrypted only for a request. Google access tokens are not stored. If no key is configured, local features continue to work and cloud AI returns a clear setup message.
+
+Moodboard **Connect Pinterest** uses official Pinterest OAuth when `PINTEREST_CLIENT_ID` and `PINTEREST_CLIENT_SECRET` are set. Register `{ARTSHIFT_PUBLIC_URL}/api/pinterest/oauth/callback` on the Pinterest app. Without those credentials, Connect stays on the disconnected empty state and explains setup — it does not fake a local session.
 
 Provider integration, consent, fallback and cost rules are documented in [docs/AI_RUNTIME.md](docs/AI_RUNTIME.md).
 

@@ -334,7 +334,7 @@ export default function BlockLibrary() {
         className={`${styles.libraryTabPanel} ${styles.assistantTabPanel}`}
         hidden={activeTab !== "pinterest"}
       >
-        <PinterestPanel />
+        {activeTab === "pinterest" ? <PinterestPanel /> : null}
       </div>
 
       <IconLibraryModal

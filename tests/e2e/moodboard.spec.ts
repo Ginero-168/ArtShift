@@ -56,16 +56,59 @@ test("Moodboard reuses editor chrome, Pinterest panel, and Block Note", async ({
   await page.getByRole("tab", { name: "Pinterest" }).click();
   await expect(page.locator("[data-pinterest-panel]")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Pinterest" })).toBeVisible();
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText("Not connected to Pinterest yet")).toBeVisible();
+  await page.getByRole("button", { name: "Connect Pinterest" }).click();
+  await expect(page.getByText(/PINTEREST_CLIENT_ID/)).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Pins" })).toHaveCount(0);
+
+  await page.screenshot({
+    path: `${ARTIFACT_DIR}/moodboard_pinterest_empty.png`,
+    fullPage: true,
+  });
+
+  const pinSrc = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  await page.route("**/api/pinterest/status", async (route) => {
+    await route.fulfill({
+      json: {
+        oauthConfigured: true,
+        connected: true,
+        officialSavedPins: "oauth_when_configured",
+        userPaste: "fallback",
+        scrape: "not_supported",
+      },
+    });
+  });
+  await page.route("**/api/pinterest/pins", async (route) => {
+    await route.fulfill({
+      json: {
+        pins: [{ id: "pin-1", title: "Prompt capsule", src: pinSrc }],
+        connected: true,
+      },
+    });
+  });
+  await page.route("**/api/pinterest/boards", async (route) => {
+    await route.fulfill({
+      json: { boards: [{ id: "board-1", name: "Refs", pinCount: 1 }], connected: true },
+    });
+  });
+  await page.route("**/api/pinterest/disconnect", async (route) => {
+    await route.fulfill({ json: { connected: false } });
+  });
+
+  await page.getByRole("tab", { name: "Block" }).click();
+  await page.getByRole("tab", { name: "Pinterest" }).click();
   await expect(page.getByRole("tab", { name: "Pins" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Boards" })).toBeVisible();
-  await page.getByRole("button", { name: "Pinterest menu" }).click();
-  await expect(page.getByRole("button", { name: /Disconnect/ })).toBeVisible();
-
+  await expect(page.getByRole("img", { name: "Prompt capsule" })).toBeVisible();
   await page.screenshot({
     path: `${ARTIFACT_DIR}/moodboard_pinterest_panel.png`,
     fullPage: true,
   });
+  await page.getByRole("button", { name: "Pinterest menu" }).click();
+  await expect(page.getByRole("button", { name: "Paste Pin URL (fallback)" })).toBeVisible();
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await expect(page.getByText("Not connected to Pinterest yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect Pinterest" })).toBeVisible();
 
   await page.getByTitle("Menu").click();
   await page.getByText("Copy moodboard to slide").click();
