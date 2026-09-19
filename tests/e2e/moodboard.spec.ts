@@ -57,16 +57,18 @@ test("Moodboard reuses editor chrome, Pinterest panel, and Block Note", async ({
   await expect(page.locator("[data-pinterest-panel]")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Pinterest" })).toBeVisible();
   await expect(page.getByText("Not connected to Pinterest yet")).toBeVisible();
-  await page.getByRole("button", { name: "Connect Pinterest" }).click();
-  await expect(page.getByText(/PINTEREST_CLIENT_ID/)).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Pins" })).toHaveCount(0);
-
+  await expect(page.getByRole("button", { name: "Connect Pinterest" })).toBeVisible();
   await page.screenshot({
     path: `${ARTIFACT_DIR}/moodboard_pinterest_empty.png`,
     fullPage: true,
   });
 
-  const pinSrc = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  await page.getByRole("button", { name: "Connect Pinterest" }).click();
+  await expect(page.getByText(/PINTEREST_CLIENT_ID/)).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Pins" })).toHaveCount(0);
+
+  const pinSrc = svgPin("Prompt capsule", 240, 320, "#1d4ed8");
+  const pinSrcTall = svgPin("Gulch", 240, 480, "#f9a8d4");
   await page.route("**/api/pinterest/status", async (route) => {
     await route.fulfill({
       json: {
@@ -81,7 +83,10 @@ test("Moodboard reuses editor chrome, Pinterest panel, and Block Note", async ({
   await page.route("**/api/pinterest/pins", async (route) => {
     await route.fulfill({
       json: {
-        pins: [{ id: "pin-1", title: "Prompt capsule", src: pinSrc }],
+        pins: [
+          { id: "pin-1", title: "Prompt capsule", src: pinSrc },
+          { id: "pin-2", title: "Gulch", src: pinSrcTall },
+        ],
         connected: true,
       },
     });
@@ -100,6 +105,7 @@ test("Moodboard reuses editor chrome, Pinterest panel, and Block Note", async ({
   await expect(page.getByRole("tab", { name: "Pins" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Boards" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Prompt capsule" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Gulch" })).toBeVisible();
   await page.screenshot({
     path: `${ARTIFACT_DIR}/moodboard_pinterest_panel.png`,
     fullPage: true,
@@ -119,3 +125,9 @@ test("Moodboard reuses editor chrome, Pinterest panel, and Block Note", async ({
     fullPage: true,
   });
 });
+
+function svgPin(title: string, width: number, height: number, fill: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="${fill}"/><text x="16" y="36" fill="#fff" font-family="sans-serif" font-size="18">${title}</text></svg>`,
+  )}`;
+}
