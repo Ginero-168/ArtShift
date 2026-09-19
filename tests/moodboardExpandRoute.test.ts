@@ -110,13 +110,15 @@ describe("Moodboard expand API", () => {
       expect.objectContaining({
         system: expect.stringContaining("stock-photo search query"),
         jsonObject: true,
-        maxTokens: 8192,
+        maxTokens: 65_535,
       }),
       expect.objectContaining({
         cloudConsent: true,
         allowFallback: false,
         accountId: "account-test",
         reasoning: { mode: "off" },
+        timeoutMs: 90_000,
+        maxCostUsd: 0.25,
       }),
     );
     expect(runtimeMock.execute.mock.calls.every((call) => call[0] !== "image.generate")).toBe(true);

@@ -62,7 +62,10 @@ const ALLOWED_IMAGE_MODEL_SLUGS = new Set([
 
 /** Quality values only valid on GPT Image 2.5 models. */
 const EXTENDED_QUALITY_VALUES = new Set(["xhigh", "max"]);
-const MAX_CHAT_OUTPUT_TOKENS = 8_192;
+/** Replicate google/gemini-3-flash schema max for max_output_tokens. */
+export const MAX_GEMINI_CHAT_OUTPUT_TOKENS = 65_535;
+/** Conservative cap for openai/gpt-oss-120b and other non-Gemini Replicate chat. */
+export const MAX_OSS_CHAT_OUTPUT_TOKENS = 8_192;
 const MAX_RECRAFT_INPUT_BYTES = 5 * 1024 * 1024;
 const MAX_RECRAFT_PIXELS = 16_000_000;
 const MAX_RECRAFT_SVG_CHARS = 4_000_000;
@@ -268,7 +271,8 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const thinkingBudget =
       options?.reasoning?.mode === "fixed" ? options.reasoning.budgetTokens : undefined;
 
-    const chatMaxTokens = Math.min(MAX_CHAT_OUTPUT_TOKENS, Math.max(256, input.maxTokens ?? 4_096));
+    const chatTokenCeiling = isGemini ? MAX_GEMINI_CHAT_OUTPUT_TOKENS : MAX_OSS_CHAT_OUTPUT_TOKENS;
+    const chatMaxTokens = Math.min(chatTokenCeiling, Math.max(256, input.maxTokens ?? 4_096));
     const predictionInput = isGemini
       ? isGemini3
         ? {

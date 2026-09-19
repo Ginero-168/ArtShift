@@ -21,7 +21,7 @@ Keyword → **LLM vibe/association expansion** → structure into **Subject / Se
 4. Each visual item gets a stock query → `/api/stock` only
 5. On failure: placeholder + retry — never gen-image fallback
 6. Requires auth + cloudConsent + BYOK for LLM step; stock uses existing stock keys
-7. Expand chat uses JSON-only mode (`assistant.chat` `jsonObject`, 8192 output tokens). The parser repairs truncated JSON and synthesizes missing role buckets from associations so a cut-off Bangkok-scale reply still yields a complete pack. Unrecoverable failures return a clear retry message; a secret-redacted preview is only in the `preview` field.
+7. Expand chat uses JSON-only mode (`assistant.chat` `jsonObject`, up to 65535 Gemini output tokens). The parser repairs truncated JSON and synthesizes missing role buckets from associations so a cut-off Bangkok-scale reply still yields a complete pack. Unrecoverable failures return a clear retry message; a secret-redacted preview is only in the `preview` field.
 
 ## Stock photo sources
 

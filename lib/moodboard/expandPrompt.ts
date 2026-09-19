@@ -1,4 +1,4 @@
-export const MOODBOARD_EXPAND_MAX_TOKENS = 8_192;
+export const MOODBOARD_EXPAND_MAX_TOKENS = 65_535;
 
 export const MOODBOARD_EXPAND_SYSTEM_PROMPT = `You expand a moodboard keyword into lateral vibe associations, then bucket them for a physical reference board.
 

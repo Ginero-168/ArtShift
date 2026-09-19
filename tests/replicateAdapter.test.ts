@@ -474,6 +474,63 @@ describe("Replicate AI adapter", () => {
     expect(body.input.dynamic_thinking).toBe(false);
   });
 
+  it("sends Gemini chat max_output_tokens up to 65535 and keeps gpt-oss at 8192", async () => {
+    const geminiFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-gemini-cap",
+          model: "google/gemini-3-flash",
+          status: "succeeded",
+          output: ['{"keyword":"Bangkok"}'],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", geminiFetch);
+    const geminiAdapter = new ReplicateAiAdapter("test-token");
+    await geminiAdapter.execute({
+      task: "assistant.chat",
+      input: {
+        messages: [{ role: "user", content: "Keyword: Bangkok" }],
+        jsonObject: true,
+        maxTokens: 65_535,
+      },
+      model: "google/gemini-3-flash",
+      options: { reasoning: { mode: "off" } },
+      signal: new AbortController().signal,
+    });
+    const geminiRequest = geminiFetch.mock.calls[0]?.[1] as RequestInit;
+    const geminiBody = JSON.parse(String(geminiRequest.body));
+    expect(geminiBody.input.max_output_tokens).toBe(65_535);
+
+    const ossFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "prediction-oss-cap",
+          model: "openai/gpt-oss-120b",
+          status: "succeeded",
+          output: ['{"kind":"text","text":"ok"}'],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", ossFetch);
+    const ossAdapter = new ReplicateAiAdapter("test-token");
+    await ossAdapter.execute({
+      task: "assistant.chat",
+      input: {
+        messages: [{ role: "user", content: "hello" }],
+        maxTokens: 65_535,
+      },
+      model: "openai/gpt-oss-120b",
+      signal: new AbortController().signal,
+    });
+    const ossRequest = ossFetch.mock.calls[0]?.[1] as RequestInit;
+    const ossBody = JSON.parse(String(ossRequest.body));
+    expect(ossBody.input.max_tokens).toBe(8_192);
+    expect(ossBody.input.max_tokens).toBeLessThan(65_535);
+  });
+
   it("executes google/gemini-2.5-flash prompt enhancement", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
