@@ -4,6 +4,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -32,7 +33,12 @@ import {
   quickSelectionMaskForPointAsync,
   selectionShapeFromPoints,
 } from "@/lib/raster/selectionInteraction";
-import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
+import { blitOffscreenPreview, createBakeSurface } from "@/lib/raster/studio/encodeRevision";
+import {
+  clampStudioZoom,
+  studioToolHint,
+  useRasterStudioSession,
+} from "@/lib/raster/studio/sessionStore";
 import { type RenderCtx, renderElement } from "@/lib/renderer/canvas";
 
 type LocalPoint = [number, number];
@@ -91,6 +97,14 @@ type DragState =
 export default function RasterStudioViewport({ elementId }: { elementId: string }) {
   const studioTool = useRasterStudioSession((s) => s.studioTool);
   const setDirty = useRasterStudioSession((s) => s.setDirty);
+  const zoom = useRasterStudioSession((s) => s.zoom);
+  const pan = useRasterStudioSession((s) => s.pan);
+  const setZoom = useRasterStudioSession((s) => s.setZoom);
+  const setPan = useRasterStudioSession((s) => s.setPan);
+  const setStageSize = useRasterStudioSession((s) => s.setStageSize);
+  const setImageSize = useRasterStudioSession((s) => s.setImageSize);
+  const fitView = useRasterStudioSession((s) => s.fitView);
+  const didInitialFit = useRasterStudioSession((s) => s.didInitialFit);
 
   const updateElements = useEngine((s) => s.updateElements);
   const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
@@ -146,13 +160,14 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
   );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const spacePanRef = useRef(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
   const dragRef = useRef<DragState | null>(null);
   const cloneSourceRef = useRef<LocalPoint | null>(null);
   const wandRequestRef = useRef(0);
   const quickRequestRef = useRef(0);
   const quickAbortRef = useRef<AbortController | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [draftPoints, setDraftPoints] = useState<LocalPoint[] | null>(null);
   const [selectionDraft, setSelectionDraft] = useState<{
     shape: RasterSelectionShape;
@@ -165,6 +180,18 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     if (!canvas || !image) return;
     const width = Math.max(1, Math.round(image.width));
     const height = Math.max(1, Math.round(image.height));
+    const bakeTarget: ImageElement = { ...image, x: 0, y: 0, angle: 0, opacity: 1 };
+    const surface = createBakeSurface(width, height);
+    surface.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    surface.ctx.clearRect(0, 0, width, height);
+    renderElement(bakeTarget, { ctx: surface.ctx, images: getImageCache() } as RenderCtx);
+    if (
+      surface.offscreen &&
+      typeof OffscreenCanvas !== "undefined" &&
+      surface.canvas instanceof OffscreenCanvas
+    ) {
+      if (blitOffscreenPreview(surface.canvas, canvas)) return;
+    }
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
@@ -173,7 +200,10 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     if (!ctx) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    const bakeTarget: ImageElement = { ...image, x: 0, y: 0, angle: 0, opacity: 1 };
+    if (surface.canvas instanceof HTMLCanvasElement) {
+      ctx.drawImage(surface.canvas, 0, 0);
+      return;
+    }
     renderElement(bakeTarget, { ctx, images: getImageCache() } as RenderCtx);
   }, [image]);
 
@@ -184,6 +214,62 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
   useEffect(() => {
     selectOnly([elementId]);
   }, [elementId, selectOnly]);
+
+  useEffect(() => {
+    if (!image) return;
+    setImageSize({ width: image.width, height: image.height });
+  }, [image, setImageSize]);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const report = () => {
+      setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
+    };
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [setStageSize]);
+
+  useLayoutEffect(() => {
+    if (didInitialFit) return;
+    const stage = stageRef.current;
+    if (!stage || !image || stage.clientWidth < 8 || stage.clientHeight < 8) return;
+    fitView();
+  }, [didInitialFit, fitView, image]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || event.repeat) return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+      event.preventDefault();
+      spacePanRef.current = true;
+      setSpaceHeld(true);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code !== "Space") return;
+      spacePanRef.current = false;
+      setSpaceHeld(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      spacePanRef.current = false;
+      setSpaceHeld(false);
+    };
+  }, []);
 
   // Clear polygon/quick drafts when switching tools.
   useEffect(() => {
@@ -326,7 +412,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!image) return;
 
-    if (studioTool === "hand" || event.button === 1) {
+    if (studioTool === "hand" || event.button === 1 || spacePanRef.current) {
       event.currentTarget.setPointerCapture(event.pointerId);
       dragRef.current = { kind: "pan", lastX: event.clientX, lastY: event.clientY };
       return;
@@ -491,7 +577,8 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       const dy = event.clientY - drag.lastY;
       drag.lastX = event.clientX;
       drag.lastY = event.clientY;
-      setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+      const current = useRasterStudioSession.getState().pan;
+      setPan({ x: current.x + dx, y: current.y + dy });
       return;
     }
 
@@ -639,15 +726,23 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
   const selectionForOverlay =
     activeRasterSelection?.imageId === image.id ? activeRasterSelection.selection : undefined;
 
+  const panning = studioTool === "hand" || spaceHeld;
+  const idleHint =
+    studioTool === "rasterClone" && !cloneSourceRef.current && !status
+      ? "Alt-click to set clone source"
+      : (status ?? studioToolHint(studioTool));
+
   return (
     <div
+      ref={stageRef}
       style={{
         position: "relative",
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        cursor: studioTool === "hand" ? "grab" : "crosshair",
+        cursor: panning ? "grab" : "crosshair",
         touchAction: "none",
+        background: "#2a2f3d",
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -655,7 +750,17 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       onPointerCancel={onPointerUp}
       onWheel={(event) => {
         event.preventDefault();
-        const next = Math.min(8, Math.max(0.2, zoom * (event.deltaY < 0 ? 1.08 : 0.92)));
+        const stage = stageRef.current;
+        if (!stage) return;
+        const next = clampStudioZoom(zoom * (event.deltaY < 0 ? 1.08 : 0.92));
+        const rect = stage.getBoundingClientRect();
+        const cx = event.clientX - rect.left - rect.width / 2;
+        const cy = event.clientY - rect.top - rect.height / 2;
+        const scale = next / Math.max(zoom, 0.0001);
+        setPan({
+          x: cx - (cx - pan.x) * scale,
+          y: cy - (cy - pan.y) * scale,
+        });
         setZoom(next);
       }}
     >
@@ -671,13 +776,13 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
         <div
           style={{
             position: "relative",
+            width: image.width,
+            height: image.height,
             lineHeight: 0,
-            borderRadius: 4,
-            boxShadow: "0 0 0 1px var(--stroke, #d1d5db), 0 8px 28px rgba(15, 23, 42, 0.12)",
-            overflow: "hidden",
+            boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.08)",
             // Checkerboard shows through transparent pixels (canvas is cleared, not filled).
             backgroundColor: "#ffffff",
-            backgroundImage: "repeating-conic-gradient(#d1d5db 0% 25%, #ffffff 0% 50%)",
+            backgroundImage: "repeating-conic-gradient(#c4c9d4 0% 25%, #ffffff 0% 50%)",
             backgroundSize: "16px 16px",
           }}
         >
@@ -685,10 +790,8 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
             ref={canvasRef}
             style={{
               display: "block",
-              maxWidth: "min(92vw, 1200px)",
-              maxHeight: "calc(100vh - 160px)",
-              width: "auto",
-              height: "auto",
+              width: image.width,
+              height: image.height,
               background: "transparent",
             }}
           />
@@ -732,7 +835,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
           ) : null}
         </div>
       </div>
-      {status ? (
+      {idleHint ? (
         <div
           style={{
             position: "absolute",
@@ -740,14 +843,14 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
             bottom: 12,
             padding: "5px 10px",
             borderRadius: 8,
-            border: "1px solid var(--stroke, #e5e7eb)",
-            background: "var(--surface-solid, #fff)",
-            color: "var(--ink, #374151)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            background: "rgba(17, 24, 39, 0.72)",
+            color: "#f9fafb",
             fontSize: 12,
-            boxShadow: "0 1px 4px rgba(15, 23, 42, 0.08)",
+            pointerEvents: "none",
           }}
         >
-          {status}
+          {idleHint}
         </div>
       ) : null}
     </div>

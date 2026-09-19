@@ -26,6 +26,12 @@ describe("Raster Studio session tools", () => {
     expect(useRasterStudioSession.getState().studioTool).toBe("rasterQuickSelection");
     state.setStudioTool("rasterPolygonLasso");
     expect(useRasterStudioSession.getState().studioTool).toBe("rasterPolygonLasso");
+    state.setStageSize({ width: 800, height: 600 });
+    state.setImageSize({ width: 1600, height: 800 });
+    state.fitView();
+    expect(useRasterStudioSession.getState().zoom).toBeCloseTo(0.46, 5);
+    state.actualSize();
+    expect(useRasterStudioSession.getState().zoom).toBe(1);
     state.close();
     expect(useRasterStudioSession.getState().open).toBe(false);
   });

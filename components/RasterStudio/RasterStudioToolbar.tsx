@@ -23,12 +23,17 @@ const TOOLS: Array<{
   title: string;
   icon: (props: { size?: number }) => React.JSX.Element;
 }> = [
-  { id: "hand", label: "Pan", title: "Pan the canvas", icon: IconHand },
+  { id: "hand", label: "Pan", title: "Pan the canvas (H) · hold Space", icon: IconHand },
   { id: "rasterBrush", label: "Brush", title: "Soft brush (B)", icon: IconBrush },
   { id: "rasterPencil", label: "Pencil", title: "Hard pencil (Shift+B)", icon: IconPencil },
   { id: "rasterEraser", label: "Eraser", title: "Erase pixels (E)", icon: IconEraser },
   { id: "rasterMarquee", label: "Rect", title: "Rectangular selection (M)", icon: IconSquare },
-  { id: "rasterEllipse", label: "Ellipse", title: "Elliptical selection", icon: IconCircle },
+  {
+    id: "rasterEllipse",
+    label: "Ellipse",
+    title: "Elliptical selection (Shift+M)",
+    icon: IconCircle,
+  },
   { id: "rasterLasso", label: "Lasso", title: "Freehand lasso (L)", icon: IconFreedraw },
   {
     id: "rasterPolygonLasso",
@@ -40,7 +45,7 @@ const TOOLS: Array<{
   {
     id: "rasterQuickSelection",
     label: "Quick",
-    title: "Quick Select brush",
+    title: "Quick Select brush (Q)",
     icon: IconBrush,
   },
   { id: "rasterHealing", label: "Heal", title: "Healing brush (J)", icon: IconHealing },
@@ -60,7 +65,17 @@ export default function RasterStudioToolbar() {
     <div
       role="toolbar"
       aria-label="Raster Studio tools"
-      style={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", flexShrink: 0 }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 2,
+        width: 48,
+        padding: "8px 4px",
+        flexShrink: 0,
+        overflowY: "auto",
+        scrollbarWidth: "thin",
+      }}
     >
       {TOOLS.map((tool) => {
         const Icon = tool.icon;
@@ -75,8 +90,7 @@ export default function RasterStudioToolbar() {
             onClick={() => setStudioTool(tool.id)}
             style={toolButtonStyle(active)}
           >
-            <Icon size={15} />
-            <span>{tool.label}</span>
+            <Icon size={16} />
           </button>
         );
       })}
@@ -85,22 +99,16 @@ export default function RasterStudioToolbar() {
 }
 
 const toolButtonStyle = (active: boolean): CSSProperties => ({
-  height: 42,
-  minWidth: 52,
-  padding: "3px 4px 2px",
+  width: 40,
+  height: 40,
+  padding: 0,
   display: "inline-flex",
-  flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  gap: 1,
   border: "none",
-  borderRadius: 6,
+  borderRadius: 8,
   background: active ? "var(--accent, #6366f1)" : "transparent",
   color: active ? "#fff" : "var(--ink, #111827)",
   cursor: "pointer",
-  fontSize: 8,
-  lineHeight: "10px",
-  fontWeight: active ? 700 : 600,
-  whiteSpace: "nowrap",
-  textAlign: "center",
+  flexShrink: 0,
 });

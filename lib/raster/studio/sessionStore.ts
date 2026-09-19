@@ -22,7 +22,54 @@ export type StudioRasterTool =
   | "rasterClone"
   | "hand";
 
-const DEFAULT_STUDIO_TOOL: StudioRasterTool = "rasterBrush";
+export const DEFAULT_STUDIO_TOOL: StudioRasterTool = "rasterBrush";
+export const STUDIO_MIN_ZOOM = 0.05;
+export const STUDIO_MAX_ZOOM = 16;
+
+export function clampStudioZoom(zoom: number): number {
+  return Math.min(STUDIO_MAX_ZOOM, Math.max(STUDIO_MIN_ZOOM, zoom));
+}
+
+export function fitZoomForStage(
+  stageWidth: number,
+  stageHeight: number,
+  imageWidth: number,
+  imageHeight: number,
+  padding = 0.92,
+): number {
+  const width = Math.max(1, imageWidth);
+  const height = Math.max(1, imageHeight);
+  const availableW = Math.max(1, stageWidth);
+  const availableH = Math.max(1, stageHeight);
+  return clampStudioZoom(Math.min(availableW / width, availableH / height) * padding);
+}
+
+const DEFAULT_STUDIO_TOOL_HINTS: Record<StudioRasterTool, string> = {
+  hand: "Drag to pan · Space also pans while held",
+  rasterBrush: "Paint pixels (B) · [ / ] size",
+  rasterPencil: "Hard pixels (Shift+B) · [ / ] size",
+  rasterEraser: "Erase pixels (E) · [ / ] size",
+  rasterMarquee: "Drag a rectangle (M) · Shift add · Alt subtract",
+  rasterEllipse: "Drag an ellipse (Shift+M)",
+  rasterLasso: "Draw a freehand selection (L)",
+  rasterPolygonLasso: "Click points · Enter or double-click to close (Shift+L)",
+  rasterMagicWand: "Click similar colors (W)",
+  rasterQuickSelection: "Brush-select similar pixels (Q) · [ / ] size",
+  rasterHealing: "Paint to heal (J) · [ / ] size",
+  rasterClone: "Alt-click to set clone source, then paint (S)",
+};
+
+export function studioToolHint(tool: StudioRasterTool): string {
+  return DEFAULT_STUDIO_TOOL_HINTS[tool];
+}
+
+const RESET_VIEW = {
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+  stageSize: { width: 0, height: 0 },
+  imageSize: { width: 0, height: 0 },
+  didInitialFit: false,
+};
 
 type RasterStudioSessionState = {
   open: boolean;
@@ -31,11 +78,22 @@ type RasterStudioSessionState = {
   saving: boolean;
   error: string | null;
   studioTool: StudioRasterTool;
+  zoom: number;
+  pan: { x: number; y: number };
+  stageSize: { width: number; height: number };
+  imageSize: { width: number; height: number };
+  didInitialFit: boolean;
   openFromImage: (image: ImageElement) => void;
   setDirty: (dirty: boolean) => void;
   setSaving: (saving: boolean) => void;
   setError: (error: string | null) => void;
   setStudioTool: (tool: StudioRasterTool) => void;
+  setZoom: (zoom: number) => void;
+  setPan: (pan: { x: number; y: number }) => void;
+  setStageSize: (size: { width: number; height: number }) => void;
+  setImageSize: (size: { width: number; height: number }) => void;
+  fitView: () => void;
+  actualSize: () => void;
   close: () => void;
 };
 
@@ -58,15 +116,16 @@ export function isStudioRasterTool(tool: Tool | string): tool is StudioRasterToo
 
 /**
  * UI session for Raster Studio. Document truth stays in the engine store;
- * this only tracks whether the studio shell is open.
+ * this only tracks whether the studio shell is open and viewport chrome.
  */
-export const useRasterStudioSession = create<RasterStudioSessionState>((set) => ({
+export const useRasterStudioSession = create<RasterStudioSessionState>((set, get) => ({
   open: false,
   payload: null,
   dirty: false,
   saving: false,
   error: null,
   studioTool: DEFAULT_STUDIO_TOOL,
+  ...RESET_VIEW,
   openFromImage: (image) => {
     const payload = buildRasterStudioOpenPayload(image);
     const hasOverlays = Boolean(
@@ -82,12 +141,27 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set) => 
       saving: false,
       error: null,
       studioTool: DEFAULT_STUDIO_TOOL,
+      ...RESET_VIEW,
+      imageSize: { width: image.width, height: image.height },
     });
   },
   setDirty: (dirty) => set({ dirty }),
   setSaving: (saving) => set({ saving }),
   setError: (error) => set({ error }),
   setStudioTool: (studioTool) => set({ studioTool }),
+  setZoom: (zoom) => set({ zoom: clampStudioZoom(zoom) }),
+  setPan: (pan) => set({ pan }),
+  setStageSize: (stageSize) => set({ stageSize }),
+  setImageSize: (imageSize) => set({ imageSize }),
+  fitView: () => {
+    const { stageSize, imageSize } = get();
+    set({
+      zoom: fitZoomForStage(stageSize.width, stageSize.height, imageSize.width, imageSize.height),
+      pan: { x: 0, y: 0 },
+      didInitialFit: true,
+    });
+  },
+  actualSize: () => set({ zoom: 1, pan: { x: 0, y: 0 }, didInitialFit: true }),
   close: () =>
     set({
       open: false,
@@ -96,6 +170,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set) => 
       saving: false,
       error: null,
       studioTool: DEFAULT_STUDIO_TOOL,
+      ...RESET_VIEW,
     }),
 }));
 
