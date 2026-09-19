@@ -34,12 +34,9 @@ import {
   selectionShapeFromPoints,
 } from "@/lib/raster/selectionInteraction";
 import { blitOffscreenPreview, createBakeSurface } from "@/lib/raster/studio/encodeRevision";
-import {
-  clampStudioZoom,
-  studioToolHint,
-  useRasterStudioSession,
-} from "@/lib/raster/studio/sessionStore";
+import { clampStudioZoom, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 import { type RenderCtx, renderElement } from "@/lib/renderer/canvas";
+import { studioChrome } from "./studioChrome";
 
 type LocalPoint = [number, number];
 
@@ -723,10 +720,6 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     activeRasterSelection?.imageId === image.id ? activeRasterSelection.selection : undefined;
 
   const panning = studioTool === "hand" || spaceHeld;
-  const idleHint =
-    studioTool === "rasterClone" && !cloneSourceRef.current && !status
-      ? "Alt-click to set clone source"
-      : (status ?? studioToolHint(studioTool));
 
   return (
     <div
@@ -738,7 +731,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
         overflow: "hidden",
         cursor: panning ? "grab" : "crosshair",
         touchAction: "none",
-        background: "#2a2f3d",
+        background: studioChrome.pasteboard,
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -775,10 +768,10 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
             width: image.width,
             height: image.height,
             lineHeight: 0,
-            boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.08)",
+            boxShadow: "0 8px 28px rgba(0, 0, 0, 0.28)",
             // Checkerboard shows through transparent pixels (canvas is cleared, not filled).
             backgroundColor: "#ffffff",
-            backgroundImage: "repeating-conic-gradient(#c4c9d4 0% 25%, #ffffff 0% 50%)",
+            backgroundImage: "repeating-conic-gradient(#d4d4d4 0% 25%, #efefef 0% 50%)",
             backgroundSize: "16px 16px",
           }}
         >
@@ -821,7 +814,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
               <polyline
                 points={draftPath}
                 fill="none"
-                stroke="var(--accent, #6366f1)"
+                stroke="#d8e6ff"
                 strokeWidth={Math.max(1, brushSize * 0.15)}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -831,22 +824,21 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
           ) : null}
         </div>
       </div>
-      {idleHint ? (
+      {status ? (
         <div
           style={{
             position: "absolute",
             left: 12,
             bottom: 12,
-            padding: "5px 10px",
-            borderRadius: 8,
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-            background: "rgba(17, 24, 39, 0.72)",
-            color: "#f9fafb",
+            padding: "4px 8px",
+            borderRadius: 4,
+            background: "rgba(24, 24, 24, 0.72)",
+            color: "#f0f0f0",
             fontSize: 12,
             pointerEvents: "none",
           }}
         >
-          {idleHint}
+          {status}
         </div>
       ) : null}
     </div>

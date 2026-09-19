@@ -94,13 +94,15 @@ the existing vector, layout, campaign, and export workflows unstable.
 Pixel editing is a **single door**: Raster Studio. The design canvas no longer
 exposes a Raster/Vector toggle or pixel paint tools. Open Studio via
 double-click on an image, context menu **Edit Raster**, or the Object context
-bar. Full inventory and UX phases: `docs/plans/raster-studio-ux-redesign-plan.md`.
+bar. Chrome follows **Affinity Photo** (grouped icon rail, contextual options,
+spacious pasteboard) — not Photopea. Full inventory and UX phases:
+`docs/plans/raster-studio-ux-redesign-plan.md`.
 
 | Piece | Status |
 |---|---|
 | Shell + Save/Cancel + placement invariant | Landed — Save bakes a revision and clears overlays |
 | Studio tools (brush / selection / heal / clone) | Landed in Studio viewport |
-| UX-1 chrome (pasteboard, left rail, Fit / 100%) | Landed |
+| UX-1 chrome (Affinity-like pasteboard, grouped rail, Fit / Actual Size) | Landed |
 | Phase 3 `@jsquash/png` encode + OffscreenCanvas bake | Landed, with canvas `toDataURL` fallback |
 | Overlay side table / policy C op history | Deferred — bake-on-Save remains the v1 policy |
 | Editor raster mode chrome | Removed — Studio is the only pixel editor |

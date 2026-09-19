@@ -14,9 +14,10 @@ import { studioToolHint, useRasterStudioSession } from "@/lib/raster/studio/sess
 import { placementUnchanged } from "@/lib/raster/studio/types";
 import RasterStudioToolbar from "./RasterStudioToolbar";
 import RasterStudioViewport from "./RasterStudioViewport";
+import { studioChrome } from "./studioChrome";
 
 /**
- * Fullscreen Raster Studio shell (UX-1 chrome).
+ * Fullscreen Raster Studio shell (UX-1, Affinity Photo–inspired chrome).
  * Open → edit pixels in image space → Save (bake revision) / Cancel.
  */
 export default function RasterStudioShell() {
@@ -216,44 +217,45 @@ export default function RasterStudioShell() {
         inset: 0,
         zIndex: 80,
         display: "grid",
-        gridTemplateRows: "auto minmax(0, 1fr) auto",
-        gridTemplateColumns: "48px minmax(0, 1fr)",
+        gridTemplateRows: "auto auto minmax(0, 1fr) auto",
+        gridTemplateColumns: "44px minmax(0, 1fr)",
         gridTemplateAreas: `
-          "top top"
+          "title title"
+          "context context"
           "rail stage"
           "status status"
         `,
-        background: "var(--bg, #1f2330)",
-        color: "var(--ink, #111827)",
+        background: studioChrome.chrome,
+        color: studioChrome.ink,
         fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
+        userSelect: "none",
       }}
     >
       <header
         style={{
-          gridArea: "top",
+          gridArea: "title",
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: 10,
           minWidth: 0,
-          padding: "8px 12px",
-          borderBottom: "1px solid rgba(15, 23, 42, 0.12)",
-          background: "var(--surface-solid, #fff)",
+          height: 36,
+          padding: "0 10px",
+          borderBottom: `1px solid ${studioChrome.hairline}`,
+          background: studioChrome.chrome,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexShrink: 0 }}>
-          <strong style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.01em" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+          <strong style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.02em" }}>
             Raster Studio
           </strong>
           {dirty ? (
             <span
               style={{
                 fontSize: 10,
-                fontWeight: 700,
-                padding: "2px 7px",
-                borderRadius: 999,
-                background: "rgba(245, 158, 11, 0.12)",
-                color: "#b45309",
-                border: "1px solid rgba(245, 158, 11, 0.28)",
+                fontWeight: 600,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                color: studioChrome.muted,
               }}
             >
               Unsaved
@@ -261,9 +263,9 @@ export default function RasterStudioShell() {
           ) : null}
           <span
             style={{
-              fontSize: 11,
-              color: "var(--ink-muted, #6b7280)",
-              maxWidth: 220,
+              fontSize: 12,
+              color: studioChrome.muted,
+              maxWidth: 280,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -272,42 +274,6 @@ export default function RasterStudioShell() {
             {payload.sourceName || "Smart Object"}
           </span>
         </div>
-
-        <div
-          style={{
-            minWidth: 0,
-            flex: "1 1 auto",
-            overflowX: "auto",
-            scrollbarWidth: "none",
-          }}
-        >
-          {optionsTool ? <RasterToolOptions tool={optionsTool} /> : null}
-        </div>
-
-        <div
-          role="group"
-          aria-label="Zoom"
-          style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
-        >
-          <span
-            aria-live="polite"
-            style={{ fontSize: 11, fontWeight: 700, minWidth: 44, textAlign: "right" }}
-          >
-            {zoomPercent}
-          </span>
-          <button type="button" onClick={fitView} title="Fit to view (⌘0)" style={ghostButtonStyle}>
-            Fit
-          </button>
-          <button
-            type="button"
-            onClick={actualSize}
-            title="Actual size 100% (⌘1)"
-            style={ghostButtonStyle}
-          >
-            100%
-          </button>
-        </div>
-
         <button type="button" onClick={close} disabled={saving} style={ghostButtonStyle}>
           Cancel
         </button>
@@ -321,11 +287,79 @@ export default function RasterStudioShell() {
         </button>
       </header>
 
+      <div
+        style={{
+          gridArea: "context",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          minWidth: 0,
+          height: 38,
+          padding: "0 10px 0 8px",
+          borderBottom: `1px solid ${studioChrome.hairline}`,
+          background: studioChrome.chromeRaised,
+        }}
+      >
+        <div
+          style={{
+            minWidth: 0,
+            flex: "1 1 auto",
+            overflowX: "auto",
+            scrollbarWidth: "none",
+          }}
+        >
+          {optionsTool ? (
+            <RasterToolOptions tool={optionsTool} variant="studio" />
+          ) : (
+            <span style={{ fontSize: 12, color: studioChrome.muted }}>
+              {studioToolHint(studioTool)}
+            </span>
+          )}
+        </div>
+
+        <div
+          role="group"
+          aria-label="Zoom"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexShrink: 0,
+            paddingLeft: 12,
+            borderLeft: `1px solid ${studioChrome.hairline}`,
+          }}
+        >
+          <span
+            aria-live="polite"
+            style={{
+              fontSize: 12,
+              fontVariantNumeric: "tabular-nums",
+              minWidth: 44,
+              textAlign: "right",
+              color: studioChrome.ink,
+            }}
+          >
+            {zoomPercent}
+          </span>
+          <button type="button" onClick={fitView} title="Zoom to Fit (⌘0)" style={ghostButtonStyle}>
+            Fit
+          </button>
+          <button
+            type="button"
+            onClick={actualSize}
+            title="Actual Size 100% (⌘1)"
+            style={ghostButtonStyle}
+          >
+            Actual Size
+          </button>
+        </div>
+      </div>
+
       <aside
         style={{
           gridArea: "rail",
-          borderRight: "1px solid rgba(15, 23, 42, 0.1)",
-          background: "var(--surface-solid, #fff)",
+          borderRight: `1px solid ${studioChrome.hairline}`,
+          background: studioChrome.chrome,
           minHeight: 0,
         }}
       >
@@ -342,17 +376,16 @@ export default function RasterStudioShell() {
           display: "flex",
           alignItems: "center",
           gap: 12,
-          padding: "6px 12px",
-          background: "var(--surface-solid, #fff)",
-          borderTop: "1px solid rgba(15, 23, 42, 0.1)",
+          height: 24,
+          padding: "0 10px",
+          background: studioChrome.chrome,
+          borderTop: `1px solid ${studioChrome.hairline}`,
           fontSize: 11,
-          color: "var(--ink-muted, #6b7280)",
+          color: studioChrome.muted,
         }}
       >
         <span>{studioToolHint(studioTool)}</span>
-        <span style={{ marginInlineStart: "auto" }}>
-          Save keeps placement · Esc cancels · Space pans
-        </span>
+        <span style={{ marginInlineStart: "auto" }}>Save keeps placement</span>
       </div>
 
       {error ? (
@@ -379,26 +412,25 @@ export default function RasterStudioShell() {
 }
 
 const ghostButtonStyle: CSSProperties = {
-  border: "1px solid var(--stroke, #d1d5db)",
-  background: "var(--surface-solid, #fff)",
-  color: "var(--ink, #374151)",
-  borderRadius: 8,
-  padding: "6px 12px",
+  border: `1px solid ${studioChrome.buttonBorder}`,
+  background: "transparent",
+  color: studioChrome.ink,
+  borderRadius: 4,
+  padding: "4px 10px",
   fontSize: 12,
-  fontWeight: 600,
+  fontWeight: 500,
   cursor: "pointer",
   flexShrink: 0,
 };
 
 const primaryButtonStyle: CSSProperties = {
   border: "none",
-  background: "var(--accent, #6366f1)",
+  background: studioChrome.save,
   color: "#fff",
-  borderRadius: 8,
-  padding: "6px 16px",
+  borderRadius: 4,
+  padding: "4px 12px",
   fontSize: 12,
-  fontWeight: 700,
+  fontWeight: 600,
   cursor: "pointer",
   flexShrink: 0,
-  boxShadow: "0 1px 3px rgba(79, 70, 229, 0.28)",
 };

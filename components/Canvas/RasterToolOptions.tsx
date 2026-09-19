@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { studioChrome } from "@/components/RasterStudio/studioChrome";
 import { getImageCache } from "@/lib/engine/imageCache";
 import type { Tool } from "@/lib/engine/store";
 import { useEngine } from "@/lib/engine/store";
@@ -11,6 +12,8 @@ import { createRasterSelectionSample } from "@/lib/raster/selectionInteraction";
 
 type Props = {
   tool: Tool;
+  /** Studio uses a calmer Affinity-like context bar on a dark chrome. */
+  variant?: "default" | "studio";
 };
 
 const controlLabelStyle = {
@@ -29,7 +32,13 @@ const rangeStyle = {
   accentColor: "var(--accent, #2563eb)",
 } as const;
 
-export default function RasterToolOptions({ tool }: Props) {
+export default function RasterToolOptions({ tool, variant = "default" }: Props) {
+  const studio = variant === "studio";
+  const labels = studio ? studioLabelStyle : controlLabelStyle;
+  const ranges = studio ? studioRangeStyle : rangeStyle;
+  const buttons = studio ? studioAdvancedButtonStyle : advancedButtonStyle;
+  const errors = studio ? studioErrorStyle : errorStyle;
+  const row = studio ? studioOptionsStyle : optionsStyle;
   const [autoSubjectBusy, setAutoSubjectBusy] = useState(false);
   const [autoSubjectError, setAutoSubjectError] = useState<string | null>(null);
   const brushSize = useEngine((state) => state.rasterBrushSize);
@@ -89,8 +98,8 @@ export default function RasterToolOptions({ tool }: Props) {
 
   if (tool === "rasterMagicWand") {
     return (
-      <div role="group" aria-label="Magic Wand options" style={optionsStyle}>
-        <label title="Color similarity tolerance" style={controlLabelStyle}>
+      <div role="group" aria-label="Magic Wand options" style={row}>
+        <label title="Color similarity tolerance" style={labels}>
           <span>Tolerance</span>
           <input
             aria-label="Tolerance"
@@ -100,7 +109,7 @@ export default function RasterToolOptions({ tool }: Props) {
             step={1}
             value={magicWandTolerance}
             onChange={(event) => setMagicWandTolerance(Number(event.currentTarget.value))}
-            style={rangeStyle}
+            style={ranges}
           />
           <output>{magicWandTolerance}</output>
         </label>
@@ -109,19 +118,19 @@ export default function RasterToolOptions({ tool }: Props) {
           title="Detect the main subject with OpenCV.js"
           onClick={() => void runAutoSubject()}
           disabled={autoSubjectBusy}
-          style={advancedButtonStyle}
+          style={buttons}
         >
           {autoSubjectBusy ? "Detecting…" : "Auto Subject"}
         </button>
-        {autoSubjectError ? <span style={errorStyle}>{autoSubjectError}</span> : null}
+        {autoSubjectError ? <span style={errors}>{autoSubjectError}</span> : null}
       </div>
     );
   }
 
   if (tool === "rasterQuickSelection") {
     return (
-      <div role="group" aria-label="Quick Selection options" style={optionsStyle}>
-        <label title="Quick Selection brush diameter" style={controlLabelStyle}>
+      <div role="group" aria-label="Quick Selection options" style={row}>
+        <label title="Quick Selection brush diameter" style={labels}>
           <span>Size</span>
           <input
             aria-label="Quick Selection size"
@@ -131,11 +140,11 @@ export default function RasterToolOptions({ tool }: Props) {
             step={1}
             value={quickSelectionSize}
             onChange={(event) => setQuickSelectionSize(Number(event.currentTarget.value))}
-            style={rangeStyle}
+            style={ranges}
           />
           <output>{quickSelectionSize}</output>
         </label>
-        <label title="Color similarity tolerance" style={controlLabelStyle}>
+        <label title="Color similarity tolerance" style={labels}>
           <span>Tolerance</span>
           <input
             aria-label="Tolerance"
@@ -145,7 +154,7 @@ export default function RasterToolOptions({ tool }: Props) {
             step={1}
             value={magicWandTolerance}
             onChange={(event) => setMagicWandTolerance(Number(event.currentTarget.value))}
-            style={rangeStyle}
+            style={ranges}
           />
           <output>{magicWandTolerance}</output>
         </label>
@@ -154,11 +163,11 @@ export default function RasterToolOptions({ tool }: Props) {
           title="Detect the main subject with OpenCV.js"
           onClick={() => void runAutoSubject()}
           disabled={autoSubjectBusy}
-          style={advancedButtonStyle}
+          style={buttons}
         >
           {autoSubjectBusy ? "Detecting…" : "Auto Subject"}
         </button>
-        {autoSubjectError ? <span style={errorStyle}>{autoSubjectError}</span> : null}
+        {autoSubjectError ? <span style={errors}>{autoSubjectError}</span> : null}
       </div>
     );
   }
@@ -166,8 +175,8 @@ export default function RasterToolOptions({ tool }: Props) {
   if (!isRasterPaintTool(tool) && !isRasterRetouchTool(tool)) return null;
 
   return (
-    <div role="group" aria-label="Raster brush options" style={optionsStyle}>
-      <label title="Brush size in image pixels" style={controlLabelStyle}>
+    <div role="group" aria-label="Raster brush options" style={row}>
+      <label title="Brush size in image pixels" style={labels}>
         <span>Size</span>
         <input
           aria-label="Brush size"
@@ -177,11 +186,11 @@ export default function RasterToolOptions({ tool }: Props) {
           step={1}
           value={brushSize}
           onChange={(event) => setBrushSize(Number(event.currentTarget.value))}
-          style={rangeStyle}
+          style={ranges}
         />
         <output>{brushSize}</output>
       </label>
-      <label title="Stroke opacity" style={controlLabelStyle}>
+      <label title="Stroke opacity" style={labels}>
         <span>Opacity</span>
         <input
           aria-label="Brush opacity"
@@ -191,11 +200,11 @@ export default function RasterToolOptions({ tool }: Props) {
           step={1}
           value={Math.round(brushOpacity * 100)}
           onChange={(event) => setBrushOpacity(Number(event.currentTarget.value) / 100)}
-          style={rangeStyle}
+          style={ranges}
         />
         <output>{Math.round(brushOpacity * 100)}%</output>
       </label>
-      <label title="Brush edge hardness" style={controlLabelStyle}>
+      <label title="Brush edge hardness" style={labels}>
         <span>Hardness</span>
         <input
           aria-label="Brush hardness"
@@ -206,11 +215,11 @@ export default function RasterToolOptions({ tool }: Props) {
           value={Math.round(brushHardness * 100)}
           disabled={tool === "rasterPencil"}
           onChange={(event) => setBrushHardness(Number(event.currentTarget.value) / 100)}
-          style={rangeStyle}
+          style={ranges}
         />
         <output>{tool === "rasterPencil" ? "100%" : `${Math.round(brushHardness * 100)}%`}</output>
       </label>
-      <label title="Paint color" style={controlLabelStyle}>
+      <label title="Paint color" style={labels}>
         <span>Color</span>
         <input
           aria-label="Paint color"
@@ -219,11 +228,14 @@ export default function RasterToolOptions({ tool }: Props) {
           disabled={tool === "rasterEraser" || isRasterRetouchTool(tool)}
           onChange={(event) => setBrushColor(event.currentTarget.value)}
           style={{
-            width: 24,
+            width: 22,
             height: 22,
             padding: 1,
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: studio
+              ? `1px solid ${studioChrome.buttonBorder}`
+              : "1px solid var(--stroke, #e5e7eb)",
             borderRadius: 4,
+            background: "transparent",
             cursor:
               tool === "rasterEraser" || isRasterRetouchTool(tool) ? "not-allowed" : "pointer",
           }}
@@ -258,4 +270,48 @@ const errorStyle = {
   color: "#b91c1c",
   fontSize: 9,
   lineHeight: "11px",
+} as const;
+
+const studioOptionsStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  width: "max-content",
+  color: studioChrome.ink,
+} as const;
+
+const studioLabelStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flexShrink: 0,
+  fontSize: 12,
+  lineHeight: "16px",
+  color: studioChrome.muted,
+} as const;
+
+const studioRangeStyle = {
+  width: 96,
+  height: 16,
+  accentColor: studioChrome.selectedAccent,
+} as const;
+
+const studioAdvancedButtonStyle = {
+  height: 26,
+  padding: "0 10px",
+  border: `1px solid ${studioChrome.buttonBorder}`,
+  borderRadius: 4,
+  background: studioChrome.chromeRaised,
+  color: studioChrome.ink,
+  fontSize: 12,
+  fontWeight: 600,
+  whiteSpace: "nowrap" as const,
+  cursor: "pointer",
+} as const;
+
+const studioErrorStyle = {
+  maxWidth: 220,
+  color: "#f0b4b4",
+  fontSize: 12,
+  lineHeight: "16px",
 } as const;

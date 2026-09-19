@@ -2,6 +2,8 @@
 
 > Goal: feel like a focused photo editor (easy, spacious), not a cramped modal over the design canvas.
 > Complements: `docs/plans/raster-studio-smart-object-plan.md` Phase 3 + remove Editor raster mode.
+>
+> **North-star reference: Affinity Photo** — clean left Tools panel, contextual options bar, spacious pasteboard, calm professional density. ArtShift stays “smart playful,” not chaotic. Photopea is **not** the visual target (busy chrome, stacked panels, noisy density).
 
 ## Pain (current)
 
@@ -9,39 +11,41 @@
 2. **Cramped chrome** — all tools + options in one top header strip; 8px labels, wrap, hard to scan.
 3. **Dual mental model** — strokes mutate live `ImageElement` then Save bakes; Cancel must discard carefully; "Unsaved" feels opaque.
 4. **Two raster entry paths** — Editor still has Raster/Vector mode + tools while Studio also exists → confusion.
-5. **Weak spatial orientation** — no navigator/minimap, no fit-to-view / 100% / zoom readout, no checkerboard scale tied to zoom.
+5. **Weak spatial orientation** — no navigator/minimap, no fit-to-view / Actual Size / zoom readout, no checkerboard scale tied to zoom.
 6. **Tool discoverability** — Photoshop-like shortcuts exist but UI doesn't teach; Heal/Clone/Alt-source easy to miss.
 
 ## Design principles
 
+- **Affinity Photo as north star**: icon-first left rail, one contextual options bar, mid-gray pasteboard, quiet status. Restraint over novelty.
 - **One door**: pixel edit only via Raster Studio (Edit Raster / double-click image).
 - **Image is the stage**: viewport fills remaining space; chrome docks to edges, not a floating card around the bitmap.
-- **Edit → Commit**: Studio session is the working copy; Editor sees one revision on Save.
-- **Familiar patterns**: Photoshop/Figma hybrid — left tool rail, top contextual options, bottom status/zoom, Esc/Cancel clear.
-- **Playful but smart** (ArtShift tone): subtle, not chaotic; clear affordances, few modes.
+- **Edit → Commit**: Studio session is the working copy; Editor sees one revision on Save. Placement + Appearance stay on the Smart Object.
+- **Calm density**: few surfaces, grouped tools, no stacked floating palettes. “Smart playful” = clear affordances and one accent, not Photopea-style clutter.
 
-## Target IA (information architecture)
+## Target IA (Affinity-like)
 
 ```
-┌─ Title · Smart Object name · Unsaved? ──── [Cancel] [Save] ─┐
-├─ Left tool rail (icons) ─┬─ Viewport (full bleed image space) ┤
-│  Pan / Brush / Pencil    │  pan·zoom·fit · checkerboard       │
-│  Eraser / Select group   │  marching ants overlay             │
-│  Wand / Quick / Heal…    │                                    │
-├──────────────────────────┴─ Bottom: zoom % · tool hint · tip ─┤
-└─ Optional right: brush/selection options when needed ─────────┘
+┌─ Raster Studio · name · Unsaved ────────────── [Cancel] [Save] ─┐
+├─ Context: only the active tool’s knobs ── zoom % · Fit · Actual ─┤
+├─ Left tool rail ─┬─ Pasteboard (full-bleed, image floats) ───────┤
+│  View / Paint    │  pan · zoom · checkerboard                    │
+│  Select / Wand   │                                               │
+│  Retouch         │                                               │
+└──────────────────┴─ Status: tool hint (quiet) ───────────────────┘
 ```
 
-## Patterns to borrow (user-loved)
+## Patterns to borrow
 
 | Pattern | From | Apply |
 |---|---|---|
-| Left icon rail | PS / Affinity / Figma | Tools always visible, no wrap |
-| Contextual options bar | PS Options / Figma | Only active tool's knobs |
-| Fit / 100% / zoom HUD | Every photo editor | Space to pan, Cmd+0 fit, Cmd+1 100% |
-| Infinite dark/light pasteboard | Photopea / PS | Image floats on pasteboard, not clipped card |
-| Single Save = commit | Smart Object | One Editor undo step |
-| Double-click to enter | PS Smart Object | Primary entry; remove Editor raster toggle |
+| Left Tools panel, icon-first, grouped | **Affinity Photo** (primary) | View / Paint / Select / Wand / Retouch separators; no wrap; quiet selected state |
+| Contextual toolbar | **Affinity Photo** context bar | Only the active tool’s knobs; readable type; not every slider at once |
+| Zoom / Fit / Actual Size | **Affinity Photo** View | Readout + Fit + Actual Size; Space pan; Cmd+0 / Cmd+1 |
+| Mid-gray pasteboard | **Affinity Photo** | Image sits on an open board — not a boxed card, not a clipped thumbnail |
+| Single Save = commit | Smart Object (PS-like contract) | One Editor undo step; placement/Appearance unchanged |
+| Double-click to enter | PS Smart Object / Affinity embedded docs | Primary entry; no Editor raster toggle |
+
+**Do not borrow from Photopea as chrome:** rainbow icon walls, stacked floating panels, cramped multi-row tool strips, heavy frames around the bitmap.
 
 ## Status inventory (verified 2026-09-19)
 
@@ -49,13 +53,13 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 
 | Area | Already in repo | Gap (this wave / later) |
 |---|---|---|
-| **Shell** | Fullscreen overlay (`RasterStudioShell`), title, Unsaved, Cancel/Save, Escape/Delete, tool letter keys | Chrome was a stacked header card; tools + options shared one wrap strip |
-| **Toolbar** | 12 Studio tools in `RasterStudioToolbar` (horizontal chips) | Need left vertical icon rail; labels wrap and fight scan time |
-| **Viewport** | Image-space paint / selection / heal / clone; wheel zoom; Hand + middle-mouse pan; checkerboard | CSS `maxWidth`/`maxHeight` boxed the bitmap; no Fit / 100% / readout; Space was sticky Hand |
-| **`lib/raster/studio/*`** | Session store, open payload, `commitRasterRevision`, `placementUnchanged`, bake-on-Save flatten | Encode was `canvas.toDataURL`; preview was on-document canvas only |
+| **Shell** | Two-row Affinity chrome: title + Unsaved + Cancel/Save; contextual options bar; zoom % / Fit / Actual Size; quiet status | Confirm-discard on Cancel (UX-4) |
+| **Toolbar** | Left icon rail, grouped View / Paint / Select / Wand / Retouch; quiet selected + inset accent | Navigator thumbnail (UX-4) |
+| **Viewport** | Full-bleed mid-gray pasteboard; image floats with soft shadow (not a boxed card); wheel zoom; Hand + Space-hold pan; checkerboard | Empty/loading polish (UX-4) |
+| **`lib/raster/studio/*`** | Session store, open payload, `commitRasterRevision`, `placementUnchanged`, bake-on-Save flatten; `@jsquash/png` encode + OffscreenCanvas bake with `toDataURL` fallback | Worker-thread `renderElement` preview; `@jsquash/webp` |
 | **Bake / commit** | Policy A (`flatten-overlays`): Save writes new `fileId`, clears `rasterMask` / `rasterEdits` / adjustments / blur; placement + Appearance unchanged | Fat `rasterEdits` dataUrls can still sit on **old** documents until the user Saves in Studio; full op side-table (policy C) is not built |
 | **Asset side table** | Image binaries already persist as `fileId → dataURL` in IDB (`persist.ts` / `serialize.ts`), not inside EngineDoc | Session overlay PNGs are still on the element until bake; do **not** strip them on load (old projects) |
-| **Editor raster mode** | Option bar already shows vector tools only; pixel tools redirect to Studio if somehow selected; entry via double-click, context menu, ObjectContextBar | Raster Studio \| Vector toggle still looked like a second door; dead paint/wand/heal branches in `CanvasEditor`; raster letter keys opened Studio |
+| **Editor raster mode** | Toggle, pixel tools, and canvas paint/wand/heal/clone paths removed. Entry is double-click / context menu / ObjectContextBar **Edit Raster**. Letter keys no-op while Studio is closed. | — |
 
 **Editor raster mode after this wave:** no Raster/Vector toggle, no pixel tools on the design-canvas chrome, no design-canvas brush/wand/heal/clone gestures. Studio is the only pixel editor.
 
@@ -65,13 +69,15 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 
 - Write this plan under `docs/plans/`
 - Status inventory above (also summarized in `ROADMAP.md`)
+- Name Affinity Photo as the north-star reference
 
-### UX-1 — Space & chrome (this PR)
+### UX-1 — Space & chrome (this PR, Affinity-biased)
 
-- Remove boxed maxWidth/maxHeight; image on infinite pasteboard; pan/zoom unconstrained
-- Left vertical tool rail; top = Save/Cancel + contextual options only
-- Zoom readout + Fit + 100%; Space hold-to-pan + Hand tool; scroll-wheel zoom toward cursor
-- Status line: tool tip ("Alt-click to set clone source")
+- Remove boxed maxWidth/maxHeight; image on a spacious mid-gray pasteboard; pan/zoom unconstrained
+- Left vertical icon rail with Affinity-like tool groups; quiet selected state
+- Title row + contextual options bar (active tool only) + zoom / Fit / Actual Size
+- Space hold-to-pan + Hand tool; scroll-wheel zoom toward cursor
+- Quiet status line for tool hints (“Alt-click to set clone source”)
 
 ### UX-2 — Phase 3 pipeline (this PR: encode + policy; see deferred)
 
@@ -89,7 +95,7 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 
 ### UX-4 — Polish (follow-up)
 
-- Navigator thumbnail
+- Navigator thumbnail (Affinity-style, optional)
 - Better empty/loading states
 - Confirm discard if dirty on Cancel
 - Optional Adjust tab (brightness/contrast) in Studio only
@@ -97,7 +103,8 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 ## Success criteria
 
 - User never needs Editor Raster mode to retouch
-- Opening Studio: image feels large; no "picture in a card" trap
+- Opening Studio: image feels large on an open pasteboard; no "picture in a card" trap
+- Chrome reads as Affinity-calm (grouped rail, one context bar) — not Photopea-busy
 - Save keeps placement/Appearance (existing invariant)
 - Toolbar scannable in <1s; primary tools ≤ one click
 - Quality gates: lint, typecheck, test, build
