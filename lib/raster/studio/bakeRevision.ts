@@ -6,7 +6,9 @@
  * Placement (x/y/angle) is temporarily zeroed and restored.
  *
  * Phase 3: composite on OffscreenCanvas when available, then encode with
- * @jsquash/png (canvas toDataURL fallback). Save still applies flatten-overlays
+ * @jsquash/png (canvas toDataURL fallback). WebP shares `encodeImageData`
+ * but bake stays PNG so revisions remain lossless by default.
+ * Worker-thread `renderElement` is deferred (DOM images + Rough.js).
  * so fat rasterEdits dataUrls leave the document JSON. Old projects that still
  * carry overlays stay readable until the user Saves in Studio.
  */

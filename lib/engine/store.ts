@@ -257,6 +257,9 @@ export type EngineState = {
   /** Diameter of the Raster Quick Selection brush in image-local pixels. */
   rasterQuickSelectionSize: number;
   setRasterQuickSelectionSize: (size: number) => void;
+  /** Soften vector marquee/lasso edges when rasterizing the selection mask. */
+  rasterSelectionAntiAlias: boolean;
+  setRasterSelectionAntiAlias: (antiAlias: boolean) => void;
   /** The one Photoshop-style pixel Selection currently attached to an image. */
   activeRasterSelection: ActiveRasterSelection;
   applyRasterSelection: (
@@ -427,6 +430,8 @@ export const useEngine = create<EngineState>((set, get) => {
     rasterQuickSelectionSize: 96,
     setRasterQuickSelectionSize: (size) =>
       set({ rasterQuickSelectionSize: Math.max(1, Math.min(512, size)) }),
+    rasterSelectionAntiAlias: true,
+    setRasterSelectionAntiAlias: (antiAlias) => set({ rasterSelectionAntiAlias: antiAlias }),
     activeRasterSelection: null,
     applyRasterSelection: (imageId, operation, width, height) =>
       set((state) => {

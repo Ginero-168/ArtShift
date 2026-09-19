@@ -38,6 +38,11 @@ export type RasterSelectionOperation = {
   id: string;
   mode: RasterSelectionMode;
   shape: RasterSelectionShape;
+  /**
+   * When true, vector shapes rasterize via 2× downsample (smooth edges).
+   * Omitted on older documents; treated as aliased.
+   */
+  antiAlias?: boolean;
 };
 
 export type RasterSelection = {
@@ -54,11 +59,13 @@ export function createRasterSelection(width: number, height: number): RasterSele
 export function createRasterSelectionOperation(
   mode: RasterSelectionMode,
   shape: RasterSelectionShape,
+  options?: { antiAlias?: boolean },
 ): RasterSelectionOperation {
   return {
     id: crypto.randomUUID(),
     mode,
     shape: normalizeShape(shape),
+    ...(options?.antiAlias === undefined ? {} : { antiAlias: options.antiAlias }),
   };
 }
 
@@ -201,7 +208,7 @@ export function createRasterSelectionMaskDataUrl(
 
   for (const operation of selection.operations) {
     operationContext.clearRect(0, 0, safeWidth, safeHeight);
-    if (!drawSelectionShape(operationContext, operation.shape, safeWidth, safeHeight)) {
+    if (!rasterizeSelectionOperation(operationContext, operation, safeWidth, safeHeight)) {
       return undefined;
     }
 
@@ -355,7 +362,34 @@ function bitmapSelection(dataUrl: string, width: number, height: number): Raster
 function selectionMaskCacheKey(selection: RasterSelection, width: number, height: number): string {
   // Operation ids are stable for immutable selection snapshots. Avoid hashing
   // polygon/bitmap payloads on every render while still separating dimensions.
-  return `${width}x${height}:${selection.operations.map((operation) => operation.id).join(",")}`;
+  return `${width}x${height}:${selection.operations
+    .map((operation) => `${operation.id}:${operation.antiAlias === true ? "aa" : "hard"}`)
+    .join(",")}`;
+}
+
+const SELECTION_AA_SCALE = 2;
+
+function rasterizeSelectionOperation(
+  context: CanvasRenderingContext2D,
+  operation: RasterSelectionOperation,
+  width: number,
+  height: number,
+): boolean {
+  const antiAlias = operation.antiAlias === true && operation.shape.kind !== "bitmap";
+  if (!antiAlias) {
+    return drawSelectionShape(context, operation.shape, width, height);
+  }
+  const hi = document.createElement("canvas");
+  hi.width = Math.max(1, width * SELECTION_AA_SCALE);
+  hi.height = Math.max(1, height * SELECTION_AA_SCALE);
+  const hiContext = hi.getContext("2d");
+  if (!hiContext) return false;
+  if (!drawSelectionShape(hiContext, operation.shape, hi.width, hi.height)) return false;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(hi, 0, 0, width, height);
+  context.imageSmoothingEnabled = false;
+  return true;
 }
 
 /** Convert a transparent subject result into a lightweight grayscale mask. */

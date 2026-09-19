@@ -79,4 +79,44 @@ describe("raster Selection masks", () => {
 
     expect(toDataURL).toHaveBeenCalledTimes(1);
   });
+
+  it("rasterizes anti-aliased shapes via a 2× downsample", () => {
+    const fillRect = vi.fn();
+    const drawImage = vi.fn();
+    const context = {
+      clearRect: vi.fn(),
+      drawImage,
+      fillRect,
+      globalCompositeOperation: "source-over",
+      fillStyle: "#fff",
+      imageSmoothingEnabled: false,
+      imageSmoothingQuality: "low",
+    } as unknown as CanvasRenderingContext2D;
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/png;base64,aa-selection",
+    );
+
+    const selection = appendRasterSelection(
+      createRasterSelection(100, 80),
+      createRasterSelectionOperation(
+        "replace",
+        { kind: "rect", x: 0.1, y: 0.2, width: 0.5, height: 0.4 },
+        { antiAlias: true },
+      ),
+      100,
+      80,
+    );
+
+    expect(createRasterSelectionMaskDataUrl(selection, 100, 80)).toBe(
+      "data:image/png;base64,aa-selection",
+    );
+    expect(fillRect).toHaveBeenCalled();
+    const [x, y, width, height] = fillRect.mock.calls[0] as number[];
+    expect(x).toBeCloseTo(20);
+    expect(y).toBeCloseTo(32);
+    expect(width).toBeCloseTo(100);
+    expect(height).toBeCloseTo(64);
+    expect(drawImage).toHaveBeenCalled();
+  });
 });

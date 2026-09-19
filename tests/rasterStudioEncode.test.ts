@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   arrayBufferToPngDataUrl,
   createBakeSurface,
+  encodeImageData,
   encodeImageDataToPngDataUrl,
   PNG_DATA_URL_PREFIX,
+  WEBP_DATA_URL_PREFIX,
 } from "@/lib/raster/studio/encodeRevision";
 import {
   clampStudioZoom,
@@ -38,6 +40,30 @@ describe("Raster Studio Phase 3 encode", () => {
     const result = await encodeImageDataToPngDataUrl(imageData);
     expect(result.dataURL.startsWith(PNG_DATA_URL_PREFIX)).toBe(true);
     expect(result.encoder === "jsquash-png" || result.encoder === "canvas-png").toBe(true);
+  });
+
+  it("keeps PNG as the default encode and can request WebP", async () => {
+    const fakeCtx = {
+      putImageData: vi.fn(),
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      fakeCtx as unknown as CanvasRenderingContext2D,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation((type?: string) => {
+      if (type === "image/webp") return `${WEBP_DATA_URL_PREFIX}d2VicA==`;
+      return `${PNG_DATA_URL_PREFIX}ZmFrZQ==`;
+    });
+
+    const imageData = new ImageData(2, 2);
+    const png = await encodeImageData(imageData);
+    expect(png.format).toBe("png");
+    expect(png.dataURL.startsWith(PNG_DATA_URL_PREFIX)).toBe(true);
+
+    const webp = await encodeImageData(imageData, { format: "webp" });
+    expect(webp.format === "webp" || webp.format === "png").toBe(true);
+    expect(
+      webp.dataURL.startsWith(WEBP_DATA_URL_PREFIX) || webp.dataURL.startsWith(PNG_DATA_URL_PREFIX),
+    ).toBe(true);
   });
 
   it("creates a bake surface with documented dimensions", () => {

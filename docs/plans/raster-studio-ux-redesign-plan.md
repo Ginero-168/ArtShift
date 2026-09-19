@@ -26,11 +26,11 @@
 
 ```
 ┌─ Raster Studio · name · Unsaved ────────────── [Cancel] [Save] ─┐
-├─ Context: only the active tool’s knobs ── zoom % · Fit · Actual ─┤
+├─ Context: only the active tool’s knobs ── Adjust · Nav · zoom % · Fit · Actual ─┤
 ├─ Left tool rail ─┬─ Pasteboard (full-bleed, image floats) ───────┤
 │  View / Paint    │  pan · zoom · checkerboard                    │
-│  Select / Wand   │                                               │
-│  Retouch         │                                               │
+│  Select / Wand   │  navigator thumbnail (viewport rect)          │
+│  Retouch         │  optional Adjust overlay (brightness/contrast)│
 └──────────────────┴─ Status: tool hint (quiet) ───────────────────┘
 ```
 
@@ -42,6 +42,7 @@
 | Contextual toolbar | **Affinity Photo** context bar | Only the active tool’s knobs; readable type; not every slider at once |
 | Zoom / Fit / Actual Size | **Affinity Photo** View | Readout + Fit + Actual Size; Space pan; Cmd+0 / Cmd+1 |
 | Mid-gray pasteboard | **Affinity Photo** | Image sits on an open board — not a boxed card, not a clipped thumbnail |
+| Navigator thumbnail | **Affinity Photo** Navigator | Optional/collapsible; viewport rect on the image; click/drag to pan |
 | Single Save = commit | Smart Object (PS-like contract) | One Editor undo step; placement/Appearance unchanged |
 | Double-click to enter | PS Smart Object / Affinity embedded docs | Primary entry; no Editor raster toggle |
 
@@ -51,12 +52,13 @@
 
 What already shipped vs remaining gaps. Pixel tools already live in Studio; Editor raster mode was leftover chrome + dead `CanvasEditor` branches.
 
-| Area | Already in repo | Gap (this wave / later) |
+| Area | Already in repo | Gap (later) |
 |---|---|---|
-| **Shell** | Two-row Affinity chrome: title + Unsaved + Cancel/Save; contextual options bar; zoom % / Fit / Actual Size; quiet status | Confirm-discard on Cancel (UX-4) |
-| **Toolbar** | Left icon rail, grouped View / Paint / Select / Wand / Retouch; quiet selected + inset accent | Navigator thumbnail (UX-4) |
-| **Viewport** | Full-bleed mid-gray pasteboard; image floats with soft shadow (not a boxed card); wheel zoom; Hand + Space-hold pan; checkerboard | Empty/loading polish (UX-4) |
-| **`lib/raster/studio/*`** | Session store, open payload, `commitRasterRevision`, `placementUnchanged`, bake-on-Save flatten; `@jsquash/png` encode + OffscreenCanvas bake with `toDataURL` fallback | Worker-thread `renderElement` preview; `@jsquash/webp` |
+| **Shell** | Two-row Affinity chrome: title + Unsaved + Cancel/Save; contextual options bar; zoom % / Fit / Actual Size; quiet status; confirm-discard on Cancel; **Adjust** + **Navigator** toggles | Dedicated Studio history stack |
+| **Toolbar** | Left icon rail, grouped View / Paint / Select / Wand / Retouch; quiet selected + inset accent | Custom cursors for marquee/lasso |
+| **Viewport** | Full-bleed mid-gray pasteboard; image floats with soft shadow; wheel zoom; Hand + Space-hold pan; checkerboard; empty/loading polish; Affinity-style navigator thumbnail with viewport rect | Wand sample-merged visual |
+| **Adjust** | Studio-only brightness (exposure) + contrast overlay; writes `ImageElement.adjustments`; Save bake still clears them. Does **not** add Editor Appearance items | More Studio-only filters (kept out of Appearance) |
+| **`lib/raster/studio/*`** | Session store, open payload, `commitRasterRevision`, `placementUnchanged`, bake-on-Save flatten; `@jsquash/png` encode + OffscreenCanvas bake with `toDataURL` fallback; shared `encodeImageData({ format: "webp" })` helper (`@jsquash/webp`), PNG remains Save default | Worker-thread `renderElement` preview (renderer still needs HTMLImageElement + Rough.js / document canvases — OffscreenCanvas blit stays the safe path) |
 | **Bake / commit** | Policy A (`flatten-overlays`): Save writes new `fileId`, clears `rasterMask` / `rasterEdits` / adjustments / blur; placement + Appearance unchanged | Fat `rasterEdits` dataUrls can still sit on **old** documents until the user Saves in Studio; full op side-table (policy C) is not built |
 | **Asset side table** | Image binaries already persist as `fileId → dataURL` in IDB (`persist.ts` / `serialize.ts`), not inside EngineDoc | Session overlay PNGs are still on the element until bake; do **not** strip them on load (old projects) |
 | **Editor raster mode** | Toggle, pixel tools, and canvas paint/wand/heal/clone paths removed. Entry is double-click / context menu / ObjectContextBar **Edit Raster**. Letter keys no-op while Studio is closed. | — |
@@ -85,6 +87,7 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 - OffscreenCanvas bake surface when available; optional ImageBitmap blit for preview
 - Reinforce bake-on-Save clear policy (already in `buildRasterStudioCommitPatch`)
 - Keep Smart Object placement invariant tests
+- Shared `encodeImageData` helper can emit WebP via `@jsquash/webp`; **Save bake stays PNG**
 
 ### UX-3 — One door (this PR)
 
@@ -93,13 +96,13 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 - No-op main-canvas raster letter / brush-size / pixel-delete hotkeys while Studio is closed
 - Remove dead `CanvasEditor` brush/wand/heal/clone/selection gesture paths
 
-### UX-4 — Polish (follow-up)
+### UX-4 — Polish (this PR)
 
-- Navigator thumbnail (Affinity-style, optional)
-- Better empty/loading states
-- Optional Adjust tab (brightness/contrast) in Studio only
-- Selection anti-alias (types do not store it yet)
-- Full clone-stamp blit preview (path + source marker landed; sampled-pixels overlay still simplified)
+- Navigator thumbnail (Affinity-style, optional/collapsible) with viewport rect; click/drag pans
+- Empty + loading states on the pasteboard
+- Optional Adjust overlay (brightness/contrast) in Studio only — maps to `adjustments.exposure` / `contrast`, baked on Save, not Appearance
+- Selection anti-alias option (stored on `RasterSelectionOperation`; 2× downsample rasterize)
+- Full clone-stamp sampled blit under the cursor (plus path + source marker)
 
 ## Tool quality wave (this PR)
 
@@ -108,14 +111,16 @@ Affinity-like *tool feel*, not new chrome. Audit was of Studio viewport + `mask.
 | Landed | Deferred |
 |---|---|
 | Brush/Pencil/Eraser circle cursor (size + hardness ring) | Custom cursors for marquee/lasso |
-| Live hardness-aware stroke preview on drag; commit on pointer-up | Worker `renderElement` preview |
+| Live hardness-aware stroke preview on drag; commit on pointer-up | Worker `renderElement` preview (DOM renderer + Rough.js — not low-risk) |
 | Stamp interpolation shared with renderer; selection mask still clips paint | — |
-| Dual-tone marching ants; Shift/Alt/Shift+Alt hint in options; Feather apply | Anti-alias option (no type yet) |
-| Wand Contiguous vs global; “Selecting…” on large images | Wand sample-merged visual |
-| Clone source marker + offset crosshair; softer stamp edges | Sampled clone blit under cursor |
-| Heal OpenCV inpaint + quiet clone-fallback status | Stronger heal-only fallback (non-clone) |
-| Cmd/Ctrl+Z uses engine history (unique stroke labels); canvas Delete/copy suppressed while Studio is open | Dedicated Studio history stack |
+| Dual-tone marching ants; Shift/Alt/Shift+Alt hint in options; Feather apply | Wand sample-merged visual |
+| Anti-alias checkbox; `RasterSelectionOperation.antiAlias`; 2× downsample | — |
+| Wand Contiguous vs global; “Selecting…” on large images | — |
+| Clone source marker + offset crosshair; sampled blit under the cursor | — |
+| Heal OpenCV inpaint + local blur-blend fallback (not clone-like; not PS Telea parity) | Dedicated Studio history stack |
+| Cmd/Ctrl+Z uses engine history (unique stroke labels); canvas Delete/copy suppressed while Studio is open | — |
 | Confirm-discard on Cancel restores Open snapshot | — |
+| Navigator thumbnail + Studio Adjust (brightness/contrast) | Full raster layer stack; policy C op history |
 
 ## Success criteria
 
@@ -131,7 +136,6 @@ Affinity-like *tool feel*, not new chrome. Audit was of Studio viewport + `mask.
 - Photopea/Pintura/Filerobot/Konva as core — rejected
 - Full raster layer stack
 - Non-destructive op history across sessions (policy C / dedicated overlay side table)
-- `@jsquash/webp` bake format (PNG first; WebP can share the encode helper later)
-- Worker-thread `renderElement` preview
-- Navigator, Adjust tab (UX-4)
-- Selection anti-alias; full clone sampled-blit preview
+- Worker-thread `renderElement` preview — renderer still requires `HTMLImageElement`, document canvases, and Rough.js; OffscreenCanvas blit on the main thread remains the safe preview path
+- `@jsquash/webp` as Save bake format — helper exists; PNG stays the lossless default
+- Production VPS / login / tunnel

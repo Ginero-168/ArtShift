@@ -217,9 +217,9 @@ Raster Source (fileId)
 
 ### Phase 3 — Pipeline คุณภาพ
 
-- `@jsquash` encode  
-- OffscreenCanvas preview  
-- Adjustments ใน Studio (brightness/contrast) โดยไม่พึ่ง Filerobot  
+- `@jsquash` encode (PNG bake default; WebP helper available)
+- OffscreenCanvas preview (main-thread blit; worker `renderElement` deferred)
+- Adjustments ใน Studio (brightness/contrast) โดยไม่พึ่ง Filerobot — writes `ImageElement.adjustments`, bake บน Save
 - ย้าย `rasterEdits` dataUrl ออกจาก document JSON → side table
 
 ### Phase 4 — Escape hatches (ถ้าจำเป็น)

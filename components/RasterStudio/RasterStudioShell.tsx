@@ -16,6 +16,7 @@ import { createRasterStroke } from "@/lib/raster/mask";
 import { bakeImageElementRevision } from "@/lib/raster/studio/bakeRevision";
 import { studioToolHint, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 import { buildRasterStudioDiscardPatch, placementUnchanged } from "@/lib/raster/studio/types";
+import RasterStudioAdjustPanel from "./RasterStudioAdjustPanel";
 import RasterStudioToolbar from "./RasterStudioToolbar";
 import RasterStudioViewport from "./RasterStudioViewport";
 import { studioChrome } from "./studioChrome";
@@ -39,6 +40,10 @@ export default function RasterStudioShell() {
   const setStudioTool = useRasterStudioSession((s) => s.setStudioTool);
   const fitView = useRasterStudioSession((s) => s.fitView);
   const actualSize = useRasterStudioSession((s) => s.actualSize);
+  const adjustOpen = useRasterStudioSession((s) => s.adjustOpen);
+  const setAdjustOpen = useRasterStudioSession((s) => s.setAdjustOpen);
+  const navigatorCollapsed = useRasterStudioSession((s) => s.navigatorCollapsed);
+  const setNavigatorCollapsed = useRasterStudioSession((s) => s.setNavigatorCollapsed);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   const requestClose = useCallback(() => {
@@ -351,6 +356,38 @@ export default function RasterStudioShell() {
 
         <div
           role="group"
+          aria-label="Studio panels"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexShrink: 0,
+            paddingLeft: 12,
+            borderLeft: `1px solid ${studioChrome.hairline}`,
+          }}
+        >
+          <button
+            type="button"
+            aria-pressed={adjustOpen}
+            title="Brightness and contrast (Studio only until Save)"
+            onClick={() => setAdjustOpen(!adjustOpen)}
+            style={adjustOpen ? activeGhostButtonStyle : ghostButtonStyle}
+          >
+            Adjust
+          </button>
+          <button
+            type="button"
+            aria-pressed={!navigatorCollapsed}
+            title="Navigator thumbnail"
+            onClick={() => setNavigatorCollapsed(!navigatorCollapsed)}
+            style={!navigatorCollapsed ? activeGhostButtonStyle : ghostButtonStyle}
+          >
+            Navigator
+          </button>
+        </div>
+
+        <div
+          role="group"
           aria-label="Zoom"
           style={{
             display: "flex",
@@ -398,8 +435,9 @@ export default function RasterStudioShell() {
         <RasterStudioToolbar />
       </aside>
 
-      <div style={{ gridArea: "stage", minWidth: 0, minHeight: 0 }}>
+      <div style={{ gridArea: "stage", position: "relative", minWidth: 0, minHeight: 0 }}>
         <RasterStudioViewport elementId={payload.elementId} />
+        {adjustOpen ? <RasterStudioAdjustPanel elementId={payload.elementId} /> : null}
       </div>
 
       <div
@@ -498,6 +536,12 @@ const ghostButtonStyle: CSSProperties = {
   fontWeight: 500,
   cursor: "pointer",
   flexShrink: 0,
+};
+
+const activeGhostButtonStyle: CSSProperties = {
+  ...ghostButtonStyle,
+  background: studioChrome.selected,
+  boxShadow: `inset 0 0 0 1px ${studioChrome.selectedAccent}`,
 };
 
 const primaryButtonStyle: CSSProperties = {

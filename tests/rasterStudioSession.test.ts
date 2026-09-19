@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createImage } from "@/lib/engine/factory";
 import { isStudioRasterTool, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 
 describe("Raster Studio session tools", () => {
+  afterEach(() => {
+    useRasterStudioSession.getState().close();
+    useRasterStudioSession.getState().setNavigatorCollapsed(false);
+    useRasterStudioSession.getState().setAdjustOpen(false);
+  });
   it("opens with brush as the default studio tool", () => {
     useRasterStudioSession.getState().close();
+    useRasterStudioSession.getState().setNavigatorCollapsed(false);
+    useRasterStudioSession.getState().setAdjustOpen(false);
     const image = createImage({
       x: 0,
       y: 0,
@@ -39,7 +46,16 @@ describe("Raster Studio session tools", () => {
     state.markSessionEdited();
     expect(useRasterStudioSession.getState().dirty).toBe(true);
     expect(useRasterStudioSession.getState().sessionEdited).toBe(true);
+    expect(useRasterStudioSession.getState().navigatorCollapsed).toBe(false);
+    state.setNavigatorCollapsed(true);
+    state.setAdjustOpen(true);
+    expect(useRasterStudioSession.getState().navigatorCollapsed).toBe(true);
+    expect(useRasterStudioSession.getState().adjustOpen).toBe(true);
     state.close();
     expect(useRasterStudioSession.getState().open).toBe(false);
+    expect(useRasterStudioSession.getState().navigatorCollapsed).toBe(true);
+    expect(useRasterStudioSession.getState().adjustOpen).toBe(true);
+    state.setNavigatorCollapsed(false);
+    state.setAdjustOpen(false);
   });
 });

@@ -65,6 +65,8 @@ export default function RasterToolOptions({ tool, variant = "default" }: Props) 
   const setRasterSelection = useEngine((state) => state.setRasterSelection);
   const featherActiveRasterSelection = useEngine((state) => state.featherActiveRasterSelection);
   const hasActiveSelection = useEngine((state) => Boolean(state.activeRasterSelection));
+  const selectionAntiAlias = useEngine((state) => state.rasterSelectionAntiAlias);
+  const setSelectionAntiAlias = useEngine((state) => state.setRasterSelectionAntiAlias);
 
   const runAutoSubject = async () => {
     const image = currentSlide?.elements.find(
@@ -217,6 +219,15 @@ export default function RasterToolOptions({ tool, variant = "default" }: Props) 
         >
           Apply
         </button>
+        <label title="Smooth vector selection edges when rasterizing" style={labels}>
+          <input
+            aria-label="Anti-alias"
+            type="checkbox"
+            checked={selectionAntiAlias}
+            onChange={(event) => setSelectionAntiAlias(event.currentTarget.checked)}
+          />
+          <span>Anti-alias</span>
+        </label>
       </div>
     );
   }

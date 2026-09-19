@@ -88,6 +88,23 @@ describe("raster selection model", () => {
     expect(canCommitRasterPolygon(third)).toBe(true);
   });
 
+  it("stores anti-alias on new selection operations when requested", () => {
+    const aliased = createRasterSelectionOperation(
+      "replace",
+      { kind: "rect", x: 0, y: 0, width: 1, height: 1 },
+      { antiAlias: true },
+    );
+    const hard = createRasterSelectionOperation("replace", {
+      kind: "rect",
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+    });
+    expect(aliased.antiAlias).toBe(true);
+    expect(hard.antiAlias).toBeUndefined();
+  });
+
   it("exposes only the current Raster tool shortcuts", () => {
     expect(RASTER_TOOL_HOTKEYS).toEqual([
       { id: "rasterMove", key: "v" },

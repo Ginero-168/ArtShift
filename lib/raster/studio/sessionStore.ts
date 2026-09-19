@@ -56,7 +56,7 @@ const DEFAULT_STUDIO_TOOL_HINTS: Record<StudioRasterTool, string> = {
   rasterMagicWand: "Click similar colors (W) · Shift add · Alt subtract",
   rasterQuickSelection: "Brush-select similar pixels (Q) · [ / ] size",
   rasterHealing: "Paint to heal (J) · [ / ] size",
-  rasterClone: "Alt-click to set clone source, then paint (S)",
+  rasterClone: "Alt-click source, then paint (S) · sampled preview follows the cursor",
 };
 
 export function studioToolHint(tool: StudioRasterTool): string {
@@ -84,6 +84,8 @@ type RasterStudioSessionState = {
   stageSize: { width: number; height: number };
   imageSize: { width: number; height: number };
   didInitialFit: boolean;
+  navigatorCollapsed: boolean;
+  adjustOpen: boolean;
   openFromImage: (image: ImageElement) => void;
   setDirty: (dirty: boolean) => void;
   markSessionEdited: () => void;
@@ -96,6 +98,8 @@ type RasterStudioSessionState = {
   setImageSize: (size: { width: number; height: number }) => void;
   fitView: () => void;
   actualSize: () => void;
+  setNavigatorCollapsed: (collapsed: boolean) => void;
+  setAdjustOpen: (open: boolean) => void;
   close: () => void;
 };
 
@@ -128,6 +132,8 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
   saving: false,
   error: null,
   studioTool: DEFAULT_STUDIO_TOOL,
+  navigatorCollapsed: false,
+  adjustOpen: false,
   ...RESET_VIEW,
   openFromImage: (image) => {
     const payload = buildRasterStudioOpenPayload(image);
@@ -175,6 +181,8 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
     });
   },
   actualSize: () => set({ zoom: 1, pan: { x: 0, y: 0 }, didInitialFit: true }),
+  setNavigatorCollapsed: (navigatorCollapsed) => set({ navigatorCollapsed }),
+  setAdjustOpen: (adjustOpen) => set({ adjustOpen }),
   close: () =>
     set({
       open: false,

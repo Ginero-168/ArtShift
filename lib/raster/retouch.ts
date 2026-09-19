@@ -1,4 +1,5 @@
 import type { ImageElement } from "@/lib/engine/types";
+import { blurUnknownRgb, fillUnknownFromNeighbors } from "./localInpaint";
 import { loadOpenCvJs } from "./opencvJsAdapter";
 import type { RasterPixelBuffer } from "./processor";
 import { registerRasterRetouchSource } from "./retouchSource";
@@ -18,7 +19,7 @@ export type RasterRetouchOptions = {
 
 export type RasterRetouchResult = {
   edit: RasterRetouchEdit;
-  /** True when Healing fell back to a clone-like patch because OpenCV inpaint failed. */
+  /** True when Healing fell back because OpenCV inpaint failed. */
   healFallback: boolean;
 };
 
@@ -55,15 +56,13 @@ export async function createRasterRetouchEdit(
       const crop = cropPixels(pixels, bounds);
       output = applyAlphaMask(await (await loadOpenCvJs()).heal(crop, repair.inpaint), repair.soft);
     } catch {
-      // OpenCV is an optional enhancement. Clone remains a predictable local fallback.
+      // OpenCV is optional. Local blur-blend inpaint is not clone-stamp
+      // (no displaced source) and is not claimed as Photoshop Telea parity.
       healFallback = true;
-      output = createClonePatch(
+      output = createLocalInpaintPatch(
         pixels,
         bounds,
         scaledPoints,
-        options.sourcePoint,
-        scaleX,
-        scaleY,
         radiusX,
         radiusY,
         hardness,
@@ -134,6 +133,55 @@ function createClonePatch(
   context.globalCompositeOperation = "destination-in";
   stampSoftPath(context, points, bounds, radiusX, radiusY, hardness);
   return imageDataToBuffer(context.getImageData(0, 0, bounds.width, bounds.height));
+}
+
+/**
+ * Heal-only fallback: fill the stamped ROI from neighboring pixels, then
+ * blur-blend. Does not sample a displaced clone source.
+ */
+function createLocalInpaintPatch(
+  pixels: RasterPixelBuffer,
+  bounds: PatchBounds,
+  points: Array<[number, number]>,
+  radiusX: number,
+  radiusY: number,
+  hardness: number,
+): RasterPixelBuffer {
+  const pad = Math.max(2, Math.ceil(Math.max(radiusX, radiusY) * 0.65));
+  const padded: PatchBounds = {
+    x: Math.max(0, bounds.x - pad),
+    y: Math.max(0, bounds.y - pad),
+    width: 0,
+    height: 0,
+  };
+  const right = Math.min(pixels.width, bounds.x + bounds.width + pad);
+  const bottom = Math.min(pixels.height, bounds.y + bounds.height + pad);
+  padded.width = Math.max(1, right - padded.x);
+  padded.height = Math.max(1, bottom - padded.y);
+
+  const crop = cropPixels(pixels, padded);
+  const repair = createRepairMasks(
+    padded.width,
+    padded.height,
+    points,
+    padded,
+    radiusX,
+    radiusY,
+    hardness,
+  );
+  fillUnknownFromNeighbors(crop, repair.inpaint);
+  blurUnknownRgb(crop, repair.inpaint);
+  const masked = applyAlphaMask(crop, repair.soft);
+
+  if (padded.x === bounds.x && padded.y === bounds.y && padded.width === bounds.width) {
+    return masked;
+  }
+  return cropPixels(masked, {
+    x: bounds.x - padded.x,
+    y: bounds.y - padded.y,
+    width: bounds.width,
+    height: bounds.height,
+  });
 }
 
 function createRepairMasks(

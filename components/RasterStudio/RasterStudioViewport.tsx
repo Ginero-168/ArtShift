@@ -11,10 +11,11 @@ import {
 } from "react";
 import RasterSelectionOverlay from "@/components/Canvas/RasterSelectionOverlay";
 import { createEditorController } from "@/lib/engine/editorController";
-import { getImageCache } from "@/lib/engine/imageCache";
+import { getImageCache, subscribeImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import { isRasterBrushCursorTool, pointerPressure } from "@/lib/engine/toolBehavior";
 import type { ImageElement } from "@/lib/engine/types";
+import { cloneSamplePoint, paintCloneBlitPreview } from "@/lib/raster/clonePreview";
 import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { createRasterRetouchEdit } from "@/lib/raster/retouch";
@@ -39,6 +40,7 @@ import { paintLiveStrokePreview, rasterStrokeSpacing } from "@/lib/raster/stroke
 import { blitOffscreenPreview, createBakeSurface } from "@/lib/raster/studio/encodeRevision";
 import { clampStudioZoom, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 import { type RenderCtx, renderElement } from "@/lib/renderer/canvas";
+import RasterStudioNavigator from "./RasterStudioNavigator";
 import { RasterStudioBrushCursor, RasterStudioCloneMarker } from "./RasterStudioPointerOverlay";
 import { studioChrome } from "./studioChrome";
 
@@ -115,6 +117,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
   const brushColor = useEngine((s) => s.rasterBrushColor);
   const wandTolerance = useEngine((s) => s.rasterMagicWandTolerance);
   const wandContiguous = useEngine((s) => s.rasterMagicWandContiguous);
+  const selectionAntiAlias = useEngine((s) => s.rasterSelectionAntiAlias);
   const quickSize = useEngine((s) => s.rasterQuickSelectionSize);
 
   const image = useEngine((s) => {
@@ -160,6 +163,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cloneBlitRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const spacePanRef = useRef(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -177,6 +181,14 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     mode: RasterSelectionMode;
   } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [previewEpoch, setPreviewEpoch] = useState(0);
+  const [cacheEpoch, setCacheEpoch] = useState(0);
+
+  const selectionOperation = useCallback(
+    (mode: RasterSelectionMode, shape: RasterSelectionShape) =>
+      createRasterSelectionOperation(mode, shape, { antiAlias: selectionAntiAlias }),
+    [selectionAntiAlias],
+  );
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -193,7 +205,10 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       typeof OffscreenCanvas !== "undefined" &&
       surface.canvas instanceof OffscreenCanvas
     ) {
-      if (blitOffscreenPreview(surface.canvas, canvas)) return;
+      if (blitOffscreenPreview(surface.canvas, canvas)) {
+        setPreviewEpoch((epoch) => epoch + 1);
+        return;
+      }
     }
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
@@ -205,14 +220,18 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     ctx.clearRect(0, 0, width, height);
     if (surface.canvas instanceof HTMLCanvasElement) {
       ctx.drawImage(surface.canvas, 0, 0);
+      setPreviewEpoch((epoch) => epoch + 1);
       return;
     }
     renderElement(bakeTarget, { ctx, images: getImageCache() } as RenderCtx);
+    setPreviewEpoch((epoch) => epoch + 1);
   }, [image]);
 
   useEffect(() => {
     redraw();
   }, [redraw, revisionKey]);
+
+  useEffect(() => subscribeImageCache(() => setCacheEpoch((epoch) => epoch + 1)), []);
 
   useEffect(() => {
     selectOnly([elementId]);
@@ -321,6 +340,38 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     [activeRasterSelection, controller, image],
   );
 
+  useLayoutEffect(() => {
+    const overlay = cloneBlitRef.current;
+    const source = canvasRef.current;
+    if (!overlay) return;
+    const ctx = overlay.getContext("2d");
+    const cloneDrag =
+      dragRef.current?.kind === "retouch" && dragRef.current.mode === "clone"
+        ? dragRef.current
+        : null;
+    if (
+      !ctx ||
+      !source ||
+      !image ||
+      studioTool !== "rasterClone" ||
+      !cloneSource ||
+      !hoverLocal ||
+      source.width < 1
+    ) {
+      if (ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+      }
+      return;
+    }
+    if (overlay.width !== source.width || overlay.height !== source.height) {
+      overlay.width = source.width;
+      overlay.height = source.height;
+    }
+    const sample = cloneSamplePoint(cloneSource, cloneDrag?.localPoints[0] ?? null, hoverLocal);
+    paintCloneBlitPreview(overlay, source, sample, hoverLocal, brushSize, brushHardness);
+  }, [brushHardness, brushSize, cloneSource, hoverLocal, image, studioTool, previewEpoch]);
+
   // Clear polygon/quick drafts when switching tools.
   useEffect(() => {
     dragRef.current = null;
@@ -338,14 +389,14 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       return false;
     }
     const shape = selectionShapeFromPoints("polygon", drag.localPoints, image.width, image.height);
-    controller.commitRasterSelection(image.id, createRasterSelectionOperation(drag.mode, shape));
+    controller.commitRasterSelection(image.id, selectionOperation(drag.mode, shape));
     dragRef.current = null;
     setDraftPoints(null);
     setSelectionDraft(null);
     markSessionEdited();
     setStatus(null);
     return true;
-  }, [controller, image, markSessionEdited]);
+  }, [controller, image, markSessionEdited, selectionOperation]);
 
   const commitQuick = useCallback(
     (drag: QuickDrag) => {
@@ -353,7 +404,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       if (drag.mask.some((value) => value !== 0)) {
         controller.commitRasterSelection(
           image.id,
-          createRasterSelectionOperation(drag.mode, {
+          selectionOperation(drag.mode, {
             kind: "bitmap",
             dataUrl: magicWandMaskToDataUrl(drag.mask, drag.imageData.width, drag.imageData.height),
           }),
@@ -362,7 +413,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       }
       setSelectionDraft(null);
     },
-    [controller, image, markSessionEdited],
+    [controller, image, markSessionEdited, selectionOperation],
   );
 
   useEffect(() => {
@@ -594,6 +645,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
         opacity: brushOpacity,
       };
       setDraftPoints([local]);
+      if (studioTool === "rasterClone") return;
       paintLivePreview(
         createRasterStroke([local], brushSize, 0.35, {
           mode: "paint",
@@ -609,7 +661,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
       const requestId = ++wandRequestRef.current;
       const applyShape = (shape: RasterSelectionShape | null) => {
         if (!shape || requestId !== wandRequestRef.current) return;
-        controller.commitRasterSelection(image.id, createRasterSelectionOperation(mode, shape));
+        controller.commitRasterSelection(image.id, selectionOperation(mode, shape));
         markSessionEdited();
         setStatus("Selection updated");
       };
@@ -703,6 +755,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
     if (drag.kind === "retouch") {
       drag.localPoints.push(local);
       setDraftPoints([...drag.localPoints]);
+      if (drag.mode === "clone") return;
       paintLivePreview(
         createRasterStroke(drag.localPoints, drag.size, 0.35, {
           mode: "paint",
@@ -766,7 +819,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
         );
         controller.commitRasterSelection(
           image.id,
-          createRasterSelectionOperation(drag.mode, shape),
+          selectionOperation(drag.mode, shape),
         );
         markSessionEdited();
       }
@@ -799,17 +852,49 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
           `${drag.mode === "heal" ? "heal" : "clone"} image pixels ${result.edit.id}`,
         );
         markSessionEdited();
-        setStatus(result.healFallback ? "Heal used clone fallback (OpenCV unavailable)" : null);
+        setStatus(
+          result.healFallback ? "Heal used local blend fallback (OpenCV unavailable)" : null,
+        );
       });
     }
   };
 
   if (!image) {
-    return <p style={{ opacity: 0.7 }}>Image is no longer on the canvas.</p>;
+    return (
+      <div
+        ref={stageRef}
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          display: "grid",
+          placeItems: "center",
+          background: studioChrome.pasteboard,
+          color: studioChrome.muted,
+          padding: 24,
+          textAlign: "center",
+        }}
+      >
+        <div>
+          <p style={{ margin: "0 0 6px", fontSize: 13, color: studioChrome.ink }}>
+            This image is no longer on the canvas.
+          </p>
+          <p style={{ margin: 0, fontSize: 12 }}>
+            Cancel or close Raster Studio to return to the Editor.
+          </p>
+        </div>
+      </div>
+    );
   }
 
+  const imageReady = cacheEpoch >= 0 && Boolean(image && getImageCache().has(image.fileId));
+  const showCloneBlit = studioTool === "rasterClone" && Boolean(cloneSource && hoverLocal);
+
   const draftPath =
-    draftPoints && draftPoints.length > 1
+    draftPoints &&
+    draftPoints.length > 1 &&
+    studioTool !== "rasterClone" &&
+    !showCloneBlit
       ? draftPoints.map(([x, y]) => `${x},${y}`).join(" ")
       : null;
 
@@ -906,6 +991,19 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
               visibility: previewing ? "visible" : "hidden",
             }}
           />
+          <canvas
+            ref={cloneBlitRef}
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "block",
+              width: image.width,
+              height: image.height,
+              pointerEvents: "none",
+              visibility: showCloneBlit ? "visible" : "hidden",
+            }}
+          />
           <RasterSelectionOverlay
             image={{ ...image, x: 0, y: 0, angle: 0 }}
             selection={selectionForOverlay}
@@ -974,6 +1072,38 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
           {status}
         </div>
       ) : null}
+      {!imageReady ? (
+        <div
+          aria-live="polite"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            pointerEvents: "none",
+            background: "rgba(74, 74, 74, 0.35)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              padding: "8px 12px",
+              borderRadius: 4,
+              background: "rgba(24, 24, 24, 0.72)",
+              color: studioChrome.ink,
+              fontSize: 12,
+            }}
+          >
+            Loading image…
+          </p>
+        </div>
+      ) : null}
+      <RasterStudioNavigator
+        imageWidth={image.width}
+        imageHeight={image.height}
+        sourceCanvas={canvasRef.current}
+        revision={previewEpoch}
+      />
     </div>
   );
 }
