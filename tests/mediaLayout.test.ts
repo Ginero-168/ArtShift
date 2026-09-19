@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createBuilderBlock } from "@/lib/builder/blocks";
 import { getBookMockupGeometry } from "@/lib/engine/bookMockup";
 import { createBookMockup, createImage } from "@/lib/engine/factory";
-import { addObjectToLayer, createEngineLayer, reflowBlockObjects } from "@/lib/engine/layers";
+import { addObjectToLayer, createEngineLayer } from "@/lib/engine/layers";
 import {
   fitMediaElementToRect,
   getMediaAspectRatio,
@@ -58,8 +58,8 @@ describe("image-like object geometry", () => {
     }
   });
 
-  it("keeps a Block image aspect-correct after its hex placement reflows", () => {
-    const layer = createEngineLayer("block");
+  it("keeps a library image aspect-correct when added to a Free layer", () => {
+    const layer = createEngineLayer("free");
     const image = createImage({
       x: 100,
       y: 100,
@@ -79,10 +79,11 @@ describe("image-like object geometry", () => {
     };
 
     slide = addObjectToLayer(slide, image, layer.id, 1);
-    slide = reflowBlockObjects(slide, 1);
 
-    const reflowed = slide.elements.find((element) => element.id === image.id)!;
-    expect(reflowed.width / reflowed.height).toBeCloseTo(2 / 3, 4);
+    const added = slide.elements.find((element) => element.id === image.id)!;
+    expect(slide.layers[0].mode).toBe("free");
+    expect(slide.layers[0].placements).toEqual({});
+    expect(added.width / added.height).toBeCloseTo(2 / 3, 4);
   });
 
   it("uses most of a 3D book bounding box at different camera angles", () => {

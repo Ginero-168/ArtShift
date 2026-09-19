@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createBuilderBlock } from "@/lib/builder/blocks";
 import { createRect, createText } from "@/lib/engine/factory";
-import { placementOverlapCells } from "@/lib/engine/hexLayout";
 import {
   addObjectToLayer,
   convertLayerMode,
   createEngineLayer,
   moveObjectsToLayer,
   normalizeDocumentLayers,
-  reflowBlockObjects,
 } from "@/lib/engine/layers";
 import { ENGINE_SCHEMA_VERSION, type EngineDoc, type EngineSlide } from "@/lib/engine/types";
 
@@ -47,37 +45,26 @@ describe("Layer-owned placement", () => {
     expect(slide.layers[0].objectIds).toEqual([heading.id, subtitle.id]);
   });
 
-  it("switches a whole Layer to Block and back without replacing Objects", () => {
+  it("refuses to convert a Layer back to Block and keeps Free geometry", () => {
     const layer = createEngineLayer("free", { name: "Copy" });
     let slide = emptySlide([layer]);
     const heading = createText({ x: 80, y: 90, width: 440, height: 140, text: "Heading" });
     const subtitle = createText({ x: 640, y: 90, width: 320, height: 100, text: "Subtitle" });
     slide = addObjectToLayer(slide, heading, layer.id, 1);
     slide = addObjectToLayer(slide, subtitle, layer.id, 1);
-
-    const blocked = convertLayerMode(slide, layer.id, "block", 1);
-    const blockedLayer = blocked.layers[0];
-    expect(blockedLayer.mode).toBe("block");
-    expect(Object.keys(blockedLayer.placements)).toEqual([heading.id, subtitle.id]);
-    expect(
-      placementOverlapCells(
-        blockedLayer.placements[heading.id],
-        blockedLayer.placements[subtitle.id],
-      ),
-    ).toBe(0);
-
-    const geometry = blocked.elements.map(({ id, x, y, width, height }) => ({
+    const geometry = slide.elements.map(({ id, x, y, width, height }) => ({
       id,
       x,
       y,
       width,
       height,
     }));
-    const freed = convertLayerMode(blocked, layer.id, "free", 1);
-    expect(freed.layers[0].mode).toBe("free");
-    expect(freed.layers[0].placements).toEqual({});
+
+    const blocked = convertLayerMode(slide, layer.id, "block", 1);
+    expect(blocked.layers[0].mode).toBe("free");
+    expect(blocked.layers[0].placements).toEqual({});
     expect(
-      freed.elements.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })),
+      blocked.elements.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })),
     ).toEqual(geometry);
   });
 
@@ -95,33 +82,32 @@ describe("Layer-owned placement", () => {
     expect(slide.layers.find((layer) => layer.id === target.id)?.objectIds).toEqual([a.id, b.id]);
   });
 
-  it("reflows Block objects collectively across separate object layers", () => {
+  it("keeps overlapping Block objects where they were when baking to Free", () => {
     const lower = createEngineLayer("block", { name: "Lower", z: 1 });
     const upper = createEngineLayer("block", { name: "Upper", z: 2 });
-    const lowerObject = createRect({ x: 0, y: 0, width: 200, height: 200 });
-    const upperObject = createRect({ x: 0, y: 0, width: 200, height: 200 });
-    const sharedPlacement = { col: 2, row: 2, colSpan: 4, rowSpan: 4 };
+    const lowerObject = createRect({ x: 40, y: 40, width: 200, height: 200 });
+    const upperObject = createRect({ x: 40, y: 40, width: 200, height: 200 });
     lower.objectIds = [lowerObject.id];
     upper.objectIds = [upperObject.id];
-    lower.placements[lowerObject.id] = sharedPlacement;
-    upper.placements[upperObject.id] = sharedPlacement;
+    lower.placements[lowerObject.id] = { col: 2, row: 2, colSpan: 4, rowSpan: 4 };
+    upper.placements[upperObject.id] = { col: 2, row: 2, colSpan: 4, rowSpan: 4 };
 
-    const slide = reflowBlockObjects(
-      {
-        ...emptySlide([lower, upper]),
-        elements: [lowerObject, upperObject],
-      },
-      1,
-    );
-
-    expect(slide.layers[0].placements[lowerObject.id]).toMatchObject(sharedPlacement);
-    expect(slide.layers[1].placements[upperObject.id]).not.toMatchObject(sharedPlacement);
-    expect(slide.elements[0]).not.toMatchObject({
-      x: slide.elements[1].x,
-      y: slide.elements[1].y,
-      width: slide.elements[1].width,
-      height: slide.elements[1].height,
+    const migrated = normalizeDocumentLayers({
+      id: "doc-overlap",
+      title: "Overlap",
+      width: 1200,
+      height: 1200,
+      slides: [{ ...emptySlide([lower, upper]), elements: [lowerObject, upperObject] }],
+      snapGrid: null,
+      workspaceStrictness: 1,
+      updatedAt: 1,
+      schemaVersion: 5,
     });
+    const slide = migrated.slides[0];
+    expect(slide.layers.every((layer) => layer.mode === "free")).toBe(true);
+    expect(slide.layers.every((layer) => Object.keys(layer.placements).length === 0)).toBe(true);
+    expect(slide.elements[0]).toMatchObject({ x: 40, y: 40, width: 200, height: 200 });
+    expect(slide.elements[1]).toMatchObject({ x: 40, y: 40, width: 200, height: 200 });
   });
 
   it("migrates schema-v1 Object placement into Layer containers", () => {
@@ -140,11 +126,15 @@ describe("Layer-owned placement", () => {
     } as unknown as EngineDoc;
 
     const migrated = normalizeDocumentLayers(legacy);
-    const blockLayer = migrated.slides[0].layers.find((layer) => layer.mode === "block");
-    const freeLayer = migrated.slides[0].layers.find((layer) => layer.mode === "free");
-    expect(blockLayer?.objectIds).toEqual([grid.id]);
-    expect(blockLayer?.placements[grid.id]).toMatchObject({ col: 3, colSpan: 6 });
-    expect(freeLayer?.objectIds).toEqual([free.id]);
+    const slide = migrated.slides[0];
+    expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
+    expect(slide.layers.every((layer) => layer.mode === "free")).toBe(true);
+    expect(slide.layers.every((layer) => Object.keys(layer.placements).length === 0)).toBe(true);
+    expect(slide.elements.map((element) => element.id).sort()).toEqual([free.id, grid.id].sort());
+    const bakedGrid = slide.elements.find((element) => element.id === grid.id);
+    expect(bakedGrid).toMatchObject({ x: 0, y: 0, layoutMode: "free" });
+    const bakedFree = slide.elements.find((element) => element.id === free.id);
+    expect(bakedFree).toMatchObject({ x: 500, y: 200, layoutMode: "free" });
   });
 
   it("migrates schema-v2 Block placement from the reference grid to a portrait grid", () => {
@@ -172,10 +162,11 @@ describe("Layer-owned placement", () => {
 
     const migrated = normalizeDocumentLayers(legacy);
     const slide = migrated.slides[0];
-    const placement = slide.layers[0].placements[block.id];
     const element = slide.elements[0];
     expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
-    expect(placement).toMatchObject({ col: 4, row: 5, colSpan: 8, rowSpan: 9 });
+    expect(slide.layers[0].mode).toBe("free");
+    expect(slide.layers[0].placements).toEqual({});
+    expect(element.layoutMode).toBe("free");
     expect(element.x).toBeGreaterThanOrEqual(0);
     expect(element.y).toBeGreaterThanOrEqual(0);
     expect(element.x + element.width).toBeLessThanOrEqual(slide.width);

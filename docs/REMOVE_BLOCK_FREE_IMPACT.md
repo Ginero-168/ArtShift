@@ -1,8 +1,8 @@
 # Remove Block/Free (hex) layout — impact inventory
 
-**Status:** inventory only. This document does not change runtime behavior.
+**Status:** P0 in progress on this branch. Schema v6 bakes Block → Free. `hexLayout.ts` is **not** deleted (P2). Residual B/F chrome is disabled, not fully stripped (P1).
 
-**This PR does not remove Block/Free code.** `hexLayout`, `LayerMode`, UI B/F toggles, store APIs, migrations, and tests stay exactly as they are on `main`. Later PRs (described below, not started here) will do the actual work.
+**No wholesale engine deletion in this PR.** Rollback baseline remains tag `pre-remove-bf-048d9fd`.
 
 ---
 
@@ -296,7 +296,13 @@ git reset --hard pre-remove-bf-048d9fd
 #   git reset --hard pre-remove-bf-048d9fd
 ```
 
-This inventory PR itself is documentation-only. Reverting it does not restore engine behavior (nothing engine-related changed).
+**P0 rollback:** reset this branch to the safety tag (or revert the P0 commits). That restores live Block/hex occupancy. Do not force-push `main`.
+
+```bash
+git fetch origin tag pre-remove-bf-048d9fd
+git checkout cursor/remove-block-free-layout-0583
+git reset --hard pre-remove-bf-048d9fd
+```
 
 ---
 
@@ -304,14 +310,16 @@ This inventory PR itself is documentation-only. Reverting it does not restore en
 
 - [x] Note exact `main` HEAD SHA (`048d9fd5219006653269f738e26fc890adbaa33b`).
 - [x] Push annotated tag `pre-remove-bf-048d9fd` on that SHA.
-- [x] Open inventory-only draft PR (this document). **No Block/Free code removed.**
+- [x] Open inventory-only draft PR (this document), then implement P0 on the same branch.
+- [x] Schema v6: bake Block placements → Free pixels; clear `placements`; force `layoutMode` + layer `mode` to `"free"`.
+- [x] Runtime no longer writes Block cells (add/paste/resize/AI/library/composition).
+- [x] Disable B/F re-entry in UI (badge is inert **F**; hex overlay + All/Block/Free filter hidden).
+- [x] Tests: v5 Block fixtures bake to Free; hex-collision is no longer product behavior.
 - [ ] Confirm nobody is mid-flight on Moodboard PR #9 with shared layer files (do not merge moodboard into a removal branch).
 - [ ] Export / snapshot a handful of real projects that still use Block mode (placements + strictness > 1).
-- [ ] Write failing-or-golden tests for “v5 block doc → v6 free geometry” *before* deleting `hexLayout`.
-- [ ] Decide pixel defaults for each `BUILDER_BLOCKS` kind to replace `colSpan` / `rowSpan`.
-- [ ] Plan AI insert: drop the Free-layer requirement in the same PR that flattens modes (P0).
-- [ ] Plan PPTX validator + design-agent `layer.mode` field in P0 or P2.
-- [ ] Do **not** delete `hexLayout.ts`, `LayerMode`, UI B/F, or migrate runtime until P0 is an explicit, reviewed PR.
+- [ ] Decide pixel defaults for each `BUILDER_BLOCKS` kind to replace `colSpan` / `rowSpan` (still used for initial recipe *size* only).
+- [ ] P1: strip leftover store APIs / CSS / hex overlay code paths.
+- [ ] P2: delete `hexLayout.ts` and leftover types once v6 is universal.
 - [ ] Do **not** merge any of this work to `main` until humans approve; this PR stays draft until then.
 
 ---
@@ -322,4 +330,18 @@ Block/Free is not a single file. It is a **dual geometry model**: hex `BlockPlac
 
 **Highest coupling:** `hexLayout.ts` ↔ `layers.ts` ↔ `store.ts` ↔ resize ↔ canvas commit. **Highest user-visible risk:** saved documents that only “look right” because reflow/strictness is still live. **Lowest coupling / keep:** Block *library* recipes, frames, groups, moodboard, Smart Arrange pixel math.
 
-Safe order: **tag (done) → inventory (this PR) → P0 bake-to-Free → P1 UI → P2 delete engine.**
+Safe order: **tag (done) → inventory (done) → P0 bake-to-Free (this PR) → P1 UI strip → P2 delete engine.**
+
+### P0 shipped on this branch
+
+- `ENGINE_SCHEMA_VERSION = 6`
+- `flattenBlockLayoutToFree` at the end of `normalizeDocumentLayers` / `fromJSON` / `loadDoc`
+- Store and layer mutators no longer create placements; `setLayerMode("block")` / B/F toggle are no-ops
+- Resize scales pixels only
+- AI insert accepts any unlocked layer
+- Library recipes still exist; `createBuilderBlock` still uses hex math for default *size*, then inserts as Free
+
+### Residual P1 / P2
+
+- **P1:** remove unused store methods (`commitBlockLayout`, `updateBlockPlacement`, `showHexGrid`, `layerFilter`, strictness setters), Layer panel F badge, inspector FREE chip, CSS, canvas hex overlay
+- **P2:** delete `lib/engine/hexLayout.ts`, `LayerMode` / `BlockPlacement` / `bento`, leftover `reflowBlockObjects` used only by old-schema load, hex unit tests

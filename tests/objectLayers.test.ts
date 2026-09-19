@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createFrame, createRect, createText } from "@/lib/engine/factory";
 import {
+  flattenBlockLayoutToFree,
   isObjectLocked,
   isObjectVisible,
   moveElementZ,
@@ -27,7 +28,8 @@ describe("1 Object = 1 Layer Architecture", () => {
     el3.name = "Profile Photo Frame";
     el3.layoutMode = "free";
 
-    return normalizeSlideLayers({
+    return flattenBlockLayoutToFree(
+      normalizeSlideLayers({
       id: "slide-1",
       name: "Slide 1",
       background: "#ffffff",
@@ -66,7 +68,8 @@ describe("1 Object = 1 Layer Architecture", () => {
           z: 3,
         },
       ],
-    });
+    }),
+    );
   }
 
   it("normalizes slide elements such that 1 object equals 1 layer", () => {
@@ -76,50 +79,40 @@ describe("1 Object = 1 Layer Architecture", () => {
     expect(slide.layers[1].id).toBe(slide.elements[1].id);
     expect(slide.layers[2].id).toBe(slide.elements[2].id);
 
-    expect(slide.layers[0].mode).toBe("block");
-    expect(slide.layers[1].mode).toBe("block");
+    expect(slide.layers[0].mode).toBe("free");
+    expect(slide.layers[1].mode).toBe("free");
     expect(slide.layers[2].mode).toBe("free");
   });
 
-  it("toggles object layout mode between block and free independently", () => {
+  it("refuses to toggle an object back into Block mode", () => {
     const slide = createTestSlide();
     const targetId = slide.elements[0].id;
 
-    // Toggle from block -> free
     const freeSlide = toggleObjectLayoutMode(slide, targetId, 1);
     const freeEl = freeSlide.elements.find((e) => e.id === targetId);
     const freeLayer = freeSlide.layers.find((l) => l.id === targetId);
     expect(freeEl?.layoutMode).toBe("free");
     expect(freeLayer?.mode).toBe("free");
-
-    // Toggle back from free -> block
-    const blockSlide = toggleObjectLayoutMode(freeSlide, targetId, 1);
-    const blockEl = blockSlide.elements.find((e) => e.id === targetId);
-    const blockLayer = blockSlide.layers.find((l) => l.id === targetId);
-    expect(blockEl?.layoutMode).toBe("block");
-    expect(blockLayer?.mode).toBe("block");
-    expect(blockLayer?.placements[targetId]).toBeDefined();
+    expect(freeLayer?.placements[targetId]).toBeUndefined();
   });
 
-  it("toggling one object mode does not change the mode of other objects sharing a slide", () => {
+  it("keeps every object on Free after a no-op layout toggle", () => {
     const slide = createTestSlide();
     const id0 = slide.elements[0].id;
     const id1 = slide.elements[1].id;
     const id2 = slide.elements[2].id;
 
-    // Initially: id0 = block, id1 = block, id2 = free
-    expect(slide.elements.find((e) => e.id === id0)?.layoutMode).toBe("block");
-    expect(slide.elements.find((e) => e.id === id1)?.layoutMode).toBe("block");
+    expect(slide.elements.find((e) => e.id === id0)?.layoutMode).toBe("free");
+    expect(slide.elements.find((e) => e.id === id1)?.layoutMode).toBe("free");
     expect(slide.elements.find((e) => e.id === id2)?.layoutMode).toBe("free");
 
-    // Toggle id0 to free
     const toggled = toggleObjectLayoutMode(slide, id0, 1);
     expect(toggled.elements.find((e) => e.id === id0)?.layoutMode).toBe("free");
-    expect(toggled.elements.find((e) => e.id === id1)?.layoutMode).toBe("block");
+    expect(toggled.elements.find((e) => e.id === id1)?.layoutMode).toBe("free");
     expect(toggled.elements.find((e) => e.id === id2)?.layoutMode).toBe("free");
   });
 
-  it("reflows all block objects in collective layout while leaving free objects untouched", () => {
+  it("leaves Free object geometry untouched when leftover reflow is invoked", () => {
     const slide = createTestSlide();
     const freeObj = slide.elements.find((e) => e.layoutMode === "free");
     expect(freeObj).toBeDefined();
@@ -185,19 +178,17 @@ describe("1 Object = 1 Layer Architecture", () => {
     expect(backwardSlide.elements[1].id).toBe(secondId);
   });
 
-  it("preserves each element's layoutMode independently when reordering layers", () => {
+  it("preserves Free layoutMode when reordering layers", () => {
     const slide = createTestSlide();
-    expect(slide.elements[0].layoutMode).toBe("block");
-    expect(slide.elements[1].layoutMode).toBe("block");
+    expect(slide.elements[0].layoutMode).toBe("free");
+    expect(slide.elements[1].layoutMode).toBe("free");
     expect(slide.elements[2].layoutMode).toBe("free");
 
-    // Move the free element forward
     const freeId = slide.elements[2].id;
     const moved = moveElementZ(slide, freeId, "backward");
 
-    // All elements must strictly keep their individual layoutMode
-    expect(moved.elements.find((e) => e.id === slide.elements[0].id)?.layoutMode).toBe("block");
-    expect(moved.elements.find((e) => e.id === slide.elements[1].id)?.layoutMode).toBe("block");
+    expect(moved.elements.find((e) => e.id === slide.elements[0].id)?.layoutMode).toBe("free");
+    expect(moved.elements.find((e) => e.id === slide.elements[1].id)?.layoutMode).toBe("free");
     expect(moved.elements.find((e) => e.id === freeId)?.layoutMode).toBe("free");
   });
 

@@ -7,7 +7,6 @@ import {
   createRect,
   createText,
 } from "@/lib/engine/factory";
-import { getHexGridDimensions } from "@/lib/engine/hexLayout";
 import { useEngine } from "@/lib/engine/store";
 import { measureTextElementHeight } from "@/lib/engine/textLayout";
 import { ENGINE_SCHEMA_VERSION } from "@/lib/engine/types";
@@ -188,11 +187,10 @@ describe("engine store", () => {
     expect(pastedArrow?.groupIds[0]).not.toBe(groupId);
   });
 
-  it("grows a Block placement when wrapped Thai text needs more rows", () => {
+  it("grows Free text height when wrapped Thai text needs more lines", () => {
     const st = useEngine.getState();
     const text = createText({ x: 100, y: 100, width: 240, height: 60, text: "สั้น" });
     st.addElement(text);
-    const before = useEngine.getState().currentSlide()!.layers[0].placements[text.id].rowSpan;
 
     st.updateElements([
       {
@@ -204,7 +202,7 @@ describe("engine store", () => {
     ]);
 
     const afterSlide = useEngine.getState().currentSlide()!;
-    expect(afterSlide.layers[0].placements[text.id].rowSpan).toBeGreaterThan(before);
+    expect(afterSlide.layers[0].placements).toEqual({});
     expect(afterSlide.elements.find((element) => element.id === text.id)!.height).toBeGreaterThan(
       60,
     );
@@ -322,7 +320,7 @@ describe("engine store", () => {
     expect(aAfter!.z).toBeGreaterThan(bAfter!.z);
   });
 
-  it("switches a whole Layer between Block and Free without replacing its Object", () => {
+  it("refuses to switch a Layer back to Block after P0 flatten", () => {
     const st = useEngine.getState();
     const text = createText({ x: 120, y: 90, width: 420, height: 160, text: "Layer" });
     st.addElement(text);
@@ -337,8 +335,8 @@ describe("engine store", () => {
     useEngine.getState().setLayerMode(layerId, "block");
     const blockSlide = useEngine.getState().currentSlide();
     expect(blockSlide?.elements[0].id).toBe(text.id);
-    expect(blockSlide?.layers[0].mode).toBe("block");
-    expect(blockSlide?.layers[0].placements[text.id]).toBeDefined();
+    expect(blockSlide?.layers[0].mode).toBe("free");
+    expect(blockSlide?.layers[0].placements).toEqual({});
   });
 
   it("hides a layer without deleting it and removes it from selection", () => {
@@ -470,20 +468,17 @@ describe("engine store", () => {
     expect(replaced.y + replaced.height / 2).toBeCloseTo(300, 5);
   });
 
-  it("remaps Block placement and geometry when the Artwork ratio changes", () => {
+  it("scales Free geometry when the Artwork ratio changes and writes no placements", () => {
     const st = useEngine.getState();
     const block = createRect({ x: 480, y: 270, width: 960, height: 540 });
     st.addElement(block);
-    st.updateBlockPlacement(block.id, { col: 6, row: 3, colSpan: 12, rowSpan: 6 });
 
     st.setSlideDimensions("s1", 1080, 1350);
 
     const resized = useEngine.getState().currentSlide()!;
-    const placement = resized.layers[0].placements[block.id];
-    const grid = getHexGridDimensions(resized.width, resized.height);
     const element = resized.elements.find((candidate) => candidate.id === block.id)!;
-    expect(grid).toEqual({ columns: 16, rows: 18 });
-    expect(placement).toMatchObject({ col: 4, row: 5, colSpan: 8, rowSpan: 9 });
+    expect(resized.layers[0].mode).toBe("free");
+    expect(resized.layers[0].placements).toEqual({});
     expect(element.x).toBeGreaterThanOrEqual(0);
     expect(element.y).toBeGreaterThanOrEqual(0);
     expect(element.x + element.width).toBeLessThanOrEqual(resized.width);
@@ -559,15 +554,15 @@ describe("engine store", () => {
     expect(updatedSlide.layers[0].name).toBe("Header & Hero Elements");
   });
 
-  it("toggles hex block grid visibility", () => {
+  it("toggles leftover hex grid visibility state", () => {
     const st = useEngine.getState();
-    expect(st.showHexGrid).toBe(true);
-
-    st.setShowHexGrid(false);
-    expect(useEngine.getState().showHexGrid).toBe(false);
+    expect(st.showHexGrid).toBe(false);
 
     st.setShowHexGrid(true);
     expect(useEngine.getState().showHexGrid).toBe(true);
+
+    st.setShowHexGrid(false);
+    expect(useEngine.getState().showHexGrid).toBe(false);
   });
 
   it("updates viewport layer filter mode", () => {
