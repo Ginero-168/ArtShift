@@ -691,6 +691,87 @@
   text-transform: uppercase;
 }
 
+.appearanceStack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.appearanceRow {
+  border: 1px solid #e1e5eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.appearanceRowHidden {
+  opacity: 0.48;
+}
+
+.appearanceRowHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 6px 4px 8px;
+  border: 0;
+  background: transparent;
+}
+
+.appearanceRowSelect {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  color: inherit;
+}
+
+.appearanceSwatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  flex-shrink: 0;
+  background-clip: padding-box;
+}
+
+.appearanceRowType {
+  flex-shrink: 0;
+  color: #94a3b8;
+  font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  width: 28px;
+}
+
+.appearanceRowTitle {
+  flex: 1;
+  min-width: 0;
+  color: #1e293b;
+  font: 650 11px/1.2 system-ui, sans-serif;
+}
+
+.appearanceRowMeta {
+  color: #64748b;
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.appearanceRowBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px;
+  border-top: 1px solid #eef1f6;
+}
+
 .field,
 .rangeField {
   display: grid;

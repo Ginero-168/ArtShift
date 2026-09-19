@@ -123,7 +123,7 @@ function legacyEffects(element: EngineElement): EffectAppearance[] {
 
 /**
  * Read semantic Appearance from legacy flat EngineElement fields.
- * Does not persist; Phase 2 will dual-write a canonical `appearance` field.
+ * Does not persist a canonical `appearance` field (that would be engine schema v7).
  */
 export function readAppearance(element: EngineElement): AppearanceSnapshot {
   const unsupported: string[] = [];

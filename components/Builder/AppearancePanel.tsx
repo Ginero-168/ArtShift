@@ -1,0 +1,561 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { IconEye, IconEyeOff, IconPlus, IconTrash } from "@/components/icons";
+import {
+  type AppearanceOperation,
+  addFillOperation,
+  addGlowOperation,
+  addShadowOperation,
+  addStrokeOperation,
+  appearanceCapabilities,
+  appearanceItemLabel,
+  appearanceItemSwatch,
+  appearanceStackRows,
+  clampPathCurvature,
+  fillPaintOperation,
+  findEffect,
+  findFill,
+  findStroke,
+  glowPatchOperation,
+  readAppearance,
+  removeStackKind,
+  setRootBlendOperation,
+  setRootOpacityOperation,
+  shadowPatchOperation,
+  stackKindOf,
+  strokePatchOperation,
+  toggleStackKindVisible,
+} from "@/lib/appearance";
+import { useEngine } from "@/lib/engine/store";
+import type { EngineElement } from "@/lib/engine/types";
+import styles from "./Builder.module.css";
+import ColorPickerInput from "./ColorPickerInput";
+
+const DEFAULT_GRADIENT_COLORS: string[] = ["#6366f1", "#a855f7"];
+const DEFAULT_GRADIENT_STOPS: number[] = [0, 1];
+
+export default function AppearancePanel({
+  element,
+  selectedIds,
+}: {
+  element: EngineElement;
+  selectedIds: string[];
+}) {
+  const updateAppearance = useEngine((state) => state.updateAppearance);
+  const previewAppearance = useEngine((state) => state.previewAppearance);
+  const checkpointInteraction = useEngine((state) => state.checkpointInteraction);
+  const commitInteraction = useEngine((state) => state.commitInteraction);
+  const previewElements = useEngine((state) => state.previewElements);
+
+  const ids = selectedIds.length ? selectedIds : [element.id];
+  const appearance = readAppearance(element);
+  const caps = appearanceCapabilities(element);
+  const rows = appearanceStackRows(element);
+  const hasShadow = !!findEffect(appearance, "shadow");
+  const hasGlow = !!findEffect(appearance, "glow");
+  const hasFill = caps.fills && !!findFill(appearance);
+  const hasStroke = caps.strokes && !!findStroke(appearance);
+
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const activeKey = useMemo(() => {
+    if (expandedKey && rows.some((row) => row.key === expandedKey)) return expandedKey;
+    return rows[0]?.key ?? null;
+  }, [expandedKey, rows]);
+
+  const applyOp = (
+    operation: AppearanceOperation | ((target: EngineElement) => AppearanceOperation | null),
+    label: string,
+  ) => {
+    updateAppearance(ids, operation, label);
+  };
+
+  const beginSlider = (label: string) => checkpointInteraction(label);
+  const slideOp = (
+    operation: AppearanceOperation | ((target: EngineElement) => AppearanceOperation | null),
+  ) => {
+    previewAppearance(ids, operation);
+  };
+  const endSlider = () => commitInteraction();
+
+  return (
+    <div className={styles.optionSection} data-appearance-panel="true">
+      <h3>Appearance</h3>
+      <p className={styles.fieldNote}>
+        Stack is front-to-back (top item paints last). Shadow and Glow can both be on; Canvas draws
+        them in stack order.
+      </p>
+
+      <div className={styles.appearanceStack} role="list" aria-label="Appearance stack">
+        {rows.map((row) => {
+          const expanded = row.key === activeKey;
+          if (row.kind === "textArc") {
+            return (
+              <div
+                key={row.key}
+                className={styles.appearanceRow}
+                role="listitem"
+                data-appearance-row="textArc"
+              >
+                <button
+                  type="button"
+                  className={styles.appearanceRowHeader}
+                  aria-expanded={expanded}
+                  onClick={() => setExpandedKey(row.key)}
+                >
+                  <span className={styles.appearanceRowType}>Arc</span>
+                  <span className={styles.appearanceRowTitle}>Text Arc</span>
+                  <span className={styles.appearanceRowMeta}>{row.value}%</span>
+                </button>
+                {expanded ? (
+                  <div className={styles.appearanceRowBody}>
+                    <TextArcSlider
+                      value={row.value}
+                      onBegin={() => beginSlider("text curvature")}
+                      onInput={(value) =>
+                        previewElements(
+                          ids.map((id) => ({
+                            id,
+                            patch: {
+                              pathCurvature: clampPathCurvature(value),
+                            } as Partial<EngineElement>,
+                          })),
+                        )
+                      }
+                      onCommit={endSlider}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            );
+          }
+
+          const item = row.item;
+          const kind = stackKindOf(item);
+          const hidden = !item.visible;
+          return (
+            <div
+              key={row.key}
+              className={`${styles.appearanceRow} ${hidden ? styles.appearanceRowHidden : ""}`}
+              role="listitem"
+              data-appearance-row={kind ?? item.kind}
+            >
+              <div className={styles.appearanceRowHeader}>
+                <button
+                  type="button"
+                  className={styles.appearanceRowSelect}
+                  aria-expanded={expanded}
+                  onClick={() => setExpandedKey(row.key)}
+                >
+                  <span
+                    className={styles.appearanceSwatch}
+                    style={{ background: appearanceItemSwatch(item) }}
+                    aria-hidden="true"
+                  />
+                  <span className={styles.appearanceRowType}>
+                    {item.kind === "effect" && item.effect.type === "glow"
+                      ? "Fx"
+                      : item.kind === "effect"
+                        ? "Fx"
+                        : item.kind === "fill"
+                          ? "Fill"
+                          : "Line"}
+                  </span>
+                  <span className={styles.appearanceRowTitle}>
+                    {appearanceItemLabel(item, element.type)}
+                  </span>
+                </button>
+                {kind ? (
+                  <button
+                    type="button"
+                    className={styles.layerIconButton}
+                    title={item.visible ? "Hide" : "Show"}
+                    aria-label={item.visible ? `Hide ${kind}` : `Show ${kind}`}
+                    onClick={() =>
+                      applyOp((target) => toggleStackKindVisible(target, kind), `toggle ${kind}`)
+                    }
+                  >
+                    {item.visible ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                  </button>
+                ) : null}
+                {kind ? (
+                  <button
+                    type="button"
+                    className={`${styles.layerIconButton} ${styles.layerIconDelete}`}
+                    title="Remove"
+                    aria-label={`Remove ${kind}`}
+                    onClick={() =>
+                      applyOp((target) => removeStackKind(target, kind), `remove ${kind}`)
+                    }
+                  >
+                    <IconTrash size={13} />
+                  </button>
+                ) : null}
+              </div>
+              {expanded ? (
+                <div className={styles.appearanceRowBody}>
+                  <AppearanceItemEditor
+                    element={element}
+                    item={item}
+                    applyOp={applyOp}
+                    beginSlider={beginSlider}
+                    slideOp={slideOp}
+                    endSlider={endSlider}
+                  />
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {rows.length === 0 ? (
+          <p className={styles.fieldNote}>No fill, stroke, or effects on this object yet.</p>
+        ) : null}
+      </div>
+
+      <div className={styles.buttonRow}>
+        {caps.fills && !hasFill ? (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            aria-label="Add fill"
+            onClick={() => applyOp(addFillOperation(), "add fill")}
+          >
+            <IconPlus size={12} /> Fill
+          </button>
+        ) : null}
+        {caps.strokes && !hasStroke ? (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            aria-label="Add stroke"
+            onClick={() => applyOp(addStrokeOperation(), "add stroke")}
+          >
+            <IconPlus size={12} /> Stroke
+          </button>
+        ) : null}
+        {caps.shadow && !hasShadow ? (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            data-appearance-add="shadow"
+            aria-label="Add shadow"
+            onClick={() => {
+              applyOp(addShadowOperation(), "add shadow");
+              setExpandedKey(null);
+            }}
+          >
+            <IconPlus size={12} /> Shadow
+          </button>
+        ) : null}
+        {caps.glow && !hasGlow ? (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            data-appearance-add="glow"
+            aria-label="Add glow"
+            onClick={() => {
+              applyOp(addGlowOperation(), "add glow");
+              setExpandedKey(null);
+            }}
+          >
+            <IconPlus size={12} /> Glow
+          </button>
+        ) : null}
+      </div>
+
+      {caps.rootOpacity ? (
+        <label className={styles.rangeField}>
+          <span>Opacity</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(appearance.opacity * 100)}
+            onPointerDown={() => beginSlider("opacity")}
+            onChange={(event) =>
+              slideOp(setRootOpacityOperation(Number(event.currentTarget.value) / 100))
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(appearance.opacity * 100)}%</output>
+        </label>
+      ) : null}
+
+      {caps.blendMode ? (
+        <label className={styles.field}>
+          <span>Blend</span>
+          <select
+            value={appearance.blendMode}
+            onChange={(event) =>
+              applyOp(
+                setRootBlendOperation(
+                  event.currentTarget.value as NonNullable<EngineElement["blendMode"]>,
+                ),
+                "blend mode",
+              )
+            }
+          >
+            <option value="source-over">Normal</option>
+            <option value="multiply">Multiply</option>
+            <option value="screen">Screen</option>
+            <option value="overlay">Overlay</option>
+            <option value="darken">Darken</option>
+            <option value="lighten">Lighten</option>
+          </select>
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+function AppearanceItemEditor({
+  element,
+  item,
+  applyOp,
+  beginSlider,
+  slideOp,
+  endSlider,
+}: {
+  element: EngineElement;
+  item: ReturnType<typeof readAppearance>["items"][number];
+  applyOp: (
+    operation: AppearanceOperation | ((target: EngineElement) => AppearanceOperation | null),
+    label: string,
+  ) => void;
+  beginSlider: (label: string) => void;
+  slideOp: (
+    operation: AppearanceOperation | ((target: EngineElement) => AppearanceOperation | null),
+  ) => void;
+  endSlider: () => void;
+}) {
+  if (item.kind === "fill") {
+    const paint = item.paint;
+    const fillType =
+      paint.type === "linearGradient"
+        ? "linear"
+        : paint.type === "radialGradient"
+          ? "radial"
+          : "solid";
+    const gradientColors =
+      paint.type === "linearGradient" || paint.type === "radialGradient"
+        ? paint.stops.map((stop) => stop.color)
+        : DEFAULT_GRADIENT_COLORS;
+    const gradientStops =
+      paint.type === "linearGradient" || paint.type === "radialGradient"
+        ? paint.stops.map((stop) => stop.offset)
+        : DEFAULT_GRADIENT_STOPS;
+    const solidColor = paint.type === "solid" ? paint.color : (gradientColors[0] ?? "#ffffff");
+
+    return (
+      <div className={styles.field}>
+        <span>{element.type === "text" ? "Background" : "Fill"}</span>
+        <ColorPickerInput
+          value={solidColor}
+          onChange={(color) =>
+            applyOp((target) => fillPaintOperation(target, { type: "solid", color }), "fill")
+          }
+          supportsGradient={true}
+          fillType={fillType}
+          gradientColors={gradientColors}
+          gradientAngle={paint.type === "linearGradient" ? paint.angle : 90}
+          gradientStops={gradientStops}
+          onGradientChange={(type, colors, angle, stops) => {
+            const nextStops = (stops ?? DEFAULT_GRADIENT_STOPS).map((offset, index) => ({
+              offset,
+              color: colors[index] ?? colors[0] ?? "#ffffff",
+            }));
+            applyOp(
+              (target) =>
+                fillPaintOperation(
+                  target,
+                  type === "radial"
+                    ? { type: "radialGradient", stops: nextStops }
+                    : {
+                        type: "linearGradient",
+                        angle: angle ?? 90,
+                        stops: nextStops,
+                      },
+                ),
+              "fill gradient",
+            );
+          }}
+          allowTransparent={true}
+          title="Fill color"
+        />
+      </div>
+    );
+  }
+
+  if (item.kind === "stroke") {
+    return (
+      <>
+        <div className={styles.field}>
+          <span>{element.type === "text" ? "Text" : "Stroke"}</span>
+          <ColorPickerInput
+            value={item.color}
+            onChange={(color) =>
+              applyOp((target) => strokePatchOperation(target, { color }), "stroke color")
+            }
+            allowTransparent={element.type !== "text"}
+            title={element.type === "text" ? "Text color" : "Stroke color"}
+          />
+        </div>
+        <label className={styles.rangeField}>
+          <span>Width</span>
+          <input
+            type="range"
+            min={0}
+            max={80}
+            step={0.5}
+            value={item.width}
+            onPointerDown={() => beginSlider("stroke width")}
+            onChange={(event) =>
+              slideOp((target) =>
+                strokePatchOperation(target, { width: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Number(item.width.toFixed(1))}</output>
+        </label>
+      </>
+    );
+  }
+
+  if (item.kind === "effect" && item.effect.type === "shadow") {
+    const effect = item.effect;
+    return (
+      <>
+        <div className={styles.field}>
+          <span>Color</span>
+          <ColorPickerInput
+            value={effect.color}
+            onChange={(color) =>
+              applyOp((target) => shadowPatchOperation(target, { color }), "shadow color")
+            }
+            allowTransparent={false}
+            title="Shadow color"
+          />
+        </div>
+        <label className={styles.rangeField}>
+          <span>Blur</span>
+          <input
+            type="range"
+            min={0}
+            max={80}
+            value={effect.blur}
+            onPointerDown={() => beginSlider("shadow blur")}
+            onChange={(event) =>
+              slideOp((target) =>
+                shadowPatchOperation(target, { blur: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.blur)}</output>
+        </label>
+        <label className={styles.rangeField}>
+          <span>Offset X</span>
+          <input
+            type="range"
+            min={-80}
+            max={80}
+            value={effect.offsetX}
+            onPointerDown={() => beginSlider("shadow offset")}
+            onChange={(event) =>
+              slideOp((target) =>
+                shadowPatchOperation(target, { offsetX: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.offsetX)}</output>
+        </label>
+        <label className={styles.rangeField}>
+          <span>Offset Y</span>
+          <input
+            type="range"
+            min={-80}
+            max={80}
+            value={effect.offsetY}
+            onPointerDown={() => beginSlider("shadow offset")}
+            onChange={(event) =>
+              slideOp((target) =>
+                shadowPatchOperation(target, { offsetY: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.offsetY)}</output>
+        </label>
+      </>
+    );
+  }
+
+  if (item.kind === "effect" && item.effect.type === "glow") {
+    const effect = item.effect;
+    return (
+      <>
+        <div className={styles.field}>
+          <span>Color</span>
+          <ColorPickerInput
+            value={effect.color}
+            onChange={(color) =>
+              applyOp((target) => glowPatchOperation(target, { color }), "glow color")
+            }
+            allowTransparent={false}
+            title="Glow color"
+          />
+        </div>
+        <label className={styles.rangeField}>
+          <span>Blur</span>
+          <input
+            type="range"
+            min={0}
+            max={80}
+            value={effect.blur}
+            onPointerDown={() => beginSlider("glow blur")}
+            onChange={(event) =>
+              slideOp((target) =>
+                glowPatchOperation(target, { blur: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.blur)}</output>
+        </label>
+      </>
+    );
+  }
+
+  return null;
+}
+
+function TextArcSlider({
+  value,
+  onBegin,
+  onInput,
+  onCommit,
+}: {
+  value: number;
+  onBegin: () => void;
+  onInput: (value: number) => void;
+  onCommit: () => void;
+}) {
+  return (
+    <label className={styles.rangeField} data-appearance-control="textArc">
+      <span>Curve</span>
+      <input
+        type="range"
+        min={-100}
+        max={100}
+        value={value}
+        aria-label="Text arc curvature"
+        onPointerDown={onBegin}
+        onChange={(event) => onInput(Number(event.currentTarget.value))}
+        onPointerUp={onCommit}
+      />
+      <output>{value}%</output>
+    </label>
+  );
+}

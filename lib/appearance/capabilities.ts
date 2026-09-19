@@ -5,6 +5,8 @@ export type AppearanceCapability = {
   strokes: boolean;
   shadow: boolean;
   glow: boolean;
+  /** Text Arc is `pathCurvature` on TextElement — not a persisted Appearance item. */
+  textArc: boolean;
   multipleFills: boolean;
   multipleStrokes: boolean;
   blendMode: boolean;
@@ -30,6 +32,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       strokes: false,
       shadow: true,
       glow: true,
+      textArc: false,
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -42,6 +45,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       strokes: true,
       shadow: true,
       glow: true,
+      textArc: true,
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -54,6 +58,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       strokes: true,
       shadow: true,
       glow: true,
+      textArc: false,
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -66,6 +71,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       strokes: true,
       shadow: true,
       glow: true,
+      textArc: false,
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -78,6 +84,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       strokes: true,
       shadow: true,
       glow: true,
+      textArc: false,
       multipleFills: true,
       multipleStrokes: true,
       blendMode: true,
@@ -89,6 +96,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     strokes: true,
     shadow: true,
     glow: true,
+    textArc: false,
     multipleFills: false,
     multipleStrokes: false,
     blendMode: true,

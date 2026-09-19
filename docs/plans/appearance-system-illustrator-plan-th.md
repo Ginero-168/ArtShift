@@ -1,8 +1,42 @@
 # แผนระบบ Appearance สำหรับ ArtShift
 
-สถานะ: แผนออกแบบ ยังไม่ได้เริ่ม implementation
+สถานะ: **Phase 1 foundation shipped** (`lib/appearance/*`). แผ่นนี้ล็อก **Appearance panel UI slice** (2026-09-19) — ยังไม่ persist canonical stack
 
-วันที่จัดทำ: 15 กันยายน 2026
+วันที่จัดทำ: 15 กันยายน 2026  
+อัปเดต: 19 กันยายน 2026
+
+## 0. สถานะจริงและขอบเขตที่ล็อก (Peerawat 2026-09-19)
+
+อย่าอ่านแผ่นนี้ราวกับว่ายังไม่ได้เริ่มทำ — **Phase 1 foundation มีอยู่แล้ว**
+
+| ชั้น | สถานะ |
+|---|---|
+| `lib/appearance/*` (`readAppearance` / `changeAppearance` / capabilities / bounds / fingerprints) | มีแล้ว — อ่าน/เขียนผ่าน legacy flat fields |
+| Engine schema | **v6 = Block bake → Free pixels** ไม่ใช่ Appearance persist |
+| Canonical `appearance` field บน `EngineElement` | **ยังไม่มี** ถ้าเพิ่มต้องเป็น **schema v7** |
+| Live Inspector Appearance stack UI | แผ่นงานนี้ (Fill / Stroke / Shadow / Glow / Text Arc) |
+| Graphic Styles ที่ผูก Brand Kit | **นอกขอบเขต** |
+| Path envelope warp | **นอกขอบเขต** — Arc = text only ผ่าน `pathCurvature` |
+| Group Appearance / multi fill-stroke เป็น product feature / Affinity PDF | **นอกขอบเขต** |
+
+### MVP slice ที่ล็อกแล้ว
+
+เริ่มที่ **Appearance panel + Shadow/Glow + Text Arc**
+
+ผู้ใช้ต้องสามารถ:
+
+1. เลือกวัตถุแล้วแก้ Shadow และ/หรือ Glow จาก live Builder Inspector
+2. แก้ Text Arc (`pathCurvature`) จาก live Inspector สำหรับ text
+3. เห็น Appearance เป็น stack/list (fill, stroke, shadow, glow, text arc เมื่อเกี่ยวข้อง)
+4. แก้ผ่าน `readAppearance` / `changeAppearance` / `updateAppearance` ไม่สร้างโมเดลขนาน
+
+Renderer: Canvas2D มี shadow state เดียวต่อ `drawImage` — ถ้ามีทั้ง Shadow และ Glow จะวาด **ตามลำดับ stack (back-to-front)** ไม่ XOR ทิ้งอย่างเงียบ ๆ
+
+### สิ่งที่แผ่นยาวด้านล่างยังเป็นแผนเต็ม (อย่าทำใน PR นี้)
+
+Multi fill/stroke เป็น product feature, Graphic Styles / Brand Kit, path warp, Group Appearance, Vector/Affinity PDF rewrite, Moodboard, persist canonical `appearance` (v7)
+
+---
 
 ## 1. บทสรุปสำหรับตัดสินใจ
 
@@ -75,7 +109,7 @@ renderSlide
 - สร้าง offscreen canvas ต่อวัตถุเพื่อ cache ผลลัพธ์
 - ใช้ rough.js สำหรับ shape บางประเภท
 - รองรับ gradient และ pattern บางส่วน
-- ใช้ shadow หรือ glow แบบเลือกอย่างใดอย่างหนึ่ง
+- ใช้ shadow หรือ glow พร้อมกันได้ โดย composite ตามลำดับ Appearance stack (legacy เคย XOR)
 - ใช้ opacity และ blend mode ในระดับวัตถุ
 
 ระบบ cache ปัจจุบันใช้ `type:id:version` ใน [lib/renderer/cache.ts](/opt/artshift/lib/renderer/cache.ts:18) ซึ่งสามารถต่อยอดเป็น appearance fingerprint ได้
@@ -94,7 +128,9 @@ Editor ปัจจุบันใช้ [components/Builder/BuilderInspector.ts
 
 ### 3.5 Persistence และ Export
 
-เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 5` และ serializer ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
+เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 6` (Block bake) และ serializer ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
+
+**อย่า bump เป็น v6 เพื่อ Appearance** — v6 ถูกใช้ไปแล้ว ถ้า persist canonical `appearance` ให้ใช้ **v7**
 
 SVG มี serializer แยกใน [lib/engine/exportSVG.ts](/opt/artshift/lib/engine/exportSVG.ts:17) และ PPTX มี validation/export path ของตัวเอง ดังนั้น Appearance ต้องมี adapter หรือ capability policy ไม่ควรให้แต่ละ exporter อ่าน field ตรง ๆ ต่อไป
 
@@ -377,9 +413,9 @@ rough.js, text layout, image crop และ book mockup ยังคงเป็
 
 บันทึก golden cases จากระบบเดิม ได้แก่ solid fill, gradient, pattern, shadow, glow, text, image, frame และ book mockup
 
-### Phase 1: Foundation module
+### Phase 1: Foundation module — **done**
 
-สร้าง:
+สร้างแล้ว:
 
 ```text
 lib/appearance/
@@ -400,7 +436,7 @@ lib/appearance/
 - กำหนด capability ตาม element type
 - เพิ่ม unit tests
 
-ยังไม่เปลี่ยน Property Panel ใน phase นี้
+ยังไม่ persist canonical `appearance` ใน phase นี้
 
 ### Phase 2: Canonical reads และ migration
 
@@ -421,13 +457,13 @@ Mapping เบื้องต้น:
 | `opacity` | Root opacity |
 | `blendMode` | Root blend mode |
 
-เพิ่ม schema migration จาก v5 เป็น v6 เมื่อเริ่ม persist canonical appearance อย่างเป็นทางการ
+เพิ่ม schema migration จาก **v6 เป็น v7** เมื่อเริ่ม persist canonical appearance อย่างเป็นทางการ (v6 คือ Block bake แล้ว)
 
 ในช่วง dual-write ให้คง legacy fields ไว้เพื่อให้ factories, templates, AI และเครื่องมือเก่าทำงานได้ จากนั้นค่อยลบ direct readers หลังมี regression coverage ครบ
 
-### Phase 3: Store และ history
+### Phase 3: Store และ history — **adapter บาง ๆ มีใน UI slice นี้**
 
-เพิ่ม `updateAppearance` ใน [lib/engine/store.ts](/opt/artshift/lib/engine/store.ts:1007)
+`updateAppearance` / `previewAppearance` ใน [lib/engine/store.ts](/opt/artshift/lib/engine/store.ts) ห่อ `changeAppearance` แล้ว dual-write legacy fields
 
 กฎสำคัญ:
 
@@ -437,6 +473,16 @@ Mapping เบื้องต้น:
 - update ที่ไม่ผ่าน validation ไม่สร้าง history
 - Undo/Redo คืนทั้ง stack และ root properties
 - appearance preview ไม่เปลี่ยน `updatedAt` จนกว่าจะ commit
+
+### Phase 5 UI slice (ล็อก 2026-09-19) — **งานนี้**
+
+Appearance panel ใน `BuilderInspector`:
+
+- stack list (front-to-back)
+- Fill / Stroke / Shadow / Glow
+- Text Arc ผ่าน `pathCurvature` (text only)
+- ไม่มี Graphic Styles / Brand Kit
+- ไม่เปิด multi fill/stroke เป็นปุ่ม product
 
 ### Phase 4: Canvas renderer
 
@@ -545,7 +591,7 @@ Raster Source
 
 ### 10.1 Schema
 
-ปัจจุบัน engine schema คือ v5 แผน canonical stack ควร bump เป็น v6 เมื่อเริ่ม persist `appearance`
+ปัจจุบัน engine schema คือ **v6 (Block bake)** แผน canonical stack ควร bump เป็น **v7** เมื่อเริ่ม persist `appearance`
 
 Migration ต้อง:
 
@@ -555,7 +601,7 @@ Migration ต้อง:
 - normalize ค่าเสียหาย
 - preserve unknown fields และ unknown appearance items
 - รองรับ document v5 ที่ไม่มี `appearance`
-- ให้ save ครั้งถัดไปเขียน canonical v6
+- ให้ save ครั้งถัดไปเขียน canonical v7
 
 ### 10.2 Asset storage
 
@@ -684,9 +730,20 @@ select image
 | AI แก้ effect โดยไม่ผ่าน validation | document เสียหาย | whitelist operations และ structured errors |
 | Multi-selection มีค่าไม่เหมือนกัน | UI สับสน | mixed/tri-state view model และ all-or-none apply |
 
-## 15. เกณฑ์รับงาน MVP
+## 15. เกณฑ์รับงาน
 
-MVP ถือว่าผ่านเมื่อ:
+### 15.1 Appearance panel MVP slice (ล็อก 2026-09-19)
+
+ผ่านเมื่อ:
+
+- เลือกวัตถุแล้วแก้ Shadow และ/หรือ Glow จาก live Builder Inspector
+- แก้ Text Arc (`pathCurvature`) จาก live Inspector
+- Appearance panel แสดง stack/list ของ fill, stroke, shadow, glow และ text arc เมื่อเกี่ยวข้อง
+- ใช้ `lib/appearance` เป็นแหล่งความจริง ไม่มี Graphic Styles / Brand Kit / Affinity PDF ใน PR
+
+### 15.2 เกณฑ์ Appearance แบบ Illustrator เต็ม (ยังไม่ใช่งานนี้)
+
+MVP เต็มถือว่าผ่านเมื่อ:
 
 - วัตถุหนึ่งชิ้นมี Fill ได้อย่างน้อย 2 รายการ
 - มี Stroke ได้อย่างน้อย 2 รายการ

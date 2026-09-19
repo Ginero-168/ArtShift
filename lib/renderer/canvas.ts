@@ -10,6 +10,7 @@
  */
 
 import type { RoughCanvas } from "roughjs/bin/canvas";
+import { canvasShadowPasses } from "../appearance/renderPlan";
 import type { ColorAdjustments } from "../color/adjustments";
 import { resolveMultiGradientStops } from "../color/swatches";
 import { getFramePolaroidCutout, traceFrameShapePath } from "../engine/frameMask";
@@ -141,24 +142,28 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   ctx.rotate(el.angle);
   ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
   ctx.translate(-el.width / 2 - cached.pad, -el.height / 2 - cached.pad);
-  ctx.drawImage(cached.canvas, 0, 0);
+  const effectPasses = canvasShadowPasses(el);
+  if (effectPasses.length === 0) {
+    ctx.drawImage(cached.canvas, 0, 0);
+  } else {
+    for (const pass of effectPasses) {
+      ctx.shadowColor = pass.color;
+      ctx.shadowBlur = pass.blur;
+      ctx.shadowOffsetX = pass.offsetX;
+      ctx.shadowOffsetY = pass.offsetY;
+      ctx.drawImage(cached.canvas, 0, 0);
+    }
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
   ctx.restore();
 }
 
 function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, render: RenderCtx) {
-  // Apply shadow or glow if present.
-  if (el.shadow) {
-    ctx.shadowColor = el.shadow.color;
-    ctx.shadowBlur = el.shadow.blur;
-    ctx.shadowOffsetX = el.shadow.offsetX;
-    ctx.shadowOffsetY = el.shadow.offsetY;
-  } else if (el.glow) {
-    ctx.shadowColor = el.glow.color;
-    ctx.shadowBlur = el.glow.blur;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-  }
-
+  // Shadow / glow are applied when compositing the cached bitmap so both can
+  // paint in stack order. Canvas2D still has one shadow state per draw.
   switch (el.type) {
     case "rect":
     case "ellipse":
@@ -229,13 +234,6 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
     case "frame":
       drawFrame(ctx, el as import("../engine/types").FrameElement, render);
       break;
-  }
-
-  if (el.shadow || el.glow) {
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
   }
 }
 
