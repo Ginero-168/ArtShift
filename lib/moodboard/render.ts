@@ -3,7 +3,7 @@ import type { EngineSlide, MoodboardItem } from "@/lib/engine/types";
 import { moodboardContentBounds } from "./layout";
 import { isMoodboardSlide } from "./types";
 
-export const MOODBOARD_BOARD_FILL = "#f4efe6";
+export const MOODBOARD_BOARD_FILL = "#f4f4f5";
 
 export function renderMoodboardThumbnail(
   slide: EngineSlide,
@@ -69,7 +69,7 @@ export function drawMoodboardItem(
     if (img) {
       ctx.drawImage(img, 6, 6, item.width - 12, item.height - 28);
     } else {
-      ctx.fillStyle = item.placeholder ? "#efe6d8" : "#e7e0d4";
+      ctx.fillStyle = item.placeholder ? "#e2e8f0" : "#e4e4e7";
       ctx.fillRect(6, 6, item.width - 12, item.height - 28);
       ctx.fillStyle = "#8a8174";
       ctx.font = "12px sans-serif";

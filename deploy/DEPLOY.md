@@ -58,10 +58,9 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `OPENAI_API_KEY` | Optional direct OpenAI provider adapter |
 | `REPLICATE_GPT_IMAGE_2_VERSION` | Optional pinned version for the fixed GPT Image 2 model |
 | `AI_MONTHLY_BUDGET_USD` | Optional monthly AI budget guard |
-| `UNSPLASH_ACCESS_KEY` | Stock photos (`/api/stock?source=unsplash`) |
-| `PEXELS_API_KEY` | Stock photos (`/api/stock?source=pexels`) |
-| `SERPAPI_API_KEY` or `SERPAPI_KEY` | Moodboard photos via SerpAPI Google Images (primary; Free ~250 searches/mo) |
-| `GOOGLE_CSE_API_KEY` | Moodboard photos via official Google Custom Search JSON API (fallback) |
+| `UNSPLASH_ACCESS_KEY` | Stock photos (`/api/stock?source=unsplash`) — not used by Moodboard Expand |
+| `PEXELS_API_KEY` | Stock photos (`/api/stock?source=pexels`) — not used by Moodboard Expand |
+| `GOOGLE_CSE_API_KEY` | Official Google Custom Search JSON API — not used by Moodboard Expand |
 | `GOOGLE_CSE_CX` | Programmable Search Engine ID (enable Image search + Search the entire web) |
 | `RASTER_API_URL` | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |

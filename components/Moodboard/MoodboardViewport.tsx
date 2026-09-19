@@ -5,9 +5,13 @@ import type { ViewTransform } from "@/components/Canvas/CanvasRoot";
 import { fileToDataURL, isSupportedImageFile, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { MoodboardItem } from "@/lib/engine/types";
-import { expandActiveMoodboard, retryMoodboardPlaceholder } from "@/lib/moodboard/expandClient";
+import { copyMoodboardItemsToArtworkSlide } from "@/lib/moodboard/copyToSlide";
+import { expandActiveMoodboard } from "@/lib/moodboard/expandClient";
 import { createMoodboardItem, createMoodboardNote } from "@/lib/moodboard/factory";
+import { nextMoodboardDropPoint } from "@/lib/moodboard/placement";
+import { classifyReferenceUrl, saveMoodboardReference } from "@/lib/moodboard/referenceStore";
 import { isMoodboardSlide } from "@/lib/moodboard/types";
+import { ReferencePanel } from "./ReferencePanel";
 
 export type MoodboardViewportHandle = {
   resetView: () => void;
@@ -18,15 +22,35 @@ export type MoodboardViewportHandle = {
     rect: { x: number; y: number; width: number; height: number },
     padding?: number,
   ) => void;
+  addNoteAtCenter: () => void;
+  addImageFileAtCenter: (file: File) => Promise<void>;
 };
 
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 3;
+const MIN_SIZE = 48;
+
+function looksLikeImageUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:") return false;
+    return /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url.pathname) || url.hostname.includes("pinimg.");
+  } catch {
+    return false;
+  }
+}
 
 const MoodboardViewport = forwardRef<
   MoodboardViewportHandle,
-  { onViewChange?: (view: ViewTransform) => void }
->(function MoodboardViewport({ onViewChange }, ref) {
+  {
+    onViewChange?: (view: ViewTransform) => void;
+    referencesOpen?: boolean;
+    onReferencesOpenChange?: (open: boolean) => void;
+  }
+>(function MoodboardViewport(
+  { onViewChange, referencesOpen = false, onReferencesOpenChange },
+  ref,
+) {
   const slide = useEngine((s) =>
     s.doc.slides.find((candidate) => candidate.id === s.currentSlideId),
   );
@@ -44,6 +68,7 @@ const MoodboardViewport = forwardRef<
   const [keyword, setKeyword] = useState(board?.keyword ?? "");
   const [expanding, setExpanding] = useState(false);
   const [expandError, setExpandError] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const viewRef = useRef({
@@ -59,6 +84,9 @@ const MoodboardViewport = forwardRef<
     startY: number;
     originX: number;
     originY: number;
+    originW: number;
+    originH: number;
+    mode: "move" | "se";
   } | null>(null);
 
   const publishView = useCallback(
@@ -92,6 +120,79 @@ const MoodboardViewport = forwardRef<
     const next = { scale: 0.72, tx: 80, ty: 64 };
     publishView(next, true);
   }, [publishView]);
+
+  const centerWorld = useCallback(() => {
+    const current = viewRef.current;
+    return {
+      x: (size.w / 2 - current.tx) / current.scale,
+      y: (size.h / 2 - current.ty) / current.scale,
+    };
+  }, [size.h, size.w]);
+
+  const clientToWorld = useCallback((clientX: number, clientY: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const current = viewRef.current;
+    return {
+      x: (clientX - (rect?.left ?? 0) - current.tx) / current.scale,
+      y: (clientY - (rect?.top ?? 0) - current.ty) / current.scale,
+    };
+  }, []);
+
+  const placeImageFile = useCallback(
+    async (file: File, world: { x: number; y: number }) => {
+      if (!isSupportedImageFile(file)) return;
+      const dataURL = await fileToDataURL(file);
+      const entry = await loadDataURL(dataURL);
+      const maxW = 320;
+      const ratio = Math.min(1, maxW / entry.width);
+      addMoodboardItem(
+        createMoodboardItem({
+          kind: "image",
+          fileId: entry.fileId,
+          src: dataURL,
+          text: file.name,
+          x: world.x - (entry.width * ratio) / 2,
+          y: world.y - (entry.height * ratio) / 2,
+          width: entry.width * ratio,
+          height: entry.height * ratio,
+          credit: { photographer: file.name, provider: "user" },
+        }),
+        "drop moodboard image",
+      );
+    },
+    [addMoodboardItem],
+  );
+
+  const placeImageUrl = useCallback(
+    (raw: string, world: { x: number; y: number }) => {
+      const src = raw.trim();
+      if (!looksLikeImageUrl(src) && !src.startsWith("https://")) return false;
+      const origin = classifyReferenceUrl(src);
+      saveMoodboardReference({
+        src,
+        title: src.split("/").filter(Boolean).at(-1) || "Reference",
+        sourceUrl: src,
+        origin,
+      });
+      addMoodboardItem(
+        createMoodboardItem({
+          kind: "image",
+          src,
+          text: src.split("/").filter(Boolean).at(-1) || "Reference",
+          x: world.x - 140,
+          y: world.y - 105,
+          credit: {
+            photographer: origin === "pinterest" ? "Pinterest" : "URL",
+            provider: origin === "pinterest" ? "pinterest" : "user",
+            sourceUrl: src,
+          },
+        }),
+        "paste moodboard url",
+      );
+      return true;
+    },
+    [addMoodboardItem],
+  );
 
   useImperativeHandle(
     ref,
@@ -133,8 +234,15 @@ const MoodboardViewport = forwardRef<
           true,
         );
       },
+      addNoteAtCenter: () => {
+        const world = centerWorld();
+        addMoodboardItem(createMoodboardNote("Note", world.x, world.y), "add sticky note");
+      },
+      addImageFileAtCenter: async (file: File) => {
+        await placeImageFile(file, centerWorld());
+      },
     }),
-    [publishView, resetView, size.h, size.w],
+    [addMoodboardItem, centerWorld, placeImageFile, publishView, resetView, size.h, size.w],
   );
 
   useEffect(() => {
@@ -152,58 +260,31 @@ const MoodboardViewport = forwardRef<
     };
   }, []);
 
-  const clientToWorld = useCallback((clientX: number, clientY: number) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    const current = viewRef.current;
-    return {
-      x: (clientX - (rect?.left ?? 0) - current.tx) / current.scale,
-      y: (clientY - (rect?.top ?? 0) - current.ty) / current.scale,
-    };
-  }, []);
-
-  const placeImageFile = useCallback(
-    async (file: File, world: { x: number; y: number }) => {
-      if (!isSupportedImageFile(file)) return;
-      const dataURL = await fileToDataURL(file);
-      const entry = await loadDataURL(dataURL);
-      const maxW = 320;
-      const ratio = Math.min(1, maxW / entry.width);
-      addMoodboardItem(
-        createMoodboardItem({
-          kind: "image",
-          fileId: entry.fileId,
-          src: dataURL,
-          text: file.name,
-          x: world.x - (entry.width * ratio) / 2,
-          y: world.y - (entry.height * ratio) / 2,
-          width: entry.width * ratio,
-          height: entry.height * ratio,
-          tilt: true,
-        }),
-        "drop moodboard image",
-      );
-    },
-    [addMoodboardItem],
-  );
-
   useEffect(() => {
     async function onPaste(event: ClipboardEvent) {
       const files = event.clipboardData?.files;
-      if (!files?.length) return;
-      const world = clientToWorld(
-        size.w / 2 + (containerRef.current?.getBoundingClientRect().left ?? 0),
-        size.h / 2 + (containerRef.current?.getBoundingClientRect().top ?? 0),
-      );
-      for (const file of Array.from(files)) {
-        if (isSupportedImageFile(file)) {
-          event.preventDefault();
-          await placeImageFile(file, world);
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      const world = centerWorld();
+      if (files?.length) {
+        for (const file of Array.from(files)) {
+          if (isSupportedImageFile(file)) {
+            event.preventDefault();
+            await placeImageFile(file, world);
+          }
         }
+        return;
+      }
+      if (
+        text &&
+        (looksLikeImageUrl(text) || text.includes("pinterest.") || text.includes("pinimg."))
+      ) {
+        event.preventDefault();
+        placeImageUrl(text, world);
       }
     }
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [clientToWorld, placeImageFile, size.h, size.w]);
+  }, [centerWorld, placeImageFile, placeImageUrl]);
 
   async function handleExpand() {
     if (expanding) return;
@@ -212,6 +293,13 @@ const MoodboardViewport = forwardRef<
     const result = await expandActiveMoodboard(keyword);
     if (!result.ok) setExpandError(result.message);
     setExpanding(false);
+  }
+
+  async function handleCopyToSlide() {
+    const result = await copyMoodboardItemsToArtworkSlide();
+    setCopyMessage(
+      result.ok ? `Copied ${result.elementCount} objects to a new slide` : result.message,
+    );
   }
 
   if (!isMoodboardSlide(slide)) return null;
@@ -263,6 +351,24 @@ const MoodboardViewport = forwardRef<
         }
         if (dragRef.current) {
           const world = clientToWorld(event.clientX, event.clientY);
+          if (dragRef.current.mode === "se") {
+            previewMoodboardItems([
+              {
+                id: dragRef.current.id,
+                patch: {
+                  width: Math.max(
+                    MIN_SIZE,
+                    dragRef.current.originW + world.x - dragRef.current.startX,
+                  ),
+                  height: Math.max(
+                    MIN_SIZE,
+                    dragRef.current.originH + world.y - dragRef.current.startY,
+                  ),
+                },
+              },
+            ]);
+            return;
+          }
           previewMoodboardItems([
             {
               id: dragRef.current.id,
@@ -281,11 +387,17 @@ const MoodboardViewport = forwardRef<
         }
         if (dragRef.current) {
           const item = items.find((candidate) => candidate.id === dragRef.current?.id);
-          if (item)
+          if (item) {
             updateMoodboardItems(
-              [{ id: item.id, patch: { x: item.x, y: item.y } }],
-              "move moodboard item",
+              [
+                {
+                  id: item.id,
+                  patch: { x: item.x, y: item.y, width: item.width, height: item.height },
+                },
+              ],
+              dragRef.current.mode === "se" ? "resize moodboard item" : "move moodboard item",
             );
+          }
           dragRef.current = null;
         }
       }}
@@ -295,6 +407,11 @@ const MoodboardViewport = forwardRef<
       onDrop={async (event) => {
         event.preventDefault();
         const world = clientToWorld(event.clientX, event.clientY);
+        const uri =
+          event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
+        if (uri.startsWith("https://")) {
+          placeImageUrl(uri, world);
+        }
         for (const file of Array.from(event.dataTransfer.files)) {
           await placeImageFile(file, world);
         }
@@ -303,7 +420,7 @@ const MoodboardViewport = forwardRef<
         position: "absolute",
         inset: 0,
         overflow: "hidden",
-        background: "#ebe4d6",
+        background: "#f4f4f5",
         cursor: spaceDown || panRef.current ? "grab" : "default",
         touchAction: "none",
       }}
@@ -312,8 +429,9 @@ const MoodboardViewport = forwardRef<
         style={{
           position: "absolute",
           inset: 0,
-          background:
-            "radial-gradient(circle at 20% 10%, rgba(255,255,255,0.35), transparent 28%), repeating-linear-gradient(0deg, rgba(80,60,30,0.03) 0 2px, transparent 2px 18px)",
+          backgroundImage:
+            "linear-gradient(rgba(15,23,42,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.06) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
           pointerEvents: "none",
         }}
       />
@@ -334,10 +452,10 @@ const MoodboardViewport = forwardRef<
               position: "absolute",
               left: label.x,
               top: label.y,
-              fontSize: 13,
-              letterSpacing: 0.6,
+              fontSize: 12,
+              letterSpacing: 0.4,
               textTransform: "uppercase",
-              color: "#8b8172",
+              color: "#94a3b8",
               fontWeight: 700,
               pointerEvents: "none",
             }}
@@ -365,11 +483,28 @@ const MoodboardViewport = forwardRef<
                 startY: world.y,
                 originX: item.x,
                 originY: item.y,
+                originW: item.width,
+                originH: item.height,
+                mode: "move",
+              };
+            }}
+            onResizePointerDown={(event) => {
+              event.stopPropagation();
+              selectOnly([item.id]);
+              const world = clientToWorld(event.clientX, event.clientY);
+              dragRef.current = {
+                id: item.id,
+                startX: world.x,
+                startY: world.y,
+                originX: item.x,
+                originY: item.y,
+                originW: item.width,
+                originH: item.height,
+                mode: "se",
               };
             }}
             onDoubleClick={() => {
               if (item.kind === "note") setEditingNoteId(item.id);
-              if (item.kind === "placeholder") void retryMoodboardPlaceholder(item.id);
             }}
           />
         ))}
@@ -386,10 +521,10 @@ const MoodboardViewport = forwardRef<
           alignItems: "center",
           gap: 8,
           padding: "8px 10px",
-          background: "rgba(255,255,255,0.94)",
+          background: "rgba(255,255,255,0.96)",
           border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          boxShadow: "0 8px 24px rgba(28, 25, 23, 0.08)",
+          borderRadius: 10,
+          boxShadow: "0 8px 24px rgba(15, 23, 42, 0.08)",
         }}
       >
         <input
@@ -398,10 +533,10 @@ const MoodboardViewport = forwardRef<
           onKeyDown={(event) => {
             if (event.key === "Enter") void handleExpand();
           }}
-          placeholder="Keyword → vibe expand (Bangkok, ice, summer market…)"
+          placeholder="Keyword → vibe labels (Bangkok, ice…)"
           aria-label="Moodboard keyword"
           style={{
-            width: 340,
+            width: 280,
             border: "1px solid #e5e7eb",
             borderRadius: 8,
             padding: "7px 10px",
@@ -429,15 +564,12 @@ const MoodboardViewport = forwardRef<
         <button
           type="button"
           onClick={() => {
-            const world = clientToWorld(
-              (containerRef.current?.getBoundingClientRect().left ?? 0) + size.w / 2,
-              (containerRef.current?.getBoundingClientRect().top ?? 0) + size.h / 2,
-            );
+            const world = centerWorld();
             addMoodboardItem(createMoodboardNote("Note", world.x, world.y), "add sticky note");
           }}
           style={{
             border: "1px solid #e5e7eb",
-            background: "#fde68a",
+            background: "#fff",
             borderRadius: 8,
             padding: "7px 10px",
             fontSize: 12,
@@ -447,9 +579,40 @@ const MoodboardViewport = forwardRef<
         >
           + Note
         </button>
+        <button
+          type="button"
+          onClick={() => onReferencesOpenChange?.(!referencesOpen)}
+          style={{
+            border: "1px solid #e5e7eb",
+            background: referencesOpen ? "#eef2ff" : "#fff",
+            borderRadius: 8,
+            padding: "7px 10px",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          References
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleCopyToSlide()}
+          style={{
+            border: "1px solid #c7d2fe",
+            background: "#eef2ff",
+            color: "#3730a3",
+            borderRadius: 8,
+            padding: "7px 10px",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Copy to slide
+        </button>
       </div>
 
-      {expandError ? (
+      {expandError || copyMessage ? (
         <div
           style={{
             position: "absolute",
@@ -457,15 +620,15 @@ const MoodboardViewport = forwardRef<
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 12,
-            background: "#fef2f2",
-            color: "#b91c1c",
-            border: "1px solid #fecaca",
+            background: expandError ? "#fef2f2" : "#ecfdf5",
+            color: expandError ? "#b91c1c" : "#047857",
+            border: `1px solid ${expandError ? "#fecaca" : "#a7f3d0"}`,
             borderRadius: 8,
             padding: "6px 10px",
             fontSize: 12,
           }}
         >
-          {expandError}
+          {expandError || copyMessage}
         </div>
       ) : null}
 
@@ -476,18 +639,24 @@ const MoodboardViewport = forwardRef<
             left: "50%",
             top: "46%",
             transform: "translate(-50%, -50%)",
-            color: "#7c7266",
+            color: "#64748b",
             textAlign: "center",
             pointerEvents: "none",
           }}
         >
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Frameless Moodboard</div>
-          <div style={{ fontSize: 13, maxWidth: 360, lineHeight: 1.5 }}>
-            Drop or paste real photos, add sticky notes, or expand a keyword into Subject / Setting
-            / Prop / Mood / Color stock references.
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Infinite artboard</div>
+          <div style={{ fontSize: 13, maxWidth: 400, lineHeight: 1.5 }}>
+            Drop, paste, or import your own photos. Expand a keyword for vibe labels — it will not
+            auto-fill stock. Copy selected objects onto a normal artwork slide when you are ready.
           </div>
         </div>
       ) : null}
+
+      <ReferencePanel
+        open={referencesOpen}
+        onClose={() => onReferencesOpenChange?.(false)}
+        dropOrigin={nextMoodboardDropPoint(items, { x: 80, y: 80 })}
+      />
     </div>
   );
 });
@@ -504,6 +673,7 @@ function MoodboardCard({
   selected,
   editing,
   onPointerDown,
+  onResizePointerDown,
   onDoubleClick,
   onEditDone,
 }: {
@@ -511,6 +681,7 @@ function MoodboardCard({
   selected: boolean;
   editing: boolean;
   onPointerDown: (event: React.PointerEvent) => void;
+  onResizePointerDown: (event: React.PointerEvent) => void;
   onDoubleClick: () => void;
   onEditDone: (text: string) => void;
 }) {
@@ -525,6 +696,7 @@ function MoodboardCard({
     <div
       data-moodboard-item={item.id}
       data-role={item.role}
+      data-rotation="0"
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
       style={{
@@ -533,110 +705,128 @@ function MoodboardCard({
         top: item.y,
         width: item.width,
         height: item.height,
-        transform: `rotate(${((item.rotation || 0) * 180) / Math.PI}deg)`,
-        boxShadow: selected
-          ? "0 0 0 2px #111827, 0 10px 22px rgba(0,0,0,0.16)"
-          : "0 8px 18px rgba(28, 25, 23, 0.12)",
+        transform: "none",
+        boxShadow: selected ? "0 0 0 2px #4f46e5" : "0 1px 3px rgba(15,23,42,0.08)",
         background:
           item.kind === "note"
-            ? item.color || "#fde68a"
+            ? item.color || "#f8fafc"
             : item.kind === "chip"
               ? item.color || "#e5e7eb"
               : "#fff",
-        borderRadius: item.kind === "chip" ? 999 : 2,
-        overflow: "hidden",
-        cursor: "grab",
+        borderRadius: item.kind === "chip" ? 999 : 4,
+        overflow: "visible",
+        cursor: "move",
         userSelect: "none",
+        border: "1px solid rgba(15,23,42,0.08)",
       }}
     >
-      {item.kind === "image" && item.src ? (
-        // Stock / data URLs are arbitrary origins; next/image is not a fit here.
-        // biome-ignore lint/performance/noImgElement: remote stock and pasted data URLs
-        <img
-          src={item.src}
-          alt={item.text || item.query || "Stock photo"}
+      <div style={{ width: "100%", height: "100%", overflow: "hidden", borderRadius: "inherit" }}>
+        {item.kind === "image" && item.src ? (
+          // User / reference URLs are arbitrary origins; next/image is not a fit here.
+          // biome-ignore lint/performance/noImgElement: remote and pasted data URLs
+          <img
+            src={item.src}
+            alt={item.text || item.query || "Reference"}
+            style={{
+              width: "100%",
+              height: item.credit ? "calc(100% - 22px)" : "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+          />
+        ) : null}
+        {item.kind === "placeholder" ? (
+          <div
+            style={{
+              height: "100%",
+              display: "grid",
+              placeItems: "center",
+              background: "#f1f5f9",
+              color: "#64748b",
+              fontSize: 12,
+              padding: 12,
+              textAlign: "center",
+            }}
+          >
+            {item.text || item.query || "Label"}
+          </div>
+        ) : null}
+        {item.kind === "note" ? (
+          editing ? (
+            <textarea
+              ref={noteRef}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              onBlur={() => onEditDone(note)}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                background: "transparent",
+                resize: "none",
+                padding: 12,
+                fontSize: 14,
+                fontFamily: "inherit",
+              }}
+            />
+          ) : (
+            <div style={{ padding: 12, fontSize: 14, color: "#0f172a", whiteSpace: "pre-wrap" }}>
+              {item.text || "Note"}
+            </div>
+          )
+        ) : null}
+        {item.kind === "chip" ? (
+          <div
+            style={{
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 13,
+              fontWeight: 700,
+              color: "#111827",
+              padding: "0 10px",
+            }}
+          >
+            {item.text}
+          </div>
+        ) : null}
+        {item.kind === "image" && item.credit ? (
+          <div
+            style={{
+              height: 22,
+              fontSize: 10,
+              color: "#64748b",
+              padding: "0 8px",
+              display: "flex",
+              alignItems: "center",
+              background: "#fff",
+            }}
+          >
+            {item.credit.photographer
+              ? `${item.credit.photographer}${item.credit.provider ? ` · ${item.credit.provider}` : ""}`
+              : item.query || "Photo"}
+          </div>
+        ) : null}
+      </div>
+      {selected ? (
+        <button
+          type="button"
+          aria-label="Resize"
+          onPointerDown={onResizePointerDown}
           style={{
-            width: "100%",
-            height: "calc(100% - 22px)",
-            objectFit: "cover",
-            display: "block",
+            position: "absolute",
+            right: -5,
+            bottom: -5,
+            width: 10,
+            height: 10,
+            padding: 0,
+            border: "2px solid #4f46e5",
+            background: "#fff",
+            cursor: "nwse-resize",
           }}
         />
       ) : null}
-      {item.kind === "placeholder" ? (
-        <div
-          style={{
-            height: "calc(100% - 22px)",
-            display: "grid",
-            placeItems: "center",
-            background: "#efe6d8",
-            color: "#7c7266",
-            fontSize: 12,
-            padding: 12,
-            textAlign: "center",
-          }}
-        >
-          {item.text || item.query || "Missing stock"}
-          <div style={{ fontSize: 10, marginTop: 6 }}>Double-click to retry</div>
-        </div>
-      ) : null}
-      {item.kind === "note" ? (
-        editing ? (
-          <textarea
-            ref={noteRef}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            onBlur={() => onEditDone(note)}
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-              background: "transparent",
-              resize: "none",
-              padding: 12,
-              fontSize: 14,
-              fontFamily: "inherit",
-            }}
-          />
-        ) : (
-          <div style={{ padding: 12, fontSize: 14, color: "#78350f", whiteSpace: "pre-wrap" }}>
-            {item.text || "Note"}
-          </div>
-        )
-      ) : null}
-      {item.kind === "chip" ? (
-        <div
-          style={{
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 13,
-            fontWeight: 700,
-            color: "#111827",
-            padding: "0 10px",
-          }}
-        >
-          {item.text}
-        </div>
-      ) : null}
-      {(item.kind === "image" || item.kind === "placeholder") && (
-        <div
-          style={{
-            height: 22,
-            fontSize: 10,
-            color: "#6b7280",
-            padding: "0 8px",
-            display: "flex",
-            alignItems: "center",
-            background: "#fff",
-          }}
-        >
-          {item.credit?.photographer
-            ? `${item.credit.photographer}${item.credit.provider ? ` · ${item.credit.provider}` : ""}`
-            : item.query || "Photo"}
-        </div>
-      )}
     </div>
   );
 }

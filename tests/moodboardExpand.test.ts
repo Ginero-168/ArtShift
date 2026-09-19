@@ -139,28 +139,27 @@ describe("moodboard expand JSON shape", () => {
     expect(parsed.pack.keyword).toBe("Bangkok");
   });
 
-  it("fills placeholders when stock is missing and never mentions gen-image paths", async () => {
+  it("fills upright structure cards only and never calls stock or gen-image paths", async () => {
     const parsed = parseMoodboardExpandJson(SAMPLE);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    const items = await fillMoodboardFromPack(parsed.pack, {
-      fetchImpl: async () => new Response(JSON.stringify({ results: [] }), { status: 200 }),
-      rng: () => 0.5,
-    });
+    const items = await fillMoodboardFromPack(parsed.pack, { rng: () => 0.5 });
     expect(items.length).toBeGreaterThanOrEqual(18);
-    expect(items.some((item) => item.kind === "placeholder")).toBe(true);
-    expect(items.every((item) => item.kind !== "image" || item.credit)).toBe(true);
+    expect(items.every((item) => item.kind === "note" || item.kind === "chip")).toBe(true);
+    expect(items.every((item) => item.rotation === 0)).toBe(true);
+    expect(items.some((item) => item.kind === "image" || item.kind === "placeholder")).toBe(false);
 
     const fillSrc = readFileSync("lib/moodboard/fill.ts", "utf8");
     const clientSrc = readFileSync("lib/moodboard/expandClient.ts", "utf8");
-    const stockSrc = readFileSync("lib/moodboard/stock.ts", "utf8");
-    for (const src of [fillSrc, clientSrc, stockSrc]) {
+    for (const src of [fillSrc, clientSrc]) {
+      expect(src).not.toContain('"/api/stock"');
+      expect(src).not.toMatch(/fetch\(["']\/api\/stock/);
       expect(src).not.toContain("/api/ai/image");
       expect(src).not.toContain("/api/generate");
       expect(src).not.toContain("image.generate");
       expect(src).not.toContain("generateAIImage");
+      expect(src).not.toContain("serpapi");
     }
-    expect(stockSrc).toContain("/api/stock");
   });
 
   it("extracts the first balanced object and redacts secrets in previews", () => {

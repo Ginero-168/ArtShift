@@ -1,15 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  mapGoogleCseHit,
-  mapSerpapiHit,
-  STOCK_SEARCH_PATH,
-  searchStockPhoto,
-} from "@/lib/moodboard/stock";
-
-const SERPAPI_FIXTURE = JSON.parse(
-  readFileSync("tests/fixtures/serpapiGoogleImages.json", "utf8"),
-) as unknown;
+import { mapGoogleCseHit, STOCK_SEARCH_PATH, searchStockPhoto } from "@/lib/moodboard/stock";
 
 const GOOGLE_ITEM = {
   title: "Giant Swing Bangkok",
@@ -31,40 +21,7 @@ const UNSPLASH_BODY = {
   ],
 };
 
-describe("moodboard stock fill", () => {
-  it("maps a SerpAPI google_images fixture to src/thumb/credit", () => {
-    expect(mapSerpapiHit(SERPAPI_FIXTURE)).toEqual({
-      src: "https://example.com/photos/giant-swing.jpg",
-      thumb: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9-thumb",
-      credit: {
-        photographer: "Giant Swing in Bangkok",
-        provider: "serpapi",
-        sourceUrl: "https://example.com/giant-swing-bangkok",
-      },
-    });
-    expect(mapSerpapiHit({ images_results: [] })).toBeNull();
-    expect(
-      mapSerpapiHit({
-        images_results: [{ title: "nope", original: "http://insecure.example/x.jpg" }],
-      }),
-    ).toBeNull();
-  });
-
-  it("uses SerpAPI first when Google Images results are present", async () => {
-    const urls: string[] = [];
-    const hit = await searchStockPhoto("giant swing bangkok", async (url) => {
-      urls.push(url);
-      return new Response(JSON.stringify(SERPAPI_FIXTURE), { status: 200 });
-    });
-    expect(hit?.src).toBe("https://example.com/photos/giant-swing.jpg");
-    expect(hit?.credit.provider).toBe("serpapi");
-    expect(urls).toEqual([
-      `${STOCK_SEARCH_PATH}?source=serpapi&query=${encodeURIComponent("giant swing bangkok")}&per_page=1`,
-    ]);
-    expect(urls.every((url) => url.startsWith(STOCK_SEARCH_PATH))).toBe(true);
-    expect(urls.some((url) => url.includes("/api/ai/image"))).toBe(false);
-  });
-
+describe("stock search helper (not used by Moodboard Expand)", () => {
   it("maps official Google CSE image items to src/thumb/credit", () => {
     expect(mapGoogleCseHit({ items: [GOOGLE_ITEM] })).toEqual({
       src: "https://example.com/swing.jpg",
@@ -81,35 +38,33 @@ describe("moodboard stock fill", () => {
     expect(mapGoogleCseHit({ items: [] })).toBeNull();
   });
 
-  it("falls through SerpAPI miss to Google CSE", async () => {
+  it("tries Google CSE first, then Unsplash", async () => {
     const urls: string[] = [];
     const hit = await searchStockPhoto("giant swing bangkok", async (url) => {
       urls.push(url);
-      if (url.includes("source=serpapi")) {
-        return new Response(JSON.stringify({ error: "Server missing SERPAPI_API_KEY" }), {
-          status: 500,
-        });
+      if (url.includes("source=google")) {
+        return new Response(JSON.stringify({ items: [GOOGLE_ITEM] }), { status: 200 });
       }
-      return new Response(JSON.stringify({ items: [GOOGLE_ITEM] }), { status: 200 });
+      return new Response(JSON.stringify({ results: [] }), { status: 200 });
     });
-    expect(urls[0]).toContain("source=serpapi");
-    expect(urls[1]).toContain("source=google");
+    expect(urls[0]).toContain("source=google");
+    expect(urls.some((url) => url.includes("source=serpapi"))).toBe(false);
     expect(hit?.credit.provider).toBe("google");
     expect(hit?.src).toBe("https://example.com/swing.jpg");
   });
 
-  it("falls through to Unsplash when SerpAPI and Google keys are missing (500)", async () => {
+  it("falls through to Unsplash when Google keys are missing (500)", async () => {
     const urls: string[] = [];
     const hit = await searchStockPhoto("bangkok tuk-tuk", async (url) => {
       urls.push(url);
-      if (url.includes("source=serpapi") || url.includes("source=google")) {
+      if (url.includes("source=google")) {
         return new Response(JSON.stringify({ error: "missing keys" }), { status: 500 });
       }
       return new Response(JSON.stringify(UNSPLASH_BODY), { status: 200 });
     });
-    expect(urls[0]).toContain("source=serpapi");
-    expect(urls[1]).toContain("source=google");
-    expect(urls[2]).toContain("source=unsplash");
+    expect(urls[0]).toContain("source=google");
+    expect(urls[1]).toContain("source=unsplash");
+    expect(urls.every((url) => url.startsWith(STOCK_SEARCH_PATH))).toBe(true);
     expect(hit?.src).toContain("unsplash.com");
     expect(hit?.credit).toEqual({
       photographer: "A Photographer",
@@ -120,12 +75,7 @@ describe("moodboard stock fill", () => {
 
   it("fails closed to null when every provider misses", async () => {
     const hit = await searchStockPhoto("nothing-here", async () => {
-      return new Response(
-        JSON.stringify({ images_results: [], items: [], results: [], photos: [] }),
-        {
-          status: 200,
-        },
-      );
+      return new Response(JSON.stringify({ items: [], results: [], photos: [] }), { status: 200 });
     });
     expect(hit).toBeNull();
   });

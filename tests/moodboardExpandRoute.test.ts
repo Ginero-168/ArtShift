@@ -108,7 +108,7 @@ describe("Moodboard expand API", () => {
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "assistant.chat",
       expect.objectContaining({
-        system: expect.stringContaining("stock-photo search query"),
+        system: expect.stringContaining("search hints"),
         jsonObject: true,
         maxTokens: 65_535,
       }),

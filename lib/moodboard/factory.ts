@@ -4,7 +4,6 @@ import type {
   MoodboardItemKind,
   MoodboardRole,
 } from "@/lib/engine/types";
-import { lightTiltRadians } from "./tilt";
 
 export type CreateMoodboardItemInput = {
   kind: MoodboardItemKind;
@@ -21,7 +20,6 @@ export type CreateMoodboardItemInput = {
   color?: string;
   credit?: MoodboardCredit;
   placeholder?: boolean;
-  tilt?: boolean;
 };
 
 const DEFAULT_SIZE: Record<MoodboardItemKind, { width: number; height: number }> = {
@@ -41,7 +39,7 @@ export function createMoodboardItem(input: CreateMoodboardItemInput): MoodboardI
     y: input.y ?? 0,
     width: input.width ?? size.width,
     height: input.height ?? size.height,
-    rotation: input.rotation ?? (input.tilt === false ? 0 : lightTiltRadians()),
+    rotation: 0,
     src: input.src,
     fileId: input.fileId,
     text: input.text,
@@ -58,7 +56,6 @@ export function createMoodboardNote(text = "", x = 0, y = 0): MoodboardItem {
     text: text || "Note",
     x,
     y,
-    color: "#fde68a",
-    tilt: true,
+    color: "#f8fafc",
   });
 }

@@ -63,6 +63,13 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
       st.selectOnly([]);
       return;
     }
+    if (mod && event.shiftKey && event.code === "KeyC") {
+      event.preventDefault();
+      void import("@/lib/moodboard/copyToSlide").then(({ copyMoodboardItemsToArtworkSlide }) =>
+        copyMoodboardItemsToArtworkSlide(),
+      );
+      return;
+    }
     return;
   }
 

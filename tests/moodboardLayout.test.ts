@@ -17,6 +17,6 @@ describe("moodboard role cluster layout", () => {
     expect(byRole.setting.x).toBeGreaterThan(byRole.subject.x + 400);
     expect(byRole.prop.y).toBeGreaterThan(byRole.subject.y + 400);
     expect(byRole.mood.x).toBeGreaterThan(byRole.prop.x + 400);
-    expect(laidOut.every((item) => Math.abs(item.rotation) < 0.3)).toBe(true);
+    expect(laidOut.every((item) => item.rotation === 0)).toBe(true);
   });
 });

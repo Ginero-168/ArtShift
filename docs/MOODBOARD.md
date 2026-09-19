@@ -1,86 +1,70 @@
-# ArtShift Moodboard — Spec v1.2 (MVP)
+# ArtShift Moodboard — Spec v2.0 (artboard pivot)
 
-**Locked 2026-09-19 (Asia/Bangkok)**
+**Locked 2026-09-19 (Asia/Bangkok)** — Peerawat product pivot. Supersedes the tilted-card / SerpAPI fill loop.
 
 ## North star
 
-Keyword → **LLM vibe/association expansion** → structure into **Subject / Setting / Prop / Mood / Color** → fill board with **many real photos** (SerpAPI Google Images, then Google CSE, then Unsplash/Pexels).  
-**No generative images** on Moodboard.
+Moodboard is an **infinite artboard** that reuses the normal canvas toolchain (select, move, resize, layers, properties, chat). Designers place **their own reference images**. Keyword **Expand** only produces vibe labels and structure — it does **not** auto-pull stock photos.
+
+**No SerpAPI.** **No generative images** on Moodboard. **Images stay upright** (rotation locked at 0°).
 
 ## Slide model
 
 - `SlideKind: "artwork" | "moodboard"` (default artwork)
 - Moodboard = frameless infinite board, create via `+ Moodboard` only (no convert)
-- `moodboard?: MoodboardState` on `EngineSlide`; do not mirror into `elements[]` in MVP
+- `moodboard?: MoodboardState` on `EngineSlide`; items are not mirrored into `elements[]` while you work on the board
+- Moodboard items share the same transform fields as slide objects (`x`, `y`, `width`, `height`, `rotation`) so they can be copied onto a normal artwork slide as `EngineElement`s
 
-## Expand formula (locked)
+## Image intake (core loop)
 
-1. LLM expands keyword into broad associations (Bangkok → tuk-tuk, temples, Giant Swing, street food; ice → matcha ice, snowman, North Pole…)
-2. Bucket into Subject / Setting / Prop / Mood / Color (quantity-first)
-3. Target pack: **~18–24 board items** (e.g. Subject 5–6, Setting 5–6, Prop 4–5, Mood chips 6, Color chips 5; Subject/Setting may use 2 photos each)
-4. Each visual item gets a stock query → `/api/stock` only
-5. On failure: placeholder + retry — never gen-image fallback
-6. Requires auth + cloudConsent + BYOK for LLM step; stock uses existing stock keys
-7. Expand chat uses JSON-only mode (`assistant.chat` `jsonObject`, up to 65535 Gemini output tokens). The parser repairs truncated JSON and synthesizes missing role buckets from associations so a cut-off Bangkok-scale reply still yields a complete pack. Unrecoverable failures return a clear retry message; a secret-redacted preview is only in the `preview` field.
+The designer finds and selects images. ArtShift does not scrape Google or Pinterest.
 
-## Stock photo sources
+1. **Local upload / drag-drop / paste** of PNG, JPEG, WebP onto the infinite board
+2. **Image URL paste** (`https://…`) onto the board
+3. **References panel** — a local tray of saved URLs and uploads, with **Add to board**
+4. **Pinterest tab** — paste a Pin or `pinimg.com` URL the user already saved
 
-`searchStockPhoto` calls `/api/stock` in this order and fail-closes to a placeholder (never a generative image):
+### Pinterest first slice (honest)
 
-1. **SerpAPI Google Images** (`source=serpapi`) when `SERPAPI_API_KEY` or `SERPAPI_KEY` is set — `https://serpapi.com/search.json?engine=google_images` with `tbs=itp:photos`. Third-party Google Images JSON; no HTML scraping of `google.com/imghp`.
-2. **Google Custom Search** (`source=google`) when `GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_CX` are set — official Programmable Search JSON API only (`https://www.googleapis.com/customsearch/v1`, `searchType=image`). Optional fallback (CSE is closed to many new projects).
-3. **Unsplash** (`UNSPLASH_ACCESS_KEY`)
-4. **Pexels** (`PEXELS_API_KEY`)
+Official saved-Pins / board APIs need a reviewed Pinterest developer app (`blocked_pending_app_review`). This MVP:
 
-### Configure SerpAPI (recommended for preview)
+- classifies `pinterest.*` / `pinimg.com` URLs
+- stores them locally in `artshift.moodboard.references.v1`
+- does **not** scrape Pinterest or Google Images
+- does **not** call SerpAPI
 
-1. Create a [SerpAPI](https://serpapi.com/) account and copy the API key.
-2. Set **one** of these server env vars and restart Node:
+OAuth / official board sync can plug into the same panel later.
 
-```bash
-SERPAPI_API_KEY=your-serpapi-key
-# or
-SERPAPI_KEY=your-serpapi-key
-```
+## Expand (structure only)
 
-**Free tier:** about **250 searches/month**. Each Moodboard Expand photo slot is one search (~15–20 searches per Expand if every visual gets its own query). That is roughly 12–16 full Expands per month on Free.
+1. LLM expands a keyword into lateral associations
+2. Bucket into Subject / Setting / Prop / Mood / Color (quantity-first, ~18–24 **labels**)
+3. Place upright notes/chips on the artboard — **no `/api/stock` call**
+4. Requires auth + cloudConsent + BYOK for the LLM step
+5. Expand chat uses JSON-only mode (`assistant.chat` `jsonObject`, up to 65535 Gemini output tokens). Truncated JSON is repaired when possible.
 
-Credits store the image title as photographer, `provider: "serpapi"`, and the page `link` as `sourceUrl`.
+`/api/stock` (Unsplash / Pexels / Google CSE) remains for other surfaces such as the AI image panel. Moodboard Expand does not use it.
 
-### Configure Google CSE
+## Copy to a normal artwork slide
 
-1. In [Google Cloud Console](https://console.cloud.google.com/) create or pick a project and enable **Custom Search API**.
-2. Create an API key. Restrict it to Custom Search API if possible.
-3. At [Programmable Search Engine](https://programmablesearchengine.google.com/) create a search engine.
-   - Turn on **Image search**.
-   - Turn on **Search the entire web** (otherwise results are limited to sites you listed).
-4. Copy the **Search engine ID** (`cx`).
-5. Set both server env vars (VPS / hPanel / `.env.local`) and restart the Node process:
+- Toolbar **Copy to slide** (also `Ctrl/Cmd+Shift+C`)
+- Copies **selected** items, or **all** items if nothing is selected
+- Creates a new `artwork` slide and adds `EngineElement`s (`createImage` / `createText`) with the same name, size, and upright transform
+- After copy, layers / option bar / properties on that slide are the normal artwork tools
 
-```bash
-GOOGLE_CSE_API_KEY=your-api-key
-GOOGLE_CSE_CX=your-search-engine-id
-```
+## Visual rules
 
-Credits store `title` (or `displayLink`) as photographer, `provider: "google"`, and `image.contextLink` as `sourceUrl`.
-
-## Smart play (keep light)
-
-Light tilt on place, notes/tape, smart rearrange, scenes later if time. No chaos toys.
-
-## MVP implementation order
-
-1. `SlideKind` + empty frameless Moodboard + rail `+ Moodboard`
-2. Drop/paste images + notes + pan/zoom
-3. Keyword bar + LLM expand API (JSON breakdown only) + stock fill + credits
-4. Quantity layout by role clusters + undo expand
-5. Hide artwork frame chrome / gen-image entry points on moodboard
-6. Add `docs/MOODBOARD.md` from this spec
+- Infinite canvas with a quiet grid — not a scrapbook
+- **No default tilt / rotation aesthetic**
+- Selection ring + resize handle; properties panel edits X/Y/W/H; rotation stays 0°
+- Layers list the board objects
 
 ## Acceptance
 
-- [ ] Frameless moodboard slide in rail
-- [ ] Expand yields vibe associations structured in 5 roles with high count
-- [ ] All auto images are stock/upload/paste
-- [ ] Credits on stock images
-- [ ] Artwork slides unchanged
+- [x] No SerpAPI path in Moodboard, `/api/stock`, env, or docs
+- [x] Expand yields vibe labels in 5 roles and does not fetch stock
+- [x] Upright media only
+- [x] Drop / paste / URL / reference panel intake
+- [x] Documented Pinterest limitation + usable paste tray
+- [x] Copy to artwork slide
+- [x] Artwork slides unchanged

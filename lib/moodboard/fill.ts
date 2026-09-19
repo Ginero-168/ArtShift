@@ -2,32 +2,29 @@ import type { MoodboardItem, MoodboardRole } from "@/lib/engine/types";
 import type { MoodboardExpandPack, MoodboardExpandVisual } from "./expandSchema";
 import { createMoodboardItem } from "./factory";
 import { layoutMoodboardByRoles } from "./layout";
-import { type StockFetcher, searchStockPhoto } from "./stock";
 
 export type FillMoodboardOptions = {
-  fetchImpl?: StockFetcher;
   rng?: () => number;
 };
 
 /**
- * Convert an expand pack into board items. Visual roles fetch `/api/stock` only.
- * Missing photos become placeholders — never a generative-image fallback.
+ * Convert an expand pack into upright structure cards (labels / chips only).
+ * Does not fetch stock photos, SerpAPI, CSE, or generative images.
  */
 export async function fillMoodboardFromPack(
   pack: MoodboardExpandPack,
   options: FillMoodboardOptions = {},
 ): Promise<MoodboardItem[]> {
-  const fetchImpl = options.fetchImpl ?? fetch;
   const items: MoodboardItem[] = [];
 
   for (const visual of pack.roles.subject) {
-    items.push(...(await fillVisuals(visual, "subject", fetchImpl)));
+    items.push(structureCard(visual, "subject"));
   }
   for (const visual of pack.roles.setting) {
-    items.push(...(await fillVisuals(visual, "setting", fetchImpl)));
+    items.push(structureCard(visual, "setting"));
   }
   for (const visual of pack.roles.prop) {
-    items.push(...(await fillVisuals(visual, "prop", fetchImpl)));
+    items.push(structureCard(visual, "prop"));
   }
   for (const chip of pack.roles.mood) {
     items.push(
@@ -55,37 +52,14 @@ export async function fillMoodboardFromPack(
   return layoutMoodboardByRoles(items, options.rng);
 }
 
-async function fillVisuals(
-  visual: MoodboardExpandVisual,
-  role: MoodboardRole,
-  fetchImpl: StockFetcher,
-): Promise<MoodboardItem[]> {
-  const items: MoodboardItem[] = [];
-  for (let i = 0; i < visual.photoCount; i += 1) {
-    const query = i === 0 ? visual.query : `${visual.query} ${visual.label}`;
-    const hit = await searchStockPhoto(query, fetchImpl);
-    if (hit) {
-      items.push(
-        createMoodboardItem({
-          kind: "image",
-          role,
-          src: hit.src,
-          text: visual.label,
-          query,
-          credit: hit.credit,
-        }),
-      );
-    } else {
-      items.push(
-        createMoodboardItem({
-          kind: "placeholder",
-          role,
-          text: visual.label,
-          query,
-          placeholder: true,
-        }),
-      );
-    }
-  }
-  return items;
+function structureCard(visual: MoodboardExpandVisual, role: MoodboardRole): MoodboardItem {
+  return createMoodboardItem({
+    kind: "note",
+    role,
+    text: visual.label,
+    query: visual.query,
+    color: role === "subject" ? "#f8fafc" : role === "setting" ? "#ecfeff" : "#fff7ed",
+    width: 220,
+    height: 88,
+  });
 }

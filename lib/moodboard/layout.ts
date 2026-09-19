@@ -1,5 +1,4 @@
 import type { MoodboardItem, MoodboardRole } from "@/lib/engine/types";
-import { lightTiltRadians } from "./tilt";
 
 export const ROLE_CLUSTER_ORIGINS: Record<MoodboardRole, { x: number; y: number }> = {
   subject: { x: 80, y: 80 },
@@ -46,13 +45,12 @@ export function layoutMoodboardByRoles(
     const index = role ? counters[role]++ : uncategorized++;
     const col = index % columns;
     const row = Math.floor(index / columns);
-    const jitterX = (rng() - 0.5) * 18;
-    const jitterY = (rng() - 0.5) * 18;
+    void rng;
     return {
       ...item,
-      x: origin.x + col * (item.width + gap.x) + jitterX,
-      y: origin.y + row * (item.height + gap.y) + jitterY,
-      rotation: item.rotation || lightTiltRadians(rng),
+      x: origin.x + col * (item.width + gap.x),
+      y: origin.y + row * (item.height + gap.y),
+      rotation: 0,
     };
   });
 }

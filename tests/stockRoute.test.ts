@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GOOGLE_CSE_ENDPOINT } from "@/lib/server/stock/googleCse";
-import { SERPAPI_SEARCH_ENDPOINT } from "@/lib/server/stock/serpapi";
 import { GET } from "../app/api/stock/route";
 
 function request(url: string): NextRequest {
@@ -80,60 +79,12 @@ describe("GET /api/stock Google CSE", () => {
   });
 });
 
-describe("GET /api/stock SerpAPI", () => {
-  const originalKey = process.env.SERPAPI_API_KEY;
-  const originalAlias = process.env.SERPAPI_KEY;
-  const originalFetch = globalThis.fetch;
-
-  beforeEach(() => {
-    delete process.env.SERPAPI_API_KEY;
-    delete process.env.SERPAPI_KEY;
-  });
-
-  afterEach(() => {
-    if (originalKey === undefined) delete process.env.SERPAPI_API_KEY;
-    else process.env.SERPAPI_API_KEY = originalKey;
-    if (originalAlias === undefined) delete process.env.SERPAPI_KEY;
-    else process.env.SERPAPI_KEY = originalAlias;
-    globalThis.fetch = originalFetch;
-    vi.restoreAllMocks();
-  });
-
-  it("fails closed with 500 when the SerpAPI key is missing and does not call the network", async () => {
-    const fetchMock = vi.fn();
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
+describe("GET /api/stock unknown sources", () => {
+  it("rejects source=serpapi and does not mention it as a valid path", async () => {
     const response = await GET(request("http://localhost/api/stock?source=serpapi&query=Bangkok"));
-    expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: "Server missing SERPAPI_API_KEY" });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("calls SerpAPI google_images with tbs=itp:photos when SERPAPI_KEY is set", async () => {
-    process.env.SERPAPI_KEY = "test-serpapi-key";
-    let requestedUrl = "";
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
-      requestedUrl = String(url);
-      return new Response(
-        JSON.stringify({ images_results: [{ original: "https://example.com/a.jpg" }] }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }) as unknown as typeof fetch;
-
-    const response = await GET(
-      request("http://localhost/api/stock?source=serpapi&query=Giant+Swing"),
-    );
-    expect(response.status).toBe(200);
-    const parsed = new URL(requestedUrl);
-    expect(`${parsed.origin}${parsed.pathname}`).toBe(SERPAPI_SEARCH_ENDPOINT);
-    expect(parsed.searchParams.get("engine")).toBe("google_images");
-    expect(parsed.searchParams.get("q")).toBe("Giant Swing");
-    expect(parsed.searchParams.get("tbs")).toBe("itp:photos");
-    expect(parsed.searchParams.get("api_key")).toBe("test-serpapi-key");
-    expect(requestedUrl).not.toContain("google.com/imghp");
-    expect(requestedUrl).not.toContain("/api/ai/image");
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(String(body.error)).not.toContain("serpapi");
+    expect(String(body.error)).toContain("source=google");
   });
 });

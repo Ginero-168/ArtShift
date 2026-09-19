@@ -38,6 +38,9 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "@/components/icons";
+import MoodboardInspector from "@/components/Moodboard/MoodboardInspector";
+import MoodboardLayers from "@/components/Moodboard/MoodboardLayers";
+import MoodboardOptionBar from "@/components/Moodboard/MoodboardOptionBar";
 import MoodboardViewport, {
   type MoodboardViewportHandle,
 } from "@/components/Moodboard/MoodboardViewport";
@@ -219,12 +222,18 @@ export default function ProjectEditorPage() {
   const persistedRevision = useRef<number | null>(null);
   const autosaveRef = useRef<ReturnType<typeof createProjectAutosave> | null>(null);
 
-  const canvasEditorRef = useRef<CanvasEditorHandle | MoodboardViewportHandle | null>(null);
+  const canvasEditorRef = useRef<CanvasEditorHandle | null>(null);
+  const moodboardRef = useRef<MoodboardViewportHandle | null>(null);
   const currentSlideKind = useEngine((s) => {
     const slide = s.doc.slides.find((candidate) => candidate.id === s.currentSlideId);
     return isMoodboardSlide(slide) ? "moodboard" : "artwork";
   });
   const isMoodboard = currentSlideKind === "moodboard";
+  const setActiveZoom = (scale: number) => {
+    if (isMoodboard) moodboardRef.current?.setZoom(scale);
+    else canvasEditorRef.current?.setZoom(scale);
+  };
+  const [moodboardReferencesOpen, setMoodboardReferencesOpen] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomDropdownOpen, setZoomDropdownOpen] = useState(false);
   const [_zoomInputText, setZoomInputText] = useState("");
@@ -690,7 +699,22 @@ export default function ProjectEditorPage() {
           )}
         </div>
 
-        <div className="topbar-center">{isMoodboard ? null : <EditorOptionBar />}</div>
+        <div className="topbar-center">
+          {isMoodboard ? (
+            <MoodboardOptionBar
+              onAddNote={() => {
+                moodboardRef.current?.addNoteAtCenter();
+              }}
+              onAddImageFile={(file) => {
+                void moodboardRef.current?.addImageFileAtCenter(file);
+              }}
+              onToggleReferences={() => setMoodboardReferencesOpen((open) => !open)}
+              referencesOpen={moodboardReferencesOpen}
+            />
+          ) : (
+            <EditorOptionBar />
+          )}
+        </div>
 
         <div className="topbar-right">
           <button className="ghost-btn" onClick={cycleTheme} title="Toggle theme">
@@ -878,13 +902,15 @@ export default function ProjectEditorPage() {
           {loaded &&
             (isMoodboard ? (
               <MoodboardViewport
-                ref={canvasEditorRef}
+                ref={moodboardRef}
                 onViewChange={(v) => setZoomScale(v.scale)}
+                referencesOpen={moodboardReferencesOpen}
+                onReferencesOpenChange={setMoodboardReferencesOpen}
               />
             ) : (
               <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
             ))}
-          {isMoodboard ? null : <LayerPanel />}
+          {isMoodboard ? <MoodboardLayers /> : <LayerPanel />}
 
           {/* ——— Left toolbar (top-left of workspace) ——— */}
           <div
@@ -1134,7 +1160,7 @@ export default function ProjectEditorPage() {
                 type="button"
                 onClick={() => {
                   const next = Math.max(0.1, zoomScale - 0.15);
-                  canvasEditorRef.current?.setZoom(next);
+                  setActiveZoom(next);
                 }}
                 title="Zoom Out (Cmd -)"
                 style={{
@@ -1199,7 +1225,7 @@ export default function ProjectEditorPage() {
                         key={pct}
                         type="button"
                         onClick={() => {
-                          canvasEditorRef.current?.setZoom(pct / 100);
+                          setActiveZoom(pct / 100);
                           setZoomDropdownOpen(false);
                         }}
                         style={{
@@ -1223,7 +1249,7 @@ export default function ProjectEditorPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        canvasEditorRef.current?.setZoom(1);
+                        setActiveZoom(1);
                         setZoomDropdownOpen(false);
                       }}
                       style={{
@@ -1248,7 +1274,7 @@ export default function ProjectEditorPage() {
                 type="button"
                 onClick={() => {
                   const next = Math.min(3, zoomScale + 0.15);
-                  canvasEditorRef.current?.setZoom(next);
+                  setActiveZoom(next);
                 }}
                 title="Zoom In (Cmd +)"
                 style={{
@@ -1336,7 +1362,7 @@ export default function ProjectEditorPage() {
             )}
           </div>
         </div>
-        {isMoodboard ? null : <BuilderInspector />}
+        {isMoodboard ? <MoodboardInspector /> : <BuilderInspector />}
       </div>
 
       {/* ——— Modals ——— */}

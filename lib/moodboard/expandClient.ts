@@ -12,8 +12,8 @@ export type MoodboardExpandClientResult =
   | { ok: false; message: string };
 
 /**
- * Keyword → LLM vibe expansion → stock fill.
- * Uses `/api/moodboard/expand` then `/api/stock` only. Never generative image routes.
+ * Keyword → LLM vibe/structure only (labels + chips).
+ * Does not call stock, SerpAPI, CSE, or generative image routes.
  */
 export async function expandActiveMoodboard(
   keyword: string,
@@ -62,38 +62,12 @@ export async function expandActiveMoodboard(
   }
 
   const items = await fillMoodboardFromPack(parsed.pack);
-  useEngine.getState().replaceMoodboard(items, trimmed, "expand moodboard");
+  useEngine.getState().replaceMoodboard(items, trimmed, "expand moodboard structure");
   return {
     ok: true,
     itemCount: items.length,
-    placeholderCount: items.filter((item) => item.placeholder || item.kind === "placeholder")
-      .length,
+    placeholderCount: 0,
   };
-}
-
-export async function retryMoodboardPlaceholder(itemId: string): Promise<boolean> {
-  const { searchStockPhoto } = await import("./stock");
-  const slide = useEngine.getState().currentSlide();
-  if (!isMoodboardSlide(slide) || !slide?.moodboard) return false;
-  const item = slide.moodboard.items.find((candidate) => candidate.id === itemId);
-  if (!item?.query) return false;
-  const hit = await searchStockPhoto(item.query);
-  if (!hit) return false;
-  useEngine.getState().updateMoodboardItems(
-    [
-      {
-        id: itemId,
-        patch: {
-          kind: "image",
-          src: hit.src,
-          credit: hit.credit,
-          placeholder: false,
-        },
-      },
-    ],
-    "retry stock photo",
-  );
-  return true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

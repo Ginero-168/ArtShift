@@ -65,10 +65,9 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | no | Optional direct Google adapter |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | no | Optional direct OpenAI adapter |
 | `AI_MONTHLY_BUDGET_USD` | no | Server-side estimated monthly budget guard |
-| `UNSPLASH_ACCESS_KEY` | no | Stock photos (`/api/stock?source=unsplash`) |
-| `PEXELS_API_KEY` | no | Stock photos (`/api/stock?source=pexels`) |
-| `SERPAPI_API_KEY` / `SERPAPI_KEY` | no | Moodboard photos via SerpAPI Google Images (primary when set; Free ~250 searches/mo) |
-| `GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | no | Moodboard stock photos via official Custom Search JSON API (`searchType=image`) |
+| `UNSPLASH_ACCESS_KEY` | no | Stock photos (`/api/stock?source=unsplash`) — not used by Moodboard Expand |
+| `PEXELS_API_KEY` | no | Stock photos (`/api/stock?source=pexels`) — not used by Moodboard Expand |
+| `GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_CX` | no | Official Custom Search JSON API (`searchType=image`) — not used by Moodboard Expand |
 | `RASTER_API_URL` | no | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | no | Bearer token for the optional raster provider |
 
