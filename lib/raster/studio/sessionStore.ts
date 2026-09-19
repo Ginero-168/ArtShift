@@ -26,6 +26,24 @@ export const DEFAULT_STUDIO_TOOL: StudioRasterTool = "rasterBrush";
 export const STUDIO_MIN_ZOOM = 0.05;
 export const STUDIO_MAX_ZOOM = 16;
 
+/** Primary Edit Raster surface. Studio remains a hidden `?rasterStudio=1` path. */
+export type RasterEditSurface = "photopea" | "studio";
+export const RASTER_STUDIO_DEV_PARAM = "rasterStudio";
+
+export function resolveRasterEditSurface(
+  search: string = typeof window === "undefined" ? "" : window.location.search,
+): RasterEditSurface {
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  try {
+    if (new URLSearchParams(query).get(RASTER_STUDIO_DEV_PARAM) === "1") {
+      return "studio";
+    }
+  } catch {
+    // ignore malformed search
+  }
+  return "photopea";
+}
+
 export function clampStudioZoom(zoom: number): number {
   return Math.min(STUDIO_MAX_ZOOM, Math.max(STUDIO_MIN_ZOOM, zoom));
 }
@@ -73,6 +91,8 @@ const RESET_VIEW = {
 
 type RasterStudioSessionState = {
   open: boolean;
+  /** Default Edit Raster surface is Photopea. Studio is opt-in via query flag. */
+  surface: RasterEditSurface;
   payload: RasterStudioOpenPayload | null;
   dirty: boolean;
   sessionEdited: boolean;
@@ -86,7 +106,7 @@ type RasterStudioSessionState = {
   didInitialFit: boolean;
   navigatorCollapsed: boolean;
   adjustOpen: boolean;
-  openFromImage: (image: ImageElement) => void;
+  openFromImage: (image: ImageElement, options?: { surface?: RasterEditSurface }) => void;
   setDirty: (dirty: boolean) => void;
   markSessionEdited: () => void;
   setSaving: (saving: boolean) => void;
@@ -121,11 +141,12 @@ export function isStudioRasterTool(tool: Tool | string): tool is StudioRasterToo
 }
 
 /**
- * UI session for Raster Studio. Document truth stays in the engine store;
- * this only tracks whether the studio shell is open and viewport chrome.
+ * UI session for raster Edit. Document truth stays in the engine store;
+ * this only tracks whether Photopea (default) or hidden Studio is open.
  */
 export const useRasterStudioSession = create<RasterStudioSessionState>((set, get) => ({
   open: false,
+  surface: "photopea",
   payload: null,
   dirty: false,
   sessionEdited: false,
@@ -135,7 +156,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
   navigatorCollapsed: false,
   adjustOpen: false,
   ...RESET_VIEW,
-  openFromImage: (image) => {
+  openFromImage: (image, options) => {
     const payload = buildRasterStudioOpenPayload(image);
     const hasOverlays = Boolean(
       (payload.rasterMask?.length ?? 0) > 0 ||
@@ -145,6 +166,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
     );
     set({
       open: true,
+      surface: options?.surface ?? resolveRasterEditSurface(),
       payload,
       dirty: hasOverlays,
       sessionEdited: false,
@@ -186,6 +208,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
   close: () =>
     set({
       open: false,
+      surface: "photopea",
       payload: null,
       dirty: false,
       sessionEdited: false,
@@ -196,6 +219,12 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
     }),
 }));
 
-export function openRasterStudioForElement(image: ImageElement) {
+/** Edit Raster / double-click door. Opens Photopea unless `?rasterStudio=1`. */
+export function openRasterEditForElement(image: ImageElement) {
   useRasterStudioSession.getState().openFromImage(image);
+}
+
+/** @deprecated Use `openRasterEditForElement` — Studio is no longer the default surface. */
+export function openRasterStudioForElement(image: ImageElement) {
+  openRasterEditForElement(image);
 }

@@ -2,7 +2,6 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import RasterToolOptions from "@/components/Canvas/RasterToolOptions";
 import { createEditorController } from "@/lib/engine/editorController";
 import { getImageCache } from "@/lib/engine/imageCache";
@@ -16,24 +15,21 @@ import type { ImageElement } from "@/lib/engine/types";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { bakeImageElementRevision } from "@/lib/raster/studio/bakeRevision";
 import { commitPngRevisionToSmartObject } from "@/lib/raster/studio/commitBakedRevision";
-import {
-  arrayBufferToPngDataUrl,
-  pngDataUrlToArrayBuffer,
-} from "@/lib/raster/studio/encodeRevision";
 import { studioToolHint, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 import { buildRasterStudioDiscardPatch } from "@/lib/raster/studio/types";
-import PhotopeaEmbed from "./PhotopeaEmbed";
+import PhotopeaEditSession from "./PhotopeaEditSession";
 import RasterStudioAdjustPanel from "./RasterStudioAdjustPanel";
 import RasterStudioToolbar from "./RasterStudioToolbar";
 import RasterStudioViewport from "./RasterStudioViewport";
 import { studioChrome } from "./studioChrome";
 
 /**
- * Fullscreen Raster Studio shell (UX-1, Affinity Photo–inspired chrome).
- * Open → edit pixels in image space → Save (bake revision) / Cancel.
+ * Raster edit mount: Photopea is the default Edit Raster surface.
+ * Hidden Studio chrome (`?rasterStudio=1`) remains Affinity-inspired.
  */
 export default function RasterStudioShell() {
   const open = useRasterStudioSession((s) => s.open);
+  const surface = useRasterStudioSession((s) => s.surface);
   const payload = useRasterStudioSession((s) => s.payload);
   const dirty = useRasterStudioSession((s) => s.dirty);
   const sessionEdited = useRasterStudioSession((s) => s.sessionEdited);
@@ -52,18 +48,15 @@ export default function RasterStudioShell() {
   const navigatorCollapsed = useRasterStudioSession((s) => s.navigatorCollapsed);
   const setNavigatorCollapsed = useRasterStudioSession((s) => s.setNavigatorCollapsed);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
-  const [photopeaFile, setPhotopeaFile] = useState<ArrayBuffer | null>(null);
-  const [openingPhotopea, setOpeningPhotopea] = useState(false);
 
   const requestClose = useCallback(() => {
-    if (saving || openingPhotopea) return;
-    if (photopeaFile) return;
+    if (saving) return;
     if (sessionEdited) {
       setConfirmingDiscard(true);
       return;
     }
     close();
-  }, [close, openingPhotopea, photopeaFile, saving, sessionEdited]);
+  }, [close, saving, sessionEdited]);
 
   const updateElements = useEngine((s) => s.updateElements);
   const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
@@ -89,7 +82,7 @@ export default function RasterStudioShell() {
       : null;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || surface !== "studio") return;
     const onKey = (event: KeyboardEvent) => {
       const st = useEngine.getState();
       const slide = st.currentSlide();
@@ -110,7 +103,7 @@ export default function RasterStudioShell() {
         }
       }
 
-      if (event.key === "Escape" && !saving && !openingPhotopea && !photopeaFile) {
+      if (event.key === "Escape" && !saving) {
         if (image && st.activeRasterSelection?.imageId === image.id) {
           event.preventDefault();
           st.clearRasterSelection(image.id);
@@ -196,9 +189,8 @@ export default function RasterStudioShell() {
     actualSize,
     fitView,
     open,
-    openingPhotopea,
     payload,
-    photopeaFile,
+    surface,
     requestClose,
     saving,
     setStudioTool,
@@ -206,7 +198,7 @@ export default function RasterStudioShell() {
   ]);
 
   const handleSave = useCallback(async () => {
-    if (!payload || photopeaFile) return;
+    if (!payload) return;
     setSaving(true);
     setError(null);
     try {
@@ -233,54 +225,7 @@ export default function RasterStudioShell() {
     } finally {
       setSaving(false);
     }
-  }, [close, controller, currentSlide, payload, photopeaFile, setError, setSaving]);
-
-  const openPhotopea = useCallback(async () => {
-    if (!payload || saving || openingPhotopea || photopeaFile) return;
-    setOpeningPhotopea(true);
-    setError(null);
-    try {
-      const image = currentSlide()?.elements.find(
-        (el): el is ImageElement => el.id === payload.elementId && el.type === "image",
-      );
-      if (!image) throw new Error("Image is no longer on the canvas");
-      const baked = await bakeImageElementRevision(image, getImageCache(), 2);
-      setPhotopeaFile(pngDataUrlToArrayBuffer(baked.dataURL));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open Photopea");
-    } finally {
-      setOpeningPhotopea(false);
-    }
-  }, [currentSlide, openingPhotopea, payload, photopeaFile, saving, setError]);
-
-  const applyPhotopeaPng = useCallback(
-    async (buffer: ArrayBuffer) => {
-      if (!payload) return;
-      setSaving(true);
-      setError(null);
-      try {
-        const image = currentSlide()?.elements.find(
-          (el): el is ImageElement => el.id === payload.elementId && el.type === "image",
-        );
-        if (!image) throw new Error("Image is no longer on the canvas");
-        await commitPngRevisionToSmartObject({
-          elementId: image.id,
-          placement: payload.placement,
-          dataURL: arrayBufferToPngDataUrl(buffer),
-          controller,
-          currentSlide,
-          historyLabel: "apply Photopea raster revision",
-        });
-        setPhotopeaFile(null);
-        close();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Photopea apply failed");
-      } finally {
-        setSaving(false);
-      }
-    },
-    [close, controller, currentSlide, payload, setError, setSaving],
-  );
+  }, [close, controller, currentSlide, payload, setError, setSaving]);
 
   const confirmDiscard = useCallback(() => {
     if (!payload) return;
@@ -299,6 +244,7 @@ export default function RasterStudioShell() {
   }, [close, currentSlide, payload, updateElements]);
 
   if (!open || !payload) return null;
+  if (surface === "photopea") return <PhotopeaEditSession />;
 
   const zoomPercent = `${Math.round(zoom * 100)}%`;
 
@@ -307,7 +253,6 @@ export default function RasterStudioShell() {
       role="dialog"
       aria-modal="true"
       aria-label="Raster Studio"
-      inert={Boolean(photopeaFile) || undefined}
       style={{
         position: "fixed",
         inset: 0,
@@ -370,18 +315,13 @@ export default function RasterStudioShell() {
             {payload.sourceName || "Smart Object"}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={requestClose}
-          disabled={saving || openingPhotopea}
-          style={ghostButtonStyle}
-        >
+        <button type="button" onClick={requestClose} disabled={saving} style={ghostButtonStyle}>
           Cancel
         </button>
         <button
           type="button"
           onClick={() => void handleSave()}
-          disabled={saving || openingPhotopea || Boolean(photopeaFile)}
+          disabled={saving}
           style={primaryButtonStyle}
         >
           {saving ? "Saving…" : "Save"}
@@ -416,29 +356,6 @@ export default function RasterStudioShell() {
               {studioToolHint(studioTool)}
             </span>
           )}
-        </div>
-
-        <div
-          role="group"
-          aria-label="Temporary escape hatch"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            flexShrink: 0,
-            paddingLeft: 12,
-            borderLeft: `1px solid ${studioChrome.hairline}`,
-          }}
-        >
-          <button
-            type="button"
-            title="Temporary power-user hatch — edit in Photopea, then Save to apply back without moving placement"
-            onClick={() => void openPhotopea()}
-            disabled={saving || openingPhotopea || Boolean(photopeaFile)}
-            style={ghostButtonStyle}
-          >
-            {openingPhotopea ? "Preparing Photopea…" : "Open in Photopea"}
-          </button>
         </div>
 
         <div
@@ -543,7 +460,7 @@ export default function RasterStudioShell() {
       >
         <span>{studioToolHint(studioTool)}</span>
         <span style={{ marginInlineStart: "auto" }}>
-          ⌘Z undo · Save keeps placement · Photopea is a temporary hatch
+          ⌘Z undo · Save keeps placement · hidden Studio (`?rasterStudio=1`)
         </span>
       </div>
 
@@ -591,24 +508,6 @@ export default function RasterStudioShell() {
           </div>
         </div>
       ) : null}
-
-      {photopeaFile
-        ? createPortal(
-            <PhotopeaEmbed
-              fileBuffer={photopeaFile}
-              sourceName={payload.sourceName}
-              applying={saving}
-              applyError={error}
-              onApplyPng={(buffer) => void applyPhotopeaPng(buffer)}
-              onDismiss={() => {
-                if (saving) return;
-                setPhotopeaFile(null);
-                setError(null);
-              }}
-            />,
-            document.body,
-          )
-        : null}
 
       {error ? (
         <div

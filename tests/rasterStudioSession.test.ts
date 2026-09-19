@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createImage } from "@/lib/engine/factory";
-import { isStudioRasterTool, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
+import {
+  isStudioRasterTool,
+  resolveRasterEditSurface,
+  useRasterStudioSession,
+} from "@/lib/raster/studio/sessionStore";
 
 describe("Raster Studio session tools", () => {
   afterEach(() => {
@@ -24,6 +28,7 @@ describe("Raster Studio session tools", () => {
     useRasterStudioSession.getState().openFromImage(image);
     const state = useRasterStudioSession.getState();
     expect(state.open).toBe(true);
+    expect(state.surface).toBe("photopea");
     expect(state.studioTool).toBe("rasterBrush");
     expect(isStudioRasterTool("rasterEraser")).toBe(true);
     expect(isStudioRasterTool("rasterPolygonLasso")).toBe(true);
@@ -57,5 +62,27 @@ describe("Raster Studio session tools", () => {
     expect(useRasterStudioSession.getState().adjustOpen).toBe(true);
     state.setNavigatorCollapsed(false);
     state.setAdjustOpen(false);
+  });
+
+  it("defaults Edit Raster to Photopea and keeps Studio behind ?rasterStudio=1", () => {
+    expect(resolveRasterEditSurface("")).toBe("photopea");
+    expect(resolveRasterEditSurface("?perf=1")).toBe("photopea");
+    expect(resolveRasterEditSurface("?rasterStudio=1")).toBe("studio");
+    expect(resolveRasterEditSurface("rasterStudio=1&perf=1")).toBe("studio");
+
+    const image = createImage({
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+      fileId: "f2",
+      naturalWidth: 40,
+      naturalHeight: 40,
+    });
+    useRasterStudioSession.getState().openFromImage(image, { surface: "studio" });
+    expect(useRasterStudioSession.getState().surface).toBe("studio");
+    useRasterStudioSession.getState().close();
+    expect(useRasterStudioSession.getState().surface).toBe("photopea");
+    expect(useRasterStudioSession.getState().open).toBe(false);
   });
 });

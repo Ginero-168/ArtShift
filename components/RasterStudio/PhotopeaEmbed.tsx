@@ -43,8 +43,8 @@ function statusCopy(phase: PhotopeaPhase, timedOut: boolean): { kind: StatusKind
 }
 
 /**
- * Temporary Photopea iframe overlay. Closing returns to Raster Studio;
- * Apply / File → Save uses the same Smart Object bake path as Studio Save.
+ * Primary Photopea iframe overlay. Closing returns to the design canvas;
+ * Apply / File → Save uses the Smart Object bake path (placement unchanged).
  */
 export default function PhotopeaEmbed({
   fileBuffer,
@@ -168,7 +168,7 @@ export default function PhotopeaEmbed({
       ref={dialogRef}
       aria-labelledby={titleId}
       aria-modal="true"
-      className="photopea-hatch-dialog"
+      className="photopea-edit-dialog"
       onCancel={(event) => {
         event.preventDefault();
         requestClose();
@@ -176,7 +176,7 @@ export default function PhotopeaEmbed({
       style={dialogStyle}
     >
       <style>{`
-        dialog.photopea-hatch-dialog::backdrop {
+        dialog.photopea-edit-dialog::backdrop {
           background: rgba(0, 0, 0, 0.45);
         }
       `}</style>
@@ -196,11 +196,11 @@ export default function PhotopeaEmbed({
           >
             Photopea
             <span style={{ marginLeft: 8, fontWeight: 500, color: studioChrome.muted }}>
-              temporary hatch
+              primary raster editor
             </span>
           </h1>
           <p style={{ margin: "2px 0 0", fontSize: 11, color: studioChrome.muted }}>
-            {sourceName || "Smart Object"} · runs on photopea.com · Save keeps placement
+            {sourceName || "Smart Object"} · runs on photopea.com · Apply keeps placement
           </p>
         </div>
         <button
@@ -248,7 +248,7 @@ export default function PhotopeaEmbed({
         <span aria-live="polite">
           {status.kind === "ready"
             ? "Ready — File → Save or Apply back keeps Smart Object placement."
-            : "File → Save in Photopea also applies back. Close returns to Raster Studio without changing the canvas."}
+            : "File → Save in Photopea also applies back. Close returns to the design canvas without changing placement."}
         </span>
       </footer>
 
@@ -267,8 +267,8 @@ export default function PhotopeaEmbed({
         >
           <div style={confirmCardStyle}>
             <p style={{ margin: "0 0 12px", fontSize: 13, lineHeight: 1.4 }}>
-              Close Photopea without applying pixels back to ArtShift? Raster Studio stays as it
-              was.
+              Close Photopea without applying pixels back to ArtShift? The design canvas stays
+              unchanged.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" onClick={() => setConfirmClose(false)} style={ghostButtonStyle}>

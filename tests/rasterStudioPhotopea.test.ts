@@ -221,20 +221,37 @@ describe("Photopea apply uses the Studio Save placement path", () => {
   });
 });
 
-describe("Raster Studio Photopea hatch chrome", () => {
-  it("adds a secondary Photopea control without replacing Studio tools or default Edit", () => {
+describe("Photopea is the primary Edit Raster path", () => {
+  it("routes Edit Raster entry points to Photopea, not Raster Studio", () => {
+    const session = readFileSync("lib/raster/studio/sessionStore.ts", "utf8");
     const shell = readFileSync("components/RasterStudio/RasterStudioShell.tsx", "utf8");
-    const toolbar = readFileSync("components/RasterStudio/RasterStudioToolbar.tsx", "utf8");
+    const photopeaSession = readFileSync("components/RasterStudio/PhotopeaEditSession.tsx", "utf8");
+    const embed = readFileSync("components/RasterStudio/PhotopeaEmbed.tsx", "utf8");
     const contextBar = readFileSync("components/Canvas/ObjectContextBar.tsx", "utf8");
+    const canvas = readFileSync("components/Canvas/CanvasEditor.tsx", "utf8");
+    const contextMenu = readFileSync("components/Canvas/ContextMenu.tsx", "utf8");
+    const inspector = readFileSync("components/Builder/BuilderInspector.tsx", "utf8");
 
-    expect(shell).toContain("Open in Photopea");
-    expect(shell).toContain("PhotopeaEmbed");
-    expect(shell).toContain("commitPngRevisionToSmartObject");
-    expect(shell).toContain("apply Photopea raster revision");
-    expect(shell).toContain("update raster revision");
-    expect(toolbar).toContain("rasterBrush");
-    expect(toolbar).toContain("rasterHealing");
+    expect(session).toContain('surface: "photopea"');
+    expect(session).toContain("openRasterEditForElement");
+    expect(session).toContain("rasterStudio");
+    expect(shell).toContain("PhotopeaEditSession");
+    expect(shell).toContain('surface === "photopea"');
+    expect(shell).not.toContain("Open in Photopea");
+    expect(shell).not.toContain("temporary hatch");
+    expect(photopeaSession).toContain("commitPngRevisionToSmartObject");
+    expect(photopeaSession).toContain("apply Photopea raster revision");
+    expect(photopeaSession).toContain("bakeImageElementRevision");
+    expect(embed).toContain("primary raster editor");
+    expect(embed).toContain("photopea.com");
+    expect(embed).toContain("design canvas");
+    expect(embed).not.toContain("temporary hatch");
     expect(contextBar).toContain("Edit Raster");
+    expect(contextBar).toContain("openRasterEditForElement");
     expect(contextBar).not.toContain("Photopea");
+    expect(canvas).toContain("openRasterEditForElement");
+    expect(contextMenu).toContain("openRasterEditForElement");
+    expect(inspector).toContain("openRasterEditForElement");
+    expect(inspector).toContain("Pixel edit");
   });
 });

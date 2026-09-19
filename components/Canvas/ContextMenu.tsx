@@ -13,7 +13,7 @@ import { usePresetStore } from "@/lib/engine/presetStore";
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
-import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
+import { openRasterEditForElement } from "@/lib/raster/studio/sessionStore";
 
 type Props = {
   /** Screen position (CSS px relative to viewport). */
@@ -102,7 +102,7 @@ export default function ContextMenu({ position, onClose }: Props) {
             kind: "item",
             label: "Edit Raster",
             hint: "Double-click",
-            onClick: () => openRasterStudioForElement(selected),
+            onClick: () => openRasterEditForElement(selected),
           },
         );
       }
