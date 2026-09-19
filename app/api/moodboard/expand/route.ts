@@ -101,12 +101,9 @@ export async function POST(req: NextRequest) {
         if (parsed.ok) break;
       }
     }
-    if (
-      !parsed.ok &&
-      isRecord(execution.output) &&
-      (typeof execution.output.keyword === "string" || isRecord(execution.output.roles))
-    ) {
-      parsed = parseMoodboardExpandJson(execution.output);
+    const rawOutput: unknown = execution.output;
+    if (!parsed.ok && looksLikeExpandPack(rawOutput)) {
+      parsed = parseMoodboardExpandJson(rawOutput);
     }
     if (!parsed.ok) {
       const preview = safeModelTextPreview(texts[0] ?? "");
@@ -160,6 +157,11 @@ function collectChatOutputTexts(output: unknown): string[] {
     }
   }
   return texts;
+}
+
+function looksLikeExpandPack(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return typeof value.keyword === "string" || isRecord(value.roles);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
