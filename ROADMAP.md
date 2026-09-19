@@ -1,6 +1,6 @@
 # ArtShift — Product and Engineering Roadmap
 
-> Last verified against the code on **2026-08-23**.
+> Last verified against the code on **2026-09-19**.
 
 ## Product focus
 
@@ -88,3 +88,19 @@ the existing vector, layout, campaign, and export workflows unstable.
   a user-facing execution-mode switch.
 - Modernization: Next 16.3.2 + TypeScript 6.0.3 + no custom webpack passed
   lint, typecheck, test and build on the dedicated experiment branch.
+
+### Raster Studio (Smart Object) — current status
+
+Pixel editing is a **single door**: Raster Studio. The design canvas no longer
+exposes a Raster/Vector toggle or pixel paint tools. Open Studio via
+double-click on an image, context menu **Edit Raster**, or the Object context
+bar. Full inventory and UX phases: `docs/plans/raster-studio-ux-redesign-plan.md`.
+
+| Piece | Status |
+|---|---|
+| Shell + Save/Cancel + placement invariant | Landed — Save bakes a revision and clears overlays |
+| Studio tools (brush / selection / heal / clone) | Landed in Studio viewport |
+| UX-1 chrome (pasteboard, left rail, Fit / 100%) | Landed |
+| Phase 3 `@jsquash/png` encode + OffscreenCanvas bake | Landed, with canvas `toDataURL` fallback |
+| Overlay side table / policy C op history | Deferred — bake-on-Save remains the v1 policy |
+| Editor raster mode chrome | Removed — Studio is the only pixel editor |
