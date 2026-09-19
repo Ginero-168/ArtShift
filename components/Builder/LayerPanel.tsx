@@ -35,7 +35,6 @@ export default function LayerPanel() {
 
   const selectOnly = useEngine((state) => state.selectOnly);
   const toggleSelect = useEngine((state) => state.toggleSelect);
-  const toggleObjectLayoutMode = useEngine((state) => state.toggleObjectLayoutMode);
   const setElementVisibility = useEngine((state) => state.setElementVisibility);
   const setElementLocked = useEngine((state) => state.setElementLocked);
   const reorderElement = useEngine((state) => state.reorderElement);
@@ -163,15 +162,12 @@ export default function LayerPanel() {
             <button
               type="button"
               className={styles.modeBadgeButton}
-              data-mode={mode}
-              onClick={(event) => {
-                event.stopPropagation();
-                toggleObjectLayoutMode(element.id);
-              }}
-              title={`Click to switch to ${mode === "block" ? "Free" : "Block"} mode`}
-              aria-label={`${displayName}: switch to ${mode === "block" ? "Free" : "Block"} mode`}
+              data-mode="free"
+              disabled
+              title="Free placement (Block/hex mode retired)"
+              aria-label={`${displayName}: Free placement`}
             >
-              {mode === "block" ? "B" : "F"}
+              F
             </button>
             <button
               type="button"

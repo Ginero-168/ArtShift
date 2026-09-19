@@ -36,13 +36,11 @@ import {
 } from "@/lib/builder/textPresets";
 import type { ColorAdjustments } from "@/lib/color/adjustments";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
-import { getHexGridDimensions } from "@/lib/engine/hexLayout";
 import { fileToDataURL, loadDataURL } from "@/lib/engine/imageCache";
 import { getLayerForObject } from "@/lib/engine/layers";
 import { useEngine } from "@/lib/engine/store";
 import { getTextSafePadding, measureTextElementHeight } from "@/lib/engine/textLayout";
 import type {
-  BlockPlacement,
   BookMockupElement,
   EngineElement,
   FrameElement,
@@ -83,7 +81,6 @@ export default function BuilderInspector() {
   const selectedIds = useEngine((state) => state.selectedIds);
   const activeLayerId = useEngine((state) => state.activeLayerId);
   const updateElements = useEngine((state) => state.updateElements);
-  const updateBlockPlacement = useEngine((state) => state.updateBlockPlacement);
   const setFrameImage = useEngine((state) => state.setFrameImage);
   const detachFrameImage = useEngine((state) => state.detachFrameImage);
   const flipHorizontal = useEngine((state) => state.flipHorizontal);
@@ -91,17 +88,6 @@ export default function BuilderInspector() {
   const alignSelectedElements = useEngine((state) => state.alignSelectedElements);
   const distributeSelectedElements = useEngine((state) => state.distributeSelectedElements);
   const setSlideBackground = useEngine((state) => state.setSlideBackground);
-  const doc = useEngine((state) => state.doc);
-  const strictness = doc.workspaceStrictness;
-  const strictnessLevel = doc.strictnessLevel ?? (strictness === 1 ? 1 : strictness === 2 ? 2 : 3);
-  const strictnessValues = doc.strictnessValues ?? { 2: 1, 3: 2 };
-  const setWorkspaceStrictness = useEngine((state) => state.setWorkspaceStrictness);
-  const setStrictnessValue = useEngine((state) => state.setStrictnessValue);
-
-  const statusText =
-    strictnessLevel === 1
-      ? "No shared cells"
-      : `Overlap by ${strictnessValues[strictnessLevel as 2 | 3] ?? 1} cell${(strictnessValues[strictnessLevel as 2 | 3] ?? 1) > 1 ? "s" : ""}`;
   const croppingImageId = useEngine((state) => state.croppingImageId);
   const setCroppingImageId = useEngine((state) => state.setCroppingImageId);
   const applyBooleanOperation = useEngine((state) => state.applyBooleanOperation);
@@ -139,9 +125,6 @@ export default function BuilderInspector() {
       ? getLayerForObject(slide, first.id)
       : slide.layers.find((layer) => layer.id === activeLayerId)
     : undefined;
-  const firstPlacement = first ? activeLayer?.placements[first.id] : undefined;
-  const hexGrid = getHexGridDimensions(slide?.width ?? 1920, slide?.height ?? 1080);
-
   const apply = (patch: Partial<EngineElement>, label: string) => {
     if (!selected.length) return;
     updateElements(
@@ -149,11 +132,6 @@ export default function BuilderInspector() {
       label,
     );
   };
-
-  function updateBlock(patch: Partial<BlockPlacement>) {
-    if (!firstPlacement || !first) return;
-    updateBlockPlacement(first.id, patch);
-  }
 
   const builderKind = first?.builderKind;
   const blockDefinition = builderKind ? getBuilderBlockDefinition(builderKind) : undefined;
@@ -169,9 +147,7 @@ export default function BuilderInspector() {
               : (blockDefinition?.label ?? typeName(first))}
           </h2>
         </div>
-        {first && activeLayer ? (
-          <span className={styles.typeChip}>{activeLayer.mode.toUpperCase()}</span>
-        ) : null}
+        {first && activeLayer ? <span className={styles.typeChip}>FREE</span> : null}
       </div>
 
       <div className={styles.inspectorScroll}>
@@ -181,89 +157,6 @@ export default function BuilderInspector() {
               Select an element on the artwork to reveal its detailed controls. Drag blocks from the
               library to compose the layout.
             </div>
-            <div className={styles.optionSection}>
-              <div className={styles.strictnessHeading}>
-                <span>Workspace strictness</span>
-                <strong>{statusText}</strong>
-              </div>
-              <div className={styles.strictnessTabs} role="group" aria-label="Workspace strictness">
-                <button
-                  type="button"
-                  key={1}
-                  aria-pressed={strictnessLevel === 1}
-                  className={strictnessLevel === 1 ? styles.strictnessActive : undefined}
-                  onClick={() => setWorkspaceStrictness(1)}
-                >
-                  <b>1</b>
-                  <span className={styles.strictnessLabel}>Exact</span>
-                </button>
-
-                <button
-                  type="button"
-                  key={2}
-                  aria-pressed={strictnessLevel === 2}
-                  className={strictnessLevel === 2 ? styles.strictnessActive : undefined}
-                  onClick={() => setWorkspaceStrictness(2)}
-                >
-                  <b>2</b>
-                  <span className={styles.strictnessLabel}>
-                    +
-                    <input
-                      type="number"
-                      min={1}
-                      max={99}
-                      className={styles.strictnessInput}
-                      value={strictnessValues[2] ?? 1}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (strictnessLevel !== 2) setWorkspaceStrictness(2);
-                      }}
-                      onChange={(e) => {
-                        const val = Number.parseInt(e.target.value, 10);
-                        if (!Number.isNaN(val)) {
-                          setStrictnessValue(2, val);
-                        }
-                      }}
-                      title="Edit overlap cells for Level 2"
-                    />
-                    cell
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  key={3}
-                  aria-pressed={strictnessLevel === 3}
-                  className={strictnessLevel === 3 ? styles.strictnessActive : undefined}
-                  onClick={() => setWorkspaceStrictness(3)}
-                >
-                  <b>3</b>
-                  <span className={styles.strictnessLabel}>
-                    +
-                    <input
-                      type="number"
-                      min={1}
-                      max={99}
-                      className={styles.strictnessInput}
-                      value={strictnessValues[3] ?? 2}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (strictnessLevel !== 3) setWorkspaceStrictness(3);
-                      }}
-                      onChange={(e) => {
-                        const val = Number.parseInt(e.target.value, 10);
-                        if (!Number.isNaN(val)) {
-                          setStrictnessValue(3, val);
-                        }
-                      }}
-                      title="Edit overlap cells for Level 3"
-                    />
-                    cell
-                  </span>
-                </button>
-              </div>
-            </div>
-
             <div className={styles.optionSection}>
               <h3>Canvas</h3>
               <div className={styles.field}>
@@ -598,56 +491,10 @@ export default function BuilderInspector() {
               </div>
             )}
 
-            {firstPlacement && slide && singleSelection ? (
-              <div className={styles.optionSection}>
-                <h3>
-                  Hex placement · {hexGrid.columns} × {hexGrid.rows}
-                </h3>
-                <div className={styles.compactNumberGrid}>
-                  <CompactNumberField
-                    label="Col"
-                    title="Column"
-                    value={firstPlacement.col + 1}
-                    min={1}
-                    max={hexGrid.columns + 1 - firstPlacement.colSpan}
-                    onChange={(value) => updateBlock({ col: value - 1 })}
-                  />
-                  <CompactNumberField
-                    label="Row"
-                    title="Row"
-                    value={firstPlacement.row + 1}
-                    min={1}
-                    max={hexGrid.rows + 1 - firstPlacement.rowSpan}
-                    onChange={(value) => updateBlock({ row: value - 1 })}
-                  />
-                  <CompactNumberField
-                    label="W"
-                    title="Width (Columns)"
-                    value={firstPlacement.colSpan}
-                    min={firstPlacement.minColSpan ?? 1}
-                    max={hexGrid.columns - firstPlacement.col}
-                    onChange={(value) => updateBlock({ colSpan: value })}
-                  />
-                  <CompactNumberField
-                    label="H"
-                    title="Height (Rows)"
-                    value={firstPlacement.rowSpan}
-                    min={firstPlacement.minRowSpan ?? 1}
-                    max={hexGrid.rows - firstPlacement.row}
-                    onChange={(value) => updateBlock({ rowSpan: value })}
-                  />
-                </div>
-              </div>
-            ) : singleSelection ? (
-              <TransformSection element={first} apply={apply} />
-            ) : null}
+            {singleSelection ? <TransformSection element={first} apply={apply} /> : null}
 
             {homogeneousType && first.type === "text" ? (
-              <TextOptions
-                text={first}
-                apply={apply as TextApply}
-                blockManaged={activeLayer?.mode === "block"}
-              />
+              <TextOptions text={first} apply={apply as TextApply} blockManaged={false} />
             ) : null}
 
             {homogeneousType && (first.type === "image" || first.type === "bookMockup") ? (
