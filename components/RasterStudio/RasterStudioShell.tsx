@@ -1,17 +1,21 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import RasterToolOptions from "@/components/Canvas/RasterToolOptions";
 import { createEditorController } from "@/lib/engine/editorController";
 import { getImageCache, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
-import { isRasterPaintTool, isRasterRetouchTool } from "@/lib/engine/toolBehavior";
+import {
+  isRasterPaintTool,
+  isRasterRetouchTool,
+  isRasterSelectionTool,
+} from "@/lib/engine/toolBehavior";
 import type { ImageElement } from "@/lib/engine/types";
 import { createRasterStroke } from "@/lib/raster/mask";
 import { bakeImageElementRevision } from "@/lib/raster/studio/bakeRevision";
 import { studioToolHint, useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
-import { placementUnchanged } from "@/lib/raster/studio/types";
+import { buildRasterStudioDiscardPatch, placementUnchanged } from "@/lib/raster/studio/types";
 import RasterStudioToolbar from "./RasterStudioToolbar";
 import RasterStudioViewport from "./RasterStudioViewport";
 import { studioChrome } from "./studioChrome";
@@ -24,6 +28,7 @@ export default function RasterStudioShell() {
   const open = useRasterStudioSession((s) => s.open);
   const payload = useRasterStudioSession((s) => s.payload);
   const dirty = useRasterStudioSession((s) => s.dirty);
+  const sessionEdited = useRasterStudioSession((s) => s.sessionEdited);
   const saving = useRasterStudioSession((s) => s.saving);
   const error = useRasterStudioSession((s) => s.error);
   const studioTool = useRasterStudioSession((s) => s.studioTool);
@@ -34,6 +39,16 @@ export default function RasterStudioShell() {
   const setStudioTool = useRasterStudioSession((s) => s.setStudioTool);
   const fitView = useRasterStudioSession((s) => s.fitView);
   const actualSize = useRasterStudioSession((s) => s.actualSize);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+
+  const requestClose = useCallback(() => {
+    if (saving) return;
+    if (sessionEdited) {
+      setConfirmingDiscard(true);
+      return;
+    }
+    close();
+  }, [close, saving, sessionEdited]);
 
   const updateElements = useEngine((s) => s.updateElements);
   const applyRasterSelection = useEngine((s) => s.applyRasterSelection);
@@ -52,6 +67,7 @@ export default function RasterStudioShell() {
   const optionsTool =
     isRasterPaintTool(studioTool) ||
     isRasterRetouchTool(studioTool) ||
+    isRasterSelectionTool(studioTool) ||
     studioTool === "rasterMagicWand" ||
     studioTool === "rasterQuickSelection"
       ? studioTool
@@ -86,7 +102,7 @@ export default function RasterStudioShell() {
           return;
         }
         event.preventDefault();
-        close();
+        requestClose();
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
@@ -161,7 +177,7 @@ export default function RasterStudioShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [actualSize, close, fitView, open, payload, saving, setStudioTool, studioTool]);
+  }, [actualSize, fitView, open, payload, requestClose, saving, setStudioTool, studioTool]);
 
   const handleSave = useCallback(async () => {
     if (!payload) return;
@@ -202,6 +218,22 @@ export default function RasterStudioShell() {
       setSaving(false);
     }
   }, [close, controller, currentSlide, payload, setError, setSaving]);
+
+  const confirmDiscard = useCallback(() => {
+    if (!payload) return;
+    const image = currentSlide()?.elements.find(
+      (el): el is ImageElement => el.id === payload.elementId && el.type === "image",
+    );
+    if (image) {
+      updateElements(
+        [{ id: image.id, patch: buildRasterStudioDiscardPatch(payload) }],
+        "discard raster studio session",
+      );
+      useEngine.getState().clearRasterSelection(image.id);
+    }
+    setConfirmingDiscard(false);
+    close();
+  }, [close, currentSlide, payload, updateElements]);
 
   if (!open || !payload) return null;
 
@@ -274,7 +306,7 @@ export default function RasterStudioShell() {
             {payload.sourceName || "Smart Object"}
           </span>
         </div>
-        <button type="button" onClick={close} disabled={saving} style={ghostButtonStyle}>
+        <button type="button" onClick={requestClose} disabled={saving} style={ghostButtonStyle}>
           Cancel
         </button>
         <button
@@ -385,8 +417,53 @@ export default function RasterStudioShell() {
         }}
       >
         <span>{studioToolHint(studioTool)}</span>
-        <span style={{ marginInlineStart: "auto" }}>Save keeps placement</span>
+        <span style={{ marginInlineStart: "auto" }}>⌘Z undo · Save keeps placement</span>
       </div>
+
+      {confirmingDiscard ? (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Discard pixel edits?"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(0, 0, 0, 0.35)",
+          }}
+        >
+          <div
+            style={{
+              minWidth: 280,
+              maxWidth: 360,
+              padding: "16px 18px",
+              borderRadius: 8,
+              background: studioChrome.chromeRaised,
+              border: `1px solid ${studioChrome.hairline}`,
+              color: studioChrome.ink,
+              boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+            }}
+          >
+            <p style={{ margin: "0 0 12px", fontSize: 13, lineHeight: 1.4 }}>
+              Discard pixel edits from this session? Placement and Appearance stay unchanged.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setConfirmingDiscard(false)}
+                style={ghostButtonStyle}
+              >
+                Keep editing
+              </button>
+              <button type="button" onClick={confirmDiscard} style={primaryButtonStyle}>
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <div

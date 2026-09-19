@@ -35,6 +35,10 @@ describe("Raster Studio session tools", () => {
     expect(useRasterStudioSession.getState().zoom).toBeCloseTo(0.46, 5);
     state.actualSize();
     expect(useRasterStudioSession.getState().zoom).toBe(1);
+    expect(useRasterStudioSession.getState().sessionEdited).toBe(false);
+    state.markSessionEdited();
+    expect(useRasterStudioSession.getState().dirty).toBe(true);
+    expect(useRasterStudioSession.getState().sessionEdited).toBe(true);
     state.close();
     expect(useRasterStudioSession.getState().open).toBe(false);
   });

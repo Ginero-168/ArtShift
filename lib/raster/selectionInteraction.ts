@@ -102,12 +102,13 @@ export function createMagicWandSelectionShape(
   local: ImageLocalPoint,
   tolerance: number,
   images: Map<string, HTMLImageElement>,
+  contiguous = true,
 ): RasterSelectionShape | null {
   const pixels = createRasterSelectionSample(image, images);
   if (!pixels) return null;
   const seedX = (local[0] / Math.max(1, image.width)) * pixels.width;
   const seedY = (local[1] / Math.max(1, image.height)) * pixels.height;
-  const mask = createMagicWandMask(pixels, seedX, seedY, tolerance);
+  const mask = createMagicWandMask(pixels, seedX, seedY, tolerance, contiguous);
   return { kind: "bitmap", dataUrl: magicWandMaskToDataUrl(mask, pixels.width, pixels.height) };
 }
 
@@ -117,6 +118,7 @@ export async function createMagicWandSelectionShapeAsync(
   tolerance: number,
   images: Map<string, HTMLImageElement>,
   processor: RasterProcessor = getLocalRasterProcessor(),
+  contiguous = true,
 ): Promise<RasterSelectionShape | null> {
   const source = images.get(image.fileId);
   if (!source?.complete || !source.naturalWidth || !source.naturalHeight) return null;
@@ -139,6 +141,7 @@ export async function createMagicWandSelectionShapeAsync(
         seedX,
         seedY,
         tolerance,
+        contiguous,
       );
       return {
         kind: "bitmap",
@@ -154,6 +157,7 @@ export async function createMagicWandSelectionShapeAsync(
       seedX,
       seedY,
       tolerance,
+      contiguous,
     });
     if (result.kind !== "mask") throw new Error("Raster processor returned no Selection mask.");
     return {
@@ -161,7 +165,7 @@ export async function createMagicWandSelectionShapeAsync(
       dataUrl: magicWandMaskToDataUrl(result.mask, pixels.width, pixels.height),
     };
   } catch {
-    return createMagicWandSelectionShape(image, local, tolerance, images);
+    return createMagicWandSelectionShape(image, local, tolerance, images, contiguous);
   }
 }
 

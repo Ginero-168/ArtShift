@@ -12,6 +12,14 @@ export type RasterRetouchOptions = {
   size: number;
   opacity: number;
   selection?: RasterSelection;
+  /** 1 is a hard cookie-cutter stamp; lower values feather the patch edge. */
+  hardness?: number;
+};
+
+export type RasterRetouchResult = {
+  edit: RasterRetouchEdit;
+  /** True when Healing fell back to a clone-like patch because OpenCV inpaint failed. */
+  healFallback: boolean;
 };
 
 /** Build one bounded derived patch, keeping the source ImageElement untouched. */
@@ -19,7 +27,7 @@ export async function createRasterRetouchEdit(
   image: ImageElement,
   pixels: RasterPixelBuffer,
   options: RasterRetouchOptions,
-): Promise<RasterRetouchEdit | null> {
+): Promise<RasterRetouchResult | null> {
   const points = options.points.filter((point) => point.every(Number.isFinite));
   if (!points.length || pixels.width < 1 || pixels.height < 1) return null;
   const scaleX = pixels.width / Math.max(1, image.width);
@@ -27,24 +35,28 @@ export async function createRasterRetouchEdit(
   const scaledPoints = points.map(([x, y]) => [x * scaleX, y * scaleY] as [number, number]);
   const radiusX = Math.max(1, options.size * scaleX) / 2;
   const radiusY = Math.max(1, options.size * scaleY) / 2;
+  const hardness = clamp01(options.hardness ?? 0.65);
   const bounds = patchBounds(scaledPoints, radiusX, radiusY, pixels.width, pixels.height);
   if (!bounds) return null;
 
   let output: RasterPixelBuffer;
+  let healFallback = false;
   if (options.mode === "heal") {
     try {
-      const repairMask = createRepairMask(
+      const repair = createRepairMasks(
         bounds.width,
         bounds.height,
         scaledPoints,
         bounds,
         radiusX,
         radiusY,
+        hardness,
       );
       const crop = cropPixels(pixels, bounds);
-      output = applyAlphaMask(await (await loadOpenCvJs()).heal(crop, repairMask), repairMask);
+      output = applyAlphaMask(await (await loadOpenCvJs()).heal(crop, repair.inpaint), repair.soft);
     } catch {
       // OpenCV is an optional enhancement. Clone remains a predictable local fallback.
+      healFallback = true;
       output = createClonePatch(
         pixels,
         bounds,
@@ -54,6 +66,7 @@ export async function createRasterRetouchEdit(
         scaleY,
         radiusX,
         radiusY,
+        hardness,
       );
     }
   } else {
@@ -66,20 +79,24 @@ export async function createRasterRetouchEdit(
       scaleY,
       radiusX,
       radiusY,
+      hardness,
     );
   }
 
   const dataUrl = pixelBufferToDataUrl(output);
   return {
-    id: crypto.randomUUID(),
-    mode: options.mode,
-    dataUrl,
-    x: bounds.x / scaleX,
-    y: bounds.y / scaleY,
-    width: bounds.width / scaleX,
-    height: bounds.height / scaleY,
-    opacity: clamp01(options.opacity),
-    selection: options.selection,
+    edit: {
+      id: crypto.randomUUID(),
+      mode: options.mode,
+      dataUrl,
+      x: bounds.x / scaleX,
+      y: bounds.y / scaleY,
+      width: bounds.width / scaleX,
+      height: bounds.height / scaleY,
+      opacity: clamp01(options.opacity),
+      selection: options.selection,
+    },
+    healFallback,
   };
 }
 
@@ -92,6 +109,7 @@ function createClonePatch(
   scaleY: number,
   radiusX: number,
   radiusY: number,
+  hardness: number,
 ): RasterPixelBuffer {
   const source = sourcePoint
     ? [sourcePoint[0] * scaleX, sourcePoint[1] * scaleY]
@@ -114,54 +132,78 @@ function createClonePatch(
   sourceContext.putImageData(sourceImage, 0, 0);
   context.drawImage(sourceCanvas, -bounds.x - deltaX, -bounds.y - deltaY);
   context.globalCompositeOperation = "destination-in";
-  context.fillStyle = "#fff";
-  context.lineCap = "round";
-  context.lineJoin = "round";
-  context.lineWidth = Math.max(1, radiusX * 2);
-  context.beginPath();
-  context.moveTo(points[0][0] - bounds.x, points[0][1] - bounds.y);
-  for (const point of points.slice(1)) context.lineTo(point[0] - bounds.x, point[1] - bounds.y);
-  context.stroke();
-  for (const point of points) {
-    context.beginPath();
-    context.ellipse(point[0] - bounds.x, point[1] - bounds.y, radiusX, radiusY, 0, 0, Math.PI * 2);
-    context.fill();
-  }
+  stampSoftPath(context, points, bounds, radiusX, radiusY, hardness);
   return imageDataToBuffer(context.getImageData(0, 0, bounds.width, bounds.height));
 }
 
-function createRepairMask(
+function createRepairMasks(
   width: number,
   height: number,
   points: Array<[number, number]>,
   bounds: PatchBounds,
   radiusX: number,
   radiusY: number,
-): Uint8Array {
+  hardness: number,
+): { inpaint: Uint8Array; soft: Uint8Array } {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
-  if (!context) return new Uint8Array(width * height);
+  const inpaint = new Uint8Array(width * height);
+  const soft = new Uint8Array(width * height);
+  if (!context) return { inpaint, soft };
+  stampSoftPath(context, points, bounds, radiusX, radiusY, hardness);
+  const data = context.getImageData(0, 0, width, height).data;
+  for (let index = 0; index < soft.length; index++) {
+    const alpha = data[index * 4 + 3];
+    soft[index] = alpha;
+    inpaint[index] = alpha > 32 ? 255 : 0;
+  }
+  return { inpaint, soft };
+}
+
+function stampSoftPath(
+  context: CanvasRenderingContext2D,
+  points: Array<[number, number]>,
+  bounds: PatchBounds,
+  radiusX: number,
+  radiusY: number,
+  hardness: number,
+): void {
   context.fillStyle = "#fff";
   context.strokeStyle = "#fff";
   context.lineCap = "round";
   context.lineJoin = "round";
-  context.lineWidth = Math.max(1, radiusX * 2);
-  context.beginPath();
-  context.moveTo(points[0][0] - bounds.x, points[0][1] - bounds.y);
-  for (const point of points.slice(1)) context.lineTo(point[0] - bounds.x, point[1] - bounds.y);
-  context.stroke();
-  // Ellipse stamps preserve the non-square brush size.
-  for (const point of points) {
+  const hard = hardness >= 0.98;
+  context.lineWidth = Math.max(1, Math.min(radiusX, radiusY) * 2 * Math.max(0.2, hardness));
+  if (hard) {
     context.beginPath();
-    context.ellipse(point[0] - bounds.x, point[1] - bounds.y, radiusX, radiusY, 0, 0, Math.PI * 2);
-    context.fill();
+    context.moveTo(points[0][0] - bounds.x, points[0][1] - bounds.y);
+    for (const point of points.slice(1)) context.lineTo(point[0] - bounds.x, point[1] - bounds.y);
+    context.stroke();
   }
-  const data = context.getImageData(0, 0, width, height).data;
-  const mask = new Uint8Array(width * height);
-  for (let index = 0; index < mask.length; index++) mask[index] = data[index * 4 + 3] > 0 ? 255 : 0;
-  return mask;
+  for (const point of points) {
+    const x = point[0] - bounds.x;
+    const y = point[1] - bounds.y;
+    context.beginPath();
+    if (hard) {
+      context.fillStyle = "#fff";
+      context.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
+      context.fill();
+      continue;
+    }
+    context.save();
+    context.translate(x, y);
+    context.scale(Math.max(0.5, radiusX), Math.max(0.5, radiusY));
+    const gradient = context.createRadialGradient(0, 0, Math.max(0.01, hardness), 0, 0, 1);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(Math.max(0.05, Math.min(0.9, hardness)), "rgba(255,255,255,0.85)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = gradient;
+    context.arc(0, 0, 1, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
 }
 
 type PatchBounds = { x: number; y: number; width: number; height: number };

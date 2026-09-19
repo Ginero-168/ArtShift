@@ -45,6 +45,7 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
       st.redo();
       return;
     }
+    if (useRasterStudioSession.getState().open) return;
     if (event.code === "KeyA" && !event.shiftKey) {
       event.preventDefault();
       st.selectAll();
@@ -83,6 +84,8 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
   }
 
   if (event.altKey) return;
+
+  if (useRasterStudioSession.getState().open) return;
 
   if (event.key === "Delete" || event.key === "Backspace") {
     // Direct Select owns Delete/Backspace while editing vector nodes.

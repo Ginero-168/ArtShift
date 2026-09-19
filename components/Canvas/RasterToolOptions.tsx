@@ -5,7 +5,11 @@ import { studioChrome } from "@/components/RasterStudio/studioChrome";
 import { getImageCache } from "@/lib/engine/imageCache";
 import type { Tool } from "@/lib/engine/store";
 import { useEngine } from "@/lib/engine/store";
-import { isRasterPaintTool, isRasterRetouchTool } from "@/lib/engine/toolBehavior";
+import {
+  isRasterPaintTool,
+  isRasterRetouchTool,
+  isRasterSelectionTool,
+} from "@/lib/engine/toolBehavior";
 import { magicWandMaskToDataUrl } from "@/lib/raster/magicWand";
 import { loadOpenCvJs } from "@/lib/raster/opencvJsAdapter";
 import { createRasterSelectionSample } from "@/lib/raster/selectionInteraction";
@@ -41,6 +45,7 @@ export default function RasterToolOptions({ tool, variant = "default" }: Props) 
   const row = studio ? studioOptionsStyle : optionsStyle;
   const [autoSubjectBusy, setAutoSubjectBusy] = useState(false);
   const [autoSubjectError, setAutoSubjectError] = useState<string | null>(null);
+  const [featherPx, setFeatherPx] = useState(8);
   const brushSize = useEngine((state) => state.rasterBrushSize);
   const setBrushSize = useEngine((state) => state.setRasterBrushSize);
   const brushOpacity = useEngine((state) => state.rasterBrushOpacity);
@@ -51,11 +56,15 @@ export default function RasterToolOptions({ tool, variant = "default" }: Props) 
   const setBrushColor = useEngine((state) => state.setRasterBrushColor);
   const magicWandTolerance = useEngine((state) => state.rasterMagicWandTolerance);
   const setMagicWandTolerance = useEngine((state) => state.setRasterMagicWandTolerance);
+  const magicWandContiguous = useEngine((state) => state.rasterMagicWandContiguous);
+  const setMagicWandContiguous = useEngine((state) => state.setRasterMagicWandContiguous);
   const quickSelectionSize = useEngine((state) => state.rasterQuickSelectionSize);
   const setQuickSelectionSize = useEngine((state) => state.setRasterQuickSelectionSize);
   const selectedIds = useEngine((state) => state.selectedIds);
   const currentSlide = useEngine((state) => state.currentSlide());
   const setRasterSelection = useEngine((state) => state.setRasterSelection);
+  const featherActiveRasterSelection = useEngine((state) => state.featherActiveRasterSelection);
+  const hasActiveSelection = useEngine((state) => Boolean(state.activeRasterSelection));
 
   const runAutoSubject = async () => {
     const image = currentSlide?.elements.find(
@@ -113,6 +122,15 @@ export default function RasterToolOptions({ tool, variant = "default" }: Props) 
           />
           <output>{magicWandTolerance}</output>
         </label>
+        <label title="Contiguous flood-fill vs all similar pixels" style={labels}>
+          <input
+            aria-label="Contiguous"
+            type="checkbox"
+            checked={magicWandContiguous}
+            onChange={(event) => setMagicWandContiguous(event.currentTarget.checked)}
+          />
+          <span>Contiguous</span>
+        </label>
         <button
           type="button"
           title="Detect the main subject with OpenCV.js"
@@ -168,6 +186,37 @@ export default function RasterToolOptions({ tool, variant = "default" }: Props) 
           {autoSubjectBusy ? "Detecting…" : "Auto Subject"}
         </button>
         {autoSubjectError ? <span style={errors}>{autoSubjectError}</span> : null}
+      </div>
+    );
+  }
+
+  if (isRasterSelectionTool(tool)) {
+    return (
+      <div role="group" aria-label="Selection options" style={row}>
+        <span style={labels}>New · Shift add · Alt subtract · Shift+Alt intersect</span>
+        <label title="Soften the active selection edge" style={labels}>
+          <span>Feather</span>
+          <input
+            aria-label="Feather radius"
+            type="range"
+            min={0}
+            max={64}
+            step={1}
+            value={featherPx}
+            onChange={(event) => setFeatherPx(Number(event.currentTarget.value))}
+            style={ranges}
+          />
+          <output>{featherPx}px</output>
+        </label>
+        <button
+          type="button"
+          title="Apply feather to the active selection"
+          disabled={!hasActiveSelection || featherPx <= 0}
+          onClick={() => featherActiveRasterSelection(featherPx)}
+          style={buttons}
+        >
+          Apply
+        </button>
       </div>
     );
   }

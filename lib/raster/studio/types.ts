@@ -84,8 +84,8 @@ export function buildRasterStudioOpenPayload(image: ImageElement): RasterStudioO
     adjustments: image.adjustments,
     filterBlur: image.filterBlur,
     mask: image.mask,
-    rasterMask: image.rasterMask,
-    rasterEdits: image.rasterEdits,
+    rasterMask: image.rasterMask ? [...image.rasterMask] : undefined,
+    rasterEdits: image.rasterEdits ? [...image.rasterEdits] : undefined,
     sourceName: image.sourceName,
     placement: snapshotImagePlacement(image),
   };
@@ -139,4 +139,16 @@ export function placementUnchanged(
     before.flipX === after.flipX &&
     before.flipY === after.flipY
   );
+}
+
+/** Restore the ImageElement overlays captured at Open (Cancel discard). */
+export function buildRasterStudioDiscardPatch(
+  payload: RasterStudioOpenPayload,
+): Pick<ImageElement, "rasterMask" | "rasterEdits" | "adjustments" | "filterBlur"> {
+  return {
+    rasterMask: payload.rasterMask,
+    rasterEdits: payload.rasterEdits,
+    adjustments: payload.adjustments,
+    filterBlur: payload.filterBlur,
+  };
 }

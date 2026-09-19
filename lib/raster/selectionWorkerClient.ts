@@ -15,6 +15,7 @@ export function runMagicWandWorker(
   seedX: number,
   seedY: number,
   tolerance: number,
+  contiguous = true,
 ): Promise<Uint8Array> {
   if (typeof Worker === "undefined") {
     return Promise.reject(new Error("Raster selection workers are unavailable."));
@@ -35,6 +36,7 @@ export function runMagicWandWorker(
         seedX,
         seedY,
         tolerance,
+        contiguous,
       },
       [data],
     );
@@ -54,6 +56,7 @@ export function runMagicWandWorkerFromBitmap(
   seedX: number,
   seedY: number,
   tolerance: number,
+  contiguous = true,
 ): Promise<Uint8Array> {
   if (typeof Worker === "undefined") {
     return Promise.reject(new Error("Raster selection workers are unavailable."));
@@ -74,6 +77,7 @@ export function runMagicWandWorkerFromBitmap(
           seedX,
           seedY,
           tolerance,
+          contiguous,
         },
         [bitmap],
       );

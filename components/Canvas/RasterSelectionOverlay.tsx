@@ -149,15 +149,26 @@ function SelectionOperationPreview({
 
   if (screenPoints.length < 3) return null;
   return (
-    <polygon
-      points={points}
-      fill={fill}
-      stroke={stroke}
-      strokeWidth={1.5}
-      strokeDasharray="6 4"
-      strokeLinejoin="round"
-      className="raster-selection-outline"
-    />
+    <g>
+      <polygon
+        points={points}
+        fill={fill}
+        stroke="#111111"
+        strokeWidth={1.5}
+        strokeDasharray="4 4"
+        strokeLinejoin="round"
+      />
+      <polygon
+        points={points}
+        fill="none"
+        stroke="#f5f5f5"
+        strokeWidth={1.5}
+        strokeDasharray="4 4"
+        strokeDashoffset={4}
+        strokeLinejoin="round"
+        className="raster-selection-outline"
+      />
+    </g>
   );
 }
 

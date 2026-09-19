@@ -103,6 +103,7 @@ spacious pasteboard) — not Photopea. Full inventory and UX phases:
 | Shell + Save/Cancel + placement invariant | Landed — Save bakes a revision and clears overlays |
 | Studio tools (brush / selection / heal / clone) | Landed in Studio viewport |
 | UX-1 chrome (Affinity-like pasteboard, grouped rail, Fit / Actual Size) | Landed |
+| Tool quality wave (cursors, live stroke, wand contiguous, clone marker) | Landed — see UX plan checklist |
 | Phase 3 `@jsquash/png` encode + OffscreenCanvas bake | Landed, with canvas `toDataURL` fallback |
 | Overlay side table / policy C op history | Deferred — bake-on-Save remains the v1 policy |
 | Editor raster mode chrome | Removed — Studio is the only pixel editor |

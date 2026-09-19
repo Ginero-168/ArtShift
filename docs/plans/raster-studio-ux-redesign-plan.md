@@ -97,8 +97,25 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 
 - Navigator thumbnail (Affinity-style, optional)
 - Better empty/loading states
-- Confirm discard if dirty on Cancel
 - Optional Adjust tab (brightness/contrast) in Studio only
+- Selection anti-alias (types do not store it yet)
+- Full clone-stamp blit preview (path + source marker landed; sampled-pixels overlay still simplified)
+
+## Tool quality wave (this PR)
+
+Affinity-like *tool feel*, not new chrome. Audit was of Studio viewport + `mask.ts` / renderer stamps / `retouch.ts` / selection overlay.
+
+| Landed | Deferred |
+|---|---|
+| Brush/Pencil/Eraser circle cursor (size + hardness ring) | Custom cursors for marquee/lasso |
+| Live hardness-aware stroke preview on drag; commit on pointer-up | Worker `renderElement` preview |
+| Stamp interpolation shared with renderer; selection mask still clips paint | — |
+| Dual-tone marching ants; Shift/Alt/Shift+Alt hint in options; Feather apply | Anti-alias option (no type yet) |
+| Wand Contiguous vs global; “Selecting…” on large images | Wand sample-merged visual |
+| Clone source marker + offset crosshair; softer stamp edges | Sampled clone blit under cursor |
+| Heal OpenCV inpaint + quiet clone-fallback status | Stronger heal-only fallback (non-clone) |
+| Cmd/Ctrl+Z uses engine history (unique stroke labels); canvas Delete/copy suppressed while Studio is open | Dedicated Studio history stack |
+| Confirm-discard on Cancel restores Open snapshot | — |
 
 ## Success criteria
 
@@ -115,5 +132,6 @@ What already shipped vs remaining gaps. Pixel tools already live in Studio; Edit
 - Full raster layer stack
 - Non-destructive op history across sessions (policy C / dedicated overlay side table)
 - `@jsquash/webp` bake format (PNG first; WebP can share the encode helper later)
-- Worker-thread `renderElement` preview (renderer still assumes a 2D context + `HTMLImageElement` cache)
-- Confirm-discard on Cancel, navigator, Adjust tab (UX-4)
+- Worker-thread `renderElement` preview
+- Navigator, Adjust tab (UX-4)
+- Selection anti-alias; full clone sampled-blit preview

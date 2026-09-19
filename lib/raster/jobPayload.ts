@@ -32,7 +32,14 @@ export function decodeRasterJob(input: unknown): RasterJob | null {
     seedY !== undefined &&
     tolerance !== undefined
   ) {
-    return { kind, pixels, seedX, seedY, tolerance };
+    return {
+      kind,
+      pixels,
+      seedX,
+      seedY,
+      tolerance,
+      ...(input.contiguous === false ? { contiguous: false } : {}),
+    };
   }
   const radiusX = numberValue(input, "radiusX");
   const radiusY = numberValue(input, "radiusY");

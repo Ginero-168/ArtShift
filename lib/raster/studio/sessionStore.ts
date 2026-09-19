@@ -49,11 +49,11 @@ const DEFAULT_STUDIO_TOOL_HINTS: Record<StudioRasterTool, string> = {
   rasterBrush: "Paint pixels (B) · [ / ] size",
   rasterPencil: "Hard pixels (Shift+B) · [ / ] size",
   rasterEraser: "Erase pixels (E) · [ / ] size",
-  rasterMarquee: "Drag a rectangle (M) · Shift add · Alt subtract",
-  rasterEllipse: "Drag an ellipse (Shift+M)",
-  rasterLasso: "Draw a freehand selection (L)",
+  rasterMarquee: "Drag a rectangle (M) · Shift add · Alt subtract · Shift+Alt intersect",
+  rasterEllipse: "Drag an ellipse (Shift+M) · Shift add · Alt subtract",
+  rasterLasso: "Draw a freehand selection (L) · Shift add · Alt subtract",
   rasterPolygonLasso: "Click points · Enter or double-click to close (Shift+L)",
-  rasterMagicWand: "Click similar colors (W)",
+  rasterMagicWand: "Click similar colors (W) · Shift add · Alt subtract",
   rasterQuickSelection: "Brush-select similar pixels (Q) · [ / ] size",
   rasterHealing: "Paint to heal (J) · [ / ] size",
   rasterClone: "Alt-click to set clone source, then paint (S)",
@@ -75,6 +75,7 @@ type RasterStudioSessionState = {
   open: boolean;
   payload: RasterStudioOpenPayload | null;
   dirty: boolean;
+  sessionEdited: boolean;
   saving: boolean;
   error: string | null;
   studioTool: StudioRasterTool;
@@ -85,6 +86,7 @@ type RasterStudioSessionState = {
   didInitialFit: boolean;
   openFromImage: (image: ImageElement) => void;
   setDirty: (dirty: boolean) => void;
+  markSessionEdited: () => void;
   setSaving: (saving: boolean) => void;
   setError: (error: string | null) => void;
   setStudioTool: (tool: StudioRasterTool) => void;
@@ -122,6 +124,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
   open: false,
   payload: null,
   dirty: false,
+  sessionEdited: false,
   saving: false,
   error: null,
   studioTool: DEFAULT_STUDIO_TOOL,
@@ -138,6 +141,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
       open: true,
       payload,
       dirty: hasOverlays,
+      sessionEdited: false,
       saving: false,
       error: null,
       studioTool: DEFAULT_STUDIO_TOOL,
@@ -146,6 +150,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
     });
   },
   setDirty: (dirty) => set({ dirty }),
+  markSessionEdited: () => set({ dirty: true, sessionEdited: true }),
   setSaving: (saving) => set({ saving }),
   setError: (error) => set({ error }),
   setStudioTool: (studioTool) => set({ studioTool }),
@@ -175,6 +180,7 @@ export const useRasterStudioSession = create<RasterStudioSessionState>((set, get
       open: false,
       payload: null,
       dirty: false,
+      sessionEdited: false,
       saving: false,
       error: null,
       studioTool: DEFAULT_STUDIO_TOOL,

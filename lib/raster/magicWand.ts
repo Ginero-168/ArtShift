@@ -20,6 +20,8 @@ export type RasterAlgorithmOptions = {
   shouldCancel?: () => boolean;
   onProgress?: (progress: number) => void;
   yieldEvery?: number;
+  /** Photoshop-style Contiguous. False selects every similar pixel, not just the flood-fill region. */
+  contiguous?: boolean;
 };
 
 export class RasterAlgorithmCancelledError extends Error {
@@ -38,6 +40,7 @@ export function createMagicWandMask(
   seedX: number,
   seedY: number,
   tolerance: number,
+  contiguous = true,
 ): Uint8Array {
   const width = Math.max(0, Math.floor(imageData.width));
   const height = Math.max(0, Math.floor(imageData.height));
@@ -68,6 +71,13 @@ export function createMagicWandMask(
 
   const seedIndex = y * width + x;
   if (!matches(seedIndex)) return mask;
+
+  if (!contiguous) {
+    for (let index = 0; index < total; index++) {
+      if (matches(index)) mask[index] = 1;
+    }
+    return mask;
+  }
 
   const visited = new Uint8Array(total);
   const queue = new Int32Array(total);
@@ -221,6 +231,19 @@ export async function createMagicWandMaskAsync(
 
   const seedIndex = y * width + x;
   if (!matches(seedIndex)) return mask;
+  if (options.contiguous === false) {
+    const yieldEvery = Math.max(256, options.yieldEvery ?? 8_192);
+    for (let index = 0; index < total; index++) {
+      if (options.shouldCancel?.()) throw new RasterAlgorithmCancelledError();
+      if (matches(index)) mask[index] = 1;
+      if (index % yieldEvery === 0) {
+        options.onProgress?.(index / Math.max(1, total));
+        await yieldToEventLoop();
+      }
+    }
+    options.onProgress?.(1);
+    return mask;
+  }
   const visited = new Uint8Array(total);
   const queue = new Int32Array(total);
   let head = 0;

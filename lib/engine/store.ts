@@ -248,9 +248,12 @@ export type EngineState = {
   setRasterBrushHardness: (hardness: number) => void;
   rasterBrushColor: string;
   setRasterBrushColor: (color: string) => void;
-  /** Color-distance tolerance for contiguous Raster Magic Wand selections. */
+  /** Color-distance tolerance for Raster Magic Wand selections. */
   rasterMagicWandTolerance: number;
   setRasterMagicWandTolerance: (tolerance: number) => void;
+  /** When true, Magic Wand flood-fills from the seed; when false, all similar pixels. */
+  rasterMagicWandContiguous: boolean;
+  setRasterMagicWandContiguous: (contiguous: boolean) => void;
   /** Diameter of the Raster Quick Selection brush in image-local pixels. */
   rasterQuickSelectionSize: number;
   setRasterQuickSelectionSize: (size: number) => void;
@@ -419,6 +422,8 @@ export const useEngine = create<EngineState>((set, get) => {
     rasterMagicWandTolerance: 32,
     setRasterMagicWandTolerance: (tolerance) =>
       set({ rasterMagicWandTolerance: Math.max(0, Math.min(255, tolerance)) }),
+    rasterMagicWandContiguous: true,
+    setRasterMagicWandContiguous: (contiguous) => set({ rasterMagicWandContiguous: contiguous }),
     rasterQuickSelectionSize: 96,
     setRasterQuickSelectionSize: (size) =>
       set({ rasterQuickSelectionSize: Math.max(1, Math.min(512, size)) }),

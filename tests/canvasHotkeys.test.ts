@@ -8,7 +8,10 @@ import { createRasterSelectionOperation } from "@/lib/raster/selection";
 import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 
 describe("Canvas hotkeys", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useRasterStudioSession.getState().close();
+  });
 
   beforeEach(() => {
     useEngine.getState().loadDoc({
@@ -323,6 +326,53 @@ describe("Canvas hotkeys", () => {
     const studio = useRasterStudioSession.getState();
     expect(studio.open).toBe(false);
     expect(useEngine.getState().tool).toBe("select");
+  });
+
+  it("keeps undo but does not delete the image while Raster Studio is open", () => {
+    const st = useEngine.getState();
+    const image = createImage({
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 80,
+      fileId: "studio-hotkey-image",
+      naturalWidth: 100,
+      naturalHeight: 80,
+    });
+    st.addElement(image);
+    st.selectOnly([image.id]);
+    useRasterStudioSession.getState().openFromImage(image);
+    st.updateElements(
+      [
+        {
+          id: image.id,
+          patch: {
+            rasterMask: [createRasterStroke([[8, 8]], 12, 1, { mode: "paint", hardness: 1 })],
+          },
+        },
+      ],
+      "paint image pixels test",
+    );
+
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "a", code: "KeyA", metaKey: true }));
+    expect(useEngine.getState().selectedIds.size).toBe(1);
+
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "Backspace", code: "Backspace" }));
+    expect(
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.some((el) => el.id === image.id && !el.isDeleted),
+    ).toBe(true);
+
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true }));
+    const undone = useEngine
+      .getState()
+      .currentSlide()
+      ?.elements.find((el): el is ImageElement => el.id === image.id && el.type === "image");
+    expect(undone?.rasterMask).toBeUndefined();
+
+    useRasterStudioSession.getState().close();
   });
 
   it.each([

@@ -30,6 +30,13 @@ describe("Magic Wand pixel selection", () => {
     expect(Array.from(mask)).toEqual([1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0]);
   });
 
+  it("selects disconnected matching pixels when contiguous is off", () => {
+    const image = pixels(["rrbrr", "rrbrr", "rrbrr"]);
+    const mask = createMagicWandMask(image, 0, 1, 0, false);
+
+    expect(Array.from(mask)).toEqual([1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1]);
+  });
+
   it("uses tolerance for nearby colors and caps working dimensions", () => {
     const image = pixels(["nnn", "nrn", "nnn"]);
     expect(createMagicWandMask(image, 1, 1, 0).reduce((sum, value) => sum + value, 0)).toBe(1);
