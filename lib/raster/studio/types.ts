@@ -94,6 +94,12 @@ export function buildRasterStudioOpenPayload(image: ImageElement): RasterStudioO
 /**
  * Build the element patch for a baked revision.
  * Callers must apply this via a single history-labeled updateElements call.
+ *
+ * Policy A (v1): flatten overlays into the new fileId and clear them on the
+ * element. Image binaries already live in the persist/IDB fileId side table;
+ * this is what keeps fat rasterEdits dataUrls out of saved JSON after Save.
+ * Do not strip overlays on document load — old projects stay readable until
+ * the user Saves in Raster Studio.
  */
 export function buildRasterStudioCommitPatch(
   input: RasterStudioCommitInput,

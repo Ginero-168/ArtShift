@@ -4,15 +4,23 @@
  * Uses the same renderer path as PPTX rasterization so crop, adjustments,
  * blur, geometric mask, rasterMask, and rasterEdits match the editor.
  * Placement (x/y/angle) is temporarily zeroed and restored.
+ *
+ * Phase 3: composite on OffscreenCanvas when available, then encode with
+ * @jsquash/png (canvas toDataURL fallback). Save still applies flatten-overlays
+ * so fat rasterEdits dataUrls leave the document JSON. Old projects that still
+ * carry overlays stay readable until the user Saves in Studio.
  */
 
 import type { ImageElement } from "@/lib/engine/types";
 import { type RenderCtx, renderElement } from "@/lib/renderer/canvas";
+import { createBakeSurface, encodeImageDataToPngDataUrl } from "./encodeRevision";
 
 export type BakedRasterRevision = {
   dataURL: string;
   width: number;
   height: number;
+  encoder: "jsquash-png" | "canvas-png";
+  offscreen: boolean;
 };
 
 export async function bakeImageElementRevision(
@@ -22,11 +30,8 @@ export async function bakeImageElementRevision(
 ): Promise<BakedRasterRevision> {
   const width = Math.max(1, Math.round(element.width * scale));
   const height = Math.max(1, Math.round(element.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Failed to acquire 2D context for Raster Studio bake");
+  const surface = createBakeSurface(width, height);
+  const ctx = surface.ctx;
 
   ctx.scale(scale, scale);
 
@@ -48,10 +53,13 @@ export async function bakeImageElementRevision(
     element.opacity = origOpacity;
   }
 
-  const dataURL = canvas.toDataURL("image/png");
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const encoded = await encodeImageDataToPngDataUrl(imageData);
   return {
-    dataURL,
+    dataURL: encoded.dataURL,
     width,
     height,
+    encoder: encoded.encoder,
+    offscreen: surface.offscreen,
   };
 }
