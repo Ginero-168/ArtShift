@@ -46,6 +46,18 @@ export function arrayBufferToPngDataUrl(buffer: ArrayBuffer): string {
   return arrayBufferToDataUrl(buffer, "image/png");
 }
 
+/** Inverse of `arrayBufferToPngDataUrl` for Photopea ArrayBuffer postMessage. */
+export function pngDataUrlToArrayBuffer(dataURL: string): ArrayBuffer {
+  const comma = dataURL.indexOf(",");
+  if (comma < 0 || !dataURL.startsWith("data:image/png")) {
+    throw new Error("Expected a PNG data URL");
+  }
+  const binary = atob(dataURL.slice(comma + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 function canvasFromImageData(imageData: ImageData): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = imageData.width;
