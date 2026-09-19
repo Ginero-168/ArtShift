@@ -17,7 +17,9 @@ export function RasterStudioBrushCursor({
 }) {
   if (!visible || !local) return null;
   const radius = Math.max(0.5, size / 2);
-  const inner = radius * Math.max(0, Math.min(1, hardness));
+  const soft = Math.max(0, Math.min(1, hardness));
+  // Soft fill hints the feather without a second bordered ring (that read as a stamp).
+  const fillAlpha = soft >= 0.98 ? 0 : 0.08 * (1 - soft);
   return (
     <svg
       aria-hidden
@@ -34,7 +36,7 @@ export function RasterStudioBrushCursor({
         cx={local[0]}
         cy={local[1]}
         r={radius}
-        fill="none"
+        fill={fillAlpha > 0.01 ? `rgba(255,255,255,${fillAlpha})` : "none"}
         stroke="rgba(0,0,0,0.55)"
         strokeWidth={1}
         vectorEffect="non-scaling-stroke"
@@ -46,21 +48,9 @@ export function RasterStudioBrushCursor({
         fill="none"
         stroke="rgba(255,255,255,0.9)"
         strokeWidth={1}
-        strokeDasharray="3 3"
+        strokeDasharray="4 4"
         vectorEffect="non-scaling-stroke"
       />
-      {hardness < 0.98 && inner > 0.75 ? (
-        <circle
-          cx={local[0]}
-          cy={local[1]}
-          r={inner}
-          fill="none"
-          stroke="rgba(255,255,255,0.4)"
-          strokeWidth={1}
-          strokeDasharray="2 3"
-          vectorEffect="non-scaling-stroke"
-        />
-      ) : null}
     </svg>
   );
 }
