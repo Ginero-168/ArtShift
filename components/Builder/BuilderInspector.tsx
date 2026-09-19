@@ -51,6 +51,7 @@ import type {
 } from "@/lib/engine/types";
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
 import { convertElementToVectorPath, smoothVectorPathNodes } from "@/lib/engine/vectorPath";
+import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
@@ -1299,10 +1300,6 @@ function ImageAdjustments({
   element: ImageElement;
   apply: (patch: Partial<EngineElement>, label: string) => void;
 }) {
-  const tool = useEngine((state) => state.tool);
-  const setTool = useEngine((state) => state.setTool);
-  const rasterBrushSize = useEngine((state) => state.rasterBrushSize);
-  const setRasterBrushSize = useEngine((state) => state.setRasterBrushSize);
   return (
     <div className={styles.subsection}>
       <div className={styles.metaRow}>
@@ -1326,9 +1323,9 @@ function ImageAdjustments({
           <button
             type="button"
             className={styles.secondaryButton}
-            onClick={() => setTool(tool === "rasterEraser" ? "select" : "rasterEraser")}
+            onClick={() => openRasterStudioForElement(element)}
           >
-            {tool === "rasterEraser" ? "Exit eraser" : "Erase pixels"}
+            Edit Raster
           </button>
           <button
             type="button"
@@ -1392,18 +1389,6 @@ function ImageAdjustments({
           <output>{element.mask.radius ?? 32}</output>
         </label>
       ) : null}
-      <label className={styles.rangeField}>
-        <span>Brush size</span>
-        <input
-          type="range"
-          min={1}
-          max={512}
-          step={4}
-          value={rasterBrushSize}
-          onChange={(event) => setRasterBrushSize(Number(event.currentTarget.value))}
-        />
-        <output>{rasterBrushSize}</output>
-      </label>
       {IMAGE_ADJUSTMENT_CONTROLS.map((control) => (
         <label className={styles.rangeField} key={control.key}>
           <span>{control.label}</span>

@@ -13,7 +13,6 @@ import { usePresetStore } from "@/lib/engine/presetStore";
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
-import { selectionForImage } from "@/lib/raster/activeSelection";
 import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 
 type Props = {
@@ -25,7 +24,6 @@ type Props = {
 export default function ContextMenu({ position, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const selectedIds = useEngine((s) => s.selectedIds);
-  const activeRasterSelection = useEngine((s) => s.activeRasterSelection);
 
   const copyElements = useEngine((s) => s.copyElements);
   const cutElements = useEngine((s) => s.cutElements);
@@ -40,10 +38,6 @@ export default function ContextMenu({ position, onClose }: Props) {
   const bringToFront = useEngine((s) => s.bringToFront);
   const sendToBack = useEngine((s) => s.sendToBack);
   const selectAll = useEngine((s) => s.selectAll);
-  const invertActiveRasterSelection = useEngine((s) => s.invertActiveRasterSelection);
-  const featherActiveRasterSelection = useEngine((s) => s.featherActiveRasterSelection);
-  const transformActiveRasterSelection = useEngine((s) => s.transformActiveRasterSelection);
-  const clearRasterSelection = useEngine((s) => s.clearRasterSelection);
 
   // Close on outside-click + Escape.
   useEffect(() => {
@@ -64,7 +58,6 @@ export default function ContextMenu({ position, onClose }: Props) {
 
   const ids = Array.from(selectedIds);
   const has = ids.length > 0;
-  const rasterSelectionIds = ids.filter((id) => selectionForImage(activeRasterSelection, id));
 
   const items: Array<
     | { kind: "item"; label: string; hint?: string; onClick: () => void; disabled?: boolean }
@@ -75,41 +68,6 @@ export default function ContextMenu({ position, onClose }: Props) {
       { kind: "item", label: "Cut", onClick: () => cutElements(ids) },
       { kind: "item", label: "Copy", onClick: () => copyElements(ids) },
     );
-    if (rasterSelectionIds.length > 0) {
-      items.push({
-        kind: "item",
-        label: "Invert Selection",
-        onClick: invertActiveRasterSelection,
-      });
-      items.push({
-        kind: "item",
-        label: "Feather Selection…",
-        onClick: () => {
-          const value = window.prompt("Feather radius (px)", "8");
-          if (value === null) return;
-          const radius = Number(value);
-          if (Number.isFinite(radius) && radius >= 0) featherActiveRasterSelection(radius);
-        },
-      });
-      items.push({
-        kind: "item",
-        label: "Transform Selection…",
-        onClick: () => {
-          const value = window.prompt("Scale X, Scale Y, Offset X, Offset Y", "1, 1, 0, 0");
-          if (value === null) return;
-          const values = value.split(",").map(Number);
-          if (values.length !== 4 || values.some((number) => !Number.isFinite(number))) return;
-          transformActiveRasterSelection(values[0], values[1], values[2], values[3]);
-        },
-      });
-      items.push({
-        kind: "item",
-        label: "Deselect",
-        onClick: () => {
-          for (const id of rasterSelectionIds) clearRasterSelection(id);
-        },
-      });
-    }
   }
   items.push({ kind: "item", label: "Paste", onClick: () => pasteElements() });
   if (has) {
