@@ -36,6 +36,7 @@ import { getVectorPathSubpathRanges } from "../engine/vectorPath";
 import { getRasterRetouchSource } from "../raster/retouchSource";
 import { createRasterSelectionMaskDataUrl } from "../raster/selection";
 import { getRasterSelectionMaskSource } from "../raster/selectionMask";
+import { drawRasterStroke } from "../raster/strokeDraw";
 import type { RasterMaskStroke, RasterRetouchEdit } from "../raster/types";
 import { getRasterAdjustedImage, getRasterAdjustedImageSync } from "./adjustmentCache";
 import { drawBookMockup } from "./bookMockup";
@@ -720,54 +721,6 @@ function drawClippedRasterStroke(
   ctx.globalCompositeOperation = stroke.mode === "paint" ? "source-over" : "destination-out";
   ctx.drawImage(layer, 0, 0);
   ctx.restore();
-}
-
-function drawRasterStroke(
-  ctx: CanvasRenderingContext2D,
-  stroke: RasterMaskStroke,
-  color = "#111827",
-) {
-  const points = stroke.points;
-  const hardness = Math.max(0, Math.min(1, stroke.hardness ?? 1));
-  const baseRadius = Math.max(0.5, stroke.size / 2);
-  const pressures = stroke.pressures ?? [];
-  const stamp = (x: number, y: number, pressure: number) => {
-    const radius = Math.max(0.5, baseRadius * Math.max(0.05, Math.min(1, pressure)));
-    ctx.beginPath();
-    if (hardness >= 0.999) {
-      ctx.fillStyle = color;
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-      return;
-    }
-
-    const innerRadius = radius * hardness;
-    const gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, radius);
-    gradient.addColorStop(0, color);
-    gradient.addColorStop(Math.max(0.01, Math.min(0.98, hardness)), color);
-    gradient.addColorStop(1, "transparent");
-    ctx.fillStyle = gradient;
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-  };
-
-  const pressureAt = (index: number) => pressures[index] ?? 1;
-  stamp(points[0][0], points[0][1], pressureAt(0));
-  for (let index = 1; index < points.length; index++) {
-    const from = points[index - 1];
-    const to = points[index];
-    const distance = Math.hypot(to[0] - from[0], to[1] - from[1]);
-    const spacing = Math.max(0.75, baseRadius * (hardness >= 0.999 ? 0.35 : 0.2));
-    const steps = Math.max(1, Math.ceil(distance / spacing));
-    for (let step = 1; step <= steps; step++) {
-      const t = step / steps;
-      stamp(
-        from[0] + (to[0] - from[0]) * t,
-        from[1] + (to[1] - from[1]) * t,
-        pressureAt(index - 1) + (pressureAt(index) - pressureAt(index - 1)) * t,
-      );
-    }
-  }
 }
 
 function applyImageMask(ctx: CanvasRenderingContext2D, el: ImageElement) {

@@ -181,7 +181,6 @@ export const TOOLBAR_TOOLS: ToolDefinition[] = [
   { id: "line", icon: IconLine, label: "Line", title: "Create a line" },
   { id: "image", icon: IconImage, label: "Image", title: "Add an image" },
   { id: "eraser", icon: IconEraser, label: "Eraser", title: "Erase an object" },
-  ...RASTER_TOOL_DEFINITIONS,
 ];
 
 export const TOOLS_WITH_OPTIONS = new Set<Tool>([

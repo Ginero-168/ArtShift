@@ -84,8 +84,8 @@ export function buildRasterStudioOpenPayload(image: ImageElement): RasterStudioO
     adjustments: image.adjustments,
     filterBlur: image.filterBlur,
     mask: image.mask,
-    rasterMask: image.rasterMask,
-    rasterEdits: image.rasterEdits,
+    rasterMask: image.rasterMask ? [...image.rasterMask] : undefined,
+    rasterEdits: image.rasterEdits ? [...image.rasterEdits] : undefined,
     sourceName: image.sourceName,
     placement: snapshotImagePlacement(image),
   };
@@ -94,6 +94,12 @@ export function buildRasterStudioOpenPayload(image: ImageElement): RasterStudioO
 /**
  * Build the element patch for a baked revision.
  * Callers must apply this via a single history-labeled updateElements call.
+ *
+ * Policy A (v1): flatten overlays into the new fileId and clear them on the
+ * element. Image binaries already live in the persist/IDB fileId side table;
+ * this is what keeps fat rasterEdits dataUrls out of saved JSON after Save.
+ * Do not strip overlays on document load — old projects stay readable until
+ * the user Saves in Raster Studio.
  */
 export function buildRasterStudioCommitPatch(
   input: RasterStudioCommitInput,
@@ -133,4 +139,16 @@ export function placementUnchanged(
     before.flipX === after.flipX &&
     before.flipY === after.flipY
   );
+}
+
+/** Restore the ImageElement overlays captured at Open (Cancel discard). */
+export function buildRasterStudioDiscardPatch(
+  payload: RasterStudioOpenPayload,
+): Pick<ImageElement, "rasterMask" | "rasterEdits" | "adjustments" | "filterBlur"> {
+  return {
+    rasterMask: payload.rasterMask,
+    rasterEdits: payload.rasterEdits,
+    adjustments: payload.adjustments,
+    filterBlur: payload.filterBlur,
+  };
 }

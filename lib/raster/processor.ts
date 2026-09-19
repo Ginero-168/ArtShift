@@ -28,6 +28,7 @@ export type RasterJob =
       seedX: number;
       seedY: number;
       tolerance: number;
+      contiguous?: boolean;
     }
   | {
       kind: "quickSelection";
@@ -169,6 +170,7 @@ export function executeRasterJobLocally(
           job.seedX,
           job.seedY,
           job.tolerance,
+          job.contiguous !== false,
         ),
       };
       break;
@@ -246,6 +248,7 @@ export async function executeRasterJobLocallyAsync(
             job.tolerance,
             {
               shouldCancel,
+              contiguous: job.contiguous !== false,
               onProgress: (progress) =>
                 options.onProgress?.({ progress: 0.05 + progress * 0.9, stage: "processing" }),
             },

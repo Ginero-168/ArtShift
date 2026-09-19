@@ -3,6 +3,7 @@ import { createEditorController } from "@/lib/engine/editorController";
 import { createImage } from "@/lib/engine/factory";
 import {
   buildRasterStudioCommitPatch,
+  buildRasterStudioDiscardPatch,
   buildRasterStudioOpenPayload,
   placementUnchanged,
 } from "@/lib/raster/studio/types";
@@ -148,5 +149,33 @@ describe("Raster Studio Smart Object contract", () => {
     expect(placementUnchanged(before, image)).toBe(true);
     expect(image.fileId).toBe("new-file");
     expect(image.rasterMask).toBeUndefined();
+  });
+
+  it("discard patch restores Open overlays without placement keys", () => {
+    const image = createImage({
+      x: 12,
+      y: 24,
+      width: 200,
+      height: 100,
+      fileId: "src-1",
+      naturalWidth: 200,
+      naturalHeight: 100,
+    });
+    image.rasterMask = [
+      {
+        id: "stroke-open",
+        points: [[1, 1]],
+        size: 8,
+        opacity: 1,
+        hardness: 1,
+        mode: "paint",
+      },
+    ];
+    const payload = buildRasterStudioOpenPayload(image);
+    image.rasterMask = [];
+    const patch = buildRasterStudioDiscardPatch(payload);
+    expect(patch.rasterMask).toHaveLength(1);
+    expect(patch).not.toHaveProperty("x");
+    expect(patch).not.toHaveProperty("fileId");
   });
 });

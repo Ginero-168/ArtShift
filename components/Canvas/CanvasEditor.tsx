@@ -19,7 +19,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { IconWand } from "@/components/icons";
 import {
   clearCanvasViewport,
   publishCanvasViewport,
@@ -59,14 +58,7 @@ import {
   type Tool,
   useEngine,
 } from "@/lib/engine/store";
-import {
-  isRasterBrushCursorTool,
-  isRasterPaintTool,
-  isRasterRetouchTool,
-  isRasterSelectionTool,
-  pointerPressure,
-  toolToCursor,
-} from "@/lib/engine/toolBehavior";
+import { toolToCursor } from "@/lib/engine/toolBehavior";
 import type {
   EngineElement,
   EngineSlide,
@@ -74,28 +66,6 @@ import type {
   VectorPathElement,
 } from "@/lib/engine/types";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
-import { magicWandMaskToDataUrl, type RasterPixelData } from "@/lib/raster/magicWand";
-import { createRasterStroke } from "@/lib/raster/mask";
-import { getRasterProcessor } from "@/lib/raster/processorFactory";
-import { createRasterRetouchEdit } from "@/lib/raster/retouch";
-import {
-  appendRasterPolygonPoint,
-  canCommitRasterPolygon,
-  createRasterSelectionOperation,
-  type RasterSelection,
-  type RasterSelectionMode,
-  type RasterSelectionShape,
-  selectionModeFromModifiers,
-} from "@/lib/raster/selection";
-import {
-  createMagicWandSelectionShape,
-  createMagicWandSelectionShapeAsync,
-  createRasterSelectionSample,
-  quickSelectionMaskForPointAsync,
-  rasterToolToShape,
-  selectionShapeFromPoints,
-  worldToImageLocal,
-} from "@/lib/raster/selectionInteraction";
 import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import BindingIndicators from "./BindingIndicators";
@@ -114,7 +84,6 @@ import PathNodeOverlay from "./PathNodeOverlay";
 import PenLiveOverlay from "./PenLiveOverlay";
 import ProcessingPreviewOverlay from "./ProcessingPreviewOverlay";
 import RasterPerformanceOverlay from "./RasterPerformanceOverlay";
-import RasterSelectionOverlay from "./RasterSelectionOverlay";
 import TextOverlay from "./TextOverlay";
 import Transformer from "./Transformer";
 import { usePasteDrop } from "./usePasteDrop";
@@ -142,55 +111,7 @@ type DragState =
       additive: boolean;
     }
   | { kind: "erase" }
-  | {
-      kind: "rasterPaint";
-      elementId: string;
-      localPoints: Array<[number, number]>;
-      worldPoints: WorldPoint[];
-      pressures: number[];
-      mode: "erase" | "paint";
-      size: number;
-      opacity: number;
-      hardness: number;
-      color: string;
-      selection?: RasterSelection;
-      selectionMaskDataUrl?: string;
-    }
-  | {
-      kind: "rasterRetouch";
-      elementId: string;
-      mode: "heal" | "clone";
-      localPoints: Array<[number, number]>;
-      worldPoints: WorldPoint[];
-      sourcePoint?: [number, number];
-      size: number;
-      opacity: number;
-      selection?: RasterSelection;
-    }
-  | {
-      kind: "rasterSelection";
-      elementId: string;
-      shape: "rect" | "ellipse" | "lasso" | "polygon";
-      startLocal: [number, number];
-      localPoints: Array<[number, number]>;
-      mode: RasterSelectionMode;
-    }
-  | {
-      kind: "rasterQuickSelection";
-      elementId: string;
-      imageData: RasterPixelData;
-      mask: Uint8Array;
-      mode: RasterSelectionMode;
-      tolerance: number;
-      brushSize: number;
-      lastLocal?: [number, number];
-      pending: boolean;
-      generation: number;
-      finishOnComplete?: boolean;
-    }
   | null;
-
-type QuickSelectionDrag = Extract<DragState, { kind: "rasterQuickSelection" }>;
 
 export type CanvasEditorHandle = {
   resetView: () => void;
@@ -218,7 +139,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const activeGhostOverlay = useEngine((s) => s.activeGhostOverlay);
   const lineSubtype = useEngine((s) => s.lineSubtype);
   const setTool = useEngine((s) => s.setTool);
-  const setEditorMode = useEngine((s) => s.setEditorMode);
   const croppingImageId = useEngine((s) => s.croppingImageId);
   const setCroppingImageId = useEngine((s) => s.setCroppingImageId);
   const addElement = useEngine((s) => s.addElement);
@@ -235,14 +155,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const currentSlide = useEngine((s) => s.currentSlide);
   const currentTool = useEngine((s) => s.currentTool);
   const currentSelection = useEngine((s) => s.currentSelection);
-  const rasterBrushSize = useEngine((s) => s.rasterBrushSize);
-  const rasterBrushOpacity = useEngine((s) => s.rasterBrushOpacity);
-  const rasterBrushHardness = useEngine((s) => s.rasterBrushHardness);
-  const rasterBrushColor = useEngine((s) => s.rasterBrushColor);
-  const rasterMagicWandTolerance = useEngine((s) => s.rasterMagicWandTolerance);
-  const rasterQuickSelectionSize = useEngine((s) => s.rasterQuickSelectionSize);
-  const activeRasterSelection = useEngine((s) => s.activeRasterSelection);
-  const rasterProcessor = getRasterProcessor();
   const editorController = useMemo(
     () =>
       createEditorController({
@@ -267,47 +179,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     ],
   );
 
-  const commitQuickSelection = useCallback(
-    (drag: QuickSelectionDrag) => {
-      const activeSlide = editorController.currentSlide();
-      const image = activeSlide?.elements.find(
-        (element): element is import("@/lib/engine/types").ImageElement =>
-          element.id === drag.elementId && element.type === "image",
-      );
-      if (image && drag.mask.some((value) => value !== 0)) {
-        const shape: RasterSelectionShape = {
-          kind: "bitmap",
-          dataUrl: magicWandMaskToDataUrl(drag.mask, drag.imageData.width, drag.imageData.height),
-        };
-        editorController.commitRasterSelection(
-          image.id,
-          createRasterSelectionOperation(drag.mode, shape),
-        );
-      }
-      setRasterSelectionDraft(null);
-    },
-    [editorController],
-  );
-
   const rootRef = useRef<CanvasRootHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState<ViewTransform>({ scale: 1, tx: 0, ty: 0 });
   const [draft, setDraft] = useState<EngineElement | null>(null);
-  const [rasterBrushDraft, setRasterBrushDraft] = useState<{
-    elementId: string;
-    points: WorldPoint[];
-    pressures: number[];
-    size: number;
-    opacity: number;
-    hardness: number;
-    color: string;
-    mode: "erase" | "paint";
-  } | null>(null);
-  const [rasterSelectionDraft, setRasterSelectionDraft] = useState<{
-    elementId: string;
-    shape: RasterSelectionShape;
-    mode: RasterSelectionMode;
-  } | null>(null);
   const [marqueeRect, setMarqueeRect] = useState<{
     x: number;
     y: number;
@@ -326,14 +201,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const penDraggingRef = useRef<{ start: WorldPoint; nodeIndex: number } | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<DragState>(null);
-  const quickSelectionRequestRef = useRef(0);
-  const quickSelectionAbortRef = useRef<AbortController | null>(null);
-  const rasterSelectionRequestRef = useRef(0);
-  const rasterBrushCursorRef = useRef<HTMLDivElement | null>(null);
-  const magicWandCursorRef = useRef<HTMLDivElement | null>(null);
   const replaceImageInputRef = useRef<HTMLInputElement | null>(null);
   const replaceImageTargetIdRef = useRef<string | null>(null);
-  const rasterCloneSourcesRef = useRef(new Map<string, [number, number]>());
   const processingPreviews = useSyncExternalStore(
     subscribeProcessingPreview,
     getProcessingPreviews,
@@ -405,30 +274,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     [selectOnly, updateElements],
   );
 
-  const moveRasterBrushCursor = useCallback((point: { x: number; y: number }) => {
-    const cursor = rasterBrushCursorRef.current;
-    if (cursor) {
-      cursor.style.setProperty("--brush-cursor-x", `${point.x}px`);
-      cursor.style.setProperty("--brush-cursor-y", `${point.y}px`);
-      cursor.style.setProperty("--brush-cursor-opacity", "1");
-    }
-    const wandCursor = magicWandCursorRef.current;
-    if (wandCursor) {
-      wandCursor.style.setProperty("--magic-cursor-x", `${point.x}px`);
-      wandCursor.style.setProperty("--magic-cursor-y", `${point.y}px`);
-      wandCursor.style.setProperty("--magic-cursor-opacity", "1");
-    }
-  }, []);
-
-  const hideRasterBrushCursor = useCallback(() => {
-    if (rasterBrushCursorRef.current) {
-      rasterBrushCursorRef.current.style.setProperty("--brush-cursor-opacity", "0");
-    }
-    if (magicWandCursorRef.current) {
-      magicWandCursorRef.current.style.setProperty("--magic-cursor-opacity", "0");
-    }
-  }, []);
-
   useImperativeHandle(
     ref,
     () => ({
@@ -479,32 +324,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   }, [slide, view]);
 
   useEffect(() => {
-    if (tool !== "rasterQuickSelection") {
-      quickSelectionAbortRef.current?.abort();
-      quickSelectionAbortRef.current = null;
-      quickSelectionRequestRef.current += 1;
-    }
     if (tool === "pen") return;
     setPenNodes([]);
     setDraft(null);
-    if (!isRasterPaintTool(tool)) {
-      setRasterBrushDraft(null);
-      if (dragRef.current?.kind === "rasterPaint") dragRef.current = null;
-    }
-    if (!isRasterSelectionTool(tool)) {
-      setRasterSelectionDraft(null);
-      if (
-        dragRef.current?.kind === "rasterSelection" ||
-        dragRef.current?.kind === "rasterQuickSelection"
-      ) {
-        dragRef.current = null;
-      }
-    }
   }, [tool]);
-
-  useEffect(() => {
-    return () => quickSelectionAbortRef.current?.abort();
-  }, []);
 
   useEffect(() => {
     if (tool !== "directSelect") {
@@ -531,46 +354,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     window.addEventListener("keydown", finishPath);
     return () => window.removeEventListener("keydown", finishPath);
   }, [addElement, penNodes, selectOnly, setTool, tool]);
-
-  useEffect(() => {
-    if (tool !== "rasterPolygonLasso") return;
-
-    function finishPolygon(event: KeyboardEvent) {
-      const current = dragRef.current;
-      if (current?.kind !== "rasterSelection" || current.shape !== "polygon") return;
-
-      if (event.key === "Escape") {
-        dragRef.current = null;
-        setRasterSelectionDraft(null);
-        return;
-      }
-
-      if (event.key !== "Enter" || !canCommitRasterPolygon(current.localPoints)) return;
-      const slideNow = currentSlide();
-      const image = slideNow?.elements.find(
-        (element): element is import("@/lib/engine/types").ImageElement =>
-          element.id === current.elementId && element.type === "image",
-      );
-      if (!image) return;
-
-      const shape = selectionShapeFromPoints(
-        "polygon",
-        current.localPoints,
-        image.width,
-        image.height,
-      );
-      editorController.commitRasterSelection(
-        image.id,
-        createRasterSelectionOperation(current.mode, shape),
-      );
-      dragRef.current = null;
-      setRasterSelectionDraft(null);
-      selectOnly([image.id]);
-    }
-
-    window.addEventListener("keydown", finishPolygon);
-    return () => window.removeEventListener("keydown", finishPolygon);
-  }, [currentSlide, editorController, selectOnly, tool]);
 
   usePasteDrop(containerRef, (x, y) => rootRef.current?.clientToWorld(x, y) ?? { x: 0, y: 0 });
 
@@ -716,238 +499,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         if (hit?.type === "image") {
           selectOnly([hit.id]);
           openRasterStudioForElement(hit);
-          setEditorMode("vector");
           setTool("select");
         }
-        return;
-      }
-
-      if (isRasterPaintTool(tool)) {
-        const hit = pickTopMost(p, slide);
-        if (hit?.type !== "image") return;
-        selectOnly([hit.id]);
-        const local = worldToImageLocal(p, hit);
-        const isPencil = tool === "rasterPencil";
-        const isEraser = tool === "rasterEraser";
-        const pressure = pointerPressure(e);
-        dragRef.current = {
-          kind: "rasterPaint",
-          elementId: hit.id,
-          localPoints: [local],
-          worldPoints: [p],
-          pressures: [pressure],
-          mode: isEraser ? "erase" : "paint",
-          size: rasterBrushSize,
-          opacity: rasterBrushOpacity,
-          hardness: isPencil ? 1 : rasterBrushHardness,
-          color: rasterBrushColor,
-          selection: editorController.selectionForImage(activeRasterSelection, hit.id),
-        };
-        setRasterBrushDraft({
-          elementId: hit.id,
-          points: [p],
-          pressures: [pressure],
-          size: rasterBrushSize,
-          opacity: rasterBrushOpacity,
-          hardness: isPencil ? 1 : rasterBrushHardness,
-          color: rasterBrushColor,
-          mode: isEraser ? "erase" : "paint",
-        });
-        return;
-      }
-
-      if (isRasterRetouchTool(tool)) {
-        const hit = pickTopMost(p, slide);
-        if (hit?.type !== "image") return;
-        selectOnly([hit.id]);
-        const local = worldToImageLocal(p, hit);
-        if (tool === "rasterClone" && e.altKey) {
-          rasterCloneSourcesRef.current.set(hit.id, local);
-          return;
-        }
-        const mode = tool === "rasterHealing" ? "heal" : "clone";
-        dragRef.current = {
-          kind: "rasterRetouch",
-          elementId: hit.id,
-          mode,
-          localPoints: [local],
-          worldPoints: [p],
-          sourcePoint: rasterCloneSourcesRef.current.get(hit.id),
-          size: rasterBrushSize,
-          opacity: rasterBrushOpacity,
-          selection: editorController.selectionForImage(activeRasterSelection, hit.id),
-        };
-        setRasterBrushDraft({
-          elementId: hit.id,
-          points: [p],
-          pressures: [1],
-          size: rasterBrushSize,
-          opacity: rasterBrushOpacity,
-          hardness: rasterBrushHardness,
-          color: "#64748b",
-          mode: "paint",
-        });
-        return;
-      }
-
-      if (tool === "rasterMagicWand") {
-        const hit = pickTopMost(p, slide);
-        if (hit?.type !== "image") return;
-        const local = worldToImageLocal(p, hit);
-        const mode = selectionModeFromModifiers(e);
-        const requestId = ++rasterSelectionRequestRef.current;
-        const applyShape = (shape: RasterSelectionShape | null) => {
-          if (
-            !shape ||
-            requestId !== rasterSelectionRequestRef.current ||
-            !editorController.isToolActive("rasterMagicWand")
-          ) {
-            return;
-          }
-          editorController.commitRasterSelection(
-            hit.id,
-            createRasterSelectionOperation(mode, shape),
-          );
-          selectOnly([hit.id]);
-        };
-        const sample = createRasterSelectionSample(hit, images);
-        if (sample && sample.width * sample.height >= 250_000) {
-          void createMagicWandSelectionShapeAsync(
-            hit,
-            local,
-            rasterMagicWandTolerance,
-            images,
-            rasterProcessor,
-          ).then(applyShape);
-          return;
-        }
-        applyShape(createMagicWandSelectionShape(hit, local, rasterMagicWandTolerance, images));
-        return;
-      }
-
-      if (tool === "rasterQuickSelection") {
-        const hit = pickTopMost(p, slide);
-        if (hit?.type !== "image") return;
-        const imageData = createRasterSelectionSample(hit, images);
-        if (!imageData) return;
-        const local = worldToImageLocal(p, hit);
-        const mode = selectionModeFromModifiers(e);
-        quickSelectionAbortRef.current?.abort();
-        const abortController = new AbortController();
-        quickSelectionAbortRef.current = abortController;
-        const drag: QuickSelectionDrag = {
-          kind: "rasterQuickSelection",
-          elementId: hit.id,
-          imageData,
-          mask: new Uint8Array(imageData.width * imageData.height),
-          mode,
-          tolerance: rasterMagicWandTolerance,
-          brushSize: rasterQuickSelectionSize,
-          lastLocal: local,
-          pending: true,
-          generation: 0,
-        };
-        dragRef.current = drag;
-        setRasterSelectionDraft({
-          elementId: hit.id,
-          shape: {
-            kind: "bitmap",
-            dataUrl: magicWandMaskToDataUrl(drag.mask, imageData.width, imageData.height),
-          },
-          mode,
-        });
-        selectOnly([hit.id]);
-        const requestId = ++quickSelectionRequestRef.current;
-        void quickSelectionMaskForPointAsync(
-          imageData,
-          hit,
-          local,
-          drag.brushSize,
-          drag.tolerance,
-          abortController.signal,
-          rasterProcessor,
-        )
-          .then((stamp) => {
-            const current = dragRef.current;
-            if (
-              current !== drag ||
-              current.kind !== "rasterQuickSelection" ||
-              current.generation !== drag.generation ||
-              quickSelectionRequestRef.current !== requestId
-            ) {
-              return;
-            }
-            for (let i = 0; i < current.mask.length; i++) {
-              if (stamp[i]) current.mask[i] = 1;
-            }
-            current.pending = false;
-            setRasterSelectionDraft({
-              elementId: current.elementId,
-              shape: {
-                kind: "bitmap",
-                dataUrl: magicWandMaskToDataUrl(
-                  current.mask,
-                  current.imageData.width,
-                  current.imageData.height,
-                ),
-              },
-              mode: current.mode,
-            });
-            if (current.finishOnComplete) {
-              dragRef.current = null;
-              commitQuickSelection(current);
-            }
-          })
-          .catch(() => {
-            const current = dragRef.current;
-            if (current === drag && current.kind === "rasterQuickSelection") {
-              current.pending = false;
-              if (current.finishOnComplete) {
-                dragRef.current = null;
-                setRasterSelectionDraft(null);
-              }
-            }
-          });
-        return;
-      }
-
-      if (isRasterSelectionTool(tool)) {
-        const hit = pickTopMost(p, slide);
-        if (hit?.type !== "image") return;
-        const local = worldToImageLocal(p, hit);
-        const shape = rasterToolToShape(tool);
-
-        if (
-          shape === "polygon" &&
-          dragRef.current?.kind === "rasterSelection" &&
-          dragRef.current.shape === "polygon" &&
-          dragRef.current.elementId === hit.id
-        ) {
-          const nextPoints = appendRasterPolygonPoint(dragRef.current.localPoints, local);
-          dragRef.current = { ...dragRef.current, localPoints: nextPoints };
-          setRasterSelectionDraft({
-            elementId: hit.id,
-            shape: selectionShapeFromPoints(shape, nextPoints, hit.width, hit.height),
-            mode: dragRef.current.mode,
-          });
-          return;
-        }
-
-        selectOnly([hit.id]);
-        const mode = selectionModeFromModifiers(e);
-        dragRef.current = {
-          kind: "rasterSelection",
-          elementId: hit.id,
-          shape,
-          startLocal: local,
-          localPoints: [local],
-          mode,
-        };
-        setRasterSelectionDraft({
-          elementId: hit.id,
-          shape: selectionShapeFromPoints(shape, [local, local], hit.width, hit.height),
-          mode,
-        });
         return;
       }
 
@@ -968,19 +521,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       ctxMenu,
       deleteElements,
       lineSubtype,
-      images,
       penNodes,
       selectOnly,
       selectedIds,
-      rasterBrushColor,
-      rasterBrushHardness,
-      rasterBrushOpacity,
-      rasterBrushSize,
-      rasterMagicWandTolerance,
-      rasterQuickSelectionSize,
-      rasterProcessor,
-      activeRasterSelection,
-      commitQuickSelection,
       editorController,
       setTool,
       slide,
@@ -992,35 +535,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
   const onDoubleClickWorld = useCallback(
     (p: WorldPoint) => {
       if (!slide) return;
-
-      const polygon = dragRef.current;
-      if (
-        tool === "rasterPolygonLasso" &&
-        polygon?.kind === "rasterSelection" &&
-        polygon.shape === "polygon" &&
-        canCommitRasterPolygon(polygon.localPoints)
-      ) {
-        const image = slide.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === polygon.elementId && element.type === "image",
-        );
-        if (image) {
-          const shape = selectionShapeFromPoints(
-            "polygon",
-            polygon.localPoints,
-            image.width,
-            image.height,
-          );
-          editorController.commitRasterSelection(
-            image.id,
-            createRasterSelectionOperation(polygon.mode, shape),
-          );
-          dragRef.current = null;
-          setRasterSelectionDraft(null);
-          selectOnly([image.id]);
-        }
-        return;
-      }
 
       const hit = pickTopMost(p, slide);
       if (!hit) return;
@@ -1122,150 +636,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         previewElements(preview.patches);
         return;
       }
-      if (d.kind === "rasterPaint") {
-        const image = slide.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (!image) return;
-        const local = worldToImageLocal(p, image);
-        const last = d.localPoints.at(-1);
-        if (last && Math.hypot(local[0] - last[0], local[1] - last[1]) < 2 / view.scale) {
-          return;
-        }
-        d.localPoints.push(local);
-        d.worldPoints.push(p);
-        d.pressures.push(pointerPressure(_e));
-        setRasterBrushDraft({
-          elementId: d.elementId,
-          points: [...d.worldPoints],
-          pressures: [...d.pressures],
-          size: d.size,
-          opacity: d.opacity,
-          hardness: d.hardness,
-          color: d.color,
-          mode: d.mode,
-        });
-        return;
-      }
-      if (d.kind === "rasterRetouch") {
-        const image = slide.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (!image) return;
-        const local = worldToImageLocal(p, image);
-        const last = d.localPoints.at(-1);
-        if (last && Math.hypot(local[0] - last[0], local[1] - last[1]) < 2 / view.scale) return;
-        d.localPoints.push(local);
-        d.worldPoints.push(p);
-        setRasterBrushDraft({
-          elementId: d.elementId,
-          points: [...d.worldPoints],
-          pressures: d.worldPoints.map(() => 1),
-          size: d.size,
-          opacity: d.opacity,
-          hardness: rasterBrushHardness,
-          color: "#64748b",
-          mode: "paint",
-        });
-        return;
-      }
-      if (d.kind === "rasterQuickSelection") {
-        const image = slide.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (!image) return;
-        const local = worldToImageLocal(p, image);
-        if (
-          d.lastLocal &&
-          Math.hypot(local[0] - d.lastLocal[0], local[1] - d.lastLocal[1]) <
-            Math.max(2 / view.scale, d.brushSize * 0.2)
-        ) {
-          return;
-        }
-        d.lastLocal = local;
-        d.pending = true;
-        const generation = ++d.generation;
-        quickSelectionAbortRef.current?.abort();
-        const abortController = new AbortController();
-        quickSelectionAbortRef.current = abortController;
-        const requestId = ++quickSelectionRequestRef.current;
-        void quickSelectionMaskForPointAsync(
-          d.imageData,
-          image,
-          local,
-          d.brushSize,
-          d.tolerance,
-          abortController.signal,
-        )
-          .then((stamp) => {
-            const current = dragRef.current;
-            if (
-              current !== d ||
-              current.kind !== "rasterQuickSelection" ||
-              current.generation !== generation ||
-              quickSelectionRequestRef.current !== requestId
-            ) {
-              return;
-            }
-            for (let i = 0; i < current.mask.length; i++) {
-              if (stamp[i]) current.mask[i] = 1;
-            }
-            current.pending = false;
-            setRasterSelectionDraft({
-              elementId: current.elementId,
-              shape: {
-                kind: "bitmap",
-                dataUrl: magicWandMaskToDataUrl(
-                  current.mask,
-                  current.imageData.width,
-                  current.imageData.height,
-                ),
-              },
-              mode: current.mode,
-            });
-            if (current.finishOnComplete) {
-              dragRef.current = null;
-              commitQuickSelection(current);
-            }
-          })
-          .catch(() => {
-            const current = dragRef.current;
-            if (current === d && current.kind === "rasterQuickSelection") {
-              current.pending = false;
-              if (current.finishOnComplete) {
-                dragRef.current = null;
-                setRasterSelectionDraft(null);
-              }
-            }
-          });
-        return;
-      }
-      if (d.kind === "rasterSelection") {
-        const image = slide.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (!image) return;
-        if (d.shape === "polygon") return;
-        const local = worldToImageLocal(p, image);
-        if (d.shape === "rect" || d.shape === "ellipse") {
-          d.localPoints = [d.startLocal, local];
-        } else {
-          const last = d.localPoints.at(-1);
-          if (!last || Math.hypot(local[0] - last[0], local[1] - last[1]) >= 2 / view.scale) {
-            d.localPoints.push(local);
-          }
-        }
-        setRasterSelectionDraft({
-          elementId: d.elementId,
-          shape: selectionShapeFromPoints(d.shape, d.localPoints, image.width, image.height),
-          mode: d.mode,
-        });
-        return;
-      }
       if (d.kind === "freedraw") {
         d.points.push([p.x, p.y, 0.5]);
         setDraft(createFreedraw(d.points));
@@ -1292,7 +662,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     [
       addElements,
       checkpointInteraction,
-      commitQuickSelection,
       deleteElements,
       lineSubtype,
       penNodes,
@@ -1301,7 +670,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       snapGrid,
       tool,
       view.scale,
-      rasterBrushHardness,
     ],
   );
 
@@ -1310,15 +678,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       penDraggingRef.current = null;
       const d = dragRef.current;
       if (!d) return;
-      if (d.kind === "rasterSelection" && d.shape === "polygon") {
-        // Polygon Lasso is click-to-add. Keep its session alive until a
-        // double-click or Enter closes the polygon.
-        return;
-      }
-      if (d.kind === "rasterQuickSelection" && d.pending) {
-        d.finishOnComplete = true;
-        return;
-      }
       dragRef.current = null;
       setIsObjectDragging(false);
       if (d.kind === "move") {
@@ -1355,78 +714,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           }
         }
 
-        return;
-      }
-      if (d.kind === "rasterPaint") {
-        const image = slide?.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (image && d.localPoints.length > 0) {
-          const stroke = createRasterStroke(d.localPoints, d.size, d.opacity, {
-            mode: d.mode,
-            pressures: d.pressures,
-            color: d.color,
-            hardness: d.hardness,
-            selection: d.selection,
-            selectionMaskDataUrl: d.selectionMaskDataUrl,
-          });
-          editorController.commitRasterStroke(
-            image.id,
-            stroke,
-            d.mode === "erase" ? "erase image pixels" : "paint image pixels",
-          );
-        }
-        setRasterBrushDraft(null);
-        return;
-      }
-      if (d.kind === "rasterRetouch") {
-        const image = slide?.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (image) {
-          const pixels = createRasterSelectionSample(image, images);
-          if (pixels) {
-            void createRasterRetouchEdit(image, pixels, {
-              mode: d.mode,
-              points: d.localPoints,
-              sourcePoint: d.sourcePoint,
-              size: d.size,
-              opacity: d.opacity,
-              selection: d.selection,
-            }).then((edit) => {
-              if (edit) {
-                editorController.commitRasterRetouch(
-                  image.id,
-                  edit,
-                  d.mode === "heal" ? "heal image pixels" : "clone image pixels",
-                );
-              }
-            });
-          }
-        }
-        setRasterBrushDraft(null);
-        return;
-      }
-      if (d.kind === "rasterQuickSelection") {
-        commitQuickSelection(d);
-        return;
-      }
-      if (d.kind === "rasterSelection") {
-        const image = slide?.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === d.elementId && element.type === "image",
-        );
-        if (
-          image &&
-          d.localPoints.length >= (d.shape === "rect" || d.shape === "ellipse" ? 2 : 3)
-        ) {
-          const shape = selectionShapeFromPoints(d.shape, d.localPoints, image.width, image.height);
-          const operation = createRasterSelectionOperation(d.mode, shape);
-          editorController.commitRasterSelection(image.id, operation);
-        }
-        setRasterSelectionDraft(null);
         return;
       }
       if (d.kind === "freedraw") {
@@ -1518,14 +805,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     [
       addElement,
       commitInteraction,
-      commitQuickSelection,
       lineSubtype,
       selectOnly,
       setTool,
       slide,
       tool,
       editorController,
-      images,
     ],
   );
 
@@ -1568,14 +853,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
     !editingFrame &&
     (tool === "select" || tool === "rasterMove") &&
     selectedIds.size > 0;
-
-  const rasterSelectionImage =
-    selectedIds.size === 1
-      ? (slide.elements.find(
-          (element): element is import("@/lib/engine/types").ImageElement =>
-            element.id === Array.from(selectedIds)[0] && element.type === "image",
-        ) ?? null)
-      : null;
 
   const editingScreenPos =
     editingText && rootRef.current
@@ -1623,8 +900,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         toolCursor={toolToCursor(tool)}
         onPointerDownWorld={onPointerDown}
         onPointerMoveWorld={onPointerMove}
-        onPointerMoveScreen={moveRasterBrushCursor}
-        onPointerLeaveCanvas={hideRasterBrushCursor}
         onPointerUpWorld={onPointerUp}
         onDoubleClickWorld={onDoubleClickWorld}
         onViewChange={handleViewChange}
@@ -1638,21 +913,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           />
         ))}
         <Marquee rect={marqueeRect} />
-        {rasterSelectionImage ? (
-          <RasterSelectionOverlay
-            image={rasterSelectionImage}
-            selection={editorController.selectionForImage(
-              activeRasterSelection,
-              rasterSelectionImage.id,
-            )}
-            draft={
-              rasterSelectionDraft?.elementId === rasterSelectionImage.id
-                ? rasterSelectionDraft
-                : null
-            }
-            worldToScreen={(point) => rootRef.current?.worldToScreen(point) ?? { x: 0, y: 0 }}
-          />
-        ) : null}
         <Guides
           guides={guides}
           worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
@@ -1667,16 +927,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
           elements={slide.elements}
           worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
         />
-        {rasterBrushDraft ? (
-          <RasterBrushPreview
-            points={rasterBrushDraft.points}
-            size={rasterBrushDraft.size}
-            opacity={rasterBrushDraft.opacity}
-            hardness={rasterBrushDraft.hardness}
-            color={rasterBrushDraft.mode === "erase" ? "#ffffff" : rasterBrushDraft.color}
-            worldToScreen={(pt) => rootRef.current?.worldToScreen(pt) ?? { x: 0, y: 0 }}
-          />
-        ) : null}
         {editingPath ? (
           <PathNodeOverlay
             element={editingPath}
@@ -1763,67 +1013,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
             onClose={() => setEditingFrameId(null)}
           />
         )}
-        {tool === "rasterMagicWand" ? (
-          <div
-            ref={magicWandCursorRef}
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: -14,
-              top: -10,
-              width: 24,
-              height: 24,
-              color: "#1d4ed8",
-              opacity: "var(--magic-cursor-opacity, 0)",
-              pointerEvents: "none",
-              transform:
-                "translate3d(var(--magic-cursor-x, -9999px), var(--magic-cursor-y, -9999px), 0)",
-              filter: "drop-shadow(0 1px 1px rgba(255, 255, 255, 0.95))",
-              zIndex: 51,
-            }}
-          >
-            <IconWand size={24} />
-          </div>
-        ) : null}
-        {isRasterBrushCursorTool(tool) ? (
-          <div
-            ref={rasterBrushCursorRef}
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left:
-                -(
-                  (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
-                  view.scale
-                ) / 2,
-              top:
-                -(
-                  (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
-                  view.scale
-                ) / 2,
-              width: Math.max(
-                2,
-                (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
-                  view.scale,
-              ),
-              height: Math.max(
-                2,
-                (tool === "rasterQuickSelection" ? rasterQuickSelectionSize : rasterBrushSize) *
-                  view.scale,
-              ),
-              border: "1px solid rgba(17, 24, 39, 0.9)",
-              borderRadius: "50%",
-              boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.95)",
-              boxSizing: "border-box",
-              opacity: "var(--brush-cursor-opacity, 0)",
-              pointerEvents: "none",
-              transform:
-                "translate3d(var(--brush-cursor-x, -9999px), var(--brush-cursor-y, -9999px), 0)",
-              willChange: "transform",
-              zIndex: 50,
-            }}
-          />
-        ) : null}
       </CanvasRoot>
       <RasterPerformanceOverlay />
       {ctxMenu && <ContextMenu position={ctxMenu} onClose={() => setCtxMenu(null)} />}
@@ -1947,61 +1136,6 @@ function makeDraftFor(
     default:
       return null;
   }
-}
-
-function RasterBrushPreview({
-  points,
-  size,
-  opacity,
-  hardness,
-  color,
-  worldToScreen,
-}: {
-  points: WorldPoint[];
-  size: number;
-  opacity: number;
-  hardness: number;
-  color: string;
-  worldToScreen: (point: WorldPoint) => WorldPoint;
-}) {
-  const screenPoints = points.map(worldToScreen);
-  const last = screenPoints.at(-1);
-  if (!last) return null;
-  const offset = worldToScreen({ x: points.at(-1)!.x + size / 2, y: points.at(-1)!.y });
-  const radius = Math.max(2, Math.hypot(offset.x - last.x, offset.y - last.y));
-  return (
-    <svg
-      aria-hidden="true"
-      style={{
-        position: "absolute",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        pointerEvents: "none",
-      }}
-    >
-      {screenPoints.length > 1 ? (
-        <polyline
-          points={screenPoints.map((point) => `${point.x},${point.y}`).join(" ")}
-          fill="none"
-          stroke={color}
-          strokeOpacity={Math.max(0.2, opacity)}
-          strokeWidth={Math.max(1, radius * 2)}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      ) : null}
-      <circle
-        cx={last.x}
-        cy={last.y}
-        r={radius}
-        fill={color}
-        fillOpacity={Math.max(0.08, opacity * (0.1 + hardness * 0.15))}
-        stroke="#111827"
-        strokeWidth={1}
-      />
-    </svg>
-  );
 }
 
 /** Given a clicked element, expand to all eligible elements in its selection group. */

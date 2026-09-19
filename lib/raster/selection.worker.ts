@@ -10,6 +10,7 @@ type SelectionWorkerRequest = {
   seedX: number;
   seedY: number;
   tolerance: number;
+  contiguous?: boolean;
 };
 
 type SelectionWorkerResponse = {
@@ -47,6 +48,7 @@ workerScope.onmessage = (event) => {
       request.seedX,
       request.seedY,
       request.tolerance,
+      request.contiguous !== false,
     );
     workerScope.postMessage({ id: request.id, mask: mask.buffer as ArrayBuffer }, [mask.buffer]);
   } catch (error) {

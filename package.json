@@ -28,6 +28,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
     "@huggingface/transformers": "^4.2.0",
+    "@jsquash/png": "^3.1.1",
+    "@jsquash/webp": "^1.5.0",
     "@techstark/opencv-js": "^5.0.0-release.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",

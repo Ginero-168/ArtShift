@@ -8,7 +8,10 @@ import { createRasterSelectionOperation } from "@/lib/raster/selection";
 import { useRasterStudioSession } from "@/lib/raster/studio/sessionStore";
 
 describe("Canvas hotkeys", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useRasterStudioSession.getState().close();
+  });
 
   beforeEach(() => {
     useEngine.getState().loadDoc({
@@ -190,9 +193,8 @@ describe("Canvas hotkeys", () => {
     expect(preventedEmpty).not.toHaveBeenCalled();
   });
 
-  it("duplicates selection with Command+D outside raster mode", () => {
+  it("duplicates selection with Command+D", () => {
     const st = useEngine.getState();
-    st.setEditorMode("vector");
     const text = createText({ x: 12, y: 12, text: "Dup" });
     st.addElement(text);
     st.selectOnly([text.id]);
@@ -207,27 +209,15 @@ describe("Canvas hotkeys", () => {
     ).toHaveLength(2);
   });
 
-  it("adjusts raster brush sizes with Adobe-style bracket shortcuts", () => {
+  it("does not change brush size from the design canvas when Studio is closed", () => {
     const st = useEngine.getState();
-
-    st.setTool("rasterBrush");
     st.setRasterBrushSize(48);
     handleCanvasHotkey(new KeyboardEvent("keydown", { key: "]", code: "BracketRight" }));
-    expect(useEngine.getState().rasterBrushSize).toBe(49);
-    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "[", code: "BracketLeft" }));
     expect(useEngine.getState().rasterBrushSize).toBe(48);
-
-    st.setTool("rasterQuickSelection");
-    st.setRasterQuickSelectionSize(96);
-    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "]", code: "BracketRight" }));
-    expect(useEngine.getState().rasterQuickSelectionSize).toBe(97);
-    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "[", code: "BracketLeft" }));
-    expect(useEngine.getState().rasterQuickSelectionSize).toBe(96);
   });
 
-  it("deletes pixels inside an active raster Selection instead of deleting the image", () => {
+  it("deletes the image object on Delete even if a leftover pixel Selection exists", () => {
     const st = useEngine.getState();
-    st.setTool("rasterMove");
     const image = createImage({
       x: 40,
       y: 40,
@@ -261,35 +251,24 @@ describe("Canvas hotkeys", () => {
         ?.elements.find(
           (element): element is ImageElement => element.id === image.id && element.type === "image",
         );
-    expect(currentImage()?.isDeleted).toBe(false);
-    expect(currentImage()?.rasterMask).toHaveLength(1);
-    expect(currentImage()?.rasterMask?.[0].mode).toBe("erase");
-    expect(currentImage()?.rasterMask?.[0].selection?.operations).toHaveLength(1);
-    expect(currentImage()?.rasterMask?.[0].selection?.operations[0].shape).toMatchObject({
-      kind: "rect",
-      x: 0.2,
-    });
+    expect(currentImage()?.isDeleted).toBe(true);
   });
 
-  it("deselects raster pixel selections with Command/Ctrl+D", () => {
+  it("duplicates with Command+D even if editorMode is still raster", () => {
     const st = useEngine.getState();
     st.setEditorMode("raster");
-    st.applyRasterSelection(
-      "image-a",
-      createRasterSelectionOperation("replace", {
-        kind: "rect",
-        x: 0,
-        y: 0,
-        width: 0.5,
-        height: 0.5,
-      }),
-      100,
-      100,
-    );
+    const text = createText({ x: 8, y: 8, text: "Keep" });
+    st.addElement(text);
+    st.selectOnly([text.id]);
 
     handleCanvasHotkey(new KeyboardEvent("keydown", { key: "d", code: "KeyD", metaKey: true }));
 
-    expect(useEngine.getState().activeRasterSelection).toBeNull();
+    expect(
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.filter((el) => !el.isDeleted),
+    ).toHaveLength(2);
   });
 
   it("undoes and redoes a raster Selection without deleting the image", () => {
@@ -327,8 +306,9 @@ describe("Canvas hotkeys", () => {
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
   });
 
-  it("opens Raster Studio for selected image when a raster tool key is pressed", () => {
+  it("does not open Raster Studio from a main-canvas raster letter key", () => {
     const st = useEngine.getState();
+    st.setTool("select");
     const image = createImage({
       x: 10,
       y: 10,
@@ -341,15 +321,58 @@ describe("Canvas hotkeys", () => {
     st.addElement(image);
     st.selectOnly([image.id]);
 
-    // Thai Kedmanee: physical B often reports a Thai vowel while code stays KeyB.
     handleCanvasHotkey(new KeyboardEvent("keydown", { key: "ิ", code: "KeyB" }));
 
     const studio = useRasterStudioSession.getState();
-    expect(studio.open).toBe(true);
-    expect(studio.payload?.elementId).toBe(image.id);
-    expect(studio.studioTool).toBe("rasterBrush");
+    expect(studio.open).toBe(false);
     expect(useEngine.getState().tool).toBe("select");
-    studio.close();
+  });
+
+  it("keeps undo but does not delete the image while Raster Studio is open", () => {
+    const st = useEngine.getState();
+    const image = createImage({
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 80,
+      fileId: "studio-hotkey-image",
+      naturalWidth: 100,
+      naturalHeight: 80,
+    });
+    st.addElement(image);
+    st.selectOnly([image.id]);
+    useRasterStudioSession.getState().openFromImage(image);
+    st.updateElements(
+      [
+        {
+          id: image.id,
+          patch: {
+            rasterMask: [createRasterStroke([[8, 8]], 12, 1, { mode: "paint", hardness: 1 })],
+          },
+        },
+      ],
+      "paint image pixels test",
+    );
+
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "a", code: "KeyA", metaKey: true }));
+    expect(useEngine.getState().selectedIds.size).toBe(1);
+
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "Backspace", code: "Backspace" }));
+    expect(
+      useEngine
+        .getState()
+        .currentSlide()
+        ?.elements.some((el) => el.id === image.id && !el.isDeleted),
+    ).toBe(true);
+
+    handleCanvasHotkey(new KeyboardEvent("keydown", { key: "z", code: "KeyZ", metaKey: true }));
+    const undone = useEngine
+      .getState()
+      .currentSlide()
+      ?.elements.find((el): el is ImageElement => el.id === image.id && el.type === "image");
+    expect(undone?.rasterMask).toBeUndefined();
+
+    useRasterStudioSession.getState().close();
   });
 
   it.each([
@@ -358,7 +381,6 @@ describe("Canvas hotkeys", () => {
     ["KeyP", "pen"],
     ["KeyT", "text"],
   ] as const)("switches vector tool with %s → %s", (code, tool) => {
-    useEngine.getState().setEditorMode("vector");
     handleCanvasHotkey(new KeyboardEvent("keydown", { key: "x", code }));
     expect(useEngine.getState().tool).toBe(tool);
   });
