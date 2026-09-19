@@ -1,13 +1,22 @@
 # Appearance Phase 0 — Contract
 
 Status: baseline for `lib/appearance/*` (2026-09-16)  
-Updated: 2026-09-19 — lock Appearance panel MVP slice
+Updated: 2026-09-19 — Appearance persist **schema v7** (this PR) on top of Phase 1 + MVP UI (#12)
 
 ## Reality check
 
-- Phase 1 foundation (`lib/appearance/*`) **exists**. Reads/writes legacy flat fields; does not persist a canonical `appearance` object.
-- Engine `ENGINE_SCHEMA_VERSION` is **6** (Block/hex bake to Free pixels). That bump is unrelated to Appearance.
-- If Appearance is ever persisted as a canonical field, that migration is **schema v7**. Do not reuse v6.
+- Phase 1 foundation (`lib/appearance/*`) **landed** in the #12 lineage. MVP UI: Appearance panel + Shadow/Glow + Text Arc.
+- Engine `ENGINE_SCHEMA_VERSION` is **7**. Canonical `appearance` is persisted on elements and dual-written to legacy flat fields.
+- **v6 = Block bake** (unrelated). Appearance persist is **schema v7**. Do not reuse v6.
+- Load prefers `appearance` when present and valid; otherwise synthesizes from legacy fields. Save always writes both.
+
+## Persist (schema v7)
+
+- Stored field: `EngineElement.appearance` (`schemaVersion: 1` inside the stack, distinct from engine v7).
+- Dual-write on save and Appearance mutations: `shadow`, `glow`, fill (`backgroundColor` / `fillType` / gradients / `fillPattern`), stroke, root `opacity` / `blendMode`.
+- Text Arc remains `pathCurvature` on text (not an Appearance item); it continues to be written as a legacy text field.
+- v6 → v7 is idempotent: synthesize `appearance` from legacy when missing; if `appearance` is already present, prefer it and refresh legacy from it. Extra stack items that do not fit in a single legacy fill/stroke are kept on `appearance` (no silent drop).
+- Runtime: `updateAppearance` / `changeAppearance` write both sides. Legacy `updateElements` patches that touch those flat fields resync the primary Appearance items so PropertiesPanel/AI are not a competing writer.
 
 ## Locked MVP slice (Peerawat 2026-09-19)
 

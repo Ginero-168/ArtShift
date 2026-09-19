@@ -11,7 +11,11 @@ export {
   defaultStrokeItem,
 } from "./defaults";
 export { appearanceFingerprint } from "./fingerprints";
-export { appearanceToLegacyPatch, readAppearance } from "./legacyAdapter";
+export {
+  appearanceToLegacyPatch,
+  readAppearance,
+  synthesizeAppearanceFromLegacy,
+} from "./legacyAdapter";
 export {
   clamp01,
   emptyAppearance,
@@ -44,6 +48,15 @@ export {
   findStroke,
   stackKindOf,
 } from "./panelModel";
+export {
+  appearanceElementPatch,
+  dualWriteElement,
+  hydrateDocumentAppearance,
+  hydrateElementAppearance,
+  snapshotToAppearance,
+  syncElementAppearance,
+  tryNormalizeAppearance,
+} from "./persist";
 export { type CanvasShadowPass, canvasShadowPasses } from "./renderPlan";
 export type {
   Appearance,

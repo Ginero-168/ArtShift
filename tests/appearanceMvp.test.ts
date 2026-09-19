@@ -186,7 +186,7 @@ describe("Appearance UI wiring", () => {
     expect(fillSection).not.toContain("glow: undefined");
     expect(fillSection).not.toContain("shadow: undefined");
     expect(contract).toContain("schema v7");
-    expect(contract).toContain("ENGINE_SCHEMA_VERSION` is **6**");
+    expect(contract).toContain("ENGINE_SCHEMA_VERSION` is **7**");
     expect(plan).toContain("schema v7");
     expect(plan).toContain("Graphic Styles");
   });

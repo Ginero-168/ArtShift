@@ -85,9 +85,9 @@ describe("P0–P2 Block → Free migration", () => {
     ).toEqual(before);
   });
 
-  it("fromJSON of a v5 Block document lands on schema v6 Free geometry", () => {
+  it("fromJSON of a v5 Block document lands on current schema with Free geometry", () => {
     const migrated = fromJSON(v5BlockDoc());
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
     assertNoHexFields(migrated.slides[0]);
   });
 

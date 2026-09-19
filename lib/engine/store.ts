@@ -18,8 +18,9 @@ import { create } from "zustand";
 import {
   type AppearanceError,
   type AppearanceOperation,
-  appearanceToLegacyPatch,
+  appearanceElementPatch,
   changeAppearance,
+  syncElementAppearance,
 } from "../appearance";
 import {
   createCompositionBlock,
@@ -190,6 +191,7 @@ export type EngineState = {
   ) => void;
   /**
    * Appearance stack mutation via `changeAppearance`. All-or-none across `ids`.
+   * Dual-writes canonical `appearance` and legacy flat fields.
    * Pass a function when item ids differ per element (legacy fill/stroke/effect ids).
    */
   updateAppearance: (
@@ -1834,7 +1836,7 @@ function appearancePatchesFor(
     const result = changeAppearance(element, resolved);
     if (!result.ok) return result;
     if (!result.changed) continue;
-    patches.push({ id, patch: appearanceToLegacyPatch(result.appearance) });
+    patches.push({ id, patch: appearanceElementPatch(result.appearance) });
   }
   return { ok: true, changed: patches.length > 0, patches };
 }
@@ -1889,15 +1891,13 @@ function applyElementPatches(
     ...slide,
     elements: slide.elements.map((element) => {
       const item = allPatches.find((candidate) => candidate.id === element.id);
-      return item
-        ? ({
-            ...element,
-            ...item.patch,
-            version: shouldInvalidateElementRender(item.patch)
-              ? element.version + 1
-              : element.version,
-          } as EngineElement)
-        : element;
+      if (!item) return element;
+      const merged = {
+        ...element,
+        ...item.patch,
+        version: shouldInvalidateElementRender(item.patch) ? element.version + 1 : element.version,
+      } as EngineElement;
+      return syncElementAppearance(element, merged, item.patch);
     }),
   };
   return recomputeArrowBindings(patchedSlide);

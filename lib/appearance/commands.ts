@@ -1,6 +1,7 @@
 import type { EngineElement } from "@/lib/engine/types";
-import { appearanceToLegacyPatch, readAppearance } from "./legacyAdapter";
+import { readAppearance } from "./legacyAdapter";
 import { normalizeAppearance, normalizeItem, validateAppearance } from "./normalize";
+import { appearanceElementPatch } from "./persist";
 import type { Appearance, AppearanceError, AppearanceItem, AppearanceOperation } from "./types";
 import { APPEARANCE_MAX_ITEMS } from "./types";
 
@@ -141,7 +142,8 @@ function applyOperation(
 }
 
 /**
- * Pure Appearance command: read legacy fields → apply operation → write legacy patch.
+ * Pure Appearance command: read (prefer `appearance`, else legacy) → apply
+ * operation → dual-write canonical `appearance` and legacy flat fields.
  * Store adapter: `useEngine.getState().updateAppearance`.
  */
 export function changeAppearance(
@@ -152,7 +154,7 @@ export function changeAppearance(
   const applied = applyOperation(snapshot, operation);
   if (!applied.ok) return applied;
 
-  const patch = appearanceToLegacyPatch(applied.appearance);
+  const patch = appearanceElementPatch(applied.appearance);
   const nextElement = { ...element, ...patch } as EngineElement;
   return {
     ok: true,

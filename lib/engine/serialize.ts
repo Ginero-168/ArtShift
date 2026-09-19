@@ -10,6 +10,7 @@
  * the doc and a side-table of dataURLs for full-fidelity save.
  */
 
+import { hydrateElementAppearance } from "../appearance/persist";
 import { getCached, loadDataURL } from "./imageCache";
 import { normalizeDocumentLayers } from "./layers";
 import {
@@ -47,7 +48,9 @@ export function toJSON(doc: EngineDoc): EngineDoc {
     ...doc,
     schemaVersion: ENGINE_SCHEMA_VERSION,
     slides: doc.slides.map((sl) => {
-      const elements = sl.elements.filter((el) => !el.isDeleted).map(({ ...rest }) => rest);
+      const elements = sl.elements
+        .filter((el) => !el.isDeleted)
+        .map((el) => hydrateElementAppearance({ ...el }));
       const objectIds = new Set(elements.map((element) => element.id));
       return {
         ...sl,

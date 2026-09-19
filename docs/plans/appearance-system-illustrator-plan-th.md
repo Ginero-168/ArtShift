@@ -1,20 +1,20 @@
 # แผนระบบ Appearance สำหรับ ArtShift
 
-สถานะ: **Phase 1 foundation shipped** (`lib/appearance/*`). แผ่นนี้ล็อก **Appearance panel UI slice** (2026-09-19) — ยังไม่ persist canonical stack
+สถานะ: **Phase 1 foundation + MVP UI (#12)** shipped. **PR นี้ = schema v7 persist** (`appearance` + dual-write legacy fields)
 
 วันที่จัดทำ: 15 กันยายน 2026  
 อัปเดต: 19 กันยายน 2026
 
 ## 0. สถานะจริงและขอบเขตที่ล็อก (Peerawat 2026-09-19)
 
-อย่าอ่านแผ่นนี้ราวกับว่ายังไม่ได้เริ่มทำ — **Phase 1 foundation มีอยู่แล้ว**
+อย่าอ่านแผ่นนี้ราวกับว่ายังไม่ได้เริ่มทำ — **Phase 1 foundation และ Appearance panel MVP มีอยู่แล้วในสาย #12**
 
 | ชั้น | สถานะ |
 |---|---|
-| `lib/appearance/*` (`readAppearance` / `changeAppearance` / capabilities / bounds / fingerprints) | มีแล้ว — อ่าน/เขียนผ่าน legacy flat fields |
-| Engine schema | **v6 = Block bake → Free pixels** ไม่ใช่ Appearance persist |
-| Canonical `appearance` field บน `EngineElement` | **ยังไม่มี** ถ้าเพิ่มต้องเป็น **schema v7** |
-| Live Inspector Appearance stack UI | แผ่นงานนี้ (Fill / Stroke / Shadow / Glow / Text Arc) |
+| `lib/appearance/*` (`readAppearance` / `changeAppearance` / capabilities / bounds / fingerprints) | มีแล้ว — อ่าน prefer `appearance` ถ้ามี ไม่เช่นนั้นสังเคราะห์จาก legacy |
+| Engine schema | **v6 = Block bake → Free pixels**. **v7 = persist canonical `appearance`** (งานนี้) |
+| Canonical `appearance` field บน `EngineElement` | **มีแล้วใน schema v7** พร้อม dual-write ไปยัง flat fields เดิม |
+| Live Inspector Appearance stack UI | มีในสาย #12 (Fill / Stroke / Shadow / Glow / Text Arc) |
 | Graphic Styles ที่ผูก Brand Kit | **นอกขอบเขต** |
 | Path envelope warp | **นอกขอบเขต** — Arc = text only ผ่าน `pathCurvature` |
 | Group Appearance / multi fill-stroke เป็น product feature / Affinity PDF | **นอกขอบเขต** |
@@ -29,12 +29,13 @@
 2. แก้ Text Arc (`pathCurvature`) จาก live Inspector สำหรับ text
 3. เห็น Appearance เป็น stack/list (fill, stroke, shadow, glow, text arc เมื่อเกี่ยวข้อง)
 4. แก้ผ่าน `readAppearance` / `changeAppearance` / `updateAppearance` ไม่สร้างโมเดลขนาน
+5. Save/load เอกสาร schema v7 โดยเก็บ `appearance` และยังเขียน legacy fields ให้ renderer/โค้ดเก่าอ่านได้
 
 Renderer: Canvas2D มี shadow state เดียวต่อ `drawImage` — ถ้ามีทั้ง Shadow และ Glow จะวาด **ตามลำดับ stack (back-to-front)** ไม่ XOR ทิ้งอย่างเงียบ ๆ
 
 ### สิ่งที่แผ่นยาวด้านล่างยังเป็นแผนเต็ม (อย่าทำใน PR นี้)
 
-Multi fill/stroke เป็น product feature, Graphic Styles / Brand Kit, path warp, Group Appearance, Vector/Affinity PDF rewrite, Moodboard, persist canonical `appearance` (v7)
+Multi fill/stroke เป็น product feature, Graphic Styles / Brand Kit, path warp, Group Appearance, Vector/Affinity PDF rewrite, Moodboard
 
 ---
 
@@ -128,9 +129,9 @@ Editor ปัจจุบันใช้ [components/Builder/BuilderInspector.ts
 
 ### 3.5 Persistence และ Export
 
-เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 6` (Block bake) และ serializer ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
+เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 7` (Appearance persist) ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
 
-**อย่า bump เป็น v6 เพื่อ Appearance** — v6 ถูกใช้ไปแล้ว ถ้า persist canonical `appearance` ให้ใช้ **v7**
+**v6 = Block bake** — bump นั้นใช้ไปแล้ว งาน persist canonical `appearance` คือ **v7** (PR นี้) Dual-write ไปยัง legacy fields เพื่อให้ factories, templates, AI และ renderer เดิมยังอ่าน flat fields ได้
 
 SVG มี serializer แยกใน [lib/engine/exportSVG.ts](/opt/artshift/lib/engine/exportSVG.ts:17) และ PPTX มี validation/export path ของตัวเอง ดังนั้น Appearance ต้องมี adapter หรือ capability policy ไม่ควรให้แต่ละ exporter อ่าน field ตรง ๆ ต่อไป
 
@@ -436,9 +437,9 @@ lib/appearance/
 - กำหนด capability ตาม element type
 - เพิ่ม unit tests
 
-ยังไม่ persist canonical `appearance` ใน phase นี้
+ยังไม่ persist canonical `appearance` ใน phase 1 (foundation) — persist เป็น **schema v7** ใน PR นี้
 
-### Phase 2: Canonical reads และ migration
+### Phase 2: Canonical reads และ migration — **งาน persist v7 ใน PR นี้**
 
 เพิ่ม `appearance?: Appearance` ให้กับวัตถุ แล้วให้ renderer และ exporter อ่านผ่าน `readAppearance`
 
@@ -457,7 +458,7 @@ Mapping เบื้องต้น:
 | `opacity` | Root opacity |
 | `blendMode` | Root blend mode |
 
-เพิ่ม schema migration จาก **v6 เป็น v7** เมื่อเริ่ม persist canonical appearance อย่างเป็นทางการ (v6 คือ Block bake แล้ว)
+เพิ่ม schema migration จาก **v6 เป็น v7** เมื่อเริ่ม persist canonical appearance อย่างเป็นทางการ (v6 คือ Block bake แล้ว) — **ทำแล้วใน PR นี้**
 
 ในช่วง dual-write ให้คง legacy fields ไว้เพื่อให้ factories, templates, AI และเครื่องมือเก่าทำงานได้ จากนั้นค่อยลบ direct readers หลังมี regression coverage ครบ
 
@@ -591,7 +592,7 @@ Raster Source
 
 ### 10.1 Schema
 
-ปัจจุบัน engine schema คือ **v6 (Block bake)** แผน canonical stack ควร bump เป็น **v7** เมื่อเริ่ม persist `appearance`
+ปัจจุบัน engine schema คือ **v7** (Appearance persist + dual-write) — v6 ยังหมายถึง Block bake
 
 Migration ต้อง:
 
