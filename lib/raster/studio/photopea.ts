@@ -1,5 +1,5 @@
 /**
- * Temporary Photopea escape hatch — Live Messaging protocol.
+ * Primary raster Edit — Photopea Live Messaging protocol.
  *
  * Photopea runs on photopea.com. Pixels move client-side via postMessage
  * (ArrayBuffer in, PNG ArrayBuffer out). No public CORS URL is required.

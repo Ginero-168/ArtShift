@@ -51,7 +51,7 @@ import type {
 } from "@/lib/engine/types";
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
 import { convertElementToVectorPath, smoothVectorPathNodes } from "@/lib/engine/vectorPath";
-import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
+import { openRasterEditForElement } from "@/lib/raster/studio/sessionStore";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import AppearancePanel from "./AppearancePanel";
 import { BlockIcon } from "./BlockIcon";
@@ -1301,7 +1301,7 @@ function ImageAdjustments({
   return (
     <div className={styles.subsection}>
       <div className={styles.metaRow}>
-        <span>Raster Studio</span>
+        <span>Pixel edit</span>
         <button
           type="button"
           className={styles.textButton}
@@ -1321,7 +1321,7 @@ function ImageAdjustments({
           <button
             type="button"
             className={styles.secondaryButton}
-            onClick={() => openRasterStudioForElement(element)}
+            onClick={() => openRasterEditForElement(element)}
           >
             Edit Raster
           </button>

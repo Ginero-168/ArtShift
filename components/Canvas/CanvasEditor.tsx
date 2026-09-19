@@ -66,7 +66,7 @@ import type {
   VectorPathElement,
 } from "@/lib/engine/types";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
-import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
+import { openRasterEditForElement } from "@/lib/raster/studio/sessionStore";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import BindingIndicators from "./BindingIndicators";
 import CanvasRoot, {
@@ -479,7 +479,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
 
-      // Pixel tools live in Raster Studio (Smart Object). Redirect instead of
+      // Pixel tools live in Photopea (primary raster Edit). Redirect instead of
       // painting on the design canvas.
       const PIXEL_STUDIO_TOOLS = new Set<Tool>([
         "rasterBrush",
@@ -498,7 +498,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         const hit = pickTopMost(p, slide);
         if (hit?.type === "image") {
           selectOnly([hit.id]);
-          openRasterStudioForElement(hit);
+          openRasterEditForElement(hit);
           setTool("select");
         }
         return;
@@ -548,7 +548,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         return;
       }
       if (hit.type === "image") {
-        openRasterStudioForElement(hit);
+        openRasterEditForElement(hit);
         return;
       }
       if (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond") {
@@ -956,7 +956,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 } else if (el?.type === "text") {
                   setEditingTextId(el.id);
                 } else if (el?.type === "image") {
-                  openRasterStudioForElement(el);
+                  openRasterEditForElement(el);
                 } else if (el?.type === "path") {
                   setTool("directSelect");
                   setEditingPathId(el.id);

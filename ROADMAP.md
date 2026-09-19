@@ -89,14 +89,19 @@ the existing vector, layout, campaign, and export workflows unstable.
 - Modernization: Next 16.3.2 + TypeScript 6.0.3 + no custom webpack passed
   lint, typecheck, test and build on the dedicated experiment branch.
 
-### Raster Studio (Smart Object) — current status
+### Raster Edit (Smart Object) — current status
 
-Pixel editing is a **single door**: Raster Studio. The design canvas no longer
-exposes a Raster/Vector toggle or pixel paint tools. Open Studio via
-double-click on an image, context menu **Edit Raster**, or the Object context
-bar. Chrome follows **Affinity Photo** (grouped icon rail, contextual options,
-spacious pasteboard) — not Photopea. Full inventory and UX phases:
-`docs/plans/raster-studio-ux-redesign-plan.md`.
+Pixel editing is a **single door**: **Photopea** is the primary Edit Raster
+surface. The design canvas has no Raster/Vector toggle or in-canvas pixel
+paint tools. Double-click an image, context menu **Edit Raster**, or the
+Object context bar opens Photopea (runs on photopea.com) with the current
+pixels. Apply / File → Save bakes a PNG revision through the Smart Object
+commit path without moving placement. Close without applying returns to the
+design canvas unchanged.
+
+Raster Studio (Affinity chrome) is a hidden/dev secondary: append
+`?rasterStudio=1` to the editor URL. It is not a default Edit entry point.
+Historical Studio UX phases: `docs/plans/raster-studio-ux-redesign-plan.md`.
 
 | Piece | Status |
 |---|---|
@@ -109,4 +114,6 @@ spacious pasteboard) — not Photopea. Full inventory and UX phases:
 | Shared `@jsquash/webp` encode helper | Landed — Save bake still PNG by default |
 | Overlay side table / policy C op history | Deferred — bake-on-Save remains the v1 policy |
 | Worker-thread `renderElement` preview | Deferred — renderer needs DOM images + Rough.js |
-| Editor raster mode chrome | Removed — Studio is the only pixel editor |
+| Photopea primary Edit (Live Messaging embed) | Landed — default Edit Raster / double-click |
+| Editor raster mode chrome | Removed — pixel edit only via Edit Raster / double-click |
+| Raster Studio Affinity chrome | Hidden/dev (`?rasterStudio=1`) — not the default Edit UI |

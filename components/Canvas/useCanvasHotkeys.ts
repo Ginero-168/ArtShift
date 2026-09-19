@@ -104,7 +104,7 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
   }
 
   if (!letter) return;
-  // Raster Studio owns pixel-tool shortcuts. Main-canvas raster letters no-op.
+  // Photopea owns pixel edit while a raster session is open. Main-canvas raster letters no-op.
   if (useRasterStudioSession.getState().open) return;
 
   const vectorMatch = VECTOR_TOOL_HOTKEYS.find(

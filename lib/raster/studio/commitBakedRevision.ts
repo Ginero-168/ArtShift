@@ -1,9 +1,9 @@
 /**
- * Shared Raster Studio / Photopea commit: load a PNG into the image cache,
+ * Shared Photopea / Raster Studio commit: load a PNG into the image cache,
  * swap fileId + natural size, flatten overlays, assert placementUnchanged.
  *
- * This is the PR #15 Smart Object invariant used by Studio Save and the
- * temporary Photopea hatch. Do not write x/y/width/height/angle/opacity.
+ * This is the PR #15 Smart Object invariant used by Photopea Apply and
+ * hidden Studio Save. Do not write x/y/width/height/angle/opacity.
  */
 
 import type { EditorController } from "@/lib/engine/editorController";
@@ -40,7 +40,7 @@ export async function commitPngRevisionToSmartObject(args: {
     .currentSlide()
     ?.elements.find((el): el is ImageElement => el.id === args.elementId && el.type === "image");
   if (!after || !placementUnchanged(args.placement, after)) {
-    throw new Error("Raster Studio Save changed placement — Smart Object invariant failed");
+    throw new Error("Raster edit Save changed placement — Smart Object invariant failed");
   }
   return after;
 }

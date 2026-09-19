@@ -14,7 +14,7 @@ import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { nextThaiFontCssFamily } from "@/lib/fonts";
-import { openRasterStudioForElement } from "@/lib/raster/studio/sessionStore";
+import { openRasterEditForElement } from "@/lib/raster/studio/sessionStore";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
@@ -302,7 +302,7 @@ export default function ObjectContextBar({
       controls.push(action("Divide", () => applyBooleanOperation("divide")));
     }
   } else if (first.type === "image") {
-    controls.push(action("Edit Raster", () => openRasterStudioForElement(first)));
+    controls.push(action("Edit Raster", () => openRasterEditForElement(first)));
     controls.push(
       action(IMAGE_ACTION_LABELS.upscale, toggleUpscale, false, activeImageTool === "upscale"),
     );
