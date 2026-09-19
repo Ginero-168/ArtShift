@@ -115,7 +115,7 @@ export function normalizeSlideLayers(
   }
 
   const claimed = new Set<string>();
-  const layers = inputLayers.map((layer, index) => {
+  const layers: WorkingLayer[] = inputLayers.map((layer, index) => {
     const incoming = layer as WorkingLayer;
     const objectIds = (incoming.objectIds ?? []).filter((id) => {
       if (!elementIds.has(id) || claimed.has(id)) return false;
