@@ -158,7 +158,6 @@ function isEngineSlideForExport(value: unknown): value is EngineSlide {
 function isEngineLayerForExport(value: unknown): boolean {
   if (!isRecord(value)) return false;
   if (!isBoundedString(value.id) || !isBoundedString(value.name)) return false;
-  if (value.mode !== "block" && value.mode !== "free") return false;
   if (typeof value.visible !== "boolean" || typeof value.locked !== "boolean") return false;
   if (!Number.isFinite(value.z) || !Array.isArray(value.objectIds)) return false;
   return value.objectIds.every((id) => isBoundedString(id));

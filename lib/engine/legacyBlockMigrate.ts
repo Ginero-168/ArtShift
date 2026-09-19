@@ -1,4 +1,21 @@
-import type { BlockPlacement, WorkspaceStrictness } from "./types";
+/**
+ * Load-only helper for v1–v5 Block/hex documents.
+ * Not a product layout engine — used by normalizeDocumentLayers to bake
+ * legacy placements into Free pixel geometry, then discarded.
+ */
+
+export type LegacyBlockPlacement = {
+  col: number;
+  row: number;
+  colSpan: number;
+  rowSpan: number;
+  minColSpan?: number;
+  minRowSpan?: number;
+  kind?: string;
+};
+
+type BlockPlacement = LegacyBlockPlacement;
+type WorkspaceStrictness = number;
 
 /** The 16:9 reference stays at 24 × 12: twice the original 12 × 12 workspace. */
 export const HEX_COLUMNS = 24;

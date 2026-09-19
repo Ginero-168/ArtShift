@@ -479,7 +479,6 @@ export function convertElementToVectorPath(element: EngineElement): VectorPathEl
     closed,
     fillRule: "nonzero",
     builderKind: element.builderKind,
-    layoutMode: element.layoutMode,
   };
 
   return recomputeVectorPathBounds(pathEl);

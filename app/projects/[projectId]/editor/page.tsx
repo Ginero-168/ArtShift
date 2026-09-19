@@ -28,7 +28,6 @@ import {
   IconBrand,
   IconChevronDown,
   IconDownload,
-  IconGrid,
   IconMenu,
   IconPalette,
   IconRedo,
@@ -182,10 +181,6 @@ export default function ProjectEditorPage() {
   const theme = useStore((s) => s.theme);
   const cycleTheme = useStore((s) => s.cycleTheme);
   const setSlideBackground = useEngine((s) => s.setSlideBackground);
-  const showHexGrid = useEngine((s) => s.showHexGrid);
-  const setShowHexGrid = useEngine((s) => s.setShowHexGrid);
-  const layerFilter = useEngine((s) => s.layerFilter);
-  const setLayerFilter = useEngine((s) => s.setLayerFilter);
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const currentSlideBackground = useEngine(
     (s) => s.doc.slides.find((slide) => slide.id === s.currentSlideId)?.background ?? "#ffffff",
@@ -1251,69 +1246,6 @@ export default function ProjectEditorPage() {
               >
                 <IconZoomIn size={13} />
               </button>
-            </div>
-
-            <div
-              style={{
-                width: 1,
-                height: 16,
-                background: "var(--stroke, #e5e7eb)",
-                margin: "0 2px",
-              }}
-            />
-
-            {/* 2. Hex Grid Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowHexGrid(!showHexGrid)}
-              title={showHexGrid ? "Hide Grid" : "Show Grid"}
-              style={{
-                width: 24,
-                height: 24,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 4,
-                border: "none",
-                background: showHexGrid ? "var(--surface-hover, #e0e7ff)" : "transparent",
-                color: showHexGrid ? "var(--accent, #4338ca)" : "var(--ink-muted, #9ca3af)",
-                cursor: "pointer",
-              }}
-            >
-              <IconGrid size={13} />
-            </button>
-
-            <div
-              style={{
-                width: 1,
-                height: 16,
-                background: "var(--stroke, #e5e7eb)",
-                margin: "0 2px",
-              }}
-            />
-
-            {/* 3. Layer Filter Selector */}
-            <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {(["all", "block", "free"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setLayerFilter(mode)}
-                  style={{
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                    border: "none",
-                    background: layerFilter === mode ? "var(--accent, #6366f1)" : "transparent",
-                    color: layerFilter === mode ? "#ffffff" : "var(--ink-muted, #6b7280)",
-                    fontSize: 10,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {mode}
-                </button>
-              ))}
             </div>
           </div>
         </div>

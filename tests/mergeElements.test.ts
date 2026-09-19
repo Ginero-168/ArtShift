@@ -26,9 +26,7 @@ describe("merge elements pipeline", () => {
             {
               id: "layer1",
               name: "Layer 1",
-              mode: "free",
               objectIds: [],
-              placements: {},
               visible: true,
               locked: false,
               z: 1,

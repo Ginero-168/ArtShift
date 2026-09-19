@@ -14,7 +14,7 @@ import { getElementDefaultName } from "@/lib/engine/layers";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { buildLayerHierarchy, type LayerTreeNode } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
-import type { EngineElement, LayerMode } from "@/lib/engine/types";
+import type { EngineElement } from "@/lib/engine/types";
 import AutoLayoutAction from "./AutoLayoutAction";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
@@ -35,7 +35,6 @@ export default function LayerPanel() {
 
   const selectOnly = useEngine((state) => state.selectOnly);
   const toggleSelect = useEngine((state) => state.toggleSelect);
-  const toggleObjectLayoutMode = useEngine((state) => state.toggleObjectLayoutMode);
   const setElementVisibility = useEngine((state) => state.setElementVisibility);
   const setElementLocked = useEngine((state) => state.setElementLocked);
   const reorderElement = useEngine((state) => state.reorderElement);
@@ -61,7 +60,6 @@ export default function LayerPanel() {
 
   const renderElement = (element: EngineElement, depth = 0) => {
     const isSelected = selectedIds.has(element.id);
-    const mode: LayerMode = element.layoutMode ?? "block";
     const isVisible = !element.hidden;
     const isLocked = element.locked === true;
     const displayName = getElementDefaultName(element);
@@ -72,7 +70,6 @@ export default function LayerPanel() {
       <section
         className={`${styles.objectLayerCard} ${isSelected ? styles.selectedObjectCard : ""} ${!isVisible ? styles.hiddenLayer : ""} ${isDragging ? styles.layerDragging : ""} ${isDragOver ? styles.layerDragOver : ""}`}
         key={element.id}
-        data-mode={mode}
         data-depth={depth}
         style={{ marginLeft: depth > 0 ? depth * 10 : undefined }}
         draggable
@@ -114,7 +111,7 @@ export default function LayerPanel() {
           >
             <IconGripVertical size={11} />
           </div>
-          <span className={styles.objectIconBox} data-mode={mode}>
+          <span className={styles.objectIconBox}>
             <BlockIcon
               kind={
                 (element.builderKind ??
@@ -160,19 +157,6 @@ export default function LayerPanel() {
             )}
           </div>
           <div className={styles.objectLayerActions}>
-            <button
-              type="button"
-              className={styles.modeBadgeButton}
-              data-mode={mode}
-              onClick={(event) => {
-                event.stopPropagation();
-                toggleObjectLayoutMode(element.id);
-              }}
-              title={`Click to switch to ${mode === "block" ? "Free" : "Block"} mode`}
-              aria-label={`${displayName}: switch to ${mode === "block" ? "Free" : "Block"} mode`}
-            >
-              {mode === "block" ? "B" : "F"}
-            </button>
             <button
               type="button"
               className={`${styles.layerIconButton} ${!isVisible ? styles.layerIconHidden : ""}`}

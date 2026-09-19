@@ -7,7 +7,6 @@ import {
   createRect,
   createText,
 } from "@/lib/engine/factory";
-import { getHexGridDimensions } from "@/lib/engine/hexLayout";
 import { useEngine } from "@/lib/engine/store";
 import { measureTextElementHeight } from "@/lib/engine/textLayout";
 import { ENGINE_SCHEMA_VERSION } from "@/lib/engine/types";
@@ -33,10 +32,8 @@ describe("engine store", () => {
           layers: [
             {
               id: "layer1",
-              name: "Block layer 1",
-              mode: "block",
+              name: "Layer 1",
               objectIds: [],
-              placements: {},
               visible: true,
               locked: false,
               z: 1,
@@ -52,7 +49,6 @@ describe("engine store", () => {
 
   it("flips the selected image horizontally in-place without creating a duplicate", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const source = createImage({
       x: 140,
       y: 180,
@@ -86,7 +82,6 @@ describe("engine store", () => {
 
   it("flips the selected image vertically in-place without creating a duplicate", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const source = createImage({
       x: 240,
       y: 260,
@@ -154,7 +149,6 @@ describe("engine store", () => {
 
   it("remaps copied bindings, frame children, containers and groups", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const target = createRect({ x: 40, y: 40, width: 180, height: 120 });
     const arrow = createArrow([300, 100], [220, 100]);
     arrow.endBinding = { elementId: target.id, gap: 0, focus: 0 };
@@ -188,11 +182,10 @@ describe("engine store", () => {
     expect(pastedArrow?.groupIds[0]).not.toBe(groupId);
   });
 
-  it("grows a Block placement when wrapped Thai text needs more rows", () => {
+  it("grows Free text height when wrapped Thai text needs more lines", () => {
     const st = useEngine.getState();
     const text = createText({ x: 100, y: 100, width: 240, height: 60, text: "สั้น" });
     st.addElement(text);
-    const before = useEngine.getState().currentSlide()!.layers[0].placements[text.id].rowSpan;
 
     st.updateElements([
       {
@@ -204,7 +197,7 @@ describe("engine store", () => {
     ]);
 
     const afterSlide = useEngine.getState().currentSlide()!;
-    expect(afterSlide.layers[0].placements[text.id].rowSpan).toBeGreaterThan(before);
+    expect("placements" in afterSlide.layers[0]).toBe(false);
     expect(afterSlide.elements.find((element) => element.id === text.id)!.height).toBeGreaterThan(
       60,
     );
@@ -257,7 +250,6 @@ describe("engine store", () => {
 
   it("records a pointer interaction as one undo step", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const element = createRect({ x: 10, y: 20, width: 100, height: 80 });
     st.addElement(element);
     st.checkpointInteraction("move");
@@ -284,7 +276,6 @@ describe("engine store", () => {
 
   it("keeps live previews out of persistence until the interaction is committed", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const element = createRect({ x: 10, y: 20, width: 100, height: 80 });
     st.addElement(element);
     useEngine.setState((state) => ({
@@ -322,25 +313,6 @@ describe("engine store", () => {
     expect(aAfter!.z).toBeGreaterThan(bAfter!.z);
   });
 
-  it("switches a whole Layer between Block and Free without replacing its Object", () => {
-    const st = useEngine.getState();
-    const text = createText({ x: 120, y: 90, width: 420, height: 160, text: "Layer" });
-    st.addElement(text);
-    const layerId = useEngine.getState().activeLayerId;
-
-    st.setLayerMode(layerId, "free");
-    const freeSlide = useEngine.getState().currentSlide();
-    expect(freeSlide?.elements[0].id).toBe(text.id);
-    expect(freeSlide?.layers[0].mode).toBe("free");
-    expect(freeSlide?.layers[0].placements).toEqual({});
-
-    useEngine.getState().setLayerMode(layerId, "block");
-    const blockSlide = useEngine.getState().currentSlide();
-    expect(blockSlide?.elements[0].id).toBe(text.id);
-    expect(blockSlide?.layers[0].mode).toBe("block");
-    expect(blockSlide?.layers[0].placements[text.id]).toBeDefined();
-  });
-
   it("hides a layer without deleting it and removes it from selection", () => {
     const st = useEngine.getState();
     const layer = createRect({ x: 10, y: 10, width: 100, height: 100 });
@@ -363,11 +335,6 @@ describe("engine store", () => {
     st.addElement(price);
 
     expect(useEngine.getState().currentSlide()?.layers[0].objectIds).toEqual([title.id, price.id]);
-  });
-
-  it("stores Workspace Strictness as a shared layout rule", () => {
-    useEngine.getState().setWorkspaceStrictness(3);
-    expect(useEngine.getState().doc.workspaceStrictness).toBe(3);
   });
 
   it("keeps one mockup identity and camera when artwork dimensions change", () => {
@@ -398,7 +365,6 @@ describe("engine store", () => {
 
   it("keeps Free-layer images proportional when the Artwork ratio changes", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const image = createImage({
       x: 240,
       y: 180,
@@ -420,7 +386,6 @@ describe("engine store", () => {
 
   it("grows Free text when a width change creates more wrapped lines", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const title = createText({
       x: 100,
       y: 100,
@@ -443,7 +408,6 @@ describe("engine store", () => {
 
   it("refits a media bounding box when its source ratio changes", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const image = createImage({
       x: 200,
       y: 100,
@@ -470,20 +434,17 @@ describe("engine store", () => {
     expect(replaced.y + replaced.height / 2).toBeCloseTo(300, 5);
   });
 
-  it("remaps Block placement and geometry when the Artwork ratio changes", () => {
+  it("scales Free geometry when the Artwork ratio changes and writes no placements", () => {
     const st = useEngine.getState();
     const block = createRect({ x: 480, y: 270, width: 960, height: 540 });
     st.addElement(block);
-    st.updateBlockPlacement(block.id, { col: 6, row: 3, colSpan: 12, rowSpan: 6 });
 
     st.setSlideDimensions("s1", 1080, 1350);
 
     const resized = useEngine.getState().currentSlide()!;
-    const placement = resized.layers[0].placements[block.id];
-    const grid = getHexGridDimensions(resized.width, resized.height);
     const element = resized.elements.find((candidate) => candidate.id === block.id)!;
-    expect(grid).toEqual({ columns: 16, rows: 18 });
-    expect(placement).toMatchObject({ col: 4, row: 5, colSpan: 8, rowSpan: 9 });
+    expect("mode" in resized.layers[0]).toBe(false);
+    expect("placements" in resized.layers[0]).toBe(false);
     expect(element.x).toBeGreaterThanOrEqual(0);
     expect(element.y).toBeGreaterThanOrEqual(0);
     expect(element.x + element.width).toBeLessThanOrEqual(resized.width);
@@ -551,7 +512,7 @@ describe("engine store", () => {
     const st = useEngine.getState();
     const slide = st.currentSlide()!;
     const layer = slide.layers[0];
-    expect(layer.name).toBe("Block layer 1");
+    expect(layer.name).toBe("Layer 1");
 
     st.renameLayer(layer.id, "Header & Hero Elements");
 
@@ -559,34 +520,8 @@ describe("engine store", () => {
     expect(updatedSlide.layers[0].name).toBe("Header & Hero Elements");
   });
 
-  it("toggles hex block grid visibility", () => {
-    const st = useEngine.getState();
-    expect(st.showHexGrid).toBe(true);
-
-    st.setShowHexGrid(false);
-    expect(useEngine.getState().showHexGrid).toBe(false);
-
-    st.setShowHexGrid(true);
-    expect(useEngine.getState().showHexGrid).toBe(true);
-  });
-
-  it("updates viewport layer filter mode", () => {
-    const st = useEngine.getState();
-    expect(st.layerFilter).toBe("all");
-
-    st.setLayerFilter("block");
-    expect(useEngine.getState().layerFilter).toBe("block");
-
-    st.setLayerFilter("free");
-    expect(useEngine.getState().layerFilter).toBe("free");
-
-    st.setLayerFilter("all");
-    expect(useEngine.getState().layerFilter).toBe("all");
-  });
-
   it("keeps an active raster selection when undoing a later document mutation", () => {
     const st = useEngine.getState();
-    st.setLayerMode(st.activeLayerId, "free");
     const image = createImage({
       x: 20,
       y: 20,

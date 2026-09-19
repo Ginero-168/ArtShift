@@ -53,11 +53,12 @@ export function toJSON(doc: EngineDoc): EngineDoc {
         ...sl,
         elements,
         layers: sl.layers.map((layer) => ({
-          ...layer,
+          id: layer.id,
+          name: layer.name,
           objectIds: layer.objectIds.filter((id) => objectIds.has(id)),
-          placements: Object.fromEntries(
-            Object.entries(layer.placements).filter(([id]) => objectIds.has(id)),
-          ),
+          visible: layer.visible,
+          locked: layer.locked,
+          z: layer.z,
         })),
       };
     }),

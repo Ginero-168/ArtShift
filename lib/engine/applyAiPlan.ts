@@ -213,7 +213,6 @@ function validateCommandTarget(doc: EngineDoc, command: AiPlanCommand): string |
     const layer = slide.layers.find((candidate) => candidate.id === command.target.layerId);
     if (!layer) return "The target Layer no longer exists.";
     if (layer.locked) return "The target Layer is locked.";
-    if (layer.mode !== "free") return "AI insertion currently requires a Free Layer.";
     return null;
   }
   const objectTarget = command.target;
@@ -286,8 +285,8 @@ function applyCommand(
 
   if (command.kind === "insert_text") {
     const layer = slide.layers.find((candidate) => candidate.id === command.target.layerId);
-    if (!layer || layer.locked || layer.mode !== "free") {
-      return { ok: false, reason: "AI insertion requires an unlocked Free Layer." };
+    if (!layer || layer.locked) {
+      return { ok: false, reason: "AI insertion requires an unlocked layer." };
     }
     const element = createText({
       x: command.payload.x,
@@ -308,8 +307,8 @@ function applyCommand(
 
   if (command.kind === "insert_shape") {
     const layer = slide.layers.find((candidate) => candidate.id === command.target.layerId);
-    if (!layer || layer.locked || layer.mode !== "free") {
-      return { ok: false, reason: "AI insertion requires an unlocked Free Layer." };
+    if (!layer || layer.locked) {
+      return { ok: false, reason: "AI insertion requires an unlocked layer." };
     }
     const element = createShape(command.payload);
     element.z = nextElementZ(slide);

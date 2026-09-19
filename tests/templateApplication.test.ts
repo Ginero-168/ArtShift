@@ -9,7 +9,6 @@ function slideWithObject(): EngineSlide {
   const original = createRect({ x: 20, y: 30, width: 100, height: 80 });
   const layer = createEngineLayer("block", { name: "Original" });
   layer.objectIds = [original.id];
-  layer.placements[original.id] = { col: 1, row: 1, colSpan: 2, rowSpan: 2 };
   return {
     id: "slide",
     name: "Slide",
@@ -29,12 +28,13 @@ function template(): TemplateResult {
 }
 
 describe("template application", () => {
-  it("replaces an artwork atomically on an absolute-positioned Free layer", () => {
+  it("replaces an artwork atomically on an absolute-positioned layer", () => {
     const outcome = applyTemplateToSlide(slideWithObject(), template(), "replace");
 
     expect(outcome.slide.background).toBe("#f4efe6");
     expect(outcome.slide.layers).toHaveLength(1);
-    expect(outcome.slide.layers[0]).toMatchObject({ mode: "free", objectIds: outcome.objectIds });
+    expect(outcome.slide.layers[0].objectIds).toEqual(outcome.objectIds);
+    expect("mode" in outcome.slide.layers[0]).toBe(false);
     expect(outcome.slide.elements).toHaveLength(1);
     expect(outcome.slide.elements[0]).toMatchObject({ x: 321, y: 123, width: 456, height: 234 });
   });
@@ -46,6 +46,6 @@ describe("template application", () => {
     expect(outcome.slide.background).toBe("#ffffff");
     expect(outcome.slide.layers).toHaveLength(2);
     expect(outcome.slide.elements[0]).toEqual(original.elements[0]);
-    expect(outcome.slide.layers[1].mode).toBe("free");
+    expect("mode" in outcome.slide.layers[1]).toBe(false);
   });
 });

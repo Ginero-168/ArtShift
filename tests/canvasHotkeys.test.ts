@@ -28,10 +28,8 @@ describe("Canvas hotkeys", () => {
           layers: [
             {
               id: "layer-1",
-              name: "Free layer",
-              mode: "free",
+              name: "Layer 1",
               objectIds: [],
-              placements: {},
               visible: true,
               locked: false,
               z: 1,

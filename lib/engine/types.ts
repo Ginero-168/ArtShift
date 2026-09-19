@@ -32,7 +32,6 @@ export type ElementId = string;
 export type GroupId = string;
 export type LayerId = string;
 
-export type LayerMode = "block" | "free";
 export type SemanticRole =
   | "background"
   | "headline"
@@ -57,27 +56,6 @@ export type SemanticMetadata = {
   importance: SemanticImportance;
   constraints?: SemanticConstraints;
 };
-export type WorkspaceStrictness = number;
-
-/**
- * Grid placement used by the visual builder. Geometry remains cached on the
- * element for the canvas renderer, while this normalized placement is the
- * source of truth when blocks reflow or the artwork is resized.
- */
-export type BlockPlacement = {
-  col: number;
-  row: number;
-  colSpan: number;
-  rowSpan: number;
-  minColSpan?: number;
-  minRowSpan?: number;
-  /** Stable library key used to describe the block in the builder UI. */
-  kind?: string;
-};
-
-/** @deprecated Legacy name retained only while schema-v1 documents migrate. */
-export type BentoBlock = BlockPlacement;
-
 // Every element shares this geometry+style envelope.
 export type BaseElement = {
   id: ElementId;
@@ -144,14 +122,10 @@ export type BaseElement = {
   };
   /** Non-destructive compositing mode used when drawing this Object. */
   blendMode?: "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
-  /** Layout mode for this individual object: "block" (Hex grid flow) or "free" (freeform floating). */
-  layoutMode?: LayerMode;
   /** Human-readable label for this object layer. */
   name?: string;
   /** When true, this object is hidden from canvas rendering. */
   hidden?: boolean;
-  /** Block placement when in "block" mode. */
-  bento?: BentoBlock;
 };
 
 // ——— Concrete element variants ————————————————————————————————————
@@ -408,16 +382,12 @@ export type EngineElementType = EngineElement["type"];
 // ——— Document container ———————————————————————————————————————————
 
 /**
- * A real layer container. Placement behavior, visibility, and locking belong
- * here so any number of objects can move between Block and Free together.
+ * A real layer container. Visibility, locking, and z-order belong here.
  */
 export type EngineLayer = {
   id: LayerId;
   name: string;
-  mode: LayerMode;
   objectIds: ElementId[];
-  /** Block placements are keyed by object id; Free layers keep this empty. */
-  placements: Record<ElementId, BlockPlacement>;
   visible: boolean;
   locked: boolean;
   /** Monotonic layer order; higher layers render above lower layers. */
@@ -445,11 +415,15 @@ export type EngineDoc = {
   height: number; // = SLIDE_H
   slides: EngineSlide[];
   snapGrid: number | null;
-  workspaceStrictness: WorkspaceStrictness;
+  /** @deprecated Ignored leftover from Block/hex strictness. Read on load, not a product API. */
+  workspaceStrictness?: number;
+  /** @deprecated Ignored leftover from Block/hex strictness. */
   strictnessLevel?: 1 | 2 | 3;
+  /** @deprecated Ignored leftover from Block/hex strictness. */
   strictnessValues?: { 2: number; 3: number };
   updatedAt: number;
   schemaVersion: number;
 };
 
-export const ENGINE_SCHEMA_VERSION = 5;
+/** v6+: Block/hex occupancy is baked to Free pixels on load. */
+export const ENGINE_SCHEMA_VERSION = 6;

@@ -21,14 +21,8 @@ import {
   createVectorPath,
   createVectorPathFromWorldNodes,
 } from "../engine/factory";
-import {
-  blockRectForPlacement,
-  getHexGridDimensions,
-  REFERENCE_HEX_GRID,
-  remapBlockPlacement,
-} from "../engine/hexLayout";
 import { fitMediaElementToRect, isMediaElement } from "../engine/mediaLayout";
-import type { BlockPlacement, EngineElement, TextElement } from "../engine/types";
+import type { EngineElement, TextElement } from "../engine/types";
 import { convertElementToVectorPath } from "../engine/vectorPath";
 import { DEFAULT_THAI_FONT_FAMILY } from "../fonts";
 import { createTextFromPreset, DEFAULT_TEXT_PRESET_ID, type TextPresetId } from "./textPresets";
@@ -92,10 +86,9 @@ export type BuilderBlockDefinition = {
   description: string;
   category: "Content" | "Commerce" | "Media" | "Frames" | "Shapes" | "Lines" | "Structure";
   glyph: string;
-  colSpan: number;
-  rowSpan: number;
-  minColSpan?: number;
-  minRowSpan?: number;
+  /** Pixel size on a 1920×1080 reference artwork. Scaled to the target slide. */
+  defaultWidth: number;
+  defaultHeight: number;
 };
 
 export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
@@ -105,10 +98,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Title, body, quote…",
     category: "Content",
     glyph: "T",
-    colSpan: 7,
-    rowSpan: 3,
-    minColSpan: 4,
-    minRowSpan: 2,
+    defaultWidth: 1120,
+    defaultHeight: 270,
   },
   {
     kind: "icon",
@@ -116,10 +107,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Vector SVG icons",
     category: "Content",
     glyph: "✦",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "cta",
@@ -127,9 +116,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Shop or learn more",
     category: "Commerce",
     glyph: "→",
-    colSpan: 4,
-    rowSpan: 1,
-    minColSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 90,
   },
   {
     kind: "badge",
@@ -137,9 +125,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Pill sticker · bestseller",
     category: "Commerce",
     glyph: "★",
-    colSpan: 3,
-    rowSpan: 1,
-    minColSpan: 2,
+    defaultWidth: 480,
+    defaultHeight: 90,
   },
   {
     kind: "badgeStarburst",
@@ -147,10 +134,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "16-pt starburst sale badge",
     category: "Commerce",
     glyph: "💥",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "badgeFlash",
@@ -158,10 +143,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "24-pt flash sale burst",
     category: "Commerce",
     glyph: "⚡",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "badgeRibbon",
@@ -169,10 +152,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Folded bestseller banner",
     category: "Commerce",
     glyph: "🎗️",
-    colSpan: 6,
-    rowSpan: 2,
-    minColSpan: 3,
-    minRowSpan: 1,
+    defaultWidth: 960,
+    defaultHeight: 180,
   },
   {
     kind: "badgeSeal",
@@ -180,10 +161,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Scalloped quality seal",
     category: "Commerce",
     glyph: "💮",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "badgePriceTag",
@@ -191,10 +170,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Chamfered price tag badge",
     category: "Commerce",
     glyph: "🏷️",
-    colSpan: 4,
-    rowSpan: 3,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 270,
   },
   {
     kind: "badgeBookmark",
@@ -202,10 +179,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Hanging ribbon tag",
     category: "Commerce",
     glyph: "🔖",
-    colSpan: 3,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 480,
+    defaultHeight: 360,
   },
   {
     kind: "bookMockup",
@@ -213,10 +188,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Editable camera and light",
     category: "Content",
     glyph: "📘",
-    colSpan: 6,
-    rowSpan: 7,
-    minColSpan: 3,
-    minRowSpan: 4,
+    defaultWidth: 960,
+    defaultHeight: 630,
   },
   {
     kind: "supportingImage",
@@ -224,10 +197,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Supporting visual",
     category: "Content",
     glyph: "🖼️",
-    colSpan: 6,
-    rowSpan: 4,
-    minColSpan: 3,
-    minRowSpan: 2,
+    defaultWidth: 960,
+    defaultHeight: 360,
   },
   {
     kind: "frameCircle",
@@ -235,10 +206,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Mask photo into circle",
     category: "Frames",
     glyph: "◎",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "framePolaroid",
@@ -246,10 +215,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Classic photo card frame",
     category: "Frames",
     glyph: "🖼",
-    colSpan: 4,
-    rowSpan: 5,
-    minColSpan: 2,
-    minRowSpan: 3,
+    defaultWidth: 640,
+    defaultHeight: 450,
   },
   {
     kind: "frameArch",
@@ -257,10 +224,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Curved architectural arch",
     category: "Frames",
     glyph: "∩",
-    colSpan: 4,
-    rowSpan: 5,
-    minColSpan: 2,
-    minRowSpan: 3,
+    defaultWidth: 640,
+    defaultHeight: 450,
   },
   {
     kind: "frameHeart",
@@ -268,10 +233,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Romantic heart mask",
     category: "Frames",
     glyph: "♥",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "frameStar",
@@ -279,10 +242,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "5-point star mask",
     category: "Frames",
     glyph: "★",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "frameRounded",
@@ -290,10 +251,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Soft corner photo mask",
     category: "Frames",
     glyph: "▢",
-    colSpan: 5,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 800,
+    defaultHeight: 360,
   },
   {
     kind: "frameHexagon",
@@ -301,10 +260,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Geometric hexagon mask",
     category: "Frames",
     glyph: "⬡",
-    colSpan: 4,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 360,
   },
   {
     kind: "shapeRect",
@@ -312,10 +269,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Panel or card",
     category: "Shapes",
     glyph: "□",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapeEllipse",
@@ -323,10 +278,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Circle or oval",
     category: "Shapes",
     glyph: "○",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapeDiamond",
@@ -334,10 +287,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Angular accent",
     category: "Shapes",
     glyph: "◇",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapeTriangle",
@@ -345,10 +296,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Directional form",
     category: "Shapes",
     glyph: "△",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapeStar",
@@ -356,10 +305,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Highlight shape",
     category: "Shapes",
     glyph: "☆",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapeHexagon",
@@ -367,10 +314,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Modular accent",
     category: "Shapes",
     glyph: "⬡",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapeHeart",
@@ -378,10 +323,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Emotive accent",
     category: "Shapes",
     glyph: "♡",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapePlus",
@@ -389,10 +332,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Graphic symbol",
     category: "Shapes",
     glyph: "+",
-    colSpan: 3,
-    rowSpan: 3,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 480,
+    defaultHeight: 270,
   },
   {
     kind: "shapePen",
@@ -400,10 +341,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Draw smooth Bezier curves & precision vector paths",
     category: "Lines",
     glyph: "✒",
-    colSpan: 4,
-    rowSpan: 2,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 180,
   },
   {
     kind: "shapeFreedraw",
@@ -411,10 +350,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Draw organic freehand strokes with natural pen pressure",
     category: "Lines",
     glyph: "✎",
-    colSpan: 4,
-    rowSpan: 2,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 180,
   },
   {
     kind: "shapeLine",
@@ -422,10 +359,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Straight separator or connector",
     category: "Lines",
     glyph: "―",
-    colSpan: 4,
-    rowSpan: 1,
-    minColSpan: 2,
-    minRowSpan: 1,
+    defaultWidth: 640,
+    defaultHeight: 90,
   },
   {
     kind: "shapeArrow",
@@ -433,10 +368,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Directional pointer arrow",
     category: "Lines",
     glyph: "→",
-    colSpan: 4,
-    rowSpan: 1,
-    minColSpan: 2,
-    minRowSpan: 1,
+    defaultWidth: 640,
+    defaultHeight: 90,
   },
   {
     kind: "shapeDoubleArrow",
@@ -444,10 +377,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Two-way indicator arrow",
     category: "Lines",
     glyph: "↔",
-    colSpan: 4,
-    rowSpan: 1,
-    minColSpan: 2,
-    minRowSpan: 1,
+    defaultWidth: 640,
+    defaultHeight: 90,
   },
   {
     kind: "shapeDashedLine",
@@ -455,10 +386,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Dotted / dashed guide line",
     category: "Lines",
     glyph: "╌",
-    colSpan: 4,
-    rowSpan: 1,
-    minColSpan: 2,
-    minRowSpan: 1,
+    defaultWidth: 640,
+    defaultHeight: 90,
   },
   {
     kind: "shapeCurvedArrow",
@@ -466,10 +395,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Curved pointer arrow",
     category: "Lines",
     glyph: "⤹",
-    colSpan: 4,
-    rowSpan: 2,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 640,
+    defaultHeight: 180,
   },
   {
     kind: "panel",
@@ -477,10 +404,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Layout surface",
     category: "Structure",
     glyph: "■",
-    colSpan: 6,
-    rowSpan: 4,
-    minColSpan: 2,
-    minRowSpan: 2,
+    defaultWidth: 960,
+    defaultHeight: 360,
   },
   {
     kind: "divider",
@@ -488,9 +413,8 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Section rule",
     category: "Structure",
     glyph: "—",
-    colSpan: 6,
-    rowSpan: 1,
-    minColSpan: 2,
+    defaultWidth: 960,
+    defaultHeight: 90,
   },
   {
     kind: "spacer",
@@ -498,33 +422,29 @@ export const BUILDER_BLOCKS: BuilderBlockDefinition[] = [
     description: "Reserve breathing room",
     category: "Structure",
     glyph: "↕",
-    colSpan: 4,
-    rowSpan: 2,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 640,
+    defaultHeight: 180,
   },
 ];
 
 const LEGACY_BLOCKS: BuilderBlockDefinition[] = [
-  legacyTextBlock("heading", "Book title", "T1", 7, 3, 4, 2),
-  legacyTextBlock("subtitle", "Subtitle", "T2", 6, 2, 3),
-  legacyTextBlock("synopsis", "Synopsis", "¶", 5, 3, 3, 2),
-  legacyTextBlock("quote", "Pull quote", "“", 5, 3, 3, 2),
-  legacyTextBlock("author", "Author", "Aa", 4, 1, 2),
-  legacyTextBlock("metadata", "Book details", "≡", 5, 2, 3),
-  legacyTextBlock("price", "Price", "฿", 3, 2, 2, undefined, "Commerce"),
-  legacyTextBlock("salePrice", "Sale price", "%", 4, 2, 3, undefined, "Commerce"),
-  legacyTextBlock("indexNumber", "Index number", "01", 3, 3, 2, 2, "Structure"),
+  legacyTextBlock("heading", "Book title", "T1", 1120, 270),
+  legacyTextBlock("subtitle", "Subtitle", "T2", 960, 180),
+  legacyTextBlock("synopsis", "Synopsis", "¶", 800, 270),
+  legacyTextBlock("quote", "Pull quote", "“", 800, 270),
+  legacyTextBlock("author", "Author", "Aa", 640, 90),
+  legacyTextBlock("metadata", "Book details", "≡", 800, 180),
+  legacyTextBlock("price", "Price", "฿", 480, 180, "Commerce"),
+  legacyTextBlock("salePrice", "Sale price", "%", 640, 180, "Commerce"),
+  legacyTextBlock("indexNumber", "Index number", "01", 480, 270, "Structure"),
   {
     kind: "coverImage",
     label: "Cover image",
     description: "Flat book cover",
     category: "Content",
     glyph: "📖",
-    colSpan: 4,
-    rowSpan: 6,
-    minColSpan: 2,
-    minRowSpan: 3,
+    defaultWidth: 640,
+    defaultHeight: 540,
   },
   {
     kind: "accentShape",
@@ -532,10 +452,8 @@ const LEGACY_BLOCKS: BuilderBlockDefinition[] = [
     description: "Legacy graphic emphasis",
     category: "Structure",
     glyph: "●",
-    colSpan: 2,
-    rowSpan: 2,
-    minColSpan: 1,
-    minRowSpan: 1,
+    defaultWidth: 320,
+    defaultHeight: 180,
   },
 ];
 
@@ -562,6 +480,9 @@ export function isBuilderBlockKind(value: string): value is BuilderBlockKind {
   return ALL_BUILDER_BLOCKS.some((block) => block.kind === value);
 }
 
+const RECIPE_REFERENCE_WIDTH = 1920;
+const RECIPE_REFERENCE_HEIGHT = 1080;
+
 export function createBuilderBlock(
   kind: BuilderBlockKind,
   artwork: {
@@ -571,34 +492,14 @@ export function createBuilderBlock(
   },
 ): EngineElement {
   const definition = ALL_BUILDER_BLOCKS.find((block) => block.kind === kind)!;
-  const referencePlacement: BlockPlacement = {
-    col: 0,
-    row: 0,
-    // Recipes use the original 16:9 grid, then scale proportionally to the Artwork ratio.
-    colSpan: definition.colSpan * 2,
-    rowSpan: definition.rowSpan,
-    minColSpan: definition.minColSpan ? definition.minColSpan * 2 : undefined,
-    minRowSpan: definition.minRowSpan,
-    kind,
-  };
-  const placement = remapBlockPlacement(
-    referencePlacement,
-    REFERENCE_HEX_GRID,
-    getHexGridDimensions(artwork.width, artwork.height),
-  );
-  const nominal = blockRectForPlacement(placement, artwork.width, artwork.height);
-  let rect: BentoRect = nominal;
+  const width = definition.defaultWidth * (artwork.width / RECIPE_REFERENCE_WIDTH);
+  const height = definition.defaultHeight * (artwork.height / RECIPE_REFERENCE_HEIGHT);
+  let rect: BentoRect = { x: 0, y: 0, width, height };
   if (artwork.point) {
     rect = {
-      ...nominal,
-      x: Math.min(
-        Math.max(0, artwork.point.x - nominal.width / 2),
-        Math.max(0, artwork.width - nominal.width),
-      ),
-      y: Math.min(
-        Math.max(0, artwork.point.y - nominal.height / 2),
-        Math.max(0, artwork.height - nominal.height),
-      ),
+      ...rect,
+      x: Math.min(Math.max(0, artwork.point.x - width / 2), Math.max(0, artwork.width - width)),
+      y: Math.min(Math.max(0, artwork.point.y - height / 2), Math.max(0, artwork.height - height)),
     };
   }
   const element = makeElement(kind, rect);
@@ -985,10 +886,8 @@ function legacyTextBlock(
   kind: BuilderBlockKind,
   label: string,
   glyph: string,
-  colSpan: number,
-  rowSpan: number,
-  minColSpan?: number,
-  minRowSpan?: number,
+  defaultWidth: number,
+  defaultHeight: number,
   category: BuilderBlockDefinition["category"] = "Content",
 ): BuilderBlockDefinition {
   return {
@@ -997,9 +896,7 @@ function legacyTextBlock(
     description: "Legacy Text preset",
     category,
     glyph,
-    colSpan,
-    rowSpan,
-    minColSpan,
-    minRowSpan,
+    defaultWidth,
+    defaultHeight,
   };
 }
