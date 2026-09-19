@@ -245,9 +245,10 @@ export default function PhotopeaEmbed({
       </div>
 
       <footer style={footerStyle}>
-        <span>
-          File → Save in Photopea also applies back. Close returns to Raster Studio without changing
-          the canvas.
+        <span aria-live="polite">
+          {status.kind === "ready"
+            ? "Ready — File → Save or Apply back keeps Smart Object placement."
+            : "File → Save in Photopea also applies back. Close returns to Raster Studio without changing the canvas."}
         </span>
       </footer>
 
