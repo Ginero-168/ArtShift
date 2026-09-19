@@ -310,85 +310,21 @@ export function setObjectLayoutMode(
   slide: EngineSlide,
   objectId: string,
   mode: LayerMode,
-  strictness: WorkspaceStrictness,
+  _strictness: WorkspaceStrictness,
 ): EngineSlide {
   if (mode === "block") return slide;
   const element = slide.elements.find((candidate) => candidate.id === objectId);
   if (!element) return slide;
-
   const currentLayer = getLayerForObject(slide, objectId);
-  if (currentLayer?.mode === mode && element.layoutMode === mode) return slide;
-
-  const grid = getHexGridDimensions(slide.width, slide.height);
-  const placement =
-    mode === "block"
-      ? normalizeBlockPlacement(
-          blockPlacementForRect(element, slide.width, slide.height, placementSeed(element)),
-          grid,
-        )
-      : undefined;
-
-  // 1. Update the element's layoutMode
-  const nextElements = slide.elements.map((el) =>
-    el.id === objectId ? { ...el, layoutMode: mode, version: el.version + 1 } : el,
-  );
-
-  // 2. Adjust layers: if currentLayer only has this 1 object, simply update its mode.
-  // If currentLayer has multiple objects, detach this object into its own layer so others are NOT affected!
-  let nextLayers: EngineLayer[];
-  if (
-    currentLayer &&
-    currentLayer.objectIds.length === 1 &&
-    currentLayer.objectIds[0] === objectId
-  ) {
-    nextLayers = slide.layers.map((layer) => {
-      if (layer.id === currentLayer.id) {
-        return {
-          ...layer,
-          mode,
-          name: element.name || getElementDefaultName(element),
-          placements: placement ? { [objectId]: placement } : {},
-        };
-      }
-      return layer;
-    });
-  } else {
-    // Detach from current layer
-    const strippedLayers = slide.layers.map((layer) => {
-      if (layer.objectIds.includes(objectId)) {
-        const nextPlacements = { ...layer.placements };
-        delete nextPlacements[objectId];
-        return {
-          ...layer,
-          objectIds: layer.objectIds.filter((id) => id !== objectId),
-          placements: nextPlacements,
-        };
-      }
-      return layer;
-    });
-
-    const newLayer: EngineLayer = {
-      id: objectId,
-      name: element.name || getElementDefaultName(element),
-      mode,
-      objectIds: [objectId],
-      placements: placement ? { [objectId]: placement } : {},
-      visible: element.hidden !== true,
-      locked: element.locked === true,
-      z: element.z || nextLayerZ(strippedLayers),
-    };
-    nextLayers = [...strippedLayers, newLayer];
+  if (currentLayer?.mode === "free" && element.layoutMode === "free") {
+    return slide;
   }
-
-  const nextSlide: EngineSlide = {
+  return flattenBlockLayoutToFree({
     ...slide,
-    elements: nextElements,
-    layers: nextLayers,
-  };
-
-  return mode === "block"
-    ? reflowBlockObjects(nextSlide, strictness, { anchorId: objectId })
-    : nextSlide;
+    elements: slide.elements.map((el) =>
+      el.id === objectId ? { ...el, layoutMode: "free", version: el.version + 1 } : el,
+    ),
+  });
 }
 
 export function moveElementZ(

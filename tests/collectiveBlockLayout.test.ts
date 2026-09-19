@@ -55,7 +55,10 @@ describe("collective Block layout (P0 bake)", () => {
   it("does not change object dimensions while baking", () => {
     const source = slideWithSeparateBlockLayers();
     const original = new Map(
-      source.elements.map((element) => [element.id, { width: element.width, height: element.height }]),
+      source.elements.map((element) => [
+        element.id,
+        { width: element.width, height: element.height },
+      ]),
     );
     const result = normalizeDocumentLayers({
       id: "doc",

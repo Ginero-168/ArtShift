@@ -214,7 +214,6 @@ function validateCommandTarget(doc: EngineDoc, command: AiPlanCommand): string |
     if (!layer) return "The target Layer no longer exists.";
     if (layer.locked) return "The target Layer is locked.";
     return null;
-    return null;
   }
   const objectTarget = command.target;
   if (!objectTarget.objectId) return "The AI command has no Object target.";

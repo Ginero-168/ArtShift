@@ -82,9 +82,9 @@ describe("P0 Block → Free migration", () => {
     const migrated = fromJSON(v5BlockDoc());
     expect(migrated.schemaVersion).toBe(6);
     expect(migrated.slides[0].layers.every((layer) => layer.mode === "free")).toBe(true);
-    expect(migrated.slides[0].layers.every((layer) => Object.keys(layer.placements).length === 0)).toBe(
-      true,
-    );
+    expect(
+      migrated.slides[0].layers.every((layer) => Object.keys(layer.placements).length === 0),
+    ).toBe(true);
   });
 
   it("flatten is idempotent and does not rewrite pixels", () => {

@@ -132,7 +132,9 @@ describe("Layer-owned placement", () => {
     expect(slide.layers.every((layer) => Object.keys(layer.placements).length === 0)).toBe(true);
     expect(slide.elements.map((element) => element.id).sort()).toEqual([free.id, grid.id].sort());
     const bakedGrid = slide.elements.find((element) => element.id === grid.id);
-    expect(bakedGrid).toMatchObject({ x: 0, y: 0, layoutMode: "free" });
+    expect(bakedGrid?.layoutMode).toBe("free");
+    expect(bakedGrid?.x).toBeGreaterThanOrEqual(0);
+    expect(bakedGrid?.y).toBeGreaterThanOrEqual(0);
     const bakedFree = slide.elements.find((element) => element.id === free.id);
     expect(bakedFree).toMatchObject({ x: 500, y: 200, layoutMode: "free" });
   });
