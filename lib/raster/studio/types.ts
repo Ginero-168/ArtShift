@@ -121,6 +121,10 @@ export function buildRasterStudioCommitPatch(
   };
 }
 
+function sameFlip(before?: boolean, after?: boolean): boolean {
+  return (before === true) === (after === true);
+}
+
 /** True when every placement field matches the snapshot taken at Open. */
 export function placementUnchanged(
   before: ImagePlacementSnapshot,
@@ -136,8 +140,8 @@ export function placementUnchanged(
     before.height === after.height &&
     before.angle === after.angle &&
     before.opacity === after.opacity &&
-    before.flipX === after.flipX &&
-    before.flipY === after.flipY
+    sameFlip(before.flipX, after.flipX) &&
+    sameFlip(before.flipY, after.flipY)
   );
 }
 
