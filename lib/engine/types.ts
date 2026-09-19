@@ -425,5 +425,5 @@ export type EngineDoc = {
   schemaVersion: number;
 };
 
-/** v6+: Block/hex occupancy is baked to Free pixels on load. */
+/** v6+: Block/hex occupancy is baked to Free pixels on load. Appearance persist is v7. */
 export const ENGINE_SCHEMA_VERSION = 6;

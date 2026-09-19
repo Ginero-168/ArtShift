@@ -52,12 +52,10 @@ import type {
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
 import { convertElementToVectorPath, smoothVectorPathNodes } from "@/lib/engine/vectorPath";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
+import AppearancePanel from "./AppearancePanel";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 import ColorPickerInput from "./ColorPickerInput";
-
-const DEFAULT_GRADIENT_COLORS: string[] = ["#6366f1", "#a855f7"];
-const DEFAULT_GRADIENT_STOPS: number[] = [0, 1];
 
 const FRAME_SHAPES: { shape: FrameMaskShape; label: string; glyph: string }[] = [
   { shape: "circle", label: "Circle", glyph: "○" },
@@ -616,7 +614,7 @@ export default function BuilderInspector() {
               />
             ) : null}
 
-            <StyleOptions element={first} apply={apply} />
+            <AppearancePanel element={first} selectedIds={selected.map((item) => item.id)} />
           </>
         ) : null}
       </div>
@@ -1483,189 +1481,6 @@ function TransformSection({
           onChange={(height) => apply({ height }, "size")}
         />
       </div>
-    </div>
-  );
-}
-
-function StyleOptions({
-  element,
-  apply,
-}: {
-  element: EngineElement;
-  apply: (patch: Partial<EngineElement>, label: string) => void;
-}) {
-  const isMedia = element.type === "bookMockup" || element.type === "image";
-  const supportsFill =
-    !isMedia &&
-    element.type !== "text" &&
-    element.type !== "line" &&
-    element.type !== "arrow" &&
-    element.type !== "freedraw" &&
-    element.type !== "frame";
-
-  return (
-    <div className={styles.optionSection}>
-      <h3>Appearance</h3>
-      {!isMedia && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              padding: "6px 8px",
-              background: "rgba(0, 0, 0, 0.02)",
-              border: "1px solid var(--stroke, #eef0f4)",
-              borderRadius: 8,
-            }}
-          >
-            {/* Fill / Background Color (Left) */}
-            {supportsFill ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 11, color: "var(--ink-muted, #64748b)", fontWeight: 500 }}>
-                  Fill
-                </span>
-                <ColorPickerInput
-                  value={element.backgroundColor}
-                  onChange={(color) => {
-                    apply({ backgroundColor: color, fillType: "solid" }, "background");
-                  }}
-                  supportsGradient={true}
-                  fillType={element.fillType ?? "solid"}
-                  gradientColors={element.gradientColors ?? DEFAULT_GRADIENT_COLORS}
-                  gradientAngle={element.gradientAngle ?? 90}
-                  gradientStops={element.gradientStops ?? DEFAULT_GRADIENT_STOPS}
-                  onGradientChange={(type, colors, angle, stops) => {
-                    apply(
-                      {
-                        fillType: type,
-                        gradientColors: colors,
-                        gradientAngle: angle ?? element.gradientAngle ?? 90,
-                        gradientStops: stops ?? element.gradientStops ?? DEFAULT_GRADIENT_STOPS,
-                      },
-                      "fill gradient",
-                    );
-                  }}
-                  allowTransparent={true}
-                  title="Fill / Background color"
-                />
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 11, color: "var(--ink-muted, #64748b)", fontWeight: 500 }}>
-                  {element.type === "text" ? "Text" : "Stroke"}
-                </span>
-                <ColorPickerInput
-                  value={element.strokeColor}
-                  onChange={(color) => {
-                    apply({ strokeColor: color }, "foreground");
-                  }}
-                  allowTransparent={element.type !== "text"}
-                  title={element.type === "text" ? "Text color" : "Stroke color"}
-                />
-              </div>
-            )}
-
-            {/* Swap Button (Center) */}
-            {supportsFill && (
-              <button
-                type="button"
-                onClick={() => {
-                  const currentStroke = element.strokeColor || "#000000";
-                  const currentBg = element.backgroundColor || "transparent";
-                  apply(
-                    {
-                      strokeColor: currentBg,
-                      backgroundColor: currentStroke,
-                    },
-                    "swap colors",
-                  );
-                }}
-                title="Swap Fill and Stroke colors"
-                style={{
-                  width: 26,
-                  height: 22,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 4,
-                  border: "1px solid var(--stroke, #d1d5db)",
-                  background: "var(--surface-solid, #ffffff)",
-                  cursor: "pointer",
-                  color: "var(--ink, #374151)",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-                  transition: "all 0.1s ease",
-                  padding: 0,
-                }}
-              >
-                ⇄
-              </button>
-            )}
-
-            {/* Stroke Color (Right when supportsFill is true) */}
-            {supportsFill && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 11, color: "var(--ink-muted, #64748b)", fontWeight: 500 }}>
-                  Stroke
-                </span>
-                <ColorPickerInput
-                  value={element.strokeColor}
-                  onChange={(color) => {
-                    apply({ strokeColor: color }, "foreground");
-                  }}
-                  allowTransparent={true}
-                  title="Stroke color"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {!isMedia ? (
-        <NumberField
-          label="Stroke"
-          value={Number(element.strokeWidth.toFixed(1))}
-          min={0}
-          max={80}
-          step={0.5}
-          onChange={(strokeWidth) => apply({ strokeWidth }, "stroke width")}
-        />
-      ) : null}
-      <label className={styles.rangeField}>
-        <span>Opacity</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={Math.round(element.opacity * 100)}
-          onChange={(event) =>
-            apply({ opacity: Number(event.currentTarget.value) / 100 }, "opacity")
-          }
-        />
-        <output>{Math.round(element.opacity * 100)}%</output>
-      </label>
-      <label className={styles.field}>
-        <span>Blend</span>
-        <select
-          value={element.blendMode ?? "source-over"}
-          onChange={(event) =>
-            apply(
-              { blendMode: event.currentTarget.value as NonNullable<EngineElement["blendMode"]> },
-              "blend mode",
-            )
-          }
-        >
-          <option value="source-over">Normal</option>
-          <option value="multiply">Multiply</option>
-          <option value="screen">Screen</option>
-          <option value="overlay">Overlay</option>
-          <option value="darken">Darken</option>
-          <option value="lighten">Lighten</option>
-        </select>
-      </label>
     </div>
   );
 }

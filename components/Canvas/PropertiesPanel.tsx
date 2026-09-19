@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * Excalidraw-style properties panel — shown above selection.
- * Compact dropdowns: one visible item + popover menu.
+ * Compact overlay above selection. Not mounted by the live editor; the
+ * Builder Inspector Appearance panel is the source of truth for fill, stroke,
+ * shadow, glow, and text arc.
  */
 
 import { useMemo } from "react";
+
 import { unionBBox } from "@/lib/engine/bounds";
 import { useEngine } from "@/lib/engine/store";
 import type { ArrowElement, EngineElement, TextElement } from "@/lib/engine/types";

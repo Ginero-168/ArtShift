@@ -16,6 +16,12 @@
 
 import { create } from "zustand";
 import {
+  type AppearanceError,
+  type AppearanceOperation,
+  appearanceToLegacyPatch,
+  changeAppearance,
+} from "../appearance";
+import {
   createCompositionBlock,
   getCompositionBlockDefinition,
 } from "../builder/compositionBlocks";
@@ -182,6 +188,20 @@ export type EngineState = {
     patches: Array<{ id: string; patch: Partial<EngineElement> }>,
     label?: string,
   ) => void;
+  /**
+   * Appearance stack mutation via `changeAppearance`. All-or-none across `ids`.
+   * Pass a function when item ids differ per element (legacy fill/stroke/effect ids).
+   */
+  updateAppearance: (
+    ids: string[],
+    operation: AppearanceOperation | ((element: EngineElement) => AppearanceOperation | null),
+    label?: string,
+  ) => { ok: true; changed: boolean } | { ok: false; error: AppearanceError };
+  /** Live Appearance preview that does not add another undo step. */
+  previewAppearance: (
+    ids: string[],
+    operation: AppearanceOperation | ((element: EngineElement) => AppearanceOperation | null),
+  ) => { ok: true; changed: boolean } | { ok: false; error: AppearanceError };
   /** One undo snapshot at the beginning of a pointer interaction. */
   checkpointInteraction: (label: string) => void;
   /** Live geometry update that intentionally does not add another undo step. */
@@ -837,6 +857,34 @@ export const useEngine = create<EngineState>((set, get) => {
       const s = get();
       pushHistory(s.history, s.doc, label);
       set((cur) => mapDoc(cur, (sl) => applyElementPatches(sl, patches)));
+    },
+
+    updateAppearance: (ids, operation, label = "appearance") => {
+      interactionController.flush();
+      const s = get();
+      const slide = s.currentSlide();
+      if (!slide) {
+        return { ok: false, error: { code: "item_not_found", message: "No current slide" } };
+      }
+      const prepared = appearancePatchesFor(slide, ids, operation);
+      if (!prepared.ok) return prepared;
+      if (!prepared.changed) return { ok: true, changed: false };
+      pushHistory(s.history, s.doc, label);
+      set((cur) => mapDoc(cur, (sl) => applyElementPatches(sl, prepared.patches)));
+      return { ok: true, changed: true };
+    },
+
+    previewAppearance: (ids, operation) => {
+      const s = get();
+      const slide = s.currentSlide();
+      if (!slide) {
+        return { ok: false, error: { code: "item_not_found", message: "No current slide" } };
+      }
+      const prepared = appearancePatchesFor(slide, ids, operation);
+      if (!prepared.ok) return prepared;
+      if (!prepared.changed) return { ok: true, changed: false };
+      interactionController.preview(prepared.patches);
+      return { ok: true, changed: true };
     },
 
     checkpointInteraction: (label) => {
@@ -1762,6 +1810,33 @@ function mapCurrentSlide(
 
 function nextRevision(previous: number): number {
   return Math.max(Date.now(), previous + 1);
+}
+
+function appearancePatchesFor(
+  slide: EngineSlide,
+  ids: string[],
+  operation: AppearanceOperation | ((element: EngineElement) => AppearanceOperation | null),
+):
+  | {
+      ok: true;
+      changed: boolean;
+      patches: Array<{ id: string; patch: Partial<EngineElement> }>;
+    }
+  | { ok: false; error: AppearanceError } {
+  const patches: Array<{ id: string; patch: Partial<EngineElement> }> = [];
+  for (const id of ids) {
+    const element = slide.elements.find((candidate) => candidate.id === id && !candidate.isDeleted);
+    if (!element) {
+      return { ok: false, error: { code: "item_not_found", message: `Element ${id} not found` } };
+    }
+    const resolved = typeof operation === "function" ? operation(element) : operation;
+    if (!resolved) continue;
+    const result = changeAppearance(element, resolved);
+    if (!result.ok) return result;
+    if (!result.changed) continue;
+    patches.push({ id, patch: appearanceToLegacyPatch(result.appearance) });
+  }
+  return { ok: true, changed: patches.length > 0, patches };
 }
 
 function applyElementPatches(

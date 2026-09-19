@@ -3,6 +3,7 @@
 import { useState } from "react";
 import FontFamilyPicker from "@/components/FontFamilyPicker";
 import { IconEye } from "@/components/icons";
+import { clampPathCurvature } from "@/lib/appearance";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement, TextElement } from "@/lib/engine/types";
@@ -124,7 +125,10 @@ export function TextSection({
             max={100}
             value={firstText.pathCurvature ?? 0}
             onChange={(e) =>
-              apply({ pathCurvature: Number(e.currentTarget.value) }, "text curvature")
+              apply(
+                { pathCurvature: clampPathCurvature(Number(e.currentTarget.value)) },
+                "text curvature",
+              )
             }
             style={{ width: 50, accentColor: "var(--accent, #6366f1)" }}
           />

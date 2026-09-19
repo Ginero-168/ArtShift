@@ -142,7 +142,7 @@ function applyOperation(
 
 /**
  * Pure Appearance command: read legacy fields → apply operation → write legacy patch.
- * Store integration (`updateAppearance`) lands in Phase 3.
+ * Store adapter: `useEngine.getState().updateAppearance`.
  */
 export function changeAppearance(
   element: EngineElement,
