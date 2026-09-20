@@ -1,3 +1,4 @@
+import { DIRECTOR_CONVERSATION_HISTORY_LIMIT } from "@/lib/ai/orchestration/chatContinuity";
 import {
   ARTSHIFT_ORCHESTRATOR_SYSTEM,
   prepareOrchestratorTurn,
@@ -111,7 +112,7 @@ function normalizeHistory(messages: readonly AiChatMessage[]) {
               .join("\n");
       return content.trim() ? [{ role: message.role, content: content.slice(0, 12_000) }] : [];
     })
-    .slice(-12);
+    .slice(-DIRECTOR_CONVERSATION_HISTORY_LIMIT);
 }
 
 function countSnapshotObjects(snapshot: unknown): number {

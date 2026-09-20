@@ -797,6 +797,19 @@ export default function ChatThread({
                 />
               )}
 
+              {msg.followUpNote ? (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#64748b",
+                    lineHeight: 1.45,
+                    marginTop: msg.thought ? 0 : 2,
+                  }}
+                >
+                  {msg.followUpNote}
+                </div>
+              ) : null}
+
               {/* Same model row as image generation (sparkle + id) */}
               <ChatModelDisclosure label={formatModelDisclosure(msg.usedModels, msg.toolLabel)} />
 

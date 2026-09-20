@@ -126,6 +126,19 @@ describe("Creative Director route", () => {
     );
   });
 
+  it("accepts a 24-turn conversation window for follow-up memory", async () => {
+    const conversationHistory = Array.from({ length: 24 }, (_, index) => ({
+      role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+      content: `turn ${index} brand campaign`,
+    }));
+    const response = await POST(request({ ...body, conversationHistory }));
+    expect(response.status).toBe(200);
+    expect(prepareMock).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationHistory }),
+      expect.anything(),
+    );
+  });
+
   it("rejects unsafe image data hidden in Artwork context", async () => {
     const response = await POST(
       request({ ...body, artworkContext: { image: "data:image/png;base64,AAAA" } }),

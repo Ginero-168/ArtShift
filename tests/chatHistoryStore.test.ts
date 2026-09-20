@@ -87,6 +87,37 @@ describe("chat history persistence", () => {
     expect(window.localStorage.getItem(`${CHAT_HISTORY_STORAGE_PREFIX}${projectId}`)).toBeTruthy();
   });
 
+  it("persists last image generation package including ingredients", () => {
+    const snapshot = buildChatHistorySnapshot({
+      projectId,
+      messages: [
+        { id: "u1", role: "user", content: "ป้าย Nain ลด 35%", timestamp: 10 },
+        {
+          id: "a1",
+          role: "assistant",
+          content: "สร้างแล้ว",
+          timestamp: 11,
+          generationContext: {
+            userPrompt: "ป้าย Nain ลด 35%",
+            refinedPrompt: "Pink floral Nain 35% off banner",
+            width: 2048,
+            height: 688,
+            aspectRatio: "3:1",
+            outputElementId: "out-1",
+            outputFileId: "file-1",
+            ingredients: [{ objectId: "cover-a", fileId: "file-a", displayName: "Cover A" }],
+          },
+        },
+      ],
+    });
+    expect(saveChatHistorySnapshot(snapshot)).toBe(true);
+    const loaded = loadChatHistorySnapshot(projectId);
+    expect(loaded?.messages[1]?.generationContext?.ingredients).toEqual([
+      { objectId: "cover-a", fileId: "file-a", displayName: "Cover A" },
+    ]);
+    expect(loaded?.messages[1]?.generationContext?.outputElementId).toBe("out-1");
+  });
+
   it("persists usedModels so resumed chat still shows which model replied", () => {
     const snapshot = buildChatHistorySnapshot({
       projectId,

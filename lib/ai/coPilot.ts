@@ -12,10 +12,12 @@ import {
 } from "@/lib/ai/imageGeneration";
 import type { ImageResultSummary } from "@/lib/ai/imageResultPresentation";
 import {
+  classifyImageFollowUpPrompt,
   composeFollowUpDirectorPrompt,
   extractPriorImageGenerationContext,
-  isImageFollowUpPrompt,
   type PriorImageGenerationContext,
+  resolveFollowUpImageRefs,
+  serializeConversationHistoryForDirector,
 } from "@/lib/ai/orchestration/chatContinuity";
 import {
   prepareRemoteCreativeDirection,
@@ -113,7 +115,8 @@ export interface CoPilotMessage {
   resultSummary?: ImageResultSummary;
   /** Quality tier used for this generation (auto/low/medium/high/…). */
   qualityLabel?: string;
-  /** Runtime models that produced this reply (adapter ids, never invented names). */
+  /** Subtle note when this turn revised the last generation. */
+  followUpNote?: string;
   usedModels?: ChatModelStep[];
 }
 
@@ -274,6 +277,11 @@ export async function executeCoPilotInstruction(
       prompt,
     );
 
+  const history = options.conversationHistory ?? [];
+  const priorGeneration = options.priorGeneration ?? extractPriorImageGenerationContext(history);
+  const followUpKind = classifyImageFollowUpPrompt(prompt);
+  const isFollowUpTurn = !pending && Boolean(followUpKind) && Boolean(priorGeneration);
+
   // -------------------------------------------------------------
   // 1. SUB-AGENT: CONTEXT-AWARE IMAGE SPECIALIST
   // Keywords: "สร้างรูป", "วาดรูป", "generate image", "create image", "วาด", "รูปภาพ", "แก้ไขรูป"
@@ -283,7 +291,8 @@ export async function executeCoPilotInstruction(
     options.imageConversation ||
     (hasInlineTags && !isBuiltInImageAction) ||
     isImageGen ||
-    isImageEdit
+    isImageEdit ||
+    isFollowUpTurn
   ) {
     const combinedIds = Array.from(new Set([...inlineObjectIds, ...st.selectedIds]));
     const selectionIds =
@@ -310,7 +319,17 @@ export async function executeCoPilotInstruction(
       };
     }
 
-    const selectedRefs = pending?.selectedImages ?? selection.refs;
+    const selectedRefs = (() => {
+      const userRefs = pending?.selectedImages ?? selection.refs;
+      if (pending || userRefs.length > 0 || !isFollowUpTurn || !priorGeneration) return userRefs;
+      const bound = resolveFollowUpImageRefs({
+        elements,
+        prior: priorGeneration,
+        userRefs,
+        maxRefs: 4,
+      });
+      return bound.carriedForward ? bound.refs : userRefs;
+    })();
     const workspaceSlide = st.currentSlide();
     const act = logAction("orchestrator", "🧠 Creative Director", "กำลังเตรียมบริบทก่อนส่งให้ Director");
     if (options.cloudConsent !== true) {
@@ -335,19 +354,16 @@ export async function executeCoPilotInstruction(
       act.stage = "analyzing";
       act.description = "กำลังส่ง brief ให้ Gemini 3 Flash Creative Director วางแผน…";
       onActionUpdate?.({ ...act });
-      const history = options.conversationHistory ?? [];
-      const priorGeneration =
-        options.priorGeneration ?? extractPriorImageGenerationContext(history);
       const directorPrompt =
-        !pending && isImageFollowUpPrompt(prompt) && priorGeneration
-          ? composeFollowUpDirectorPrompt(prompt, priorGeneration)
+        !pending && isFollowUpTurn && priorGeneration
+          ? composeFollowUpDirectorPrompt(prompt, priorGeneration, { kind: followUpKind })
           : prompt;
       const direction = await prepareRemoteCreativeDirection(
         {
           prompt: directorPrompt,
-          conversationHistory: history
-            .map((m) => ({ role: m.role, content: m.content }))
-            .slice(-12),
+          conversationHistory: serializeConversationHistoryForDirector(history, {
+            currentPrompt: prompt,
+          }),
           canvasSummary: {
             objectCount: context.elementCount,
             selectedCount: context.selectedIds.length,
