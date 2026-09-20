@@ -5,7 +5,7 @@
  *
  * Requirements:
  * - Public Index Route
- * - Branding & Big "ArtShift" Title
+ * - Hero ArtShift wordmark + "AI Powered Design Tools"
  * - Single Primary "Log in with Google" button
  * - If already logged in, shows "Go to Projects"
  * - Handles OAuth query parameters (?auth=...)
@@ -16,7 +16,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
-import { IconDownload, IconFrame, IconSparkles, IconWand } from "@/components/icons";
 import { useAuth } from "@/lib/auth/useAuth";
 
 export default function LandingRootPage() {
@@ -91,70 +90,6 @@ function LandingPageContent() {
         }}
       />
 
-      {/* Header */}
-      <header
-        style={{
-          height: 72,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 32px",
-          maxWidth: 1200,
-          width: "100%",
-          margin: "0 auto",
-          zIndex: 20,
-        }}
-      >
-        <ArtShiftLogo size="header" />
-
-        <div>
-          {!loading && authenticated ? (
-            <Link
-              href="/projects"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 18px",
-                borderRadius: 9,
-                background: "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(255, 255, 255, 0.16)",
-                color: "#ffffff",
-                fontSize: 13,
-                fontWeight: 600,
-                textDecoration: "none",
-                backdropFilter: "blur(8px)",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span>ไปที่โปรเจกต์ของคุณ →</span>
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={signInWithGoogle}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 18px",
-                borderRadius: 9,
-                background: "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(255, 255, 255, 0.16)",
-                color: "#ffffff",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                backdropFilter: "blur(8px)",
-              }}
-            >
-              <GoogleGIcon size={14} />
-              <span>เข้าสู่ระบบ</span>
-            </button>
-          )}
-        </div>
-      </header>
-
       {/* Hero Section */}
       <main
         style={{
@@ -164,7 +99,7 @@ function LandingPageContent() {
           alignItems: "center",
           justifyContent: "center",
           textAlign: "center",
-          padding: "48px 24px 80px",
+          padding: "48px 24px",
           maxWidth: 880,
           margin: "0 auto",
           zIndex: 10,
@@ -188,26 +123,6 @@ function LandingPageContent() {
           </div>
         )}
 
-        {/* Pill Tag */}
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "6px 14px",
-            borderRadius: 30,
-            background: "rgba(99, 102, 241, 0.12)",
-            border: "1px solid rgba(99, 102, 241, 0.3)",
-            color: "#a5b4fc",
-            fontSize: 12,
-            fontWeight: 600,
-            marginBottom: 24,
-          }}
-        >
-          <IconSparkles size={13} color="#a5b4fc" />
-          <span>Local-First Presentation &amp; Graphic Canvas</span>
-        </div>
-
         <ArtShiftLogo as="h1" size="hero" style={{ margin: "0 0 20px" }} />
 
         {/* Tagline */}
@@ -218,10 +133,10 @@ function LandingPageContent() {
             lineHeight: 1.6,
             maxWidth: 640,
             margin: "0 0 40px",
+            textWrap: "balance",
           }}
         >
-          สร้างสไลด์ พรีเซนเทชัน และงานกราฟิกอย่างมืออาชีพด้วย Director AI ปลอดภัยด้วยระบบจัดเก็บข้อมูลในเครื่องคุณ
-          (Local IndexedDB) ไม่ส่งไฟล์ออกนอกเบราว์เซอร์
+          AI Powered Design Tools
         </p>
 
         {/* Action Card: Sign in with Google OR Go to Projects */}
@@ -326,80 +241,7 @@ function LandingPageContent() {
             </div>
           )}
         </div>
-
-        {/* Feature Highlights Grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: 16,
-            width: "100%",
-            marginTop: 64,
-          }}
-        >
-          <FeatureCard
-            icon={<IconWand size={20} color="#818cf8" />}
-            title="Director AI"
-            description="ออกแบบและปรับปรุงสไลด์อัตโนมัติด้วยคำสั่งภาษาไทยและอังกฤษ"
-          />
-          <FeatureCard
-            icon={<IconFrame size={20} color="#38bdf8" />}
-            title="Vector & Icons"
-            description="ไอคอน SVG ในตัว ปรับขนาด หมุนอิสระแบบ Illustrator และเปลี่ยนสีได้ทันที"
-          />
-          <FeatureCard
-            icon={<span style={{ fontSize: 20 }}>🔒</span>}
-            title="100% Local Storage"
-            description="ไฟล์งานทุกชิ้นถูกจัดเก็บใน IndexedDB บนเครื่องคุณโดยสมบูรณ์"
-          />
-          <FeatureCard
-            icon={<IconDownload size={20} color="#34d399" />}
-            title="ส่งออกได้หลากหลาย"
-            description="Export เป็น .pptx (PowerPoint), PDF, SVG และ PNG ความละเอียดสูง"
-          />
-        </div>
       </main>
-    </div>
-  );
-}
-
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div
-      style={{
-        background: "rgba(255, 255, 255, 0.03)",
-        border: "1px solid rgba(255, 255, 255, 0.06)",
-        borderRadius: 14,
-        padding: "20px 18px",
-        textAlign: "left",
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 8,
-          background: "rgba(255, 255, 255, 0.05)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {icon}
-      </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{title}</div>
-      <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{description}</div>
     </div>
   );
 }
