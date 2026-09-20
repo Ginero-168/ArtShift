@@ -72,7 +72,7 @@ describe("chat model attribution", () => {
         ],
         "GPT Image 2",
       ),
-    ).toBe("openai/gpt-image-2.5-sunburst");
+    ).toBe("google/gemini-3-flash → openai/gpt-image-2.5-sunburst");
     expect(formatModelDisclosure([florenceModelStep()], "Florence-2")).toBe("");
     expect(
       formatUsingStatus([
@@ -80,14 +80,17 @@ describe("chat model attribution", () => {
         { id: "openai/gpt-image-2.5-sunburst", role: "image" },
         florenceModelStep(),
       ]),
-    ).toBe("กำลังใช้ openai/gpt-image-2.5-sunburst...");
+    ).toBe("กำลังใช้ google/gemini-3-flash → openai/gpt-image-2.5-sunburst...");
     expect(
       displayModelSteps([
         directorModelStep(),
         { id: "openai/gpt-image-2.5-sunburst", role: "image" },
         florenceModelStep(),
       ]),
-    ).toEqual([{ id: "openai/gpt-image-2.5-sunburst", role: "image" }]);
+    ).toEqual([
+      { id: "google/gemini-3-flash", role: "chat" },
+      { id: "openai/gpt-image-2.5-sunburst", role: "image" },
+    ]);
     expect(visionModelStep()).toEqual({ id: DEFAULT_DIRECTOR_MODEL_ID, role: "vision" });
     expect(visionModelStep("google/gemini-3-flash")).toEqual({
       id: "google/gemini-3-flash",
@@ -136,8 +139,8 @@ describe("chat model attribution", () => {
     expect(turn.label()).toBe("google/gemini-3-flash");
     turn.remember(catalogModelStep("image-general"));
     turn.remember(florenceModelStep());
-    expect(turn.using()).toBe("กำลังใช้ openai/gpt-image-2.5-sunburst...");
-    expect(turn.label()).toBe("openai/gpt-image-2.5-sunburst");
+    expect(turn.using()).toBe("กำลังใช้ google/gemini-3-flash → openai/gpt-image-2.5-sunburst...");
+    expect(turn.label()).toBe("google/gemini-3-flash → openai/gpt-image-2.5-sunburst");
     const message = turn.attach({ content: "done" });
     expect(message.usedModels?.map((step) => step.id)).toEqual([
       "google/gemini-3-flash",
@@ -157,6 +160,6 @@ describe("chat model attribution", () => {
     expect(turn.label()).toBe("");
     turn.remember(visionModelStep("google/gemini-3-flash"));
     turn.remember(catalogModelStep("image-general"));
-    expect(turn.label()).toBe("openai/gpt-image-2.5-sunburst");
+    expect(turn.label()).toBe("google/gemini-3-flash → openai/gpt-image-2.5-sunburst");
   });
 });

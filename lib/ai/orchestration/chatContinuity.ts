@@ -7,6 +7,7 @@ import {
   type RequestedSizeSpec,
   type RequestedSizeUnit,
   resolveImageGenerationDimensions,
+  uniqueRequestedSizeSpecs,
 } from "@/lib/ai/imageGeneration";
 import {
   buildComposerImageSelectionFromIds,
@@ -76,6 +77,27 @@ export function followUpAskText(prompt: string | undefined): string {
   const labeled = /User follow-up (?:request|command):\s*([\s\S]+)/iu.exec(cut);
   if (labeled?.[1]?.trim()) return labeled[1].trim().slice(0, 4_000);
   return cut.trim().slice(0, 4_000);
+}
+
+/** Size list from the user ask only — last-package / Director prose must not inflate count. */
+export function extractRequestedSizeSpecsFromUserAsk(
+  prompt: string | undefined,
+  extraAsks: readonly (string | undefined)[] = [],
+): RequestedSizeSpec[] {
+  const specs: RequestedSizeSpec[] = [];
+  for (const raw of [prompt, ...extraAsks]) {
+    const ask = followUpAskText(raw) || raw;
+    if (!ask) continue;
+    specs.push(...extractRequestedSizeSpecsFromText(stripFollowUpMentions(ask)));
+  }
+  return uniqueRequestedSizeSpecs(specs);
+}
+
+function stripFollowUpMentions(prompt: string): string {
+  return prompt
+    .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
+    .replace(/@[^\s]+/g, "")
+    .trim();
 }
 
 /** Layer-1 locks carried across Orchestrator turns (must not drift on follow-ups). */
@@ -216,15 +238,30 @@ export function isImageVariationFollowUpPrompt(prompt: string): boolean {
   return false;
 }
 
+/** Size / resize follow-ups such as "ปรับไซส์เป็น 29x7cm" or "@Photo ปรับขนาดเป็น 16:9". */
+export function isSizeAdjustFollowUpPrompt(prompt: string): boolean {
+  const text = stripFollowUpMentions(prompt || "");
+  if (!text || text.length > 240) return false;
+  if (isBuiltinImageToolPrompt(text)) return false;
+  return (
+    /(?:ปรับ|เปลี่ยน|แปลง|ทำ|make|change|resize)\s*(?:ไซส์|ขนาด|สัดส่วน|size|aspect|ratio)/iu.test(
+      text,
+    ) ||
+    /(?:ไซส์|ขนาด|สัดส่วน)\s*(?:เป็น|ให้เป็น|to)/iu.test(text) ||
+    /(?:ปรับไซส์|ปรับขนาด|ปรับสัดส่วน|\bresize\b)/iu.test(text)
+  );
+}
+
 /**
  * Short revision of the last image: orientation, style, "ปรับ…", "ทำให้เป็น…".
  * Does not invent a new brief — relies on prior generation package + chat.
  */
 export function isImageRevisionFollowUpPrompt(prompt: string): boolean {
-  const text = (prompt || "").trim();
+  const text = stripFollowUpMentions(prompt || "");
   if (!text || text.length > 240) return false;
   if (isBuiltinImageToolPrompt(text)) return false;
   if (isImageVariationFollowUpPrompt(text)) return false;
+  if (isSizeAdjustFollowUpPrompt(text)) return true;
 
   if (
     /^(?:ช่วย|กรุณา)?\s*(?:ปรับ|ทำให้|ทำ|เปลี่ยน|แปลง|make|change|convert|switch)?\s*(?:เป็น|ให้เป็น|to|it(?:\s+to)?)?\s*(?:แนวตั้ง|แนวนอน|vertical|horizontal|portrait|landscape)/iu.test(
@@ -246,7 +283,11 @@ export function isImageRevisionFollowUpPrompt(prompt: string): boolean {
     return true;
   }
 
-  if (/(?:ปรับ|ทำให้|เปลี่ยน|แปลง)\s*(?:รูป|ภาพ|ป้าย|งาน|แบนเนอร์|มัน|อันนี้)?\s*(?:ให้)?\s*เป็น/iu.test(text)) {
+  if (
+    /(?:ปรับ|ทำให้|เปลี่ยน|แปลง)\s*(?:รูป|ภาพ|ป้าย|งาน|แบนเนอร์|มัน|อันนี้|ไซส์|ขนาด|สัดส่วน|size)?\s*(?:ให้)?\s*เป็น/iu.test(
+      text,
+    )
+  ) {
     return true;
   }
 
@@ -262,8 +303,9 @@ export function isImageRevisionFollowUpPrompt(prompt: string): boolean {
 }
 
 export function classifyImageFollowUpPrompt(prompt: string): ImageFollowUpKind | null {
-  if (isImageVariationFollowUpPrompt(prompt)) return "variation";
-  if (isImageRevisionFollowUpPrompt(prompt)) return "revision";
+  const text = stripFollowUpMentions(prompt || "");
+  if (isImageVariationFollowUpPrompt(text)) return "variation";
+  if (isImageRevisionFollowUpPrompt(text)) return "revision";
   return null;
 }
 

@@ -14,6 +14,36 @@ import type { AiAssistantChatInput, AiExecution, AiRuntime } from "@/lib/ai-runt
 export const FOLLOW_UP_RECALL_STATUS_MESSAGE =
   "กำลังทบทวนบทสนทนาและแพ็กเกจภาพล่าสุดด้วย Gemini 3 Flash...";
 
+/** Minimum time the Gemini recall / Director chip stays visible before image-gen. */
+export const GEMINI_PLANNING_MIN_VISIBLE_MS = 900;
+
+/**
+ * Keep the Gemini summarize/plan phase on screen long enough to read
+ * `google/gemini-3-flash` before the UI switches to the image model.
+ */
+export function holdGeminiStepVisible(
+  startedAt: number,
+  options: { minMs?: number; signal?: AbortSignal } = {},
+): Promise<void> {
+  const minMs = options.minMs ?? GEMINI_PLANNING_MIN_VISIBLE_MS;
+  const wait = minMs - (Date.now() - startedAt);
+  if (options.signal?.aborted) {
+    return Promise.reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+  }
+  if (wait <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      options.signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, wait);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+    };
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export const FOLLOW_UP_RECALL_SYSTEM = [
   "You are ArtShift Memory Recall running on Gemini 3 Flash.",
   "This is step 1 of follow-up image work: SUMMARIZE requirements from the full prior chat plus the LAST IMAGE GENERATION PACKAGE before any Creative Director plan or image generate.",

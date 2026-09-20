@@ -4,8 +4,10 @@ import {
   extractDimensionSpecsFromText,
   extractRequestedSizeSpecsFromText,
   hasNumericOrNamedSizeInText,
+  requestedSizeSpecKey,
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
+  uniqueRequestedSizeSpecs,
 } from "@/lib/ai/imageGeneration";
 import {
   aspectRatioFromDimensions,
@@ -126,6 +128,29 @@ describe("extractRequestedSizeSpecsFromText", () => {
   it("extracts named aspect ratios listed in one Thai resize ask", () => {
     const specs = extractRequestedSizeSpecsFromText("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที");
     expect(specs.map((s) => s.aspectRatio)).toEqual(["16:9", "3:4", "9:16"]);
+  });
+
+  it("keeps two Thai cm sizes distinct even when both clamp toward 3:1", () => {
+    const specs = extractRequestedSizeSpecsFromText("ปรับไซส์เป็น 29x7cm และ 60x20cm");
+    expect(specs.map((s) => `${s.sourceWidth}x${s.sourceHeight}${s.unit ?? ""}`)).toEqual([
+      "29x7cm",
+      "60x20cm",
+    ]);
+    expect(specs).toHaveLength(2);
+  });
+
+  it("extracts bare WxH pairs joined by และ", () => {
+    const specs = extractRequestedSizeSpecsFromText("29x7 และ 29x10");
+    expect(specs.map((s) => `${s.sourceWidth}x${s.sourceHeight}`)).toEqual(["29x7", "29x10"]);
+  });
+});
+
+describe("uniqueRequestedSizeSpecs", () => {
+  it("does not collapse 29x7cm and 60x20cm just because generation pixels match", () => {
+    const specs = extractRequestedSizeSpecsFromText("29x7cm และ 60x20cm");
+    expect(specs[0]?.aspectRatio).toBe(specs[1]?.aspectRatio);
+    expect(requestedSizeSpecKey(specs[0]!)).not.toBe(requestedSizeSpecKey(specs[1]!));
+    expect(uniqueRequestedSizeSpecs(specs)).toHaveLength(2);
   });
 });
 

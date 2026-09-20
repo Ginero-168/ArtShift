@@ -1395,6 +1395,37 @@ describe("gpt-oss-120b Creative Director", () => {
       expect(direction.outputBriefs).toHaveLength(3);
     }
   });
+
+  it("expands two Thai cm sizes in one ask even if Director JSON says 1", () => {
+    const direction = parseCreativeDirection(
+      {
+        kind: "image-task",
+        summary: "ปรับไซส์ป้าย",
+        refinedPrompt: "Same campaign artwork, recomposed for the target print size",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Preserve campaign identity"],
+        search: { required: false, queries: [], sources: [] },
+        requestedOutputCount: 1,
+        outputBriefs: ["ไซส์เดียว"],
+      },
+      {
+        prompt: "ปรับไซส์เป็น 29x7cm และ 60x20cm",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+      },
+      [],
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(2);
+      expect(direction.outputBriefs).toHaveLength(2);
+    }
+  });
 });
 
 describe("extractExplicitRequestedOutputCount / resolveRequestedOutputCountFromUserAsk", () => {
@@ -1409,9 +1440,16 @@ describe("extractExplicitRequestedOutputCount / resolveRequestedOutputCountFromU
     expect(extractExplicitRequestedOutputCount("ขอ 3 แบบ")).toBe(3);
     expect(extractExplicitRequestedOutputCount("สร้าง 3 รูป")).toBe(3);
     expect(extractExplicitRequestedOutputCount("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที")).toBe(3);
+    expect(extractExplicitRequestedOutputCount("ปรับไซส์เป็น 29x7cm และ 60x20cm")).toBe(2);
+    expect(extractExplicitRequestedOutputCount("29x7 และ 29x10")).toBe(2);
+    expect(extractExplicitRequestedOutputCount("สองไซส์ ปรับให้")).toBe(2);
+    expect(extractExplicitRequestedOutputCount("@Photo ปรับไซส์เป็น 29x7cm และ 60x20cm")).toBe(2);
     expect(resolveRequestedOutputCountFromUserAsk("ขอ 3 แบบ")).toBe(3);
     expect(resolveRequestedOutputCountFromUserAsk("สร้าง 3 รูป")).toBe(3);
     expect(resolveRequestedOutputCountFromUserAsk("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที")).toBe(3);
+    expect(resolveRequestedOutputCountFromUserAsk("ปรับไซส์เป็น 29x7cm และ 60x20cm")).toBe(2);
+    expect(resolveRequestedOutputCountFromUserAsk("29x7 และ 29x10")).toBe(2);
+    expect(resolveRequestedOutputCountFromUserAsk("สองไซส์ ปรับให้")).toBe(2);
   });
 
   it("ignores last-package sizes on a composed orientation follow-up", () => {

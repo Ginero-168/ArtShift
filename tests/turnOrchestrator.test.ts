@@ -572,6 +572,83 @@ describe("context-aware turn orchestrator", () => {
     ]);
   });
 
+  it("creates one task per Thai cm size even when generation pixels match", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "ปรับไซส์เป็น 29x7cm และ 60x20cm",
+      refs: [],
+      analyses: [],
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 1,
+      summary: "ปรับไซส์ป้ายเป็นสองขนาด",
+      refinedPrompt: "Same pink floral campaign, recomposed for each print size",
+      specialist: "image_editor",
+      capability: "IMAGE_EDIT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Preserve campaign identity"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    expect(run.requestedOutputCount).toBe(2);
+    expect(run.tasks).toHaveLength(2);
+    expect(run.tasks[0]?.requestedDimensions?.sizeLabel).toBe("29x7cm");
+    expect(run.tasks[1]?.requestedDimensions?.sizeLabel).toBe("60x20cm");
+    expect(run.tasks[0]?.requestedDimensions?.ratioClamped).toBe(true);
+    expect(
+      (run.tasks[0]?.requestedDimensions?.printWidth ?? 0) /
+        (run.tasks[0]?.requestedDimensions?.printHeight ?? 1),
+    ).toBeCloseTo(29 / 7, 2);
+    expect(run.tasks[1]?.requestedDimensions?.ratioClamped).toBeFalsy();
+  });
+
+  it("creates two tasks for '29x7 และ 29x10'", () => {
+    const run = createDirectedImageRun(
+      { prompt: "29x7 และ 29x10", refs: [], analyses: [] },
+      {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 1,
+        summary: "สองไซส์",
+        refinedPrompt: "Same artwork at each listed size",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Preserve campaign identity"],
+        search: { required: false, queries: [], sources: [] },
+      },
+    );
+    expect(run.requestedOutputCount).toBe(2);
+    expect(run.tasks.map((task) => task.requestedDimensions?.sizeLabel)).toEqual(["29x7", "29x10"]);
+  });
+
+  it("keeps a single cm resize at count 1 even if Director invented 5", () => {
+    const run = createDirectedImageRun(
+      { prompt: "ปรับไซส์เป็น 29x7cm", refs: [], analyses: [] },
+      {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 5,
+        summary: "ปรับไซส์แล้วแยก 5 แบบ",
+        refinedPrompt: "Five 29x7cm variations",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Preserve campaign identity"],
+        search: { required: false, queries: [], sources: [] },
+        outputBriefs: ["1", "2", "3", "4", "5"],
+      },
+    );
+    expect(run.requestedOutputCount).toBe(1);
+    expect(run.tasks).toHaveLength(1);
+    expect(run.tasks[0]?.requestedDimensions?.sizeLabel).toBe("29x7cm");
+  });
+
   it("builds a single-task run for 'ปรับเป็นแนวตั้ง' even if Director JSON requested 5", () => {
     const input: ContextAwareTurnInput = {
       prompt: "ปรับเป็นแนวตั้ง",

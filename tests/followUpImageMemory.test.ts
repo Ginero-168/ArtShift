@@ -183,6 +183,22 @@ describe("AICoPilotBar follow-up wiring", () => {
     expect(barSource).toMatch(/createDirectedImageTask\(\s*\{[\s\S]*?prompt: promptToSend/);
     expect(barSource).toContain("conversationHistory: historyForContinuity");
     expect(barSource).not.toContain("florenceModelStep");
+    expect(barSource).not.toContain("skip director");
+    expect(barSource).not.toContain("expandImageToAspectRatio");
+    expect(barSource).not.toMatch(/isExpandAspectPrompt\(/);
+    expect(barSource).toContain("holdGeminiStepVisible");
+    const recallCall = barSource.indexOf("await recallFollowUpContext");
+    const directorCall = barSource.indexOf("await prepareRemoteCreativeDirection");
+    const imageRunCall = barSource.indexOf(
+      "createDirectedImageRun(contextDecision.input, direction)",
+    );
+    const holdAfterRecall = barSource.indexOf("await holdGeminiStepVisible", recallCall);
+    const holdAfterDirector = barSource.indexOf("await holdGeminiStepVisible", directorCall);
+    expect(recallCall).toBeGreaterThan(-1);
+    expect(holdAfterRecall).toBeGreaterThan(recallCall);
+    expect(holdAfterRecall).toBeLessThan(directorCall);
+    expect(holdAfterDirector).toBeGreaterThan(directorCall);
+    expect(holdAfterDirector).toBeLessThan(imageRunCall);
   });
 });
 
@@ -194,5 +210,16 @@ describe("coPilot follow-up wiring", () => {
     expect(coPilotSource.indexOf("await recallFollowUpContext")).toBeLessThan(
       coPilotSource.indexOf("await prepareRemoteCreativeDirection"),
     );
+  });
+});
+
+describe("size follow-up still outpaints after planning", () => {
+  it("image task runner expands ratio-clamped prints after generate, not in the chat bar", () => {
+    const runnerSource = readFileSync("lib/ai/orchestration/imageTaskRunner.ts", "utf8");
+    expect(runnerSource).toContain("expandImageToAspectRatio");
+    expect(runnerSource.indexOf("generateAIImage")).toBeLessThan(
+      runnerSource.indexOf("expandImageToAspectRatio"),
+    );
+    expect(runnerSource).toContain("ratioClamped");
   });
 });

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyImageFollowUpPrompt,
   composeFollowUpDirectorPrompt,
   extractPriorImageGenerationContext,
+  extractRequestedSizeSpecsFromUserAsk,
   followUpCommandText,
   isImageFollowUpPrompt,
   isOrientationOnlyFollowUpPrompt,
+  isSizeAdjustFollowUpPrompt,
   resolveFollowUpDimensions,
   snapshotGenerationContext,
 } from "@/lib/ai/orchestration/chatContinuity";
@@ -118,8 +121,24 @@ describe("chatContinuity", () => {
     expect(isImageFollowUpPrompt("make it vertical")).toBe(true);
     expect(isImageFollowUpPrompt("ปรับโทน")).toBe(true);
     expect(isImageFollowUpPrompt("ปรับรายละเอียดต่อ")).toBe(true);
+    expect(isImageFollowUpPrompt("ปรับไซส์เป็น 29x7cm")).toBe(true);
+    expect(isImageFollowUpPrompt("@Photo ปรับไซส์เป็น 29x7cm")).toBe(true);
+    expect(isImageFollowUpPrompt("ปรับไซส์เป็น 29x7cm และ 60x20cm")).toBe(true);
     expect(isImageFollowUpPrompt("ตรวจสอบ Layout")).toBe(false);
     expect(isImageFollowUpPrompt("ลบพื้นหลัง")).toBe(false);
+  });
+
+  it("classifies size-adjust asks as revision follow-ups and reads both sizes", () => {
+    expect(isSizeAdjustFollowUpPrompt("@Photo ปรับไซส์เป็น 29x7cm")).toBe(true);
+    expect(classifyImageFollowUpPrompt("@Photo ปรับไซส์เป็น 29x7cm")).toBe("revision");
+    expect(
+      extractRequestedSizeSpecsFromUserAsk("ปรับไซส์เป็น 29x7cm และ 60x20cm").map(
+        (spec) => spec.label,
+      ),
+    ).toEqual(["29x7cm", "60x20cm"]);
+    expect(
+      extractRequestedSizeSpecsFromUserAsk("@Photo 29x7 และ 29x10").map((spec) => spec.label),
+    ).toEqual(["29x7", "29x10"]);
   });
 
   it("swaps custom 29×7cm to 7×29cm on 'ปรับเป็นแนวตั้ง' instead of defaulting to 9:16", () => {
