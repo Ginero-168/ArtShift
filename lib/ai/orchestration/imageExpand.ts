@@ -58,16 +58,20 @@ export function expandAxisForRatio(ratioWidth: number, ratioHeight: number): Exp
 }
 
 /**
- * Detect expand-to-ultra-aspect asks that **require** multi-panel stitch
- * (print ratio longer:shorter > 3:1). Normal ≤3:1 sizes stay on generate/edit.
+ * Detect **explicit** expand/outpaint wording plus a print ratio beyond 3:1.
+ *
+ * This is NOT a chat-turn router. Special-size asks such as
+ * `@Photo ปรับไซส์เป็น 29x7cm` must still run Gemini Memory Recall then
+ * Creative Director; only the image-task runner may call
+ * `expandImageToAspectRatio` after that plan (when `ratioClamped`).
+ * Never short-circuit the chat bar / coPilot into outpaint from this flag.
  */
 export function isExpandAspectPrompt(text?: string): boolean {
   if (!text || typeof text !== "string") return false;
   const value = text.toLocaleLowerCase();
-  const wantsExpand =
-    /ขยาย|expand|outpaint|ต่อข้าง|เติมข้าง|ต่อบน|ต่อล่าง|เป็น\s*29|ทำเป็น\s*29|เป็น\s*7\s*[x×]\s*29/iu.test(
-      value,
-    );
+  // Require an explicit expand/outpaint verb. Do NOT treat a custom cm resize
+  // ("ปรับไซส์เป็น 29x7cm") as "jump to ต่อภาพ" — that skipped Gemini planning.
+  const wantsExpand = /ขยาย|expand|outpaint|ต่อข้าง|เติมข้าง|ต่อบน|ต่อล่าง|ต่อภาพ|ต่อฉาก/iu.test(value);
   if (!wantsExpand) return false;
 
   const parsed = parseExpandRatioFromText(text);

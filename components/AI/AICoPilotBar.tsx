@@ -549,6 +549,9 @@ export default function AICoPilotBar() {
     });
 
     try {
+      // Special-size / ultra-wide asks (29x7cm, ต่อภาพ) must NOT jump to
+      // expandImageToAspectRatio here. Always: Memory Recall → Director → image
+      // task. Post-3:1 outpaint runs in imageTaskRunner after that plan.
       let analysesForTurn: ImageReferenceAnalysis[] = pending
         ? pending.analyses.map((analysis) => ({ ...analysis, ref: { ...analysis.ref } }))
         : [];

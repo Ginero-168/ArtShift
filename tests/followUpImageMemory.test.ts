@@ -4,11 +4,14 @@ import {
   classifyImageFollowUpPrompt,
   composeFollowUpDirectorPrompt,
   DIRECTOR_CONVERSATION_HISTORY_LIMIT,
+  isSizeAdjustFollowUpPrompt,
   resolveFollowUpImageRefs,
   serializeConversationHistoryForDirector,
   snapshotIngredients,
   toContinuityHistory,
 } from "@/lib/ai/orchestration/chatContinuity";
+import { isExpandAspectPrompt } from "@/lib/ai/orchestration/imageExpand";
+import { createDirectedImageRun } from "@/lib/ai/orchestration/turnOrchestrator";
 import { createImage } from "@/lib/engine/factory";
 
 function photo(id: string, fileId: string, name: string) {
@@ -184,8 +187,9 @@ describe("AICoPilotBar follow-up wiring", () => {
     expect(barSource).toContain("conversationHistory: historyForContinuity");
     expect(barSource).not.toContain("florenceModelStep");
     expect(barSource).not.toContain("skip director");
-    expect(barSource).not.toContain("expandImageToAspectRatio");
-    expect(barSource).not.toMatch(/isExpandAspectPrompt\(/);
+    expect(barSource).not.toMatch(/from\s+["']@\/lib\/ai\/orchestration\/imageExpand["']/);
+    expect(barSource).not.toMatch(/isExpandAspectPrompt\s*\(/);
+    expect(barSource).not.toMatch(/await\s+expandImageToAspectRatio\s*\(/);
     expect(barSource).toContain("holdGeminiStepVisible");
     const recallCall = barSource.indexOf("await recallFollowUpContext");
     const directorCall = barSource.indexOf("await prepareRemoteCreativeDirection");
@@ -213,13 +217,51 @@ describe("coPilot follow-up wiring", () => {
   });
 });
 
+describe("special-size asks stay on the Gemini 3-step path", () => {
+  it("treats 29x7cm resize as recall+Director work, not an expand-now skip", () => {
+    const special = "@Photo ปรับไซส์เป็น 29x7cm";
+    expect(isExpandAspectPrompt(special)).toBe(false);
+    expect(isSizeAdjustFollowUpPrompt(special)).toBe(true);
+    expect(classifyImageFollowUpPrompt(special)).toBe("revision");
+
+    const run = createDirectedImageRun(
+      { prompt: special, refs: [], analyses: [] },
+      {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 5,
+        summary: "Director invented five 29x7 variants",
+        refinedPrompt: "Rebuild the last campaign at 29x7cm",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Keep campaign copy"],
+        search: { required: false, queries: [], sources: [] },
+        outputBriefs: ["1", "2", "3", "4", "5"],
+      },
+    );
+    expect(run.requestedOutputCount).toBe(1);
+    expect(run.tasks[0]?.requestedDimensions?.ratioClamped).toBe(true);
+    expect(run.tasks[0]?.requestedDimensions?.sizeLabel).toBe("29x7cm");
+    expect(
+      (run.tasks[0]?.requestedDimensions?.printWidth ?? 0) /
+        (run.tasks[0]?.requestedDimensions?.printHeight ?? 1),
+    ).toBeCloseTo(29 / 7, 2);
+  });
+});
+
 describe("size follow-up still outpaints after planning", () => {
   it("image task runner expands ratio-clamped prints after generate, not in the chat bar", () => {
     const runnerSource = readFileSync("lib/ai/orchestration/imageTaskRunner.ts", "utf8");
+    const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
     expect(runnerSource).toContain("expandImageToAspectRatio");
     expect(runnerSource.indexOf("generateAIImage")).toBeLessThan(
       runnerSource.indexOf("expandImageToAspectRatio"),
     );
     expect(runnerSource).toContain("ratioClamped");
+    expect(barSource).not.toMatch(/from\s+["']@\/lib\/ai\/orchestration\/imageExpand["']/);
+    expect(barSource).not.toMatch(/await\s+expandImageToAspectRatio\s*\(/);
+    expect(barSource).toContain("Memory Recall → Director → image");
   });
 });
