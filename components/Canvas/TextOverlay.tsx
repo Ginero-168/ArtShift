@@ -9,11 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useEngine } from "@/lib/engine/store";
-import {
-  getTextMinimumHeight,
-  getTextRenderPadding,
-  getTextSafePadding,
-} from "@/lib/engine/textLayout";
+import { getTextRenderPadding, isPointText } from "@/lib/engine/textLayout";
 import type { TextElement } from "@/lib/engine/types";
 
 type Props = {
@@ -28,6 +24,7 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(element.text);
   const updateElements = useEngine((s) => s.updateElements);
+  const point = isPointText(element);
 
   useEffect(() => {
     const el = ref.current;
@@ -41,44 +38,7 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.currentTarget.value;
     setValue(text);
-    const lines = text.split("\n");
-    const patch: Partial<TextElement> = { text };
-
-    // Auto-expand height
-    if (!element.containerId) {
-      patch.height = getTextMinimumHeight(element, lines.length);
-    }
-
-    // Auto-expand width using canvas measureText
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.font = `${element.fontStyle.includes("bold") ? "bold " : ""}${
-        element.fontStyle.includes("italic") ? "italic " : ""
-      }${element.fontSize}px ${element.fontFamily}`;
-      let maxWidth = 0;
-      for (const rawLine of lines) {
-        const isBullet = rawLine.startsWith("- ") || rawLine.startsWith("• ");
-        const line = isBullet ? rawLine.slice(2) : rawLine;
-        // Account for bullet indentation + text width (including bold/italic segments).
-        const segments = parseRichText(line);
-        let lineWidth = 0;
-        for (const seg of segments) {
-          ctx.font = `${seg.bold || element.fontStyle.includes("bold") ? "bold " : ""}${
-            seg.italic || element.fontStyle.includes("italic") ? "italic " : ""
-          }${element.fontSize}px ${element.fontFamily}`;
-          lineWidth += ctx.measureText(seg.text).width;
-        }
-        if (isBullet) lineWidth += element.fontSize * 0.8;
-        if (lineWidth > maxWidth) maxWidth = lineWidth;
-      }
-      const needed = maxWidth + getTextSafePadding(element.fontSize, element.padding ?? 0) * 2;
-      if (!element.containerId && needed > element.width) {
-        patch.width = needed;
-      }
-    }
-
-    updateElements([{ id: element.id, patch }], "text edit");
+    updateElements([{ id: element.id, patch: { text } }], "text edit");
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -123,7 +83,7 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
         boxSizing: "border-box",
         border: "none",
         resize: "none",
-        overflow: "hidden",
+        overflow: point ? "visible" : "hidden",
         padding: `${paddingTop}px ${renderPadding}px ${renderPadding}px`,
         margin: 0,
         outline: "2px solid #6366f1",
@@ -138,46 +98,11 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
         fontStyle: element.fontStyle.includes("italic") ? "italic" : "normal",
         lineHeight: element.lineHeight,
         textAlign: element.textAlign,
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
+        whiteSpace: point ? "pre" : "pre-wrap",
+        wordBreak: point ? "normal" : "break-word",
         cursor: "text",
         zIndex: 5,
       }}
     />
   );
-}
-
-type Segment = { text: string; bold: boolean; italic: boolean };
-
-function parseRichText(text: string): Segment[] {
-  const segments: Segment[] = [];
-  let i = 0;
-  let bold = false;
-  let italic = false;
-  let current = "";
-
-  function flush() {
-    if (current) {
-      segments.push({ text: current, bold, italic });
-      current = "";
-    }
-  }
-
-  while (i < text.length) {
-    if (text[i] === "*" && text[i + 1] === "*") {
-      flush();
-      bold = !bold;
-      i += 2;
-    } else if (text[i] === "*") {
-      flush();
-      italic = !italic;
-      i += 1;
-    } else {
-      current += text[i];
-      i++;
-    }
-  }
-  flush();
-  if (segments.length === 0) segments.push({ text, bold: false, italic: false });
-  return segments;
 }

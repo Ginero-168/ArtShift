@@ -72,7 +72,7 @@ import { isMediaElement, normalizeMediaPatch } from "./mediaLayout";
 import { resizeArtworkSlide } from "./resizeArtwork";
 import { type SmartArrangeOptions, type SmartArrangePatch, solveSmartArrange } from "./smartLayout";
 import { applyTemplateToSlide, type TemplateApplyMode } from "./templateApplication";
-import { measureTextElementHeight } from "./textLayout";
+import { normalizeTextPatch } from "./textObject";
 import {
   ENGINE_SCHEMA_VERSION,
   type EngineDoc,
@@ -1858,14 +1858,10 @@ function applyElementPatches(
   const normalizedPatches = patches.map((item) => {
     const element = slide.elements.find((candidate) => candidate.id === item.id);
     if (!element) return item;
-    if (element.type === "text" && !element.containerId) {
-      const next = { ...element, ...item.patch } as TextElement;
+    if (element.type === "text") {
       return {
         ...item,
-        patch: {
-          ...item.patch,
-          height: Math.max(next.height, measureTextElementHeight(next)),
-        },
+        patch: normalizeTextPatch(element, item.patch as Partial<TextElement>),
       };
     }
     if (!isMediaElement(element)) return item;

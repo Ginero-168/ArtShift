@@ -10,6 +10,7 @@ const SQUARE_SHAPE_TOOLS = new Set([
   "heart",
   "plus",
   "frame",
+  "text",
 ]);
 
 /** Constrain shape drag geometry to a 1:1 square while Shift is held. */

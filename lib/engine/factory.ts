@@ -5,7 +5,7 @@
  */
 
 import { DEFAULT_THAI_FONT_FAMILY } from "@/lib/fonts";
-import { getTextMinimumHeight, getTextSafePadding } from "./textLayout";
+import { autosizePointText, getTextMinimumHeight, getTextSafePadding } from "./textLayout";
 import type {
   ArrowElement,
   BookMockupElement,
@@ -23,6 +23,7 @@ import type {
   RectElement,
   StarElement,
   TextElement,
+  TextMode,
   TriangleElement,
   VectorPathElement,
 } from "./types";
@@ -274,17 +275,19 @@ export function createText(opts: {
   fontFamily?: string;
   width?: number;
   height?: number;
+  textMode?: TextMode;
 }): TextElement {
   const fontSize = opts.fontSize ?? 24;
   const lines = opts.text.split("\n");
   const lineHeight = 1.4;
   const padding = getTextSafePadding(fontSize);
-  return {
+  const textMode = opts.textMode ?? "area";
+  const element: TextElement = {
     ...baseDefaults(),
     type: "text",
     x: opts.x,
     y: opts.y,
-    width: opts.width ?? 200,
+    width: opts.width ?? (textMode === "point" ? 1 : 200),
     height:
       opts.height ??
       Math.max(
@@ -294,6 +297,7 @@ export function createText(opts: {
     strokeColor: "#1b1b1f",
     backgroundColor: "transparent",
     text: opts.text,
+    textMode,
     fontSize,
     fontFamily: opts.fontFamily ?? DEFAULT_THAI_FONT_FAMILY,
     fontStyle: "normal",
@@ -302,6 +306,13 @@ export function createText(opts: {
     lineHeight,
     containerId: null,
     padding,
+  };
+  if (textMode !== "point") return element;
+  const sized = autosizePointText(element);
+  return {
+    ...sized,
+    width: opts.width ?? sized.width,
+    height: opts.height ?? sized.height,
   };
 }
 

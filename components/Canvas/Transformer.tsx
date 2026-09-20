@@ -20,7 +20,7 @@ import { getInteractiveElements, getRenderableElements, isObjectLocked } from "@
 import { isMediaElement } from "@/lib/engine/mediaLayout";
 import { snapResize } from "@/lib/engine/snap";
 import { useEngine } from "@/lib/engine/store";
-import { getTextMinimumHeight } from "@/lib/engine/textLayout";
+import { scaleTextWithBox } from "@/lib/engine/textObject";
 import type { ArrowElement, EngineElement } from "@/lib/engine/types";
 
 const SNAP_THRESHOLD_PX = 6;
@@ -238,7 +238,8 @@ export default function Transformer({
           return;
         }
 
-        const keepAR = e.shiftKey || originals.some(isMediaElement);
+        const keepAR =
+          e.shiftKey || originals.some((el) => isMediaElement(el) || el.type === "text");
         const right = handle === "e" || handle === "ne" || handle === "se";
         const left = handle === "w" || handle === "nw" || handle === "sw";
         const bottom = handle === "s" || handle === "se" || handle === "sw";
@@ -305,15 +306,18 @@ export default function Transformer({
         }
         const sx = nw / aabb.width;
         const sy = nh / aabb.height;
-        const patches = originals.map((el) => ({
-          id: el.id,
-          patch: {
+        const patches = originals.map((el) => {
+          const box = {
             x: nx + (el.x - aabb.x) * sx,
             y: ny + (el.y - aabb.y) * sy,
             width: el.width * sx,
             height: el.height * sy,
-          },
-        }));
+          };
+          return {
+            id: el.id,
+            patch: scaledElementPatch(el, box),
+          };
+        });
         previewElements(patches);
         return;
       }
@@ -457,7 +461,7 @@ export default function Transformer({
       const localDy = -dx * sin + dy * cos;
       let newW = start.width;
       let newH = start.height;
-      const keepAR = e.shiftKey || isMediaElement(start);
+      const keepAR = e.shiftKey || isMediaElement(start) || start.type === "text";
       const ar = start.width / Math.max(1, start.height);
 
       let px = 0.5,
@@ -570,18 +574,12 @@ export default function Transformer({
           onGuidesChange?.(snap.guides);
         }
       }
-      if (start.type === "text") {
-        const minimumHeight = getTextMinimumHeight(
-          start,
-          Math.max(1, start.text.split("\n").length),
-        );
-        if (newH < minimumHeight) {
-          const growsUp = drag.handle === "n" || drag.handle === "ne" || drag.handle === "nw";
-          if (growsUp) newY -= minimumHeight - newH;
-          newH = minimumHeight;
-        }
-      }
-      previewElements([{ id: start.id, patch: { x: newX, y: newY, width: newW, height: newH } }]);
+      previewElements([
+        {
+          id: start.id,
+          patch: scaledElementPatch(start, { x: newX, y: newY, width: newW, height: newH }),
+        },
+      ]);
     },
     [checkpointInteraction, onGuidesChange, previewElements, scale, slide, worldToScreen],
   );
@@ -980,4 +978,14 @@ function handleLabel(id: HandleId): string {
     mid: "arrow midpoint",
   };
   return labels[id] ?? "resize handle";
+}
+
+function scaledElementPatch(
+  element: EngineElement,
+  box: { x: number; y: number; width: number; height: number },
+): Partial<EngineElement> {
+  if (element.type === "text") {
+    return scaleTextWithBox(element, box);
+  }
+  return box;
 }

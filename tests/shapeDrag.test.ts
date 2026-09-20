@@ -11,6 +11,10 @@ describe("shape drag constraints", () => {
       start: { x: 200, y: 200 },
       current: { x: 140, y: 140 },
     });
+    expect(constrainShapeDrag("text", { x: 40, y: 40 }, { x: 120, y: 70 }, true)).toEqual({
+      start: { x: 40, y: 40 },
+      current: { x: 120, y: 120 },
+    });
   });
 
   it("does not constrain line-like tools or unconstrained drags", () => {
