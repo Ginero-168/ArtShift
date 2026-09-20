@@ -66,6 +66,8 @@ describe("AI model manifest", () => {
     const manifest = await import("@/lib/server/ai/modelManifest");
     expect(manifest.AI_DEFAULT_PROFILES["assistant.chat"]).toBe("quality");
     expect(manifest.AI_DEFAULT_PROFILES["prompt.enhance"]).toBe("quality");
+    expect(manifest.AI_DEFAULT_PROFILES["vision.describe"]).toBe("quality");
+    expect(manifest.AI_DEFAULT_PROFILES["vision.ocr"]).toBe("quality");
   });
 
   it("routes assistant.chat and prompt.enhance to Google Gemini when AI_ORCHESTRATOR_PROVIDER is google", () => {

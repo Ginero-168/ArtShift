@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateImageMock = vi.hoisted(() => vi.fn());
 const preloadDataURLMock = vi.hoisted(() => vi.fn());
@@ -71,6 +71,12 @@ describe("AI Co-Pilot image commands", () => {
       }
       return undefined;
     });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("vision api not mocked");
+      }),
+    );
     prepareDirectionMock.mockReset();
     reviewOutputMock.mockReset();
     prepareDirectionMock.mockResolvedValue({
@@ -118,6 +124,10 @@ describe("AI Co-Pilot image commands", () => {
       currentSlideId: "slide-1",
       selectedIds: new Set(),
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("lets the Director explain an unavailable model without image execution", async () => {

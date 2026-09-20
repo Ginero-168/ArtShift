@@ -82,6 +82,7 @@ describe("AI vision-analyze API", () => {
         cloudConsent: true,
         allowFallback: false,
         accountId: "account-test",
+        profile: "quality",
       }),
     );
   });

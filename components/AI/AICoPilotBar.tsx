@@ -81,6 +81,10 @@ import {
   runSequentialExecutionPlan,
   type SequentialExecutionPlan,
 } from "@/lib/ai/orchestration/turnOrchestrator";
+import {
+  cloudVisionStatusMessage,
+  DEFAULT_CLOUD_VISION_LABEL,
+} from "@/lib/ai/orchestration/visionPreference";
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
@@ -606,7 +610,8 @@ export default function AICoPilotBar() {
       stage: isEditTurn ? "analyzing" : "outputting",
       prompt: promptToSend,
       isEdit: isEditTurn,
-      statusMessage: isEditTurn ? "กำลังวิเคราะห์ภาพต้นฉบับ..." : "กำลังประมวลผลคำสั่ง...",
+      toolLabel: isEditTurn ? DEFAULT_CLOUD_VISION_LABEL : undefined,
+      statusMessage: isEditTurn ? cloudVisionStatusMessage() : "กำลังประมวลผลคำสั่ง...",
     });
 
     try {
@@ -732,21 +737,38 @@ export default function AICoPilotBar() {
         (hasImageContext && !isBuiltInImageAction)
       ) {
         if (hasImageContext && analysesForTurn.length === 0) {
+          const visionConsent = ensureCloudConsent();
           const analysisAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
             agent: "orchestrator",
-            title: "Image Analyzer (วิเคราะห์ภาพต้นฉบับ)",
-            description: `กำลังวิเคราะห์ภาพต้นฉบับและบริบทบน Canvas (${refsForTurn.length} ภาพ)…`,
-            status: "running",
+            title: `Image Analyzer (${DEFAULT_CLOUD_VISION_LABEL})`,
+            description: visionConsent
+              ? `กำลังวิเคราะห์ภาพต้นฉบับด้วย ${DEFAULT_CLOUD_VISION_LABEL} (${refsForTurn.length} ภาพ)…`
+              : "ยังไม่ได้รับอนุญาตให้ส่งภาพไปวิเคราะห์ที่ Gemini 3 Flash",
+            status: visionConsent ? "running" : "error",
             timestamp: Date.now(),
           };
           analysisActions.push(analysisAction);
           upsertCurrentAction(analysisAction);
+          if (!visionConsent) {
+            setMessages((previous) => [
+              ...previous,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider",
+                timestamp: Date.now(),
+                actions: analysisActions,
+              },
+            ]);
+            return;
+          }
           setLiveAssistantState({
             stage: "analyzing",
             prompt: promptToSend,
             isEdit: true,
-            statusMessage: "กำลังวิเคราะห์ภาพต้นฉบับและบริบท...",
+            toolLabel: DEFAULT_CLOUD_VISION_LABEL,
+            statusMessage: cloudVisionStatusMessage(),
             actions: [analysisAction],
           });
           try {
@@ -756,16 +778,16 @@ export default function AICoPilotBar() {
               (completed, total, stage) => {
                 analysisAction.description = `${stage} · ${Math.round((completed / Math.max(1, total)) * 100)}%`;
                 upsertCurrentAction({ ...analysisAction });
-                setLiveAssistantState((prev) => ({
-                  ...(prev || { stage: "analyzing", prompt: promptToSend, isEdit: true }),
-                  stage: "analyzing",
-                  statusMessage: `กำลังวิเคราะห์ภาพ (${Math.round((completed / Math.max(1, total)) * 100)}%)...`,
-                  actions: [analysisAction],
-                }));
               },
+              undefined,
+              { cloudConsent: true },
             );
             analysisAction.status = "success";
-            analysisAction.description = `วิเคราะห์ภาพต้นฉบับเสร็จสมบูรณ์ (${analysesForTurn.length} รายการ)`;
+            analysisAction.description = analysesForTurn.some(
+              (item) => item.source === "local-florence",
+            )
+              ? `วิเคราะห์สำรองบนเครื่อง (${analysesForTurn.length}) — ${DEFAULT_CLOUD_VISION_LABEL} ไม่พร้อม`
+              : `วิเคราะห์ภาพด้วย ${DEFAULT_CLOUD_VISION_LABEL} เสร็จแล้ว (${analysesForTurn.length} รายการ)`;
             upsertCurrentAction({ ...analysisAction });
           } catch (error) {
             analysisAction.status = "error";

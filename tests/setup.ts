@@ -32,3 +32,16 @@ if (typeof window !== "undefined" && !window.localStorage) {
     value: new MemoryStorage(),
   });
 }
+
+// happy-dom resolves relative `/api/...` URLs against localhost. Unmocked
+// vision-analyze calls should fail fast instead of printing ECONNREFUSED.
+if (typeof globalThis.fetch === "function") {
+  const realFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (url.startsWith("/")) {
+      return Promise.reject(new Error(`unmocked relative fetch: ${url}`));
+    }
+    return realFetch(input as RequestInfo, init);
+  }) as typeof fetch;
+}

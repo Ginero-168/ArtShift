@@ -3,6 +3,12 @@ import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngin
 import { parseVisionResponse, visionExtrasAsAppearanceNotes } from "./cloudVisionParser";
 import type { ComposerImageRef } from "./imageReferences";
 import { renderVisibleReference } from "./visibleReferenceRenderer";
+import {
+  DEFAULT_CLOUD_VISION_LABEL,
+  formatVisionModelLabel,
+  resolveVisionBackendOrder,
+  type VisionBackendId,
+} from "./visionPreference";
 
 export type ImageReferenceAnalysis = {
   ref: Pick<ComposerImageRef, "objectId" | "elementVersion" | "displayName">;
@@ -13,6 +19,8 @@ export type ImageReferenceAnalysis = {
   transparency: "none" | "partial" | "unknown";
   appearanceNotes: string[];
   limitations: string[];
+  source?: VisionBackendId | "none";
+  modelLabel?: string;
 };
 
 export type CloudVisionTurboResult = {
@@ -20,6 +28,8 @@ export type CloudVisionTurboResult = {
   objects: string[];
   visibleText: string;
   appearanceNotes?: string[];
+  model?: string;
+  modelLabel?: string;
 };
 
 export type ImageReferenceAnalyzers = {
@@ -45,13 +55,14 @@ export async function tryCloudVisionTurbo(
   dataUrl: string,
   signal: AbortSignal,
   onProgress?: (stage: string, progress: number) => void,
-  options?: { cloudConsent?: boolean },
+  options?: { cloudConsent?: boolean; timeoutMs?: number },
 ): Promise<CloudVisionTurboResult | null> {
   if (options?.cloudConsent !== true) return null;
   if (typeof fetch === "undefined") return null;
   try {
-    onProgress?.("Cloud Vision Turbo ⚡ กำลังวิเคราะห์", 0.3);
-    const timeoutSignal = AbortSignal.timeout ? AbortSignal.timeout(22_000) : undefined;
+    onProgress?.(`${DEFAULT_CLOUD_VISION_LABEL} กำลังวิเคราะห์ภาพ`, 0.3);
+    const timeoutMs = options.timeoutMs ?? 22_000;
+    const timeoutSignal = AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined;
     const combinedSignal =
       timeoutSignal &&
       typeof (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any ===
@@ -70,25 +81,34 @@ export async function tryCloudVisionTurbo(
     });
 
     if (!res.ok) return null;
-    const data = await res.json();
+    const data = (await res.json()) as {
+      success?: boolean;
+      result?: unknown;
+      model?: string;
+    };
     if (data.success && data.result) {
-      onProgress?.("Cloud Vision Turbo ⚡ วิเคราะห์เสร็จสิ้น", 0.95);
+      onProgress?.(`${DEFAULT_CLOUD_VISION_LABEL} วิเคราะห์เสร็จสิ้น`, 0.95);
       const parsed = parseVisionResponse(JSON.stringify(data.result));
+      const model = typeof data.model === "string" ? data.model : undefined;
       return {
         caption: parsed.caption,
         objects: parsed.objects,
         visibleText: parsed.visibleText,
         appearanceNotes: visionExtrasAsAppearanceNotes(parsed),
+        ...(model ? { model } : {}),
+        modelLabel: formatVisionModelLabel(model, "cloud-api"),
       };
     }
   } catch {
-    // Graceful fallback to local Florence-2
+    // Caller may fall back to local Florence-2 after this API miss.
   }
   return null;
 }
 
 export type AnalyzeImageReferenceOptions = {
   cloudConsent?: boolean;
+  /** Default true. Set false to skip Florence after a cloud miss (generate critical path). */
+  allowLocalFallback?: boolean;
 };
 
 const defaultAnalyzers: ImageReferenceAnalyzers = {
@@ -105,10 +125,11 @@ function analyzersForConsent(
   cloudConsent: boolean,
 ): ImageReferenceAnalyzers {
   if (analyzers !== defaultAnalyzers) return analyzers;
+  if (!cloudConsent) return analyzers;
   return {
     ...analyzers,
     turbo: (dataUrl, signal, onProgress) =>
-      tryCloudVisionTurbo(dataUrl, signal, onProgress, { cloudConsent }),
+      tryCloudVisionTurbo(dataUrl, signal, onProgress, { cloudConsent: true }),
   };
 }
 
@@ -127,12 +148,17 @@ export async function analyzeImageReference(
   let objects: string[] = [];
   let visibleText = "";
   let turboNotes: string[] = [];
+  let source: VisionBackendId | "none" = "none";
+  let modelLabel = DEFAULT_CLOUD_VISION_LABEL;
 
   const resolvedAnalyzers = analyzersForConsent(analyzers, options?.cloudConsent === true);
+  const order = resolveVisionBackendOrder({
+    cloudConsent: options?.cloudConsent === true || Boolean(resolvedAnalyzers.turbo),
+    allowLocalFallback: options?.allowLocalFallback,
+  });
 
-  // 1. Cloud Vision Turbo Fast-Lane (only when explicit consent is present)
   let turboSuccess = false;
-  if (resolvedAnalyzers.turbo) {
+  if (order[0] === "cloud-api" && resolvedAnalyzers.turbo) {
     const turboResult = await resolvedAnalyzers.turbo(visible.dataUrl, signal, onProgress);
     if (
       turboResult &&
@@ -142,26 +168,29 @@ export async function analyzeImageReference(
       objects = turboResult.objects;
       visibleText = turboResult.visibleText;
       turboNotes = turboResult.appearanceNotes ?? [];
+      source = "cloud-api";
+      modelLabel = turboResult.modelLabel || formatVisionModelLabel(turboResult.model, "cloud-api");
       turboSuccess = true;
     }
   }
 
-  // 2. Local Florence-2 Fallback pass (if turbo not used or failed)
-  if (!turboSuccess) {
+  if (!turboSuccess && order.includes("local-florence")) {
     const [localCaption, detection, localText] = await Promise.all([
       analyzers.caption(visible.dataUrl, "detailed", (progress) =>
-        onProgress?.("กำลังอ่านบริบทภาพ", 0.1 + progress * 0.25),
+        onProgress?.("กำลังอ่านบริบทภาพ (สำรองบนเครื่อง)", 0.1 + progress * 0.25),
       ),
       analyzers.detect(visible.dataUrl, (progress) =>
-        onProgress?.("กำลังตรวจวัตถุในภาพ", 0.1 + progress * 0.25),
+        onProgress?.("กำลังตรวจวัตถุในภาพ (สำรองบนเครื่อง)", 0.1 + progress * 0.25),
       ),
       analyzers.ocr(visible.dataUrl, (progress) =>
-        onProgress?.("กำลังตรวจข้อความในภาพ", 0.1 + progress * 0.25),
+        onProgress?.("กำลังตรวจข้อความในภาพ (สำรองบนเครื่อง)", 0.1 + progress * 0.25),
       ),
     ]);
     caption = localCaption;
     objects = detection.objects.map((object) => object.label.trim()).filter(Boolean);
     visibleText = localText;
+    source = "local-florence";
+    modelLabel = formatVisionModelLabel(undefined, "local-florence");
   }
   throwIfAborted(signal);
 
@@ -194,7 +223,10 @@ export async function analyzeImageReference(
       ...(asset?.result?.foregroundStatus === "failed"
         ? ["foreground preview analysis failed"]
         : []),
+      ...(source === "none" ? ["cloud vision unavailable; local fallback disabled"] : []),
     ],
+    source,
+    modelLabel,
   };
 }
 

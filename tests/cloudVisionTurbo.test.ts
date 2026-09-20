@@ -21,6 +21,11 @@ vi.mock("@/lib/ai/orchestration/visibleReferenceRenderer", () => ({
     limitations: [],
   })),
 }));
+vi.mock("@/lib/vision/visionEngine", () => ({
+  visionCaption: vi.fn(),
+  visionDetect: vi.fn(),
+  visionOcr: vi.fn(),
+}));
 
 const mockRef: ComposerImageRef = {
   objectId: "img-1",
@@ -124,6 +129,7 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
             objects: ["sign", "logo"],
             visibleText: "Welearn Book Shop",
           },
+          model: "google/gemini-3-flash",
         }),
       })) as unknown as typeof fetch;
 
@@ -150,6 +156,8 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
           objects: ["sign", "logo"],
           visibleText: "Welearn Book Shop",
           appearanceNotes: [],
+          model: "google/gemini-3-flash",
+          modelLabel: "Gemini 3 Flash",
         });
       } finally {
         globalThis.fetch = originalFetch;
@@ -203,6 +211,8 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       expect(result.caption).toBe("Fast cloud caption");
       expect(result.objects).toEqual(["fast-obj"]);
       expect(result.visibleText).toBe("FAST TEXT");
+      expect(result.source).toBe("cloud-api");
+      expect(result.modelLabel).toBe("Gemini 3 Flash");
     });
 
     it("falls back to local passes when turbo returns null", async () => {
@@ -226,6 +236,123 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       expect(result.caption).toBe("Local fallback caption");
       expect(result.objects).toEqual(["fallback-obj"]);
       expect(result.visibleText).toBe("FALLBACK TEXT");
+      expect(result.source).toBe("local-florence");
+      expect(result.modelLabel).toBe("Florence-2");
+    });
+
+    it("does not auto-load Florence when cloud succeeds and local fallback is disabled", async () => {
+      const mockTurbo = vi.fn(async () => ({
+        caption: "API caption",
+        objects: ["api-obj"],
+        visibleText: "API TEXT",
+        modelLabel: "Gemini 3 Flash",
+      }));
+      const mockCaption = vi.fn();
+      const mockDetect = vi.fn();
+      const mockOcr = vi.fn();
+
+      const result = await analyzeImageReference(
+        mockRef,
+        new AbortController().signal,
+        undefined,
+        {
+          caption: mockCaption,
+          detect: mockDetect,
+          ocr: mockOcr,
+          asset: () => undefined,
+          turbo: mockTurbo,
+        },
+        { cloudConsent: true, allowLocalFallback: false },
+      );
+
+      expect(mockTurbo).toHaveBeenCalledTimes(1);
+      expect(mockCaption).not.toHaveBeenCalled();
+      expect(mockDetect).not.toHaveBeenCalled();
+      expect(mockOcr).not.toHaveBeenCalled();
+      expect(result.source).toBe("cloud-api");
+    });
+
+    it("skips Florence when the API misses and local fallback is disabled", async () => {
+      const mockTurbo = vi.fn(async () => null);
+      const mockCaption = vi.fn();
+      const mockDetect = vi.fn();
+      const mockOcr = vi.fn();
+
+      const result = await analyzeImageReference(
+        mockRef,
+        new AbortController().signal,
+        undefined,
+        {
+          caption: mockCaption,
+          detect: mockDetect,
+          ocr: mockOcr,
+          asset: () => undefined,
+          turbo: mockTurbo,
+        },
+        { cloudConsent: true, allowLocalFallback: false },
+      );
+
+      expect(mockTurbo).toHaveBeenCalledTimes(1);
+      expect(mockCaption).not.toHaveBeenCalled();
+      expect(result.source).toBe("none");
+      expect(result.limitations).toContain("cloud vision unavailable; local fallback disabled");
+    });
+
+    it("calls Gemini API before any local Florence pass on the default consent path", async () => {
+      const callOrder: string[] = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => {
+        callOrder.push("cloud-api");
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            result: {
+              caption: "Gemini caption",
+              objects: ["logo"],
+              visibleText: "SALE",
+            },
+            model: "google/gemini-3-flash",
+          }),
+        };
+      }) as unknown as typeof fetch;
+
+      const { visionCaption, visionDetect, visionOcr } = await import("@/lib/vision/visionEngine");
+      const captionSpy = vi.mocked(visionCaption).mockImplementation(async () => {
+        callOrder.push("local-florence");
+        return "local caption";
+      });
+      const detectSpy = vi.mocked(visionDetect).mockImplementation(async () => {
+        callOrder.push("local-florence");
+        return { objects: [] };
+      });
+      const ocrSpy = vi.mocked(visionOcr).mockImplementation(async () => {
+        callOrder.push("local-florence");
+        return "";
+      });
+
+      try {
+        const result = await analyzeImageReference(
+          mockRef,
+          new AbortController().signal,
+          undefined,
+          undefined,
+          { cloudConsent: true },
+        );
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        expect(captionSpy).not.toHaveBeenCalled();
+        expect(detectSpy).not.toHaveBeenCalled();
+        expect(ocrSpy).not.toHaveBeenCalled();
+        expect(callOrder).toEqual(["cloud-api"]);
+        expect(result.source).toBe("cloud-api");
+        expect(result.modelLabel).toBe("Gemini 3 Flash");
+        expect(result.caption).toBe("Gemini caption");
+      } finally {
+        globalThis.fetch = originalFetch;
+        captionSpy.mockReset();
+        detectSpy.mockReset();
+        ocrSpy.mockReset();
+      }
     });
   });
 });
