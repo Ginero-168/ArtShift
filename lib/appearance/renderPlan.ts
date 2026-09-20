@@ -1,5 +1,6 @@
 import type { EngineElement } from "@/lib/engine/types";
 import { appearanceCapabilities } from "./capabilities";
+import { expandEmbossPasses, expandExtrudePasses, resolveExtrudeSideColor } from "./depthEffects";
 import { readAppearance } from "./legacyAdapter";
 import { isMvpStackItem } from "./panelModel";
 import type { BackgroundAppearance, FillAppearance, StrokeAppearance } from "./types";
@@ -22,7 +23,7 @@ export type CanvasShadowPass = {
   blur: number;
   offsetX: number;
   offsetY: number;
-  source: "shadow" | "glow";
+  source: "shadow" | "glow" | "extrude" | "emboss";
 };
 
 export type CanvasPaintPass =
@@ -75,6 +76,21 @@ export function canvasShadowPasses(element: EngineElement): CanvasShadowPass[] {
           offsetY: 0,
           source: "glow",
         });
+      }
+    } else if (item.effect.type === "extrude") {
+      const sideColor = resolveExtrudeSideColor(item.effect, faceColor(element));
+      if (isInvisiblePaintColor(sideColor)) continue;
+      for (const layer of expandExtrudePasses(item.effect, {
+        color: sideColor,
+        opacity: item.opacity,
+      })) {
+        if (isInvisiblePaintColor(layer.color)) continue;
+        passes.push({ ...layer, source: "extrude" });
+      }
+    } else if (item.effect.type === "emboss") {
+      for (const layer of expandEmbossPasses(item.effect, { opacity: item.opacity })) {
+        if (isInvisiblePaintColor(layer.color)) continue;
+        passes.push({ ...layer, source: "emboss" });
       }
     }
   }
@@ -154,4 +170,20 @@ export function canvasGaussianBlurRadius(element: EngineElement): number {
     radius = Math.max(radius, item.effect.radius);
   }
   return radius;
+}
+
+function faceColor(element: EngineElement): string {
+  const appearance = readAppearance(element);
+  const fill = appearance.items.find(
+    (item): item is FillAppearance => item.kind === "fill" && item.visible !== false,
+  );
+  if (fill) {
+    if (fill.paint.type === "solid") return fill.paint.color;
+    if (fill.paint.type === "pattern") return fill.paint.foreground;
+    return fill.paint.stops[0]?.color ?? "#888888";
+  }
+  if (element.type === "text") return element.strokeColor || "#111111";
+  return element.backgroundColor && element.backgroundColor !== "transparent"
+    ? element.backgroundColor
+    : element.strokeColor || "#111111";
 }

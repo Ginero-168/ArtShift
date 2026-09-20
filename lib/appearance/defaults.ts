@@ -1,4 +1,6 @@
 import type {
+  AppearanceEmbossEffect,
+  AppearanceExtrudeEffect,
   BackgroundAppearance,
   EffectAppearance,
   FillAppearance,
@@ -16,6 +18,23 @@ export const DEFAULT_GLOW = {
   color: "#38bdf8",
   blur: 18,
 } as const;
+
+export const DEFAULT_EXTRUDE = {
+  depth: 10,
+  angle: 45,
+  steps: 0,
+  sideColor: "#2a2438",
+  sideFromFill: true,
+} as const satisfies Omit<AppearanceExtrudeEffect, "type">;
+
+export const DEFAULT_EMBOSS = {
+  mode: "emboss",
+  depth: 2,
+  angle: 45,
+  softness: 0,
+  highlightColor: "rgba(255, 255, 255, 0.72)",
+  shadowColor: "rgba(0, 0, 0, 0.55)",
+} as const satisfies Omit<AppearanceEmbossEffect, "type">;
 
 export function defaultShadowItem(): EffectAppearance {
   return {
@@ -36,6 +55,28 @@ export function defaultGlowItem(): EffectAppearance {
     opacity: 1,
     scope: "object",
     effect: { type: "glow", ...DEFAULT_GLOW },
+  };
+}
+
+export function defaultExtrudeItem(): EffectAppearance {
+  return {
+    id: "",
+    kind: "effect",
+    visible: true,
+    opacity: 1,
+    scope: "object",
+    effect: { type: "extrude", ...DEFAULT_EXTRUDE },
+  };
+}
+
+export function defaultEmbossItem(): EffectAppearance {
+  return {
+    id: "",
+    kind: "effect",
+    visible: true,
+    opacity: 1,
+    scope: "object",
+    effect: { type: "emboss", ...DEFAULT_EMBOSS },
   };
 }
 

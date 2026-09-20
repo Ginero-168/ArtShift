@@ -1,9 +1,10 @@
 /**
  * Canonical Appearance stack types (Illustrator-inspired).
- * Engine schema v8 persists this object on EngineElement (v7 introduced the
- * field) and dual-writes legacy flat fields (fill/stroke/shadow/glow/opacity/
- * blendMode) for older readers. Appearance.schemaVersion stays 1; new item
- * fields are additive and normalize to defaults when missing.
+ * Engine schema v9 persists this object on EngineElement (v7 introduced the
+ * field; v8 added text-effect stack fields) and dual-writes legacy flat fields
+ * (fill/stroke/shadow/glow/opacity/blendMode) for older readers.
+ * Appearance.schemaVersion stays 1; new item fields (including extrude/emboss
+ * effects) are additive and normalize to defaults when missing.
  */
 
 import type { ColorAdjustments } from "@/lib/color/adjustments";
@@ -108,6 +109,34 @@ export type StrokeAppearance = {
   paintOrder?: "fill" | "stroke";
 } & AppearancePaintLayer;
 
+export type AppearanceEmbossMode = "emboss" | "deboss" | "bevel";
+
+export type AppearanceExtrudeEffect = {
+  type: "extrude";
+  /** Distance of the block in px along `angle`. */
+  depth: number;
+  /** Canvas azimuth: 0° = right, 90° = down. */
+  angle: number;
+  /** 0 = smooth (≈1px copies). 1+ = that many copies along the depth vector. */
+  steps: number;
+  sideColor: string;
+  /** When true, the renderer darkens the current Fill instead of `sideColor`. */
+  sideFromFill?: boolean;
+};
+
+export type AppearanceEmbossEffect = {
+  type: "emboss";
+  mode: AppearanceEmbossMode;
+  /** Offset magnitude of the highlight/shadow pair in px. */
+  depth: number;
+  /** Light falls this way in canvas space (0° = right, 90° = down); highlight is opposite. */
+  angle: number;
+  /** Blur of the highlight/shadow copies. 0 = hard chisel. */
+  softness: number;
+  highlightColor: string;
+  shadowColor: string;
+};
+
 export type AppearanceEffect =
   | {
       type: "shadow";
@@ -124,6 +153,8 @@ export type AppearanceEffect =
       blur: number;
       layers?: AppearanceGlowLayer[];
     }
+  | AppearanceExtrudeEffect
+  | AppearanceEmbossEffect
   | { type: "gaussianBlur"; radius: number }
   | { type: "colorAdjust"; adjustments: Partial<ColorAdjustments> };
 
@@ -194,3 +225,6 @@ export type AppearanceOperation =
 export const APPEARANCE_SCHEMA_VERSION = 1 as const;
 /** Raised in v8 so neon stacks + offset duplicate fills can coexist. */
 export const APPEARANCE_MAX_ITEMS = 24;
+export const MAX_EXTRUDE_DEPTH = 80;
+export const MAX_EXTRUDE_STEPS = 48;
+export const MAX_EMBOSS_SOFTNESS = 32;

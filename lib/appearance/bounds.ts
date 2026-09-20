@@ -1,3 +1,4 @@
+import { depthEffectPadding } from "./depthEffects";
 import type { Appearance, AppearanceItem } from "./types";
 
 export type AppearancePadding = {
@@ -57,6 +58,9 @@ function itemPadding(item: AppearanceItem): AppearancePadding {
   if (item.kind === "effect" && item.effect.type === "gaussianBlur") {
     const radius = item.effect.radius;
     return { top: radius, right: radius, bottom: radius, left: radius };
+  }
+  if (item.kind === "effect" && (item.effect.type === "extrude" || item.effect.type === "emboss")) {
+    return depthEffectPadding(item);
   }
   return { top: 0, right: 0, bottom: 0, left: 0 };
 }

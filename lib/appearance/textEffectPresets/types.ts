@@ -1,5 +1,7 @@
 import type {
   Appearance,
+  AppearanceEmbossEffect,
+  AppearanceExtrudeEffect,
   AppearanceItemBlendMode,
   AppearancePaint,
   AppearanceShadowLayer,
@@ -84,4 +86,8 @@ export type TextEffectSourceSpec = {
     blendMode?: AppearanceItemBlendMode;
   }>;
   blurRadius?: number;
+  /** Named 3D block — compiled to an `extrude` Appearance effect, not a shadow stack. */
+  extrude?: Omit<AppearanceExtrudeEffect, "type">;
+  /** Named relief — compiled to an `emboss` Appearance effect. */
+  emboss?: Omit<AppearanceEmbossEffect, "type">;
 };

@@ -451,5 +451,7 @@ export type EngineDoc = {
  * v7: persist canonical `appearance` on elements, dual-written to legacy flat fields.
  * v8: Appearance items gain gradient/conic, clip-to-glyphs, multi-shadow layers,
  * item blend, offset paint layers, and optional static blur. Additive on v7 docs.
+ * v9: Named Extrude and Emboss/Bevel Appearance effects (editable 3D/relief).
+ * Additive on v8 docs; not dual-written to legacy shadow/glow fields.
  */
-export const ENGINE_SCHEMA_VERSION = 8;
+export const ENGINE_SCHEMA_VERSION = 9;

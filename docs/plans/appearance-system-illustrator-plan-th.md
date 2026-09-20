@@ -1,6 +1,6 @@
 # แผนระบบ Appearance สำหรับ ArtShift
 
-สถานะ: **Phase 1 foundation + MVP UI (#12) + schema v7 persist + multi Fill/Stroke + static Text Effect Presets A–D / schema v8 (2026-09-20)**
+สถานะ: **Phase 1 foundation + MVP UI (#12) + schema v7 persist + multi Fill/Stroke + static Text Effect Presets A–D / schema v8 + Extrude/Emboss Appearance effects / schema v9 (2026-09-20)**
 
 วันที่จัดทำ: 15 กันยายน 2026  
 อัปเดต: 20 กันยายน 2026
@@ -12,7 +12,7 @@
 | ชั้น | สถานะ |
 |---|---|
 | `lib/appearance/*` (`readAppearance` / `changeAppearance` / capabilities / bounds / fingerprints) | มีแล้ว — อ่าน prefer `appearance` ถ้ามี ไม่เช่นนั้นสังเคราะห์จาก legacy |
-| Engine schema | **v6 = Block bake → Free pixels**. **v7 = persist canonical `appearance`**. **v8 = text-effect stack fields** (gradient/conic, clip-to-glyphs, multi-shadow layers, item blend, offset fills, static blur) |
+| Engine schema | **v6 = Block bake → Free pixels**. **v7 = persist canonical `appearance`**. **v8 = text-effect stack fields** (gradient/conic, clip-to-glyphs, multi-shadow layers, item blend, offset fills, static blur). **v9 = named Extrude + Emboss/Bevel effects** (editable 3D/relief; not dual-written to legacy shadow) |
 | Canonical `appearance` field บน `EngineElement` | **มีแล้วใน schema v7** พร้อม dual-write ไปยัง flat fields เดิม |
 | Live Inspector Appearance stack UI | มีในสาย #12 (Fill / Stroke / Shadow / Glow / Text Arc) — **multi Fill/Stroke เปิดเป็น product feature แล้ว** |
 | Graphic Styles ที่ผูก Brand Kit | **นอกขอบเขต** |
@@ -129,7 +129,7 @@ Editor ปัจจุบันใช้ [components/Builder/BuilderInspector.ts
 
 ### 3.5 Persistence และ Export
 
-เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 8` (Appearance persist + text-effect stack fields; v7 introduced canonical `appearance`) ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
+เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 9` (Appearance persist + text-effect stack fields + Extrude/Emboss; v7 introduced canonical `appearance`, v8 text-effect item fields) ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
 
 **v6 = Block bake** — bump นั้นใช้ไปแล้ว งาน persist canonical `appearance` คือ **v7** (PR นี้) Dual-write ไปยัง legacy fields เพื่อให้ factories, templates, AI และ renderer เดิมยังอ่าน flat fields ได้
 
