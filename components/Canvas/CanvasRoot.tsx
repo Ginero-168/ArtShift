@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { absorbWorkspaceWheel } from "@/lib/editor/overscrollLock";
 import { unionBBox } from "@/lib/engine/bounds";
 import { createPointerGestureRouter } from "@/lib/engine/pointerGestureRouter";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
@@ -418,8 +419,9 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
   // ——— wheel zoom + scroll pan ———
   const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    // React wheel is often passive; native listener below is the real preventDefault.
+    absorbWorkspaceWheel(e);
     if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
       const factor = Math.exp(-e.deltaY * 0.0015);
       const clientX = e.clientX;
       const clientY = e.clientY;
@@ -438,12 +440,12 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     setView((v) => ({ ...v, tx: v.tx - e.deltaX, ty: v.ty - e.deltaY }));
   }, []);
 
-  // ——— Native non-passive wheel to prevent browser zoom/scroll ———
+  // Non-passive: absorb trackpad deltaX so Chrome/Safari do not navigate history.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const preventNativeWheel = (e: WheelEvent) => {
-      e.preventDefault();
+      absorbWorkspaceWheel(e);
     };
     el.addEventListener("wheel", preventNativeWheel, { passive: false });
     return () => el.removeEventListener("wheel", preventNativeWheel);
@@ -647,12 +649,15 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       ref={containerRef}
       className={className}
       role="application"
+      data-editor-overscroll="workspace"
       aria-label="Slide canvas. Use Tab to reach toolbar and selection controls."
       style={{
         position: "relative",
         width: "100%",
         height: "100%",
         overflow: "hidden",
+        overscrollBehavior: "contain",
+        overscrollBehaviorX: "none",
         cursor,
         touchAction: "none",
       }}

@@ -8,6 +8,7 @@ describe("present page wiring", () => {
     expect(source).toContain("projectStore");
     expect(source).toContain("getImageCache");
     expect(source).toContain("showFrames: true");
+    expect(source).toContain("useEditorOverscrollLock");
     expect(source).not.toContain("loadEngine()");
   });
 });

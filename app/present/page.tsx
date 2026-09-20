@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { absorbWorkspaceWheel } from "@/lib/editor/overscrollLock";
+import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
 import { getImageCache } from "@/lib/engine/imageCache";
 import type { EngineDoc } from "@/lib/engine/types";
 import { loadPresentDocument } from "@/lib/project/presentProject";
@@ -13,6 +15,7 @@ export default function PresentPage() {
   const [index, setIndex] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  useEditorOverscrollLock();
 
   useEffect(() => {
     const projectId = new URLSearchParams(window.location.search).get("projectId");
@@ -87,6 +90,17 @@ export default function PresentPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [doc]);
 
+  useEffect(() => {
+    if (!doc) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      absorbWorkspaceWheel(event);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [doc]);
+
   if (!doc) {
     return (
       <div
@@ -124,6 +138,8 @@ export default function PresentPage() {
         height: "100vh",
         background: "#111",
         overflow: "hidden",
+        overscrollBehavior: "contain",
+        overscrollBehaviorX: "none",
       }}
       onClick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();

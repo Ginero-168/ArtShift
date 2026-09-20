@@ -38,6 +38,7 @@ import {
   IconZoomOut,
 } from "@/components/icons";
 import { useAuth } from "@/lib/auth/useAuth";
+import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
 import {
   exportAllPNG,
   exportCurrentSlideJPEG,
@@ -173,6 +174,7 @@ export default function ProjectEditorPage() {
   const projectId = typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : "";
 
   const { authenticated, loading: authLoading } = useAuth();
+  useEditorOverscrollLock();
 
   const undo = useEngine((s) => s.undo);
   const redo = useEngine((s) => s.redo);
