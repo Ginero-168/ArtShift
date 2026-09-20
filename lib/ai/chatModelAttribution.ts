@@ -149,10 +149,25 @@ export function formatModelChain(steps: readonly ChatModelStep[]): string {
   return [primary, ...rest].map(displayId).join(" → ");
 }
 
-/** In-flight status, e.g. `Using google/gemini-3-flash…` */
+/**
+ * Model id shown on the image-gen sparkle / spinner row.
+ * Prefers the runtime chain; falls back to an existing toolLabel.
+ */
+export function formatModelDisclosure(
+  steps?: readonly ChatModelStep[] | null,
+  fallback?: string | null,
+): string {
+  const chain = formatModelChain(steps ?? []);
+  if (chain) return chain;
+  return typeof fallback === "string" ? fallback.trim() : "";
+}
+
+/**
+ * In-flight Thought phrasing, matching image gen `กำลังสร้างรูปภาพด้วย {id}...`
+ */
 export function formatUsingStatus(steps: readonly ChatModelStep[]): string {
   const chain = formatModelChain(steps);
-  return chain ? `Using ${chain}…` : "";
+  return chain ? `กำลังใช้ ${chain}...` : "";
 }
 
 export function attachRuntimeModel<T extends { runtimeModel?: string }>(
@@ -167,6 +182,7 @@ export function attachRuntimeModel<T extends { runtimeModel?: string }>(
 export type ChatTurnModels = {
   remember: (step: ChatModelStep | null | undefined) => ChatModelStep[];
   snapshot: () => ChatModelStep[];
+  label: () => string;
   using: () => string;
   attach: <T extends object>(message: T) => T & { usedModels?: ChatModelStep[] };
 };
@@ -174,12 +190,14 @@ export type ChatTurnModels = {
 export function createChatTurnModels(): ChatTurnModels {
   let steps: ChatModelStep[] = [];
   const snapshot = () => uniqueModelSteps(steps);
+  const label = () => formatModelChain(steps);
   return {
     remember(step) {
       steps = upsertModelStep(steps, step);
       return snapshot();
     },
     snapshot,
+    label,
     using: () => formatUsingStatus(steps),
     attach(message) {
       const usedModels = snapshot();

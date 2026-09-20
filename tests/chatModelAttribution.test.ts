@@ -8,6 +8,7 @@ import {
   FLORENCE_2_MODEL_ID,
   florenceModelStep,
   formatModelChain,
+  formatModelDisclosure,
   formatUsingStatus,
   modelStepFromRuntime,
   normalizeRuntimeModelId,
@@ -41,7 +42,7 @@ describe("chat model attribution", () => {
   });
 
   it("formats in-flight status and completed chains from runtime ids", () => {
-    expect(formatUsingStatus([directorModelStep()])).toBe("Using google/gemini-3-flash…");
+    expect(formatUsingStatus([directorModelStep()])).toBe("กำลังใช้ google/gemini-3-flash...");
     expect(
       formatModelChain([
         { id: "openai/gpt-image-2.5-sunburst", role: "image" },
@@ -57,6 +58,15 @@ describe("chat model attribution", () => {
     ).toBe("google/gemini-3-flash → openai/gpt-image-2.5-sunburst then Florence-2");
     expect(formatUsingStatus([])).toBe("");
     expect(formatModelChain([florenceModelStep()])).toBe("Florence-2");
+    expect(formatModelDisclosure(undefined, "openai/gpt-image-2.5-sunburst")).toBe(
+      "openai/gpt-image-2.5-sunburst",
+    );
+    expect(
+      formatModelDisclosure(
+        [{ id: "openai/gpt-image-2.5-sunburst", role: "image" }, florenceModelStep()],
+        "GPT Image 2",
+      ),
+    ).toBe("openai/gpt-image-2.5-sunburst then Florence-2");
   });
 
   it("upserts the same role to the adapter-reported id instead of stacking expected+actual", () => {
@@ -85,13 +95,18 @@ describe("chat model attribution", () => {
   it("tracks a turn: in-flight Using… then completed usedModels", () => {
     const turn = createChatTurnModels();
     expect(turn.using()).toBe("");
+    expect(turn.label()).toBe("");
     expect(turn.attach({ content: "hi" })).toEqual({ content: "hi" });
     turn.remember(directorModelStep());
-    expect(turn.using()).toBe("Using google/gemini-3-flash…");
+    expect(turn.using()).toBe("กำลังใช้ google/gemini-3-flash...");
+    expect(turn.label()).toBe("google/gemini-3-flash");
     turn.remember(catalogModelStep("image-general"));
     turn.remember(florenceModelStep());
     expect(turn.using()).toBe(
-      "Using google/gemini-3-flash → openai/gpt-image-2.5-sunburst then Florence-2…",
+      "กำลังใช้ google/gemini-3-flash → openai/gpt-image-2.5-sunburst then Florence-2...",
+    );
+    expect(turn.label()).toBe(
+      "google/gemini-3-flash → openai/gpt-image-2.5-sunburst then Florence-2",
     );
     const message = turn.attach({ content: "done" });
     expect(message.usedModels?.map((step) => step.id)).toEqual([

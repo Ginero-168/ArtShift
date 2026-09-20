@@ -29,7 +29,7 @@ describe("Image Completion Summary Format", () => {
   it("uses formatImageCompletionReply in both context-aware batch run and remote turn paths", () => {
     expect(source).toContain("usedModels: turnModels.snapshot()");
     expect(source).toContain("activeModels:");
-    expect(source).toContain("turnModels.using()");
+    expect(source).toContain("turnModels.label()");
     expect(source).toContain("direction.outputBriefs");
     expect(source).toMatch(/formatImageCompletionReply\(subject,\s*1,\s*briefs/);
   });
@@ -38,10 +38,13 @@ describe("Image Completion Summary Format", () => {
     expect(threadSource).toContain("ChatResultImageThumb");
     expect(threadSource).toContain("ImageResultSummaryBlock");
     expect(threadSource).toContain("Thought");
-    expect(threadSource).toContain("export function ChatModelMeta(");
+    expect(threadSource).toContain("export function ChatModelDisclosure(");
     expect(threadSource).toContain("chat-model-status");
     expect(threadSource).toContain("chat-model-meta");
-    expect(threadSource).toContain("chat-header-model");
+    expect(threadSource).toContain("ImageSparkleIcon");
+    expect(threadSource).toContain("SpinnerIcon");
+    expect(threadSource).not.toContain("chat-header-model");
+    expect(threadSource).not.toContain("export function ChatModelMeta(");
     expect(threadSource).not.toContain("DEFAULT_CREATING_MODEL_LABEL");
   });
 

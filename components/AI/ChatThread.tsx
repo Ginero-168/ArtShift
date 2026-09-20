@@ -24,11 +24,7 @@ import {
   IconUndo,
   IconWand,
 } from "@/components/icons";
-import {
-  type ChatModelStep,
-  formatModelChain,
-  formatUsingStatus,
-} from "@/lib/ai/chatModelAttribution";
+import { type ChatModelStep, formatModelDisclosure } from "@/lib/ai/chatModelAttribution";
 import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
@@ -38,7 +34,6 @@ import {
   type InlineTagToken,
   parseInlineTagTokens,
 } from "@/lib/ai/orchestration/inlineTagSynthesis";
-import { DEFAULT_CLOUD_VISION_LABEL } from "@/lib/ai/orchestration/visionPreference";
 import { UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
@@ -72,35 +67,14 @@ export interface ChatThreadProps {
   children?: React.ReactNode;
 }
 
-const MODEL_CHIP_STYLE: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  alignSelf: "flex-start",
-  maxWidth: "100%",
-  padding: "2px 8px",
-  borderRadius: 999,
-  background: "#f1f5f9",
-  border: "1px solid #e2e8f0",
-  color: "#475569",
-  fontSize: 10.5,
-  fontWeight: 600,
-  letterSpacing: "-0.01em",
-  lineHeight: 1.4,
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-export function ChatModelMeta({
-  steps,
+/** Same sparkle / spinner row image generation already uses for "using model X". */
+export function ChatModelDisclosure({
+  label,
   live = false,
 }: {
-  steps?: readonly ChatModelStep[] | null;
+  label?: string | null;
   live?: boolean;
 }) {
-  const label = live ? formatUsingStatus(steps ?? []) : formatModelChain(steps ?? []);
   if (!label) return null;
   return (
     <div
@@ -108,9 +82,24 @@ export function ChatModelMeta({
       aria-live={live ? "polite" : undefined}
       data-testid={live ? "chat-model-status" : "chat-model-meta"}
       title={label}
-      style={MODEL_CHIP_STYLE}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: live ? 6 : 5,
+        alignSelf: "flex-start",
+        padding: "2px 0",
+        marginLeft: 6,
+        color: "#64748b",
+        fontSize: 11.5,
+        fontWeight: 600,
+      }}
     >
-      {label}
+      {live ? (
+        <SpinnerIcon style={{ color: "#64748b", width: 12, height: 12 }} />
+      ) : (
+        <ImageSparkleIcon style={{ color: "#64748b", width: 13, height: 13 }} />
+      )}
+      <span>{label}</span>
     </div>
   );
 }
@@ -585,26 +574,6 @@ export default function ChatThread({
           >
             {UNIFIED_AI_SYSTEM.label}
           </strong>
-          {busy && liveAssistantState?.activeModels?.length ? (
-            <span
-              role="status"
-              aria-live="polite"
-              data-testid="chat-header-model"
-              title={formatUsingStatus(liveAssistantState.activeModels)}
-              style={{
-                fontSize: 10.5,
-                color: "#6366f1",
-                fontWeight: 600,
-                maxWidth: 220,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-              }}
-            >
-              {formatUsingStatus(liveAssistantState.activeModels)}
-            </span>
-          ) : null}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -828,26 +797,8 @@ export default function ChatThread({
                 />
               )}
 
-              {/* Minimal process label */}
-              {msg.toolLabel && (
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    alignSelf: "flex-start",
-                    padding: "2px 0",
-                    color: "#64748b",
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    marginTop: msg.thought ? 0 : 2,
-                    marginLeft: 6,
-                  }}
-                >
-                  <ImageSparkleIcon style={{ color: "#64748b", width: 13, height: 13 }} />
-                  <span>{msg.toolLabel}</span>
-                </div>
-              )}
+              {/* Same model row as image generation (sparkle + id) */}
+              <ChatModelDisclosure label={formatModelDisclosure(msg.usedModels, msg.toolLabel)} />
 
               {/* Content Policy / Error Card */}
               {msg.errorCard && (
@@ -926,8 +877,6 @@ export default function ChatThread({
                   />
                 </div>
               )}
-
-              <ChatModelMeta steps={msg.usedModels} />
 
               {/* Suggestion Chips */}
               {msg.suggestions && msg.suggestions.length > 0 && (
@@ -1179,78 +1128,55 @@ export default function ChatThread({
               toolLabel={liveAssistantState.toolLabel}
             />
 
-            <ChatModelMeta steps={liveAssistantState.activeModels} live />
+            <ChatModelDisclosure
+              live
+              label={formatModelDisclosure(
+                liveAssistantState.activeModels,
+                liveAssistantState.toolLabel,
+              )}
+            />
 
-            {/* Vision / generate process label */}
-            {(liveAssistantState.stage === "analyzing" ||
-              liveAssistantState.stage === "generating") && (
-              <>
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    alignSelf: "flex-start",
-                    padding: "2px 0",
-                    marginLeft: 6,
-                    color: "#64748b",
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                  }}
-                >
-                  <SpinnerIcon style={{ color: "#64748b", width: 12, height: 12 }} />
-                  <span>
-                    {liveAssistantState.toolLabel ||
-                      (liveAssistantState.stage === "analyzing"
-                        ? DEFAULT_CLOUD_VISION_LABEL
-                        : formatModelChain(liveAssistantState.activeModels ?? []) ||
-                          DEFAULT_CREATING_MODEL_LABEL)}
-                  </span>
-                </div>
-
-                {liveAssistantState.stage === "generating" && (
+            {/* Image-gen skeleton thumbs */}
+            {liveAssistantState.stage === "generating" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  marginTop: 4,
+                  width: "100%",
+                }}
+              >
+                {Array.from({
+                  length: Math.max(1, liveAssistantState.requestedCount || 1),
+                }).map((_, idx) => (
                   <div
+                    key={idx}
                     style={{
+                      width: (liveAssistantState.requestedCount || 1) === 1 ? 168 : 120,
+                      maxWidth: "100%",
+                      aspectRatio: "1 / 1",
+                      borderRadius: 12,
+                      background: "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
+                      backgroundSize: "200% 100%",
+                      animation: "artshiftPulse 1.5s ease-in-out infinite",
+                      border: "1px dashed #cbd5e1",
                       display: "flex",
-                      gap: 10,
-                      marginTop: 4,
-                      width: "100%",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
                     }}
                   >
-                    {Array.from({
-                      length: Math.max(1, liveAssistantState.requestedCount || 1),
-                    }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          width: (liveAssistantState.requestedCount || 1) === 1 ? 168 : 120,
-                          maxWidth: "100%",
-                          aspectRatio: "1 / 1",
-                          borderRadius: 12,
-                          background:
-                            "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
-                          backgroundSize: "200% 100%",
-                          animation: "artshiftPulse 1.5s ease-in-out infinite",
-                          border: "1px dashed #cbd5e1",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <ImageSparkleIcon
-                          style={{
-                            width: 20,
-                            height: 20,
-                            color: "#94a3b8",
-                            opacity: 0.5,
-                          }}
-                        />
-                      </div>
-                    ))}
+                    <ImageSparkleIcon
+                      style={{
+                        width: 20,
+                        height: 20,
+                        color: "#94a3b8",
+                        opacity: 0.5,
+                      }}
+                    />
                   </div>
-                )}
-              </>
+                ))}
+              </div>
             )}
           </div>
         )}

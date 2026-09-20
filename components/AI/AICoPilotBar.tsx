@@ -10,7 +10,6 @@ import {
   createChatTurnModels,
   directorModelStep,
   florenceModelStep,
-  formatModelChain,
   modelStepFromRuntime,
 } from "@/lib/ai/chatModelAttribution";
 import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
@@ -790,7 +789,7 @@ export default function AICoPilotBar() {
           setLiveAssistantState((prev) => ({
             ...(prev || { prompt: promptToSend, isEdit: refsForTurn.length > 0 }),
             stage: "planning",
-            statusMessage: turnModels.using() || "Creative Director กำลังวางแผนงาน...",
+            statusMessage: "Creative Director กำลังวางแผนงาน...",
             actions: [...actions],
             activeModels: turnModels.snapshot(),
           }));
@@ -868,7 +867,7 @@ export default function AICoPilotBar() {
                   ? {
                       ...prev,
                       activeModels: turnModels.snapshot(),
-                      statusMessage: turnModels.using() || prev.statusMessage,
+                      statusMessage: prev.statusMessage,
                     }
                   : prev,
               );
@@ -996,9 +995,9 @@ export default function AICoPilotBar() {
                 setLiveAssistantState({
                   stage: "generating",
                   thought: thoughtText,
-                  toolLabel: modelName,
+                  toolLabel: turnModels.label() || modelName,
                   requestedCount: count,
-                  statusMessage: turnModels.using() || `กำลังสร้างรูปภาพด้วย ${modelName}...`,
+                  statusMessage: `กำลังสร้างรูปภาพด้วย ${modelName}...`,
                   prompt: rawPrompt,
                   isEdit: isEditTurn,
                   actions: [...actions],
@@ -1029,7 +1028,7 @@ export default function AICoPilotBar() {
                       prev
                         ? {
                             ...prev,
-                            statusMessage: turnModels.using() || update.message,
+                            statusMessage: update.message,
                             actions: [...actions],
                             activeModels: turnModels.snapshot(),
                           }
@@ -1076,7 +1075,7 @@ export default function AICoPilotBar() {
                       id: crypto.randomUUID(),
                       role: "assistant",
                       content: reply,
-                      toolLabel: modelName,
+                      toolLabel: turnModels.label() || modelName,
                       errorCard: diagnosis.errorCard,
                       timestamp: Date.now(),
                       actions,
@@ -1236,7 +1235,7 @@ export default function AICoPilotBar() {
                       role: "assistant",
                       content: reply,
                       thought: thoughtText,
-                      toolLabel: modelName,
+                      toolLabel: turnModels.label() || modelName,
                       images: generatedImages,
                       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
                       resultSummary,
@@ -1322,7 +1321,9 @@ export default function AICoPilotBar() {
                     id: crypto.randomUUID(),
                     role: "assistant",
                     content: reply,
-                    toolLabel: diagnosis.errorCard ? resolvedModelLabel : undefined,
+                    toolLabel: diagnosis.errorCard
+                      ? turnModels.label() || resolvedModelLabel
+                      : undefined,
                     errorCard: diagnosis.errorCard,
                     timestamp: Date.now(),
                     actions,
@@ -1444,7 +1445,7 @@ export default function AICoPilotBar() {
           stage: "planning",
           prompt: promptToSend,
           isEdit: refsForTurn.length > 0,
-          statusMessage: turnModels.using() || "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...",
+          statusMessage: "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...",
           activeModels: turnModels.snapshot(),
         });
         const history: ClientChatMessage[] = [
@@ -1490,7 +1491,7 @@ export default function AICoPilotBar() {
               ? {
                   ...prev,
                   activeModels: turnModels.snapshot(),
-                  statusMessage: turnModels.using() || prev.statusMessage,
+                  statusMessage: prev.statusMessage,
                 }
               : prev,
           );
@@ -1600,8 +1601,10 @@ export default function AICoPilotBar() {
             setLiveAssistantState({
               stage: "generating",
               prompt: promptToSend,
-              toolLabel: directedImageModel?.id,
-              statusMessage: turnModels.using(),
+              toolLabel: turnModels.label() || directedImageModel?.id,
+              statusMessage: directedImageModel?.id
+                ? `กำลังสร้างรูปภาพด้วย ${directedImageModel.id}...`
+                : "กำลังสร้างรูปภาพ...",
               activeModels: turnModels.snapshot(),
             });
             const generated = await runContextAwareImageTask(directedTask, refsForTurn, {
@@ -1631,7 +1634,7 @@ export default function AICoPilotBar() {
                   prev
                     ? {
                         ...prev,
-                        statusMessage: turnModels.using() || update.message,
+                        statusMessage: update.message,
                         activeModels: turnModels.snapshot(),
                       }
                     : prev,
@@ -1694,9 +1697,11 @@ export default function AICoPilotBar() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: reply,
-        toolLabel: remoteGeneratedImages
-          ? (catalogModelStep(remoteModelAlias)?.id ?? formatCreatingModelLabel(remoteModelAlias))
-          : formatModelChain(turnModels.snapshot()) || undefined,
+        toolLabel:
+          turnModels.label() ||
+          (remoteGeneratedImages
+            ? (catalogModelStep(remoteModelAlias)?.id ?? formatCreatingModelLabel(remoteModelAlias))
+            : undefined),
         images: remoteGeneratedImages,
         resultSummary: remoteResultSummary,
         qualityLabel: remoteGeneratedImages ? selectedQuality : undefined,
