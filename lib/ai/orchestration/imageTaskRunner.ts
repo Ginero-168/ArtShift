@@ -493,6 +493,7 @@ export async function runContextAwareImageTask(
             message: "ตรวจผลลัพธ์เทียบกับ brief แล้ว",
           });
 
+          // Post-plan only: after Gemini recall + Director have already run.
           // Any print ratio beyond the model 3:1 cap (ultra-wide OR ultra-tall):
           // expand overflowing edges and stitch to the true print canvas.
           const printW = dimensions.printWidth;

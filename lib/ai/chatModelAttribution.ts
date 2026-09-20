@@ -129,17 +129,19 @@ export function uniqueModelSteps(steps: readonly ChatModelStep[]): ChatModelStep
 }
 
 /**
- * Status / sparkle row: generate tasks show the cloud image API model.
- * Vision analysis shows the Gemini API id when that is running.
- * Never local Florence/ONNX.
+ * Status / sparkle row.
+ * Planning + generate: `google/gemini-3-flash → openai/gpt-image-2.5-sunburst`.
+ * Generate-only: cloud image API. Vision-only: Gemini API. Never local Florence/ONNX.
  */
 export function displayModelSteps(steps: readonly ChatModelStep[]): ChatModelStep[] {
   const unique = uniqueModelSteps(steps).filter((step) => !isFlorenceModelId(step.id));
-  const image = unique.filter((step) => step.role === "image");
-  if (image.length > 0) return image;
-  const vision = unique.filter((step) => step.role === "vision" || step.role === "local");
-  if (vision.length > 0) return vision;
   const chat = unique.filter((step) => step.role === "chat");
+  const vision = unique.filter((step) => step.role === "vision" || step.role === "local");
+  const image = unique.filter((step) => step.role === "image");
+  const planning = chat.length > 0 ? chat : vision;
+  if (planning.length > 0 && image.length > 0) return [...planning, ...image];
+  if (image.length > 0) return image;
+  if (vision.length > 0) return vision;
   if (chat.length > 0) return chat;
   return [];
 }

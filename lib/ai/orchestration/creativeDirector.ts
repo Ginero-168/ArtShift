@@ -1,8 +1,5 @@
 import { attachRuntimeModel } from "@/lib/ai/chatModelAttribution";
-import {
-  extractRequestedSizeSpecsFromText,
-  hasNumericOrNamedSizeInText,
-} from "@/lib/ai/imageGeneration";
+import { hasNumericOrNamedSizeInText } from "@/lib/ai/imageGeneration";
 import type {
   AiAssistantChatInput,
   AiExecution,
@@ -21,6 +18,7 @@ import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/d
 import {
   applyOrientationToPriorSize,
   DIRECTOR_CONVERSATION_HISTORY_LIMIT,
+  extractRequestedSizeSpecsFromUserAsk,
   followUpAskText,
   followUpCommandText,
   formatGenerationPackageForPrompt,
@@ -1125,9 +1123,9 @@ export function extractExplicitRequestedOutputCount(
   const text = prompt.trim();
   if (!text) return undefined;
 
-  // 1. Prefix (ขอ/สร้าง/ทำ/เอา/เจน/ผลิต/เพิ่ม) + optional filler (ตัวเลือก/แบบ/เพิ่ม/มา/ให้) + number + classifier (แบบ/รูป/ภาพ/ตัวเลือก/ชิ้น/variations/options)
+  // 1. Prefix (ขอ/สร้าง/ทำ/เอา/เจน/ผลิต/เพิ่ม) + optional filler (ตัวเลือก/แบบ/เพิ่ม/มา/ให้) + number + classifier (แบบ/รูป/ภาพ/ตัวเลือก/ชิ้น/ไซส์/variations/options)
   const prefixMatch =
-    /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|เพิ่ม|จัดมา|ออกแบบ|generate|create|make|give\s+me)\s*(?:ตัวเลือก|แบบ|ภาพ|รูป|เพิ่ม|อีก|มา|ให้|หน่อย|ที|ด้วย|เพิ่มเติม|\s+)*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ชิ้น|ดีไซน์|ใบ|variations?|options?|versions?|images?|designs?|choices?)/iu.exec(
+    /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|เพิ่ม|จัดมา|ออกแบบ|generate|create|make|give\s+me)\s*(?:ตัวเลือก|แบบ|ภาพ|รูป|ไซส์|ขนาด|เพิ่ม|อีก|มา|ให้|หน่อย|ที|ด้วย|เพิ่มเติม|\s+)*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ชิ้น|ดีไซน์|ใบ|ไซส์|ขนาด|sizes?|variations?|options?|versions?|images?|designs?|choices?)/iu.exec(
       text,
     );
   if (prefixMatch?.[1]) {
@@ -1135,9 +1133,9 @@ export function extractExplicitRequestedOutputCount(
     if (parsed && parsed >= 1 && parsed <= 5) return parsed;
   }
 
-  // 2. Standalone number + classifier e.g. "3 แบบ", "3 ตัวเลือก", "3 variations", "3 options"
+  // 2. Standalone number + classifier e.g. "3 แบบ", "สองไซส์", "3 ตัวเลือก", "3 variations"
   const standaloneMatch =
-    /(?:^|[^\u0E00-\u0E7Fa-zA-Z0-9])(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:แบบ|ตัวเลือก|ดีไซน์|variations?|options?|versions?)(?:$|[^\u0E00-\u0E7Fa-zA-Z0-9])/iu.exec(
+    /(?:^|[^\u0E00-\u0E7Fa-zA-Z0-9])(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:แบบ|ตัวเลือก|ดีไซน์|ไซส์|ขนาด|sizes?|variations?|options?|versions?)(?:$|[^\u0E00-\u0E7Fa-zA-Z0-9])/iu.exec(
       text,
     );
   if (standaloneMatch?.[1]) {
@@ -1157,7 +1155,7 @@ export function extractExplicitRequestedOutputCount(
 
   // 4. "อีก N รูป/แบบ" without a create-verb prefix
   const moreMatch =
-    /อีก\s*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|variations?|options?|images?)/iu.exec(
+    /อีก\s*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ไซส์|ขนาด|variations?|options?|images?|sizes?)/iu.exec(
       text,
     );
   if (moreMatch?.[1]) {
@@ -1167,7 +1165,7 @@ export function extractExplicitRequestedOutputCount(
 
   // 5. Multiple distinct sizes / aspect ratios listed in one ask
   // e.g. "เป็น 16:9, 3:4 และ 9:16" or "53x20 cm, 29x7 cm, 1040x1040"
-  const sizeListCount = extractRequestedSizeSpecsFromText(text).length;
+  const sizeListCount = extractRequestedSizeSpecsFromUserAsk(text).length;
   if (sizeListCount >= 2) return Math.min(5, sizeListCount);
 
   return undefined;

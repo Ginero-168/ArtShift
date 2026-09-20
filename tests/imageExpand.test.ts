@@ -39,6 +39,11 @@ describe("image expand (any ratio beyond 3:1)", () => {
     expect(isExpandAspectPrompt("ขยายเป็น 3:1")).toBe(false);
     expect(isExpandAspectPrompt("สร้างป้าย 29x7 cm")).toBe(false);
     expect(isExpandAspectPrompt("ขยายภาพให้ใหญ่ขึ้น")).toBe(false);
+    // Special-size resize is not "jump to ต่อภาพ" — Gemini must plan first.
+    expect(isExpandAspectPrompt("ปรับไซส์เป็น 29x7cm")).toBe(false);
+    expect(isExpandAspectPrompt("@Photo ปรับไซส์เป็น 29x7cm")).toBe(false);
+    expect(isExpandAspectPrompt("ปรับไซส์เป็น 29x7cm และ 60x20cm")).toBe(false);
+    expect(isExpandAspectPrompt("ต่อภาพเป็น 29x7 cm")).toBe(true);
   });
 
   it("parses expand ratio from cm / colon text", () => {

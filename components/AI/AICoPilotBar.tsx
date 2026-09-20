@@ -60,14 +60,10 @@ import {
 import {
   FOLLOW_UP_RECALL_STATUS_MESSAGE,
   type FollowUpRecallResult,
+  holdGeminiStepVisible,
 } from "@/lib/ai/orchestration/followUpRecall";
 import { recallFollowUpContext } from "@/lib/ai/orchestration/followUpRecallClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
-import {
-  expandImageToAspectRatio,
-  isExpandAspectPrompt,
-  parseExpandRatioFromText,
-} from "@/lib/ai/orchestration/imageExpand";
 import {
   buildComposerImageSelectionFromIds,
   snapshotComposerImageRefs,
@@ -111,10 +107,6 @@ import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
 import { summarizePlanForReview } from "@/lib/designAgent/planReview";
 import { applyAiPlan } from "@/lib/engine/applyAiPlan";
-import { getCanvasViewport } from "@/lib/engine/canvasViewport";
-import { createImage } from "@/lib/engine/factory";
-import { getGenerationPreviewBounds } from "@/lib/engine/generationPlacement";
-import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 
 /** @deprecated Staging tray removed — kept for test/type imports. */
@@ -537,106 +529,29 @@ export default function AICoPilotBar() {
     };
 
     const isEditTurn = refsForTurn.length > 0;
+    const willPlanWithGemini = Boolean(isFollowUpTurn || isEditTurn);
     setMessages((prev) => [...prev, userMsg]);
     setCurrentActions([]);
     const turnModels = createChatTurnModels();
     setLiveAssistantState({
-      stage: isEditTurn ? "analyzing" : "outputting",
+      stage: willPlanWithGemini ? "analyzing" : "outputting",
       prompt: promptToSend,
       isEdit: isEditTurn,
-      toolLabel: isEditTurn ? DEFAULT_DIRECTOR_MODEL_ID : undefined,
-      statusMessage: isEditTurn ? cloudVisionStatusMessage() : "กำลังประมวลผลคำสั่ง...",
-      activeModels: isEditTurn ? turnModels.remember(visionModelStep()) : turnModels.snapshot(),
+      toolLabel: willPlanWithGemini ? DEFAULT_DIRECTOR_MODEL_ID : undefined,
+      statusMessage: isFollowUpTurn
+        ? FOLLOW_UP_RECALL_STATUS_MESSAGE
+        : isEditTurn
+          ? cloudVisionStatusMessage()
+          : "กำลังประมวลผลคำสั่ง...",
+      activeModels: willPlanWithGemini
+        ? turnModels.remember(directorModelStep())
+        : turnModels.snapshot(),
     });
 
     try {
-      // Ultra-wide expand (>3:1 only, e.g. 29×7): side-panel stitch — skip director.
-      if (refsForTurn.length > 0 && isExpandAspectPrompt(promptToSend)) {
-        const sourceRef = refsForTurn[0]!;
-        const sourceDataUrl = getCached(sourceRef.fileId)?.dataURL;
-        if (!sourceDataUrl) {
-          throw new Error("ไม่พบข้อมูลภาพต้นทางใน cache — เลือกรูปบน Canvas แล้วลองอีกครั้ง");
-        }
-        const ratio = parseExpandRatioFromText(promptToSend);
-        const cloudConsent = ensureCloudConsent();
-        if (!cloudConsent) {
-          throw new Error("ยังไม่ได้รับอนุญาตให้ส่งภาพไปขยายที่ Image Model");
-        }
-        setLiveAssistantState({
-          stage: "generating",
-          prompt: promptToSend,
-          isEdit: true,
-          statusMessage: `กำลังขยายเป็น ${ratio.ratioWidth}×${ratio.ratioHeight} (เกินเพดาน 3:1 — ต่อข้างแล้วประกอบ)…`,
-          activeModels: turnModels.remember(catalogModelStep("image-general")),
-        });
-        const expanded = await expandImageToAspectRatio({
-          sourceDataUrl,
-          ratioWidth: ratio.ratioWidth,
-          ratioHeight: ratio.ratioHeight,
-          scenePrompt: promptToSend,
-          quality: selectedQuality === "auto" ? "high" : selectedQuality,
-          cloudConsent,
-          signal: controller.signal,
-          onProgress: (progress) => {
-            setLiveAssistantState((prev) =>
-              prev ? { ...prev, statusMessage: progress.message } : prev,
-            );
-          },
-        });
-        const viewport =
-          getCanvasViewport() ??
-          ({
-            width: expanded.width,
-            height: expanded.height,
-            scale: 1,
-            tx: 0,
-            ty: 0,
-            slideWidth: useEngine.getState().doc.width,
-            slideHeight: useEngine.getState().doc.height,
-          } as const);
-        const bounds = getGenerationPreviewBounds(viewport, {
-          width: expanded.width,
-          height: expanded.height,
-        });
-        const element = createImage({
-          x: bounds.x,
-          y: bounds.y,
-          width: bounds.width,
-          height: bounds.height,
-          fileId: expanded.fileId,
-          naturalWidth: expanded.width,
-          naturalHeight: expanded.height,
-          name: `Expanded ${ratio.ratioWidth}x${ratio.ratioHeight}`,
-          sourceName: `Expanded ${ratio.ratioWidth}x${ratio.ratioHeight}`,
-        });
-        useEngine.getState().addElement(element, "AI expand ultra-wide banner");
-        useEngine.getState().selectOnly([element.id]);
-        setMessages((previous) => [
-          ...previous,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: `ขยายเป็นสัดส่วน ${ratio.ratioWidth}:${ratio.ratioHeight} แล้วครับ (${expanded.width}×${expanded.height}px) — โมเดลทำได้สูงสุด 3:1 จึงต่อซ้าย–ขวาแล้วประกอบเป็นแถบพิมพ์จริง`,
-            timestamp: Date.now(),
-            usedModels: turnModels.snapshot(),
-            images: [
-              {
-                url: expanded.dataUrl,
-                fileId: expanded.fileId,
-                width: expanded.width,
-                height: expanded.height,
-                label: `${ratio.ratioWidth}x${ratio.ratioHeight}`,
-              },
-            ],
-            suggestions: ["Upscale ให้คมขึ้น", "ปรับโทนต่อ", "↶ Undo"],
-          },
-        ]);
-        setLiveAssistantState(null);
-        setBusy(false);
-        abortRef.current = null;
-        return;
-      }
-
+      // Special-size / ultra-wide asks (29x7cm, ต่อภาพ) must NOT jump to
+      // expandImageToAspectRatio here. Always: Memory Recall → Director → image
+      // task. Post-3:1 outpaint runs in imageTaskRunner after that plan.
       let analysesForTurn: ImageReferenceAnalysis[] = pending
         ? pending.analyses.map((analysis) => ({ ...analysis, ref: { ...analysis.ref } }))
         : [];
@@ -662,13 +577,14 @@ export default function AICoPilotBar() {
       );
 
       const shouldRunSmartRecall =
-        isFollowUpTurn &&
         Boolean(priorGeneration) &&
         !pending &&
         !isBuiltInImageAction &&
-        !isCanvasInventoryPrompt(promptToSend);
+        !isCanvasInventoryPrompt(promptToSend) &&
+        (isFollowUpTurn || isImageFollowUp);
 
       if (shouldRunSmartRecall && priorGeneration) {
+        const recallStartedAt = Date.now();
         const recallConsent = ensureCloudConsent();
         const recallAction: SubAgentActionLog = {
           id: crypto.randomUUID(),
@@ -712,6 +628,7 @@ export default function AICoPilotBar() {
           },
           { signal: controller.signal, cloudConsent: true },
         );
+        await holdGeminiStepVisible(recallStartedAt, { signal: controller.signal });
         turnModels.remember(directorModelStep(followUpRecall.model));
         recallAction.status = "success";
         recallAction.description =
@@ -723,7 +640,7 @@ export default function AICoPilotBar() {
           recall: followUpRecall,
           kind: followUpKind,
         });
-      } else if (isFollowUpTurn && priorGeneration) {
+      } else if ((isFollowUpTurn || isImageFollowUp) && priorGeneration) {
         directorPrompt = composeFollowUpDirectorPrompt(promptToSend, priorGeneration, {
           kind: followUpKind,
         });
@@ -869,10 +786,12 @@ export default function AICoPilotBar() {
           };
           actions = [...actions, directorAction];
           upsertCurrentAction({ ...directorAction });
+          const directorStartedAt = Date.now();
           turnModels.remember(directorModelStep());
           setLiveAssistantState((prev) => ({
             ...(prev || { prompt: promptToSend, isEdit: refsForTurn.length > 0 }),
             stage: "planning",
+            toolLabel: directorModelStep().id,
             statusMessage: "Creative Director กำลังวางแผนงาน...",
             actions: [...actions],
             activeModels: turnModels.snapshot(),
@@ -1033,6 +952,7 @@ export default function AICoPilotBar() {
                 const cleanSummary = cleanTechnicalPromptText(summaryDetail);
                 directorAction.description = `วางแผนสำเร็จ: ${cleanSummary}${scoresBadge} (เลือก ${direction.modelAlias})`;
                 upsertCurrentAction({ ...directorAction });
+                await holdGeminiStepVisible(directorStartedAt, { signal: controller.signal });
 
                 const imageRun = createDirectedImageRun(contextDecision.input, direction);
                 setPendingClarification(null);
@@ -1061,6 +981,7 @@ export default function AICoPilotBar() {
                 const modelName = imageModel?.id ?? formatCreatingModelLabel(direction.modelAlias);
                 resolvedModelLabel = modelName;
                 turnModels.remember(imageModel);
+                const chainLabel = turnModels.label() || modelName;
                 const specialistTitle =
                   direction.specialist === "image_editor" ? "Image Editor" : "Image Specialist";
 
@@ -1081,9 +1002,9 @@ export default function AICoPilotBar() {
                 setLiveAssistantState({
                   stage: "generating",
                   thought: thoughtText,
-                  toolLabel: turnModels.label() || modelName,
+                  toolLabel: chainLabel,
                   requestedCount: count,
-                  statusMessage: `กำลังสร้างรูปภาพด้วย ${modelName}...`,
+                  statusMessage: `กำลังสร้างรูปภาพด้วย ${chainLabel}...`,
                   prompt: rawPrompt,
                   isEdit: isEditTurn,
                   actions: [...actions],
@@ -1692,18 +1613,19 @@ export default function AICoPilotBar() {
             );
             const directedImageModel = catalogModelStep(result.modelAlias);
             turnModels.remember(directedImageModel);
+            const directedChain = turnModels.label() || directedImageModel?.id;
             remoteActions[0] = {
               ...remoteActions[0],
               title: `ArtShift Orchestrator → ${directedTask.subAgent}`,
-              description: `กำลังดำเนินงานด้วย ${directedImageModel?.id ?? result.modelAlias}`,
+              description: `กำลังดำเนินงานด้วย ${directedChain ?? result.modelAlias}`,
             };
             upsertCurrentAction(remoteActions[0]);
             setLiveAssistantState({
               stage: "generating",
               prompt: promptToSend,
-              toolLabel: turnModels.label() || directedImageModel?.id,
-              statusMessage: directedImageModel?.id
-                ? `กำลังสร้างรูปภาพด้วย ${directedImageModel.id}...`
+              toolLabel: directedChain,
+              statusMessage: directedChain
+                ? `กำลังสร้างรูปภาพด้วย ${directedChain}...`
                 : "กำลังสร้างรูปภาพ...",
               activeModels: turnModels.snapshot(),
             });

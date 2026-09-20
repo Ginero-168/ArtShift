@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildFollowUpRecallUserPrompt,
   buildLocalFollowUpRecall,
+  GEMINI_PLANNING_MIN_VISIBLE_MS,
+  holdGeminiStepVisible,
   parseFollowUpRecallPayload,
 } from "@/lib/ai/orchestration/followUpRecall";
 
@@ -125,5 +127,12 @@ describe("follow-up recall", () => {
     expect(prompt).toMatch(/resolved size MUST be 7x29/i);
     expect(prompt).toContain("LAST IMAGE GENERATION PACKAGE");
     expect(prompt).toContain("29x7cm");
+  });
+
+  it("holds a fast Gemini step long enough to stay visible", async () => {
+    const started = Date.now();
+    await holdGeminiStepVisible(started, { minMs: 40 });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(35);
+    expect(GEMINI_PLANNING_MIN_VISIBLE_MS).toBeGreaterThanOrEqual(800);
   });
 });

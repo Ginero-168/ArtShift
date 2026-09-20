@@ -1,5 +1,4 @@
 import {
-  extractRequestedSizeSpecsFromText,
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
   hasExplicitDimensionsInText,
@@ -18,6 +17,7 @@ import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import {
   applyOrientationToPriorSize,
+  extractRequestedSizeSpecsFromUserAsk,
   followUpCommandText,
   isImageFollowUpPrompt,
   isOrientationOnlyFollowUpPrompt,
@@ -354,16 +354,11 @@ export function createDirectedImageRun(
   ]);
   // Multi-size campaigns list several WxH / cm sizes or named A:B ratios.
   // Assign each task its own target so we do not stamp every output as 1:1 / first ratio only.
+  // Dedup by source WxH (or named aspect), not the clamped generation ratio — 29x7cm
+  // and 60x20cm both generate at 2048x688 but are distinct print sizes.
   const sizeSpecs = lockFollowUpSize
     ? []
-    : [
-        ...extractRequestedSizeSpecsFromText(input.prompt),
-        ...extractRequestedSizeSpecsFromText(input.clarification?.originalPrompt),
-        ...extractRequestedSizeSpecsFromText(direction.summary),
-        ...extractRequestedSizeSpecsFromText(direction.refinedPrompt),
-      ].filter((spec, index, all) => {
-        return all.findIndex((s) => s.aspectRatio === spec.aspectRatio) === index;
-      });
+    : extractRequestedSizeSpecsFromUserAsk(input.prompt, [input.clarification?.originalPrompt]);
   const briefs =
     direction.outputBriefs && direction.outputBriefs.length === count
       ? direction.outputBriefs
@@ -403,24 +398,27 @@ export function createDirectedImageRun(
         : sizeSpecs.length === 1
           ? sizeSpecs[0]
           : (sizeSpecs[index] ?? null);
-    const dims = briefDims
+    const dims = listDims
       ? {
-          width: briefDims.width,
-          height: briefDims.height,
-          aspectRatio: briefDims.aspectRatio,
-          ratioClamped: briefDims.ratioClamped,
-          printWidth: briefDims.printWidth,
-          printHeight: briefDims.printHeight,
+          width: listDims.width,
+          height: listDims.height,
+          aspectRatio: listDims.aspectRatio,
+          ratioClamped: listDims.ratioClamped,
+          printWidth: listDims.printWidth,
+          printHeight: listDims.printHeight,
+          sizeLabel: listDims.label,
+          sourceWidth: listDims.sourceWidth,
+          sourceHeight: listDims.sourceHeight,
+          ...(listDims.unit ? { sizeUnit: listDims.unit } : {}),
         }
-      : listDims
+      : briefDims
         ? {
-            width: listDims.width,
-            height: listDims.height,
-            aspectRatio: listDims.aspectRatio,
-            ratioClamped: listDims.ratioClamped,
-            printWidth: listDims.printWidth,
-            printHeight: listDims.printHeight,
-            sizeLabel: listDims.label,
+            width: briefDims.width,
+            height: briefDims.height,
+            aspectRatio: briefDims.aspectRatio,
+            ratioClamped: briefDims.ratioClamped,
+            printWidth: briefDims.printWidth,
+            printHeight: briefDims.printHeight,
           }
         : baseTask.requestedDimensions;
     const exactSizeNote =

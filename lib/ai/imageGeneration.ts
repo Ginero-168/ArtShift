@@ -204,11 +204,32 @@ export function extractRequestedSizeSpecsFromText(text?: string): RequestedSizeS
   if (!text || typeof text !== "string") return [];
   const fromPixels = extractDimensionSpecsFromText(text);
   if (fromPixels.length > 0) {
-    const seen = new Set(fromPixels.map((s) => s.aspectRatio));
-    const extras = extractAspectRatioSpecsFromText(text).filter((s) => !seen.has(s.aspectRatio));
+    const seen = new Set(fromPixels.map((s) => requestedSizeSpecKey(s)));
+    const extras = extractAspectRatioSpecsFromText(text).filter(
+      (s) => !seen.has(requestedSizeSpecKey(s)),
+    );
     return [...fromPixels, ...extras];
   }
   return extractAspectRatioSpecsFromText(text);
+}
+
+/** Identity for a listed size: source WxH+unit, or named aspect. Not the clamped generation ratio. */
+export function requestedSizeSpecKey(spec: RequestedSizeSpec): string {
+  if (spec.unit === "named") return `named:${spec.aspectRatio}`;
+  return `${spec.sourceWidth}x${spec.sourceHeight}:${spec.unit ?? ""}`;
+}
+
+/** Keep distinct print/pixel sizes even when they clamp to the same 3:1 generation ratio. */
+export function uniqueRequestedSizeSpecs(specs: readonly RequestedSizeSpec[]): RequestedSizeSpec[] {
+  const seen = new Set<string>();
+  const unique: RequestedSizeSpec[] = [];
+  for (const spec of specs) {
+    const key = requestedSizeSpecKey(spec);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(spec);
+  }
+  return unique;
 }
 
 export function resolveImageGenerationDimensions(prompt: string): {
