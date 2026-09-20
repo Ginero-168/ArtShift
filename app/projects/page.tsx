@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProfileMenu from "@/components/Auth/ProfileMenu";
+import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
 import {
   IconBrand,
   IconClose,
@@ -434,9 +435,7 @@ export default function ProjectsPage() {
     return (
       <div style={fullScreenCenterStyle}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 36, height: 36, color: "#6366f1" }} className="anim-pulse-ring">
-            <IconBrand />
-          </div>
+          <ArtShiftLogo size="header" />
           <span style={{ fontSize: 13, color: "#64748b", fontWeight: 500 }}>
             กำลังตรวจสอบข้อมูลผู้ใช้…
           </span>
@@ -493,39 +492,15 @@ export default function ProjectsPage() {
               color: "inherit",
             }}
           >
-            <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 8,
-                background: "linear-gradient(135deg, #6366f1 0%, #4338ca 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#ffffff",
-                boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
-              }}
-            >
-              <IconBrand />
-            </div>
             <div style={{ display: "flex", flexDirection: "column" }}>
-              <span
-                style={{
-                  fontSize: 16,
-                  fontWeight: 800,
-                  letterSpacing: "-0.02em",
-                  color: "#0f172a",
-                }}
-              >
-                ArtShift
-              </span>
+              <ArtShiftLogo size="header" />
               <span
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
                   color: "#6366f1",
                   letterSpacing: "0.02em",
-                  marginTop: -2,
+                  marginTop: 2,
                 }}
               >
                 PROJECTS

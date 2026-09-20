@@ -5,8 +5,7 @@
  *
  * Requirements:
  * - Scoped to projectId
- * - Header: [Logo -> /projects] [Project Name Input]
- * - No "ArtShift" brand text in header
+ * - Header: [Portal ArtShift wordmark -> /projects] [Project Name Input]
  * - No "Saved" / "Local Workspace" status in header
  * - Scoped IndexedDB Autosave
  * - Friendly Not Found state if projectId does not exist
@@ -17,6 +16,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ProfileMenu from "@/components/Auth/ProfileMenu";
+import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
 import BlockLibrary from "@/components/Builder/BlockLibrary";
 import BuilderInspector from "@/components/Builder/BuilderInspector";
 import LayerPanel from "@/components/Builder/LayerPanel";
@@ -579,7 +579,7 @@ export default function ProjectEditorPage() {
         flexDirection: "column",
       }}
     >
-      {/* ——— TopBar (Section 7 compliant: [Logo -> /projects] [Project Name Input]) ——— */}
+      {/* ——— TopBar: [Portal ArtShift wordmark -> /projects] [Project Name Input] ——— */}
       <header className="topbar">
         <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Top-left Logo button linking back to /projects */}
@@ -598,9 +598,7 @@ export default function ProjectEditorPage() {
             }}
             className="brand-link"
           >
-            <div className="brand-mark">
-              <IconBrand size={14} />
-            </div>
+            <ArtShiftLogo size="compact" />
           </Link>
 
           {/* Inline Editable Project Name + attached save state */}

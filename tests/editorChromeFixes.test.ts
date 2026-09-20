@@ -5,16 +5,19 @@ describe("Editor chrome: logo, selection, Appearance image group", () => {
   it("uses a centered two-peak M for IconBrand and the favicon", () => {
     const icons = readFileSync("components/icons.tsx", "utf8");
     const favicon = readFileSync("public/icon.svg", "utf8");
-    const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
     const css = readFileSync("app/globals.css", "utf8");
 
     expect(icons).toContain('d="M7 17.5V6.5L12 14L17 6.5V17.5"');
     expect(icons).not.toContain("M4 20V6l4 8 4-8 4 8 4-8v14");
     expect(favicon).toContain('d="M7 17.5V6.5L12 14L17 6.5V17.5"');
-    expect(editor).toContain('<div className="brand-mark">');
-    expect(editor).toContain("<IconBrand size={14} />");
-    expect(editor).not.toContain('className="brand-mark" style=');
     expect(css).toContain("place-items: center");
+  });
+
+  it("uses the shared Portal ArtShift wordmark in editor chrome", () => {
+    const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
+    expect(editor).toContain('<ArtShiftLogo size="compact" />');
+    expect(editor).not.toContain('<div className="brand-mark">');
+    expect(editor).not.toContain("<IconBrand size={14} />");
   });
 
   it("draws object selection bounds as solid strokes", () => {

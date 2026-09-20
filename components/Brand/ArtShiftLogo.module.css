@@ -1,0 +1,104 @@
+@property --logo-ink {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f5f5fa;
+}
+
+.root {
+  --logo-size: 34px;
+  --logo-ink: currentColor;
+  --ink: var(--logo-ink);
+  --ink-2: #ff4fd8;
+  --ink-3: #4ff8ff;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.sizeHero {
+  --logo-size: clamp(2.35rem, 6.2vw, 3.5rem);
+}
+
+.sizeHeader {
+  --logo-size: 1.25rem;
+}
+
+.sizeCompact {
+  --logo-size: 0.875rem;
+}
+
+.root :global(.fx-portal) {
+  position: relative;
+  display: inline-block;
+  font-weight: 600;
+  font-size: var(--logo-size);
+  line-height: 1.05;
+  font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size-adjust: from-font;
+  letter-spacing: 0.12em;
+  color: transparent;
+  background: conic-gradient(from 0deg, var(--ink-2), var(--ink), var(--ink-3), var(--ink-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: fx-portal 3.6s linear infinite;
+  white-space: nowrap;
+}
+
+.root :global(.fx-portal)::after {
+  content: attr(data-text);
+  content: attr(data-text) / "";
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  background: radial-gradient(circle, transparent 0 30%, #fff 34% 36%, transparent 40% 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  opacity: 0.72;
+  animation: fx-portal-pulse 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes fx-portal {
+  to {
+    filter: hue-rotate(360deg);
+    transform: rotate(0.001deg);
+  }
+}
+
+@keyframes fx-portal-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.24;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root :global(.fx-portal),
+  .root :global(.fx-portal)::after {
+    animation: none;
+  }
+
+  .root :global(.fx-portal)::after {
+    opacity: 0.36;
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .root :global(.fx-portal) {
+    color: CanvasText;
+    background: none;
+    -webkit-text-fill-color: CanvasText;
+    animation: none;
+  }
+
+  .root :global(.fx-portal)::after {
+    content: none;
+  }
+}
