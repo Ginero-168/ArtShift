@@ -26,11 +26,15 @@ describe("Editor chrome: logo, selection, Appearance image group", () => {
     expect(transformer).not.toContain("strokeDasharray");
   });
 
-  it("keeps Edit Raster on the object context bar after leaving Property", () => {
+  it("does not show Edit Raster on the object context bar after leaving Property", () => {
     const contextBar = readFileSync("components/Canvas/ObjectContextBar.tsx", "utf8");
+    const contextMenu = readFileSync("components/Canvas/ContextMenu.tsx", "utf8");
     const inspector = readFileSync("components/Builder/BuilderInspector.tsx", "utf8");
 
-    expect(contextBar).toContain("Edit Raster");
+    expect(contextBar).not.toContain("Edit Raster");
+    expect(contextBar).not.toContain("openRasterEditForElement");
+    expect(contextMenu).toContain("Edit Raster");
+    expect(contextMenu).toContain("openRasterEditForElement");
     expect(inspector).not.toContain("Pixel edit");
     expect(inspector).not.toContain("Image mask");
   });

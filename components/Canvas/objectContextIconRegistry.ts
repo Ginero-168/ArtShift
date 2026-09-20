@@ -44,7 +44,7 @@ export type ObjectContextIconName =
   | "object";
 
 const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Object.freeze({
-  "Convert to Brief": "brief",
+  Brief: "brief",
   "Creating Brief...": "brief",
   "Flip Horizontal": "flip-horizontal",
   "Flip Vertical": "flip-vertical",

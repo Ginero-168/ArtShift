@@ -96,7 +96,7 @@ export type BaseElement = {
   visible?: boolean;
   /** Stable builder identity, independent from Layer placement mode. */
   builderKind?: string;
-  /** Optional semantic metadata used by Smart Arrange and Composition UI. */
+  /** Optional semantic metadata used by Smart Arrange. */
   semantic?: SemanticMetadata;
   /** Fill type: solid (default), linear gradient, or radial gradient. */
   fillType?: "solid" | "linear" | "radial";

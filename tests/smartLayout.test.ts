@@ -145,10 +145,11 @@ describe("Smart Arrange store lifecycle", () => {
     ).toEqual(before);
   });
 
-  it("inserts a composition as editable members with one undo boundary", () => {
+  it("adds composition members through addElements with one undo boundary", () => {
     const beforeCount = useEngine.getState().currentSlide()!.elements.length;
-    const ids = useEngine.getState().insertCompositionBlock("hero");
-    expect(ids).toHaveLength(4);
+    const composition = createCompositionBlock("hero", { width: 1200, height: 800 });
+    useEngine.getState().addElements(composition.elements, "insert Hero");
+    expect(composition.elements).toHaveLength(4);
     expect(useEngine.getState().currentSlide()!.elements).toHaveLength(beforeCount + 4);
     expect(
       new Set(

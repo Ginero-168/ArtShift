@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 import { getObjectContextIconName } from "@/components/Canvas/objectContextIconRegistry";
 
-describe("ObjectContextBar Hook Rules and Convert to Brief Action", () => {
+describe("ObjectContextBar Hook Rules and Brief Action", () => {
   const fileContent = readFileSync("components/Canvas/ObjectContextBar.tsx", "utf-8");
 
   it("declares all React hooks before any early return statements to adhere strictly to Rules of Hooks", () => {
@@ -31,22 +31,27 @@ describe("ObjectContextBar Hook Rules and Convert to Brief Action", () => {
     expect(contentAfterEarlyReturn).not.toMatch(/\buseRef\s*\(/);
   });
 
-  it("registers Convert to Brief icon in object context registry and exports IconBrief", () => {
-    expect(getObjectContextIconName("Convert to Brief")).toBe("brief");
+  it("registers Brief icon in object context registry and exports IconBrief", () => {
+    expect(getObjectContextIconName("Brief")).toBe("brief");
     expect(getObjectContextIconName("Creating Brief...")).toBe("brief");
     const iconsContent = readFileSync("components/icons.tsx", "utf-8");
     expect(iconsContent).toContain("export const IconBrief");
   });
 
-  it("places Convert to Brief action after Vectorize on image selection toolbar", () => {
+  it("places Brief action after Vectorize on image selection toolbar", () => {
     const vectorizeIndex = fileContent.indexOf(
       "controls.push(\n      action(VECTORIZE_GROUP_LABEL",
     );
     const briefIndex = fileContent.indexOf(
-      'controls.push(\n      action(\n        briefBusy ? "Creating Brief..." : "Convert to Brief"',
+      'controls.push(\n      action(\n        briefBusy ? "Creating Brief..." : "Brief"',
     );
     expect(vectorizeIndex).toBeGreaterThan(0);
     expect(briefIndex).toBeGreaterThan(vectorizeIndex);
+  });
+
+  it("does not expose Edit Raster on the Option bar", () => {
+    expect(fileContent).not.toContain("Edit Raster");
+    expect(fileContent).not.toContain("openRasterEditForElement");
   });
 
   it("renders text labels for Option Bar buttons while keeping Download icon-only", () => {

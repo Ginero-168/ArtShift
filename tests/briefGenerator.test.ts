@@ -432,9 +432,10 @@ describe("Brief Generator Service & Layout Geometry", () => {
     ).toBe("column");
   });
 
-  it("keeps Convert to Brief on the image context bar, not the vector tool rail", () => {
+  it("keeps Brief on the image context bar, not the vector tool rail", () => {
     const objectContextBarSource = readFileSync("components/Canvas/ObjectContextBar.tsx", "utf8");
-    expect(objectContextBarSource).toContain("Convert to Brief");
+    expect(objectContextBarSource).toContain(': "Brief"');
+    expect(objectContextBarSource).not.toContain('"Convert to Brief"');
     expect(objectContextBarSource).toContain("handleConvertToBrief");
 
     const editorOptionBarSource = readFileSync("components/Canvas/EditorOptionBar.tsx", "utf8");
