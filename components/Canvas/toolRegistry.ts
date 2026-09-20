@@ -1,3 +1,4 @@
+import type { SVGProps } from "react";
 import {
   IconArrow,
   IconBrush,
@@ -26,7 +27,7 @@ import {
 import type { Tool } from "@/lib/engine/store";
 import { RASTER_TOOL_HOTKEYS, VECTOR_TOOL_HOTKEYS } from "./toolMetadata";
 
-export type ToolIcon = (props: { size?: number }) => React.JSX.Element;
+export type ToolIcon = (props: { size?: number } & SVGProps<SVGSVGElement>) => React.JSX.Element;
 
 export type ToolDefinition = {
   id: Tool;
