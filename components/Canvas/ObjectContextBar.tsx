@@ -12,8 +12,12 @@ import { mergeSelectedElements } from "@/lib/engine/mergeElements";
 import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/objectContext";
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
-import type { EngineElement, ImageElement } from "@/lib/engine/types";
+import type { EngineElement, ImageElement, VectorizedElement } from "@/lib/engine/types";
 import { nextThaiFontCssFamily } from "@/lib/fonts";
+import {
+  downloadVectorizedSvg,
+  getAtomicVectorizedOptionBarLabels,
+} from "@/lib/vectorize/atomicVectorize";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
@@ -274,7 +278,17 @@ export default function ObjectContextBar({
     window.setTimeout(() => setMixBusy(false), 600);
   };
 
-  if (selected.length > 1) {
+  const vectorizedActions = getAtomicVectorizedOptionBarLabels(selected);
+  if (vectorizedActions) {
+    const vectorized = first as VectorizedElement;
+    for (const label of vectorizedActions) {
+      controls.push(
+        action(label, () =>
+          downloadVectorizedSvg(vectorized, `${vectorized.name || "vectorized"}.svg`),
+        ),
+      );
+    }
+  } else if (selected.length > 1) {
     controls.push(action("Align", () => alignSelectedElements("center")));
     controls.push(action("Distribute", () => distributeSelectedElements("horizontal")));
     if (selectionGroups.canGroup) {

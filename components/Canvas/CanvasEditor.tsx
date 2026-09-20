@@ -422,6 +422,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       if (tool === "directSelect") {
         const hit = pickTopMost(p, slide);
         if (hit) {
+          if (hit.type === "vectorized") {
+            selectOnly([hit.id]);
+            setEditingPathId(null);
+            return;
+          }
           if (hit.type !== "path") {
             const converted = convertElementToVectorPath(hit);
             if (converted) {
@@ -552,6 +557,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       }
       if (hit.type === "image") {
         openRasterEditForElement(hit);
+        return;
+      }
+      if (hit.type === "vectorized") {
         return;
       }
       if (hit.type === "rect" || hit.type === "ellipse" || hit.type === "diamond") {
@@ -987,6 +995,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
                 } else if (el?.type === "path") {
                   setTool("directSelect");
                   setEditingPathId(el.id);
+                } else if (el?.type === "vectorized") {
+                  return;
                 } else if (
                   el &&
                   (el.type === "rect" ||

@@ -3,6 +3,7 @@ import type { EngineElement } from "./types";
 export type ObjectContextCategory =
   | "Image"
   | "Vector"
+  | "Vectorized"
   | "3D Book"
   | "Frame"
   | "Text"
@@ -12,6 +13,7 @@ export type ObjectContextCategory =
 const categoryForType: Record<EngineElement["type"], ObjectContextCategory> = {
   image: "Image",
   path: "Vector",
+  vectorized: "Vectorized",
   bookMockup: "3D Book",
   frame: "Frame",
   text: "Text",

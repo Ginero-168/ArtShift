@@ -36,6 +36,11 @@ import {
 import { useEngine } from "@/lib/engine/store";
 import type { ImageElement } from "@/lib/engine/types";
 import {
+  createAtomicVectorizedFromResult,
+  createAtomicVectorizedFromSvg,
+  svgHasVectorContent,
+} from "@/lib/vectorize/atomicVectorize";
+import {
   VECTORIZE_PRESET_CONFIGS,
   VectorizeCancelledError,
   type VectorizeClustering,
@@ -51,11 +56,7 @@ import {
   getVTracerPresetDefaults,
   type VectorizeBackend,
 } from "@/lib/vectorize/vectorizerBackend";
-import {
-  getSvgViewport,
-  parseVTracerSvgResult,
-  RECRAFT_SVG_LIMITS,
-} from "@/lib/vectorize/vtracerAdapter";
+import { getSvgViewport } from "@/lib/vectorize/vtracerAdapter";
 import { findAlphaComponents } from "@/lib/vision/alphaComponents";
 import {
   enqueueAssetAnalysis,
@@ -478,9 +479,7 @@ export function VisionObjectIsolator({
                     ? backend === "vtracer-wasm"
                       ? "VTracer fitting vector curves..."
                       : "Tracing contours in background..."
-                    : backend === "vtracer-wasm"
-                      ? "Converting VTracer SVG into editable paths..."
-                      : "Building editable vector paths...";
+                    : "Building a locked vector object...";
             setProgress(Math.round(progress * 100));
             setStatusMessage(message);
             updateCanvasProcessingPreview(previewId, { progress, message });
@@ -488,22 +487,19 @@ export function VisionObjectIsolator({
         },
       );
 
-      if (res.elements.length === 0) {
+      if (!svgHasVectorContent(res.svgString) && res.elements.length === 0) {
         setStatusMessage("No distinct vector paths detected");
         report("complete", "ไม่พบเส้น Vector ที่แยกได้", "fallback", 100);
         window.alert("ไม่พบเส้น Vector ที่สามารถแปลงได้จากภาพนี้ กรุณาลองปรับ Preset หรือ Detail Level");
       } else {
-        addElements(res.elements, "vectorize image to paths");
-        selectOnly(res.elements.map((el) => el.id));
-        setStatusMessage(
-          `VTracer traced ${res.elements.length} vector layers (${res.totalNodes} anchor nodes, ${res.palette.length} colors)!`,
+        const object = createAtomicVectorizedFromResult(
+          res,
+          getProcessingPreviewPlacement(previewId, getProcessingPreviewBounds(element)),
         );
-        report(
-          "complete",
-          `VTracer WASM สร้าง Vector สำเร็จ ${res.elements.length} Layers`,
-          "success",
-          100,
-        );
+        addElements([object], "vectorize image");
+        selectOnly([object.id]);
+        setStatusMessage(`VTracer created 1 vectorized object (${res.palette.length} colors).`);
+        report("complete", "VTracer WASM สร้าง Vector สำเร็จ 1 วัตถุ", "success", 100);
       }
     } catch (err) {
       if (err instanceof VectorizeCancelledError || (err as Error).name === "AbortError") {
@@ -602,32 +598,20 @@ export function VisionObjectIsolator({
       if (typeof svg !== "string") throw new Error("Recraft returned no SVG output.");
 
       setProgress(82);
-      setStatusMessage("Validating Recraft SVG and building editable paths...");
+      setStatusMessage("Validating Recraft SVG…");
       updateCanvasProcessingPreview(previewId, {
         progress: 0.82,
-        message: "กำลังตรวจสอบ SVG และสร้าง Vector ที่แก้ไขได้…",
+        message: "กำลังตรวจสอบ SVG…",
       });
-      const viewport = getSvgViewport(svg);
-      const result = parseVTracerSvgResult(svg, {
-        targetBounds: getProcessingPreviewPlacement(previewId, getProcessingPreviewBounds(element)),
-        sourceWidth: viewport.width,
-        sourceHeight: viewport.height,
-        ...RECRAFT_SVG_LIMITS,
+      getSvgViewport(svg);
+      const object = createAtomicVectorizedFromSvg({
+        svg,
+        bounds: getProcessingPreviewPlacement(previewId, getProcessingPreviewBounds(element)),
       });
-      if (result.elements.length === 0) {
-        throw new Error("Recraft returned no editable vector paths.");
-      }
-      addElements(result.elements, "Recraft Vectorize image");
-      selectOnly(result.elements.map((item) => item.id));
-      setStatusMessage(
-        `Recraft Vectorize สร้าง ${result.elements.length} vector layers (${result.totalNodes} anchor nodes, ${result.palette.length} colors)!`,
-      );
-      report(
-        "complete",
-        `Recraft Vectorize สร้าง Vector สำเร็จ ${result.elements.length} Layers`,
-        "success",
-        1,
-      );
+      addElements([object], "Recraft Vectorize image");
+      selectOnly([object.id]);
+      setStatusMessage("Recraft Vectorize created 1 vectorized object.");
+      report("complete", "Recraft Vectorize สร้าง Vector สำเร็จ 1 วัตถุ", "success", 1);
     } catch (error) {
       if (error instanceof VectorizeCancelledError || (error as Error).name === "AbortError") {
         setStatusMessage("Recraft Vectorization cancelled.");

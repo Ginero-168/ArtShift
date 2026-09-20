@@ -48,6 +48,7 @@ import type {
   EngineSlide,
   ImageElement,
   TextElement,
+  VectorizedElement,
 } from "../engine/types";
 import { getVectorPathSubpathRanges } from "../engine/vectorPath";
 import { getRasterRetouchSource } from "../raster/retouchSource";
@@ -58,6 +59,7 @@ import type { RasterMaskStroke, RasterRetouchEdit } from "../raster/types";
 import { getRasterAdjustedImage, getRasterAdjustedImageSync } from "./adjustmentCache";
 import { drawBookMockup } from "./bookMockup";
 import { getCachedElement, setCachedElement } from "./cache";
+import { getVectorizedImage } from "./vectorizedCache";
 
 export type RenderCtx = {
   ctx: CanvasRenderingContext2D;
@@ -305,6 +307,9 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
     case "path":
       drawVectorPath(ctx, el);
       break;
+    case "vectorized":
+      drawVectorized(ctx, el);
+      break;
     case "text":
       drawText(ctx, el);
       break;
@@ -549,6 +554,18 @@ function drawVectorPath(
     ctx.stroke(path);
     drawVectorPathArrowheads(ctx, el, el.strokeColor, el.strokeWidth);
   }
+}
+
+function drawVectorized(ctx: CanvasRenderingContext2D, el: VectorizedElement) {
+  const img = getVectorizedImage(el);
+  if (img) {
+    ctx.drawImage(img, 0, 0, el.width, el.height);
+    return;
+  }
+  ctx.save();
+  ctx.fillStyle = "rgba(99, 102, 241, 0.08)";
+  ctx.fillRect(0, 0, el.width, el.height);
+  ctx.restore();
 }
 
 function drawVectorPathArrowheads(

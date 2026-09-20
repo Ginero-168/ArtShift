@@ -37,6 +37,7 @@ const EXPORTABLE_ELEMENT_TYPES = new Set([
   "arrow",
   "freedraw",
   "path",
+  "vectorized",
   "text",
   "image",
   "bookMockup",

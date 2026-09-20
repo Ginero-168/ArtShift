@@ -70,6 +70,18 @@ describe("ObjectContextBar Hook Rules and Brief Action", () => {
     expect(fileContent).not.toContain("Excalifont");
   });
 
+  it("shows only Download as SVG for an atomic Vectorize result", () => {
+    expect(fileContent).toContain("getAtomicVectorizedOptionBarLabels");
+    expect(fileContent).toContain("downloadVectorizedSvg");
+    expect(fileContent).toContain("vectorizedActions");
+    const vectorizedBranch = fileContent.indexOf("const vectorizedActions");
+    const multiBranch = fileContent.indexOf("} else if (selected.length > 1)");
+    expect(vectorizedBranch).toBeGreaterThan(0);
+    expect(multiBranch).toBeGreaterThan(vectorizedBranch);
+    expect(fileContent.slice(vectorizedBranch, multiBranch)).not.toContain("Align");
+    expect(fileContent.slice(vectorizedBranch, multiBranch)).not.toContain("Ungroup");
+  });
+
   it("provides Merge, Mix, and group actions for multi-selection", () => {
     expect(fileContent).toContain('mergeBusy ? "Merging..." : "Merge"');
     expect(fileContent).toContain('mixBusy ? "Mixing..." : "Mix"');

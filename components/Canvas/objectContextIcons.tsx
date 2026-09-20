@@ -62,6 +62,7 @@ const ICON_BY_NAME: Readonly<Record<ObjectContextIconName, ObjectContextIcon>> =
   image: IconImage,
   vector: IconVectorNodes,
   vectorize: IconVectorNodes,
+  vectorized: IconVectorNodes,
   book: IconBook,
   frame: IconFrame,
   text: IconText,

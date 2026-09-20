@@ -12,6 +12,7 @@ import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createImage, createText } from "@/lib/engine/factory";
 import { getCached } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
+import { createAtomicVectorizedFromResult } from "@/lib/vectorize/atomicVectorize";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import { type PriorImageGenerationContext, resolveFollowUpDimensions } from "./chatContinuity";
@@ -527,16 +528,22 @@ async function executeDefaultSpecialistStep(
         },
         { signal },
       );
-      if (result.elements.length === 0) {
-        throw new Error("Vectorizer returned no editable paths");
+      if (!result.svgString?.trim()) {
+        throw new Error("Vectorizer returned no SVG output");
       }
-      state.addElements(result.elements, `orchestrator vectorizer: ${step.id}`);
-      state.selectOnly(result.elements.map((element) => element.id));
+      const object = createAtomicVectorizedFromResult(result, {
+        x: Number(payload.x ?? slide.width * 0.1),
+        y: Number(payload.y ?? slide.height * 0.1),
+        width: Number(payload.width ?? slide.width * 0.8),
+        height: Number(payload.height ?? slide.height * 0.8),
+      });
+      state.addElements([object], `orchestrator vectorizer: ${step.id}`);
+      state.selectOnly([object.id]);
       return {
         artifactKind: "mask",
-        data: { elements: result.elements, totalNodes: result.totalNodes, backend: result.backend },
+        data: { elements: [object], totalNodes: result.totalNodes, backend: result.backend },
         reviewStatus: "not_checked",
-        notes: `Vectorizer produced ${result.elements.length} editable paths`,
+        notes: "Vectorizer produced 1 locked vectorized object",
       };
     }
     case "copywriter": {

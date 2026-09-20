@@ -123,11 +123,18 @@ test("keeps image tools and VTracer settings independent", async ({ page }) => {
   await expect(page.getByRole("slider", { name: "VTracer noise filter" })).toHaveValue("6");
 
   await page.getByRole("button", { name: /Generate VTracer Paths/ }).click();
-  await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible({
+  await expect(page.getByText("Vectorized", { exact: true })).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByText(/elements$/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/^\d+ nodes$/)).toBeVisible({ timeout: 30_000 });
+  const vectorizedToolbar = page.getByRole("toolbar", { name: "Vectorized options", exact: true });
+  await expect(vectorizedToolbar).toBeVisible();
+  await expect(
+    vectorizedToolbar.getByRole("button", { name: "Download as SVG", exact: true }),
+  ).toBeVisible();
+  await expect(vectorizedToolbar.getByRole("button", { name: "Align", exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toHaveCount(0);
 
   const vtracerPayload = await page.evaluate(() => {
     const messages =
@@ -158,7 +165,7 @@ test("keeps image tools and VTracer settings independent", async ({ page }) => {
   expect(consoleErrors).toEqual([]);
 });
 
-test("runs Vectorize(Cloud) through the Replicate task route and imports editable paths", async ({
+test("runs Vectorize(Cloud) through the Replicate task route and imports one locked SVG object", async ({
   page,
 }) => {
   let recraftRequest: Record<string, unknown> | null = null;
@@ -238,9 +245,20 @@ test("runs Vectorize(Cloud) through the Replicate task route and imports editabl
   await page.mouse.click(850, 480);
   await expect(processingPreview).toBeVisible();
   releaseRecraft();
-  await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toBeVisible();
+  await expect(page.getByText("Vectorized", { exact: true })).toBeVisible();
+  const recraftVectorizedToolbar = page.getByRole("toolbar", {
+    name: "Vectorized options",
+    exact: true,
+  });
+  await expect(recraftVectorizedToolbar).toBeVisible();
+  await expect(
+    recraftVectorizedToolbar.getByRole("button", { name: "Download as SVG", exact: true }),
+  ).toBeVisible();
+  await expect(
+    recraftVectorizedToolbar.getByRole("button", { name: "Align", exact: true }),
+  ).toHaveCount(0);
   await expect(processingPreview).toHaveCount(0);
-  await expect(page.getByText(/^\d+ nodes$/)).toBeVisible();
+  await expect(page.getByText("Vector Path (Illustrator)", { exact: true })).toHaveCount(0);
 
   expect(recraftRequest).toMatchObject({
     task: "vectorize.recraft",

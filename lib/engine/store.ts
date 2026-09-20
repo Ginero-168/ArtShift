@@ -1345,6 +1345,9 @@ export const useEngine = create<EngineState>((set, get) => {
 
     ungroupElements: (ids) => {
       const s = get();
+      const slide = s.currentSlide();
+      const targets = slide?.elements.filter((el) => ids.includes(el.id) && !el.isDeleted) ?? [];
+      if (targets.some((el) => el.type === "vectorized")) return;
       pushHistory(s.history, s.doc, "ungroup");
       set((cur) =>
         mapDoc(cur, (sl) => ({

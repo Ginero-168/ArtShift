@@ -29,6 +29,7 @@ export function isShapeElement(el: EngineElement | undefined | null): boolean {
     el.type !== "frame" &&
     el.type !== "bookMockup" &&
     el.type !== "text" &&
+    el.type !== "vectorized" &&
     !el.isDeleted
   );
 }

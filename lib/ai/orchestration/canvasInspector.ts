@@ -32,6 +32,7 @@ const TYPE_LABELS: Record<string, string> = {
   arrow: "Arrow",
   freedraw: "Freehand",
   path: "Vector path",
+  vectorized: "Vectorized",
   image: "Image",
   bookMockup: "Book mockup",
   frame: "Frame",

@@ -25,6 +25,7 @@ import type {
   TextElement,
   TextMode,
   TriangleElement,
+  VectorizedElement,
   VectorPathElement,
 } from "./types";
 import { recomputeVectorPathBounds } from "./vectorPath";
@@ -313,6 +314,36 @@ export function createText(opts: {
     ...sized,
     width: opts.width ?? sized.width,
     height: opts.height ?? sized.height,
+  };
+}
+
+export function createVectorized(opts: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  svg: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  name?: string;
+}): VectorizedElement {
+  return {
+    ...baseDefaults(),
+    type: "vectorized",
+    x: opts.x,
+    y: opts.y,
+    width: Math.max(1, opts.width),
+    height: Math.max(1, opts.height),
+    svg: opts.svg,
+    sourceWidth: Math.max(1, opts.sourceWidth),
+    sourceHeight: Math.max(1, opts.sourceHeight),
+    atomic: true,
+    lockedChildren: true,
+    strokeColor: "transparent",
+    strokeWidth: 0,
+    fillStyle: "solid",
+    roughness: 0,
+    name: opts.name ?? "Vectorized",
   };
 }
 

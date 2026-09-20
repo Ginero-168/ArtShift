@@ -245,7 +245,7 @@ describe("Appearance UI wiring", () => {
     expect(fillSection).not.toContain("glow: undefined");
     expect(fillSection).not.toContain("shadow: undefined");
     expect(contract).toContain("schema v7");
-    expect(contract).toContain("ENGINE_SCHEMA_VERSION` is **10**");
+    expect(contract).toContain("ENGINE_SCHEMA_VERSION` is **11**");
     expect(panel).toContain("add extrude");
     expect(panel).toContain("add emboss");
     expect(panel).toContain("Extrude taper toward center");
