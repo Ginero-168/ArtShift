@@ -106,31 +106,33 @@ export default function ContextMenu({ position, onClose }: Props) {
           },
         );
       }
-      items.push(
-        { kind: "sep" },
-        {
-          kind: "item",
-          label: "Edit Vector Points",
-          hint: "Double-click",
-          onClick: () => {
-            const currentSlide = useEngine
-              .getState()
-              .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
-            if (!currentSlide || ids.length !== 1) return;
-            const el = currentSlide.elements.find((e) => e.id === ids[0]);
-            if (!el) return;
-            if (el.type !== "path") {
-              const converted = convertElementToVectorPath(el);
-              if (converted) {
-                useEngine
-                  .getState()
-                  .updateElements([{ id: el.id, patch: converted }], "convert to editable path");
+      if (selected && selected.type !== "vectorized") {
+        items.push(
+          { kind: "sep" },
+          {
+            kind: "item",
+            label: "Edit Vector Points",
+            hint: "Double-click",
+            onClick: () => {
+              const currentSlide = useEngine
+                .getState()
+                .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
+              if (!currentSlide || ids.length !== 1) return;
+              const el = currentSlide.elements.find((e) => e.id === ids[0]);
+              if (!el || el.type === "vectorized") return;
+              if (el.type !== "path") {
+                const converted = convertElementToVectorPath(el);
+                if (converted) {
+                  useEngine
+                    .getState()
+                    .updateElements([{ id: el.id, patch: converted }], "convert to editable path");
+                }
               }
-            }
-            useEngine.getState().setTool("directSelect");
+              useEngine.getState().setTool("directSelect");
+            },
           },
-        },
-      );
+        );
+      }
     }
     if (ids.length > 1) {
       const slide = useEngine

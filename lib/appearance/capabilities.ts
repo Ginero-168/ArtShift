@@ -48,7 +48,7 @@ const STACK_FX = {
 
 export function appearanceCapabilities(element: EngineElement): AppearanceCapability {
   const type = element.type;
-  if (type === "image" || type === "bookMockup") {
+  if (type === "image" || type === "bookMockup" || type === "vectorized") {
     return {
       fills: false,
       strokes: false,

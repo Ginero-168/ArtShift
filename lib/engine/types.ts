@@ -222,6 +222,22 @@ export type VectorPathElement = BaseElement & {
   arrowheadScale?: number;
 };
 
+/**
+ * One inseparable Vectorize result. The original SVG stays on the object;
+ * children cannot be ungrouped, isolated, or edited path-by-path.
+ */
+export type VectorizedElement = BaseElement & {
+  type: "vectorized";
+  /** Original SVG markup from VTracer / Recraft. */
+  svg: string;
+  /** Intrinsic SVG viewport used when scaling the object. */
+  sourceWidth: number;
+  sourceHeight: number;
+  /** Locked compound — UI must not ungroup or isolate children. */
+  atomic: true;
+  lockedChildren: true;
+};
+
 /** Illustrator-style text: point hugs content; area wraps inside a fixed frame. */
 export type TextMode = "point" | "area";
 
@@ -393,6 +409,7 @@ export type EngineElement =
   | ArrowElement
   | FreedrawElement
   | VectorPathElement
+  | VectorizedElement
   | TextElement
   | ImageElement
   | BookMockupElement
@@ -455,5 +472,6 @@ export type EngineDoc = {
  * Additive on v8 docs; not dual-written to legacy shadow/glow fields.
  * v10: Extrude `taper` (0 = parallel, 1 = scale toward bounds center).
  * Additive on v9 docs; missing taper normalizes to 0.
+ * v11: Atomic `vectorized` objects from Vectorize (one SVG payload, no child paths).
  */
-export const ENGINE_SCHEMA_VERSION = 10;
+export const ENGINE_SCHEMA_VERSION = 11;

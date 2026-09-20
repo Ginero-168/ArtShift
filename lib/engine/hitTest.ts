@@ -54,6 +54,8 @@ export function hitTestElement(world: Point, el: EngineElement): boolean {
       return hitFreedraw(world, el);
     case "path":
       return hitVectorPath(world, el);
+    case "vectorized":
+      return hitRect(world, el);
     case "text":
       return hitText(world, el);
   }

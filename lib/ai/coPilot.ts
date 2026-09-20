@@ -43,6 +43,7 @@ import { createRect, createText } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement, TextElement } from "@/lib/engine/types";
+import { createAtomicVectorizedFromResult } from "@/lib/vectorize/atomicVectorize";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 
 export type CoPilotRole = "user" | "assistant" | "system";
@@ -657,19 +658,21 @@ export async function executeCoPilotInstruction(
         { signal: options.signal },
       );
 
-      st.addElements(res.elements, "co-pilot vectorize image");
-      st.selectOnly(res.elements.map((el) => el.id));
+      const object = createAtomicVectorizedFromResult(res, {
+        x: targetImg.x + 20,
+        y: targetImg.y + 20,
+        width: targetImg.width,
+        height: targetImg.height,
+      });
+      st.addElements([object], "co-pilot vectorize image");
+      st.selectOnly([object.id]);
 
-      updateActionStatus(
-        act,
-        "success",
-        `Traced ${res.elements.length} vector layers (${res.totalNodes} anchor nodes).`,
-      );
+      updateActionStatus(act, "success", "Traced 1 locked vectorized object.");
 
       return {
-        reply: `แปลงรูปภาพเป็น ${res.elements.length} เลเยอร์เวกเตอร์อิสระเรียบร้อย สามารถเลือกดัด Anchor Nodes ต่อได้ทันทีครับ!`,
+        reply: "แปลงรูปภาพเป็นวัตถุเวกเตอร์ชิ้นเดียวเรียบร้อย สามารถย้าย ย่อ-ขยาย หรือดาวน์โหลด SVG ได้ครับ",
         actions,
-        suggestions: ["🎨 เปลี่ยนสีเลเยอร์เวกเตอร์", "📐 จัดเรียง Layout ใหม่", "✍️ ใส่ข้อความพาดหัว"],
+        suggestions: ["📥 ดาวน์โหลด SVG", "📐 จัดเรียง Layout ใหม่", "✍️ ใส่ข้อความพาดหัว"],
       };
     } catch (err) {
       updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);

@@ -629,6 +629,7 @@ export function getElementDefaultName(element: EngineElement): string {
   if (element.type === "bookMockup") return "3D Book";
   if (element.type === "freedraw") return "Drawing";
   if (element.type === "path") return "Vector Path";
+  if (element.type === "vectorized") return "Vectorized";
   return "Object";
 }
 

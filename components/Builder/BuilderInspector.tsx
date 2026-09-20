@@ -510,6 +510,16 @@ export default function BuilderInspector() {
               <VectorPathOptions path={first} apply={apply as VectorPathApply} />
             ) : null}
 
+            {homogeneousType && first.type === "vectorized" ? (
+              <div className={styles.optionSection}>
+                <h3>Vectorized</h3>
+                <p className={styles.fieldNote}>
+                  This Vectorize result is one locked object. Paths cannot be ungrouped or edited.
+                  Use Download as SVG on the Option Bar to export.
+                </p>
+              </div>
+            ) : null}
+
             {homogeneousType &&
             (first.type === "rect" ||
               first.type === "ellipse" ||

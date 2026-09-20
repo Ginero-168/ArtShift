@@ -16,6 +16,7 @@ import type {
   EngineDoc,
   EngineElement,
   EngineSlide,
+  VectorizedElement,
   VectorPathElement,
   VectorPathNode,
 } from "./types";
@@ -120,6 +121,8 @@ function serializeLocalElement(element: EngineElement): string {
         .join(" ")}" fill="${escapeXml(element.strokeColor)}"/>`;
     case "path":
       return `<path d="${vectorPathData(element)}" fill-rule="${element.fillRule}" ${paint}/>`;
+    case "vectorized":
+      return serializeVectorized(element);
     case "text":
       return serializeText(element);
     case "image":
@@ -173,6 +176,23 @@ function serializeLocalElement(element: EngineElement): string {
       return strokeMarkup;
     }
   }
+}
+
+function serializeVectorized(element: VectorizedElement): string {
+  const inner = extractSvgInner(element.svg);
+  const viewBox =
+    /viewBox\s*=\s*["']([^"']+)["']/i.exec(element.svg)?.[1] ??
+    `0 0 ${n(element.sourceWidth)} ${n(element.sourceHeight)}`;
+  return `<svg width="${n(element.width)}" height="${n(element.height)}" viewBox="${escapeXml(viewBox)}" preserveAspectRatio="none">${inner}</svg>`;
+}
+
+function extractSvgInner(svg: string): string {
+  const open = /<svg\b[^>]*>/i.exec(svg);
+  const close = /<\/svg\s*>/i.exec(svg);
+  if (open && close && close.index > open.index + open[0].length) {
+    return svg.slice(open.index + open[0].length, close.index);
+  }
+  return svg;
 }
 
 function serializeText(element: Extract<EngineElement, { type: "text" }>): string {
