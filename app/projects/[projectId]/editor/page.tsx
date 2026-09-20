@@ -5,7 +5,7 @@
  *
  * Requirements:
  * - Scoped to projectId
- * - Header: [Portal ArtShift wordmark -> /projects] [Project Name Input]
+ * - Header: [Heatmap ArtShift wordmark -> /projects] [Project Name Input]
  * - No "Saved" / "Local Workspace" status in header
  * - Scoped IndexedDB Autosave
  * - Friendly Not Found state if projectId does not exist
@@ -579,7 +579,7 @@ export default function ProjectEditorPage() {
         flexDirection: "column",
       }}
     >
-      {/* ——— TopBar: [Portal ArtShift wordmark -> /projects] [Project Name Input] ——— */}
+      {/* ——— TopBar: [Heatmap ArtShift wordmark -> /projects] [Project Name Input] ——— */}
       <header className="topbar">
         <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Top-left Logo button linking back to /projects */}
