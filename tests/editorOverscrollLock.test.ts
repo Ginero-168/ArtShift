@@ -1,5 +1,5 @@
-import { cleanup, renderHook } from "@testing-library/react";
 import { readFileSync } from "node:fs";
+import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyEditorOverscrollLock,
@@ -30,18 +30,18 @@ describe("editor overscroll lock helpers", () => {
   });
 
   it("treats dominant horizontal wheels as history-navigation candidates", () => {
-    expect(isHistoryNavigationWheel({ deltaX: 80, deltaY: 4, ctrlKey: false, metaKey: false })).toBe(
-      true,
-    );
-    expect(isHistoryNavigationWheel({ deltaX: 4, deltaY: 80, ctrlKey: false, metaKey: false })).toBe(
-      false,
-    );
+    expect(
+      isHistoryNavigationWheel({ deltaX: 80, deltaY: 4, ctrlKey: false, metaKey: false }),
+    ).toBe(true);
+    expect(
+      isHistoryNavigationWheel({ deltaX: 4, deltaY: 80, ctrlKey: false, metaKey: false }),
+    ).toBe(false);
     expect(isHistoryNavigationWheel({ deltaX: 80, deltaY: 0, ctrlKey: true, metaKey: false })).toBe(
       false,
     );
-    expect(isHistoryNavigationWheel({ deltaX: 0, deltaY: 12, ctrlKey: false, metaKey: false })).toBe(
-      false,
-    );
+    expect(
+      isHistoryNavigationWheel({ deltaX: 0, deltaY: 12, ctrlKey: false, metaKey: false }),
+    ).toBe(false);
   });
 
   it("preventDefault absorbs a cancelable wheel", () => {

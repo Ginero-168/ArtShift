@@ -91,6 +91,7 @@ export default function PresentPage() {
   }, [doc]);
 
   useEffect(() => {
+    if (!doc) return;
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (event: WheelEvent) => {

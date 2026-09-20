@@ -76,7 +76,9 @@ export function preventHistoryNavigationWheel(
 }
 
 /** Workspace/canvas: absorb every wheel so pan/zoom owns the gesture. */
-export function absorbWorkspaceWheel(event: Pick<WheelEvent, "cancelable" | "preventDefault">): void {
+export function absorbWorkspaceWheel(
+  event: Pick<WheelEvent, "cancelable" | "preventDefault">,
+): void {
   preventHistoryNavigationWheel(event);
 }
 
