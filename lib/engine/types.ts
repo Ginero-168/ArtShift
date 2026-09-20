@@ -123,9 +123,10 @@ export type BaseElement = {
   /** Non-destructive compositing mode used when drawing this Object. */
   blendMode?: "source-over" | "multiply" | "screen" | "overlay" | "darken" | "lighten";
   /**
-   * Canonical Appearance stack (schema v7). Dual-written with the legacy flat
-   * fill/stroke/shadow/glow/opacity/blendMode fields so older readers still work.
-   * Load prefers this object when present; otherwise it is synthesized from legacy fields.
+   * Canonical Appearance stack (engine schema v7+, item fields expanded in v8).
+   * Dual-written with the legacy flat fill/stroke/shadow/glow/opacity/blendMode
+   * fields so older readers still work. Load prefers this object when present;
+   * otherwise it is synthesized from legacy fields.
    */
   appearance?: import("../appearance/types").Appearance;
   /** Human-readable label for this object layer. */
@@ -443,5 +444,7 @@ export type EngineDoc = {
 /**
  * v6: Block/hex occupancy is baked to Free pixels on load.
  * v7: persist canonical `appearance` on elements, dual-written to legacy flat fields.
+ * v8: Appearance items gain gradient/conic, clip-to-glyphs, multi-shadow layers,
+ * item blend, offset paint layers, and optional static blur. Additive on v7 docs.
  */
-export const ENGINE_SCHEMA_VERSION = 7;
+export const ENGINE_SCHEMA_VERSION = 8;

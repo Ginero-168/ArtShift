@@ -113,6 +113,7 @@ function glyphFillFromStrokeColor(element: EngineElement): FillAppearance {
     opacity: 1,
     paint: { type: "solid", color: element.strokeColor || "#1b1b1f" },
     fillStyle: "solid",
+    clipToGlyphs: true,
   };
 }
 
@@ -210,6 +211,9 @@ export function migrateTextPaintSemantics(
           visible: item.visible,
           opacity: item.opacity,
           paint: item.paint,
+          blendMode: item.blendMode,
+          offsetX: item.offsetX,
+          offsetY: item.offsetY,
         });
       }
       continue;
@@ -223,6 +227,10 @@ export function migrateTextPaintSemantics(
         opacity: item.opacity,
         paint: { type: "solid", color: item.color || glyphColor },
         fillStyle: "solid",
+        clipToGlyphs: true,
+        blendMode: item.blendMode,
+        offsetX: item.offsetX,
+        offsetY: item.offsetY,
       });
       continue;
     }
@@ -322,8 +330,9 @@ function applyPaintToLegacyFill(
     patch.backgroundColor = paint.stops[0]?.color ?? "transparent";
     return;
   }
-  if (paint.type === "radialGradient") {
+  if (paint.type === "radialGradient" || paint.type === "conicGradient") {
     patch.fillType = "radial";
+    if (paint.type === "conicGradient") patch.gradientAngle = paint.angle;
     patch.gradientColors = paint.stops.map((stop) => stop.color);
     patch.gradientStops = paint.stops.map((stop) => stop.offset);
     patch.backgroundColor = paint.stops[0]?.color ?? "transparent";
@@ -338,7 +347,11 @@ function applyPaintToLegacyGlyph(patch: Partial<EngineElement>, paint: Appearanc
     patch.strokeColor = paint.color;
     return;
   }
-  if (paint.type === "linearGradient" || paint.type === "radialGradient") {
+  if (
+    paint.type === "linearGradient" ||
+    paint.type === "radialGradient" ||
+    paint.type === "conicGradient"
+  ) {
     patch.strokeColor = paint.stops[0]?.color ?? "#1b1b1f";
     return;
   }

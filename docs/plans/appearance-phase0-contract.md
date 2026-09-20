@@ -1,22 +1,23 @@
 # Appearance Phase 0 — Contract
 
 Status: baseline for `lib/appearance/*` (2026-09-16)  
-Updated: 2026-09-20 — Multi-layer Fill/Stroke as a product feature on the Appearance stack (this PR). Image tones remain a UI group from #20, not Appearance items.
+Updated: 2026-09-20 — Text Effect Presets (static Colorion) extend the stack (engine schema v8). Multi-layer Fill/Stroke remains a product feature. Image tones remain a UI group from #20, not Appearance items.
 
 ## Reality check
 
 - Phase 1 foundation (`lib/appearance/*`) **landed** in the #12 lineage. MVP UI: Appearance panel + Shadow/Glow + Text Arc.
-- Engine `ENGINE_SCHEMA_VERSION` is **7**. Canonical `appearance` is persisted on elements and dual-written to legacy flat fields.
-- **v6 = Block bake** (unrelated). Appearance persist is **schema v7**. Do not reuse v6.
+- Engine `ENGINE_SCHEMA_VERSION` is **8**. Canonical `appearance` landed in schema v7 and is dual-written to legacy flat fields. v8 adds item-level gradient/conic, clip-to-glyphs, multi-shadow `layers`, item blend, offset paint layers, and static blur.
+- **v6 = Block bake** (unrelated). Appearance persist started as **schema v7**. Do not reuse v6.
 - Load prefers `appearance` when present and valid; otherwise synthesizes from legacy fields. Save always writes both.
 - Extra Fill/Stroke items live on `appearance.items` (legacy dual-write still stores only the first visible fill and stroke). Canvas2D paints the full stack.
 
-## Persist (schema v7)
+## Persist (schema v7 → v8)
 
-- Stored field: `EngineElement.appearance` (`schemaVersion: 1` inside the stack, distinct from engine v7).
-- Dual-write on save and Appearance mutations: `shadow`, `glow`, fill (`backgroundColor` / `fillType` / gradients / `fillPattern`), stroke, root `opacity` / `blendMode`.
+- Stored field: `EngineElement.appearance` (`schemaVersion: 1` inside the stack, distinct from engine v7/v8).
+- Dual-write on save and Appearance mutations: `shadow`, `glow`, fill (`backgroundColor` / `fillType` / gradients / `fillPattern`), stroke, root `opacity` / `blendMode`. Extra shadow `layers[]`, item blend, and offsets stay on `appearance` only.
 - Text Arc remains `pathCurvature` on text (not an Appearance item); it continues to be written as a legacy text field.
 - v6 → v7 is idempotent: synthesize `appearance` from legacy when missing; if `appearance` is already present, prefer it and refresh legacy from it. Extra stack items that do not fit in a single legacy fill/stroke are kept on `appearance` (no silent drop).
+- v7 → v8 is additive: missing item fields normalize to defaults. Text Effect Presets write a full stack recipe through `applyTextEffectPreset`.
 - Runtime: `updateAppearance` / `changeAppearance` write both sides. Legacy `updateElements` patches that touch those flat fields resync the primary Appearance items so PropertiesPanel/AI are not a competing writer.
 
 ## Locked slice (Peerawat 2026-09-20)
@@ -26,7 +27,9 @@ In scope:
 - Appearance panel in the live Builder Inspector
 - **Multiple Fill and Stroke layers** (add / remove / reorder); Canvas paints in stored stack order
 - **Text paint roles (Illustrator-like):** Fill = glyph fill (สีพื้นของตัวอักษร), Stroke = glyph outline (สีขอบ), Background = optional behind-text backdrop (separate stack item — not the Fill row renamed)
-- Shadow + Glow (both allowed)
+- **Text Effect Presets (static Colorion 90)** — still frames only; see `docs/plans/text-effect-presets-static-from-colorion.md`
+- Shadow + Glow (both allowed; multi-layer `layers[]` on a single Shadow/Glow item)
+- Optional static gaussian blur, per-item blend, offset duplicate paint layers
 - Text Arc for text objects via existing `pathCurvature` (no path envelope warp)
 - Image tone sliders (`adjustments` / `filterBlur`) as one Appearance UI group for images; not Appearance stack items and not Brand Graphic Styles
 

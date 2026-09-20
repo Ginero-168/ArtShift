@@ -65,6 +65,7 @@ export function isMvpStackItem(
   if (item.kind === "background") return caps.background;
   if (item.kind === "effect" && item.effect.type === "shadow") return caps.shadow;
   if (item.kind === "effect" && item.effect.type === "glow") return caps.glow;
+  if (item.kind === "effect" && item.effect.type === "gaussianBlur") return caps.staticBlur;
   return false;
 }
 
@@ -116,6 +117,7 @@ export function appearanceItemLabel(item: AppearanceItem): string {
   if (item.kind !== "effect") return "Item";
   if (item.effect.type === "shadow") return "Shadow";
   if (item.effect.type === "glow") return "Glow";
+  if (item.effect.type === "gaussianBlur") return "Blur";
   return item.effect.type;
 }
 

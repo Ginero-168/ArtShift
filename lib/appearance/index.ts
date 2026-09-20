@@ -78,17 +78,30 @@ export {
   appearanceMaxStrokeWidth,
   type CanvasPaintPass,
   type CanvasShadowPass,
+  canvasGaussianBlurRadius,
   canvasPaintPasses,
   canvasPaintRoles,
   canvasShadowPasses,
   usesStackedPaint,
 } from "./renderPlan";
+export type { TextEffectFamily, TextEffectPreset, TextEffectStaticCap } from "./textEffectPresets";
+export {
+  applyTextEffectPreset,
+  COLORION_INK,
+  getTextEffectPreset,
+  TEXT_EFFECT_PRESET_COUNT,
+  TEXT_EFFECT_PRESETS,
+  textEffectPresetsByFamily,
+} from "./textEffectPresets";
 export type {
   Appearance,
   AppearanceBlendMode,
   AppearanceError,
   AppearanceItem,
+  AppearanceItemBlendMode,
   AppearanceOperation,
+  AppearancePaint,
+  AppearanceShadowLayer,
   AppearanceSnapshot,
   BackgroundAppearance,
   EffectAppearance,

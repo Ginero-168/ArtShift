@@ -224,6 +224,8 @@ describe("Appearance UI wiring", () => {
     expect(panel).toContain("data-appearance-panel");
     expect(panel).toContain("add shadow");
     expect(panel).toContain("add glow");
+    expect(panel).toContain("data-text-effect-presets");
+    expect(panel).toContain("applyTextEffectPreset");
     expect(panel).toContain("Text Arc");
     expect(panel).toContain("pathCurvature");
     expect(panel).toContain("updateAppearance");
@@ -239,7 +241,7 @@ describe("Appearance UI wiring", () => {
     expect(fillSection).not.toContain("glow: undefined");
     expect(fillSection).not.toContain("shadow: undefined");
     expect(contract).toContain("schema v7");
-    expect(contract).toContain("ENGINE_SCHEMA_VERSION` is **7**");
+    expect(contract).toContain("ENGINE_SCHEMA_VERSION` is **8**");
     expect(plan).toContain("schema v7");
     expect(plan).toContain("Graphic Styles");
   });

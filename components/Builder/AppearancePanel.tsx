@@ -14,6 +14,7 @@ import {
   appearanceItemSwatch,
   appearanceItemTypeLabel,
   appearanceStackRows,
+  applyTextEffectPreset,
   backgroundItemPatchOperation,
   backgroundPaintOperation,
   clampPathCurvature,
@@ -33,6 +34,7 @@ import {
   shadowPatchOperation,
   stackKindOf,
   strokePatchOperation,
+  TEXT_EFFECT_PRESETS,
   toggleAppearanceExpandedKey,
   toggleItemVisibleOperation,
 } from "@/lib/appearance";
@@ -126,6 +128,42 @@ export default function AppearancePanel({
         Stack is front-to-back (top item paints last). Add multiple Fills and Strokes; reorder to
         change paint order. Shadow and Glow composite after paint.
       </p>
+
+      {element.type === "text" ? (
+        <label className={`${styles.field} ${styles.presetField}`} data-text-effect-presets="true">
+          <span>Text Effect</span>
+          <select
+            aria-label="Text effect preset"
+            defaultValue=""
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              if (!value) return;
+              const id = Number(value);
+              updateElements(
+                ids.flatMap((targetId) => {
+                  const target =
+                    targetId === element.id
+                      ? element
+                      : slide?.elements.find((candidate) => candidate.id === targetId);
+                  if (target?.type !== "text") return [];
+                  const next = applyTextEffectPreset(target, id);
+                  if (!next?.appearance) return [];
+                  return [{ id: targetId, patch: { appearance: next.appearance } }];
+                }),
+                "text effect preset",
+              );
+              event.currentTarget.value = "";
+            }}
+          >
+            <option value="">None — pick a still</option>
+            {TEXT_EFFECT_PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {String(preset.id).padStart(2, "0")} {preset.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       <div className={styles.appearanceStack} role="list" aria-label="Appearance stack">
         {rows.map((row) => {

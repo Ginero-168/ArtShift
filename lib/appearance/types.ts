@@ -1,12 +1,15 @@
 /**
  * Canonical Appearance stack types (Illustrator-inspired).
- * Schema v7 persists this object on EngineElement and dual-writes legacy flat
- * fields (fill/stroke/shadow/glow/opacity/blendMode) for older readers.
+ * Engine schema v8 persists this object on EngineElement (v7 introduced the
+ * field) and dual-writes legacy flat fields (fill/stroke/shadow/glow/opacity/
+ * blendMode) for older readers. Appearance.schemaVersion stays 1; new item
+ * fields are additive and normalize to defaults when missing.
  */
 
 import type { ColorAdjustments } from "@/lib/color/adjustments";
 import type { FillStyle, StrokeStyle } from "@/lib/engine/types";
 
+/** Root compositing — dual-writes to EngineElement.blendMode. */
 export type AppearanceBlendMode =
   | "source-over"
   | "multiply"
@@ -14,6 +17,17 @@ export type AppearanceBlendMode =
   | "overlay"
   | "darken"
   | "lighten";
+
+/**
+ * Per-item compositing. Wider than root so Colorion mix-blend stills
+ * (difference, soft-light) can live on offset paint layers.
+ */
+export type AppearanceItemBlendMode =
+  | AppearanceBlendMode
+  | "difference"
+  | "soft-light"
+  | "color-dodge"
+  | "hard-light";
 
 export type AppearanceColorStop = {
   offset: number;
@@ -24,12 +38,32 @@ export type AppearancePaint =
   | { type: "solid"; color: string }
   | { type: "linearGradient"; angle: number; stops: AppearanceColorStop[] }
   | { type: "radialGradient"; stops: AppearanceColorStop[] }
+  | { type: "conicGradient"; angle: number; stops: AppearanceColorStop[] }
   | {
       type: "pattern";
       pattern: "dots" | "stripes" | "grid";
       foreground: string;
       background: string;
     };
+
+export type AppearanceShadowLayer = {
+  color: string;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+export type AppearanceGlowLayer = {
+  color: string;
+  blur: number;
+};
+
+/** Shared paint-layer fields for offset duplicates (glitch / anaglyph / duotone). */
+export type AppearancePaintLayer = {
+  blendMode?: AppearanceItemBlendMode;
+  offsetX?: number;
+  offsetY?: number;
+};
 
 export type FillAppearance = {
   id: string;
@@ -38,7 +72,13 @@ export type FillAppearance = {
   opacity: number;
   paint: AppearancePaint;
   fillStyle?: FillStyle;
-};
+  /**
+   * CSS `background-clip: text` analogue: paint is clipped to glyph
+   * silhouettes. Text Fill already paints glyphs; keep true on text-effect
+   * recipes. Ignored for shape fills (already clipped to geometry).
+   */
+  clipToGlyphs?: boolean;
+} & AppearancePaintLayer;
 
 /**
  * Behind-content backdrop (text box). Distinct from Fill — Fill is the object
@@ -50,7 +90,7 @@ export type BackgroundAppearance = {
   visible: boolean;
   opacity: number;
   paint: AppearancePaint;
-};
+} & AppearancePaintLayer;
 
 export type StrokeAppearance = {
   id: string;
@@ -64,11 +104,26 @@ export type StrokeAppearance = {
   cap?: "butt" | "round" | "square";
   join?: "miter" | "round" | "bevel";
   dash?: number[];
-};
+  /** CSS `paint-order` analogue for glyph outline vs fill. */
+  paintOrder?: "fill" | "stroke";
+} & AppearancePaintLayer;
 
 export type AppearanceEffect =
-  | { type: "shadow"; color: string; blur: number; offsetX: number; offsetY: number }
-  | { type: "glow"; color: string; blur: number }
+  | {
+      type: "shadow";
+      color: string;
+      blur: number;
+      offsetX: number;
+      offsetY: number;
+      /** Extra halo/extrusion layers after the primary (legacy dual-write) layer. */
+      layers?: AppearanceShadowLayer[];
+    }
+  | {
+      type: "glow";
+      color: string;
+      blur: number;
+      layers?: AppearanceGlowLayer[];
+    }
   | { type: "gaussianBlur"; radius: number }
   | { type: "colorAdjust"; adjustments: Partial<ColorAdjustments> };
 
@@ -79,6 +134,7 @@ export type EffectAppearance = {
   opacity: number;
   effect: AppearanceEffect;
   scope?: "previous" | "object";
+  blendMode?: AppearanceItemBlendMode;
 };
 
 export type AppearanceItem =
@@ -130,4 +186,5 @@ export type AppearanceOperation =
   | { type: "duplicateItem"; itemId: string };
 
 export const APPEARANCE_SCHEMA_VERSION = 1 as const;
-export const APPEARANCE_MAX_ITEMS = 12;
+/** Raised in v8 so neon stacks + offset duplicate fills can coexist. */
+export const APPEARANCE_MAX_ITEMS = 24;

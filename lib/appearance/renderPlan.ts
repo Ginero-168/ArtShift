@@ -36,6 +36,15 @@ export function canvasShadowPasses(element: EngineElement): CanvasShadowPass[] {
         offsetY: item.effect.offsetY,
         source: "shadow",
       });
+      for (const layer of item.effect.layers ?? []) {
+        passes.push({
+          color: layer.color,
+          blur: layer.blur,
+          offsetX: layer.offsetX,
+          offsetY: layer.offsetY,
+          source: "shadow",
+        });
+      }
     } else if (item.effect.type === "glow") {
       passes.push({
         color: item.effect.color,
@@ -44,6 +53,15 @@ export function canvasShadowPasses(element: EngineElement): CanvasShadowPass[] {
         offsetY: 0,
         source: "glow",
       });
+      for (const layer of item.effect.layers ?? []) {
+        passes.push({
+          color: layer.color,
+          blur: layer.blur,
+          offsetX: 0,
+          offsetY: 0,
+          source: "glow",
+        });
+      }
     }
   }
 
@@ -111,4 +129,15 @@ export function appearanceMaxStrokeWidth(element: EngineElement): number {
     .filter((pass): pass is Extract<CanvasPaintPass, { kind: "stroke" }> => pass.kind === "stroke")
     .map((pass) => pass.item.width);
   return Math.max(element.strokeWidth ?? 0, ...widths, 0);
+}
+
+/** Static gaussian blur on the object (not CSS animation). */
+export function canvasGaussianBlurRadius(element: EngineElement): number {
+  const appearance = readAppearance(element);
+  let radius = 0;
+  for (const item of appearance.items) {
+    if (!item.visible || item.kind !== "effect" || item.effect.type !== "gaussianBlur") continue;
+    radius = Math.max(radius, item.effect.radius);
+  }
+  return radius;
 }
