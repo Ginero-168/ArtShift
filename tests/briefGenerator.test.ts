@@ -432,14 +432,15 @@ describe("Brief Generator Service & Layout Geometry", () => {
     ).toBe("column");
   });
 
-  it("verifies 'Convert to Brief' button is exposed in both ObjectContextBar and EditorOptionBar", () => {
+  it("keeps Convert to Brief on the image context bar, not the vector tool rail", () => {
     const objectContextBarSource = readFileSync("components/Canvas/ObjectContextBar.tsx", "utf8");
     expect(objectContextBarSource).toContain("Convert to Brief");
     expect(objectContextBarSource).toContain("handleConvertToBrief");
 
     const editorOptionBarSource = readFileSync("components/Canvas/EditorOptionBar.tsx", "utf8");
-    expect(editorOptionBarSource).toContain("Convert to Brief");
-    expect(editorOptionBarSource).toContain("handleToolbarConvertToBrief");
+    expect(editorOptionBarSource).not.toContain("Convert to Brief");
+    expect(editorOptionBarSource).not.toContain("handleToolbarConvertToBrief");
+    expect(editorOptionBarSource).not.toContain("IconBrief");
   });
 
   it("pairs each visual component (Text + Card/Bubble) into its own sub-group while maintaining master group", () => {

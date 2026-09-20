@@ -211,11 +211,24 @@ export const IconSpacing = (p: Props) =>
     p,
   );
 
-export const IconCursor = (p: Props) => svg(p.size, <path d="M4 3l7 17 2.5-7 7-2.5Z" />, p);
+export const IconCursor = (p: Props) =>
+  svg(
+    p.size,
+    <path
+      d="M5.2 3.4 18.8 12.6l-6.2 1.4 2.7 7.1-3.2 1.2-2.7-7.1-4.2 3.6Z"
+      fill="currentColor"
+      stroke="none"
+    />,
+    p,
+  );
+
 export const IconDirectSelect = (p: Props) =>
   svg(
     p.size,
-    <path d="M4 3l7 17 2.5-7 7-2.5Z" fill="currentColor" stroke="currentColor" strokeWidth="1.2" />,
+    <>
+      <path d="M5.2 3.4 18.8 12.6l-6.2 1.4 2.7 7.1-3.2 1.2-2.7-7.1-4.2 3.6Z" strokeWidth="1.7" />
+      <rect x="16.4" y="3.2" width="4" height="4" rx="0.5" fill="currentColor" stroke="none" />
+    </>,
     p,
   );
 
@@ -223,9 +236,9 @@ export const IconText = (p: Props) =>
   svg(
     p.size,
     <>
-      <path d="M5 6V4h14v2" />
-      <path d="M12 4v16" />
-      <path d="M9 20h6" />
+      <path d="M5 5.4h14" strokeWidth="2.1" />
+      <path d="M12 5.4v13.2" strokeWidth="2.1" />
+      <path d="M8.4 18.6h7.2" strokeWidth="2" />
     </>,
     p,
   );
@@ -702,11 +715,7 @@ export const IconCopy = (p: Props) =>
 export const IconHand = (p: Props) =>
   svg(
     p.size,
-    <>
-      <path d="M18 11V6a2 2 0 0 0-4 0v3" />
-      <path d="M14 10V4a2 2 0 0 0-4 0v6" />
-      <path d="M10 10V5a2 2 0 0 0-4 0v9a7 7 0 0 0 14 0v-4a2 2 0 0 0-4 0" />
-    </>,
+    <path d="M8 11.2V6.4a1.55 1.55 0 0 1 3.1 0V10M11.1 10.2V5.2a1.55 1.55 0 0 1 3.1 0V10M14.2 10.4V6.8a1.55 1.55 0 1 1 3.1 0v6.4a5.5 5.5 0 1 1-11 0V9.4a1.55 1.55 0 0 1 3.1 0" />,
     p,
   );
 
@@ -716,18 +725,25 @@ export const IconPen = (p: Props) =>
   svg(
     p.size,
     <>
-      <path
-        d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-        strokeWidth="0"
-        fill="none"
-      />
-      <path d="M12 20c-4-8 0-16 0-16s8 4 4 10c-2 3-4 6-4 6Z" />
+      <path d="M14.4 3.6 20.4 9.6 9.2 20.8 3.4 21.6l.8-5.8Z" />
+      <path d="m16 5.2 2.8 2.8" />
+      <path d="M8.4 15.2 4.8 18.8" />
     </>,
     p,
   );
 
 export const IconFreedraw = (p: Props) =>
-  svg(p.size, <path d="M4 20C8 16 10 10 14 8c2-1 4 1 6-4" />, p);
+  svg(
+    p.size,
+    <>
+      <path
+        d="M4 18c2.6-1 4.2-4.8 7-6.4 2.4-1.4 3.6.8 6-1.6 1.8-1.8 2.6-4.4 3.8-6"
+        strokeWidth="2"
+      />
+      <path d="M15.6 4.2c1.1.3 2 1.1 2.4 2.2" strokeWidth="1.8" />
+    </>,
+    p,
+  );
 
 export const IconEraser = (p: Props) =>
   svg(
