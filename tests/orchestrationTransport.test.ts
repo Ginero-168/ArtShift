@@ -203,6 +203,32 @@ describe("ORCH-01: Orchestration Transport & Normalization", () => {
     }
   });
 
+  it("attaches the adapter-reported director model from the route payload", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        model:
+          "google/gemini-3-flash@e27b7b83f67f5865920667591a2a08a41cdc82906bd29306fe79581ab0646b8b",
+        direction: {
+          kind: "answer",
+          text: "ใช้ภาพที่เลือกเป็นต้นทางได้เลยครับ",
+        },
+      }),
+    });
+
+    const result = await prepareRemoteOrchestratorTurn({
+      prompt: "วิเคราะห์ภาพนี้",
+      canvasSummary: { objectCount: 1, selectedCount: 1, width: 1920, height: 1080 },
+      referenceAnalyses: [],
+    });
+
+    expect(result).toMatchObject({
+      kind: "answer",
+      text: "ใช้ภาพที่เลือกเป็นต้นทางได้เลยครับ",
+      runtimeModel: "google/gemini-3-flash",
+    });
+  });
+
   it("extracts embedded JSON direction wrapped in an answer text block", async () => {
     const rawEmbedded = JSON.stringify({
       kind: "clarification",

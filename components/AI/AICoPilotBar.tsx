@@ -3,8 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatActionCards";
 import ChatComposer, { type QualitySelection } from "@/components/AI/ChatComposer";
-import ChatThread from "@/components/AI/ChatThread";
+import ChatThread, { type LiveAssistantState } from "@/components/AI/ChatThread";
 import { useCanvasSelectionBridge } from "@/components/AI/useCanvasSelectionBridge";
+import {
+  catalogModelStep,
+  createChatTurnModels,
+  directorModelStep,
+  florenceModelStep,
+  formatModelChain,
+  modelStepFromRuntime,
+} from "@/lib/ai/chatModelAttribution";
 import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
 import {
   type CoPilotMessage,
@@ -16,13 +24,12 @@ import {
 import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import {
   buildImageCompletionSummary,
+  extractSubject,
   formatImageCompletionReply,
+  formatThoughtText,
 } from "@/lib/ai/imageCompletionReply";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
-import {
-  formatFriendlyAspectRatio,
-  formatHumanThoughtText,
-} from "@/lib/ai/imageResultPresentation";
+import { formatFriendlyAspectRatio } from "@/lib/ai/imageResultPresentation";
 import {
   composeFollowUpDirectorPrompt,
   extractPriorImageGenerationContext,
@@ -102,86 +109,6 @@ import { useEngine } from "@/lib/engine/store";
 /** @deprecated Staging tray removed — kept for test/type imports. */
 export type { StagedVariationCard };
 
-function extractSubject(prompt: string, summary?: string): string {
-  let effectivePrompt = prompt;
-  if (effectivePrompt.includes("User reply:")) {
-    effectivePrompt = effectivePrompt.slice(effectivePrompt.lastIndexOf("User reply:") + 11).trim();
-  } else if (effectivePrompt.includes("\n\n")) {
-    const segments = effectivePrompt
-      .split("\n\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    effectivePrompt = segments[segments.length - 1] || effectivePrompt;
-  }
-  effectivePrompt = effectivePrompt
-    .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
-    .replace(/@[^\s]+/g, "")
-    .trim();
-
-  if (summary && summary.trim().length > 0 && !summary.includes("Director question:")) {
-    let cleanFromSummary = cleanTechnicalPromptText(summary);
-    if (cleanFromSummary.includes("User reply:")) {
-      cleanFromSummary = cleanFromSummary
-        .slice(cleanFromSummary.lastIndexOf("User reply:") + 11)
-        .trim();
-    }
-    cleanFromSummary = cleanFromSummary
-      .replace(/@\[([^\]:]+)(?::[^\]]+)?\]/g, "")
-      .replace(/@[^\s]+/g, "")
-      .trim()
-      .replace(
-        /^(?:ช่วย|กรุณา)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?\s*/iu,
-        "",
-      )
-      .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
-      .replace(/^(?:รูปภาพ|ภาพ|รูป)\s*/iu, "")
-      .replace(/\s*(?:ตามที่ขอ|เรียบร้อยแล้ว|สมจริง|สวยๆ|สไตล์.*|ในฉาก.*)\s*$/iu, "")
-      .trim();
-    if (
-      cleanFromSummary.length > 0 &&
-      cleanFromSummary.length < 60 &&
-      !cleanFromSummary.includes("\n")
-    ) {
-      return cleanFromSummary;
-    }
-  }
-
-  let cleaned = effectivePrompt
-    .replace(
-      /^(?:ช่วย|กรุณา|อยากได้|อยากให้|ขอ)?\s*(?:สร้าง|วาด|ทำ|เนรมิต|เจน|เอา|ปรับ|แก้ไข)?\s*(?:รูป|ภาพ|รูปภาพ)?/iu,
-      "",
-    )
-    .replace(/\s*\d+\s*(?:รูป|ภาพ|แบบ|ชิ้น|อัน)?\s*$/iu, "")
-    .replace(/\s*(?:ให้หน่อย|คิดให้หน่อย|สวยๆ|เจ๋งๆ|น่ารัก|สมจริง|ด้วยนะ|ด้วยครับ|ด้วยค่ะ|ด้วย)\s*$/iu, "")
-    .trim();
-  if (cleaned.includes("\n")) cleaned = cleaned.split("\n")[0].trim();
-  return cleaned || "ภาพ";
-}
-
-function formatThoughtText(
-  rawPrompt: string,
-  directionSummary?: string,
-  count = 1,
-  isEdit = false,
-  dims?: { width?: number; height?: number; aspectRatio?: string },
-  plannedAspects?: readonly string[],
-): string {
-  const multiAspectNote =
-    plannedAspects && plannedAspects.length > 1
-      ? ` จะแยกสร้างตามสัดส่วน ${plannedAspects.join(" · ")}`
-      : "";
-  const base = formatHumanThoughtText({
-    rawPrompt,
-    directionSummary,
-    count,
-    isEdit,
-    width: dims?.width,
-    height: dims?.height,
-    aspectRatio: dims?.aspectRatio,
-  });
-  return multiAspectNote ? `${base}${multiAspectNote}` : base;
-}
-
 const DEFAULT_ASSISTANT_GREETING: CoPilotMessage = {
   id: "initial-msg",
   role: "assistant",
@@ -242,17 +169,7 @@ export default function AICoPilotBar() {
   const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(
     () => restoredChat?.pendingClarification ?? null,
   );
-  const [liveAssistantState, setLiveAssistantState] = useState<{
-    stage: "outputting" | "generating" | "analyzing" | "planning";
-    thought?: string;
-    toolLabel?: string;
-    requestedCount?: number;
-    statusMessage?: string;
-    prompt?: string;
-    isEdit?: boolean;
-    stepDetails?: string[];
-    actions?: SubAgentActionLog[];
-  } | null>(null);
+  const [liveAssistantState, setLiveAssistantState] = useState<LiveAssistantState | null>(null);
   const [feedbackState, setFeedbackState] = useState<Record<string, "up" | "down">>({});
   const [promptRefinementData, setPromptRefinementData] = useState<PromptRefinementCardData | null>(
     null,
@@ -606,12 +523,14 @@ export default function AICoPilotBar() {
     const isEditTurn = refsForTurn.length > 0;
     setMessages((prev) => [...prev, userMsg]);
     setCurrentActions([]);
+    const turnModels = createChatTurnModels();
     setLiveAssistantState({
       stage: isEditTurn ? "analyzing" : "outputting",
       prompt: promptToSend,
       isEdit: isEditTurn,
       toolLabel: isEditTurn ? DEFAULT_CLOUD_VISION_LABEL : undefined,
       statusMessage: isEditTurn ? cloudVisionStatusMessage() : "กำลังประมวลผลคำสั่ง...",
+      activeModels: turnModels.snapshot(),
     });
 
     try {
@@ -632,6 +551,7 @@ export default function AICoPilotBar() {
           prompt: promptToSend,
           isEdit: true,
           statusMessage: `กำลังขยายเป็น ${ratio.ratioWidth}×${ratio.ratioHeight} (เกินเพดาน 3:1 — ต่อข้างแล้วประกอบ)…`,
+          activeModels: turnModels.remember(catalogModelStep("image-general")),
         });
         const expanded = await expandImageToAspectRatio({
           sourceDataUrl,
@@ -682,6 +602,7 @@ export default function AICoPilotBar() {
             role: "assistant",
             content: `ขยายเป็นสัดส่วน ${ratio.ratioWidth}:${ratio.ratioHeight} แล้วครับ (${expanded.width}×${expanded.height}px) — โมเดลทำได้สูงสุด 3:1 จึงต่อซ้าย–ขวาแล้วประกอบเป็นแถบพิมพ์จริง`,
             timestamp: Date.now(),
+            usedModels: turnModels.snapshot(),
             images: [
               {
                 url: expanded.dataUrl,
@@ -716,6 +637,7 @@ export default function AICoPilotBar() {
       const isImageFollowUp = Boolean(
         lastAssistantMsg &&
           ((lastAssistantMsg.images && lastAssistantMsg.images.length > 0) ||
+            lastAssistantMsg.usedModels?.some((step) => step.role === "image") ||
             lastAssistantMsg.toolLabel === "GPT Image 2" ||
             lastAssistantMsg.toolLabel === DEFAULT_CREATING_MODEL_LABEL ||
             lastAssistantMsg.toolLabel?.toLowerCase().includes("image")) &&
@@ -768,8 +690,9 @@ export default function AICoPilotBar() {
             prompt: promptToSend,
             isEdit: true,
             toolLabel: DEFAULT_CLOUD_VISION_LABEL,
-            statusMessage: cloudVisionStatusMessage(),
+            statusMessage: turnModels.using() || cloudVisionStatusMessage(),
             actions: [analysisAction],
+            activeModels: turnModels.snapshot(),
           });
           try {
             analysesForTurn = await analyzeImageReferences(
@@ -778,10 +701,24 @@ export default function AICoPilotBar() {
               (completed, total, stage) => {
                 analysisAction.description = `${stage} · ${Math.round((completed / Math.max(1, total)) * 100)}%`;
                 upsertCurrentAction({ ...analysisAction });
+                setLiveAssistantState((prev) => ({
+                  ...(prev || { stage: "analyzing", prompt: promptToSend, isEdit: true }),
+                  stage: "analyzing",
+                  toolLabel: DEFAULT_CLOUD_VISION_LABEL,
+                  statusMessage:
+                    turnModels.using() ||
+                    cloudVisionStatusMessage(Math.round((completed / Math.max(1, total)) * 100)),
+                  actions: [analysisAction],
+                  activeModels: turnModels.snapshot(),
+                }));
               },
               undefined,
               { cloudConsent: true },
             );
+            const analysisVision = analysesForTurn
+              .map((analysis) => modelStepFromRuntime(analysis.visionModel, "vision"))
+              .find(Boolean);
+            if (analysisVision) turnModels.remember(analysisVision);
             analysisAction.status = "success";
             analysisAction.description = analysesForTurn.some(
               (item) => item.source === "local-florence",
@@ -802,6 +739,7 @@ export default function AICoPilotBar() {
                   "ยังไม่ได้สร้าง Task ครับ เพราะวิเคราะห์ภาพที่เลือกไม่สำเร็จ ลองโหลดภาพใหม่แล้วส่งอีกครั้งได้เลย",
                 timestamp: Date.now(),
                 actions: analysisActions,
+                usedModels: turnModels.snapshot(),
               },
             ]);
             return;
@@ -838,7 +776,7 @@ export default function AICoPilotBar() {
           const directorAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
             agent: "orchestrator",
-            title: "Creative Director (Gemini 3 Flash)",
+            title: `Creative Director (${directorModelStep().id})`,
             description:
               "กำลังวิเคราะห์โจทย์ ประเมิน Detail Score & Precision Score จัดสัดส่วนภาพและแนวคิด 2D Graphic…",
             status: "running",
@@ -848,11 +786,13 @@ export default function AICoPilotBar() {
           };
           actions = [...actions, directorAction];
           upsertCurrentAction({ ...directorAction });
+          turnModels.remember(directorModelStep());
           setLiveAssistantState((prev) => ({
             ...(prev || { prompt: promptToSend, isEdit: refsForTurn.length > 0 }),
             stage: "planning",
-            statusMessage: "Creative Director กำลังวางแผนงาน...",
+            statusMessage: turnModels.using() || "Creative Director กำลังวางแผนงาน...",
             actions: [...actions],
+            activeModels: turnModels.snapshot(),
           }));
           let activeRunningAction: SubAgentActionLog = directorAction;
           let resolvedModelLabel = DEFAULT_CREATING_MODEL_LABEL;
@@ -913,12 +853,25 @@ export default function AICoPilotBar() {
                     search: { required: false, queries: [], sources: [] },
                     detailScore: 8,
                     precisionScore: 8,
+                    runtimeModel: undefined,
                   };
                 }
                 throw dirErr;
               });
 
               activeRunningAction = directorAction;
+              turnModels.remember(directorModelStep(direction.runtimeModel));
+              directorAction.title = `Creative Director (${directorModelStep(direction.runtimeModel).id})`;
+              upsertCurrentAction({ ...directorAction });
+              setLiveAssistantState((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      activeModels: turnModels.snapshot(),
+                      statusMessage: turnModels.using() || prev.statusMessage,
+                    }
+                  : prev,
+              );
 
               if (direction.kind === "answer") {
                 setPendingClarification(null);
@@ -1017,8 +970,12 @@ export default function AICoPilotBar() {
                   plannedAspects.length > 1 ? undefined : imageRun.tasks[0]?.requestedDimensions,
                   plannedAspects,
                 );
-                const modelName = formatCreatingModelLabel(direction.modelAlias);
+                const imageModel =
+                  catalogModelStep(direction.modelAlias) ??
+                  modelStepFromRuntime(direction.runtimeModel, "image");
+                const modelName = imageModel?.id ?? formatCreatingModelLabel(direction.modelAlias);
                 resolvedModelLabel = modelName;
+                turnModels.remember(imageModel);
                 const specialistTitle =
                   direction.specialist === "image_editor" ? "Image Editor" : "Image Specialist";
 
@@ -1041,10 +998,11 @@ export default function AICoPilotBar() {
                   thought: thoughtText,
                   toolLabel: modelName,
                   requestedCount: count,
-                  statusMessage: `กำลังสร้างรูปภาพด้วย ${modelName}...`,
+                  statusMessage: turnModels.using() || `กำลังสร้างรูปภาพด้วย ${modelName}...`,
                   prompt: rawPrompt,
                   isEdit: isEditTurn,
                   actions: [...actions],
+                  activeModels: turnModels.snapshot(),
                 });
 
                 const runResult = await runContextAwareImageRun(imageRun, refsForTurn, {
@@ -1071,8 +1029,9 @@ export default function AICoPilotBar() {
                       prev
                         ? {
                             ...prev,
-                            statusMessage: update.message,
+                            statusMessage: turnModels.using() || update.message,
                             actions: [...actions],
+                            activeModels: turnModels.snapshot(),
                           }
                         : null,
                     );
@@ -1122,6 +1081,7 @@ export default function AICoPilotBar() {
                       timestamp: Date.now(),
                       actions,
                       suggestions,
+                      usedModels: turnModels.snapshot(),
                     },
                   ]);
                   setBusy(false);
@@ -1165,6 +1125,10 @@ export default function AICoPilotBar() {
                         prompt: direction.refinedPrompt,
                       };
                     });
+                  for (const item of runResult.items) {
+                    turnModels.remember(modelStepFromRuntime(item.result?.model, "image"));
+                    turnModels.remember(modelStepFromRuntime(item.result?.visionModel, "vision"));
+                  }
 
                   const subject = extractSubject(promptToSend, direction.summary);
                   const isEditTurn =
@@ -1304,6 +1268,7 @@ export default function AICoPilotBar() {
                       timestamp: Date.now(),
                       actions,
                       suggestions: completionSuggestions,
+                      usedModels: turnModels.snapshot(),
                     },
                   ]);
                   setLiveAssistantState(null);
@@ -1362,6 +1327,7 @@ export default function AICoPilotBar() {
                     timestamp: Date.now(),
                     actions,
                     suggestions,
+                    usedModels: turnModels.snapshot(),
                   },
                 ]);
                 setLiveAssistantState(null);
@@ -1381,6 +1347,7 @@ export default function AICoPilotBar() {
             timestamp: Date.now(),
             actions,
             suggestions,
+            usedModels: turnModels.snapshot(),
           },
         ]);
         return;
@@ -1472,6 +1439,14 @@ export default function AICoPilotBar() {
         };
 
         addRemoteAction("ArtShift Orchestrator", "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...");
+        turnModels.remember(directorModelStep());
+        setLiveAssistantState({
+          stage: "planning",
+          prompt: promptToSend,
+          isEdit: refsForTurn.length > 0,
+          statusMessage: turnModels.using() || "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...",
+          activeModels: turnModels.snapshot(),
+        });
         const history: ClientChatMessage[] = [
           ...messages
             .flatMap((message): ClientChatMessage[] =>
@@ -1508,6 +1483,16 @@ export default function AICoPilotBar() {
               referenceAnalyses: analysesForTurn,
             },
             { signal: controller.signal, cloudConsent: remoteConsent },
+          );
+          turnModels.remember(directorModelStep(result.runtimeModel));
+          setLiveAssistantState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  activeModels: turnModels.snapshot(),
+                  statusMessage: turnModels.using() || prev.statusMessage,
+                }
+              : prev,
           );
 
           if (result.kind === "design-plan") {
@@ -1604,12 +1589,21 @@ export default function AICoPilotBar() {
               },
               result,
             );
+            const directedImageModel = catalogModelStep(result.modelAlias);
+            turnModels.remember(directedImageModel);
             remoteActions[0] = {
               ...remoteActions[0],
               title: `ArtShift Orchestrator → ${directedTask.subAgent}`,
-              description: `กำลังดำเนินงานด้วย ${result.modelAlias}`,
+              description: `กำลังดำเนินงานด้วย ${directedImageModel?.id ?? result.modelAlias}`,
             };
             upsertCurrentAction(remoteActions[0]);
+            setLiveAssistantState({
+              stage: "generating",
+              prompt: promptToSend,
+              toolLabel: directedImageModel?.id,
+              statusMessage: turnModels.using(),
+              activeModels: turnModels.snapshot(),
+            });
             const generated = await runContextAwareImageTask(directedTask, refsForTurn, {
               signal: controller.signal,
               cloudConsent: remoteConsent,
@@ -1633,8 +1627,19 @@ export default function AICoPilotBar() {
                   quality: update.quality,
                 };
                 upsertCurrentAction(remoteActions[0]);
+                setLiveAssistantState((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        statusMessage: turnModels.using() || update.message,
+                        activeModels: turnModels.snapshot(),
+                      }
+                    : prev,
+                );
               },
             });
+            turnModels.remember(modelStepFromRuntime(generated.model, "image"));
+            turnModels.remember(modelStepFromRuntime(generated.visionModel, "vision"));
             remoteActions[0] = {
               ...remoteActions[0],
               status: "success",
@@ -1654,7 +1659,9 @@ export default function AICoPilotBar() {
               width: generated.width,
               height: generated.height,
               aspectRatio: directedTask.requestedDimensions?.aspectRatio,
-              modelLabel: formatCreatingModelLabel(result.modelAlias),
+              modelLabel:
+                catalogModelStep(result.modelAlias)?.id ??
+                formatCreatingModelLabel(result.modelAlias),
               quality: selectedQuality,
             };
             remoteResultSummary = buildImageCompletionSummary(
@@ -1687,13 +1694,16 @@ export default function AICoPilotBar() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: reply,
-        toolLabel: remoteGeneratedImages ? formatCreatingModelLabel(remoteModelAlias) : undefined,
+        toolLabel: remoteGeneratedImages
+          ? (catalogModelStep(remoteModelAlias)?.id ?? formatCreatingModelLabel(remoteModelAlias))
+          : formatModelChain(turnModels.snapshot()) || undefined,
         images: remoteGeneratedImages,
         resultSummary: remoteResultSummary,
         qualityLabel: remoteGeneratedImages ? selectedQuality : undefined,
         timestamp: Date.now(),
         actions,
         suggestions,
+        usedModels: turnModels.snapshot(),
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -1706,6 +1716,7 @@ export default function AICoPilotBar() {
           ? "ยกเลิกงานที่กำลังประมวลผลแล้วครับ ไม่มีการส่งงานต่อเพิ่มเติม"
           : `ขออภัยครับ เกิดข้อผิดพลาด: ${(err as Error).message}`,
         timestamp: Date.now(),
+        usedModels: turnModels.snapshot(),
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {

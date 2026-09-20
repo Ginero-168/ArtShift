@@ -19,10 +19,11 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
     expect(barSource).toContain("Image Analyzer");
     expect(barSource).toContain("DEFAULT_CLOUD_VISION_LABEL");
     expect(barSource).toContain('analysisAction.status = "success";');
-    expect(barSource).toContain('title: "Creative Director (Gemini 3 Flash)"');
+    expect(barSource).toContain("Creative Director (");
+    expect(barSource).toContain("directorModelStep().id");
     expect(barSource).toContain('directorAction.status = "success";');
     expect(barSource).toContain("const imageTaskAction: SubAgentActionLog = {");
-    expect(barSource).toContain("formatHumanThoughtText");
+    expect(barSource).toContain("formatThoughtText");
     expect(barSource).toContain("buildImageCompletionSummary");
   });
 

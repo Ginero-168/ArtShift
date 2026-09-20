@@ -77,7 +77,10 @@ export async function POST(req: NextRequest) {
         searchImages: (query, limit, signal) => searchImageReferences(query, limit, { signal }),
       },
     );
-    return NextResponse.json({ direction });
+    return NextResponse.json({
+      direction,
+      model: direction.runtimeModel ?? null,
+    });
   } catch (error) {
     console.error("[Creative Director Route Error]:", error);
     if (error instanceof CreativeDirectorValidationError) {

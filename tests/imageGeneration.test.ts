@@ -109,6 +109,36 @@ describe("GPT Image 2 generation client", () => {
     );
   });
 
+  it("prefers the adapter-reported model id from the image route over the catalog fallback", async () => {
+    const mockDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          dataUrl: mockDataUrl,
+          seed: 1,
+          model:
+            "openai/gpt-image-2.5-sunburst@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        }),
+      }),
+    );
+    class MockImage {
+      naturalWidth = 1024;
+      naturalHeight = 1024;
+      onload: (() => void) | null = null;
+      set src(_value: string) {
+        setTimeout(() => this.onload?.(), 0);
+      }
+    }
+    vi.stubGlobal("Image", MockImage);
+
+    const result = await generateAIImage({ prompt: "a cat", cloudConsent: true });
+    expect(result.model).toBe("openai/gpt-image-2.5-sunburst");
+  });
+
   it("rejects a generated image that fails the technical quality gate", async () => {
     const mockDataUrl = "data:image/png;base64,BBBB";
 

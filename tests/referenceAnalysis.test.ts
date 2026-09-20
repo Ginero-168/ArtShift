@@ -71,6 +71,7 @@ describe("local selected-image analysis", () => {
       visibleText: "SALE 20%",
       dimensions: { width: 400, height: 300 },
       limitations: ["test visible render"],
+      visionModel: "florence-2",
     });
     expect(configuredAnalyzers.caption).toHaveBeenCalledWith(
       "data:image/png;base64,VISIBLE_RENDER",

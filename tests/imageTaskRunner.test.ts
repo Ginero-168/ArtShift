@@ -148,6 +148,7 @@ describe("context-aware image task runner", () => {
     });
 
     expect(result.width).toBe(1024);
+    expect(result.model).toBe("openai/gpt-image-2");
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
     expect(events).toEqual(
       expect.arrayContaining([

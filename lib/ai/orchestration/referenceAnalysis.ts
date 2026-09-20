@@ -1,3 +1,4 @@
+import { normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import { getAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 import { parseVisionResponse, visionExtrasAsAppearanceNotes } from "./cloudVisionParser";
@@ -21,6 +22,8 @@ export type ImageReferenceAnalysis = {
   limitations: string[];
   source?: VisionBackendId | "none";
   modelLabel?: string;
+  /** Runtime vision model that produced this analysis (florence-2 or cloud adapter id). */
+  visionModel?: string;
 };
 
 export type CloudVisionTurboResult = {
@@ -89,7 +92,7 @@ export async function tryCloudVisionTurbo(
     if (data.success && data.result) {
       onProgress?.(`${DEFAULT_CLOUD_VISION_LABEL} วิเคราะห์เสร็จสิ้น`, 0.95);
       const parsed = parseVisionResponse(JSON.stringify(data.result));
-      const model = typeof data.model === "string" ? data.model : undefined;
+      const model = normalizeRuntimeModelId(typeof data.model === "string" ? data.model : null);
       return {
         caption: parsed.caption,
         objects: parsed.objects,
@@ -150,6 +153,7 @@ export async function analyzeImageReference(
   let turboNotes: string[] = [];
   let source: VisionBackendId | "none" = "none";
   let modelLabel = DEFAULT_CLOUD_VISION_LABEL;
+  let visionModel: string | undefined;
 
   const resolvedAnalyzers = analyzersForConsent(analyzers, options?.cloudConsent === true);
   const order = resolveVisionBackendOrder({
@@ -171,6 +175,7 @@ export async function analyzeImageReference(
       source = "cloud-api";
       modelLabel = turboResult.modelLabel || formatVisionModelLabel(turboResult.model, "cloud-api");
       turboSuccess = true;
+      visionModel = normalizeRuntimeModelId(turboResult.model) ?? undefined;
     }
   }
 
@@ -191,6 +196,7 @@ export async function analyzeImageReference(
     visibleText = localText;
     source = "local-florence";
     modelLabel = formatVisionModelLabel(undefined, "local-florence");
+    visionModel = "florence-2";
   }
   throwIfAborted(signal);
 
@@ -227,6 +233,7 @@ export async function analyzeImageReference(
     ],
     source,
     modelLabel,
+    ...(visionModel ? { visionModel } : {}),
   };
 }
 

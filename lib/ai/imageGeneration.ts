@@ -3,6 +3,7 @@
  * The server routes every generation request to the server-owned GPT Image 2 route.
  */
 
+import { normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import { resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
 import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { loadDataURL } from "@/lib/engine/imageCache";
@@ -759,6 +760,7 @@ export async function generateAIImage(
   const data = (await apiRes.json().catch(() => ({}))) as {
     dataUrl?: string;
     seed?: number;
+    model?: string;
     error?: string;
     code?: string;
     predictionId?: string;
@@ -800,7 +802,7 @@ export async function generateAIImage(
     width: cached.width,
     height: cached.height,
     seed: data.seed ?? options.seed ?? 0,
-    model: GPT_IMAGE_2_MODEL,
+    model: normalizeRuntimeModelId(data.model) ?? GPT_IMAGE_2_MODEL,
     prompt,
   };
 }

@@ -87,6 +87,27 @@ describe("chat history persistence", () => {
     expect(window.localStorage.getItem(`${CHAT_HISTORY_STORAGE_PREFIX}${projectId}`)).toBeTruthy();
   });
 
+  it("persists usedModels so resumed chat still shows which model replied", () => {
+    const snapshot = buildChatHistorySnapshot({
+      projectId,
+      messages: [
+        { id: "u1", role: "user", content: "สวัสดี", timestamp: 10 },
+        {
+          id: "a1",
+          role: "assistant",
+          content: "สวัสดีครับ",
+          timestamp: 11,
+          usedModels: [{ id: "google/gemini-3-flash", role: "chat" }],
+        },
+      ],
+    });
+    expect(saveChatHistorySnapshot(snapshot)).toBe(true);
+    const loaded = loadChatHistorySnapshot(projectId);
+    expect(loaded?.messages[1]?.usedModels).toEqual([
+      { id: "google/gemini-3-flash", role: "chat" },
+    ]);
+  });
+
   it("reads the project id from the editor path", () => {
     expect(readProjectIdFromPath("/projects/abc%20123/editor")).toBe("abc 123");
     expect(readProjectIdFromPath("/projects")).toBe("");

@@ -24,8 +24,12 @@ import {
   IconUndo,
   IconWand,
 } from "@/components/icons";
+import {
+  type ChatModelStep,
+  formatModelChain,
+  formatUsingStatus,
+} from "@/lib/ai/chatModelAttribution";
 import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
-import { DEFAULT_CREATING_MODEL_LABEL } from "@/lib/ai/orchestration/creatingModelCatalog";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import {
@@ -39,20 +43,23 @@ import { UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
 
+export type LiveAssistantState = {
+  stage: "outputting" | "generating" | "analyzing" | "planning";
+  thought?: string;
+  toolLabel?: string;
+  requestedCount?: number;
+  statusMessage?: string;
+  prompt?: string;
+  isEdit?: boolean;
+  stepDetails?: string[];
+  actions?: SubAgentActionLog[];
+  activeModels?: ChatModelStep[];
+};
+
 export interface ChatThreadProps {
   messages: CoPilotMessage[];
   busy: boolean;
-  liveAssistantState: {
-    stage: "outputting" | "generating" | "analyzing" | "planning";
-    thought?: string;
-    toolLabel?: string;
-    requestedCount?: number;
-    statusMessage?: string;
-    prompt?: string;
-    isEdit?: boolean;
-    stepDetails?: string[];
-    actions?: SubAgentActionLog[];
-  } | null;
+  liveAssistantState: LiveAssistantState | null;
   streamingText: string;
   currentActions: SubAgentActionLog[];
   feedbackState: Record<string, "up" | "down">;
@@ -63,6 +70,49 @@ export interface ChatThreadProps {
   onClearHistory: () => void;
   onEditPromptFromError?: (prompt: string) => void;
   children?: React.ReactNode;
+}
+
+const MODEL_CHIP_STYLE: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  alignSelf: "flex-start",
+  maxWidth: "100%",
+  padding: "2px 8px",
+  borderRadius: 999,
+  background: "#f1f5f9",
+  border: "1px solid #e2e8f0",
+  color: "#475569",
+  fontSize: 10.5,
+  fontWeight: 600,
+  letterSpacing: "-0.01em",
+  lineHeight: 1.4,
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+export function ChatModelMeta({
+  steps,
+  live = false,
+}: {
+  steps?: readonly ChatModelStep[] | null;
+  live?: boolean;
+}) {
+  const label = live ? formatUsingStatus(steps ?? []) : formatModelChain(steps ?? []);
+  if (!label) return null;
+  return (
+    <div
+      role={live ? "status" : undefined}
+      aria-live={live ? "polite" : undefined}
+      data-testid={live ? "chat-model-status" : "chat-model-meta"}
+      title={label}
+      style={MODEL_CHIP_STYLE}
+    >
+      {label}
+    </div>
+  );
 }
 
 export function UserMessageImagePreviews({
@@ -535,6 +585,26 @@ export default function ChatThread({
           >
             {UNIFIED_AI_SYSTEM.label}
           </strong>
+          {busy && liveAssistantState?.activeModels?.length ? (
+            <span
+              role="status"
+              aria-live="polite"
+              data-testid="chat-header-model"
+              title={formatUsingStatus(liveAssistantState.activeModels)}
+              style={{
+                fontSize: 10.5,
+                color: "#6366f1",
+                fontWeight: 600,
+                maxWidth: 220,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              }}
+            >
+              {formatUsingStatus(liveAssistantState.activeModels)}
+            </span>
+          ) : null}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -857,6 +927,8 @@ export default function ChatThread({
                 </div>
               )}
 
+              <ChatModelMeta steps={msg.usedModels} />
+
               {/* Suggestion Chips */}
               {msg.suggestions && msg.suggestions.length > 0 && (
                 <div
@@ -1107,6 +1179,8 @@ export default function ChatThread({
               toolLabel={liveAssistantState.toolLabel}
             />
 
+            <ChatModelMeta steps={liveAssistantState.activeModels} live />
+
             {/* Vision / generate process label */}
             {(liveAssistantState.stage === "analyzing" ||
               liveAssistantState.stage === "generating") && (
@@ -1129,7 +1203,8 @@ export default function ChatThread({
                     {liveAssistantState.toolLabel ||
                       (liveAssistantState.stage === "analyzing"
                         ? DEFAULT_CLOUD_VISION_LABEL
-                        : DEFAULT_CREATING_MODEL_LABEL)}
+                        : formatModelChain(liveAssistantState.activeModels ?? []) ||
+                          DEFAULT_CREATING_MODEL_LABEL)}
                   </span>
                 </div>
 
