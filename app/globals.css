@@ -169,9 +169,28 @@ button {
   isolation: isolate;
   min-width: 0;
   overflow: hidden;
+  overscroll-behavior: contain;
+  overscroll-behavior-x: none;
   background:
     radial-gradient(circle at 30% 20%, color-mix(in oklch, var(--accent) 8%, transparent) 0%, transparent 50%),
     var(--canvas);
+}
+
+/*
+ * Editor/present only. Applied to html+body while those routes are mounted.
+ * contain stops scroll chaining; none on X blocks Chrome/Firefox swipe-to-navigate.
+ * Safari may still need the non-passive wheel preventDefault in overscrollLock.ts.
+ */
+html.editor-overscroll-lock,
+html.editor-overscroll-lock body {
+  overscroll-behavior: contain;
+  overscroll-behavior-x: none;
+  overflow-x: hidden;
+}
+
+.editor-overscroll-lock .app-root {
+  overscroll-behavior: contain;
+  overscroll-behavior-x: none;
 }
 
 @keyframes pop-in {
