@@ -572,6 +572,33 @@ describe("context-aware turn orchestrator", () => {
     ]);
   });
 
+  it("builds a single-task run for 'ปรับเป็นแนวตั้ง' even if Director JSON requested 5", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "ปรับเป็นแนวตั้ง",
+      refs: [],
+      analyses: [],
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 5,
+      summary: "จะแยกสร้างตามสัดส่วน 5 แบบ",
+      refinedPrompt: "Five vertical 9:16 poster variations of the last campaign",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Keep campaign copy"],
+      search: { required: false, queries: [], sources: [] },
+      outputBriefs: ["แนวตั้ง 1", "แนวตั้ง 2", "แนวตั้ง 3", "แนวตั้ง 4", "แนวตั้ง 5"],
+    });
+
+    expect(run.requestedOutputCount).toBe(1);
+    expect(run.tasks).toHaveLength(1);
+    expect(run.tasks[0]?.imageRun?.requestedOutputCount).toBe(1);
+  });
+
   it("swaps 29×7cm to 7×29cm on 'ปรับเป็นแนวตั้ง' even if Director prose says 9:16", () => {
     const input: ContextAwareTurnInput = {
       prompt: "ปรับเป็นแนวตั้ง",

@@ -60,6 +60,24 @@ export function followUpCommandText(prompt: string): string {
   return (firstLine || cut).trim().slice(0, 500);
 }
 
+/**
+ * Full user-ask text for output-count / multi-size decisions.
+ * Strips injected last-package / recall blocks so a remembered 29×7cm
+ * (or Director prose) cannot look like a multi-size campaign.
+ */
+export function followUpAskText(prompt: string | undefined): string {
+  const text = (prompt || "").trim();
+  if (!text) return "";
+  let cut = text;
+  for (const marker of FOLLOW_UP_CONTEXT_MARKERS) {
+    const idx = cut.indexOf(marker);
+    if (idx >= 0) cut = cut.slice(0, idx);
+  }
+  const labeled = /User follow-up (?:request|command):\s*([\s\S]+)/iu.exec(cut);
+  if (labeled?.[1]?.trim()) return labeled[1].trim().slice(0, 4_000);
+  return cut.trim().slice(0, 4_000);
+}
+
 /** Layer-1 locks carried across Orchestrator turns (must not drift on follow-ups). */
 export type SharedAnchorLock = {
   id: string;
@@ -880,6 +898,8 @@ export function composeFollowUpDirectorPrompt(
           "- Re-use the same ingredients and campaign copy unless the user overrides them. Never invent extra reference photos.",
           "- Attached images (when present): the first image is the last output to revise (image-to-image); later images are the original ingredients.",
           "- Prefer specialist image_editor when the last output is attached.",
+          "- requestedOutputCount MUST be 1 for orientation/size revisions (แนวตั้ง / แนวนอน / cm resize) unless the user also explicitly asks for N outputs (ขอ N แบบ / สร้าง N รูป) or lists multiple distinct sizes.",
+          "- Never invent a variation count for a short revision. One follow-up instruction = one image.",
           "- refinedPrompt must restate the full prior brief in English, then apply the follow-up change, and must include the resolved exact size (swapped custom WxH or flipped named aspect — never a default 9:16 when a custom size exists).",
           "- If this was a brand/shelf-sign job, never invent new slogans or drop the logo.",
         ]
@@ -890,6 +910,7 @@ export function composeFollowUpDirectorPrompt(
           "- Re-include the same ingredient references. Never invent extras.",
           "- refinedPrompt must restate the full base brief in English, enriched for variation, and must explicitly include the prior aspect ratio unless the user changed it.",
           "- requestedOutputCount must match the follow-up quantity when the user asked for N more images.",
+          "- If the user did not ask for N more images and did not list multiple sizes, requestedOutputCount must be 1.",
           "- If this was a brand/shelf-sign job, never invent new copy or move the logo to create variety.",
         ];
 

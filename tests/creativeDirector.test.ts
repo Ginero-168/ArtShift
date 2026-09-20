@@ -1,15 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
+import { followUpAskText } from "@/lib/ai/orchestration/chatContinuity";
 import {
   applyCreativeDirectionToTask,
   CREATIVE_DIRECTOR_MODEL_ALIAS,
   CREATIVE_DIRECTOR_SYSTEM,
+  extractExplicitRequestedOutputCount,
+  parseCreativeDirection,
   prepareCreativeDirection,
+  resolveRequestedOutputCountFromUserAsk,
   reviewCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirector";
 import {
   ARTSHIFT_HARNESS_RULE_IDS,
   ARTSHIFT_HARNESS_VERSION,
 } from "@/lib/ai/orchestration/harnessPolicy";
+import { composeClarifiedImagePrompt } from "@/lib/ai/orchestration/intentCompleteness";
 import { createAiTask } from "@/lib/ai/orchestration/taskMachine";
 
 const baseTask = () =>
@@ -587,7 +592,11 @@ describe("gpt-oss-120b Creative Director", () => {
 
     const result = await prepareCreativeDirection(
       {
-        prompt: "ภาพถ่ายสมจริง",
+        prompt: composeClarifiedImagePrompt(
+          "สร้างรูปหมู 3 รูป",
+          "ภาพถ่ายสมจริง",
+          "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
+        ),
         conversationHistory: [
           { role: "user", content: "สร้างรูปหมู 3 รูป" },
           { role: "assistant", content: "คุณต้องการสไตล์ของรูปหมูอย่างไร?" },
@@ -1085,6 +1094,11 @@ describe("gpt-oss-120b Creative Director", () => {
     expect(CREATIVE_DIRECTOR_SYSTEM).toContain(
       "synthesize both references into ONE unified design artwork",
     );
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("NEVER INVENT A VARIATION COUNT");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("ปรับเป็นแนวตั้ง");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain(
+      "If the user does not state N and does not list multiple sizes, requestedOutputCount MUST be 1",
+    );
   });
 
   it("normalizes requestedOutputCount to 1 when prompt references 2 covers without explicit output quantity request", async () => {
@@ -1227,5 +1241,194 @@ describe("gpt-oss-120b Creative Director", () => {
       expect(direction2.requestedOutputCount).toBe(3);
       expect(direction2.outputBriefs).toHaveLength(3);
     }
+  });
+
+  it("forces requestedOutputCount to 1 for a cm resize follow-up without 'ขอ N แบบ'", () => {
+    const direction = parseCreativeDirection(
+      {
+        kind: "image-task",
+        summary: "ปรับขนาดป้ายเป็น 60x20cm หลายแบบ",
+        refinedPrompt: "Rebuild the last banner at 60x20cm in several variations",
+        specialist: "image_generator",
+        capability: "IMAGE_DEFAULT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Keep campaign copy"],
+        search: { required: false, queries: [], sources: [] },
+        requestedOutputCount: 4,
+        outputBriefs: ["ไซส์ 1", "ไซส์ 2", "ไซส์ 3", "ไซส์ 4"],
+      },
+      {
+        prompt: "ปรับขนาดเป็น 60x20cm",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1536, height: 512 },
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        referenceAnalyses: [],
+      },
+      [],
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(1);
+      expect(direction.outputBriefs).toHaveLength(1);
+    }
+  });
+
+  it("forces requestedOutputCount to 1 when Director invents 5 for 'ปรับเป็นแนวตั้ง'", () => {
+    const direction = parseCreativeDirection(
+      {
+        kind: "image-task",
+        summary: "ปรับป้ายเป็นแนวตั้ง 5 แบบ",
+        refinedPrompt: "Rebuild as five vertical 9:16 poster variations",
+        specialist: "image_generator",
+        capability: "IMAGE_DEFAULT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Keep campaign copy"],
+        search: { required: false, queries: [], sources: [] },
+        requestedOutputCount: 5,
+        outputBriefs: ["แนวตั้ง 1", "แนวตั้ง 2", "แนวตั้ง 3", "แนวตั้ง 4", "แนวตั้ง 5"],
+      },
+      {
+        prompt: "ปรับเป็นแนวตั้ง",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        referenceAnalyses: [],
+      },
+      [],
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(1);
+      expect(direction.outputBriefs).toHaveLength(1);
+    }
+  });
+
+  it("honors explicit 'ขอ 3 แบบ' and 'สร้าง 3 รูป' even if Director JSON says 1", () => {
+    const raw = {
+      kind: "image-task",
+      summary: "สร้างภาพ",
+      refinedPrompt: "A single image",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Keep subject"],
+      search: { required: false, queries: [], sources: [] },
+      requestedOutputCount: 1,
+      outputBriefs: ["ภาพเดียว"],
+    };
+    const canvas = {
+      canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+      availableCapabilities: ["IMAGE_DEFAULT" as const],
+      referenceAnalyses: [],
+    };
+
+    const fromBaep = parseCreativeDirection(raw, { ...canvas, prompt: "ขอ 3 แบบ" }, []);
+    const fromRup = parseCreativeDirection(raw, { ...canvas, prompt: "สร้าง 3 รูป" }, []);
+
+    expect(fromBaep.kind).toBe("image-task");
+    expect(fromRup.kind).toBe("image-task");
+    if (fromBaep.kind === "image-task") expect(fromBaep.requestedOutputCount).toBe(3);
+    if (fromRup.kind === "image-task") expect(fromRup.requestedOutputCount).toBe(3);
+  });
+
+  it("forces count 1 for 'จาก 2 ปกนี้' alone even if Director JSON says 5", () => {
+    const direction = parseCreativeDirection(
+      {
+        kind: "image-task",
+        summary: "ออกแบบจาก 2 ปก",
+        refinedPrompt: "Fuse two covers into one banner",
+        specialist: "image_generator",
+        capability: "IMAGE_DEFAULT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Fuse both covers"],
+        search: { required: false, queries: [], sources: [] },
+        requestedOutputCount: 5,
+        outputBriefs: ["แบบ 1", "แบบ 2", "แบบ 3", "แบบ 4", "แบบ 5"],
+      },
+      {
+        prompt: "ออกแบบป้ายหมวดจาก 2 ปกนี้",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1536, height: 512 },
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        referenceAnalyses: [],
+      },
+      [],
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(1);
+      expect(direction.outputBriefs).toHaveLength(1);
+    }
+  });
+
+  it("expands a multi-size list in one ask even if Director JSON says 1", () => {
+    const direction = parseCreativeDirection(
+      {
+        kind: "image-task",
+        summary: "ปรับสัดส่วนปก",
+        refinedPrompt: "Same cover artwork, recomposed for the target frame",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Preserve cover identity"],
+        search: { required: false, queries: [], sources: [] },
+        requestedOutputCount: 1,
+        outputBriefs: ["ปกเดียว"],
+      },
+      {
+        prompt: "ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1080, height: 1080 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+      },
+      [],
+    );
+
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(3);
+      expect(direction.outputBriefs).toHaveLength(3);
+    }
+  });
+});
+
+describe("extractExplicitRequestedOutputCount / resolveRequestedOutputCountFromUserAsk", () => {
+  it("treats orientation and input-ref phrases as default 1", () => {
+    expect(extractExplicitRequestedOutputCount("ปรับเป็นแนวตั้ง")).toBeUndefined();
+    expect(extractExplicitRequestedOutputCount("จาก 2 ปกนี้")).toBeUndefined();
+    expect(resolveRequestedOutputCountFromUserAsk("ปรับเป็นแนวตั้ง")).toBe(1);
+    expect(resolveRequestedOutputCountFromUserAsk("จาก 2 ปกนี้")).toBe(1);
+  });
+
+  it("reads explicit N and multi-size lists from the user ask", () => {
+    expect(extractExplicitRequestedOutputCount("ขอ 3 แบบ")).toBe(3);
+    expect(extractExplicitRequestedOutputCount("สร้าง 3 รูป")).toBe(3);
+    expect(extractExplicitRequestedOutputCount("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที")).toBe(
+      3,
+    );
+    expect(resolveRequestedOutputCountFromUserAsk("ขอ 3 แบบ")).toBe(3);
+    expect(resolveRequestedOutputCountFromUserAsk("สร้าง 3 รูป")).toBe(3);
+    expect(
+      resolveRequestedOutputCountFromUserAsk("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที"),
+    ).toBe(3);
+  });
+
+  it("ignores last-package sizes on a composed orientation follow-up", () => {
+    const composed = [
+      "User follow-up request: ปรับเป็นแนวตั้ง",
+      "",
+      "=== LAST IMAGE GENERATION PACKAGE ===",
+      "Exact size: 29x7cm and also 53x20cm",
+      "CONTINUATION RULES:",
+      "- requestedOutputCount must match the follow-up quantity when the user asked for N more images.",
+    ].join("\n");
+    expect(followUpAskText(composed)).toBe("ปรับเป็นแนวตั้ง");
+    expect(extractExplicitRequestedOutputCount(followUpAskText(composed))).toBeUndefined();
+    expect(resolveRequestedOutputCountFromUserAsk(composed)).toBe(1);
   });
 });
