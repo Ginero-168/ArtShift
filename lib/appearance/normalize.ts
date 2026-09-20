@@ -66,7 +66,7 @@ export function normalizePaint(paint: AppearancePaint): AppearancePaint {
 
 export function normalizeItem(item: AppearanceItem): AppearanceItem {
   const opacity = clamp01(item.opacity);
-  if (item.kind === "fill") {
+  if (item.kind === "fill" || item.kind === "background") {
     return {
       ...item,
       visible: item.visible !== false,
@@ -111,13 +111,14 @@ export function normalizeItem(item: AppearanceItem): AppearanceItem {
 }
 
 export function emptyAppearance(
-  patch: Partial<Pick<Appearance, "opacity" | "blendMode">> = {},
+  patch: Partial<Pick<Appearance, "opacity" | "blendMode" | "paintSemantics">> = {},
 ): Appearance {
   return {
     schemaVersion: APPEARANCE_SCHEMA_VERSION,
     opacity: clamp01(patch.opacity ?? 1),
     blendMode: patch.blendMode ?? "source-over",
     items: [],
+    paintSemantics: patch.paintSemantics ?? "object",
   };
 }
 
@@ -170,5 +171,6 @@ export function normalizeAppearance(appearance: Appearance): Appearance {
     opacity: clamp01(appearance.opacity),
     blendMode: appearance.blendMode || "source-over",
     items: appearance.items.map(normalizeItem),
+    ...(appearance.paintSemantics ? { paintSemantics: appearance.paintSemantics } : {}),
   };
 }

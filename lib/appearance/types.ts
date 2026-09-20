@@ -40,6 +40,18 @@ export type FillAppearance = {
   fillStyle?: FillStyle;
 };
 
+/**
+ * Behind-content backdrop (text box). Distinct from Fill — Fill is the object
+ * fill (glyph fill on text, shape fill on paths).
+ */
+export type BackgroundAppearance = {
+  id: string;
+  kind: "background";
+  visible: boolean;
+  opacity: number;
+  paint: AppearancePaint;
+};
+
 export type StrokeAppearance = {
   id: string;
   kind: "stroke";
@@ -69,13 +81,23 @@ export type EffectAppearance = {
   scope?: "previous" | "object";
 };
 
-export type AppearanceItem = FillAppearance | StrokeAppearance | EffectAppearance;
+export type AppearanceItem =
+  | FillAppearance
+  | StrokeAppearance
+  | BackgroundAppearance
+  | EffectAppearance;
 
 export type Appearance = {
   schemaVersion: 1;
   opacity: number;
   blendMode: AppearanceBlendMode;
   items: AppearanceItem[];
+  /**
+   * Illustrator-like paint roles: Fill = object fill, Stroke = outline,
+   * Background = behind-content backdrop. Absent on older text stacks that
+   * stored the box as Fill and the glyph color as Stroke.
+   */
+  paintSemantics?: "object";
 };
 
 export type AppearanceSnapshot = Appearance & {

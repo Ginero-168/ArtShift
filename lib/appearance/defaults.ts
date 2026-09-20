@@ -1,4 +1,9 @@
-import type { EffectAppearance, FillAppearance, StrokeAppearance } from "./types";
+import type {
+  BackgroundAppearance,
+  EffectAppearance,
+  FillAppearance,
+  StrokeAppearance,
+} from "./types";
 
 export const DEFAULT_SHADOW = {
   color: "rgba(0, 0, 0, 0.18)",
@@ -45,6 +50,16 @@ export function defaultFillItem(): FillAppearance {
   };
 }
 
+export function defaultBackgroundItem(): BackgroundAppearance {
+  return {
+    id: "",
+    kind: "background",
+    visible: true,
+    opacity: 1,
+    paint: { type: "solid", color: "#ffffff" },
+  };
+}
+
 export function defaultStrokeItem(): StrokeAppearance {
   return {
     id: "",
@@ -55,6 +70,15 @@ export function defaultStrokeItem(): StrokeAppearance {
     width: 2,
     style: "solid",
     alignment: "center",
+  };
+}
+
+/** Default text outline: present in the stack, but not painted until width > 0. */
+export function defaultTextStrokeItem(color = "#1b1b1f"): StrokeAppearance {
+  return {
+    ...defaultStrokeItem(),
+    color,
+    width: 0,
   };
 }
 

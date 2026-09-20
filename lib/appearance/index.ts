@@ -5,14 +5,17 @@ export {
   clampPathCurvature,
   DEFAULT_GLOW,
   DEFAULT_SHADOW,
+  defaultBackgroundItem,
   defaultFillItem,
   defaultGlowItem,
   defaultShadowItem,
   defaultStrokeItem,
+  defaultTextStrokeItem,
 } from "./defaults";
 export { appearanceFingerprint } from "./fingerprints";
 export {
   appearanceToLegacyPatch,
+  migrateTextPaintSemantics,
   readAppearance,
   synthesizeAppearanceFromLegacy,
 } from "./legacyAdapter";
@@ -23,10 +26,14 @@ export {
   validateAppearance,
 } from "./normalize";
 export {
+  addBackgroundOperation,
   addFillOperation,
   addGlowOperation,
   addShadowOperation,
   addStrokeOperation,
+  backgroundInsertIndex,
+  backgroundItemPatchOperation,
+  backgroundPaintOperation,
   fillItemPatchOperation,
   fillPaintOperation,
   glowPatchOperation,
@@ -45,7 +52,10 @@ export {
   type AppearanceStackRow,
   appearanceItemLabel,
   appearanceItemSwatch,
+  appearanceItemTypeLabel,
   appearanceStackRows,
+  findBackground,
+  findBackgrounds,
   findEffect,
   findFill,
   findFills,
@@ -69,6 +79,7 @@ export {
   type CanvasPaintPass,
   type CanvasShadowPass,
   canvasPaintPasses,
+  canvasPaintRoles,
   canvasShadowPasses,
   usesStackedPaint,
 } from "./renderPlan";
@@ -79,6 +90,7 @@ export type {
   AppearanceItem,
   AppearanceOperation,
   AppearanceSnapshot,
+  BackgroundAppearance,
   EffectAppearance,
   FillAppearance,
   StrokeAppearance,

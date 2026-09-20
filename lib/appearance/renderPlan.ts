@@ -2,7 +2,7 @@ import type { EngineElement } from "@/lib/engine/types";
 import { appearanceCapabilities } from "./capabilities";
 import { readAppearance } from "./legacyAdapter";
 import { isMvpStackItem } from "./panelModel";
-import type { FillAppearance, StrokeAppearance } from "./types";
+import type { BackgroundAppearance, FillAppearance, StrokeAppearance } from "./types";
 
 export type CanvasShadowPass = {
   color: string;
@@ -13,6 +13,7 @@ export type CanvasShadowPass = {
 };
 
 export type CanvasPaintPass =
+  | { kind: "background"; item: BackgroundAppearance }
   | { kind: "fill"; item: FillAppearance }
   | { kind: "stroke"; item: StrokeAppearance };
 
@@ -50,8 +51,9 @@ export function canvasShadowPasses(element: EngineElement): CanvasShadowPass[] {
 }
 
 /**
- * Visible Fill/Stroke items in stored stack order (back-to-front).
- * Interleaved fills and strokes paint in this sequence, like Illustrator.
+ * Visible paint items in stored stack order (back-to-front).
+ * Background paints behind Fill/Stroke. Interleaved fills and strokes paint
+ * in this sequence, like Illustrator.
  */
 export function canvasPaintPasses(element: EngineElement): CanvasPaintPass[] {
   const appearance = readAppearance(element);
@@ -60,13 +62,17 @@ export function canvasPaintPasses(element: EngineElement): CanvasPaintPass[] {
 
   for (const item of appearance.items) {
     if (!item.visible || !isMvpStackItem(item, caps)) continue;
+    if (item.kind === "background") {
+      passes.push({ kind: "background", item });
+      continue;
+    }
     if (item.kind === "fill") {
       if (item.fillStyle === "none") continue;
       passes.push({ kind: "fill", item });
       continue;
     }
     if (item.kind === "stroke") {
-      if (item.width <= 0 && (item.color === "transparent" || item.color === "none")) continue;
+      if (item.width <= 0 || item.color === "transparent" || item.color === "none") continue;
       passes.push({ kind: "stroke", item });
     }
   }
@@ -74,15 +80,21 @@ export function canvasPaintPasses(element: EngineElement): CanvasPaintPass[] {
   return passes;
 }
 
+export function canvasPaintRoles(passes: CanvasPaintPass[]): Array<CanvasPaintPass["kind"]> {
+  return passes.map((pass) => pass.kind);
+}
+
 /**
  * True when paint cannot be reduced to the legacy single-fill-then-stroke draw.
- * Multiple fills/strokes, or a fill in front of a stroke, need stacked compositing.
+ * Multiple fills/strokes, a fill in front of a stroke, or a background pass
+ * need stacked compositing.
  */
 export function usesStackedPaint(passes: CanvasPaintPass[]): boolean {
   let fills = 0;
   let strokes = 0;
   let sawStroke = false;
   for (const pass of passes) {
+    if (pass.kind === "background") return true;
     if (pass.kind === "fill") {
       fills += 1;
       if (sawStroke) return true;
