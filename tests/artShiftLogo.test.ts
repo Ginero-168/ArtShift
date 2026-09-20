@@ -34,6 +34,7 @@ describe("ArtShift Heatmap wordmark", () => {
     expect(logoCss).toContain('"JetBrains Mono"');
     expect(logoCss).toContain("--logo-size");
     expect(logoCss).toContain(".sizeHero");
+    expect(logoCss).toContain("clamp(3.25rem, 9vw, 5.5rem)");
     expect(logoCss).toContain(".sizeHeader");
     expect(logoCss).toContain(".sizeCompact");
     expect(logoCss).not.toContain(".fx-portal");

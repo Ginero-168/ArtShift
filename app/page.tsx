@@ -123,7 +123,7 @@ function LandingPageContent() {
           </div>
         )}
 
-        <ArtShiftLogo as="h1" size="hero" style={{ margin: "0 0 20px" }} />
+        <ArtShiftLogo as="h1" size="hero" style={{ margin: "0 0 24px" }} />
 
         {/* Tagline */}
         <p
@@ -132,7 +132,7 @@ function LandingPageContent() {
             color: "#94a3b8",
             lineHeight: 1.6,
             maxWidth: 640,
-            margin: "0 0 40px",
+            margin: "0 0 48px",
             textWrap: "balance",
           }}
         >
@@ -145,7 +145,7 @@ function LandingPageContent() {
             background: "rgba(255, 255, 255, 0.04)",
             border: "1px solid rgba(255, 255, 255, 0.1)",
             borderRadius: 20,
-            padding: "28px 36px",
+            padding: "32px 28px",
             backdropFilter: "blur(16px)",
             boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
             display: "flex",
@@ -153,7 +153,7 @@ function LandingPageContent() {
             alignItems: "center",
             gap: 16,
             width: "100%",
-            maxWidth: 420,
+            maxWidth: 460,
           }}
         >
           {loading ? (
@@ -174,11 +174,12 @@ function LandingPageContent() {
                   justifyContent: "center",
                   gap: 10,
                   width: "100%",
-                  padding: "14px 20px",
-                  borderRadius: 12,
+                  minBlockSize: 56,
+                  padding: "16px 24px",
+                  borderRadius: 14,
                   background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
                   color: "#ffffff",
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: 700,
                   textDecoration: "none",
                   boxShadow: "0 4px 20px rgba(99, 102, 241, 0.45)",
@@ -215,23 +216,26 @@ function LandingPageContent() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 12,
+                  gap: 14,
                   width: "100%",
-                  padding: "14px 24px",
-                  borderRadius: 12,
+                  minBlockSize: 56,
+                  padding: "18px 24px",
+                  borderRadius: 14,
                   background: "#ffffff",
                   color: "#0f172a",
-                  fontSize: 15,
+                  fontSize: 17,
                   fontWeight: 700,
+                  lineHeight: 1.3,
                   border: "none",
                   cursor: "pointer",
-                  boxShadow: "0 4px 20px rgba(255, 255, 255, 0.2)",
+                  boxSizing: "border-box",
+                  boxShadow: "0 8px 28px rgba(255, 255, 255, 0.28)",
                   transition: "transform 0.15s ease",
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
                 onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
               >
-                <GoogleGIcon size={18} />
+                <GoogleGIcon size={22} />
                 <span>เข้าสู่ระบบด้วย Google (Log in with Google)</span>
               </button>
 

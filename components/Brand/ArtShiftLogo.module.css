@@ -9,7 +9,8 @@
 }
 
 .sizeHero {
-  --logo-size: clamp(2.35rem, 6.2vw, 3.5rem);
+  --logo-size: clamp(3.25rem, 9vw, 5.5rem);
+  max-inline-size: 100%;
 }
 
 .sizeHeader {
@@ -40,6 +41,16 @@
   background-clip: text;
   animation: fx-heatmap 3.5s ease-in-out infinite alternate;
   white-space: nowrap;
+}
+
+.sizeHero :global(.fx-heatmap) {
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 20rem) {
+  .sizeHero {
+    --logo-size: 2.95rem;
+  }
 }
 
 @keyframes fx-heatmap {
