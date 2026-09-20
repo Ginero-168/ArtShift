@@ -15,7 +15,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { IconBrand, IconDownload, IconFrame, IconSparkles, IconWand } from "@/components/icons";
+import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
+import { IconDownload, IconFrame, IconSparkles, IconWand } from "@/components/icons";
 import { useAuth } from "@/lib/auth/useAuth";
 
 export default function LandingRootPage() {
@@ -38,9 +39,7 @@ function LandingLoadingState() {
         color: "#ffffff",
       }}
     >
-      <div style={{ width: 40, height: 40, color: "#818cf8" }} className="anim-pulse-ring">
-        <IconBrand />
-      </div>
+      <ArtShiftLogo size="header" />
     </div>
   );
 }
@@ -106,24 +105,7 @@ function LandingPageContent() {
           zIndex: 20,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 10,
-              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#ffffff",
-              boxShadow: "0 4px 16px rgba(99, 102, 241, 0.4)",
-            }}
-          >
-            <IconBrand />
-          </div>
-          <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.03em" }}>ArtShift</span>
-        </div>
+        <ArtShiftLogo size="header" />
 
         <div>
           {!loading && authenticated ? (
@@ -226,21 +208,7 @@ function LandingPageContent() {
           <span>Local-First Presentation &amp; Graphic Canvas</span>
         </div>
 
-        {/* Big Title */}
-        <h1
-          style={{
-            fontSize: "clamp(42px, 7vw, 68px)",
-            fontWeight: 900,
-            lineHeight: 1.08,
-            letterSpacing: "-0.04em",
-            margin: "0 0 20px",
-            background: "linear-gradient(180deg, #ffffff 30%, #94a3b8 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          ArtShift
-        </h1>
+        <ArtShiftLogo as="h1" size="hero" style={{ margin: "0 0 20px" }} />
 
         {/* Tagline */}
         <p

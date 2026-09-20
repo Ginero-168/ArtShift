@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
 import { absorbWorkspaceWheel } from "@/lib/editor/overscrollLock";
 import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
 import { getImageCache } from "@/lib/engine/imageCache";
@@ -117,6 +118,7 @@ export default function PresentPage() {
           textAlign: "center",
         }}
       >
+        <ArtShiftLogo size="header" />
         <p style={{ maxWidth: 480, lineHeight: 1.5 }}>{loadError ?? "Loading…"}</p>
         {loadError ? (
           <a href="/projects" style={{ color: "#93c5fd", fontSize: 14 }}>

@@ -11,9 +11,9 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
   it("verifies root page (/) is an Index Landing Page with Google Sign-in and no editor canvas", () => {
     const rootPageSource = readFileSync("app/page.tsx", "utf8");
 
-    // Has ArtShift title and Branding
+    // Has ArtShift Portal wordmark
     expect(rootPageSource).toContain("ArtShift");
-    expect(rootPageSource).toContain("IconBrand");
+    expect(rootPageSource).toContain("ArtShiftLogo");
 
     // Has Google sign-in trigger
     expect(rootPageSource).toContain("signInWithGoogle");
@@ -60,18 +60,17 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
   it("verifies Editor route header matches strict requirements (Section 7)", () => {
     const editorSource = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
 
-    // Top-left Logo button linking back to /projects
+    // Top-left Portal wordmark linking back to /projects
     expect(editorSource).toContain('href="/projects"');
-    expect(editorSource).toContain("<IconBrand");
+    expect(editorSource).toContain("<ArtShiftLogo");
 
-    // NO "ArtShift" brand text in topbar header
-    // The topbar header section must not have <span>ArtShift</span>
     const headerSectionMatch = editorSource.match(
       /<header className="topbar">([\s\S]*?)<\/header>/,
     );
     expect(headerSectionMatch).toBeTruthy();
     const headerHtml = headerSectionMatch ? headerSectionMatch[1] : "";
-    expect(headerHtml).not.toContain("ArtShift");
+    expect(headerHtml).toContain("<ArtShiftLogo");
+    expect(headerHtml).toContain('size="compact"');
 
     // NO "Saved" or "Local Workspace" status in header
     expect(headerHtml).not.toContain("Saved");
