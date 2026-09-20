@@ -10,6 +10,11 @@ test("keeps pixel tools out of the design-canvas chrome", async ({ page }) => {
   await expect(page.getByTitle("Select contiguous similar colors (W)")).toHaveCount(0);
   await expect(page.getByTitle("Repair pixels with Healing Brush")).toHaveCount(0);
   await expect(page.getByTitle("Select and move objects (V)")).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "Convert to Brief" })).toHaveCount(0);
+  await expect(toolbar.getByText("Brief", { exact: true })).toHaveCount(0);
+  for (const label of ["Pan", "Select", "Direct", "Pen", "Draw", "Text"]) {
+    await expect(toolbar.getByText(label, { exact: true })).toBeVisible();
+  }
 });
 
 test("reports a real Canvas pointer dispatch p95 performance gate", async ({ page }) => {
