@@ -11,7 +11,7 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
   it("verifies root page (/) is an Index Landing Page with Google Sign-in and no editor canvas", () => {
     const rootPageSource = readFileSync("app/page.tsx", "utf8");
 
-    // Has ArtShift Portal wordmark
+    // Has ArtShift Heatmap wordmark
     expect(rootPageSource).toContain("ArtShift");
     expect(rootPageSource).toContain("ArtShiftLogo");
 
@@ -64,7 +64,7 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
   it("verifies Editor route header matches strict requirements (Section 7)", () => {
     const editorSource = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
 
-    // Top-left Portal wordmark linking back to /projects
+    // Top-left Heatmap wordmark linking back to /projects
     expect(editorSource).toContain('href="/projects"');
     expect(editorSource).toContain("<ArtShiftLogo");
 
