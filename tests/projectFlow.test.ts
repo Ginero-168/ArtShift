@@ -55,6 +55,10 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
     // Project cards render the first slide thumbnail
     expect(projectsSource).toContain("ProjectSlideThumbnail");
     expect(projectsSource).toContain("renderSlideToDataUrl");
+
+    // Header ArtShift wordmark navigates to Index home
+    expect(projectsSource).toContain('href="/"');
+    expect(projectsSource).toContain('aria-label="ArtShift home"');
   });
 
   it("verifies Editor route header matches strict requirements (Section 7)", () => {

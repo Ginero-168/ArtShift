@@ -480,33 +480,33 @@ export default function ProjectsPage() {
           boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
         }}
       >
-        {/* Brand */}
+        {/* Brand: wordmark navigates to Index home; PROJECTS is the current-page label */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link
-            href="/projects"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <Link
+              href="/"
+              aria-label="ArtShift home"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                textDecoration: "none",
+                color: "inherit",
+              }}
+            >
               <ArtShiftLogo size="header" />
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "#6366f1",
-                  letterSpacing: "0.02em",
-                  marginTop: 2,
-                }}
-              >
-                PROJECTS
-              </span>
-            </div>
-          </Link>
+            </Link>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: "#6366f1",
+                letterSpacing: "0.02em",
+                marginTop: 2,
+              }}
+            >
+              PROJECTS
+            </span>
+          </div>
         </div>
 
         {/* Right Actions: + New Project, Import, Export All, Profile */}
