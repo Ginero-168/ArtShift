@@ -432,9 +432,18 @@ export type EngineLayer = {
   z: number;
 };
 
+export type SlideKind = "artwork" | "infinityCanvas";
+
 export type EngineSlide = {
   id: string;
   name: string;
+  /**
+   * Artwork (default) has a fixed page frame and is exported.
+   * Infinity Canvas is a frameless infinite artboard with the same tools
+   * and is omitted from PNG / PDF / PPTX / SVG / Present.
+   * Missing on older documents — treat as `"artwork"`.
+   */
+  kind?: SlideKind;
   /** Root Artwork id shared by resized variants. Missing means this is a master. */
   variantOf?: string;
   variantLabel?: string;
@@ -473,5 +482,7 @@ export type EngineDoc = {
  * v10: Extrude `taper` (0 = parallel, 1 = scale toward bounds center).
  * Additive on v9 docs; missing taper normalizes to 0.
  * v11: Atomic `vectorized` objects from Vectorize (one SVG payload, no child paths).
+ * v12: Optional `EngineSlide.kind` (`artwork` | `infinityCanvas`). Missing kind
+ * loads as artwork. Infinity Canvas is omitted from export and Present.
  */
-export const ENGINE_SCHEMA_VERSION = 11;
+export const ENGINE_SCHEMA_VERSION = 12;

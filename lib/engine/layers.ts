@@ -11,6 +11,7 @@ import {
   remapBlockPlacement,
 } from "./legacyBlockMigrate";
 import { fitMediaElementToRect, isMediaElement } from "./mediaLayout";
+import { normalizeSlideKind } from "./slideKind";
 import {
   ENGINE_SCHEMA_VERSION,
   type EngineDoc,
@@ -96,7 +97,12 @@ export function normalizeDocumentLayers(doc: EngineDoc): EngineDoc {
       if (adaptiveGridMigration || mediaGeometryMigration) {
         normalized = reflowBlockObjects(normalized, strictness);
       }
-      return hydrateSlideAppearance(flattenBlockLayoutToFree(normalized));
+      return hydrateSlideAppearance(
+        flattenBlockLayoutToFree({
+          ...normalized,
+          kind: normalizeSlideKind(slide.kind),
+        }),
+      );
     }),
   };
 }

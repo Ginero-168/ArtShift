@@ -5,7 +5,12 @@ import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
 import { absorbWorkspaceWheel } from "@/lib/editor/overscrollLock";
 import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
 import { getImageCache } from "@/lib/engine/imageCache";
-import type { EngineDoc } from "@/lib/engine/types";
+import {
+  getExportableSlides,
+  INFINITY_CANVAS_EXPORT_NOTE,
+  INFINITY_CANVAS_LABEL,
+} from "@/lib/engine/slideKind";
+import type { EngineDoc, EngineSlide } from "@/lib/engine/types";
 import { loadPresentDocument } from "@/lib/project/presentProject";
 import { projectStore } from "@/lib/project/projectStore";
 import { renderSlide } from "@/lib/renderer/canvas";
@@ -37,7 +42,8 @@ export default function PresentPage() {
     });
   }, []);
 
-  const slide = doc?.slides[index];
+  const presentSlides: EngineSlide[] = doc ? getExportableSlides(doc) : [];
+  const slide = presentSlides[index];
 
   useEffect(() => {
     if (!slide || !canvasRef.current || !containerRef.current) return;
@@ -79,7 +85,7 @@ export default function PresentPage() {
         e.key === "PageDown"
       ) {
         e.preventDefault();
-        setIndex((i) => Math.min(i + 1, (doc?.slides.length ?? 1) - 1));
+        setIndex((i) => Math.min(i + 1, Math.max(presentSlides.length - 1, 0)));
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") {
         e.preventDefault();
         setIndex((i) => Math.max(i - 1, 0));
@@ -89,7 +95,7 @@ export default function PresentPage() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doc]);
+  }, [presentSlides.length]);
 
   useEffect(() => {
     if (!doc) return;
@@ -129,7 +135,35 @@ export default function PresentPage() {
     );
   }
 
-  const total = doc.slides.length;
+  if (!presentSlides.length) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#111",
+          color: "#fff",
+          gap: 16,
+          padding: 24,
+          textAlign: "center",
+        }}
+      >
+        <ArtShiftLogo size="header" />
+        <p style={{ maxWidth: 480, lineHeight: 1.5 }}>
+          This project has no exportable slides. {INFINITY_CANVAS_LABEL} slides are skipped in
+          Present. {INFINITY_CANVAS_EXPORT_NOTE}
+        </p>
+        <a href="/projects" style={{ color: "#93c5fd", fontSize: 14 }}>
+          Back to Projects
+        </a>
+      </div>
+    );
+  }
+
+  const total = presentSlides.length;
 
   return (
     <div

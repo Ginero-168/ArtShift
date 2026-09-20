@@ -51,6 +51,12 @@ import { exportAllSVG, exportCurrentSlideSVG } from "@/lib/engine/exportSVG";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { importLegacyStoreDocument } from "@/lib/engine/legacyBridge";
 import { usePresetStore } from "@/lib/engine/presetStore";
+import {
+  getExportableSlides,
+  INFINITY_CANVAS_EXPORT_NOTE,
+  INFINITY_CANVAS_LABEL,
+  isInfinityCanvasSlide,
+} from "@/lib/engine/slideKind";
 import { createEmptyEngineDoc, useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
 import { loadThaiFonts } from "@/lib/fonts";
@@ -184,9 +190,13 @@ export default function ProjectEditorPage() {
   const cycleTheme = useStore((s) => s.cycleTheme);
   const setSlideBackground = useEngine((s) => s.setSlideBackground);
   const currentSlideId = useEngine((s) => s.currentSlideId);
-  const currentSlideBackground = useEngine(
-    (s) => s.doc.slides.find((slide) => slide.id === s.currentSlideId)?.background ?? "#ffffff",
+  const currentSlide = useEngine((s) =>
+    s.doc.slides.find((slide) => slide.id === s.currentSlideId),
   );
+  const currentSlideIsInfinity = isInfinityCanvasSlide(currentSlide);
+  const exportableSlideCount = useEngine((s) => getExportableSlides(s.doc).length);
+  const hasInfinityCanvas = useEngine((s) => s.doc.slides.some(isInfinityCanvasSlide));
+  const currentSlideBackground = currentSlide?.background ?? "#ffffff";
   const aiImageModalOpen = useEngine((s) => s.aiImageModalOpen);
   const setAiImageModalOpen = useEngine((s) => s.setAiImageModalOpen);
 
@@ -424,6 +434,15 @@ export default function ProjectEditorPage() {
   ) {
     if (exportBusy) return;
     const { doc, currentSlideId: activeSlideId } = useEngine.getState();
+    const current = doc.slides.find((sl) => sl.id === activeSlideId);
+    const currentExport = kind === "png" || kind === "webp" || kind === "jpg" || kind === "svg";
+    if (currentExport && current && isInfinityCanvasSlide(current)) return;
+    if (
+      (kind === "pngAll" || kind === "svgAll" || kind === "pdf" || kind === "pptx") &&
+      getExportableSlides(doc).length === 0
+    ) {
+      return;
+    }
     setExportBusy(kind);
     try {
       const images = getImageCache();
@@ -656,6 +675,28 @@ export default function ProjectEditorPage() {
             <AutoSaveIndicator status={saveStatus} />
           </div>
 
+          {currentSlideIsInfinity ? (
+            <span
+              title={INFINITY_CANVAS_EXPORT_NOTE}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#4338ca",
+                background: "#eef2ff",
+                border: "1px solid #c7d2fe",
+                padding: "2px 8px",
+                borderRadius: 999,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                whiteSpace: "nowrap",
+              }}
+            >
+              ∞ {INFINITY_CANVAS_LABEL}
+              <span style={{ fontWeight: 500, color: "#6366f1" }}>not exported</span>
+            </span>
+          ) : null}
+
           {saveError && (
             <span
               style={{
@@ -736,11 +777,27 @@ export default function ProjectEditorPage() {
             </button>
             {exportOpen && (
               <div className="menu" style={{ position: "absolute", top: 32, right: 0, zIndex: 30 }}>
+                {hasInfinityCanvas ? (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      fontSize: 11,
+                      lineHeight: 1.4,
+                      color: "#4338ca",
+                      background: "#eef2ff",
+                      borderBottom: "1px solid #c7d2fe",
+                      maxWidth: 240,
+                    }}
+                  >
+                    {INFINITY_CANVAS_EXPORT_NOTE}
+                  </div>
+                ) : null}
                 <button
                   onClick={() => {
                     runExport("pptx");
                     setExportOpen(false);
                   }}
+                  disabled={exportableSlideCount === 0}
                 >
                   <IconDownload size={13} /> Download .pptx
                 </button>
@@ -749,6 +806,7 @@ export default function ProjectEditorPage() {
                     runExport("pdf");
                     setExportOpen(false);
                   }}
+                  disabled={exportableSlideCount === 0}
                 >
                   <IconDownload size={13} /> Download .pdf
                 </button>
@@ -757,6 +815,8 @@ export default function ProjectEditorPage() {
                     runExport("png");
                     setExportOpen(false);
                   }}
+                  disabled={currentSlideIsInfinity}
+                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download .png (current)
                 </button>
@@ -765,6 +825,8 @@ export default function ProjectEditorPage() {
                     runExport("webp");
                     setExportOpen(false);
                   }}
+                  disabled={currentSlideIsInfinity}
+                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download .webp (Optimized Ads)
                 </button>
@@ -773,6 +835,8 @@ export default function ProjectEditorPage() {
                     runExport("jpg");
                     setExportOpen(false);
                   }}
+                  disabled={currentSlideIsInfinity}
+                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download .jpg (High Quality)
                 </button>
@@ -781,6 +845,7 @@ export default function ProjectEditorPage() {
                     runExport("pngAll");
                     setExportOpen(false);
                   }}
+                  disabled={exportableSlideCount === 0}
                 >
                   <IconDownload size={13} /> Download .png (all)
                 </button>
@@ -789,6 +854,8 @@ export default function ProjectEditorPage() {
                     runExport("svg");
                     setExportOpen(false);
                   }}
+                  disabled={currentSlideIsInfinity}
+                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download editable .svg (current)
                 </button>
@@ -797,6 +864,7 @@ export default function ProjectEditorPage() {
                     runExport("svgAll");
                     setExportOpen(false);
                   }}
+                  disabled={exportableSlideCount === 0}
                 >
                   <IconDownload size={13} /> Download editable .svg (all)
                 </button>

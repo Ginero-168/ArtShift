@@ -85,6 +85,7 @@ export async function generateCampaignBatch(
       const slide: EngineSlide = {
         id: crypto.randomUUID(),
         name: `${book.isbn || book.id} — ${book.title} [${channel.ratio}]`,
+        kind: "artwork",
         variantOf: cIdx === 0 ? undefined : masterId,
         variantLabel: channel.badge,
         background: result.background,

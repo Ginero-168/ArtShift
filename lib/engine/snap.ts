@@ -31,10 +31,20 @@ type Cand = {
   gapPos?: number;
 };
 
-export function snapBBox(bbox: Rect, others: EngineElement[], thresholdWorld: number): SnapResult {
+export function snapBBox(
+  bbox: Rect,
+  others: EngineElement[],
+  thresholdWorld: number,
+  options?: { pageBounds?: boolean },
+): SnapResult {
+  const pageBounds = options?.pageBounds !== false;
   // Build candidate target lines + (optional) source rect for guide bounds.
-  const targetsX: Cand[] = [{ tgt: 0 }, { tgt: SLIDE_W / 2 }, { tgt: SLIDE_W }];
-  const targetsY: Cand[] = [{ tgt: 0 }, { tgt: SLIDE_H / 2 }, { tgt: SLIDE_H }];
+  const targetsX: Cand[] = pageBounds
+    ? [{ tgt: 0 }, { tgt: SLIDE_W / 2 }, { tgt: SLIDE_W }]
+    : [{ tgt: 0 }];
+  const targetsY: Cand[] = pageBounds
+    ? [{ tgt: 0 }, { tgt: SLIDE_H / 2 }, { tgt: SLIDE_H }]
+    : [{ tgt: 0 }];
 
   const bboxes = others.filter((el) => !el.isDeleted).map(elementWorldBBox);
 
@@ -202,9 +212,15 @@ export function snapResize(
   edges: { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean },
   others: EngineElement[],
   thresholdWorld: number,
+  options?: { pageBounds?: boolean },
 ): SnapResult {
-  const targetsX: Cand[] = [{ tgt: 0 }, { tgt: SLIDE_W / 2 }, { tgt: SLIDE_W }];
-  const targetsY: Cand[] = [{ tgt: 0 }, { tgt: SLIDE_H / 2 }, { tgt: SLIDE_H }];
+  const pageBounds = options?.pageBounds !== false;
+  const targetsX: Cand[] = pageBounds
+    ? [{ tgt: 0 }, { tgt: SLIDE_W / 2 }, { tgt: SLIDE_W }]
+    : [{ tgt: 0 }];
+  const targetsY: Cand[] = pageBounds
+    ? [{ tgt: 0 }, { tgt: SLIDE_H / 2 }, { tgt: SLIDE_H }]
+    : [{ tgt: 0 }];
   for (const el of others) {
     if (el.isDeleted) continue;
     const b = elementWorldBBox(el);

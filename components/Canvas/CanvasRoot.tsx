@@ -27,6 +27,7 @@ import {
 import { absorbWorkspaceWheel } from "@/lib/editor/overscrollLock";
 import { unionBBox } from "@/lib/engine/bounds";
 import { createPointerGestureRouter } from "@/lib/engine/pointerGestureRouter";
+import { isInfinityCanvasSlide } from "@/lib/engine/slideKind";
 import type { EngineElement, EngineSlide } from "@/lib/engine/types";
 import { subscribeFontsLoaded } from "@/lib/fonts";
 import { recordEditorInteraction } from "@/lib/perf/editorTelemetry";
@@ -161,6 +162,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
   const slideW = slide.width;
   const slideH = slide.height;
+  const infinite = isInfinityCanvasSlide(slide);
 
   // ——— fit-to-viewport ———
   const fitScale = useMemo(() => {
@@ -181,11 +183,31 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
   const lastSlideLayout = useRef<string | null>(null);
   useEffect(() => {
     if (!size.w || !size.h) return;
-    const layoutKey = `${slide.id}:${slide.width}:${slide.height}`;
+    const layoutKey = `${slide.id}:${slide.width}:${slide.height}:${infinite ? "infinity" : "artwork"}`;
     if (lastSlideLayout.current === layoutKey) return;
     lastSlideLayout.current = layoutKey;
+    if (infinite) {
+      const elements = slide.elements;
+      const live = elements.filter((el) => !el.isDeleted && !el.hidden);
+      const box = unionBBox(live);
+      if (box && box.width > 0 && box.height > 0) {
+        const pad = 80;
+        const availableW = Math.max(40, size.w - pad * 2);
+        const availableH = Math.max(40, size.h - pad * 2);
+        const nextScale = Math.min(
+          MAX_SCALE,
+          Math.max(MIN_SCALE, Math.min(availableW / box.width, availableH / box.height)),
+        );
+        setView({
+          scale: nextScale,
+          tx: (size.w - box.width * nextScale) / 2 - box.x * nextScale,
+          ty: (size.h - box.height * nextScale) / 2 - box.y * nextScale,
+        });
+        return;
+      }
+    }
     resetView();
-  }, [resetView, size.w, size.h, slide.height, slide.id, slide.width]);
+  }, [infinite, resetView, size.w, size.h, slide.elements, slide.height, slide.id, slide.width]);
 
   // ——— DPR-aware redraw ———
   useEffect(() => {
@@ -207,7 +229,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
     // Background of the page surrounding the slide.
     ctx.clearRect(0, 0, size.w, size.h);
-    ctx.fillStyle = "#e9ecf1";
+    ctx.fillStyle = infinite ? slide.background || "#f4f5f7" : "#e9ecf1";
     ctx.fillRect(0, 0, size.w, size.h);
 
     // Viewport transform.
@@ -215,13 +237,17 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     ctx.translate(view.tx, view.ty);
     ctx.scale(view.scale, view.scale);
 
-    // Slide drop shadow + paper.
-    ctx.shadowColor = "rgba(15, 20, 35, 0.18)";
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 8;
-    ctx.fillStyle = slide.background;
-    ctx.fillRect(0, 0, slideW, slideH);
-    ctx.shadowColor = "transparent";
+    if (infinite) {
+      drawInfinityBoard(ctx, view, size.w, size.h, snapGrid);
+    } else {
+      // Slide drop shadow + paper.
+      ctx.shadowColor = "rgba(15, 20, 35, 0.18)";
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 8;
+      ctx.fillStyle = slide.background;
+      ctx.fillRect(0, 0, slideW, slideH);
+      ctx.shadowColor = "transparent";
+    }
 
     const hiddenLayerObjectIds = new Set(
       slide.layers.filter((layer) => !layer.visible).flatMap((layer) => layer.objectIds),
@@ -237,12 +263,13 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
     renderSlide(slide, { ctx, images, deferRasterJobs: true }, slideW, slideH, {
       showFrames: true,
+      fillBackground: !infinite,
       afterBackground: undefined,
     });
     if (draftElement) renderElement(draftElement, { ctx, images, deferRasterJobs: true });
     if (ghostOverlay) drawGhostVariationOverlay(ghostOverlay, { ctx, images });
 
-    if (snapGrid) {
+    if (snapGrid && !infinite) {
       ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
       const r = Math.max(0.5, 1.5 / view.scale);
       for (let x = 0; x <= slideW; x += snapGrid) {
@@ -254,10 +281,12 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
       }
     }
 
-    // Slide border drawn on top of content so it stays visible.
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
-    ctx.lineWidth = 1 / view.scale;
-    ctx.strokeRect(0, 0, slideW, slideH);
+    if (!infinite) {
+      // Slide border drawn on top of content so it stays visible.
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+      ctx.lineWidth = 1 / view.scale;
+      ctx.strokeRect(0, 0, slideW, slideH);
+    }
 
     // Selection outline overlay.
     if (selectedIds && selectedIds.size > 0) {
@@ -378,6 +407,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
     snapGrid,
     rasterMaskVersion,
     ghostOverlay,
+    infinite,
   ]);
 
   const setZoom = useCallback(
@@ -683,6 +713,44 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 });
 
 export default CanvasRoot;
+
+function drawInfinityBoard(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  width: number,
+  height: number,
+  snapGrid: number | null | undefined,
+) {
+  const step = snapGrid && snapGrid > 0 ? snapGrid : 80;
+  const left = Math.floor(-view.tx / view.scale / step) * step;
+  const top = Math.floor(-view.ty / view.scale / step) * step;
+  const right = (width - view.tx) / view.scale;
+  const bottom = (height - view.ty) / view.scale;
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(15, 23, 42, 0.06)";
+  ctx.lineWidth = 1 / view.scale;
+  ctx.beginPath();
+  for (let x = left; x <= right; x += step) {
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+  }
+  for (let y = top; y <= bottom; y += step) {
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.35)";
+  ctx.lineWidth = 1.25 / view.scale;
+  ctx.beginPath();
+  ctx.moveTo(left, 0);
+  ctx.lineTo(right, 0);
+  ctx.moveTo(0, top);
+  ctx.lineTo(0, bottom);
+  ctx.stroke();
+  ctx.restore();
+}
 
 function isEditableTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;

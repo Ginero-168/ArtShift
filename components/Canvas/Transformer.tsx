@@ -19,6 +19,7 @@ import { elementWorldBBox, localToWorld, type Rect, unionBBox } from "@/lib/engi
 import { pickTopMost } from "@/lib/engine/hitTest";
 import { getInteractiveElements, getRenderableElements, isObjectLocked } from "@/lib/engine/layers";
 import { isMediaElement } from "@/lib/engine/mediaLayout";
+import { isInfinityCanvasSlide } from "@/lib/engine/slideKind";
 import { snapResize } from "@/lib/engine/snap";
 import { useEngine } from "@/lib/engine/store";
 import { scaleTextWithBox } from "@/lib/engine/textObject";
@@ -297,6 +298,7 @@ export default function Transformer({
               { left, right, top, bottom },
               others,
               SNAP_THRESHOLD_PX / scale,
+              { pageBounds: !isInfinityCanvasSlide(slide) },
             );
             if (left) nx += snap.dx;
             else nw += snap.dx;
@@ -567,6 +569,7 @@ export default function Transformer({
             { left: leftEdge, right, top: topEdge, bottom },
             others,
             SNAP_THRESHOLD_PX / scale,
+            { pageBounds: !isInfinityCanvasSlide(slide) },
           );
           if (leftEdge) newX += snap.dx;
           else newW += snap.dx;

@@ -115,6 +115,7 @@ async function legacyToEngineSlide(legacy: Slide, k: number): Promise<EngineSlid
   return {
     id: legacy.id,
     name: legacy.name,
+    kind: "artwork",
     background: legacy.background,
     elements: elements.map((element) => ({ ...element, locked: false }) as EngineElement),
     layers,

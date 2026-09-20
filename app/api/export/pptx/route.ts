@@ -3,6 +3,7 @@ import PptxGenJS from "pptxgenjs";
 import { getPptxClippedChildIds, getPptxSlideTransform } from "@/lib/engine/exportPPTX";
 import { getRenderableElements } from "@/lib/engine/layers";
 import { PPTX_EXPORT_LIMITS, parsePptxExportPayload } from "@/lib/engine/pptxPayload";
+import { getExportableSlides, INFINITY_CANVAS_EMPTY_EXPORT_MESSAGE } from "@/lib/engine/slideKind";
 import type { ImageElement, TextElement } from "@/lib/engine/types";
 
 export const runtime = "nodejs";
@@ -34,11 +35,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid document structure" }, { status: 400 });
     }
     const { doc, rasterizedImages } = payload;
+    const slides = getExportableSlides(doc);
+    if (!slides.length) {
+      return NextResponse.json({ error: INFINITY_CANVAS_EMPTY_EXPORT_MESSAGE }, { status: 400 });
+    }
 
     const pptx = new PptxGenJS();
     const targetSize = {
-      width: doc.slides[0]?.width ?? doc.width,
-      height: doc.slides[0]?.height ?? doc.height,
+      width: slides[0]?.width ?? doc.width,
+      height: slides[0]?.height ?? doc.height,
     };
 
     const wIn = targetSize.width * PX_TO_IN;
@@ -48,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     const px = (n: number) => n * PX_TO_IN;
 
-    for (const slide of doc.slides) {
+    for (const slide of slides) {
       const s = pptx.addSlide();
       s.background = { color: (slide.background || "#ffffff").replace("#", "") };
       const transform = getPptxSlideTransform(slide, targetSize);

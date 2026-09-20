@@ -66,6 +66,7 @@ import {
 } from "./layers";
 import { isMediaElement, normalizeMediaPatch } from "./mediaLayout";
 import { resizeArtworkSlide } from "./resizeArtwork";
+import { INFINITY_CANVAS_LABEL, SLIDE_KIND_ARTWORK, SLIDE_KIND_INFINITY_CANVAS } from "./slideKind";
 import { type SmartArrangeOptions, type SmartArrangePatch, solveSmartArrange } from "./smartLayout";
 import { applyTemplateToSlide, type TemplateApplyMode } from "./templateApplication";
 import { normalizeTextPatch } from "./textObject";
@@ -80,6 +81,7 @@ import {
   type ImageElement,
   SLIDE_H,
   SLIDE_W,
+  type SlideKind,
   type TextElement,
 } from "./types";
 import {
@@ -221,6 +223,7 @@ export type EngineState = {
   convertShapeToFrame: (elementId: string, imageFileId?: string) => FrameElement | undefined;
 
   addSlide: () => string;
+  addInfinityCanvasSlide: () => string;
   deleteSlide: (id: string) => void;
   renameSlide: (id: string, name: string) => void;
   setSlideBackground: (id: string, color: string) => void;
@@ -332,11 +335,12 @@ function isVectorTool(tool: Tool): boolean {
   );
 }
 
-function newSlide(name: string): EngineSlide {
+function newSlide(name: string, kind: SlideKind = SLIDE_KIND_ARTWORK): EngineSlide {
   const layer = createEngineLayer({ name: "Layer 1" });
   return {
     id: crypto.randomUUID(),
     name,
+    kind,
     background: "#ffffff",
     elements: [],
     layers: [layer],
@@ -1317,6 +1321,19 @@ export const useEngine = create<EngineState>((set, get) => {
       const s = get();
       pushHistory(s.history, s.doc, "add slide");
       const sl = newSlide(`${s.doc.slides.length + 1}`);
+      set((cur) => ({
+        doc: { ...cur.doc, slides: [...cur.doc.slides, sl], updatedAt: Date.now() },
+        currentSlideId: sl.id,
+        activeLayerId: sl.layers[0].id,
+        selectedIds: new Set(),
+      }));
+      return sl.id;
+    },
+
+    addInfinityCanvasSlide: () => {
+      const s = get();
+      pushHistory(s.history, s.doc, "add infinity canvas");
+      const sl = newSlide(INFINITY_CANVAS_LABEL, SLIDE_KIND_INFINITY_CANVAS);
       set((cur) => ({
         doc: { ...cur.doc, slides: [...cur.doc.slides, sl], updatedAt: Date.now() },
         currentSlideId: sl.id,
