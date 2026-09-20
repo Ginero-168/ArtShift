@@ -756,8 +756,7 @@ export default function AICoPilotBar() {
               {
                 id: crypto.randomUUID(),
                 role: "assistant",
-                content:
-                  "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider",
+                content: "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider",
                 timestamp: Date.now(),
                 actions: analysisActions,
               },
