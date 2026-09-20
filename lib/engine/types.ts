@@ -453,5 +453,7 @@ export type EngineDoc = {
  * item blend, offset paint layers, and optional static blur. Additive on v7 docs.
  * v9: Named Extrude and Emboss/Bevel Appearance effects (editable 3D/relief).
  * Additive on v8 docs; not dual-written to legacy shadow/glow fields.
+ * v10: Extrude `taper` (0 = parallel, 1 = scale toward bounds center).
+ * Additive on v9 docs; missing taper normalizes to 0.
  */
-export const ENGINE_SCHEMA_VERSION = 9;
+export const ENGINE_SCHEMA_VERSION = 10;

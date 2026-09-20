@@ -45,6 +45,7 @@ import {
   MAX_EMBOSS_SOFTNESS,
   MAX_EXTRUDE_DEPTH,
   MAX_EXTRUDE_STEPS,
+  MAX_EXTRUDE_TAPER,
 } from "@/lib/appearance/types";
 import type { ColorAdjustments } from "@/lib/color/adjustments";
 import { useEngine } from "@/lib/engine/store";
@@ -857,7 +858,10 @@ function AppearanceItemEditor({
     const smooth = effect.steps === 0;
     return (
       <>
-        <p className={styles.fieldNote}>Face uses the Fill layer. Sides follow depth and angle.</p>
+        <p className={styles.fieldNote} id="extrude-taper-hint">
+          Face uses the Fill layer. Sides follow depth and angle. Taper leans the extrusion toward
+          the center.
+        </p>
         <label className={styles.rangeField}>
           <span>Depth</span>
           <input
@@ -893,6 +897,28 @@ function AppearanceItemEditor({
             onPointerUp={endSlider}
           />
           <output>{Math.round(effect.angle)}°</output>
+        </label>
+        <label className={styles.rangeField} data-appearance-control="extrude-taper">
+          <span>Taper</span>
+          <input
+            type="range"
+            min={0}
+            max={MAX_EXTRUDE_TAPER * 100}
+            step={1}
+            value={Math.round((effect.taper ?? 0) * 100)}
+            aria-label="Extrude taper toward center"
+            aria-describedby="extrude-taper-hint"
+            onPointerDown={() => beginSlider("extrude taper")}
+            onChange={(event) =>
+              slideOp((target) =>
+                extrudePatchOperation(target, {
+                  taper: Number(event.currentTarget.value) / 100,
+                }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round((effect.taper ?? 0) * 100)}%</output>
         </label>
         <label className={styles.checkField}>
           <input

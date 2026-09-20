@@ -233,6 +233,7 @@ describe("Colorion static text effect catalog", () => {
     if (deepExtrude?.kind === "effect" && deepExtrude.effect.type === "extrude") {
       expect(deepExtrude.effect.depth).toBeGreaterThan(0);
       expect(deepExtrude.effect.steps).toBe(6);
+      expect(deepExtrude.effect.taper ?? 0).toBe(0);
     }
 
     const pop = getTextEffectPreset("pop")!;

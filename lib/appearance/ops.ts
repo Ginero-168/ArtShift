@@ -196,7 +196,10 @@ export function addEmbossOperation(): AppearanceOperation {
 export function extrudePatchOperation(
   element: EngineElement,
   patch: Partial<
-    Pick<AppearanceExtrudeEffect, "depth" | "angle" | "steps" | "sideColor" | "sideFromFill"> & {
+    Pick<
+      AppearanceExtrudeEffect,
+      "depth" | "angle" | "steps" | "sideColor" | "sideFromFill" | "taper"
+    > & {
       visible: boolean;
       opacity: number;
     }
@@ -217,6 +220,7 @@ export function extrudePatchOperation(
           steps: patch.steps ?? DEFAULT_EXTRUDE.steps,
           sideColor: patch.sideColor ?? DEFAULT_EXTRUDE.sideColor,
           sideFromFill: patch.sideFromFill ?? DEFAULT_EXTRUDE.sideFromFill,
+          taper: patch.taper ?? DEFAULT_EXTRUDE.taper,
         },
       },
     };
@@ -236,6 +240,7 @@ export function extrudePatchOperation(
         steps: patch.steps ?? effect.steps,
         sideColor: patch.sideColor ?? effect.sideColor,
         sideFromFill: patch.sideFromFill ?? effect.sideFromFill,
+        taper: patch.taper ?? effect.taper ?? DEFAULT_EXTRUDE.taper,
       },
     },
   };

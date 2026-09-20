@@ -21,9 +21,11 @@ export {
   clampEmbossSoftness,
   clampExtrudeDepth,
   clampExtrudeSteps,
+  clampExtrudeTaper,
   darkenColor,
   expandEmbossPasses,
   expandExtrudePasses,
+  extrudeCopyScale,
   offsetFromAngle,
   resolveExtrudeSideColor,
 } from "./depthEffects";

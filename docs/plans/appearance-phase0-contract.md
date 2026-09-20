@@ -1,24 +1,25 @@
 # Appearance Phase 0 — Contract
 
 Status: baseline for `lib/appearance/*` (2026-09-16)  
-Updated: 2026-09-20 — Extrude / Emboss are first-class Appearance effects (engine schema v9). Text Effect Presets (static Colorion) still write the same stack. Multi-layer Fill/Stroke remains a product feature. Image tones remain a UI group from #20, not Appearance items.
+Updated: 2026-09-20 — Extrude / Emboss are first-class Appearance effects (engine schema v9); Extrude taper is schema v10. Text Effect Presets (static Colorion) still write the same stack. Multi-layer Fill/Stroke remains a product feature. Image tones remain a UI group from #20, not Appearance items.
 
 ## Reality check
 
 - Phase 1 foundation (`lib/appearance/*`) **landed** in the #12 lineage. MVP UI: Appearance panel + Shadow/Glow + Text Arc.
-- Engine `ENGINE_SCHEMA_VERSION` is **9**. Canonical `appearance` landed in schema v7 and is dual-written to legacy flat fields. v8 adds item-level gradient/conic, clip-to-glyphs, multi-shadow `layers`, item blend, offset paint layers, and static blur. v9 adds named `extrude` and `emboss` effects (not dual-written to legacy shadow/glow).
+- Engine `ENGINE_SCHEMA_VERSION` is **10**. Canonical `appearance` landed in schema v7 and is dual-written to legacy flat fields. v8 adds item-level gradient/conic, clip-to-glyphs, multi-shadow `layers`, item blend, offset paint layers, and static blur. v9 adds named `extrude` and `emboss` effects (not dual-written to legacy shadow/glow). v10 adds Extrude `taper` (0 = parallel; 1 = scale toward bounds center). Missing taper normalizes to 0.
 - **v6 = Block bake** (unrelated). Appearance persist started as **schema v7**. Do not reuse v6.
 - Load prefers `appearance` when present and valid; otherwise synthesizes from legacy fields. Save always writes both.
 - Extra Fill/Stroke items live on `appearance.items` (legacy dual-write still stores only the first visible fill and stroke). Canvas2D paints the full stack.
 
 ## Persist (schema v7 → v8)
 
-- Stored field: `EngineElement.appearance` (`schemaVersion: 1` inside the stack, distinct from engine v7/v8/v9).
+- Stored field: `EngineElement.appearance` (`schemaVersion: 1` inside the stack, distinct from engine v7/v8/v9/v10).
 - Dual-write on save and Appearance mutations: `shadow`, `glow`, fill (`backgroundColor` / `fillType` / gradients / `fillPattern`), stroke, root `opacity` / `blendMode`. Extra shadow `layers[]`, item blend, and offsets stay on `appearance` only.
 - Text Arc remains `pathCurvature` on text (not an Appearance item); it continues to be written as a legacy text field.
 - v6 → v7 is idempotent: synthesize `appearance` from legacy when missing; if `appearance` is already present, prefer it and refresh legacy from it. Extra stack items that do not fit in a single legacy fill/stroke are kept on `appearance` (no silent drop).
 - v7 → v8 is additive: missing item fields normalize to defaults. Text Effect Presets write a full stack recipe through `replaceStack` (`applyTextEffectPreset` / `updateAppearance`).
 - v8 → v9 is additive: missing `extrude` / `emboss` items means the look is not applied. Extra stack items that do not fit in a single legacy fill/stroke/shadow stay on `appearance` (no silent drop).
+- v9 → v10 is additive: missing Extrude `taper` normalizes to 0 (parallel copies).
 - Runtime: `updateAppearance` / `changeAppearance` write both sides. Legacy `updateElements` patches that touch those flat fields resync the primary Appearance items so PropertiesPanel/AI are not a competing writer.
 
 ## Locked slice (Peerawat 2026-09-20)
@@ -72,7 +73,7 @@ Out of scope:
 
 - `extrude` and `emboss` are `kind: "effect"` items. They are **not** dual-written to legacy `shadow` / `glow`.
 - The canvas compositor expands them into sequential offset copies of the cached still (same path as multi-layer shadow), then paints the unshadowed face on top. Face color is the Fill; side color is `sideColor` or a darkened Fill when `sideFromFill` is true.
-- **Extrude controls:** depth (px), angle (0° = right, 90° = down), steps (0 = smooth 1px copies), side color.
+- **Extrude controls:** depth (px), angle (0° = right, 90° = down), steps (0 = smooth 1px copies), taper (0–100% toward bounds center), side color. Taper 0 keeps the v9 parallel compositor path.
 - **Emboss controls:** mode (emboss / deboss / bevel), depth, light angle (shadow falls this way; highlight opposite), softness, highlight + shadow colors.
 - Text is the primary target. Path / freedraw / shapes reuse the same compositor when cheap. Images do not get these add-buttons.
 - Colorion 3D stills (Deep-Type, Pop-Riot, Sundial, Parallax, Keycap) compile into these named items instead of an uneditable shadow stack.

@@ -112,6 +112,7 @@ function extrudeItem(spec: TextEffectSourceSpec): EffectAppearance | null {
       steps: spec.extrude.steps,
       sideColor: resolveColorionColor(spec.extrude.sideColor),
       sideFromFill: spec.extrude.sideFromFill === true,
+      taper: spec.extrude.taper ?? 0,
     },
   };
 }
