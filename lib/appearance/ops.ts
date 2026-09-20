@@ -1,8 +1,12 @@
 import type { EngineElement } from "@/lib/engine/types";
 import {
+  DEFAULT_EMBOSS,
+  DEFAULT_EXTRUDE,
   DEFAULT_GLOW,
   DEFAULT_SHADOW,
   defaultBackgroundItem,
+  defaultEmbossItem,
+  defaultExtrudeItem,
   defaultFillItem,
   defaultGlowItem,
   defaultShadowItem,
@@ -12,6 +16,9 @@ import { readAppearance } from "./legacyAdapter";
 import { findBackground, findEffect, findFill, findStroke } from "./panelModel";
 import type {
   Appearance,
+  AppearanceEmbossEffect,
+  AppearanceEmbossMode,
+  AppearanceExtrudeEffect,
   AppearanceOperation,
   AppearancePaint,
   BackgroundAppearance,
@@ -178,6 +185,115 @@ export function addGlowOperation(): AppearanceOperation {
   return { type: "insertItem", item: defaultGlowItem() };
 }
 
+export function addExtrudeOperation(): AppearanceOperation {
+  return { type: "insertItem", item: defaultExtrudeItem() };
+}
+
+export function addEmbossOperation(): AppearanceOperation {
+  return { type: "insertItem", item: defaultEmbossItem() };
+}
+
+export function extrudePatchOperation(
+  element: EngineElement,
+  patch: Partial<
+    Pick<AppearanceExtrudeEffect, "depth" | "angle" | "steps" | "sideColor" | "sideFromFill"> & {
+      visible: boolean;
+      opacity: number;
+    }
+  >,
+): AppearanceOperation {
+  const extrude = findEffect(readAppearance(element), "extrude");
+  if (extrude?.effect.type !== "extrude") {
+    return {
+      type: "insertItem",
+      item: {
+        ...defaultExtrudeItem(),
+        visible: patch.visible ?? true,
+        opacity: patch.opacity ?? 1,
+        effect: {
+          type: "extrude",
+          depth: patch.depth ?? DEFAULT_EXTRUDE.depth,
+          angle: patch.angle ?? DEFAULT_EXTRUDE.angle,
+          steps: patch.steps ?? DEFAULT_EXTRUDE.steps,
+          sideColor: patch.sideColor ?? DEFAULT_EXTRUDE.sideColor,
+          sideFromFill: patch.sideFromFill ?? DEFAULT_EXTRUDE.sideFromFill,
+        },
+      },
+    };
+  }
+  const effect = extrude.effect;
+  return {
+    type: "updateItem",
+    itemId: extrude.id,
+    patch: {
+      kind: "effect",
+      visible: patch.visible ?? extrude.visible,
+      opacity: patch.opacity ?? extrude.opacity,
+      effect: {
+        type: "extrude",
+        depth: patch.depth ?? effect.depth,
+        angle: patch.angle ?? effect.angle,
+        steps: patch.steps ?? effect.steps,
+        sideColor: patch.sideColor ?? effect.sideColor,
+        sideFromFill: patch.sideFromFill ?? effect.sideFromFill,
+      },
+    },
+  };
+}
+
+export function embossPatchOperation(
+  element: EngineElement,
+  patch: Partial<
+    Pick<
+      AppearanceEmbossEffect,
+      "mode" | "depth" | "angle" | "softness" | "highlightColor" | "shadowColor"
+    > & {
+      visible: boolean;
+      opacity: number;
+    }
+  >,
+): AppearanceOperation {
+  const emboss = findEffect(readAppearance(element), "emboss");
+  if (emboss?.effect.type !== "emboss") {
+    return {
+      type: "insertItem",
+      item: {
+        ...defaultEmbossItem(),
+        visible: patch.visible ?? true,
+        opacity: patch.opacity ?? 1,
+        effect: {
+          type: "emboss",
+          mode: (patch.mode ?? DEFAULT_EMBOSS.mode) as AppearanceEmbossMode,
+          depth: patch.depth ?? DEFAULT_EMBOSS.depth,
+          angle: patch.angle ?? DEFAULT_EMBOSS.angle,
+          softness: patch.softness ?? DEFAULT_EMBOSS.softness,
+          highlightColor: patch.highlightColor ?? DEFAULT_EMBOSS.highlightColor,
+          shadowColor: patch.shadowColor ?? DEFAULT_EMBOSS.shadowColor,
+        },
+      },
+    };
+  }
+  const effect = emboss.effect;
+  return {
+    type: "updateItem",
+    itemId: emboss.id,
+    patch: {
+      kind: "effect",
+      visible: patch.visible ?? emboss.visible,
+      opacity: patch.opacity ?? emboss.opacity,
+      effect: {
+        type: "emboss",
+        mode: patch.mode ?? effect.mode,
+        depth: patch.depth ?? effect.depth,
+        angle: patch.angle ?? effect.angle,
+        softness: patch.softness ?? effect.softness,
+        highlightColor: patch.highlightColor ?? effect.highlightColor,
+        shadowColor: patch.shadowColor ?? effect.shadowColor,
+      },
+    },
+  };
+}
+
 /**
  * Insert a Fill in front of existing paint (before the first effect).
  * When `element` is given, the new fill copies the front-most fill (Illustrator-like).
@@ -301,7 +417,7 @@ export function toggleItemVisibleOperation(
 
 export function toggleStackKindVisible(
   element: EngineElement,
-  kind: "fill" | "stroke" | "background" | "shadow" | "glow",
+  kind: "fill" | "stroke" | "background" | "shadow" | "glow" | "extrude" | "emboss",
 ): AppearanceOperation | null {
   const item = stackKindItem(element, kind);
   if (!item) return null;
@@ -310,7 +426,7 @@ export function toggleStackKindVisible(
 
 export function removeStackKind(
   element: EngineElement,
-  kind: "fill" | "stroke" | "background" | "shadow" | "glow",
+  kind: "fill" | "stroke" | "background" | "shadow" | "glow" | "extrude" | "emboss",
 ): AppearanceOperation | null {
   const item = stackKindItem(element, kind);
   if (!item) return null;
@@ -319,7 +435,7 @@ export function removeStackKind(
 
 function stackKindItem(
   element: EngineElement,
-  kind: "fill" | "stroke" | "background" | "shadow" | "glow",
+  kind: "fill" | "stroke" | "background" | "shadow" | "glow" | "extrude" | "emboss",
 ) {
   const appearance = readAppearance(element);
   if (kind === "fill") return findFill(appearance);

@@ -1,23 +1,24 @@
 # Appearance Phase 0 — Contract
 
 Status: baseline for `lib/appearance/*` (2026-09-16)  
-Updated: 2026-09-20 — Text Effect Presets (static Colorion) extend the stack (engine schema v8). Multi-layer Fill/Stroke remains a product feature. Image tones remain a UI group from #20, not Appearance items.
+Updated: 2026-09-20 — Extrude / Emboss are first-class Appearance effects (engine schema v9). Text Effect Presets (static Colorion) still write the same stack. Multi-layer Fill/Stroke remains a product feature. Image tones remain a UI group from #20, not Appearance items.
 
 ## Reality check
 
 - Phase 1 foundation (`lib/appearance/*`) **landed** in the #12 lineage. MVP UI: Appearance panel + Shadow/Glow + Text Arc.
-- Engine `ENGINE_SCHEMA_VERSION` is **8**. Canonical `appearance` landed in schema v7 and is dual-written to legacy flat fields. v8 adds item-level gradient/conic, clip-to-glyphs, multi-shadow `layers`, item blend, offset paint layers, and static blur.
+- Engine `ENGINE_SCHEMA_VERSION` is **9**. Canonical `appearance` landed in schema v7 and is dual-written to legacy flat fields. v8 adds item-level gradient/conic, clip-to-glyphs, multi-shadow `layers`, item blend, offset paint layers, and static blur. v9 adds named `extrude` and `emboss` effects (not dual-written to legacy shadow/glow).
 - **v6 = Block bake** (unrelated). Appearance persist started as **schema v7**. Do not reuse v6.
 - Load prefers `appearance` when present and valid; otherwise synthesizes from legacy fields. Save always writes both.
 - Extra Fill/Stroke items live on `appearance.items` (legacy dual-write still stores only the first visible fill and stroke). Canvas2D paints the full stack.
 
 ## Persist (schema v7 → v8)
 
-- Stored field: `EngineElement.appearance` (`schemaVersion: 1` inside the stack, distinct from engine v7/v8).
+- Stored field: `EngineElement.appearance` (`schemaVersion: 1` inside the stack, distinct from engine v7/v8/v9).
 - Dual-write on save and Appearance mutations: `shadow`, `glow`, fill (`backgroundColor` / `fillType` / gradients / `fillPattern`), stroke, root `opacity` / `blendMode`. Extra shadow `layers[]`, item blend, and offsets stay on `appearance` only.
 - Text Arc remains `pathCurvature` on text (not an Appearance item); it continues to be written as a legacy text field.
 - v6 → v7 is idempotent: synthesize `appearance` from legacy when missing; if `appearance` is already present, prefer it and refresh legacy from it. Extra stack items that do not fit in a single legacy fill/stroke are kept on `appearance` (no silent drop).
 - v7 → v8 is additive: missing item fields normalize to defaults. Text Effect Presets write a full stack recipe through `replaceStack` (`applyTextEffectPreset` / `updateAppearance`).
+- v8 → v9 is additive: missing `extrude` / `emboss` items means the look is not applied. Extra stack items that do not fit in a single legacy fill/stroke/shadow stay on `appearance` (no silent drop).
 - Runtime: `updateAppearance` / `changeAppearance` write both sides. Legacy `updateElements` patches that touch those flat fields resync the primary Appearance items so PropertiesPanel/AI are not a competing writer.
 
 ## Locked slice (Peerawat 2026-09-20)
@@ -29,6 +30,7 @@ In scope:
 - **Text paint roles (Illustrator-like):** Fill = glyph fill (สีพื้นของตัวอักษร), Stroke = glyph outline (สีขอบ), Background = optional behind-text backdrop (separate stack item — not the Fill row renamed)
 - **Text Effect Presets (static Colorion 90)** — still frames only; canvas/SVG paint the stack; Appearance picker groups, searches, and previews; see `docs/plans/text-effect-presets-static-from-colorion.md`
 - Shadow + Glow (both allowed; multi-layer `layers[]` on a single Shadow/Glow item)
+- **Extrude (depth / 3D block)** and **Emboss / Deboss / Bevel** as named effect items — add/remove from Appearance like Shadow/Glow; presets that imply 3D write these items so they stay editable
 - Optional static gaussian blur, per-item blend, offset duplicate paint layers
 - Text Arc for text objects via existing `pathCurvature` (no path envelope warp)
 - Image tone sliders (`adjustments` / `filterBlur`) as one Appearance UI group for images; not Appearance stack items and not Brand Graphic Styles
@@ -66,6 +68,15 @@ Out of scope:
 - Current renderer composites cached element bitmaps with **sequential passes in stored stack order** so both can be visible. Interior pixels of later passes cover earlier interiors; halos remain.
 - Do not XOR-clear the other effect when the user enables Shadow or Glow.
 
+## Extrude / Emboss (Canvas2D)
+
+- `extrude` and `emboss` are `kind: "effect"` items. They are **not** dual-written to legacy `shadow` / `glow`.
+- The canvas compositor expands them into sequential offset copies of the cached still (same path as multi-layer shadow), then paints the unshadowed face on top. Face color is the Fill; side color is `sideColor` or a darkened Fill when `sideFromFill` is true.
+- **Extrude controls:** depth (px), angle (0° = right, 90° = down), steps (0 = smooth 1px copies), side color.
+- **Emboss controls:** mode (emboss / deboss / bevel), depth, light angle (shadow falls this way; highlight opposite), softness, highlight + shadow colors.
+- Text is the primary target. Path / freedraw / shapes reuse the same compositor when cheap. Images do not get these add-buttons.
+- Colorion 3D stills (Deep-Type, Pop-Riot, Sundial, Parallax, Keycap) compile into these named items instead of an uneditable shadow stack.
+
 ## Coordinates
 
 - Fill / Stroke / Effect use the element's local geometry (bbox before rotation).
@@ -80,6 +91,7 @@ Out of scope:
 ## Visual bounds
 
 - Shadow / glow expand bounds by `blur + abs(offset)` (see `bounds.ts`).
+- Extrude expands by the depth vector; emboss expands by `depth + softness` in both light directions.
 - Stroke center alignment expands by `width / 2`.
 
 ## Multi-selection

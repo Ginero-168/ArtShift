@@ -1,3 +1,4 @@
+import { normalizeEmbossEffect, normalizeExtrudeEffect } from "./depthEffects";
 import {
   APPEARANCE_MAX_ITEMS,
   APPEARANCE_SCHEMA_VERSION,
@@ -182,7 +183,11 @@ export function normalizeItem(item: AppearanceItem): AppearanceItem {
               type: "gaussianBlur" as const,
               radius: clampNonNegative(item.effect.radius),
             }
-          : item.effect;
+          : item.effect.type === "extrude"
+            ? normalizeExtrudeEffect(item.effect)
+            : item.effect.type === "emboss"
+              ? normalizeEmbossEffect(item.effect)
+              : item.effect;
   return {
     ...item,
     visible: item.visible !== false,
@@ -240,7 +245,9 @@ export function validateAppearance(appearance: Appearance): AppearanceError | nu
       item.kind === "effect" &&
       ((item.effect.type === "shadow" && item.effect.blur < 0) ||
         (item.effect.type === "glow" && item.effect.blur < 0) ||
-        (item.effect.type === "gaussianBlur" && item.effect.radius < 0))
+        (item.effect.type === "gaussianBlur" && item.effect.radius < 0) ||
+        (item.effect.type === "extrude" && item.effect.depth < 0) ||
+        (item.effect.type === "emboss" && (item.effect.depth < 0 || item.effect.softness < 0)))
     ) {
       return { code: "invalid_blur", message: `Effect ${item.id} blur/radius cannot be negative` };
     }

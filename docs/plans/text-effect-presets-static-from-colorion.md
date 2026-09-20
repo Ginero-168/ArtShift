@@ -142,8 +142,10 @@ Colorion CSS capability (frequency) maps onto the existing Appearance **stack**,
 | text box | Background item (unchanged) |
 | `letter-spacing` | recipe `letterSpacingEm` → `TextElement.letterSpacingEm` on apply |
 | Text Arc | existing `pathCurvature` — not used by these presets |
+| 3D block / long cast / comic depth (Deep-Type, Pop-Riot, Sundial, Keycap) | named `extrude` effect (depth, angle, steps, side color) — not an uneditable shadow stack |
+| Emboss / dual-color relief (Parallax, Keycap face) | named `emboss` effect (mode, depth, light angle, softness, highlight+shadow colors) |
 
-Engine **schema v8** documents the additive item fields. `Appearance.schemaVersion` stays **1**. v7 documents load: missing fields normalize to defaults. Dual-write still copies the first visible Fill/Stroke/Shadow/Glow onto legacy flat fields.
+Engine **schema v9** documents named Extrude/Emboss effects. v8 item fields stay. `Appearance.schemaVersion` stays **1**. v7 documents load: missing fields normalize to defaults. Dual-write still copies the first visible Fill/Stroke/Shadow/Glow onto legacy flat fields. Extrude/Emboss live on `appearance` only.
 
 ### Schema v8 item fields
 
@@ -154,6 +156,13 @@ Engine **schema v8** documents the additive item fields. `Appearance.schemaVersi
 - Shadow/Glow `layers[]`
 - `gaussianBlur` remains an effect; painted as a static canvas filter
 - `replaceStack` appearance command applies a full recipe undo-safely
+
+### Schema v9 named 3D effects
+
+- Effect `type: "extrude"` — `depth`, `angle` (0° = right, 90° = down), `steps` (0 = smooth), `sideColor`, `sideFromFill`
+- Effect `type: "emboss"` — `mode: emboss | deboss | bevel`, `depth`, `angle`, `softness`, `highlightColor`, `shadowColor`
+- Renderer expands both into sequential cached-bitmap copies (same compositor as multi-shadow), then paints the face still on top
+- Appearance panel: add/remove Extrude and Emboss like Shadow/Glow; sliders live-preview on canvas
 
 `APPEARANCE_MAX_ITEMS` is 24 so offset fills can sit beside a shadow stack.
 
@@ -168,6 +177,7 @@ Canvas2D (live editor + PNG/thumbnail path) paints the Appearance stack for text
 | Glyph-clipped linear / radial / conic fills | `fillText` with gradient `fillStyle`; conic falls back to radial if `createConicGradient` is missing | gradient `url(#)` fills; conic approximated as radial |
 | Pattern fills (dots / stripes / grid) | offscreen pattern + `destination-in` glyph mask | foreground solid (pattern not reconstructed) |
 | Multi-layer text-shadow / glow | sequential `shadow*` passes, then the unshadowed still on top | stacked `feDropShadow` |
+| Extrude / Emboss | same compositor: named effects expand to offset copies (`source: extrude \| emboss`) | stacked `feDropShadow` via `canvasShadowPasses` |
 | Text stroke | `strokeText` | `<text fill="none" stroke>` |
 | Static gaussian blur | `ctx.filter = blur()` at composite | `feGaussianBlur` |
 | Per-item blend | `globalCompositeOperation` | `mix-blend-mode` |

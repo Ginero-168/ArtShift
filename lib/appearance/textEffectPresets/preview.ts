@@ -46,6 +46,33 @@ function shadowCss(preset: TextEffectPreset): string | undefined {
       for (const layer of item.effect.layers ?? []) {
         parts.push(`0 0 ${layer.blur}px ${layer.color}`);
       }
+    } else if (item.effect.type === "extrude") {
+      const color = item.effect.sideFromFill ? "currentColor" : item.effect.sideColor;
+      const count =
+        item.effect.steps > 0
+          ? item.effect.steps
+          : Math.max(1, Math.min(24, Math.round(item.effect.depth)));
+      const rad = (item.effect.angle * Math.PI) / 180;
+      const step = item.effect.depth / count;
+      for (let i = 1; i <= count; i++) {
+        const distance = i * step;
+        parts.push(
+          `${Math.round(Math.cos(rad) * distance)}px ${Math.round(Math.sin(rad) * distance)}px 0 ${color}`,
+        );
+      }
+    } else if (item.effect.type === "emboss") {
+      const rad = (item.effect.angle * Math.PI) / 180;
+      const dx = Math.cos(rad) * item.effect.depth;
+      const dy = Math.sin(rad) * item.effect.depth;
+      const invert = item.effect.mode === "deboss";
+      const shadowX = invert ? -dx : dx;
+      const shadowY = invert ? -dy : dy;
+      parts.push(
+        `${Math.round(shadowX)}px ${Math.round(shadowY)}px ${item.effect.softness}px ${item.effect.shadowColor}`,
+      );
+      parts.push(
+        `${Math.round(-shadowX)}px ${Math.round(-shadowY)}px ${item.effect.softness}px ${item.effect.highlightColor}`,
+      );
     }
   }
   return parts.length ? parts.join(", ") : undefined;

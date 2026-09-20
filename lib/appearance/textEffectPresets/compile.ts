@@ -97,6 +97,45 @@ function blurItem(spec: TextEffectSourceSpec): EffectAppearance | null {
   };
 }
 
+function extrudeItem(spec: TextEffectSourceSpec): EffectAppearance | null {
+  if (!spec.extrude) return null;
+  return {
+    id: itemId("effect", spec.slug, "extrude"),
+    kind: "effect",
+    visible: true,
+    opacity: 1,
+    scope: "object",
+    effect: {
+      type: "extrude",
+      depth: spec.extrude.depth,
+      angle: spec.extrude.angle,
+      steps: spec.extrude.steps,
+      sideColor: resolveColorionColor(spec.extrude.sideColor),
+      sideFromFill: spec.extrude.sideFromFill === true,
+    },
+  };
+}
+
+function embossItem(spec: TextEffectSourceSpec): EffectAppearance | null {
+  if (!spec.emboss) return null;
+  return {
+    id: itemId("effect", spec.slug, "emboss"),
+    kind: "effect",
+    visible: true,
+    opacity: 1,
+    scope: "object",
+    effect: {
+      type: "emboss",
+      mode: spec.emboss.mode,
+      depth: spec.emboss.depth,
+      angle: spec.emboss.angle,
+      softness: spec.emboss.softness,
+      highlightColor: resolveColorionColor(spec.emboss.highlightColor),
+      shadowColor: resolveColorionColor(spec.emboss.shadowColor),
+    },
+  };
+}
+
 function usesFrontBlend(blend: FillAppearance["blendMode"] | undefined): boolean {
   return !!blend && blend !== "source-over";
 }
@@ -150,6 +189,10 @@ export function compileTextEffectAppearance(spec: TextEffectSourceSpec): Appeara
   items.push(glyphFill(still));
   items.push(...offsetFills(still, "front"));
   items.push(outlineStroke(still));
+  const extrude = extrudeItem(still);
+  if (extrude) items.push(extrude);
+  const emboss = embossItem(still);
+  if (emboss) items.push(emboss);
   const shadow = shadowItem(still);
   if (shadow) items.push(shadow);
   const blur = blurItem(still);

@@ -6,6 +6,8 @@ import {
   canvasPaintPasses,
   canvasShadowPasses,
   changeAppearance,
+  extrudePatchOperation,
+  findEffect,
   getTextEffectPreset,
   hydrateElementAppearance,
   readAppearance,
@@ -221,6 +223,49 @@ describe("Colorion static text effect catalog", () => {
     const irisFill = iridescent.recipe.appearance.items.find((item) => item.kind === "fill");
     expect(irisFill?.kind === "fill" && irisFill.paint.type).toBe("conicGradient");
   });
+
+  it("compiles 3D Colorion stills into named extrude/emboss effects", () => {
+    const deep = getTextEffectPreset("extrude")!;
+    const deepExtrude = deep.recipe.appearance.items.find(
+      (item) => item.kind === "effect" && item.effect.type === "extrude",
+    );
+    expect(deepExtrude?.kind === "effect" && deepExtrude.effect.type).toBe("extrude");
+    if (deepExtrude?.kind === "effect" && deepExtrude.effect.type === "extrude") {
+      expect(deepExtrude.effect.depth).toBeGreaterThan(0);
+      expect(deepExtrude.effect.steps).toBe(6);
+    }
+
+    const pop = getTextEffectPreset("pop")!;
+    expect(
+      pop.recipe.appearance.items.some(
+        (item) => item.kind === "effect" && item.effect.type === "extrude",
+      ),
+    ).toBe(true);
+
+    const sundial = getTextEffectPreset("sundial")!;
+    const sundialExtrude = sundial.recipe.appearance.items.find(
+      (item) => item.kind === "effect" && item.effect.type === "extrude",
+    );
+    expect(sundialExtrude?.kind === "effect" && sundialExtrude.effect.type).toBe("extrude");
+
+    const parallax = getTextEffectPreset("parallax")!;
+    const parallaxEmboss = parallax.recipe.appearance.items.find(
+      (item) => item.kind === "effect" && item.effect.type === "emboss",
+    );
+    expect(parallaxEmboss?.kind === "effect" && parallaxEmboss.effect.type).toBe("emboss");
+
+    const keycap = getTextEffectPreset("keycap")!;
+    expect(
+      keycap.recipe.appearance.items.some(
+        (item) => item.kind === "effect" && item.effect.type === "extrude",
+      ),
+    ).toBe(true);
+    expect(
+      keycap.recipe.appearance.items.some(
+        (item) => item.kind === "effect" && item.effect.type === "emboss",
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("text effect appearance model round-trip", () => {
@@ -239,7 +284,7 @@ describe("text effect appearance model round-trip", () => {
     );
 
     const saved = toJSON(docWith([applied]));
-    expect(saved.schemaVersion).toBe(8);
+    expect(saved.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
     const loaded = fromJSON(saved);
     const roundTrip = loaded.slides[0].elements[0];
     expect(loaded.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
@@ -301,6 +346,29 @@ describe("text effect renderer + command apply", () => {
     expect(stroke?.kind === "stroke" && stroke.width).toBeGreaterThan(0);
     const fill = readAppearance(contour).items.find((item) => item.kind === "fill");
     expect(fill?.kind === "fill" && fill.clipToGlyphs).toBe(true);
+  });
+
+  it("keeps Deep-Type extrude editable after applying the preset", () => {
+    const text = createText({ x: 40, y: 40, width: 280, text: "DEEP" });
+    const applied = applyTextEffectPreset(text, "extrude");
+    expect(applied).toBeTruthy();
+    if (!applied) return;
+    const snapshot = readAppearance(applied);
+    const extrude = findEffect(snapshot, "extrude");
+    expect(extrude?.effect.type).toBe("extrude");
+    const passes = canvasShadowPasses(applied);
+    expect(passes.some((pass) => pass.source === "extrude")).toBe(true);
+    expect(passes.length).toBeGreaterThan(1);
+
+    const edited = changeAppearance(
+      applied,
+      extrudePatchOperation(applied, { depth: 18, angle: 90 }),
+    );
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+    const next = findEffect(readAppearance(edited.element), "extrude");
+    expect(next?.effect.type === "extrude" && next.effect.depth).toBe(18);
+    expect(canvasShadowPasses(edited.element).some((pass) => pass.source === "extrude")).toBe(true);
   });
 
   it("keeps 90 named stills visually distinct after freeze and marks CSS-only gaps", () => {

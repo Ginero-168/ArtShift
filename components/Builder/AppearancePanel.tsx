@@ -5,6 +5,8 @@ import { IconChevronDown, IconEye, IconEyeOff, IconPlus, IconTrash } from "@/com
 import {
   type AppearanceOperation,
   addBackgroundOperation,
+  addEmbossOperation,
+  addExtrudeOperation,
   addFillOperation,
   addGlowOperation,
   addShadowOperation,
@@ -17,6 +19,8 @@ import {
   backgroundItemPatchOperation,
   backgroundPaintOperation,
   clampPathCurvature,
+  embossPatchOperation,
+  extrudePatchOperation,
   fillItemPatchOperation,
   fillPaintOperation,
   findBackground,
@@ -36,7 +40,12 @@ import {
   toggleAppearanceExpandedKey,
   toggleItemVisibleOperation,
 } from "@/lib/appearance";
-import { APPEARANCE_MAX_ITEMS } from "@/lib/appearance/types";
+import {
+  APPEARANCE_MAX_ITEMS,
+  MAX_EMBOSS_SOFTNESS,
+  MAX_EXTRUDE_DEPTH,
+  MAX_EXTRUDE_STEPS,
+} from "@/lib/appearance/types";
 import type { ColorAdjustments } from "@/lib/color/adjustments";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
@@ -89,6 +98,8 @@ export default function AppearancePanel({
   const rows = appearanceStackRows(element);
   const hasShadow = !!findEffect(appearance, "shadow");
   const hasGlow = !!findEffect(appearance, "glow");
+  const hasExtrude = !!findEffect(appearance, "extrude");
+  const hasEmboss = !!findEffect(appearance, "emboss");
   const hasFill = caps.fills && !!findFill(appearance);
   const hasStroke = caps.strokes && !!findStroke(appearance);
   const hasBackground = caps.background && !!findBackground(appearance);
@@ -125,7 +136,8 @@ export default function AppearancePanel({
       <h3>Appearance</h3>
       <p className={styles.fieldNote}>
         Stack is front-to-back (top item paints last). Add multiple Fills and Strokes; reorder to
-        change paint order. Shadow and Glow composite after paint.
+        change paint order. Extrude and Emboss are editable 3D/relief effects — presets write into
+        the same rows. Shadow and Glow composite after paint.
       </p>
 
       {element.type === "text" ? <TextEffectPresetPicker onApply={applyOp} /> : null}
@@ -349,6 +361,34 @@ export default function AppearancePanel({
             }}
           >
             <IconPlus size={12} /> Glow
+          </button>
+        ) : null}
+        {caps.extrude && !hasExtrude && appearance.items.length < APPEARANCE_MAX_ITEMS ? (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            data-appearance-add="extrude"
+            aria-label="Add extrude"
+            onClick={() => {
+              applyOp(addExtrudeOperation(), "add extrude");
+              setExpandedKey(null);
+            }}
+          >
+            <IconPlus size={12} /> Extrude
+          </button>
+        ) : null}
+        {caps.emboss && !hasEmboss && appearance.items.length < APPEARANCE_MAX_ITEMS ? (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            data-appearance-add="emboss"
+            aria-label="Add emboss"
+            onClick={() => {
+              applyOp(addEmbossOperation(), "add emboss");
+              setExpandedKey(null);
+            }}
+          >
+            <IconPlus size={12} /> Emboss
           </button>
         ) : null}
       </div>
@@ -808,6 +848,234 @@ function AppearanceItemEditor({
           />
           <output>{Math.round(effect.blur)}</output>
         </label>
+      </>
+    );
+  }
+
+  if (item.kind === "effect" && item.effect.type === "extrude") {
+    const effect = item.effect;
+    const smooth = effect.steps === 0;
+    return (
+      <>
+        <p className={styles.fieldNote}>Face uses the Fill layer. Sides follow depth and angle.</p>
+        <label className={styles.rangeField}>
+          <span>Depth</span>
+          <input
+            type="range"
+            min={0}
+            max={MAX_EXTRUDE_DEPTH}
+            value={effect.depth}
+            aria-label="Extrude depth"
+            onPointerDown={() => beginSlider("extrude depth")}
+            onChange={(event) =>
+              slideOp((target) =>
+                extrudePatchOperation(target, { depth: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.depth)}</output>
+        </label>
+        <label className={styles.rangeField}>
+          <span>Angle</span>
+          <input
+            type="range"
+            min={0}
+            max={360}
+            value={effect.angle}
+            aria-label="Extrude angle"
+            onPointerDown={() => beginSlider("extrude angle")}
+            onChange={(event) =>
+              slideOp((target) =>
+                extrudePatchOperation(target, { angle: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.angle)}°</output>
+        </label>
+        <label className={styles.checkField}>
+          <input
+            type="checkbox"
+            checked={smooth}
+            aria-label="Smooth extrude"
+            onChange={(event) =>
+              applyOp(
+                (target) =>
+                  extrudePatchOperation(target, {
+                    steps: event.currentTarget.checked
+                      ? 0
+                      : Math.max(1, Math.min(MAX_EXTRUDE_STEPS, Math.round(effect.depth) || 8)),
+                  }),
+                "extrude steps",
+              )
+            }
+          />
+          Smooth (continuous)
+        </label>
+        {smooth ? null : (
+          <label className={styles.rangeField}>
+            <span>Steps</span>
+            <input
+              type="range"
+              min={1}
+              max={MAX_EXTRUDE_STEPS}
+              value={effect.steps}
+              aria-label="Extrude steps"
+              onPointerDown={() => beginSlider("extrude steps")}
+              onChange={(event) =>
+                slideOp((target) =>
+                  extrudePatchOperation(target, { steps: Number(event.currentTarget.value) }),
+                )
+              }
+              onPointerUp={endSlider}
+            />
+            <output>{effect.steps}</output>
+          </label>
+        )}
+        <label className={styles.checkField}>
+          <input
+            type="checkbox"
+            checked={effect.sideFromFill === true}
+            aria-label="Side color from fill"
+            onChange={(event) =>
+              applyOp(
+                (target) =>
+                  extrudePatchOperation(target, { sideFromFill: event.currentTarget.checked }),
+                "extrude side from fill",
+              )
+            }
+          />
+          Side from Fill
+        </label>
+        {effect.sideFromFill ? null : (
+          <div className={styles.field}>
+            <span>Side</span>
+            <ColorPickerInput
+              value={effect.sideColor}
+              onChange={(color) =>
+                applyOp(
+                  (target) =>
+                    extrudePatchOperation(target, { sideColor: color, sideFromFill: false }),
+                  "extrude side color",
+                )
+              }
+              allowTransparent={false}
+              title="Extrude side color"
+            />
+          </div>
+        )}
+      </>
+    );
+  }
+
+  if (item.kind === "effect" && item.effect.type === "emboss") {
+    const effect = item.effect;
+    return (
+      <>
+        <label className={styles.field}>
+          <span>Style</span>
+          <select
+            value={effect.mode}
+            aria-label="Emboss style"
+            onChange={(event) =>
+              applyOp(
+                (target) =>
+                  embossPatchOperation(target, {
+                    mode: event.currentTarget.value as typeof effect.mode,
+                  }),
+                "emboss style",
+              )
+            }
+          >
+            <option value="emboss">Emboss</option>
+            <option value="deboss">Deboss</option>
+            <option value="bevel">Bevel</option>
+          </select>
+        </label>
+        <label className={styles.rangeField}>
+          <span>Depth</span>
+          <input
+            type="range"
+            min={0}
+            max={24}
+            step={0.5}
+            value={effect.depth}
+            aria-label="Emboss depth"
+            onPointerDown={() => beginSlider("emboss depth")}
+            onChange={(event) =>
+              slideOp((target) =>
+                embossPatchOperation(target, { depth: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Number(effect.depth.toFixed(1))}</output>
+        </label>
+        <label className={styles.rangeField}>
+          <span>Light</span>
+          <input
+            type="range"
+            min={0}
+            max={360}
+            value={effect.angle}
+            aria-label="Emboss light angle"
+            onPointerDown={() => beginSlider("emboss angle")}
+            onChange={(event) =>
+              slideOp((target) =>
+                embossPatchOperation(target, { angle: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.angle)}°</output>
+        </label>
+        <label className={styles.rangeField}>
+          <span>Softness</span>
+          <input
+            type="range"
+            min={0}
+            max={MAX_EMBOSS_SOFTNESS}
+            value={effect.softness}
+            aria-label="Emboss softness"
+            onPointerDown={() => beginSlider("emboss softness")}
+            onChange={(event) =>
+              slideOp((target) =>
+                embossPatchOperation(target, { softness: Number(event.currentTarget.value) }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(effect.softness)}</output>
+        </label>
+        <div className={styles.field}>
+          <span>Highlight</span>
+          <ColorPickerInput
+            value={effect.highlightColor}
+            onChange={(color) =>
+              applyOp(
+                (target) => embossPatchOperation(target, { highlightColor: color }),
+                "emboss highlight",
+              )
+            }
+            allowTransparent={true}
+            title="Emboss highlight"
+          />
+        </div>
+        <div className={styles.field}>
+          <span>Shadow</span>
+          <ColorPickerInput
+            value={effect.shadowColor}
+            onChange={(color) =>
+              applyOp(
+                (target) => embossPatchOperation(target, { shadowColor: color }),
+                "emboss shadow",
+              )
+            }
+            allowTransparent={true}
+            title="Emboss shadow"
+          />
+        </div>
       </>
     );
   }

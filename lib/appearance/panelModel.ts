@@ -66,12 +66,14 @@ export function isMvpStackItem(
   if (item.kind === "effect" && item.effect.type === "shadow") return caps.shadow;
   if (item.kind === "effect" && item.effect.type === "glow") return caps.glow;
   if (item.kind === "effect" && item.effect.type === "gaussianBlur") return caps.staticBlur;
+  if (item.kind === "effect" && item.effect.type === "extrude") return caps.extrude;
+  if (item.kind === "effect" && item.effect.type === "emboss") return caps.emboss;
   return false;
 }
 
 export function findEffect(
   appearance: AppearanceSnapshot | { items: AppearanceItem[] },
-  type: "shadow" | "glow",
+  type: "shadow" | "glow" | "extrude" | "emboss" | "gaussianBlur",
 ): EffectAppearance | undefined {
   return appearance.items.find(
     (item): item is EffectAppearance => item.kind === "effect" && item.effect.type === type,
@@ -118,6 +120,12 @@ export function appearanceItemLabel(item: AppearanceItem): string {
   if (item.effect.type === "shadow") return "Shadow";
   if (item.effect.type === "glow") return "Glow";
   if (item.effect.type === "gaussianBlur") return "Blur";
+  if (item.effect.type === "extrude") return "Extrude";
+  if (item.effect.type === "emboss") {
+    if (item.effect.mode === "deboss") return "Deboss";
+    if (item.effect.mode === "bevel") return "Bevel";
+    return "Emboss";
+  }
   return item.effect.type;
 }
 
@@ -137,19 +145,28 @@ export function appearanceItemSwatch(item: AppearanceItem): string {
   if (item.kind === "stroke") return item.color;
   if (item.kind === "effect") {
     if (item.effect.type === "shadow" || item.effect.type === "glow") return item.effect.color;
+    if (item.effect.type === "extrude") return item.effect.sideColor;
+    if (item.effect.type === "emboss") return item.effect.highlightColor;
   }
   return "transparent";
 }
 
 export function stackKindOf(
   item: AppearanceItem,
-): "fill" | "stroke" | "background" | "shadow" | "glow" | "blur" | null {
+): "fill" | "stroke" | "background" | "shadow" | "glow" | "blur" | "extrude" | "emboss" | null {
   if (item.kind === "fill") return "fill";
   if (item.kind === "stroke") return "stroke";
   if (item.kind === "background") return "background";
-  if (item.kind === "effect" && (item.effect.type === "shadow" || item.effect.type === "glow")) {
-    return item.effect.type;
+  if (item.kind === "effect") {
+    if (
+      item.effect.type === "shadow" ||
+      item.effect.type === "glow" ||
+      item.effect.type === "extrude" ||
+      item.effect.type === "emboss"
+    ) {
+      return item.effect.type;
+    }
+    if (item.effect.type === "gaussianBlur") return "blur";
   }
-  if (item.kind === "effect" && item.effect.type === "gaussianBlur") return "blur";
   return null;
 }

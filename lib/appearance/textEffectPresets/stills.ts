@@ -16,6 +16,8 @@ type StillOverlay = Partial<
     | "offsetFills"
     | "blurRadius"
     | "letterSpacingEm"
+    | "extrude"
+    | "emboss"
   >
 >;
 
@@ -91,6 +93,16 @@ export const RECIPE_STILLS: Partial<Record<string, StillOverlay>> = {
     ],
     blurRadius: 1.4,
     stroke: { width: 1, color: alphaInk("ink", 55) },
+  },
+  extrude: {
+    extrude: {
+      depth: 6,
+      angle: 45,
+      steps: 6,
+      sideColor: mixInk("ink2", 50, "#000"),
+      sideFromFill: false,
+    },
+    shadows: [shadow(7, 7, 12, "rgba(0,0,0,.5)")],
   },
   contour: {
     fillPaint: { type: "solid", color: alphaInk("ink", 10) },
@@ -366,14 +378,53 @@ export const RECIPE_STILLS: Partial<Record<string, StillOverlay>> = {
       [0.45, "#2a2438"],
       [1, "#1a1528"],
     ]),
-    shadows: [
-      shadow(0, 1, 0, alphaInk("ink", 32)),
-      shadow(0, 6, 0, mixInk("ink2", 42, "#0b0812")),
-      shadow(0, 10, 16, "rgba(0,0,0,0.5)"),
-    ],
+    extrude: {
+      depth: 6,
+      angle: 90,
+      steps: 1,
+      sideColor: mixInk("ink2", 42, "#0b0812"),
+      sideFromFill: false,
+    },
+    emboss: {
+      mode: "emboss",
+      depth: 1,
+      angle: 90,
+      softness: 0,
+      highlightColor: alphaInk("ink", 40),
+      shadowColor: "rgba(0,0,0,0.4)",
+    },
+    shadows: [shadow(0, 10, 16, "rgba(0,0,0,0.5)")],
   },
   pop: {
-    shadows: [shadow(0, 0, 0, ink2), shadow(0, 12, 0, ink2)],
+    extrude: {
+      depth: 12,
+      angle: 90,
+      steps: 1,
+      sideColor: ink2,
+      sideFromFill: false,
+    },
+    shadows: [],
+  },
+  sundial: {
+    extrude: {
+      depth: 12,
+      angle: 45,
+      steps: 3,
+      sideColor: ink2,
+      sideFromFill: false,
+    },
+    shadows: [],
+  },
+  parallax: {
+    emboss: {
+      mode: "emboss",
+      depth: 4,
+      angle: 45,
+      softness: 0,
+      highlightColor: ink3,
+      shadowColor: ink2,
+    },
+    shadows: [],
   },
 };
 
@@ -391,5 +442,7 @@ export function applyRecipeStill(spec: TextEffectSourceSpec): TextEffectSourceSp
     blend: overlay.blend ?? spec.blend,
     inkColor: overlay.inkColor ?? spec.inkColor,
     letterSpacingEm: overlay.letterSpacingEm ?? spec.letterSpacingEm,
+    extrude: overlay.extrude ?? spec.extrude,
+    emboss: overlay.emboss ?? spec.emboss,
   };
 }

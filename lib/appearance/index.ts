@@ -3,15 +3,30 @@ export { type AppearanceCapability, appearanceCapabilities } from "./capabilitie
 export { changeAppearance } from "./commands";
 export {
   clampPathCurvature,
+  DEFAULT_EMBOSS,
+  DEFAULT_EXTRUDE,
   DEFAULT_GLOW,
   DEFAULT_SHADOW,
   defaultBackgroundItem,
+  defaultEmbossItem,
+  defaultExtrudeItem,
   defaultFillItem,
   defaultGlowItem,
   defaultShadowItem,
   defaultStrokeItem,
   defaultTextStrokeItem,
 } from "./defaults";
+export {
+  applyColorOpacity,
+  clampEmbossSoftness,
+  clampExtrudeDepth,
+  clampExtrudeSteps,
+  darkenColor,
+  expandEmbossPasses,
+  expandExtrudePasses,
+  offsetFromAngle,
+  resolveExtrudeSideColor,
+} from "./depthEffects";
 export { appearanceFingerprint } from "./fingerprints";
 export {
   appearanceToLegacyPatch,
@@ -27,6 +42,8 @@ export {
 } from "./normalize";
 export {
   addBackgroundOperation,
+  addEmbossOperation,
+  addExtrudeOperation,
   addFillOperation,
   addGlowOperation,
   addShadowOperation,
@@ -34,6 +51,8 @@ export {
   backgroundInsertIndex,
   backgroundItemPatchOperation,
   backgroundPaintOperation,
+  embossPatchOperation,
+  extrudePatchOperation,
   fillItemPatchOperation,
   fillPaintOperation,
   glowPatchOperation,
@@ -102,7 +121,10 @@ export {
 export type {
   Appearance,
   AppearanceBlendMode,
+  AppearanceEmbossEffect,
+  AppearanceEmbossMode,
   AppearanceError,
+  AppearanceExtrudeEffect,
   AppearanceItem,
   AppearanceItemBlendMode,
   AppearanceOperation,

@@ -21,6 +21,10 @@ export type AppearanceCapability = {
   itemBlend: boolean;
   /** Offset duplicate Fill/Stroke layers (anaglyph / glitch stills). */
   offsetLayers: boolean;
+  /** Named 3D block / depth. Text first; path and shapes reuse the same compositor. */
+  extrude: boolean;
+  /** Named emboss / deboss / bevel. */
+  emboss: boolean;
 };
 
 const SHAPE_LIKE = new Set<EngineElementType>([
@@ -38,6 +42,8 @@ const STACK_FX = {
   staticBlur: true,
   itemBlend: true,
   offsetLayers: true,
+  extrude: true,
+  emboss: true,
 } as const;
 
 export function appearanceCapabilities(element: EngineElement): AppearanceCapability {
@@ -58,6 +64,8 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       staticBlur: true,
       itemBlend: false,
       offsetLayers: false,
+      extrude: false,
+      emboss: false,
     };
   }
   if (type === "text") {
@@ -92,6 +100,8 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       staticBlur: true,
       itemBlend: false,
       offsetLayers: false,
+      extrude: false,
+      emboss: false,
     };
   }
   if (type === "path" || type === "freedraw" || type === "line" || type === "arrow") {
@@ -142,5 +152,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     staticBlur: true,
     itemBlend: false,
     offsetLayers: false,
+    extrude: false,
+    emboss: false,
   };
 }
