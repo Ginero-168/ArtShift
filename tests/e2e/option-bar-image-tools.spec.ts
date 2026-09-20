@@ -36,6 +36,11 @@ test("keeps each image tool as its own Option Bar settings entry", async ({ page
   for (const tool of tools) {
     await expect(optionBar.getByRole("button", { name: tool.label, exact: true })).toBeVisible();
   }
+  await expect(optionBar.getByRole("button", { name: "Brief", exact: true })).toBeVisible();
+  await expect(
+    optionBar.getByRole("button", { name: "Convert to Brief", exact: true }),
+  ).toHaveCount(0);
+  await expect(optionBar.getByRole("button", { name: "Edit Raster", exact: true })).toHaveCount(0);
   const optionBarLabels = await optionBar
     .locator("button")
     .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));

@@ -23,10 +23,6 @@ import {
   syncElementAppearance,
 } from "../appearance";
 import {
-  createCompositionBlock,
-  getCompositionBlockDefinition,
-} from "../builder/compositionBlocks";
-import {
   type ActiveRasterSelection,
   appendActiveRasterSelection,
   clearActiveRasterSelection,
@@ -172,7 +168,6 @@ export type EngineState = {
 
   addElement: (el: EngineElement, label?: string) => void;
   addElements: (elements: EngineElement[], label?: string) => void;
-  insertCompositionBlock: (id: "hero" | "text-image" | "offer-cta") => string[];
   applyTemplate: (result: TemplateResult, mode?: TemplateApplyMode, label?: string) => void;
   addLayer: () => string;
   renameLayer: (id: string, name: string) => void;
@@ -661,16 +656,6 @@ export const useEngine = create<EngineState>((set, get) => {
         }),
         selectedIds: new Set(elements.map((e) => e.id)),
       }));
-    },
-
-    insertCompositionBlock: (id) => {
-      const state = get();
-      const slide = state.currentSlide();
-      const definition = getCompositionBlockDefinition(id);
-      if (!slide || !definition) return [];
-      const composition = createCompositionBlock(id, slide);
-      state.addElements(composition.elements, `insert ${definition.label}`);
-      return composition.elements.map((element) => element.id);
     },
 
     applyTemplate: (result, mode = "replace", label = "apply template") => {

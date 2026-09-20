@@ -38,4 +38,11 @@ describe("BlockLibrary Default Tab & Tab Order", () => {
     expect(cssSource).toContain(".libraryAssistantActive {");
     expect(cssSource).toContain("width: 476px;");
   });
+
+  it("does not render Composition preset cards in the Block tab", () => {
+    expect(librarySource).not.toContain("COMPOSITION_BLOCKS");
+    expect(librarySource).not.toContain("insertCompositionBlock");
+    expect(librarySource).not.toContain("<span>Composition</span>");
+    expect(librarySource).not.toMatch(/Insert .+ composition/);
+  });
 });

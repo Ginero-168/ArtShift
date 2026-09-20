@@ -247,10 +247,10 @@ describe("Photopea is the primary Edit Raster path", () => {
     expect(embed).toContain("photopea.com");
     expect(embed).toContain("design canvas");
     expect(embed).not.toContain("temporary hatch");
-    expect(contextBar).toContain("Edit Raster");
-    expect(contextBar).toContain("openRasterEditForElement");
-    expect(contextBar).not.toContain("Photopea");
+    expect(contextBar).not.toContain("Edit Raster");
+    expect(contextBar).not.toContain("openRasterEditForElement");
     expect(canvas).toContain("openRasterEditForElement");
+    expect(contextMenu).toContain("Edit Raster");
     expect(contextMenu).toContain("openRasterEditForElement");
     expect(inspector).not.toContain("openRasterEditForElement");
     expect(inspector).not.toContain("Pixel edit");

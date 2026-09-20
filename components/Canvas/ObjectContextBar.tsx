@@ -8,13 +8,12 @@ import { IMAGE_MIX_PROMPT, requestCoPilotExternalTurn } from "@/lib/ai/coPilotRe
 import { unionBBox } from "@/lib/engine/bounds";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
-import { mergeSelectedElements, mergeSelectedImages } from "@/lib/engine/mergeElements";
+import { mergeSelectedElements } from "@/lib/engine/mergeElements";
 import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/objectContext";
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import { nextThaiFontCssFamily } from "@/lib/fonts";
-import { openRasterEditForElement } from "@/lib/raster/studio/sessionStore";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
@@ -302,7 +301,6 @@ export default function ObjectContextBar({
       controls.push(action("Divide", () => applyBooleanOperation("divide")));
     }
   } else if (first.type === "image") {
-    controls.push(action("Edit Raster", () => openRasterEditForElement(first)));
     controls.push(
       action(IMAGE_ACTION_LABELS.upscale, toggleUpscale, false, activeImageTool === "upscale"),
     );
@@ -320,7 +318,7 @@ export default function ObjectContextBar({
     );
     controls.push(
       action(
-        briefBusy ? "Creating Brief..." : "Convert to Brief",
+        briefBusy ? "Creating Brief..." : "Brief",
         () => void handleConvertToBrief(first),
         false,
         briefBusy,

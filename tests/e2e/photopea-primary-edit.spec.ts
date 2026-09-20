@@ -118,13 +118,46 @@ async function openEditorWithImage(page: Page) {
     timeout: 20_000,
   });
   await dropPngOnCanvas(page, "photopea-source.png");
-  await expect(editRasterButton(page)).toBeVisible({
-    timeout: 10_000,
+  const optionBar = page.getByRole("toolbar", { name: "Image options", exact: true });
+  await expect(optionBar).toBeVisible({ timeout: 10_000 });
+  await expect(optionBar.getByRole("button", { name: "Edit Raster", exact: true })).toHaveCount(0);
+  await expect(
+    page.locator(".object-context-button[data-context-label='Edit Raster']"),
+  ).toHaveCount(0);
+}
+
+function imageOptionBar(page: Page) {
+  return page.getByRole("toolbar", { name: "Image options", exact: true });
+}
+
+async function canvasCenter(page: Page) {
+  const canvas = page.getByRole("application", { name: /Slide canvas/ });
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Canvas is not visible");
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+async function openPhotopeaByDoubleClick(page: Page) {
+  const point = await canvasCenter(page);
+  await page.mouse.dblclick(point.x, point.y);
+}
+
+async function openPhotopeaFromContextMenu(page: Page) {
+  const canvas = page.getByRole("application", { name: /Slide canvas/ });
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Canvas is not visible");
+  // Keep the selected image; open the menu near the top of the canvas so it stays on-screen.
+  await page.mouse.click(box.x + box.width / 2, box.y + 48, { button: "right" });
+  await page.getByRole("button", { name: /Edit Raster/ }).evaluate((el) => {
+    (el as HTMLButtonElement).click();
   });
 }
 
-function editRasterButton(page: Page) {
-  return page.locator(".object-context-button[data-context-label='Edit Raster']");
+async function expectNoOptionBarEditRaster(page: Page) {
+  await expect(imageOptionBar(page)).toBeVisible();
+  await expect(
+    imageOptionBar(page).getByRole("button", { name: "Edit Raster", exact: true }),
+  ).toHaveCount(0);
 }
 
 async function selectionPoints(page: Page) {
@@ -134,15 +167,16 @@ async function selectionPoints(page: Page) {
   return polygon.getAttribute("points");
 }
 
-test("Edit Raster opens Photopea, Apply keeps placement, Close returns to canvas", async ({
+test("Double-click and context menu Edit Raster open Photopea; Option bar has no Edit Raster", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await openEditorWithImage(page);
 
   const before = await selectionPoints(page);
   await expect(page.getByRole("dialog", { name: "Raster Studio" })).toHaveCount(0);
 
-  await editRasterButton(page).click();
+  await openPhotopeaByDoubleClick(page);
 
   await expect(page.getByRole("heading", { name: /Photopea/ })).toBeVisible();
   await expect(page.getByText("primary raster editor")).toBeVisible();
@@ -153,10 +187,10 @@ test("Edit Raster opens Photopea, Apply keeps placement, Close returns to canvas
 
   await page.getByRole("button", { name: "Apply back to ArtShift" }).click();
   await expect(page.getByRole("heading", { name: /Photopea/ })).toHaveCount(0, { timeout: 15_000 });
-  await expect(editRasterButton(page)).toBeVisible();
+  await expectNoOptionBarEditRaster(page);
   expect(await selectionPoints(page)).toBe(before);
 
-  await editRasterButton(page).click();
+  await openPhotopeaFromContextMenu(page);
   await expect(page.getByText(/Ready — File → Save/)).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(
@@ -164,6 +198,6 @@ test("Edit Raster opens Photopea, Apply keeps placement, Close returns to canvas
   ).toBeVisible();
   await page.getByRole("button", { name: "Close without applying" }).click();
   await expect(page.getByRole("heading", { name: /Photopea/ })).toHaveCount(0);
-  await expect(editRasterButton(page)).toBeVisible();
+  await expectNoOptionBarEditRaster(page);
   expect(await selectionPoints(page)).toBe(before);
 });
