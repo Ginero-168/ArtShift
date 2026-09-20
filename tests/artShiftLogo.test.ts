@@ -47,6 +47,25 @@ describe("ArtShift Portal wordmark", () => {
     expect(present).toContain("<ArtShiftLogo");
   });
 
+  it("links the Projects header wordmark to Index home, not a self-link", () => {
+    const headerMatch = projects.match(/<header[\s\S]*?<\/header>/);
+    expect(headerMatch).toBeTruthy();
+    const header = headerMatch?.[0] ?? "";
+    expect(header).toContain('href="/"');
+    expect(header).toContain('aria-label="ArtShift home"');
+    expect(header).toContain("<ArtShiftLogo");
+    expect(header).not.toContain('href="/projects"');
+  });
+
+  it("keeps the editor wordmark as a Projects catalog link", () => {
+    const headerMatch = editor.match(/<header className="topbar">[\s\S]*?<\/header>/);
+    expect(headerMatch).toBeTruthy();
+    const header = headerMatch?.[0] ?? "";
+    expect(header).toContain('href="/projects"');
+    expect(header).toContain("<ArtShiftLogo");
+    expect(header).not.toContain('href="/"');
+  });
+
   it("does not change the Colorion Text Effect Presets Portal recipe", () => {
     expect(portalPreset).toContain('slug: "portal"');
     expect(portalPreset).toContain("sourceHasAnimation: true");
