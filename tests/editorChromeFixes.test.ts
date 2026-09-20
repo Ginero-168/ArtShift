@@ -26,6 +26,21 @@ describe("Editor chrome: logo, selection, Appearance image group", () => {
     expect(transformer).not.toContain("strokeDasharray");
   });
 
+  it("keeps Crop off the IMAGE SOURCE row while leaving the transform Crop control", () => {
+    const inspector = readFileSync("components/Builder/BuilderInspector.tsx", "utf8");
+    const mediaStart = inspector.indexOf("function MediaOptions");
+    const nextFn = inspector.indexOf("\nfunction ", mediaStart + 1);
+    const mediaOptions = inspector.slice(mediaStart, nextFn > 0 ? nextFn : undefined);
+
+    expect(mediaStart).toBeGreaterThan(0);
+    expect(mediaOptions).toContain("Image source");
+    expect(mediaOptions).toContain("Replace image");
+    expect(mediaOptions).not.toContain("Crop");
+    expect(mediaOptions).not.toContain("onToggleCrop");
+    expect(inspector).toContain('aria-label="Crop"');
+    expect(inspector).toContain('title="Crop image (ตัดรูปภาพ)"');
+  });
+
   it("does not show Edit Raster on the object context bar after leaving Property", () => {
     const contextBar = readFileSync("components/Canvas/ObjectContextBar.tsx", "utf8");
     const contextMenu = readFileSync("components/Canvas/ContextMenu.tsx", "utf8");
