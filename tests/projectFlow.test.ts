@@ -11,9 +11,11 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
   it("verifies root page (/) is an Index Landing Page with Google Sign-in and no editor canvas", () => {
     const rootPageSource = readFileSync("app/page.tsx", "utf8");
 
-    // Has ArtShift Heatmap wordmark
+    // Has ArtShift Heatmap wordmark in the hero (not a top header)
     expect(rootPageSource).toContain("ArtShift");
     expect(rootPageSource).toContain("ArtShiftLogo");
+    expect(rootPageSource).toContain('size="hero"');
+    expect(rootPageSource).toContain("AI Powered Design Tools");
 
     // Has Google sign-in trigger
     expect(rootPageSource).toContain("signInWithGoogle");
@@ -25,6 +27,17 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
     // Does NOT render the CanvasEditor directly on /
     expect(rootPageSource).not.toContain("<CanvasEditor");
     expect(rootPageSource).not.toContain("useEngine");
+
+    // Home chrome requested for removal
+    expect(rootPageSource).not.toContain("ไปที่โปรเจกต์ของคุณ");
+    expect(rootPageSource).not.toContain("Local-First Presentation");
+    expect(rootPageSource).not.toContain("Graphic Canvas");
+    expect(rootPageSource).not.toContain("Director AI");
+    expect(rootPageSource).not.toContain("Vector & Icons");
+    expect(rootPageSource).not.toContain("100% Local Storage");
+    expect(rootPageSource).not.toContain("ส่งออกได้หลากหลาย");
+    expect(rootPageSource).not.toContain("สร้างสไลด์");
+    expect(rootPageSource).not.toContain("FeatureCard");
   });
 
   it("verifies /projects catalog page handles projects, search, sort, and legacy migration", () => {

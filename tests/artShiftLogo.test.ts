@@ -48,6 +48,8 @@ describe("ArtShift Heatmap wordmark", () => {
   it("uses the shared logo on landing, projects, editor, and present chrome", () => {
     expect(landing).toContain("<ArtShiftLogo");
     expect(landing).toContain('size="hero"');
+    expect(landing).toContain("AI Powered Design Tools");
+    expect(landing).not.toContain("<header");
     expect(landing).not.toContain("<IconBrand");
     expect(projects).toContain("<ArtShiftLogo");
     expect(editor).toContain("<ArtShiftLogo");
