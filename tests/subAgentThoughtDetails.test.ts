@@ -19,6 +19,7 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
     const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
 
     expect(barSource).toContain("Image Analyzer");
+    expect(barSource).toContain("Memory Recall");
     expect(barSource).toContain("DEFAULT_CLOUD_VISION_LABEL");
     expect(barSource).toContain('analysisAction.status = "success";');
     expect(barSource).toContain("Creative Director (");

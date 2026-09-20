@@ -15,6 +15,7 @@ import {
 } from "@/lib/designAgent/contracts";
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
+import { DIRECTOR_CONVERSATION_HISTORY_LIMIT } from "./chatContinuity";
 import {
   CREATING_MODEL_CATALOG,
   detectRequestedCreatingModel,
@@ -405,12 +406,15 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - DEFAULT BASELINE: All image generation tasks MUST use a baseline aspect ratio of 1:1 (square, 1024x1024) unless the user explicitly specifies an aspect ratio or physical dimensions in their instruction, OR this is a follow-up continuation of a prior image generation that already locked a ratio.",
   "  - EXPLICIT USER OVERRIDES ONLY: Only non-1:1 aspect ratios explicitly specified by the user (such as '16:9', 'แนวนอน', 'landscape', '9:16', 'แนวตั้ง', 'portrait', '3:1', '60x20cm', 'พาโนรามา', 'wide panoramic') may be used for a fresh request.",
   "  - MULTI-SIZE LISTS: When the user lists multiple distinct print/pixel sizes OR named aspect ratios (e.g. '53x20 cm, 29x7 cm, 1040x1040' or '16:9, 3:4 และ 9:16'), set requestedOutputCount to that count and put EACH size/ratio into the matching outputBrief. Never collapse every size into one output or one 1:1 square variation set.",
-  "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') after a prior image generation in this conversation:",
-  "      * Treat the prior refinedPrompt as the BASE brief. Restate and enrich it; do not invent a new unrelated subject.",
-  "      * KEEP the prior aspect ratio / dimensions unless the follow-up explicitly changes them.",
-  "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio.",
-  "      * If the message includes === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief and ratio.",
-  "      * If === SHARED ANCHORS (Layer 1 === is present: those locks (copy, logo, brand colors, ratio, hierarchy, reference set) MUST stay identical on every new output.",
+  "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') OR a short revision of the last image (e.g. 'ปรับเป็นแนวตั้ง', 'ทำให้เป็นแนวตั้ง', 'make it vertical', 'ปรับโทน') after a prior image generation in this conversation:",
+  "      * Treat the prior refinedPrompt + chat recall as the BASE brief. Restate and enrich it; do not invent a new unrelated subject or a blank campaign.",
+  "      * KEEP the prior aspect ratio / dimensions unless the follow-up explicitly changes them (แนวตั้ง / vertical / 9:16 may change the ratio).",
+  "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio — unless this is a revision, in which case apply the new instruction and keep everything else.",
+  "      * If the message includes === LAST IMAGE GENERATION PACKAGE or === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief, ingredients, copy, and ratio.",
+  "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package.",
+  "      * Never invent ingredient photos, slogans, or brand marks that are not listed in the package.",
+  "      * Attached images on a revision: first image is the last output to revise (image_editor / image-to-image); later images are original ingredients. Re-include them.",
+  "      * If === SHARED ANCHORS (Layer 1 === is present: those locks (copy, logo, brand colors, ratio, hierarchy, reference set) MUST stay identical on every new output unless the user overrides them.",
   "      * If === PRIOR VARIANT AXES (Layer 2 === is present: differentiate by changing at least two axes (mood / structure / signature / density) so each output has a distinct character pole — never five clones of the same personality.",
   "  - PROMPT HELPER ALIGNMENT: When the user brief was built via Prompt Helper with Shared Anchors + Variant picks, honor that split: Anchors = correctness; Variants = direction choice only.",
   "  - NEVER HALLUCINATE OR INFER NON-1:1 for a brand-new request: Do NOT infer or force 16:9, panoramic, or landscape simply because the prompt mentions 'แบนเนอร์', 'banner', 'cover', or 'poster', or because an existing Canvas element has a rectangular shape. If the user does not explicitly specify dimensions or an aspect ratio and there is no prior locked ratio to continue, the output must remain 1:1 square.",
@@ -1536,7 +1540,7 @@ function normalizeConversationHistory(
         message.content.trim().length > 0 &&
         !containsSensitivePayload(message.content),
     )
-    .slice(-12)
+    .slice(-DIRECTOR_CONVERSATION_HISTORY_LIMIT)
     .map((message) => ({ role: message.role, content: message.content.slice(0, 12_000) }));
   const last = history.at(-1);
   if (last?.role === "user" && last.content.trim() === currentPrompt.trim()) history.pop();

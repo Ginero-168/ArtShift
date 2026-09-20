@@ -1,3 +1,4 @@
+import { DIRECTOR_CONVERSATION_HISTORY_LIMIT } from "@/lib/ai/orchestration/chatContinuity";
 import { prepareRemoteOrchestratorTurn } from "@/lib/ai/orchestration/creativeDirectorClient";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { type EngineState, useEngine } from "@/lib/engine/store";
@@ -77,7 +78,7 @@ export async function prepareRemoteDesignTurn(
   const direction = await prepareRemoteOrchestratorTurn(
     {
       prompt,
-      conversationHistory: messages.slice(-12),
+      conversationHistory: messages.slice(-DIRECTOR_CONVERSATION_HISTORY_LIMIT),
       designContext: context,
       canvasSummary: {
         objectCount: countSnapshotObjects(context.snapshot),

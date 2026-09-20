@@ -43,6 +43,7 @@ describe("Image Completion Summary Format", () => {
     expect(threadSource).toContain("ImageResultSummaryBlock");
     expect(threadSource).toContain("Thought");
     expect(threadSource).toContain("export function ChatModelDisclosure(");
+    expect(threadSource).toContain("followUpNote");
     expect(threadSource).toContain("chat-model-status");
     expect(threadSource).toContain("chat-model-meta");
     expect(threadSource).toContain("ImageSparkleIcon");

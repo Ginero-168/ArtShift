@@ -51,7 +51,7 @@ describe("chatContinuity", () => {
       summary: "แมวนอนบนโซฟาแนวนอน",
     });
     expect(composed).toContain("User follow-up request: สร้างมาอีก 3 รูป");
-    expect(composed).toContain("PRIOR IMAGE GENERATION TO CONTINUE");
+    expect(composed).toContain("LAST IMAGE GENERATION PACKAGE");
     expect(composed).toContain("16:9 (1280×720)");
     expect(composed).toContain("Photoreal Scottish Fold cat on a sofa");
   });
@@ -104,5 +104,29 @@ describe("chatContinuity", () => {
     ]);
     expect(prior?.refinedPrompt).toBe("Cat 16:9 base prompt");
     expect(prior?.aspectRatio).toBe("16:9");
+  });
+
+  it("detects short revision follow-ups like 'ปรับเป็นแนวตั้ง'", () => {
+    expect(isImageFollowUpPrompt("ปรับเป็นแนวตั้ง")).toBe(true);
+    expect(isImageFollowUpPrompt("ทำให้เป็นแนวตั้ง")).toBe(true);
+    expect(isImageFollowUpPrompt("make it vertical")).toBe(true);
+    expect(isImageFollowUpPrompt("ปรับโทน")).toBe(true);
+    expect(isImageFollowUpPrompt("ปรับรายละเอียดต่อ")).toBe(true);
+    expect(isImageFollowUpPrompt("ตรวจสอบ Layout")).toBe(false);
+    expect(isImageFollowUpPrompt("ลบพื้นหลัง")).toBe(false);
+  });
+
+  it("resolves 9:16 when the follow-up explicitly asks for vertical", () => {
+    const dims = resolveFollowUpDimensions({
+      prompt: "ปรับเป็นแนวตั้ง",
+      prior: {
+        userPrompt: "ป้าย Nain ลด 35% พาโนรามา 3:1",
+        refinedPrompt: "Pink floral Nain bookstore banner, 35% off, 3:1",
+        width: 2048,
+        height: 688,
+        aspectRatio: "3:1",
+      },
+    });
+    expect(dims?.aspectRatio).toBe("9:16");
   });
 });

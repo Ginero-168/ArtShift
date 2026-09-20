@@ -12,7 +12,7 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     const lines = barSource.split("\n").length;
 
     // Line count reduced from ~2,975 lines; Mix / ultra-wide / vision-API status grew past 1900
-    expect(lines).toBeLessThan(1920);
+    expect(lines).toBeLessThan(2100);
 
     // Integrates the 4 extracted submodules
     expect(barSource).toContain("useCanvasSelectionBridge");

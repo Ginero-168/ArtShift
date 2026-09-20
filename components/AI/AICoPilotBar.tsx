@@ -31,10 +31,16 @@ import {
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import { formatFriendlyAspectRatio } from "@/lib/ai/imageResultPresentation";
 import {
+  classifyImageFollowUpPrompt,
   composeFollowUpDirectorPrompt,
   extractPriorImageGenerationContext,
-  isImageFollowUpPrompt,
+  LAST_GENERATION_FOLLOW_UP_NOTE,
   type PriorImageGenerationContext,
+  resolveFollowUpImageRefs,
+  serializeConversationHistoryForDirector,
+  snapshotGenerationContext,
+  snapshotIngredients,
+  toContinuityHistory,
 } from "@/lib/ai/orchestration/chatContinuity";
 import {
   buildChatHistorySnapshot,
@@ -51,6 +57,11 @@ import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
+import {
+  FOLLOW_UP_RECALL_STATUS_MESSAGE,
+  type FollowUpRecallResult,
+} from "@/lib/ai/orchestration/followUpRecall";
+import { recallFollowUpContext } from "@/lib/ai/orchestration/followUpRecallClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import {
   expandImageToAspectRatio,
@@ -95,7 +106,7 @@ import {
 import { subscribeAIProgress } from "@/lib/ai/progressReporter";
 import { routeUnifiedPrompt, UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { planVisualRequest } from "@/lib/ai/visualOrchestrator";
-import { buildDesignAgentContext, type ClientChatMessage } from "@/lib/designAgent/client";
+import { buildDesignAgentContext } from "@/lib/designAgent/client";
 import type { PlanProposal } from "@/lib/designAgent/contracts";
 import { buildLocalEditPlan } from "@/lib/designAgent/localPlan";
 import { summarizePlanForReview } from "@/lib/designAgent/planReview";
@@ -439,24 +450,14 @@ export default function AICoPilotBar() {
       }
     }
 
-    const historyForContinuity = messages
-      .filter(
-        (m): m is CoPilotMessage & { role: "user" | "assistant" } =>
-          (m.role === "user" || m.role === "assistant") && m.kind !== "progress",
-      )
-      .map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-        ...(m.generationContext ? { generationContext: m.generationContext } : {}),
-      }));
+    const historyForContinuity = toContinuityHistory(messages);
     const priorGeneration: PriorImageGenerationContext | null =
       extractPriorImageGenerationContext(historyForContinuity);
-    const isFollowUpTurn =
-      !pending && isImageFollowUpPrompt(promptToSend) && Boolean(priorGeneration);
-    const directorPrompt =
-      isFollowUpTurn && priorGeneration
-        ? composeFollowUpDirectorPrompt(promptToSend, priorGeneration)
-        : promptToSend;
+    const followUpKind = classifyImageFollowUpPrompt(promptToSend);
+    const isFollowUpTurn = !pending && Boolean(followUpKind) && Boolean(priorGeneration);
+    let directorPrompt = promptToSend;
+    let followUpRecall: FollowUpRecallResult | null = null;
+    let followUpCarriedForward = false;
 
     const inlineTagRefs = extractInlineTagRefs(rawPrompt);
     const inlineObjectIds = inlineTagRefs.map((tag) => tag.objectId);
@@ -500,8 +501,23 @@ export default function AICoPilotBar() {
       ]);
       return;
     }
+    const userAttachedRefs = pending ? pending.selectedImages : effectiveSelection.refs;
+    const followUpBinding = pending
+      ? {
+          refs: userAttachedRefs,
+          carriedForward: false,
+          usedOutput: false,
+          usedIngredients: false,
+        }
+      : resolveFollowUpImageRefs({
+          elements: slide?.elements ?? [],
+          prior: priorGeneration,
+          userRefs: userAttachedRefs,
+          maxRefs: 4,
+        });
+    followUpCarriedForward = Boolean(isFollowUpTurn && followUpBinding.carriedForward);
     const refsForTurn = snapshotComposerImageRefs(
-      pending ? pending.selectedImages : effectiveSelection.refs,
+      followUpCarriedForward ? followUpBinding.refs : userAttachedRefs,
     );
 
     setInput("");
@@ -645,6 +661,74 @@ export default function AICoPilotBar() {
           !isBuiltInImageAction,
       );
 
+      const shouldRunSmartRecall =
+        isFollowUpTurn &&
+        Boolean(priorGeneration) &&
+        !pending &&
+        !isBuiltInImageAction &&
+        !isCanvasInventoryPrompt(promptToSend);
+
+      if (shouldRunSmartRecall && priorGeneration) {
+        const recallConsent = ensureCloudConsent();
+        const recallAction: SubAgentActionLog = {
+          id: crypto.randomUUID(),
+          agent: "orchestrator",
+          title: `Memory Recall (${DEFAULT_CLOUD_VISION_LABEL})`,
+          description: FOLLOW_UP_RECALL_STATUS_MESSAGE,
+          status: recallConsent ? "running" : "error",
+          timestamp: Date.now(),
+          stage: "analyzing",
+        };
+        analysisActions.push(recallAction);
+        upsertCurrentAction(recallAction);
+        if (!recallConsent) {
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider",
+              timestamp: Date.now(),
+              actions: analysisActions,
+            },
+          ]);
+          return;
+        }
+        turnModels.remember(directorModelStep());
+        setLiveAssistantState({
+          stage: "analyzing",
+          prompt: promptToSend,
+          isEdit: refsForTurn.length > 0,
+          toolLabel: DEFAULT_DIRECTOR_MODEL_ID,
+          statusMessage: FOLLOW_UP_RECALL_STATUS_MESSAGE,
+          actions: [...analysisActions],
+          activeModels: turnModels.snapshot(),
+        });
+        followUpRecall = await recallFollowUpContext(
+          {
+            followUpPrompt: promptToSend,
+            conversationHistory: historyForContinuity,
+            lastGeneration: priorGeneration,
+          },
+          { signal: controller.signal, cloudConsent: true },
+        );
+        turnModels.remember(directorModelStep(followUpRecall.model));
+        recallAction.status = "success";
+        recallAction.description =
+          followUpRecall.source === "cloud-api"
+            ? `ทบทวนบทสนทนาและภาพล่าสุดด้วย ${DEFAULT_CLOUD_VISION_LABEL} แล้ว`
+            : "ทบทวนจากแพ็กเกจภาพล่าสุดในแชทแล้ว";
+        upsertCurrentAction({ ...recallAction });
+        directorPrompt = composeFollowUpDirectorPrompt(promptToSend, priorGeneration, {
+          recall: followUpRecall,
+          kind: followUpKind,
+        });
+      } else if (isFollowUpTurn && priorGeneration) {
+        directorPrompt = composeFollowUpDirectorPrompt(promptToSend, priorGeneration, {
+          kind: followUpKind,
+        });
+      }
+
       if (isCanvasInventoryPrompt(promptToSend) && slide) {
         contextDecision = prepareContextAwareTurn({
           prompt: promptToSend,
@@ -655,6 +739,7 @@ export default function AICoPilotBar() {
       } else if (
         pending ||
         isImageGenerationPrompt(promptToSend) ||
+        isFollowUpTurn ||
         isImageFollowUp ||
         (hasImageContext && !isBuiltInImageAction)
       ) {
@@ -808,14 +893,10 @@ export default function AICoPilotBar() {
               const direction = await prepareRemoteCreativeDirection(
                 {
                   prompt: directorPrompt,
-                  conversationHistory: historyForContinuity
-                    .map(
-                      (message): ClientChatMessage => ({
-                        role: message.role,
-                        content: message.content,
-                      }),
-                    )
-                    .slice(-12),
+                  conversationHistory: serializeConversationHistoryForDirector(
+                    historyForContinuity,
+                    { currentPrompt: promptToSend },
+                  ),
                   designContext: buildDesignAgentContext(),
                   canvasSummary: {
                     objectCount: elementCount,
@@ -960,14 +1041,19 @@ export default function AICoPilotBar() {
                 const plannedAspects = imageRun.tasks
                   .map((task) => task.requestedDimensions?.aspectRatio)
                   .filter((ratio): ratio is string => Boolean(ratio));
-                const thoughtText = formatThoughtText(
-                  rawPrompt,
-                  direction.summary,
-                  count,
-                  isEditTurn,
-                  plannedAspects.length > 1 ? undefined : imageRun.tasks[0]?.requestedDimensions,
-                  plannedAspects,
-                );
+                const thoughtText = [
+                  followUpCarriedForward ? LAST_GENERATION_FOLLOW_UP_NOTE : "",
+                  formatThoughtText(
+                    rawPrompt,
+                    direction.summary,
+                    count,
+                    isEditTurn,
+                    plannedAspects.length > 1 ? undefined : imageRun.tasks[0]?.requestedDimensions,
+                    plannedAspects,
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(" — ");
                 const imageModel =
                   catalogModelStep(direction.modelAlias) ??
                   modelStepFromRuntime(direction.runtimeModel, "image");
@@ -1225,6 +1311,38 @@ export default function AICoPilotBar() {
                     );
                   const continuedVariants =
                     locksFromHelper?.variantSelections ?? priorGeneration?.variantSelections;
+                  const storedContext = snapshotGenerationContext({
+                    userPrompt: isFollowUpTurn
+                      ? priorGeneration?.userPrompt || promptToSend
+                      : promptToSend,
+                    refinedPrompt: direction.refinedPrompt,
+                    summary: direction.summary,
+                    width:
+                      firstSucceeded?.result?.width ??
+                      firstSucceededTask?.requestedDimensions?.width ??
+                      1024,
+                    height:
+                      firstSucceeded?.result?.height ??
+                      firstSucceededTask?.requestedDimensions?.height ??
+                      1024,
+                    aspectRatio: firstSucceededTask?.requestedDimensions?.aspectRatio ?? "1:1",
+                    refinementMode:
+                      locksFromHelper?.refinementMode ??
+                      priorGeneration?.refinementMode ??
+                      (continuedVariants?.length ? "brand-variant" : "generic"),
+                    sharedAnchors: continuedAnchors,
+                    variantSelections: continuedVariants,
+                    modelId: firstSucceeded?.result?.model ?? modelName,
+                    outputElementId: firstSucceeded?.result?.elementId,
+                    outputFileId: firstSucceeded?.result?.fileId,
+                    ingredients:
+                      isFollowUpTurn && priorGeneration?.ingredients?.length
+                        ? priorGeneration.ingredients
+                        : snapshotIngredients(refsForTurn),
+                    campaignNotes: followUpRecall?.campaignNotes || direction.summary,
+                    styleTags: priorGeneration?.styleTags,
+                    revisedLastGeneration: followUpCarriedForward,
+                  });
 
                   setMessages((previous) => [
                     ...previous,
@@ -1238,30 +1356,10 @@ export default function AICoPilotBar() {
                       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
                       resultSummary,
                       qualityLabel: selectedQuality,
-                      generationContext: {
-                        userPrompt: isFollowUpTurn
-                          ? priorGeneration?.userPrompt || promptToSend
-                          : promptToSend,
-                        refinedPrompt: direction.refinedPrompt,
-                        summary: direction.summary,
-                        width:
-                          firstSucceeded?.result?.width ??
-                          firstSucceededTask?.requestedDimensions?.width ??
-                          1024,
-                        height:
-                          firstSucceeded?.result?.height ??
-                          firstSucceededTask?.requestedDimensions?.height ??
-                          1024,
-                        aspectRatio: firstSucceededTask?.requestedDimensions?.aspectRatio ?? "1:1",
-                        refinementMode:
-                          locksFromHelper?.refinementMode ??
-                          priorGeneration?.refinementMode ??
-                          (continuedVariants?.length ? "brand-variant" : "generic"),
-                        sharedAnchors: continuedAnchors,
-                        ...(continuedVariants?.length
-                          ? { variantSelections: continuedVariants }
-                          : {}),
-                      } satisfies PriorImageGenerationContext,
+                      generationContext: storedContext,
+                      followUpNote: followUpCarriedForward
+                        ? LAST_GENERATION_FOLLOW_UP_NOTE
+                        : undefined,
                       timestamp: Date.now(),
                       actions,
                       suggestions: completionSuggestions,
@@ -1385,6 +1483,7 @@ export default function AICoPilotBar() {
         | undefined;
       let remoteModelAlias: string | undefined;
       let remoteResultSummary: ReturnType<typeof buildImageCompletionSummary> | undefined;
+      let remoteGenerationContext: PriorImageGenerationContext | undefined;
 
       if (localPlan) {
         const localAction: SubAgentActionLog = {
@@ -1446,17 +1545,9 @@ export default function AICoPilotBar() {
           statusMessage: "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...",
           activeModels: turnModels.snapshot(),
         });
-        const history: ClientChatMessage[] = [
-          ...messages
-            .flatMap((message): ClientChatMessage[] =>
-              (message.role === "user" || message.role === "assistant") &&
-              message.kind !== "progress"
-                ? [{ role: message.role, content: message.content }]
-                : [],
-            )
-            .slice(-10),
-          { role: "user", content: promptToSend },
-        ];
+        const history = serializeConversationHistoryForDirector(historyForContinuity, {
+          currentPrompt: promptToSend,
+        });
         const remoteConsent = ensureCloudConsent();
         if (!remoteConsent) {
           remoteActions[0] = {
@@ -1684,6 +1775,25 @@ export default function AICoPilotBar() {
               },
             ];
             suggestions = ["ปรับรายละเอียดต่อ", "ตรวจสอบ Layout", "↶ Undo ผลลัพธ์ล่าสุด"];
+            remoteGenerationContext = snapshotGenerationContext({
+              userPrompt: isFollowUpTurn
+                ? priorGeneration?.userPrompt || promptToSend
+                : promptToSend,
+              refinedPrompt: result.refinedPrompt,
+              summary: result.summary,
+              width: generated.width,
+              height: generated.height,
+              aspectRatio: directedTask.requestedDimensions?.aspectRatio ?? "1:1",
+              modelId: generated.model,
+              outputElementId: generated.elementId,
+              outputFileId: generated.fileId,
+              ingredients:
+                isFollowUpTurn && priorGeneration?.ingredients?.length
+                  ? priorGeneration.ingredients
+                  : snapshotIngredients(refsForTurn),
+              campaignNotes: result.summary,
+              revisedLastGeneration: followUpCarriedForward,
+            });
           }
         }
         upsertCurrentAction(remoteActions[0]);
@@ -1702,6 +1812,11 @@ export default function AICoPilotBar() {
         images: remoteGeneratedImages,
         resultSummary: remoteResultSummary,
         qualityLabel: remoteGeneratedImages ? selectedQuality : undefined,
+        generationContext: remoteGenerationContext,
+        followUpNote:
+          followUpCarriedForward && remoteGeneratedImages
+            ? LAST_GENERATION_FOLLOW_UP_NOTE
+            : undefined,
         timestamp: Date.now(),
         actions,
         suggestions,

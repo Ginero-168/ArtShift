@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { DIRECTOR_CONVERSATION_HISTORY_LIMIT } from "@/lib/ai/orchestration/chatContinuity";
 import {
   type CreativeDirectorInput,
   CreativeDirectorValidationError,
@@ -220,7 +221,7 @@ function parseConversationHistory(
   value: unknown,
 ): CreativeDirectorInput["conversationHistory"] | null | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > 12) return null;
+  if (!Array.isArray(value) || value.length > DIRECTOR_CONVERSATION_HISTORY_LIMIT) return null;
   const messages: NonNullable<CreativeDirectorInput["conversationHistory"]>[number][] = [];
   for (const item of value) {
     if (
