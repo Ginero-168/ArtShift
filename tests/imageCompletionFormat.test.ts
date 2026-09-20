@@ -33,6 +33,7 @@ describe("Image Completion Summary Format", () => {
     expect(source).toContain("direction.outputBriefs");
     expect(source).toContain("{ cloudConsent: true }");
     expect(source).toContain("visionConsent");
+    expect(source).toContain("visionModelStep");
     expect(source).not.toContain("florenceModelStep");
     expect(source).toMatch(/formatImageCompletionReply\(subject,\s*1,\s*briefs/);
   });

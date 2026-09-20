@@ -1,3 +1,4 @@
+import { DEFAULT_DIRECTOR_MODEL_ID, normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import {
   cleanImagePrompt,
   generateAIImage,
@@ -376,7 +377,7 @@ export async function runContextAwareImageTask(
                 },
                 { cloudConsent: options.cloudConsent === true },
               );
-              visionModelUsed = "florence-2";
+              visionModelUsed = normalizeRuntimeModelId(outputAnalysis?.model) ?? undefined;
             } catch (error) {
               if (isAbortError(error)) throw error;
               technicalFallback = true;
@@ -1019,6 +1020,7 @@ async function analyzeGeneratedOutput(
           .slice(0, 50),
         visibleText: turbo.visibleText.trim(),
         limitations: [],
+        model: normalizeRuntimeModelId(turbo.model) ?? DEFAULT_DIRECTOR_MODEL_ID,
       };
     }
   }

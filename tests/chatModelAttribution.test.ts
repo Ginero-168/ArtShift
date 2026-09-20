@@ -16,6 +16,7 @@ import {
   resolveCatalogModelId,
   uniqueModelSteps,
   upsertModelStep,
+  visionModelStep,
 } from "@/lib/ai/chatModelAttribution";
 
 describe("chat model attribution", () => {
@@ -87,6 +88,19 @@ describe("chat model attribution", () => {
         florenceModelStep(),
       ]),
     ).toEqual([{ id: "openai/gpt-image-2.5-sunburst", role: "image" }]);
+    expect(visionModelStep()).toEqual({ id: DEFAULT_DIRECTOR_MODEL_ID, role: "vision" });
+    expect(visionModelStep("google/gemini-3-flash")).toEqual({
+      id: "google/gemini-3-flash",
+      role: "vision",
+    });
+    expect(visionModelStep(FLORENCE_2_MODEL_ID)).toBeNull();
+    expect(formatUsingStatus([visionModelStep()!])).toBe("กำลังใช้ google/gemini-3-flash...");
+    expect(formatModelDisclosure([visionModelStep()!, florenceModelStep()])).toBe(
+      "google/gemini-3-flash",
+    );
+    expect(
+      displayModelSteps([directorModelStep(), visionModelStep()!, florenceModelStep()]),
+    ).toEqual([{ id: "google/gemini-3-flash", role: "vision" }]);
   });
 
   it("upserts the same role to the adapter-reported id instead of stacking expected+actual", () => {
@@ -130,5 +144,19 @@ describe("chat model attribution", () => {
       "openai/gpt-image-2.5-sunburst",
       FLORENCE_2_MODEL_ID,
     ]);
+  });
+
+  it("labels in-flight vision as Gemini API and drops Florence from the sparkle row", () => {
+    const turn = createChatTurnModels();
+    turn.remember(visionModelStep());
+    expect(turn.using()).toBe("กำลังใช้ google/gemini-3-flash...");
+    expect(turn.label()).toBe("google/gemini-3-flash");
+    turn.remember(visionModelStep(FLORENCE_2_MODEL_ID));
+    expect(turn.label()).toBe("google/gemini-3-flash");
+    turn.forget("vision");
+    expect(turn.label()).toBe("");
+    turn.remember(visionModelStep("google/gemini-3-flash"));
+    turn.remember(catalogModelStep("image-general"));
+    expect(turn.label()).toBe("openai/gpt-image-2.5-sunburst");
   });
 });

@@ -991,6 +991,7 @@ describe("context-aware image task runner", () => {
     expect(callOrder).toEqual(["cloud-api"]);
     expect(events.some((event) => event.includes("Gemini 3 Flash"))).toBe(true);
     expect(events.some((event) => /florence/i.test(event))).toBe(false);
+    expect(result.visionModel).toBe("google/gemini-3-flash");
   });
 
   it("falls back to local Florence only after the cloud vision API misses", async () => {

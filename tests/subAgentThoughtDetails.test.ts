@@ -7,6 +7,8 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
 
     expect(threadSource).toContain("ChatModelDisclosure");
     expect(threadSource).toContain("formatModelDisclosure");
+    expect(threadSource).not.toContain("DEFAULT_CLOUD_VISION_LABEL");
+    expect(threadSource).not.toContain("DEFAULT_CREATING_MODEL_LABEL");
     expect(threadSource).toContain(">Thought</span>");
     expect(threadSource).not.toContain("การสั่งงาน Sub-Agents");
     expect(threadSource).not.toContain("Detail: {taskItem.detailScore}");

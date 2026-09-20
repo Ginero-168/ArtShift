@@ -1,4 +1,4 @@
-import { normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
+import { DEFAULT_DIRECTOR_MODEL_ID, normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import { getAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 import { parseVisionResponse, visionExtrasAsAppearanceNotes } from "./cloudVisionParser";
@@ -20,10 +20,10 @@ export type ImageReferenceAnalysis = {
   transparency: "none" | "partial" | "unknown";
   appearanceNotes: string[];
   limitations: string[];
+  /** Runtime vision model that produced this analysis (Gemini API id or florence-2). */
+  visionModel?: string;
   source?: VisionBackendId | "none";
   modelLabel?: string;
-  /** Runtime vision model that produced this analysis (florence-2 or cloud adapter id). */
-  visionModel?: string;
 };
 
 export type CloudVisionTurboResult = {
@@ -153,7 +153,6 @@ export async function analyzeImageReference(
   let turboNotes: string[] = [];
   let source: VisionBackendId | "none" = "none";
   let modelLabel = DEFAULT_CLOUD_VISION_LABEL;
-  let visionModel: string | undefined;
 
   const resolvedAnalyzers = analyzersForConsent(analyzers, options?.cloudConsent === true);
   const order = resolveVisionBackendOrder({
@@ -162,6 +161,7 @@ export async function analyzeImageReference(
   });
 
   let turboSuccess = false;
+  let visionModel: string | undefined;
   if (order[0] === "cloud-api" && resolvedAnalyzers.turbo) {
     const turboResult = await resolvedAnalyzers.turbo(visible.dataUrl, signal, onProgress);
     if (
@@ -175,7 +175,7 @@ export async function analyzeImageReference(
       source = "cloud-api";
       modelLabel = turboResult.modelLabel || formatVisionModelLabel(turboResult.model, "cloud-api");
       turboSuccess = true;
-      visionModel = normalizeRuntimeModelId(turboResult.model) ?? undefined;
+      visionModel = normalizeRuntimeModelId(turboResult.model) ?? DEFAULT_DIRECTOR_MODEL_ID;
     }
   }
 
@@ -194,9 +194,9 @@ export async function analyzeImageReference(
     caption = localCaption;
     objects = detection.objects.map((object) => object.label.trim()).filter(Boolean);
     visibleText = localText;
+    visionModel = "florence-2";
     source = "local-florence";
     modelLabel = formatVisionModelLabel(undefined, "local-florence");
-    visionModel = "florence-2";
   }
   throwIfAborted(signal);
 
@@ -231,9 +231,9 @@ export async function analyzeImageReference(
         : []),
       ...(source === "none" ? ["cloud vision unavailable; local fallback disabled"] : []),
     ],
+    ...(visionModel ? { visionModel } : {}),
     source,
     modelLabel,
-    ...(visionModel ? { visionModel } : {}),
   };
 }
 

@@ -330,7 +330,7 @@ export async function executeCoPilotInstruction(
           options.signal ?? new AbortController().signal,
           undefined,
           undefined,
-          { cloudConsent: options.cloudConsent === true },
+          { cloudConsent: true },
         ));
       act.stage = "analyzing";
       act.description = "กำลังส่ง brief ให้ Gemini 3 Flash Creative Director วางแผน…";

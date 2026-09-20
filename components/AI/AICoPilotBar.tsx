@@ -8,8 +8,10 @@ import { useCanvasSelectionBridge } from "@/components/AI/useCanvasSelectionBrid
 import {
   catalogModelStep,
   createChatTurnModels,
+  DEFAULT_DIRECTOR_MODEL_ID,
   directorModelStep,
   modelStepFromRuntime,
+  visionModelStep,
 } from "@/lib/ai/chatModelAttribution";
 import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
 import {
@@ -526,9 +528,9 @@ export default function AICoPilotBar() {
       stage: isEditTurn ? "analyzing" : "outputting",
       prompt: promptToSend,
       isEdit: isEditTurn,
-      toolLabel: isEditTurn ? DEFAULT_CLOUD_VISION_LABEL : undefined,
+      toolLabel: isEditTurn ? DEFAULT_DIRECTOR_MODEL_ID : undefined,
       statusMessage: isEditTurn ? cloudVisionStatusMessage() : "กำลังประมวลผลคำสั่ง...",
-      activeModels: turnModels.snapshot(),
+      activeModels: isEditTurn ? turnModels.remember(visionModelStep()) : turnModels.snapshot(),
     });
 
     try {
@@ -683,12 +685,13 @@ export default function AICoPilotBar() {
             ]);
             return;
           }
+          turnModels.remember(visionModelStep());
           setLiveAssistantState({
             stage: "analyzing",
             prompt: promptToSend,
             isEdit: true,
-            toolLabel: DEFAULT_CLOUD_VISION_LABEL,
-            statusMessage: turnModels.using() || cloudVisionStatusMessage(),
+            toolLabel: DEFAULT_DIRECTOR_MODEL_ID,
+            statusMessage: cloudVisionStatusMessage(),
             actions: [analysisAction],
             activeModels: turnModels.snapshot(),
           });
@@ -701,11 +704,9 @@ export default function AICoPilotBar() {
                 upsertCurrentAction({ ...analysisAction });
                 setLiveAssistantState((prev) => ({
                   ...(prev || { stage: "analyzing", prompt: promptToSend, isEdit: true }),
-                  stage: "analyzing",
-                  toolLabel: DEFAULT_CLOUD_VISION_LABEL,
-                  statusMessage:
-                    turnModels.using() ||
-                    cloudVisionStatusMessage(Math.round((completed / Math.max(1, total)) * 100)),
+                  statusMessage: cloudVisionStatusMessage(
+                    Math.round((completed / Math.max(1, total)) * 100),
+                  ),
                   actions: [analysisAction],
                   activeModels: turnModels.snapshot(),
                 }));
@@ -720,6 +721,9 @@ export default function AICoPilotBar() {
               ? `วิเคราะห์สำรองบนเครื่อง (${analysesForTurn.length}) — ${DEFAULT_CLOUD_VISION_LABEL} ไม่พร้อม`
               : `วิเคราะห์ภาพด้วย ${DEFAULT_CLOUD_VISION_LABEL} เสร็จแล้ว (${analysesForTurn.length} รายการ)`;
             upsertCurrentAction({ ...analysisAction });
+            const cloudVision = analysesForTurn.find((item) => item.source === "cloud-api");
+            if (cloudVision) turnModels.remember(visionModelStep(cloudVision.visionModel));
+            else turnModels.forget("vision");
           } catch (error) {
             analysisAction.status = "error";
             analysisAction.description = `วิเคราะห์ภาพไม่สำเร็จ: ${(error as Error).message}`;

@@ -40,6 +40,10 @@ export function normalizeRuntimeModelId(raw: string | null | undefined): string 
   return stripped;
 }
 
+export function isFlorenceModelId(id: string): boolean {
+  return id === FLORENCE_2_MODEL_ID || id.toLowerCase().includes("florence");
+}
+
 export function directorModelStep(raw?: string | null): ChatModelStep {
   const id = normalizeRuntimeModelId(raw) ?? DEFAULT_DIRECTOR_MODEL_ID;
   return { id, role: "chat" };
@@ -47,6 +51,16 @@ export function directorModelStep(raw?: string | null): ChatModelStep {
 
 export function florenceModelStep(): ChatModelStep {
   return { id: FLORENCE_2_MODEL_ID, role: "vision" };
+}
+
+/**
+ * Cloud vision step (Gemini 3 Flash API). Returns null for Florence so the
+ * sparkle/status row never labels local ONNX as the active vision model.
+ */
+export function visionModelStep(raw?: string | null): ChatModelStep | null {
+  const id = normalizeRuntimeModelId(raw) ?? DEFAULT_DIRECTOR_MODEL_ID;
+  if (isFlorenceModelId(id)) return null;
+  return { id, role: "vision" };
 }
 
 /** Resolve a creating-model alias to its catalog `modelId`. Returns null if unknown or unconfigured. */
@@ -115,13 +129,16 @@ export function uniqueModelSteps(steps: readonly ChatModelStep[]): ChatModelStep
 }
 
 /**
- * Status / sparkle row: generate tasks show the cloud image API model,
- * not Gemini chat and not local Florence/ONNX vision.
+ * Status / sparkle row: generate tasks show the cloud image API model.
+ * Vision analysis shows the Gemini API id when that is running.
+ * Never local Florence/ONNX.
  */
 export function displayModelSteps(steps: readonly ChatModelStep[]): ChatModelStep[] {
-  const unique = uniqueModelSteps(steps);
+  const unique = uniqueModelSteps(steps).filter((step) => !isFlorenceModelId(step.id));
   const image = unique.filter((step) => step.role === "image");
   if (image.length > 0) return image;
+  const vision = unique.filter((step) => step.role === "vision" || step.role === "local");
+  if (vision.length > 0) return vision;
   const chat = unique.filter((step) => step.role === "chat");
   if (chat.length > 0) return chat;
   return [];
@@ -164,7 +181,7 @@ export function formatModelChain(steps: readonly ChatModelStep[]): string {
 
 /**
  * Model id shown on the image-gen sparkle / spinner row.
- * Generate tasks: cloud image API id only. Chat replies: Gemini. Never local vision.
+ * Generate: cloud image API. Vision: Gemini API. Chat: Gemini. Never local Florence.
  */
 export function formatModelDisclosure(
   steps?: readonly ChatModelStep[] | null,
@@ -199,6 +216,7 @@ export function attachRuntimeModel<T extends { runtimeModel?: string }>(
 
 export type ChatTurnModels = {
   remember: (step: ChatModelStep | null | undefined) => ChatModelStep[];
+  forget: (role: ChatModelRole) => ChatModelStep[];
   snapshot: () => ChatModelStep[];
   label: () => string;
   using: () => string;
@@ -212,6 +230,10 @@ export function createChatTurnModels(): ChatTurnModels {
   return {
     remember(step) {
       steps = upsertModelStep(steps, step);
+      return snapshot();
+    },
+    forget(role) {
+      steps = steps.filter((step) => step.role !== role);
       return snapshot();
     },
     snapshot,
