@@ -143,12 +143,13 @@ export function appearanceItemSwatch(item: AppearanceItem): string {
 
 export function stackKindOf(
   item: AppearanceItem,
-): "fill" | "stroke" | "background" | "shadow" | "glow" | null {
+): "fill" | "stroke" | "background" | "shadow" | "glow" | "blur" | null {
   if (item.kind === "fill") return "fill";
   if (item.kind === "stroke") return "stroke";
   if (item.kind === "background") return "background";
   if (item.kind === "effect" && (item.effect.type === "shadow" || item.effect.type === "glow")) {
     return item.effect.type;
   }
+  if (item.kind === "effect" && item.effect.type === "gaussianBlur") return "blur";
   return null;
 }

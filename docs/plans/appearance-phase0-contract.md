@@ -17,7 +17,7 @@ Updated: 2026-09-20 — Text Effect Presets (static Colorion) extend the stack (
 - Dual-write on save and Appearance mutations: `shadow`, `glow`, fill (`backgroundColor` / `fillType` / gradients / `fillPattern`), stroke, root `opacity` / `blendMode`. Extra shadow `layers[]`, item blend, and offsets stay on `appearance` only.
 - Text Arc remains `pathCurvature` on text (not an Appearance item); it continues to be written as a legacy text field.
 - v6 → v7 is idempotent: synthesize `appearance` from legacy when missing; if `appearance` is already present, prefer it and refresh legacy from it. Extra stack items that do not fit in a single legacy fill/stroke are kept on `appearance` (no silent drop).
-- v7 → v8 is additive: missing item fields normalize to defaults. Text Effect Presets write a full stack recipe through `applyTextEffectPreset`.
+- v7 → v8 is additive: missing item fields normalize to defaults. Text Effect Presets write a full stack recipe through `replaceStack` (`applyTextEffectPreset` / `updateAppearance`).
 - Runtime: `updateAppearance` / `changeAppearance` write both sides. Legacy `updateElements` patches that touch those flat fields resync the primary Appearance items so PropertiesPanel/AI are not a competing writer.
 
 ## Locked slice (Peerawat 2026-09-20)
@@ -27,7 +27,7 @@ In scope:
 - Appearance panel in the live Builder Inspector
 - **Multiple Fill and Stroke layers** (add / remove / reorder); Canvas paints in stored stack order
 - **Text paint roles (Illustrator-like):** Fill = glyph fill (สีพื้นของตัวอักษร), Stroke = glyph outline (สีขอบ), Background = optional behind-text backdrop (separate stack item — not the Fill row renamed)
-- **Text Effect Presets (static Colorion 90)** — still frames only; see `docs/plans/text-effect-presets-static-from-colorion.md`
+- **Text Effect Presets (static Colorion 90)** — still frames only; canvas/SVG paint the stack; Appearance picker groups, searches, and previews; see `docs/plans/text-effect-presets-static-from-colorion.md`
 - Shadow + Glow (both allowed; multi-layer `layers[]` on a single Shadow/Glow item)
 - Optional static gaussian blur, per-item blend, offset duplicate paint layers
 - Text Arc for text objects via existing `pathCurvature` (no path envelope warp)

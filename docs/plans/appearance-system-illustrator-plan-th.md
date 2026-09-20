@@ -1,6 +1,6 @@
 # แผนระบบ Appearance สำหรับ ArtShift
 
-สถานะ: **Phase 1 foundation + MVP UI (#12) + schema v7 persist + multi Fill/Stroke + static Text Effect Presets / schema v8 (2026-09-20)**
+สถานะ: **Phase 1 foundation + MVP UI (#12) + schema v7 persist + multi Fill/Stroke + static Text Effect Presets A–D / schema v8 (2026-09-20)**
 
 วันที่จัดทำ: 15 กันยายน 2026  
 อัปเดต: 20 กันยายน 2026

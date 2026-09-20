@@ -84,8 +84,10 @@ export function layoutText(
     TextElement,
     "text" | "fontSize" | "fontFamily" | "fontStyle" | "lineHeight" | "padding" | "width" | "height"
   > &
-    Partial<Pick<TextElement, "textMode" | "containerId">>,
-  measure: TextMeasure = (text) => estimateTextWidth(text, element.fontSize),
+    Partial<Pick<TextElement, "textMode" | "containerId" | "letterSpacingEm">>,
+  measure: TextMeasure = (text) =>
+    estimateTextWidth(text, element.fontSize) +
+    letterSpacingPx(element) * Math.max(0, Array.from(text).length - (text ? 1 : 0)),
 ): TextLayout {
   const padding = getTextSafePadding(element.fontSize, element.padding ?? 0);
   const wrap = !isPointText(element);
@@ -179,7 +181,7 @@ export function fitTextElementToBox(element: TextElement, minimumFontSize = 8): 
 
 export function createCanvasTextMeasure(
   context: CanvasRenderingContext2D,
-  element: Pick<TextElement, "fontSize" | "fontFamily" | "fontStyle">,
+  element: Pick<TextElement, "fontSize" | "fontFamily" | "fontStyle" | "letterSpacingEm">,
 ): TextMeasure {
   return (text, style) => {
     setCanvasTextFont(context, element, style.bold, style.italic);
@@ -187,15 +189,25 @@ export function createCanvasTextMeasure(
   };
 }
 
+export function letterSpacingPx(
+  element: Pick<TextElement, "fontSize" | "letterSpacingEm">,
+): number {
+  return Math.max(0, (element.letterSpacingEm ?? 0) * element.fontSize);
+}
+
 export function setCanvasTextFont(
   context: CanvasRenderingContext2D,
-  element: Pick<TextElement, "fontSize" | "fontFamily" | "fontStyle">,
+  element: Pick<TextElement, "fontSize" | "fontFamily" | "fontStyle" | "letterSpacingEm">,
   bold: boolean,
   italic: boolean,
 ) {
   const weight = bold || element.fontStyle.includes("bold") ? "bold" : "normal";
   const style = italic || element.fontStyle.includes("italic") ? "italic" : "normal";
   context.font = `${weight} ${style} ${element.fontSize}px ${element.fontFamily}`;
+  const spacing = letterSpacingPx(element);
+  if ("letterSpacing" in context) {
+    context.letterSpacing = spacing ? `${spacing}px` : "0px";
+  }
 }
 
 export function parseRichText(text: string): RichTextSegment[] {

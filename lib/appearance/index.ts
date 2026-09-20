@@ -1,4 +1,4 @@
-export { appearancePadding } from "./bounds";
+export { appearancePadding, appearanceRenderPad } from "./bounds";
 export { type AppearanceCapability, appearanceCapabilities } from "./capabilities";
 export { changeAppearance } from "./commands";
 export {
@@ -41,6 +41,7 @@ export {
   paintInsertIndex,
   removeItemOperation,
   removeStackKind,
+  replaceStackOperation,
   setRootBlendOperation,
   setRootOpacityOperation,
   shadowPatchOperation,
@@ -87,11 +88,16 @@ export {
 export type { TextEffectFamily, TextEffectPreset, TextEffectStaticCap } from "./textEffectPresets";
 export {
   applyTextEffectPreset,
+  applyTextEffectPresetOperation,
   COLORION_INK,
   getTextEffectPreset,
+  searchTextEffectPresets,
+  TEXT_EFFECT_FAMILY_LABELS,
+  TEXT_EFFECT_FAMILY_ORDER,
   TEXT_EFFECT_PRESET_COUNT,
   TEXT_EFFECT_PRESETS,
   textEffectPresetsByFamily,
+  textEffectPreviewStyle,
 } from "./textEffectPresets";
 export type {
   Appearance,

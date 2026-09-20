@@ -359,6 +359,17 @@ export function setRootBlendOperation(
   return { type: "setRoot", patch: { blendMode } };
 }
 
+export function replaceStackOperation(
+  appearance: Appearance,
+  options: { letterSpacingEm?: number } = {},
+): AppearanceOperation {
+  return {
+    type: "replaceStack",
+    appearance,
+    ...(options.letterSpacingEm !== undefined ? { letterSpacingEm: options.letterSpacingEm } : {}),
+  };
+}
+
 /** New paint sits in front of current fills/strokes and behind the first effect. */
 export function paintInsertIndex(appearance: Appearance | { items: Appearance["items"] }): number {
   const firstEffect = appearance.items.findIndex((item) => item.kind === "effect");

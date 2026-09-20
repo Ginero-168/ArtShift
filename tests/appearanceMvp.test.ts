@@ -215,6 +215,7 @@ describe("Appearance UI wiring", () => {
   it("mounts the stack panel in the live inspector and not XOR toggles in FillSection", () => {
     const inspector = readFileSync("components/Builder/BuilderInspector.tsx", "utf8");
     const panel = readFileSync("components/Builder/AppearancePanel.tsx", "utf8");
+    const picker = readFileSync("components/Builder/TextEffectPresetPicker.tsx", "utf8");
     const fillSection = readFileSync("components/Canvas/PropertiesPanel/FillSection.tsx", "utf8");
     const contract = readFileSync("docs/plans/appearance-phase0-contract.md", "utf8");
     const plan = readFileSync("docs/plans/appearance-system-illustrator-plan-th.md", "utf8");
@@ -224,8 +225,11 @@ describe("Appearance UI wiring", () => {
     expect(panel).toContain("data-appearance-panel");
     expect(panel).toContain("add shadow");
     expect(panel).toContain("add glow");
-    expect(panel).toContain("data-text-effect-presets");
-    expect(panel).toContain("applyTextEffectPreset");
+    expect(panel).toContain("<TextEffectPresetPicker");
+    expect(picker).toContain("data-text-effect-presets");
+    expect(picker).toContain("applyTextEffectPresetOperation");
+    expect(picker).toContain("searchTextEffectPresets");
+    expect(picker).toContain("textEffectPreviewStyle");
     expect(panel).toContain("Text Arc");
     expect(panel).toContain("pathCurvature");
     expect(panel).toContain("updateAppearance");

@@ -1,9 +1,15 @@
+import {
+  canvasGaussianBlurRadius,
+  canvasPaintPasses,
+  canvasShadowPasses,
+} from "../appearance/renderPlan";
+import type { AppearancePaint } from "../appearance/types";
 import { parseCssColor, resolveMultiGradientStops } from "../color/swatches";
 import { getFramePolaroidCutout, getFrameShapeSVGPath } from "./frameMask";
 import { strokeOutlineFor } from "./freehand";
 import { getCached } from "./imageCache";
 import { getRenderableElements } from "./layers";
-import { layoutText, parseRichText } from "./textLayout";
+import { layoutText, letterSpacingPx, parseRichText } from "./textLayout";
 import type {
   ArrowElement,
   ArrowHead,
@@ -193,7 +199,61 @@ function serializeText(element: Extract<EngineElement, { type: "text" }>): strin
     .join("");
   const weight = element.fontStyle.includes("bold") ? "700" : "400";
   const italic = element.fontStyle.includes("italic") ? "italic" : "normal";
-  return `<text fill="${escapeXml(element.strokeColor)}" font-family="${escapeXml(element.fontFamily)}" font-size="${n(element.fontSize)}" font-weight="${weight}" font-style="${italic}" text-anchor="${anchor}" dominant-baseline="hanging">${lines}</text>`;
+  const spacing = letterSpacingPx(element);
+  const letterSpacingAttr = spacing ? ` letter-spacing="${n(spacing)}"` : "";
+  const fontAttrs = `font-family="${escapeXml(element.fontFamily)}" font-size="${n(element.fontSize)}" font-weight="${weight}" font-style="${italic}" text-anchor="${anchor}" dominant-baseline="hanging"${letterSpacingAttr}`;
+  const filterId = `text-fx-${escapeId(element.id)}`;
+  const hasFilter = textFilterNeeded(element);
+  const filterAttr = hasFilter ? ` filter="url(#${filterId})"` : "";
+
+  const passes = canvasPaintPasses(element);
+  if (!passes.length) {
+    return `<text fill="${escapeXml(element.strokeColor)}" ${fontAttrs}${filterAttr}>${lines}</text>`;
+  }
+
+  const parts: string[] = [];
+  for (const [index, pass] of passes.entries()) {
+    const blend = svgBlend(pass.item.blendMode);
+    const blendAttr = blend !== "normal" ? ` style="mix-blend-mode:${blend}"` : "";
+    const offsetX = pass.item.offsetX ?? 0;
+    const offsetY = pass.item.offsetY ?? 0;
+    const transformAttr =
+      offsetX || offsetY ? ` transform="translate(${n(offsetX)} ${n(offsetY)})"` : "";
+    const opacityAttr = pass.item.opacity < 1 ? ` opacity="${n(pass.item.opacity)}"` : "";
+    if (pass.kind === "background") {
+      const fill = svgPaintValue(element, pass.item.paint, index);
+      parts.push(
+        `<rect width="${n(element.width)}" height="${n(element.height)}" rx="${n(element.cornerRadius ?? 0)}" fill="${fill}"${opacityAttr}${blendAttr}${transformAttr}/>`,
+      );
+      continue;
+    }
+    if (pass.kind === "fill") {
+      const fill = svgPaintValue(element, pass.item.paint, index);
+      parts.push(
+        `<text fill="${fill}" stroke="none" ${fontAttrs}${opacityAttr}${blendAttr}${transformAttr}${index === 0 ? filterAttr : ""}>${lines}</text>`,
+      );
+      continue;
+    }
+    parts.push(
+      `<text fill="none" stroke="${escapeXml(pass.item.color)}" stroke-width="${n(pass.item.width)}" paint-order="${pass.item.paintOrder ?? "fill"}" ${fontAttrs}${opacityAttr}${blendAttr}${transformAttr}>${lines}</text>`,
+    );
+  }
+  return parts.length === 1 ? parts[0] : `<g>${parts.join("")}</g>`;
+}
+
+function textFilterNeeded(element: EngineElement): boolean {
+  return canvasShadowPasses(element).length > 0 || canvasGaussianBlurRadius(element) > 0;
+}
+
+function svgBlend(mode?: string): string {
+  if (!mode || mode === "source-over") return "normal";
+  return mode;
+}
+
+function svgPaintValue(element: EngineElement, paint: AppearancePaint, index: number): string {
+  if (paint.type === "solid") return escapeXml(paint.color);
+  if (paint.type === "pattern") return escapeXml(paint.foreground);
+  return `url(#text-paint-${escapeId(element.id)}-${index})`;
 }
 
 function serializeImage(element: Extract<EngineElement, { type: "image" }>): string {
@@ -253,6 +313,9 @@ function elementDefinition(element: EngineElement): string[] {
       );
     }
   }
+  if (element.type === "text") {
+    definitions.push(...textAppearanceDefinitions(element));
+  }
   if (element.type === "image" && element.mask && element.mask.shape !== "rect") {
     definitions.push(
       `<clipPath id="mask-${escapeId(element.id)}">${maskShape(element)}</clipPath>`,
@@ -262,6 +325,55 @@ function elementDefinition(element: EngineElement): string[] {
     definitions.push(imageFilterDefinition(element));
   }
   return definitions;
+}
+
+function textAppearanceDefinitions(element: Extract<EngineElement, { type: "text" }>): string[] {
+  const definitions: string[] = [];
+  const passes = canvasPaintPasses(element);
+  for (const [index, pass] of passes.entries()) {
+    if (pass.kind === "stroke") continue;
+    const paint = pass.item.paint;
+    if (paint.type === "solid" || paint.type === "pattern") continue;
+    definitions.push(appearancePaintGradient(`text-paint-${escapeId(element.id)}-${index}`, paint));
+  }
+  if (!textFilterNeeded(element)) return definitions;
+  const shadows = canvasShadowPasses(element);
+  const blur = canvasGaussianBlurRadius(element);
+  const primitives: string[] = [];
+  for (const pass of shadows) {
+    primitives.push(
+      `<feDropShadow dx="${n(pass.offsetX)}" dy="${n(pass.offsetY)}" stdDeviation="${n(pass.blur / 2)}" flood-color="${escapeXml(pass.color)}" flood-opacity="1"/>`,
+    );
+  }
+  if (blur > 0) {
+    primitives.push(`<feGaussianBlur stdDeviation="${n(blur)}"/>`);
+  }
+  definitions.push(
+    `<filter id="text-fx-${escapeId(element.id)}" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">${primitives.join("")}</filter>`,
+  );
+  return definitions;
+}
+
+function appearancePaintGradient(id: string, paint: AppearancePaint): string {
+  if (paint.type === "solid" || paint.type === "pattern") return "";
+  const stopTags = paint.stops
+    .map((stop) => {
+      const parsed = parseCssColor(stop.color);
+      const hex = `#${Math.round(parsed.r).toString(16).padStart(2, "0")}${Math.round(parsed.g).toString(16).padStart(2, "0")}${Math.round(parsed.b).toString(16).padStart(2, "0")}`;
+      const opacityAttr = parsed.a < 1 ? ` stop-opacity="${parsed.a.toFixed(2)}"` : "";
+      return `<stop offset="${Math.round(stop.offset * 100)}%" stop-color="${escapeXml(hex)}"${opacityAttr}/>`;
+    })
+    .join("");
+  if (paint.type === "linearGradient") {
+    const rad = (paint.angle * Math.PI) / 180;
+    const x1 = Math.round(50 - Math.cos(rad) * 50);
+    const y1 = Math.round(50 - Math.sin(rad) * 50);
+    const x2 = Math.round(50 + Math.cos(rad) * 50);
+    const y2 = Math.round(50 + Math.sin(rad) * 50);
+    return `<linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">${stopTags}</linearGradient>`;
+  }
+  // Radial (and conic approximated as radial — SVG 1.1 has no conicGradient).
+  return `<radialGradient id="${id}">${stopTags}</radialGradient>`;
 }
 
 function hasImageFilter(element: Extract<EngineElement, { type: "image" }>): boolean {
