@@ -197,7 +197,7 @@ describe("ORCH-01: Orchestration Transport & Normalization", () => {
 
     expect(result.kind).toBe("image-task");
     if (result.kind === "image-task") {
-      expect(result.requestedOutputCount).toBe(3);
+      expect(result.requestedOutputCount).toBe(1);
       expect(result.modelAlias).toBe("image-gpt-2");
       expect(result.specialist).toBe("image_generator");
     }

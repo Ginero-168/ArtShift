@@ -1408,14 +1408,10 @@ describe("extractExplicitRequestedOutputCount / resolveRequestedOutputCountFromU
   it("reads explicit N and multi-size lists from the user ask", () => {
     expect(extractExplicitRequestedOutputCount("ขอ 3 แบบ")).toBe(3);
     expect(extractExplicitRequestedOutputCount("สร้าง 3 รูป")).toBe(3);
-    expect(extractExplicitRequestedOutputCount("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที")).toBe(
-      3,
-    );
+    expect(extractExplicitRequestedOutputCount("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที")).toBe(3);
     expect(resolveRequestedOutputCountFromUserAsk("ขอ 3 แบบ")).toBe(3);
     expect(resolveRequestedOutputCountFromUserAsk("สร้าง 3 รูป")).toBe(3);
-    expect(
-      resolveRequestedOutputCountFromUserAsk("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที"),
-    ).toBe(3);
+    expect(resolveRequestedOutputCountFromUserAsk("ปรับให้รูปนี้ เป็น 16:9 , 3:4 และ 9:16 ที")).toBe(3);
   });
 
   it("ignores last-package sizes on a composed orientation follow-up", () => {
