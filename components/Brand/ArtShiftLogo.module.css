@@ -20,79 +20,52 @@
   --logo-size: 0.875rem;
 }
 
-.root :global(.fx-portal) {
-  position: relative;
+.root :global(.fx-heatmap) {
   display: inline-block;
   font-weight: 600;
   font-size: var(--logo-size);
-  line-height: 1.05;
+  line-height: 1.1;
   font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-size-adjust: from-font;
-  letter-spacing: 0.12em;
-  color: inherit;
-  -webkit-text-fill-color: transparent;
-  background: conic-gradient(from 0deg, var(--ink-2), currentColor, var(--ink-3), var(--ink-2));
+  letter-spacing: 0.08em;
+  color: transparent;
+  background:
+    radial-gradient(circle at 20% 50%, #fff26d 0 8%, transparent 24%),
+    radial-gradient(circle at 70% 40%, #ff4f8b 0 12%, transparent 28%),
+    radial-gradient(circle at 44% 78%, var(--ink-3) 0 14%, transparent 32%),
+    linear-gradient(90deg, #2d7dff, #36f0b2, #ffcf4a, #ff4f8b);
+  background-size: 130% 130%, 150% 150%, 140% 140%, 260% 100%;
+  background-position: 0 0, 100% 20%, 40% 100%, 100% 0;
   -webkit-background-clip: text;
   background-clip: text;
-  animation: fx-portal 3.6s linear infinite;
+  animation: fx-heatmap 3.5s ease-in-out infinite alternate;
   white-space: nowrap;
 }
 
-.root :global(.fx-portal)::after {
-  content: attr(data-text);
-  content: attr(data-text) / "";
-  position: absolute;
-  inset: 0;
-  color: inherit;
-  -webkit-text-fill-color: transparent;
-  background: radial-gradient(circle, transparent 0 30%, #fff 34% 36%, transparent 40% 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  opacity: 0.72;
-  animation: fx-portal-pulse 1.8s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes fx-portal {
-  to {
-    filter: hue-rotate(360deg);
-    transform: rotate(0.001deg);
+@keyframes fx-heatmap {
+  0% {
+    background-position: 0 0, 100% 20%, 40% 100%, 100% 0;
+    filter: saturate(1);
   }
-}
-
-@keyframes fx-portal-pulse {
-  0%,
   100% {
-    transform: scale(0.92);
-    opacity: 0.24;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 0.8;
+    background-position: 100% 90%, 0 60%, 80% 0, -100% 0;
+    filter: saturate(1.35);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .root :global(.fx-portal),
-  .root :global(.fx-portal)::after {
+  .root :global(.fx-heatmap) {
     animation: none;
-  }
-
-  .root :global(.fx-portal)::after {
-    opacity: 0.36;
-    transform: none;
+    filter: none;
+    background-position: 0 0, 100% 20%, 40% 100%, 100% 0;
   }
 }
 
 @media (forced-colors: active) {
-  .root :global(.fx-portal) {
+  .root :global(.fx-heatmap) {
     color: CanvasText;
-    -webkit-text-fill-color: CanvasText;
     background: none;
     animation: none;
-  }
-
-  .root :global(.fx-portal)::after {
-    content: none;
+    filter: none;
   }
 }

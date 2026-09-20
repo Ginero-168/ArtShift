@@ -18,7 +18,7 @@ const SIZE_CLASS: Record<ArtShiftLogoSize, string> = {
   compact: styles.sizeCompact,
 };
 
-/** Shared Portal-styled ArtShift wordmark. Size via `size` or `--logo-size`. */
+/** Shared Heatmap-styled ArtShift wordmark. Size via `size` or `--logo-size`. */
 export default function ArtShiftLogo({
   as: Tag = "span",
   size = "header",
@@ -30,9 +30,7 @@ export default function ArtShiftLogo({
 
   return (
     <Tag className={classes} style={style} {...rest}>
-      <span className="fx-portal" data-text="ArtShift">
-        ArtShift
-      </span>
+      <span className="fx-heatmap">{ARTSHIFT_WORDMARK}</span>
     </Tag>
   );
 }

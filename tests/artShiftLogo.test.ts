@@ -10,25 +10,34 @@ const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
 const present = readFileSync("app/present/page.tsx", "utf8");
 const portalPreset = readFileSync("lib/appearance/textEffectPresets/source.ts", "utf8");
 
-describe("ArtShift Portal wordmark", () => {
-  it("renders the Colorion Portal markup with ArtShift as visible text and data-text", () => {
-    expect(logoSource).toContain('className="fx-portal"');
-    expect(logoSource).toContain('data-text="ArtShift"');
-    expect(logoSource).toMatch(/data-text="ArtShift">\s*ArtShift\s*</);
+describe("ArtShift Heatmap wordmark", () => {
+  it("renders the Colorion Heatmap markup with ArtShift as visible text", () => {
+    expect(logoSource).toContain('className="fx-heatmap"');
+    expect(logoSource).toContain("{ARTSHIFT_WORDMARK}");
     expect(logoSource).toContain('export const ARTSHIFT_WORDMARK = "ArtShift"');
+    expect(logoSource).not.toContain("data-text");
+    expect(logoSource).not.toContain("fx-portal");
     expect(logoSource).not.toContain("PORTAL");
-    expect(logoSource).not.toContain('data-text="PORTAL"');
+    expect(logoSource).not.toContain("THERMAL");
     expect(logoSource).toContain("--logo-size");
   });
 
-  it("keeps the Portal animations and pauses them when reduced motion is preferred", () => {
-    expect(logoCss).toContain(".fx-portal");
-    expect(logoCss).toContain("conic-gradient");
-    expect(logoCss).toContain("@keyframes fx-portal");
-    expect(logoCss).toContain("@keyframes fx-portal-pulse");
+  it("keeps the Heatmap animation and uses a static gradient when reduced motion is preferred", () => {
+    expect(logoCss).toContain(".fx-heatmap");
+    expect(logoCss).toContain("radial-gradient");
+    expect(logoCss).toContain("linear-gradient(90deg, #2d7dff, #36f0b2, #ffcf4a, #ff4f8b)");
+    expect(logoCss).toContain("@keyframes fx-heatmap");
+    expect(logoCss).toContain("animation: fx-heatmap 3.5s ease-in-out infinite alternate");
     expect(logoCss).toContain("prefers-reduced-motion: reduce");
     expect(logoCss).toContain("animation: none");
+    expect(logoCss).toContain("background-position: 0 0, 100% 20%, 40% 100%, 100% 0");
     expect(logoCss).toContain('"JetBrains Mono"');
+    expect(logoCss).toContain("--logo-size");
+    expect(logoCss).toContain(".sizeHero");
+    expect(logoCss).toContain(".sizeHeader");
+    expect(logoCss).toContain(".sizeCompact");
+    expect(logoCss).not.toContain(".fx-portal");
+    expect(logoCss).not.toContain("::after");
     expect(logoCss).not.toContain("--primary");
   });
 
