@@ -20,6 +20,7 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
     // Has Google sign-in trigger
     expect(rootPageSource).toContain("signInWithGoogle");
     expect(rootPageSource).toContain("GoogleGIcon");
+    expect(rootPageSource).toContain("เข้าสู่ระบบด้วย Google (Log in with Google)");
 
     // Has link to /projects when authenticated
     expect(rootPageSource).toContain('href="/projects"');
