@@ -2,6 +2,7 @@ import type { EngineElement } from "@/lib/engine/types";
 import { appearanceCapabilities } from "./capabilities";
 import { readAppearance } from "./legacyAdapter";
 import { isMvpStackItem } from "./panelModel";
+import type { FillAppearance, StrokeAppearance } from "./types";
 
 export type CanvasShadowPass = {
   color: string;
@@ -10,6 +11,10 @@ export type CanvasShadowPass = {
   offsetY: number;
   source: "shadow" | "glow";
 };
+
+export type CanvasPaintPass =
+  | { kind: "fill"; item: FillAppearance }
+  | { kind: "stroke"; item: StrokeAppearance };
 
 /**
  * Canvas2D has one shadow state per draw. When both Shadow and Glow are set,
@@ -42,4 +47,56 @@ export function canvasShadowPasses(element: EngineElement): CanvasShadowPass[] {
   }
 
   return passes;
+}
+
+/**
+ * Visible Fill/Stroke items in stored stack order (back-to-front).
+ * Interleaved fills and strokes paint in this sequence, like Illustrator.
+ */
+export function canvasPaintPasses(element: EngineElement): CanvasPaintPass[] {
+  const appearance = readAppearance(element);
+  const caps = appearanceCapabilities(element);
+  const passes: CanvasPaintPass[] = [];
+
+  for (const item of appearance.items) {
+    if (!item.visible || !isMvpStackItem(item, caps)) continue;
+    if (item.kind === "fill") {
+      if (item.fillStyle === "none") continue;
+      passes.push({ kind: "fill", item });
+      continue;
+    }
+    if (item.kind === "stroke") {
+      if (item.width <= 0 && (item.color === "transparent" || item.color === "none")) continue;
+      passes.push({ kind: "stroke", item });
+    }
+  }
+
+  return passes;
+}
+
+/**
+ * True when paint cannot be reduced to the legacy single-fill-then-stroke draw.
+ * Multiple fills/strokes, or a fill in front of a stroke, need stacked compositing.
+ */
+export function usesStackedPaint(passes: CanvasPaintPass[]): boolean {
+  let fills = 0;
+  let strokes = 0;
+  let sawStroke = false;
+  for (const pass of passes) {
+    if (pass.kind === "fill") {
+      fills += 1;
+      if (sawStroke) return true;
+    } else {
+      strokes += 1;
+      sawStroke = true;
+    }
+  }
+  return fills > 1 || strokes > 1;
+}
+
+export function appearanceMaxStrokeWidth(element: EngineElement): number {
+  const widths = canvasPaintPasses(element)
+    .filter((pass): pass is Extract<CanvasPaintPass, { kind: "stroke" }> => pass.kind === "stroke")
+    .map((pass) => pass.item.width);
+  return Math.max(element.strokeWidth ?? 0, ...widths, 0);
 }

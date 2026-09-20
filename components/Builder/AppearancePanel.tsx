@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { IconEye, IconEyeOff, IconPlus, IconTrash } from "@/components/icons";
+import { IconChevronDown, IconEye, IconEyeOff, IconPlus, IconTrash } from "@/components/icons";
 import {
   type AppearanceOperation,
   addFillOperation,
@@ -13,20 +13,23 @@ import {
   appearanceItemSwatch,
   appearanceStackRows,
   clampPathCurvature,
+  fillItemPatchOperation,
   fillPaintOperation,
   findEffect,
   findFill,
   findStroke,
   glowPatchOperation,
+  nudgeItemOperation,
   readAppearance,
-  removeStackKind,
+  removeItemOperation,
   setRootBlendOperation,
   setRootOpacityOperation,
   shadowPatchOperation,
   stackKindOf,
   strokePatchOperation,
-  toggleStackKindVisible,
+  toggleItemVisibleOperation,
 } from "@/lib/appearance";
+import { APPEARANCE_MAX_ITEMS } from "@/lib/appearance/types";
 import type { ColorAdjustments } from "@/lib/color/adjustments";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, ImageElement } from "@/lib/engine/types";
@@ -106,8 +109,8 @@ export default function AppearancePanel({
     <div className={styles.optionSection} data-appearance-panel="true">
       <h3>Appearance</h3>
       <p className={styles.fieldNote}>
-        Stack is front-to-back (top item paints last). Shadow and Glow can both be on; Canvas draws
-        them in stack order.
+        Stack is front-to-back (top item paints last). Add multiple Fills and Strokes; reorder to
+        change paint order. Shadow and Glow composite after paint.
       </p>
 
       <div className={styles.appearanceStack} role="list" aria-label="Appearance stack">
@@ -163,6 +166,7 @@ export default function AppearancePanel({
               className={`${styles.appearanceRow} ${hidden ? styles.appearanceRowHidden : ""}`}
               role="listitem"
               data-appearance-row={kind ?? item.kind}
+              data-appearance-item={item.id}
             >
               <div className={styles.appearanceRowHeader}>
                 <button
@@ -189,32 +193,61 @@ export default function AppearancePanel({
                     {appearanceItemLabel(item, element.type)}
                   </span>
                 </button>
-                {kind ? (
+                <div className={styles.appearanceRowActions}>
                   <button
                     type="button"
                     className={styles.layerIconButton}
-                    title={item.visible ? "Hide" : "Show"}
-                    aria-label={item.visible ? `Hide ${kind}` : `Show ${kind}`}
+                    title="Bring forward"
+                    aria-label={`Bring ${kind ?? item.kind} forward`}
+                    data-appearance-move="forward"
+                    disabled={appearance.items[appearance.items.length - 1]?.id === item.id}
                     onClick={() =>
-                      applyOp((target) => toggleStackKindVisible(target, kind), `toggle ${kind}`)
+                      applyOp((target) => nudgeItemOperation(target, item.id, 1), "bring forward")
                     }
                   >
-                    {item.visible ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                    <IconChevronDown size={13} style={{ transform: "rotate(180deg)" }} />
                   </button>
-                ) : null}
-                {kind ? (
                   <button
                     type="button"
-                    className={`${styles.layerIconButton} ${styles.layerIconDelete}`}
-                    title="Remove"
-                    aria-label={`Remove ${kind}`}
+                    className={styles.layerIconButton}
+                    title="Send backward"
+                    aria-label={`Send ${kind ?? item.kind} backward`}
+                    data-appearance-move="backward"
+                    disabled={appearance.items[0]?.id === item.id}
                     onClick={() =>
-                      applyOp((target) => removeStackKind(target, kind), `remove ${kind}`)
+                      applyOp((target) => nudgeItemOperation(target, item.id, -1), "send backward")
                     }
                   >
-                    <IconTrash size={13} />
+                    <IconChevronDown size={13} />
                   </button>
-                ) : null}
+                  {kind ? (
+                    <button
+                      type="button"
+                      className={styles.layerIconButton}
+                      title={item.visible ? "Hide" : "Show"}
+                      aria-label={item.visible ? `Hide ${kind}` : `Show ${kind}`}
+                      onClick={() =>
+                        applyOp(
+                          (target) => toggleItemVisibleOperation(target, item.id),
+                          `toggle ${kind}`,
+                        )
+                      }
+                    >
+                      {item.visible ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                    </button>
+                  ) : null}
+                  {kind ? (
+                    <button
+                      type="button"
+                      className={`${styles.layerIconButton} ${styles.layerIconDelete}`}
+                      title="Remove"
+                      aria-label={`Remove ${kind}`}
+                      onClick={() => applyOp(() => removeItemOperation(item.id), `remove ${kind}`)}
+                    >
+                      <IconTrash size={13} />
+                    </button>
+                  ) : null}
+                </div>
               </div>
               {expanded ? (
                 <div className={styles.appearanceRowBody}>
@@ -237,22 +270,34 @@ export default function AppearancePanel({
       </div>
 
       <div className={styles.buttonRow}>
-        {caps.fills && !hasFill ? (
+        {caps.fills &&
+        (caps.multipleFills || !hasFill) &&
+        appearance.items.length < APPEARANCE_MAX_ITEMS ? (
           <button
             type="button"
             className={styles.secondaryButton}
+            data-appearance-add="fill"
             aria-label="Add fill"
-            onClick={() => applyOp(addFillOperation(), "add fill")}
+            onClick={() => {
+              applyOp((target) => addFillOperation(target), "add fill");
+              setExpandedKey(null);
+            }}
           >
             <IconPlus size={12} /> Fill
           </button>
         ) : null}
-        {caps.strokes && !hasStroke ? (
+        {caps.strokes &&
+        (caps.multipleStrokes || !hasStroke) &&
+        appearance.items.length < APPEARANCE_MAX_ITEMS ? (
           <button
             type="button"
             className={styles.secondaryButton}
+            data-appearance-add="stroke"
             aria-label="Add stroke"
-            onClick={() => applyOp(addStrokeOperation(), "add stroke")}
+            onClick={() => {
+              applyOp((target) => addStrokeOperation(target), "add stroke");
+              setExpandedKey(null);
+            }}
           >
             <IconPlus size={12} /> Stroke
           </button>
@@ -480,42 +525,69 @@ function AppearanceItemEditor({
     const solidColor = paint.type === "solid" ? paint.color : (gradientColors[0] ?? "#ffffff");
 
     return (
-      <div className={styles.field}>
-        <span>{element.type === "text" ? "Background" : "Fill"}</span>
-        <ColorPickerInput
-          value={solidColor}
-          onChange={(color) =>
-            applyOp((target) => fillPaintOperation(target, { type: "solid", color }), "fill")
-          }
-          supportsGradient={true}
-          fillType={fillType}
-          gradientColors={gradientColors}
-          gradientAngle={paint.type === "linearGradient" ? paint.angle : 90}
-          gradientStops={gradientStops}
-          onGradientChange={(type, colors, angle, stops) => {
-            const nextStops = (stops ?? DEFAULT_GRADIENT_STOPS).map((offset, index) => ({
-              offset,
-              color: colors[index] ?? colors[0] ?? "#ffffff",
-            }));
-            applyOp(
-              (target) =>
-                fillPaintOperation(
-                  target,
-                  type === "radial"
-                    ? { type: "radialGradient", stops: nextStops }
-                    : {
-                        type: "linearGradient",
-                        angle: angle ?? 90,
-                        stops: nextStops,
-                      },
-                ),
-              "fill gradient",
-            );
-          }}
-          allowTransparent={true}
-          title="Fill color"
-        />
-      </div>
+      <>
+        <div className={styles.field}>
+          <span>{element.type === "text" ? "Background" : "Fill"}</span>
+          <ColorPickerInput
+            value={solidColor}
+            onChange={(color) =>
+              applyOp(
+                (target) =>
+                  fillPaintOperation(target, { type: "solid", color }, { itemId: item.id }),
+                "fill",
+              )
+            }
+            supportsGradient={true}
+            fillType={fillType}
+            gradientColors={gradientColors}
+            gradientAngle={paint.type === "linearGradient" ? paint.angle : 90}
+            gradientStops={gradientStops}
+            onGradientChange={(type, colors, angle, stops) => {
+              const nextStops = (stops ?? DEFAULT_GRADIENT_STOPS).map((offset, index) => ({
+                offset,
+                color: colors[index] ?? colors[0] ?? "#ffffff",
+              }));
+              applyOp(
+                (target) =>
+                  fillPaintOperation(
+                    target,
+                    type === "radial"
+                      ? { type: "radialGradient", stops: nextStops }
+                      : {
+                          type: "linearGradient",
+                          angle: angle ?? 90,
+                          stops: nextStops,
+                        },
+                    { itemId: item.id },
+                  ),
+                "fill gradient",
+              );
+            }}
+            allowTransparent={true}
+            title="Fill color"
+          />
+        </div>
+        <label className={styles.rangeField}>
+          <span>Opacity</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(item.opacity * 100)}
+            aria-label="Fill opacity"
+            onPointerDown={() => beginSlider("fill opacity")}
+            onChange={(event) =>
+              slideOp((target) =>
+                fillItemPatchOperation(target, item.id, {
+                  opacity: Number(event.currentTarget.value) / 100,
+                }),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(item.opacity * 100)}%</output>
+        </label>
+      </>
     );
   }
 
@@ -527,7 +599,7 @@ function AppearanceItemEditor({
           <ColorPickerInput
             value={item.color}
             onChange={(color) =>
-              applyOp((target) => strokePatchOperation(target, { color }), "stroke color")
+              applyOp((target) => strokePatchOperation(target, { color }, item.id), "stroke color")
             }
             allowTransparent={element.type !== "text"}
             title={element.type === "text" ? "Text color" : "Stroke color"}
@@ -544,12 +616,58 @@ function AppearanceItemEditor({
             onPointerDown={() => beginSlider("stroke width")}
             onChange={(event) =>
               slideOp((target) =>
-                strokePatchOperation(target, { width: Number(event.currentTarget.value) }),
+                strokePatchOperation(target, { width: Number(event.currentTarget.value) }, item.id),
               )
             }
             onPointerUp={endSlider}
           />
           <output>{Number(item.width.toFixed(1))}</output>
+        </label>
+        {element.type !== "text" ? (
+          <label className={styles.field}>
+            <span>Style</span>
+            <select
+              value={item.style}
+              aria-label="Stroke style"
+              onChange={(event) =>
+                applyOp(
+                  (target) =>
+                    strokePatchOperation(
+                      target,
+                      { style: event.currentTarget.value as typeof item.style },
+                      item.id,
+                    ),
+                  "stroke style",
+                )
+              }
+            >
+              <option value="solid">Solid</option>
+              <option value="dashed">Dashed</option>
+              <option value="dotted">Dotted</option>
+            </select>
+          </label>
+        ) : null}
+        <label className={styles.rangeField}>
+          <span>Opacity</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(item.opacity * 100)}
+            aria-label="Stroke opacity"
+            onPointerDown={() => beginSlider("stroke opacity")}
+            onChange={(event) =>
+              slideOp((target) =>
+                strokePatchOperation(
+                  target,
+                  { opacity: Number(event.currentTarget.value) / 100 },
+                  item.id,
+                ),
+              )
+            }
+            onPointerUp={endSlider}
+          />
+          <output>{Math.round(item.opacity * 100)}%</output>
         </label>
       </>
     );

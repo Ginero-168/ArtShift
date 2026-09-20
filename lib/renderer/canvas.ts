@@ -10,11 +10,18 @@
  */
 
 import type { RoughCanvas } from "roughjs/bin/canvas";
-import { canvasShadowPasses } from "../appearance/renderPlan";
+import {
+  appearanceMaxStrokeWidth,
+  type CanvasPaintPass,
+  canvasPaintPasses,
+  canvasShadowPasses,
+  usesStackedPaint,
+} from "../appearance/renderPlan";
+import type { AppearancePaint, FillAppearance, StrokeAppearance } from "../appearance/types";
 import type { ColorAdjustments } from "../color/adjustments";
 import { resolveMultiGradientStops } from "../color/swatches";
 import { getFramePolaroidCutout, traceFrameShapePath } from "../engine/frameMask";
-import { freedrawPath } from "../engine/freehand";
+import { freedrawPath, strokeOutlineFor } from "../engine/freehand";
 import { getRenderableElements } from "../engine/layers";
 import { buildRoughShape } from "../engine/rough";
 import {
@@ -121,7 +128,7 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   let cached = getCachedElement(el);
 
   if (!cached) {
-    const pad = Math.max(32, (el.strokeWidth ?? 2) * 4 + 48);
+    const pad = Math.max(32, appearanceMaxStrokeWidth(el) * 4 + 48);
     const offscreen = document.createElement("canvas");
     offscreen.width = Math.max(1, Math.ceil(el.width + pad * 2));
     offscreen.height = Math.max(1, Math.ceil(el.height + pad * 2));
@@ -176,6 +183,24 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
     case "plus":
     case "line":
     case "arrow": {
+      const paintPasses = canvasPaintPasses(el);
+      if (usesStackedPaint(paintPasses)) {
+        paintStackedGeometry(ctx, el, paintPasses);
+        if (el.type === "arrow") {
+          const frontStroke = frontStrokePass(paintPasses);
+          drawArrowHeads(
+            ctx,
+            frontStroke
+              ? ({
+                  ...el,
+                  strokeColor: frontStroke.color,
+                  strokeWidth: frontStroke.width,
+                } as ArrowElement)
+              : el,
+          );
+        }
+        break;
+      }
       const hasGradient = el.fillType === "linear" || el.fillType === "radial";
       const hasPattern = !!el.fillPattern;
       if (hasGradient) {
@@ -240,11 +265,157 @@ function renderElementContent(el: EngineElement, ctx: CanvasRenderingContext2D, 
 
 // ——— per-type draw helpers ———
 
+function frontStrokePass(passes: CanvasPaintPass[]): StrokeAppearance | undefined {
+  for (let index = passes.length - 1; index >= 0; index--) {
+    const pass = passes[index];
+    if (pass.kind === "stroke") return pass.item;
+  }
+  return undefined;
+}
+
+function paintStackedGeometry(
+  ctx: CanvasRenderingContext2D,
+  el: EngineElement,
+  passes: CanvasPaintPass[],
+) {
+  for (const pass of passes) {
+    ctx.save();
+    ctx.globalAlpha *= pass.item.opacity;
+    if (pass.kind === "fill") {
+      paintFillPass(ctx, el, pass.item);
+    } else {
+      applyStrokeAppearance(ctx, pass.item);
+      strokeElementGeometry(ctx, el);
+    }
+    ctx.restore();
+  }
+}
+
+function paintFillPass(ctx: CanvasRenderingContext2D, el: EngineElement, item: FillAppearance) {
+  const paint = item.paint;
+  if (paint.type === "pattern") {
+    const backdrop = paint.background === "transparent" ? paint.foreground : paint.background;
+    ctx.fillStyle = backdrop;
+    fillElementGeometry(ctx, el);
+    ctx.save();
+    clipElementGeometry(ctx, el);
+    drawPattern(ctx, el, paint.pattern, paint.foreground);
+    ctx.restore();
+    return;
+  }
+  if (!applyFillAppearance(ctx, el, paint)) return;
+  fillElementGeometry(ctx, el);
+}
+
+function applyFillAppearance(
+  ctx: CanvasRenderingContext2D,
+  el: EngineElement,
+  paint: AppearancePaint,
+): boolean {
+  if (paint.type === "solid") {
+    if (paint.color === "transparent" || paint.color === "none") return false;
+    ctx.fillStyle = paint.color;
+    return true;
+  }
+  if (paint.type === "linearGradient" || paint.type === "radialGradient") {
+    ctx.fillStyle = createAppearanceGradient(ctx, el, paint);
+    return true;
+  }
+  ctx.fillStyle = paint.foreground;
+  return true;
+}
+
+function applyStrokeAppearance(ctx: CanvasRenderingContext2D, item: StrokeAppearance) {
+  ctx.strokeStyle = item.color;
+  ctx.lineWidth = Math.max(0, item.width);
+  ctx.lineCap = item.cap ?? "round";
+  ctx.lineJoin = item.join ?? "round";
+  ctx.setLineDash(
+    item.dash
+      ? item.dash
+      : item.style === "dashed"
+        ? [item.width * 4, item.width * 4]
+        : item.style === "dotted"
+          ? [item.width, item.width * 2]
+          : [],
+  );
+}
+
+function isPolylineElement(
+  el: EngineElement,
+): el is import("../engine/types").LineElement | ArrowElement {
+  return el.type === "line" || el.type === "arrow";
+}
+
+function fillElementGeometry(ctx: CanvasRenderingContext2D, el: EngineElement) {
+  if (isPolylineElement(el)) return;
+  traceShapePath(ctx, el);
+  ctx.fill();
+}
+
+function strokeElementGeometry(ctx: CanvasRenderingContext2D, el: EngineElement) {
+  if (isPolylineElement(el)) {
+    tracePolylinePath(ctx, el);
+    ctx.stroke();
+    return;
+  }
+  traceShapePath(ctx, el);
+  ctx.stroke();
+}
+
+function clipElementGeometry(ctx: CanvasRenderingContext2D, el: EngineElement) {
+  if (isPolylineElement(el)) return;
+  traceShapePath(ctx, el);
+  ctx.clip();
+}
+
+function tracePolylinePath(
+  ctx: CanvasRenderingContext2D,
+  el: import("../engine/types").LineElement | ArrowElement,
+) {
+  if (el.points.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(el.points[0][0], el.points[0][1]);
+  for (let index = 1; index < el.points.length; index++) {
+    ctx.lineTo(el.points[index][0], el.points[index][1]);
+  }
+}
+
 function drawFreedraw(ctx: CanvasRenderingContext2D, el: EngineElement) {
   if (el.type !== "freedraw") return;
-  const path = freedrawPath(el);
-  ctx.fillStyle = el.strokeColor;
-  ctx.fill(path);
+  const passes = canvasPaintPasses(el);
+  if (!usesStackedPaint(passes)) {
+    const path = freedrawPath(el);
+    ctx.fillStyle = el.strokeColor;
+    ctx.fill(path);
+    return;
+  }
+  for (const pass of passes) {
+    ctx.save();
+    ctx.globalAlpha *= pass.item.opacity;
+    if (pass.kind === "stroke") {
+      ctx.fillStyle = pass.item.color;
+      ctx.fill(freedrawPathForWidth(el, pass.item.width));
+    } else if (applyFillAppearance(ctx, el, pass.item.paint)) {
+      ctx.fill(freedrawPath(el));
+    }
+    ctx.restore();
+  }
+}
+
+function freedrawPathForWidth(
+  el: import("../engine/types").FreedrawElement,
+  width: number,
+): Path2D {
+  const outline = strokeOutlineFor(el, { size: Math.max(0.5, width) * 2 });
+  const path = new Path2D();
+  if (!outline.length) return path;
+  path.moveTo(outline[0][0], outline[0][1]);
+  for (let index = 1; index < outline.length; index++) {
+    path.lineTo(outline[index][0], outline[index][1]);
+  }
+  path.closePath();
+  return path;
 }
 
 function drawVectorPath(
@@ -265,6 +436,26 @@ function drawVectorPath(
       path.closePath();
     }
   }
+  const paintPasses = canvasPaintPasses(el);
+  if (usesStackedPaint(paintPasses)) {
+    for (const pass of paintPasses) {
+      ctx.save();
+      ctx.globalAlpha *= pass.item.opacity;
+      if (pass.kind === "fill") {
+        if (el.closed && applyFillAppearance(ctx, el, pass.item.paint)) {
+          ctx.fill(path, el.fillRule);
+        }
+      } else {
+        applyStrokeAppearance(ctx, pass.item);
+        ctx.stroke(path);
+      }
+      ctx.restore();
+    }
+    const frontStroke = frontStrokePass(paintPasses);
+    if (frontStroke) drawVectorPathArrowheads(ctx, el, frontStroke.color, frontStroke.width);
+    return;
+  }
+
   if (el.closed && el.backgroundColor !== "transparent") {
     ctx.fillStyle = vectorFillStyle(ctx, el);
     ctx.fill(path, el.fillRule);
@@ -278,51 +469,42 @@ function drawVectorPath(
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.stroke(path);
+    drawVectorPathArrowheads(ctx, el, el.strokeColor, el.strokeWidth);
+  }
+}
 
-    if (el.nodes.length >= 2 && !el.closed) {
-      const scale = el.arrowheadScale ?? 1;
-      const firstNode = el.nodes[0];
-      const secondNode = el.nodes[1];
-      const lastNode = el.nodes[el.nodes.length - 1];
-      const prevLastNode = el.nodes[el.nodes.length - 2];
+function drawVectorPathArrowheads(
+  ctx: CanvasRenderingContext2D,
+  el: import("../engine/types").VectorPathElement,
+  color: string,
+  width: number,
+) {
+  if (el.nodes.length < 2 || el.closed) return;
+  const scale = el.arrowheadScale ?? 1;
+  const firstNode = el.nodes[0];
+  const secondNode = el.nodes[1];
+  const lastNode = el.nodes[el.nodes.length - 1];
+  const prevLastNode = el.nodes[el.nodes.length - 2];
 
-      if (el.startArrowhead && el.startArrowhead !== "none" && firstNode && secondNode) {
-        const p0 = pathNodePoint(el, firstNode);
-        const p1 = firstNode.out
-          ? {
-              x: (firstNode.x + firstNode.out[0]) * el.width,
-              y: (firstNode.y + firstNode.out[1]) * el.height,
-            }
-          : pathNodePoint(el, secondNode);
-        drawArrowhead(
-          ctx,
-          [p0.x, p0.y],
-          [p1.x, p1.y],
-          el.startArrowhead,
-          el.strokeColor,
-          el.strokeWidth,
-          scale,
-        );
-      }
-      if (el.endArrowhead && el.endArrowhead !== "none" && lastNode && prevLastNode) {
-        const pn = pathNodePoint(el, lastNode);
-        const pnPrev = lastNode.in
-          ? {
-              x: (lastNode.x + lastNode.in[0]) * el.width,
-              y: (lastNode.y + lastNode.in[1]) * el.height,
-            }
-          : pathNodePoint(el, prevLastNode);
-        drawArrowhead(
-          ctx,
-          [pn.x, pn.y],
-          [pnPrev.x, pnPrev.y],
-          el.endArrowhead,
-          el.strokeColor,
-          el.strokeWidth,
-          scale,
-        );
-      }
-    }
+  if (el.startArrowhead && el.startArrowhead !== "none" && firstNode && secondNode) {
+    const p0 = pathNodePoint(el, firstNode);
+    const p1 = firstNode.out
+      ? {
+          x: (firstNode.x + firstNode.out[0]) * el.width,
+          y: (firstNode.y + firstNode.out[1]) * el.height,
+        }
+      : pathNodePoint(el, secondNode);
+    drawArrowhead(ctx, [p0.x, p0.y], [p1.x, p1.y], el.startArrowhead, color, width, scale);
+  }
+  if (el.endArrowhead && el.endArrowhead !== "none" && lastNode && prevLastNode) {
+    const pn = pathNodePoint(el, lastNode);
+    const pnPrev = lastNode.in
+      ? {
+          x: (lastNode.x + lastNode.in[0]) * el.width,
+          y: (lastNode.y + lastNode.in[1]) * el.height,
+        }
+      : pathNodePoint(el, prevLastNode);
+    drawArrowhead(ctx, [pn.x, pn.y], [pnPrev.x, pnPrev.y], el.endArrowhead, color, width, scale);
   }
 }
 
@@ -363,24 +545,59 @@ export function createShapeGradient(
 ): CanvasGradient {
   const rawColors = el.gradientColors ?? ["#6366f1", "#a855f7"];
   const angleDeg = el.gradientAngle ?? 90;
-  const stops = resolveMultiGradientStops(rawColors, el.gradientStops);
+  return createSizedGradient(
+    ctx,
+    el.width,
+    el.height,
+    el.fillType === "linear" ? "linear" : "radial",
+    angleDeg,
+    rawColors,
+    el.gradientStops,
+  );
+}
+
+function createAppearanceGradient(
+  ctx: CanvasRenderingContext2D,
+  el: EngineElement,
+  paint: Extract<AppearancePaint, { type: "linearGradient" | "radialGradient" }>,
+): CanvasGradient {
+  return createSizedGradient(
+    ctx,
+    el.width,
+    el.height,
+    paint.type === "linearGradient" ? "linear" : "radial",
+    paint.type === "linearGradient" ? paint.angle : 90,
+    paint.stops.map((stop) => stop.color),
+    paint.stops.map((stop) => stop.offset),
+  );
+}
+
+function createSizedGradient(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  type: "linear" | "radial",
+  angleDeg: number,
+  rawColors: string[],
+  rawOffsets?: number[],
+): CanvasGradient {
+  const stops = resolveMultiGradientStops(rawColors, rawOffsets);
 
   let grad: CanvasGradient;
-  if (el.fillType === "linear") {
+  if (type === "linear") {
     const angleRad = (angleDeg * Math.PI) / 180;
-    const cx = el.width / 2;
-    const cy = el.height / 2;
-    const len =
-      (Math.abs(el.width * Math.cos(angleRad)) + Math.abs(el.height * Math.sin(angleRad))) / 2;
+    const cx = width / 2;
+    const cy = height / 2;
+    const len = (Math.abs(width * Math.cos(angleRad)) + Math.abs(height * Math.sin(angleRad))) / 2;
     const x0 = cx - Math.cos(angleRad) * len;
     const y0 = cy - Math.sin(angleRad) * len;
     const x1 = cx + Math.cos(angleRad) * len;
     const y1 = cy + Math.sin(angleRad) * len;
     grad = ctx.createLinearGradient(x0, y0, x1, y1);
   } else {
-    const cx = el.width / 2;
-    const cy = el.height / 2;
-    const r = Math.max(el.width, el.height) / 2;
+    const cx = width / 2;
+    const cy = height / 2;
+    const r = Math.max(width, height) / 2;
     const minOffset = stops.length > 0 ? stops[0].offset : 0;
     const maxOffset = stops.length > 0 ? stops[stops.length - 1].offset : 1;
     grad = ctx.createRadialGradient(
@@ -410,7 +627,26 @@ function vectorFillStyle(
 function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
   const measure = createCanvasTextMeasure(ctx, el);
   const layout = layoutText(el, measure);
-  const { padding, lines, lineHeight: lh, contentHeight: totalH } = layout;
+  const paintPasses = canvasPaintPasses(el);
+  if (usesStackedPaint(paintPasses)) {
+    for (const pass of paintPasses) {
+      ctx.save();
+      ctx.globalAlpha *= pass.item.opacity;
+      if (pass.kind === "fill") {
+        if (applyFillAppearance(ctx, el, pass.item.paint)) {
+          roundedRectPath(ctx, 0, 0, el.width, el.height, el.cornerRadius ?? 0);
+          ctx.fill();
+        }
+      } else if (el.pathCurvature && el.pathCurvature !== 0) {
+        drawCurvedText(ctx, el, layout, pass.item.color);
+      } else {
+        drawTextGlyphs(ctx, el, layout, pass.item.color);
+      }
+      ctx.restore();
+    }
+    return;
+  }
+
   if (el.backgroundColor !== "transparent") {
     ctx.save();
     ctx.fillStyle = el.backgroundColor;
@@ -419,13 +655,23 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
     ctx.restore();
   }
 
-  // Handle Text on Path / Curved Text
   if (el.pathCurvature && el.pathCurvature !== 0) {
     drawCurvedText(ctx, el, layout);
     return;
   }
 
-  ctx.fillStyle = el.strokeColor;
+  drawTextGlyphs(ctx, el, layout, el.strokeColor);
+}
+
+function drawTextGlyphs(
+  ctx: CanvasRenderingContext2D,
+  el: TextElement,
+  layout: import("../engine/textLayout").TextLayout,
+  color: string,
+) {
+  const measure = createCanvasTextMeasure(ctx, el);
+  const { padding, lines, lineHeight: lh, contentHeight: totalH } = layout;
+  ctx.fillStyle = color;
   ctx.textBaseline = "top";
   ctx.textAlign =
     el.textAlign === "center" ? "center" : el.textAlign === "right" ? "right" : "left";
@@ -438,14 +684,12 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
   }
 
   for (const line of lines) {
-    // Parse and render rich text segments.
     const segments = parseRichText(line.text);
     const lineWidth = measureRichText(line.text, measure);
     let x = padding + line.bulletIndent;
     if (el.textAlign === "center") x = (el.width - lineWidth + line.bulletIndent) / 2;
     if (el.textAlign === "right") x = el.width - padding - lineWidth;
 
-    // Draw bullet character before switching to left-aligned segment drawing.
     if (line.bullet) {
       setCanvasTextFont(ctx, el, false, false);
       ctx.textAlign = "left";
@@ -468,6 +712,7 @@ function drawCurvedText(
   ctx: CanvasRenderingContext2D,
   el: TextElement,
   layout: import("../engine/textLayout").TextLayout,
+  color: string = el.strokeColor,
 ) {
   const curvature = el.pathCurvature ?? 0;
   if (curvature === 0) return;
@@ -496,7 +741,7 @@ function drawCurvedText(
   const startAngle = k > 0 ? -Math.PI / 2 - sweepAngle / 2 : Math.PI / 2 - sweepAngle / 2;
 
   ctx.save();
-  ctx.fillStyle = el.strokeColor;
+  ctx.fillStyle = color;
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
 
@@ -1056,6 +1301,11 @@ function drawArrowhead(
 }
 
 function fillShapePath(ctx: CanvasRenderingContext2D, el: EngineElement) {
+  traceShapePath(ctx, el);
+  ctx.fill();
+}
+
+function traceShapePath(ctx: CanvasRenderingContext2D, el: EngineElement) {
   ctx.beginPath();
   switch (el.type) {
     case "rect": {
@@ -1154,15 +1404,14 @@ function fillShapePath(ctx: CanvasRenderingContext2D, el: EngineElement) {
     default:
       ctx.rect(0, 0, el.width, el.height);
   }
-  ctx.fill();
 }
 
 function drawPattern(
   ctx: CanvasRenderingContext2D,
   el: EngineElement,
   pattern: "dots" | "stripes" | "grid",
+  color: string = el.strokeColor,
 ) {
-  const color = el.strokeColor;
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.25;

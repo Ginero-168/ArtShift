@@ -810,6 +810,18 @@
   border-top: 1px solid #eef1f6;
 }
 
+.appearanceRowActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.appearanceRowActions .layerIconButton:disabled {
+  opacity: 0.28;
+  cursor: default;
+  background: transparent;
+}
+
 .field,
 .rangeField {
   display: grid;
