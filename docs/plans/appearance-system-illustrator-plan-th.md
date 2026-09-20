@@ -1,6 +1,6 @@
 # แผนระบบ Appearance สำหรับ ArtShift
 
-สถานะ: **Phase 1 foundation + MVP UI (#12) + schema v7 persist + multi Fill/Stroke (2026-09-20)**
+สถานะ: **Phase 1 foundation + MVP UI (#12) + schema v7 persist + multi Fill/Stroke + static Text Effect Presets / schema v8 (2026-09-20)**
 
 วันที่จัดทำ: 15 กันยายน 2026  
 อัปเดต: 20 กันยายน 2026
@@ -12,7 +12,7 @@
 | ชั้น | สถานะ |
 |---|---|
 | `lib/appearance/*` (`readAppearance` / `changeAppearance` / capabilities / bounds / fingerprints) | มีแล้ว — อ่าน prefer `appearance` ถ้ามี ไม่เช่นนั้นสังเคราะห์จาก legacy |
-| Engine schema | **v6 = Block bake → Free pixels**. **v7 = persist canonical `appearance`** (งานนี้) |
+| Engine schema | **v6 = Block bake → Free pixels**. **v7 = persist canonical `appearance`**. **v8 = text-effect stack fields** (gradient/conic, clip-to-glyphs, multi-shadow layers, item blend, offset fills, static blur) |
 | Canonical `appearance` field บน `EngineElement` | **มีแล้วใน schema v7** พร้อม dual-write ไปยัง flat fields เดิม |
 | Live Inspector Appearance stack UI | มีในสาย #12 (Fill / Stroke / Shadow / Glow / Text Arc) — **multi Fill/Stroke เปิดเป็น product feature แล้ว** |
 | Graphic Styles ที่ผูก Brand Kit | **นอกขอบเขต** |
@@ -29,7 +29,7 @@
 2. แก้ Text Arc (`pathCurvature`) จาก live Inspector สำหรับ text
 3. เห็น Appearance เป็น stack/list (fill, stroke, shadow, glow, text arc เมื่อเกี่ยวข้อง)
 4. แก้ผ่าน `readAppearance` / `changeAppearance` / `updateAppearance` ไม่สร้างโมเดลขนาน
-5. Save/load เอกสาร schema v7 โดยเก็บ `appearance` และยังเขียน legacy fields ให้ renderer/โค้ดเก่าอ่านได้
+5. Save/load เอกสาร schema v7 (และ v8 หลัง Text Effect Presets) โดยเก็บ `appearance` และยังเขียน legacy fields ให้ renderer/โค้ดเก่าอ่านได้
 
 Renderer: Canvas2D มี shadow state เดียวต่อ `drawImage` — ถ้ามีทั้ง Shadow และ Glow จะวาด **ตามลำดับ stack (back-to-front)** ไม่ XOR ทิ้งอย่างเงียบ ๆ
 
@@ -129,7 +129,7 @@ Editor ปัจจุบันใช้ [components/Builder/BuilderInspector.ts
 
 ### 3.5 Persistence และ Export
 
-เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 7` (Appearance persist) ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
+เอกสารใช้ schema ปัจจุบัน `ENGINE_SCHEMA_VERSION = 8` (Appearance persist + text-effect stack fields; v7 introduced canonical `appearance`) ใน [lib/engine/serialize.ts](/opt/artshift/lib/engine/serialize.ts:46) เก็บ document JSON แยกจาก image assets ใน IndexedDB
 
 **v6 = Block bake** — bump นั้นใช้ไปแล้ว งาน persist canonical `appearance` คือ **v7** (PR นี้) Dual-write ไปยัง legacy fields เพื่อให้ factories, templates, AI และ renderer เดิมยังอ่าน flat fields ได้
 

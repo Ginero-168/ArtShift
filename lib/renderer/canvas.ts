@@ -13,6 +13,7 @@ import type { RoughCanvas } from "roughjs/bin/canvas";
 import {
   appearanceMaxStrokeWidth,
   type CanvasPaintPass,
+  canvasGaussianBlurRadius,
   canvasPaintPasses,
   canvasShadowPasses,
   usesStackedPaint,
@@ -133,7 +134,11 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   let cached = getCachedElement(el);
 
   if (!cached) {
-    const pad = Math.max(32, appearanceMaxStrokeWidth(el) * 4 + 48);
+    const pad = Math.max(
+      32,
+      appearanceMaxStrokeWidth(el) * 4 + 48,
+      canvasGaussianBlurRadius(el) * 2 + 24,
+    );
     const offscreen = document.createElement("canvas");
     offscreen.width = Math.max(1, Math.ceil(el.width + pad * 2));
     offscreen.height = Math.max(1, Math.ceil(el.height + pad * 2));
@@ -156,6 +161,8 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
   ctx.translate(-el.width / 2 - cached.pad, -el.height / 2 - cached.pad);
   const effectPasses = canvasShadowPasses(el);
+  const blur = canvasGaussianBlurRadius(el);
+  if (blur > 0) ctx.filter = `blur(${blur}px)`;
   if (effectPasses.length === 0) {
     ctx.drawImage(cached.canvas, 0, 0);
   } else {
@@ -171,6 +178,7 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   }
+  if (blur > 0) ctx.filter = "none";
   ctx.restore();
 }
 
@@ -285,7 +293,7 @@ function paintStackedGeometry(
 ) {
   for (const pass of passes) {
     ctx.save();
-    ctx.globalAlpha *= pass.item.opacity;
+    applyPaintLayer(ctx, pass.item);
     if (pass.kind === "fill") {
       paintFillPass(ctx, el, pass.item);
     } else if (pass.kind === "stroke") {
@@ -326,8 +334,25 @@ function applyFillAppearance(
     ctx.fillStyle = createAppearanceGradient(ctx, el, paint);
     return true;
   }
+  if (paint.type === "conicGradient") {
+    ctx.fillStyle = createConicAppearanceGradient(ctx, el, paint);
+    return true;
+  }
   ctx.fillStyle = paint.foreground;
   return true;
+}
+
+function applyPaintLayer(
+  ctx: CanvasRenderingContext2D,
+  item: { opacity: number; blendMode?: string; offsetX?: number; offsetY?: number },
+) {
+  ctx.globalAlpha *= item.opacity;
+  if (item.blendMode && item.blendMode !== "source-over") {
+    ctx.globalCompositeOperation = item.blendMode as GlobalCompositeOperation;
+  }
+  const offsetX = item.offsetX ?? 0;
+  const offsetY = item.offsetY ?? 0;
+  if (offsetX || offsetY) ctx.translate(offsetX, offsetY);
 }
 
 function applyStrokeAppearance(ctx: CanvasRenderingContext2D, item: StrokeAppearance) {
@@ -397,7 +422,7 @@ function drawFreedraw(ctx: CanvasRenderingContext2D, el: EngineElement) {
   }
   for (const pass of passes) {
     ctx.save();
-    ctx.globalAlpha *= pass.item.opacity;
+    applyPaintLayer(ctx, pass.item);
     if (pass.kind === "stroke") {
       ctx.fillStyle = pass.item.color;
       ctx.fill(freedrawPathForWidth(el, pass.item.width));
@@ -445,7 +470,7 @@ function drawVectorPath(
   if (usesStackedPaint(paintPasses)) {
     for (const pass of paintPasses) {
       ctx.save();
-      ctx.globalAlpha *= pass.item.opacity;
+      applyPaintLayer(ctx, pass.item);
       if (pass.kind === "fill") {
         if (el.closed && applyFillAppearance(ctx, el, pass.item.paint)) {
           ctx.fill(path, el.fillRule);
@@ -577,6 +602,24 @@ function createAppearanceGradient(
   );
 }
 
+function createConicAppearanceGradient(
+  ctx: CanvasRenderingContext2D,
+  el: EngineElement,
+  paint: Extract<AppearancePaint, { type: "conicGradient" }>,
+): CanvasGradient {
+  const cx = el.width / 2;
+  const cy = el.height / 2;
+  const grad = ctx.createConicGradient((paint.angle * Math.PI) / 180, cx, cy);
+  const stops = resolveMultiGradientStops(
+    paint.stops.map((stop) => stop.color),
+    paint.stops.map((stop) => stop.offset),
+  );
+  for (const stop of stops) {
+    grad.addColorStop(stop.offset, stop.color);
+  }
+  return grad;
+}
+
 function createSizedGradient(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -637,7 +680,7 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
   if (paintPasses.length > 0) {
     for (const pass of paintPasses) {
       ctx.save();
-      ctx.globalAlpha *= pass.item.opacity;
+      applyPaintLayer(ctx, pass.item);
       if (pass.kind === "background") {
         paintTextBackground(ctx, el, pass.item);
       } else if (pass.kind === "fill") {

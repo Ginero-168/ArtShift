@@ -15,6 +15,12 @@ export type AppearanceCapability = {
   multipleStrokes: boolean;
   blendMode: boolean;
   rootOpacity: boolean;
+  /** Optional static gaussian blur on the object (not animated). */
+  staticBlur: boolean;
+  /** Per-item mix-blend (offset duplicate layers). */
+  itemBlend: boolean;
+  /** Offset duplicate Fill/Stroke layers (anaglyph / glitch stills). */
+  offsetLayers: boolean;
 };
 
 const SHAPE_LIKE = new Set<EngineElementType>([
@@ -27,6 +33,12 @@ const SHAPE_LIKE = new Set<EngineElementType>([
   "heart",
   "plus",
 ]);
+
+const STACK_FX = {
+  staticBlur: true,
+  itemBlend: true,
+  offsetLayers: true,
+} as const;
 
 export function appearanceCapabilities(element: EngineElement): AppearanceCapability {
   const type = element.type;
@@ -43,6 +55,9 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       multipleStrokes: false,
       blendMode: true,
       rootOpacity: true,
+      staticBlur: true,
+      itemBlend: false,
+      offsetLayers: false,
     };
   }
   if (type === "text") {
@@ -58,6 +73,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       multipleStrokes: true,
       blendMode: true,
       rootOpacity: true,
+      ...STACK_FX,
     };
   }
   if (type === "frame") {
@@ -73,6 +89,9 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       multipleStrokes: false,
       blendMode: true,
       rootOpacity: true,
+      staticBlur: true,
+      itemBlend: false,
+      offsetLayers: false,
     };
   }
   if (type === "path" || type === "freedraw" || type === "line" || type === "arrow") {
@@ -89,6 +108,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       multipleStrokes: true,
       blendMode: true,
       rootOpacity: true,
+      ...STACK_FX,
     };
   }
   if (SHAPE_LIKE.has(type)) {
@@ -104,6 +124,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       multipleStrokes: true,
       blendMode: true,
       rootOpacity: true,
+      ...STACK_FX,
     };
   }
   return {
@@ -118,5 +139,8 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     multipleStrokes: false,
     blendMode: true,
     rootOpacity: true,
+    staticBlur: true,
+    itemBlend: false,
+    offsetLayers: false,
   };
 }

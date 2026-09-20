@@ -1,11 +1,24 @@
 import type { Appearance, AppearanceItem } from "./types";
 
 function paintKey(item: AppearanceItem): string {
-  if (item.kind === "fill" || item.kind === "background") return JSON.stringify(item.paint);
-  if (item.kind === "stroke") {
-    return [item.color, item.width, item.style, item.alignment ?? "center"].join(":");
+  const offsetX = item.kind === "effect" ? 0 : (item.offsetX ?? 0);
+  const offsetY = item.kind === "effect" ? 0 : (item.offsetY ?? 0);
+  const layer = `${item.blendMode ?? "source-over"}:${offsetX}:${offsetY}`;
+  if (item.kind === "fill") {
+    return `${JSON.stringify(item.paint)}:${item.clipToGlyphs ? 1 : 0}:${layer}`;
   }
-  return JSON.stringify(item.effect);
+  if (item.kind === "background") return `${JSON.stringify(item.paint)}:${layer}`;
+  if (item.kind === "stroke") {
+    return [
+      item.color,
+      item.width,
+      item.style,
+      item.alignment ?? "center",
+      item.paintOrder ?? "fill",
+      layer,
+    ].join(":");
+  }
+  return `${JSON.stringify(item.effect)}:${layer}`;
 }
 
 /**

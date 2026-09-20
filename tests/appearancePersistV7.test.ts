@@ -80,7 +80,7 @@ describe("schema v7 appearance persist", () => {
     expect(text.appearance).toBeUndefined();
 
     const migrated = fromJSON(docWith([rect, text], 6));
-    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.schemaVersion).toBe(8);
     expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
 
     const loadedRect = migrated.slides[0].elements.find((el) => el.id === rect.id)!;
@@ -108,7 +108,7 @@ describe("schema v7 appearance persist", () => {
   it("is idempotent: v7 documents stay v7 with the same appearance ids", () => {
     const migrated = fromJSON(docWith([styledRect()], 6));
     const again = fromJSON(migrated);
-    expect(again.schemaVersion).toBe(7);
+    expect(again.schemaVersion).toBe(8);
     expect(again.slides[0].elements[0].appearance).toEqual(
       migrated.slides[0].elements[0].appearance,
     );
@@ -124,14 +124,14 @@ describe("schema v7 appearance persist", () => {
     expect(changed.element.shadow).toEqual(expect.objectContaining({ blur: 12, offsetY: 6 }));
 
     const saved = toJSON(docWith([changed.element], ENGINE_SCHEMA_VERSION));
-    expect(saved.schemaVersion).toBe(7);
+    expect(saved.schemaVersion).toBe(8);
     const persisted = saved.slides[0].elements[0];
     expect(persisted.appearance?.items.some((item) => item.kind === "effect")).toBe(true);
     expect(persisted.shadow).toEqual(changed.element.shadow);
 
     const loaded = fromJSON(saved);
     const roundTrip = loaded.slides[0].elements[0];
-    expect(loaded.schemaVersion).toBe(7);
+    expect(loaded.schemaVersion).toBe(8);
     expect(roundTrip.shadow).toEqual(changed.element.shadow);
     expect(readAppearance(roundTrip).fromLegacy).toBe(false);
     expect(findEffect(readAppearance(roundTrip), "shadow")).toBeTruthy();

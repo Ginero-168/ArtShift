@@ -4,9 +4,26 @@ import {
   type Appearance,
   type AppearanceColorStop,
   type AppearanceError,
+  type AppearanceGlowLayer,
   type AppearanceItem,
+  type AppearanceItemBlendMode,
   type AppearancePaint,
+  type AppearancePaintLayer,
+  type AppearanceShadowLayer,
 } from "./types";
+
+const ITEM_BLEND_MODES = new Set<AppearanceItemBlendMode>([
+  "source-over",
+  "multiply",
+  "screen",
+  "overlay",
+  "darken",
+  "lighten",
+  "difference",
+  "soft-light",
+  "color-dodge",
+  "hard-light",
+]);
 
 export function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -56,6 +73,13 @@ export function normalizePaint(paint: AppearancePaint): AppearancePaint {
   if (paint.type === "radialGradient") {
     return { type: "radialGradient", stops: normalizeStops(paint.stops) };
   }
+  if (paint.type === "conicGradient") {
+    return {
+      type: "conicGradient",
+      angle: normalizeAngleDegrees(paint.angle),
+      stops: normalizeStops(paint.stops),
+    };
+  }
   return {
     type: "pattern",
     pattern: paint.pattern,
@@ -64,14 +88,65 @@ export function normalizePaint(paint: AppearancePaint): AppearancePaint {
   };
 }
 
+function normalizeBlendMode(value: unknown): AppearanceItemBlendMode | undefined {
+  if (typeof value !== "string") return undefined;
+  return ITEM_BLEND_MODES.has(value as AppearanceItemBlendMode)
+    ? (value as AppearanceItemBlendMode)
+    : undefined;
+}
+
+function normalizePaintLayer(item: AppearancePaintLayer): AppearancePaintLayer {
+  const blendMode = normalizeBlendMode(item.blendMode);
+  const offsetX = Number.isFinite(item.offsetX) ? item.offsetX : undefined;
+  const offsetY = Number.isFinite(item.offsetY) ? item.offsetY : undefined;
+  return {
+    ...(blendMode ? { blendMode } : {}),
+    ...(offsetX ? { offsetX } : {}),
+    ...(offsetY ? { offsetY } : {}),
+  };
+}
+
+function normalizeShadowLayers(
+  layers: AppearanceShadowLayer[] | undefined,
+): AppearanceShadowLayer[] | undefined {
+  if (!layers?.length) return undefined;
+  return layers.map((layer) => ({
+    color: layer.color || "transparent",
+    blur: clampNonNegative(layer.blur),
+    offsetX: Number.isFinite(layer.offsetX) ? layer.offsetX : 0,
+    offsetY: Number.isFinite(layer.offsetY) ? layer.offsetY : 0,
+  }));
+}
+
+function normalizeGlowLayers(
+  layers: AppearanceGlowLayer[] | undefined,
+): AppearanceGlowLayer[] | undefined {
+  if (!layers?.length) return undefined;
+  return layers.map((layer) => ({
+    color: layer.color || "transparent",
+    blur: clampNonNegative(layer.blur),
+  }));
+}
+
 export function normalizeItem(item: AppearanceItem): AppearanceItem {
   const opacity = clamp01(item.opacity);
-  if (item.kind === "fill" || item.kind === "background") {
+  if (item.kind === "fill") {
     return {
       ...item,
       visible: item.visible !== false,
       opacity,
       paint: normalizePaint(item.paint),
+      clipToGlyphs: item.clipToGlyphs === true,
+      ...normalizePaintLayer(item),
+    };
+  }
+  if (item.kind === "background") {
+    return {
+      ...item,
+      visible: item.visible !== false,
+      opacity,
+      paint: normalizePaint(item.paint),
+      ...normalizePaintLayer(item),
     };
   }
   if (item.kind === "stroke") {
@@ -83,6 +158,8 @@ export function normalizeItem(item: AppearanceItem): AppearanceItem {
       width: clampNonNegative(item.width),
       style: item.style || "solid",
       alignment: item.alignment ?? "center",
+      paintOrder: item.paintOrder === "stroke" ? "stroke" : "fill",
+      ...normalizePaintLayer(item),
     };
   }
   const effect =
@@ -92,21 +169,27 @@ export function normalizeItem(item: AppearanceItem): AppearanceItem {
           blur: clampNonNegative(item.effect.blur),
           offsetX: Number.isFinite(item.effect.offsetX) ? item.effect.offsetX : 0,
           offsetY: Number.isFinite(item.effect.offsetY) ? item.effect.offsetY : 0,
+          layers: normalizeShadowLayers(item.effect.layers),
         }
-      : item.effect.type === "glow" || item.effect.type === "gaussianBlur"
+      : item.effect.type === "glow"
         ? {
             ...item.effect,
-            ...(item.effect.type === "glow"
-              ? { blur: clampNonNegative(item.effect.blur) }
-              : { radius: clampNonNegative(item.effect.radius) }),
+            blur: clampNonNegative(item.effect.blur),
+            layers: normalizeGlowLayers(item.effect.layers),
           }
-        : item.effect;
+        : item.effect.type === "gaussianBlur"
+          ? {
+              type: "gaussianBlur" as const,
+              radius: clampNonNegative(item.effect.radius),
+            }
+          : item.effect;
   return {
     ...item,
     visible: item.visible !== false,
     opacity,
     effect,
     scope: item.scope ?? "object",
+    ...normalizePaintLayer(item),
   };
 }
 
