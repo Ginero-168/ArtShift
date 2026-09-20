@@ -5,6 +5,7 @@ import {
   createChatTurnModels,
   DEFAULT_DIRECTOR_MODEL_ID,
   directorModelStep,
+  displayModelSteps,
   FLORENCE_2_MODEL_ID,
   florenceModelStep,
   formatModelChain,
@@ -63,10 +64,29 @@ describe("chat model attribution", () => {
     );
     expect(
       formatModelDisclosure(
-        [{ id: "openai/gpt-image-2.5-sunburst", role: "image" }, florenceModelStep()],
+        [
+          directorModelStep(),
+          { id: "openai/gpt-image-2.5-sunburst", role: "image" },
+          florenceModelStep(),
+        ],
         "GPT Image 2",
       ),
-    ).toBe("openai/gpt-image-2.5-sunburst then Florence-2");
+    ).toBe("openai/gpt-image-2.5-sunburst");
+    expect(formatModelDisclosure([florenceModelStep()], "Florence-2")).toBe("");
+    expect(
+      formatUsingStatus([
+        directorModelStep(),
+        { id: "openai/gpt-image-2.5-sunburst", role: "image" },
+        florenceModelStep(),
+      ]),
+    ).toBe("กำลังใช้ openai/gpt-image-2.5-sunburst...");
+    expect(
+      displayModelSteps([
+        directorModelStep(),
+        { id: "openai/gpt-image-2.5-sunburst", role: "image" },
+        florenceModelStep(),
+      ]),
+    ).toEqual([{ id: "openai/gpt-image-2.5-sunburst", role: "image" }]);
   });
 
   it("upserts the same role to the adapter-reported id instead of stacking expected+actual", () => {
@@ -102,12 +122,8 @@ describe("chat model attribution", () => {
     expect(turn.label()).toBe("google/gemini-3-flash");
     turn.remember(catalogModelStep("image-general"));
     turn.remember(florenceModelStep());
-    expect(turn.using()).toBe(
-      "กำลังใช้ google/gemini-3-flash → openai/gpt-image-2.5-sunburst then Florence-2...",
-    );
-    expect(turn.label()).toBe(
-      "google/gemini-3-flash → openai/gpt-image-2.5-sunburst then Florence-2",
-    );
+    expect(turn.using()).toBe("กำลังใช้ openai/gpt-image-2.5-sunburst...");
+    expect(turn.label()).toBe("openai/gpt-image-2.5-sunburst");
     const message = turn.attach({ content: "done" });
     expect(message.usedModels?.map((step) => step.id)).toEqual([
       "google/gemini-3-flash",

@@ -114,6 +114,19 @@ export function uniqueModelSteps(steps: readonly ChatModelStep[]): ChatModelStep
   return result;
 }
 
+/**
+ * Status / sparkle row: generate tasks show the cloud image API model,
+ * not Gemini chat and not local Florence/ONNX vision.
+ */
+export function displayModelSteps(steps: readonly ChatModelStep[]): ChatModelStep[] {
+  const unique = uniqueModelSteps(steps);
+  const image = unique.filter((step) => step.role === "image");
+  if (image.length > 0) return image;
+  const chat = unique.filter((step) => step.role === "chat");
+  if (chat.length > 0) return chat;
+  return [];
+}
+
 function displayId(id: string): string {
   if (id === FLORENCE_2_MODEL_ID) return "Florence-2";
   return id;
@@ -151,22 +164,27 @@ export function formatModelChain(steps: readonly ChatModelStep[]): string {
 
 /**
  * Model id shown on the image-gen sparkle / spinner row.
- * Prefers the runtime chain; falls back to an existing toolLabel.
+ * Generate tasks: cloud image API id only. Chat replies: Gemini. Never local vision.
  */
 export function formatModelDisclosure(
   steps?: readonly ChatModelStep[] | null,
   fallback?: string | null,
 ): string {
-  const chain = formatModelChain(steps ?? []);
+  const chain = formatModelChain(displayModelSteps(steps ?? []));
   if (chain) return chain;
-  return typeof fallback === "string" ? fallback.trim() : "";
+  const extra = typeof fallback === "string" ? fallback.trim() : "";
+  if (!extra) return "";
+  const normalized = normalizeRuntimeModelId(extra);
+  if (!normalized || normalized === FLORENCE_2_MODEL_ID) return "";
+  if (extra === "Florence-2") return "";
+  return extra;
 }
 
 /**
  * In-flight Thought phrasing, matching image gen `กำลังสร้างรูปภาพด้วย {id}...`
  */
 export function formatUsingStatus(steps: readonly ChatModelStep[]): string {
-  const chain = formatModelChain(steps);
+  const chain = formatModelChain(displayModelSteps(steps));
   return chain ? `กำลังใช้ ${chain}...` : "";
 }
 
@@ -190,7 +208,7 @@ export type ChatTurnModels = {
 export function createChatTurnModels(): ChatTurnModels {
   let steps: ChatModelStep[] = [];
   const snapshot = () => uniqueModelSteps(steps);
-  const label = () => formatModelChain(steps);
+  const label = () => formatModelChain(displayModelSteps(steps));
   return {
     remember(step) {
       steps = upsertModelStep(steps, step);

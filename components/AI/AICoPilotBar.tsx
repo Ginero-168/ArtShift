@@ -9,7 +9,6 @@ import {
   catalogModelStep,
   createChatTurnModels,
   directorModelStep,
-  florenceModelStep,
   modelStepFromRuntime,
 } from "@/lib/ai/chatModelAttribution";
 import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
@@ -714,10 +713,6 @@ export default function AICoPilotBar() {
               undefined,
               { cloudConsent: true },
             );
-            const analysisVision = analysesForTurn
-              .map((analysis) => modelStepFromRuntime(analysis.visionModel, "vision"))
-              .find(Boolean);
-            if (analysisVision) turnModels.remember(analysisVision);
             analysisAction.status = "success";
             analysisAction.description = analysesForTurn.some(
               (item) => item.source === "local-florence",
@@ -1126,7 +1121,6 @@ export default function AICoPilotBar() {
                     });
                   for (const item of runResult.items) {
                     turnModels.remember(modelStepFromRuntime(item.result?.model, "image"));
-                    turnModels.remember(modelStepFromRuntime(item.result?.visionModel, "vision"));
                   }
 
                   const subject = extractSubject(promptToSend, direction.summary);
@@ -1642,7 +1636,6 @@ export default function AICoPilotBar() {
               },
             });
             turnModels.remember(modelStepFromRuntime(generated.model, "image"));
-            turnModels.remember(modelStepFromRuntime(generated.visionModel, "vision"));
             remoteActions[0] = {
               ...remoteActions[0],
               status: "success",

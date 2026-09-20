@@ -31,6 +31,8 @@ describe("Image Completion Summary Format", () => {
     expect(source).toContain("activeModels:");
     expect(source).toContain("turnModels.label()");
     expect(source).toContain("direction.outputBriefs");
+    expect(source).toContain("cloudConsent: analysisConsent === true");
+    expect(source).not.toContain("florenceModelStep");
     expect(source).toMatch(/formatImageCompletionReply\(subject,\s*1,\s*briefs/);
   });
 
