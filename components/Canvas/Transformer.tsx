@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { scaledAppearancePatch } from "@/lib/appearance";
 import { elementWorldBBox, localToWorld, type Rect, unionBBox } from "@/lib/engine/bounds";
 import { pickTopMost } from "@/lib/engine/hitTest";
 import { getInteractiveElements, getRenderableElements, isObjectLocked } from "@/lib/engine/layers";
@@ -984,8 +985,9 @@ function scaledElementPatch(
   element: EngineElement,
   box: { x: number; y: number; width: number; height: number },
 ): Partial<EngineElement> {
-  if (element.type === "text") {
-    return scaleTextWithBox(element, box);
-  }
-  return box;
+  const sx = box.width / Math.max(1, element.width);
+  const sy = box.height / Math.max(1, element.height);
+  const appearance = scaledAppearancePatch(element, sx, sy);
+  const geometry = element.type === "text" ? scaleTextWithBox(element, box) : box;
+  return { ...geometry, ...appearance } as Partial<EngineElement>;
 }

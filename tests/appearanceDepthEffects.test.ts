@@ -1,13 +1,17 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   addEmbossOperation,
   addExtrudeOperation,
+  addGlowOperation,
+  addShadowOperation,
   appearanceCapabilities,
   appearancePadding,
   appearanceStackRows,
   canvasShadowPasses,
   changeAppearance,
   darkenColor,
+  effectPassUsesTint,
   embossPatchOperation,
   expandEmbossPasses,
   expandExtrudePasses,
@@ -16,6 +20,8 @@ import {
   findEffect,
   offsetFromAngle,
   readAppearance,
+  scaleAppearance,
+  scaledAppearancePatch,
   validateAppearance,
 } from "@/lib/appearance";
 import { DEFAULT_EMBOSS, DEFAULT_EXTRUDE } from "@/lib/appearance/defaults";
@@ -248,6 +254,10 @@ describe("extrude / emboss renderer expansion", () => {
     expect(emboss).toHaveLength(2);
     expect(emboss[0].color).toBe("#000000");
     expect(emboss[1].color).toBe("#ffffff");
+    expect(emboss[0].role).toBe("shadow");
+    expect(emboss[1].role).toBe("highlight");
+    expect(emboss[0].composite).toBe("tint");
+    expect(emboss[1].composite).toBe("tint");
     expect(emboss[0].offsetX).toBeCloseTo(-emboss[1].offsetX);
     expect(emboss[0].offsetY).toBeCloseTo(-emboss[1].offsetY);
 
@@ -329,5 +339,126 @@ describe("extrude / emboss renderer expansion", () => {
     const rect = createRect({ x: 0, y: 0, width: 20, height: 20 });
     expect(appearanceCapabilities(rect).extrude).toBe(true);
     expect(darkenColor("#ffffff", 0.5)).toBe("#808080");
+  });
+
+  it("keeps a white highlight pass visible opposite the shadow along the light angle", () => {
+    const text = createText({ x: 0, y: 0, width: 120, text: "RELIEF" });
+    const added = changeAppearance(text, addEmbossOperation());
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const patched = changeAppearance(
+      added.element,
+      embossPatchOperation(added.element, {
+        depth: 8,
+        angle: 0,
+        softness: 2,
+        highlightColor: "#ffffff",
+        shadowColor: "rgba(0, 0, 0, 0.55)",
+      }),
+    );
+    expect(patched.ok).toBe(true);
+    if (!patched.ok) return;
+    const passes = canvasShadowPasses(patched.element);
+    const highlight = passes.find((pass) => pass.role === "highlight");
+    const shadow = passes.find((pass) => pass.role === "shadow");
+    expect(highlight).toBeDefined();
+    expect(shadow).toBeDefined();
+    if (!highlight || !shadow) return;
+    expect(highlight.color).toBe("#ffffff");
+    expect(highlight.offsetX).toBeCloseTo(-8);
+    expect(shadow.offsetX).toBeCloseTo(8);
+    expect(highlight.offsetX).toBeCloseTo(-shadow.offsetX);
+    expect(highlight.offsetY).toBeCloseTo(-shadow.offsetY);
+    expect(effectPassUsesTint(highlight)).toBe(true);
+    expect(effectPassUsesTint(shadow)).toBe(true);
+    expect(passes.filter((pass) => pass.source === "emboss")).toHaveLength(2);
+  });
+
+  it("paints emboss highlight by tinting still alpha instead of canvas shadow*", () => {
+    const canvas = readFileSync("lib/renderer/canvas.ts", "utf8");
+    expect(canvas).toContain("effectPassUsesTint");
+    expect(canvas).toContain("tintCanvasAlpha");
+    expect(canvas).toContain('globalCompositeOperation = "source-in"');
+    expect(canvas).toContain("ctx.drawImage(tinted, pass.offsetX, pass.offsetY)");
+  });
+});
+
+describe("appearance scale with object", () => {
+  it("scales size-like appearance params and leaves angles/colors unchanged", () => {
+    const text = createText({ x: 0, y: 0, width: 100, height: 40, text: "SCALE" });
+    const extruded = changeAppearance(text, addExtrudeOperation());
+    expect(extruded.ok).toBe(true);
+    if (!extruded.ok) return;
+    const withEmboss = changeAppearance(extruded.element, addEmbossOperation());
+    expect(withEmboss.ok).toBe(true);
+    if (!withEmboss.ok) return;
+    const withShadow = changeAppearance(withEmboss.element, addShadowOperation());
+    expect(withShadow.ok).toBe(true);
+    if (!withShadow.ok) return;
+    const withGlow = changeAppearance(withShadow.element, addGlowOperation());
+    expect(withGlow.ok).toBe(true);
+    if (!withGlow.ok) return;
+    const tuned = changeAppearance(
+      withGlow.element,
+      embossPatchOperation(withGlow.element, {
+        depth: 4,
+        angle: 45,
+        softness: 6,
+        highlightColor: "#ffffff",
+      }),
+    );
+    expect(tuned.ok).toBe(true);
+    if (!tuned.ok) return;
+    const withTaper = changeAppearance(
+      tuned.element,
+      extrudePatchOperation(tuned.element, { taper: 0.4, steps: 6 }),
+    );
+    expect(withTaper.ok).toBe(true);
+    if (!withTaper.ok) return;
+    const before = readAppearance(withTaper.element);
+    const scaled = scaleAppearance(before, 2, 2);
+    const extrude = findEffect(scaled, "extrude");
+    const emboss = findEffect(scaled, "emboss");
+    const shadow = findEffect(scaled, "shadow");
+    const glow = findEffect(scaled, "glow");
+    expect(extrude?.effect.type === "extrude" && extrude.effect.depth).toBe(20);
+    expect(extrude?.effect.type === "extrude" && extrude.effect.angle).toBe(45);
+    expect(extrude?.effect.type === "extrude" && extrude.effect.taper).toBe(0.4);
+    expect(extrude?.effect.type === "extrude" && extrude.effect.steps).toBe(6);
+    expect(emboss?.effect.type === "emboss" && emboss.effect.depth).toBe(8);
+    expect(emboss?.effect.type === "emboss" && emboss.effect.softness).toBe(12);
+    expect(emboss?.effect.type === "emboss" && emboss.effect.angle).toBe(45);
+    expect(emboss?.effect.type === "emboss" && emboss.effect.highlightColor).toBe("#ffffff");
+    expect(shadow?.effect.type === "shadow" && shadow.effect.blur).toBe(24);
+    expect(shadow?.effect.type === "shadow" && shadow.effect.offsetX).toBe(4);
+    expect(shadow?.effect.type === "shadow" && shadow.effect.offsetY).toBe(12);
+    expect(glow?.effect.type === "glow" && glow.effect.blur).toBe(36);
+  });
+
+  it("scales X/Y offsets independently and does not touch angles on a transform patch", () => {
+    const rect = createRect({ x: 0, y: 0, width: 40, height: 20 });
+    const added = changeAppearance(rect, addShadowOperation());
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const withEmboss = changeAppearance(added.element, addEmbossOperation());
+    expect(withEmboss.ok).toBe(true);
+    if (!withEmboss.ok) return;
+    const tuned = changeAppearance(
+      withEmboss.element,
+      embossPatchOperation(withEmboss.element, { depth: 4, angle: 90, softness: 2 }),
+    );
+    expect(tuned.ok).toBe(true);
+    if (!tuned.ok) return;
+    const patch = scaledAppearancePatch(tuned.element, 2, 0.5);
+    expect(patch.appearance).toBeDefined();
+    if (!patch.appearance) return;
+    const emboss = findEffect(patch.appearance, "emboss");
+    const shadow = findEffect(patch.appearance, "shadow");
+    expect(emboss?.effect.type === "emboss" && emboss.effect.angle).toBe(90);
+    expect(emboss?.effect.type === "emboss" && emboss.effect.depth).toBeCloseTo(5);
+    expect(emboss?.effect.type === "emboss" && emboss.effect.softness).toBeCloseTo(2.5);
+    expect(shadow?.effect.type === "shadow" && shadow.effect.offsetX).toBeCloseTo(4);
+    expect(shadow?.effect.type === "shadow" && shadow.effect.offsetY).toBeCloseTo(3);
+    expect(shadow?.effect.type === "shadow" && shadow.effect.blur).toBeCloseTo(15);
   });
 });

@@ -1,6 +1,12 @@
 import type { EngineElement } from "@/lib/engine/types";
 import { appearanceCapabilities } from "./capabilities";
-import { expandEmbossPasses, expandExtrudePasses, resolveExtrudeSideColor } from "./depthEffects";
+import {
+  type DepthEffectComposite,
+  type DepthEffectRole,
+  expandEmbossPasses,
+  expandExtrudePasses,
+  resolveExtrudeSideColor,
+} from "./depthEffects";
 import { readAppearance } from "./legacyAdapter";
 import { isMvpStackItem } from "./panelModel";
 import type { BackgroundAppearance, FillAppearance, StrokeAppearance } from "./types";
@@ -26,7 +32,17 @@ export type CanvasShadowPass = {
   /** Extrude taper: 1 = parallel. Absent on shadow/glow/emboss. */
   scale?: number;
   source: "shadow" | "glow" | "extrude" | "emboss";
+  role?: DepthEffectRole;
+  /**
+   * Emboss highlight (and its paired shadow) must tint the still's alpha.
+   * Canvas `shadow*` of a colored bitmap does not paint light flood colors.
+   */
+  composite?: DepthEffectComposite;
 };
+
+export function effectPassUsesTint(pass: CanvasShadowPass): boolean {
+  return pass.composite === "tint" || pass.role === "highlight";
+}
 
 export type CanvasPaintPass =
   | { kind: "background"; item: BackgroundAppearance }

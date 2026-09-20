@@ -18,6 +18,15 @@ function wrapAngleDegrees(angle: number, fallback = 45): number {
   return wrapped < 0 ? wrapped + 360 : wrapped;
 }
 
+export type DepthEffectRole = "shadow" | "highlight";
+
+/**
+ * `halo` uses Canvas2D `shadow*` (source + colored drop).
+ * `tint` paints a SourceAlpha-colored copy — required for light colors,
+ * because `shadow*` of a colored still drops / multiplies highlights.
+ */
+export type DepthEffectComposite = "halo" | "tint";
+
 export type DepthEffectPass = {
   color: string;
   blur: number;
@@ -25,6 +34,8 @@ export type DepthEffectPass = {
   offsetY: number;
   /** 1 = parallel copy. <1 scales the copy toward the element bounds center. */
   scale?: number;
+  role?: DepthEffectRole;
+  composite?: DepthEffectComposite;
 };
 
 const SIDE_DARKEN = 0.42;
@@ -170,12 +181,27 @@ function embossPair(
   invert: boolean,
 ): DepthEffectPass[] {
   if (depth <= 0 && softness <= 0) return [];
+  // Light travels along `angle`; shadow is cast that way, highlight toward the source.
   const dir = offsetFromAngle(angle, depth);
   const shadow = invert ? { x: -dir.x, y: -dir.y } : dir;
   const highlight = { x: -shadow.x, y: -shadow.y };
   return [
-    { color: shadowColor, blur: softness, offsetX: shadow.x, offsetY: shadow.y },
-    { color: highlightColor, blur: softness, offsetX: highlight.x, offsetY: highlight.y },
+    {
+      color: shadowColor,
+      blur: softness,
+      offsetX: shadow.x,
+      offsetY: shadow.y,
+      role: "shadow",
+      composite: "tint",
+    },
+    {
+      color: highlightColor,
+      blur: softness,
+      offsetX: highlight.x,
+      offsetY: highlight.y,
+      role: "highlight",
+      composite: "tint",
+    },
   ];
 }
 

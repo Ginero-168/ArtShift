@@ -18,6 +18,7 @@ import {
   canvasGaussianBlurRadius,
   canvasPaintPasses,
   canvasShadowPasses,
+  effectPassUsesTint,
   usesStackedPaint,
 } from "../appearance/renderPlan";
 import type {
@@ -174,48 +175,50 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   } else {
     // Canvas shadow* draws source + halo. Paint each halo, then the still once
     // on top so multi-layer text-shadow/glow is not XOR'd and glyphs are not
-    // restacked as N opaque copies. Tapered extrude copies scale toward the
-    // element center — those cannot use shadowOffset, so they tint + transform.
-    let tint: HTMLCanvasElement | null = null;
-    let tintColor: string | null = null;
+    // restacked as N opaque copies.
+    // Emboss highlight (and its paired shadow) tint SourceAlpha instead —
+    // shadow* of a colored still drops light flood colors.
+    // Tapered extrude copies scale toward the element center — those cannot
+    // use shadowOffset, so they tint + transform.
+    const tints = new Map<string, HTMLCanvasElement>();
     for (const pass of effectPasses) {
       const scale = pass.scale ?? 1;
-      if (scale === 1) {
-        ctx.shadowColor = pass.color;
-        ctx.shadowBlur = pass.blur;
-        ctx.shadowOffsetX = pass.offsetX;
-        ctx.shadowOffsetY = pass.offsetY;
-        ctx.drawImage(cached.canvas, 0, 0);
+      if (scale !== 1 || effectPassUsesTint(pass)) {
+        let tinted = tints.get(pass.color);
+        if (!tinted) {
+          tinted = tintCanvasAlpha(cached.canvas, pass.color);
+          tints.set(pass.color, tinted);
+        }
+        ctx.save();
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        if (pass.blur > 0) {
+          const current = ctx.filter;
+          ctx.filter =
+            current && current !== "none"
+              ? `${current} blur(${pass.blur}px)`
+              : `blur(${pass.blur}px)`;
+        }
+        if (scale !== 1) {
+          const pcx = cached.pad + el.width / 2;
+          const pcy = cached.pad + el.height / 2;
+          ctx.translate(pcx + pass.offsetX, pcy + pass.offsetY);
+          ctx.scale(scale, scale);
+          ctx.translate(-pcx, -pcy);
+          ctx.drawImage(tinted, 0, 0);
+        } else {
+          ctx.drawImage(tinted, pass.offsetX, pass.offsetY);
+        }
+        ctx.restore();
         continue;
       }
-      ctx.shadowColor = "transparent";
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      if (!tint || tintColor !== pass.color) {
-        tint ??= document.createElement("canvas");
-        tint.width = cached.canvas.width;
-        tint.height = cached.canvas.height;
-        const tctx = tint.getContext("2d");
-        if (tctx) {
-          tctx.clearRect(0, 0, tint.width, tint.height);
-          tctx.drawImage(cached.canvas, 0, 0);
-          tctx.globalCompositeOperation = "source-in";
-          tctx.fillStyle = pass.color;
-          tctx.fillRect(0, 0, tint.width, tint.height);
-          tctx.globalCompositeOperation = "source-over";
-        }
-        tintColor = pass.color;
-      }
-      ctx.save();
-      const cx = cached.pad + el.width / 2;
-      const cy = cached.pad + el.height / 2;
-      ctx.translate(cx + pass.offsetX, cy + pass.offsetY);
-      ctx.scale(scale, scale);
-      ctx.translate(-cx, -cy);
-      if (pass.blur > 0) ctx.filter = `blur(${pass.blur}px)`;
-      ctx.drawImage(tint, 0, 0);
-      ctx.restore();
+      ctx.shadowColor = pass.color;
+      ctx.shadowBlur = pass.blur;
+      ctx.shadowOffsetX = pass.offsetX;
+      ctx.shadowOffsetY = pass.offsetY;
+      ctx.drawImage(cached.canvas, 0, 0);
     }
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
@@ -1635,4 +1638,18 @@ function drawPattern(
     }
   }
   ctx.globalAlpha = 1;
+}
+
+/** Replace RGB of `source` with `color`, keeping the still's alpha (glyph / shape mask). */
+function tintCanvasAlpha(source: HTMLCanvasElement, color: string): HTMLCanvasElement {
+  const tinted = document.createElement("canvas");
+  tinted.width = source.width;
+  tinted.height = source.height;
+  const tctx = tinted.getContext("2d");
+  if (!tctx) return source;
+  tctx.drawImage(source, 0, 0);
+  tctx.globalCompositeOperation = "source-in";
+  tctx.fillStyle = color;
+  tctx.fillRect(0, 0, tinted.width, tinted.height);
+  return tinted;
 }
