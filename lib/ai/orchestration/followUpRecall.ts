@@ -1,8 +1,11 @@
 import { DEFAULT_DIRECTOR_MODEL_ID, normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
+import { hasNumericOrNamedSizeInText } from "@/lib/ai/imageGeneration";
 import {
+  applyOrientationToPriorSize,
   type ContinuityHistoryMessage,
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
+  parseFollowUpOrientation,
   serializeConversationHistoryForDirector,
 } from "@/lib/ai/orchestration/chatContinuity";
 import type { AiAssistantChatInput, AiExecution, AiRuntime } from "@/lib/ai-runtime/contracts";
@@ -20,7 +23,7 @@ export const FOLLOW_UP_RECALL_SYSTEM = [
   '{ "summary": string, "agreedConstraints": string[], "styleNotes": string, "campaignNotes": string, "followUpIntent": string, "keepCopy": boolean, "keepIngredients": boolean, "aspectOverride": string | null }',
   "summary: 2–6 sentences covering prior brief, agreed style/copy, ingredients, last output, and how the new command should apply.",
   "followUpIntent: the new instruction interpreted in light of that memory (not a blank new brief).",
-  "aspectOverride: only if the user clearly changes ratio/orientation (e.g. 9:16, แนวตั้ง); otherwise null.",
+  "aspectOverride: only if the user names a specific ratio/size (e.g. 9:16, 7x29cm). For orientation-only commands (แนวตั้ง / portrait / แนวนอน), return the swapped prior custom size (29x7cm → 7x29cm) or the flipped named aspect (16:9 → 9:16). Never default แนวตั้ง to 9:16 when a custom WxH exists.",
 ].join(" ");
 
 export type FollowUpRecallResult = {
@@ -75,6 +78,13 @@ export function buildFollowUpRecallUserPrompt(input: FollowUpRecallInput): strin
   ].join("\n");
 }
 
+function resolvedOrientationAspectOverride(input: FollowUpRecallInput): string | undefined {
+  const orientation = parseFollowUpOrientation(input.followUpPrompt);
+  if (!orientation || hasNumericOrNamedSizeInText(input.followUpPrompt)) return undefined;
+  const inverted = applyOrientationToPriorSize(input.lastGeneration, orientation);
+  return inverted.sizeLabel || inverted.aspectRatio;
+}
+
 export function buildLocalFollowUpRecall(input: FollowUpRecallInput): FollowUpRecallResult {
   const prior = input.lastGeneration;
   const recentUserTurns = (input.conversationHistory ?? [])
@@ -103,6 +113,8 @@ export function buildLocalFollowUpRecall(input: FollowUpRecallInput): FollowUpRe
     .filter(Boolean)
     .join(" ");
 
+  const aspectOverride = resolvedOrientationAspectOverride(input);
+
   return {
     summary,
     agreedConstraints: constraintBits.slice(0, 12),
@@ -111,6 +123,7 @@ export function buildLocalFollowUpRecall(input: FollowUpRecallInput): FollowUpRe
     followUpIntent: clip(input.followUpPrompt, 500) || "Revise the last generated image.",
     keepCopy: true,
     keepIngredients: true,
+    ...(aspectOverride ? { aspectOverride } : {}),
     source: "local-fallback",
   };
 }
@@ -167,10 +180,9 @@ export function parseFollowUpRecallPayload(
     typeof record.campaignNotes === "string" ? record.campaignNotes : fallback.campaignNotes,
     800,
   );
-  const aspectOverride = clip(
-    typeof record.aspectOverride === "string" ? record.aspectOverride : "",
-    32,
-  );
+  const aspectOverride =
+    resolvedOrientationAspectOverride(input) ||
+    clip(typeof record.aspectOverride === "string" ? record.aspectOverride : "", 32);
 
   return {
     summary: summary || fallback.summary,

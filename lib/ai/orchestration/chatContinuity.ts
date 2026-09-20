@@ -1,5 +1,11 @@
+import { resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
 import {
+  ASPECT_RATIOS,
+  extractRequestedSizeSpecsFromText,
   hasExplicitDimensionsInText,
+  hasNumericOrNamedSizeInText,
+  type RequestedSizeSpec,
+  type RequestedSizeUnit,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
 import {
@@ -53,6 +59,17 @@ export type PriorImageGenerationContext = {
   width: number;
   height: number;
   aspectRatio: string;
+  /** True when generation size was clamped to the model 3:1 max. */
+  ratioClamped?: boolean;
+  /** True print canvas when the requested ratio exceeds 3:1. */
+  printWidth?: number;
+  printHeight?: number;
+  /** Original requested size (cm/px/ratio units) before model clamp. */
+  sourceWidth?: number;
+  sourceHeight?: number;
+  /** Display/API label such as "29x7cm" or "16:9". */
+  sizeLabel?: string;
+  sizeUnit?: RequestedSizeUnit;
   /** subject = photo/illustration helper; brand-variant = Shared Anchor + Variant axes */
   refinementMode?: "subject" | "brand-variant" | "generic";
   sharedAnchors?: readonly SharedAnchorLock[];
@@ -71,6 +88,17 @@ export type PriorImageGenerationContext = {
   campaignNotes?: string;
   /** True when this context itself was a follow-up revision of an earlier gen. */
   revisedLastGeneration?: boolean;
+};
+
+export type FollowUpOrientation = "portrait" | "landscape";
+
+export type FollowUpResolvedSize = {
+  width: number;
+  height: number;
+  aspectRatio: string;
+  ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
 };
 
 export type ContinuityHistoryMessage = {
@@ -143,14 +171,14 @@ export function isImageRevisionFollowUpPrompt(prompt: string): boolean {
   if (isImageVariationFollowUpPrompt(text)) return false;
 
   if (
-    /^(?:ช่วย|กรุณา)?\s*(?:ปรับ|ทำให้|เปลี่ยน|แปลง|make|change|convert|switch)?\s*(?:เป็น|ให้เป็น|to|it(?:\s+to)?)?\s*(?:แนวตั้ง|แนวนอน|vertical|horizontal|portrait|landscape)/iu.test(
+    /^(?:ช่วย|กรุณา)?\s*(?:ปรับ|ทำให้|ทำ|เปลี่ยน|แปลง|make|change|convert|switch)?\s*(?:เป็น|ให้เป็น|to|it(?:\s+to)?)?\s*(?:แนวตั้ง|แนวนอน|vertical|horizontal|portrait|landscape)/iu.test(
       text,
     )
   ) {
     return true;
   }
 
-  if (/(?:ปรับเป็น|ทำให้เป็น|เปลี่ยนเป็น|แปลงเป็น)\s*(?:แนวตั้ง|แนวนอน|แนวตั้งใหม่)/iu.test(text)) {
+  if (/(?:ปรับเป็น|ทำให้เป็น|ทำเป็น|เปลี่ยนเป็น|แปลงเป็น)\s*(?:แนวตั้ง|แนวนอน|แนวตั้งใหม่)/iu.test(text)) {
     return true;
   }
 
@@ -206,6 +234,364 @@ export function snapshotIngredients(
   return ingredients;
 }
 
+const COLON_ASPECT_RE = /^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/;
+
+function isColonAspect(value: string | undefined): boolean {
+  return Boolean(value && COLON_ASPECT_RE.test(value.trim()));
+}
+
+function sameOrientation(
+  widthA: number,
+  heightA: number,
+  widthB: number,
+  heightB: number,
+): boolean {
+  const squareA = Math.abs(widthA - heightA) < 1e-6;
+  const squareB = Math.abs(widthB - heightB) < 1e-6;
+  if (squareA || squareB) return true;
+  return widthA >= heightA === widthB >= heightB;
+}
+
+function formatExactSizeLabel(
+  sourceWidth: number,
+  sourceHeight: number,
+  unit?: RequestedSizeUnit,
+  fallback?: string,
+): string {
+  if (unit === "named" || isColonAspect(fallback)) {
+    return `${sourceWidth}:${sourceHeight}`;
+  }
+  if (unit) {
+    return `${sourceWidth}x${sourceHeight}${unit}`;
+  }
+  return fallback || `${sourceWidth}x${sourceHeight}`;
+}
+
+function swapSizeLabel(
+  label: string | undefined,
+  oldWidth: number,
+  oldHeight: number,
+  newWidth: number,
+  newHeight: number,
+  unit?: RequestedSizeUnit,
+): string {
+  if (label && isColonAspect(label)) {
+    return `${newWidth}:${newHeight}`;
+  }
+  if (label) {
+    const replaced = label
+      .replaceAll(`${oldWidth}x${oldHeight}`, `${newWidth}x${newHeight}`)
+      .replaceAll(`${oldWidth}×${oldHeight}`, `${newWidth}×${newHeight}`);
+    if (replaced !== label) return replaced;
+  }
+  return formatExactSizeLabel(newWidth, newHeight, unit, label);
+}
+
+function specToResolvedSize(spec: RequestedSizeSpec): FollowUpResolvedSize & {
+  sourceWidth: number;
+  sourceHeight: number;
+  sizeLabel: string;
+  sizeUnit?: RequestedSizeUnit;
+} {
+  return resolveSizeFromSource(spec.sourceWidth, spec.sourceHeight, spec.label, spec.unit);
+}
+
+function resolveSizeFromSource(
+  sourceWidth: number,
+  sourceHeight: number,
+  label?: string,
+  unit?: RequestedSizeUnit,
+): FollowUpResolvedSize & {
+  sourceWidth: number;
+  sourceHeight: number;
+  sizeLabel: string;
+  sizeUnit?: RequestedSizeUnit;
+} {
+  const namedLabel =
+    unit === "named" || isColonAspect(label) ? `${sourceWidth}:${sourceHeight}` : "";
+  if (namedLabel) {
+    const preset = ASPECT_RATIOS.find(
+      (ratio) => ratio.id === namedLabel || ratio.ratio === namedLabel,
+    );
+    if (preset) {
+      return {
+        width: preset.width,
+        height: preset.height,
+        aspectRatio: preset.id,
+        sourceWidth,
+        sourceHeight,
+        sizeLabel: preset.id,
+        sizeUnit: "named",
+      };
+    }
+    const resolved = resolveImageGenerationDimensions(namedLabel);
+    return {
+      width: resolved.width,
+      height: resolved.height,
+      aspectRatio: resolved.aspectRatio,
+      ...(resolved.ratioClamped
+        ? {
+            ratioClamped: true,
+            printWidth: resolved.printWidth,
+            printHeight: resolved.printHeight,
+          }
+        : {}),
+      sourceWidth,
+      sourceHeight,
+      sizeLabel: namedLabel,
+      sizeUnit: "named",
+    };
+  }
+
+  const resolved = resolveGenerationSizeFromRatio(sourceWidth, sourceHeight);
+  return {
+    width: resolved.width,
+    height: resolved.height,
+    aspectRatio: resolved.aspectRatio,
+    ...(resolved.ratioClamped
+      ? {
+          ratioClamped: true,
+          printWidth: resolved.printWidth,
+          printHeight: resolved.printHeight,
+        }
+      : {}),
+    sourceWidth,
+    sourceHeight,
+    sizeLabel: formatExactSizeLabel(sourceWidth, sourceHeight, unit, label),
+    ...(unit ? { sizeUnit: unit } : {}),
+  };
+}
+
+function toPublicFollowUpSize(
+  size: FollowUpResolvedSize & { sourceWidth?: number; sourceHeight?: number },
+): FollowUpResolvedSize {
+  return {
+    width: size.width,
+    height: size.height,
+    aspectRatio: size.aspectRatio,
+    ...(size.ratioClamped
+      ? {
+          ratioClamped: true,
+          printWidth: size.printWidth,
+          printHeight: size.printHeight,
+        }
+      : {}),
+  };
+}
+
+/** Portrait / landscape intent without a newly named WxH or A:B size. */
+export function parseFollowUpOrientation(prompt: string): FollowUpOrientation | null {
+  const text = (prompt || "").trim();
+  if (!text) return null;
+  const portrait =
+    /(?:แนวตั้ง|\bvertical\b|portrait\s+(?:mode|orientation|ratio)|\bportrait\b(?!\s+of\b|\s+photo|\s+shot|\s+picture)|\btall\b)/iu.test(
+      text,
+    );
+  const landscape = /(?:แนวนอน|\bhorizontal\b|\blandscape\b|\bwide\b)/iu.test(text);
+  if (portrait && !landscape) return "portrait";
+  if (landscape && !portrait) return "landscape";
+  return null;
+}
+
+export function isOrientationOnlyFollowUpPrompt(prompt: string): boolean {
+  const text = (prompt || "").trim();
+  if (!text || hasNumericOrNamedSizeInText(text)) return false;
+  if (!parseFollowUpOrientation(text)) return false;
+  return isImageFollowUpPrompt(text);
+}
+
+export function resolvePriorRequestedSize(
+  prior: PriorImageGenerationContext,
+): FollowUpResolvedSize & {
+  sourceWidth: number;
+  sourceHeight: number;
+  sizeLabel: string;
+  sizeUnit?: RequestedSizeUnit;
+} {
+  if (
+    typeof prior.sourceWidth === "number" &&
+    prior.sourceWidth > 0 &&
+    typeof prior.sourceHeight === "number" &&
+    prior.sourceHeight > 0
+  ) {
+    return resolveSizeFromSource(
+      prior.sourceWidth,
+      prior.sourceHeight,
+      prior.sizeLabel,
+      prior.sizeUnit,
+    );
+  }
+
+  const fromPrompt =
+    extractRequestedSizeSpecsFromText(prior.userPrompt)[0] ??
+    extractRequestedSizeSpecsFromText(prior.refinedPrompt)[0];
+  if (fromPrompt) {
+    return specToResolvedSize(fromPrompt);
+  }
+
+  if (isColonAspect(prior.aspectRatio)) {
+    const match = COLON_ASPECT_RE.exec(prior.aspectRatio.trim());
+    const width = Number(match?.[1]);
+    const height = Number(match?.[2]);
+    if (width > 0 && height > 0) {
+      return resolveSizeFromSource(width, height, prior.aspectRatio, "named");
+    }
+  }
+
+  if (prior.printWidth && prior.printHeight && prior.printWidth > 0 && prior.printHeight > 0) {
+    return resolveSizeFromSource(
+      prior.printWidth,
+      prior.printHeight,
+      prior.sizeLabel,
+      prior.sizeUnit ?? "px",
+    );
+  }
+
+  return resolveSizeFromSource(
+    prior.width,
+    prior.height,
+    prior.aspectRatio,
+    prior.sizeUnit ?? "px",
+  );
+}
+
+export function applyOrientationToPriorSize(
+  prior: PriorImageGenerationContext,
+  orientation: FollowUpOrientation,
+): FollowUpResolvedSize & {
+  sourceWidth: number;
+  sourceHeight: number;
+  sizeLabel: string;
+  sizeUnit?: RequestedSizeUnit;
+} {
+  const current = resolvePriorRequestedSize(prior);
+  const isLandscape = current.sourceWidth >= current.sourceHeight;
+  const wantLandscape = orientation === "landscape";
+  if (isLandscape === wantLandscape) {
+    return current;
+  }
+  return resolveSizeFromSource(
+    current.sourceHeight,
+    current.sourceWidth,
+    swapSizeLabel(
+      current.sizeLabel,
+      current.sourceWidth,
+      current.sourceHeight,
+      current.sourceHeight,
+      current.sourceWidth,
+      current.sizeUnit,
+    ),
+    current.sizeUnit,
+  );
+}
+
+function inferSnapshotSizeFields(input: {
+  userPrompt: string;
+  width: number;
+  height: number;
+  aspectRatio: string;
+  ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sizeLabel?: string;
+  sizeUnit?: RequestedSizeUnit;
+}): Pick<
+  PriorImageGenerationContext,
+  | "ratioClamped"
+  | "printWidth"
+  | "printHeight"
+  | "sourceWidth"
+  | "sourceHeight"
+  | "sizeLabel"
+  | "sizeUnit"
+> {
+  let sourceWidth = input.sourceWidth;
+  let sourceHeight = input.sourceHeight;
+  let sizeLabel = input.sizeLabel;
+  let sizeUnit = input.sizeUnit;
+
+  if (
+    !(
+      typeof sourceWidth === "number" &&
+      sourceWidth > 0 &&
+      typeof sourceHeight === "number" &&
+      sourceHeight > 0
+    )
+  ) {
+    const spec = extractRequestedSizeSpecsFromText(input.userPrompt)[0];
+    if (spec) {
+      sourceWidth = spec.sourceWidth;
+      sourceHeight = spec.sourceHeight;
+      sizeLabel = sizeLabel ?? spec.label;
+      sizeUnit = sizeUnit ?? spec.unit;
+    } else if (isColonAspect(input.aspectRatio)) {
+      const match = COLON_ASPECT_RE.exec(input.aspectRatio.trim());
+      const width = Number(match?.[1]);
+      const height = Number(match?.[2]);
+      if (width > 0 && height > 0) {
+        sourceWidth = width;
+        sourceHeight = height;
+        sizeLabel = sizeLabel ?? input.aspectRatio;
+        sizeUnit = sizeUnit ?? "named";
+      }
+    }
+  }
+
+  if (
+    typeof sourceWidth === "number" &&
+    sourceWidth > 0 &&
+    typeof sourceHeight === "number" &&
+    sourceHeight > 0 &&
+    input.width > 0 &&
+    input.height > 0 &&
+    !sameOrientation(sourceWidth, sourceHeight, input.width, input.height)
+  ) {
+    const nextWidth = sourceHeight;
+    const nextHeight = sourceWidth;
+    sizeLabel = swapSizeLabel(
+      sizeLabel,
+      sourceWidth,
+      sourceHeight,
+      nextWidth,
+      nextHeight,
+      sizeUnit,
+    );
+    sourceWidth = nextWidth;
+    sourceHeight = nextHeight;
+  }
+
+  const resolved =
+    typeof sourceWidth === "number" &&
+    sourceWidth > 0 &&
+    typeof sourceHeight === "number" &&
+    sourceHeight > 0
+      ? resolveSizeFromSource(sourceWidth, sourceHeight, sizeLabel, sizeUnit)
+      : null;
+
+  return {
+    ...(input.ratioClamped || resolved?.ratioClamped ? { ratioClamped: true as const } : {}),
+    ...((input.printWidth && input.printHeight) || (resolved?.printWidth && resolved?.printHeight)
+      ? {
+          printWidth: input.printWidth ?? resolved?.printWidth,
+          printHeight: input.printHeight ?? resolved?.printHeight,
+        }
+      : {}),
+    ...(typeof sourceWidth === "number" &&
+    sourceWidth > 0 &&
+    typeof sourceHeight === "number" &&
+    sourceHeight > 0
+      ? {
+          sourceWidth,
+          sourceHeight,
+          sizeLabel: sizeLabel || resolved?.sizeLabel,
+          ...(sizeUnit || resolved?.sizeUnit ? { sizeUnit: sizeUnit ?? resolved?.sizeUnit } : {}),
+        }
+      : {}),
+  };
+}
+
 export function snapshotGenerationContext(input: {
   userPrompt: string;
   refinedPrompt: string;
@@ -213,6 +599,13 @@ export function snapshotGenerationContext(input: {
   width: number;
   height: number;
   aspectRatio: string;
+  ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sizeLabel?: string;
+  sizeUnit?: RequestedSizeUnit;
   refinementMode?: PriorImageGenerationContext["refinementMode"];
   sharedAnchors?: readonly SharedAnchorLock[];
   variantSelections?: readonly VariantSelectionLock[];
@@ -224,6 +617,7 @@ export function snapshotGenerationContext(input: {
   campaignNotes?: string;
   revisedLastGeneration?: boolean;
 }): PriorImageGenerationContext {
+  const inferred = inferSnapshotSizeFields(input);
   return {
     userPrompt: input.userPrompt,
     refinedPrompt: input.refinedPrompt,
@@ -231,6 +625,7 @@ export function snapshotGenerationContext(input: {
     width: input.width,
     height: input.height,
     aspectRatio: input.aspectRatio,
+    ...inferred,
     ...(input.refinementMode ? { refinementMode: input.refinementMode } : {}),
     ...(input.sharedAnchors?.length ? { sharedAnchors: input.sharedAnchors } : {}),
     ...(input.variantSelections?.length ? { variantSelections: input.variantSelections } : {}),
@@ -338,6 +733,14 @@ export function formatGenerationPackageForPrompt(prior: PriorImageGenerationCont
     ...(prior.campaignNotes ? [`Campaign notes: ${prior.campaignNotes.slice(0, 1_000)}`] : []),
     `Refinement mode: ${prior.refinementMode ?? "generic"}`,
     `Prior aspect ratio / dimensions: ${prior.aspectRatio} (${prior.width}×${prior.height})`,
+    ...(prior.sizeLabel || (prior.sourceWidth && prior.sourceHeight)
+      ? [
+          `Prior exact size: ${
+            prior.sizeLabel ||
+            formatExactSizeLabel(prior.sourceWidth!, prior.sourceHeight!, prior.sizeUnit)
+          } — keep this physical/custom size; invert axes on orientation-only follow-ups (do not substitute 9:16)`,
+        ]
+      : []),
     ...(prior.modelId ? [`Prior image model: ${prior.modelId}`] : []),
     ...(prior.styleTags?.length ? [`Style tags: ${prior.styleTags.join(", ")}`] : []),
     ...(prior.outputElementId ? [`Last output element id: ${prior.outputElementId}`] : []),
@@ -411,7 +814,8 @@ export function composeFollowUpDirectorPrompt(
       : [
           "=== REVISION STRATEGY ===",
           "Apply the user's new instruction on top of the last generation. Keep copy, brand, ingredients, and style unless the follow-up overrides them.",
-          "If the user changes orientation/ratio (e.g. แนวตั้ง / vertical / 9:16), change aspect accordingly and rebuild the layout for that frame — do not start a blank new campaign.",
+          "If the user only changes orientation (แนวตั้ง / แนวนอน / vertical / portrait / landscape) and the last size was custom WxH (including cm): SWAP the axes (29×7cm → 7×29cm). Do NOT replace with 9:16 / 3:4 / 16:9 unless the last size was a named aspect — then flip that named aspect (16:9↔9:16, 3:4↔4:3, 3:1↔1:3).",
+          "Rebuild the layout for the resolved frame — do not start a blank new campaign.",
         ];
 
   const continuationRules =
@@ -423,7 +827,7 @@ export function composeFollowUpDirectorPrompt(
           "- Re-use the same ingredients and campaign copy unless the user overrides them. Never invent extra reference photos.",
           "- Attached images (when present): the first image is the last output to revise (image-to-image); later images are the original ingredients.",
           "- Prefer specialist image_editor when the last output is attached.",
-          "- refinedPrompt must restate the full prior brief in English, then apply the follow-up change, and must include the resolved aspect ratio.",
+          "- refinedPrompt must restate the full prior brief in English, then apply the follow-up change, and must include the resolved exact size (swapped custom WxH or flipped named aspect — never a default 9:16 when a custom size exists).",
           "- If this was a brand/shelf-sign job, never invent new slogans or drop the logo.",
         ]
       : [
@@ -548,14 +952,17 @@ export function extractPriorImageGenerationContext(
       ? resolveImageGenerationDimensions(msg.content)
       : { width: 1024, height: 1024, aspectRatio: "1:1" as const };
     const assistantAfter = history.slice(i + 1).find((m) => m.role === "assistant");
-    return {
+    return snapshotGenerationContext({
       userPrompt: msg.content,
       refinedPrompt: msg.content,
       summary: assistantAfter?.content?.slice(0, 500),
       width: dims.width,
       height: dims.height,
       aspectRatio: dims.aspectRatio,
-    };
+      ratioClamped: dims.ratioClamped,
+      printWidth: dims.printWidth,
+      printHeight: dims.printHeight,
+    });
   }
 
   return null;
@@ -563,6 +970,8 @@ export function extractPriorImageGenerationContext(
 
 /**
  * Resolves dimensions for a follow-up turn: current prompt → prior context → history scan.
+ * Orientation-only commands invert the remembered custom size (29×7cm → 7×29cm)
+ * or flip a named aspect (16:9 → 9:16) instead of defaulting to 9:16 / 16:9.
  */
 export function resolveFollowUpDimensions(options: {
   prompt: string;
@@ -571,7 +980,7 @@ export function resolveFollowUpDimensions(options: {
   clarificationOriginalPrompt?: string;
   directionRefinedPrompt?: string;
   directionSummary?: string;
-}): { width: number; height: number; aspectRatio: string } | null {
+}): FollowUpResolvedSize | null {
   const {
     prompt,
     prior,
@@ -581,35 +990,53 @@ export function resolveFollowUpDimensions(options: {
     directionSummary,
   } = options;
 
+  const orientation = parseFollowUpOrientation(prompt);
+  const hasConcreteSize = hasNumericOrNamedSizeInText(prompt);
+  const priorFromHistory = prior ?? extractPriorImageGenerationContext(conversationHistory);
+
+  if (hasConcreteSize) {
+    return resolveImageGenerationDimensions(prompt);
+  }
+  if (clarificationOriginalPrompt && hasNumericOrNamedSizeInText(clarificationOriginalPrompt)) {
+    return resolveImageGenerationDimensions(clarificationOriginalPrompt);
+  }
+
+  if (orientation && isImageFollowUpPrompt(prompt) && priorFromHistory) {
+    return toPublicFollowUpSize(applyOrientationToPriorSize(priorFromHistory, orientation));
+  }
+
+  // Fresh requests (and follow-ups with no prior size) still honor แนวตั้ง→9:16 / แนวนอน→16:9.
   if (hasExplicitDimensionsInText(prompt)) {
     return resolveImageGenerationDimensions(prompt);
   }
   if (clarificationOriginalPrompt && hasExplicitDimensionsInText(clarificationOriginalPrompt)) {
     return resolveImageGenerationDimensions(clarificationOriginalPrompt);
   }
+
   if (!isImageFollowUpPrompt(prompt)) return null;
 
-  if (prior?.aspectRatio && prior.width > 0 && prior.height > 0) {
-    return {
-      width: prior.width,
-      height: prior.height,
-      aspectRatio: prior.aspectRatio,
-    };
+  if (priorFromHistory?.aspectRatio && priorFromHistory.width > 0 && priorFromHistory.height > 0) {
+    return toPublicFollowUpSize(resolvePriorRequestedSize(priorFromHistory));
   }
 
   if (conversationHistory?.length) {
     for (let i = conversationHistory.length - 1; i >= 0; i--) {
       const msg = conversationHistory[i];
       if (msg?.role === "assistant" && msg.generationContext) {
-        const ctx = msg.generationContext;
-        return { width: ctx.width, height: ctx.height, aspectRatio: ctx.aspectRatio };
+        return toPublicFollowUpSize(resolvePriorRequestedSize(msg.generationContext));
       }
-      if (msg?.role === "user" && hasExplicitDimensionsInText(msg.content)) {
+      if (msg?.role === "user" && hasNumericOrNamedSizeInText(msg.content)) {
         return resolveImageGenerationDimensions(msg.content);
       }
     }
   }
 
+  if (directionRefinedPrompt && hasNumericOrNamedSizeInText(directionRefinedPrompt)) {
+    return resolveImageGenerationDimensions(directionRefinedPrompt);
+  }
+  if (directionSummary && hasNumericOrNamedSizeInText(directionSummary)) {
+    return resolveImageGenerationDimensions(directionSummary);
+  }
   if (directionRefinedPrompt && hasExplicitDimensionsInText(directionRefinedPrompt)) {
     return resolveImageGenerationDimensions(directionRefinedPrompt);
   }

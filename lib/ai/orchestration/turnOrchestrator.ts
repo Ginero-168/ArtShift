@@ -15,7 +15,11 @@ import { useEngine } from "@/lib/engine/store";
 import { createAtomicVectorizedFromResult } from "@/lib/vectorize/atomicVectorize";
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
-import { type PriorImageGenerationContext, resolveFollowUpDimensions } from "./chatContinuity";
+import {
+  isOrientationOnlyFollowUpPrompt,
+  type PriorImageGenerationContext,
+  resolveFollowUpDimensions,
+} from "./chatContinuity";
 import {
   applyCreativeDirectionToTask,
   type CreativeDirection,
@@ -122,10 +126,17 @@ export function resolveTaskDimensionsWithContext(
     directionSummary: direction?.summary,
   });
   if (followUpDims) {
-    return followUpDims as {
-      width: number;
-      height: number;
-      aspectRatio: AiImageAspectRatio;
+    return {
+      width: followUpDims.width,
+      height: followUpDims.height,
+      aspectRatio: followUpDims.aspectRatio as AiImageAspectRatio,
+      ...(followUpDims.ratioClamped
+        ? {
+            ratioClamped: true,
+            printWidth: followUpDims.printWidth,
+            printHeight: followUpDims.printHeight,
+          }
+        : {}),
     };
   }
 
@@ -282,16 +293,22 @@ export function createDirectedImageRun(
   options: { runId?: string } = {},
 ): DirectedImageRun {
   const explicitCount = extractExplicitRequestedOutputCount(input.prompt);
+  // Orientation-only follow-ups (ปรับเป็นแนวตั้ง) must invert the remembered size
+  // in resolveTaskDimensionsWithContext. Do not let Director prose like "9:16"
+  // override a custom 29×7cm → 7×29cm swap.
+  const lockFollowUpSize = isOrientationOnlyFollowUpPrompt(input.prompt);
   // Multi-size campaigns list several WxH / cm sizes or named A:B ratios.
   // Assign each task its own target so we do not stamp every output as 1:1 / first ratio only.
-  const sizeSpecs = [
-    ...extractRequestedSizeSpecsFromText(input.prompt),
-    ...extractRequestedSizeSpecsFromText(input.clarification?.originalPrompt),
-    ...extractRequestedSizeSpecsFromText(direction.summary),
-    ...extractRequestedSizeSpecsFromText(direction.refinedPrompt),
-  ].filter((spec, index, all) => {
-    return all.findIndex((s) => s.aspectRatio === spec.aspectRatio) === index;
-  });
+  const sizeSpecs = lockFollowUpSize
+    ? []
+    : [
+        ...extractRequestedSizeSpecsFromText(input.prompt),
+        ...extractRequestedSizeSpecsFromText(input.clarification?.originalPrompt),
+        ...extractRequestedSizeSpecsFromText(direction.summary),
+        ...extractRequestedSizeSpecsFromText(direction.refinedPrompt),
+      ].filter((spec, index, all) => {
+        return all.findIndex((s) => s.aspectRatio === spec.aspectRatio) === index;
+      });
   const sizeListCount = sizeSpecs.length >= 2 ? Math.min(5, sizeSpecs.length) : undefined;
   const count = Math.min(
     5,
@@ -335,9 +352,10 @@ export function createDirectedImageRun(
     } else if (/ขาว|สว่าง|white|bright/i.test(brief)) {
       variationCues = " (focusing on bright clean minimalist illumination)";
     }
-    const briefDims = hasExplicitDimensionsInText(brief)
-      ? resolveImageGenerationDimensions(brief)
-      : null;
+    const briefDims =
+      lockFollowUpSize || !hasExplicitDimensionsInText(brief)
+        ? null
+        : resolveImageGenerationDimensions(brief);
     const listDims =
       sizeSpecs.length >= count
         ? sizeSpecs[index]

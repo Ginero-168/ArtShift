@@ -571,4 +571,43 @@ describe("context-aware turn orchestrator", () => {
       "9:16",
     ]);
   });
+
+  it("swaps 29×7cm to 7×29cm on 'ปรับเป็นแนวตั้ง' even if Director prose says 9:16", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "ปรับเป็นแนวตั้ง",
+      refs: [],
+      analyses: [],
+      priorGeneration: {
+        userPrompt: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%",
+        refinedPrompt: "Pink floral bookstore shelftalk, 35% off, 29x7cm",
+        width: 2048,
+        height: 688,
+        aspectRatio: "2048x688",
+        ratioClamped: true,
+        printWidth: 2848,
+        printHeight: 688,
+      },
+    };
+
+    const run = createDirectedImageRun(input, {
+      kind: "image-task",
+      outputCount: 1,
+      requestedOutputCount: 1,
+      summary: "ปรับป้ายเป็นแนวตั้ง 9:16",
+      refinedPrompt:
+        "Rebuild the last pink floral Nain campaign as a vertical 9:16 poster, keep 35% copy",
+      specialist: "image_generator",
+      capability: "IMAGE_DEFAULT",
+      modelAlias: "image-gpt-2",
+      knowledgeSkillIds: [],
+      reviewCriteria: ["Keep campaign copy"],
+      search: { required: false, queries: [], sources: [] },
+    });
+
+    const dims = run.tasks[0]?.requestedDimensions;
+    expect(dims?.aspectRatio).not.toBe("9:16");
+    expect(dims?.ratioClamped).toBe(true);
+    expect((dims?.printHeight ?? 0) / (dims?.printWidth ?? 1)).toBeCloseTo(29 / 7, 2);
+    expect(dims?.height ?? 0).toBeGreaterThan(dims?.width ?? 0);
+  });
 });

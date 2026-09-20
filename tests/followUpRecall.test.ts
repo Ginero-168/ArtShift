@@ -36,6 +36,7 @@ describe("follow-up recall", () => {
     expect(recall.followUpIntent).toContain("ปรับเป็นแนวตั้ง");
     expect(recall.keepIngredients).toBe(true);
     expect(recall.summary).not.toContain("Cover C");
+    expect(recall.aspectOverride).toBe("1:3");
   });
 
   it("parses Gemini JSON but ignores invented ingredient ids from the model", () => {
@@ -56,8 +57,31 @@ describe("follow-up recall", () => {
     expect(parsed.source).toBe("cloud-api");
     expect(parsed.summary).toContain("pink Nain");
     expect(parsed.followUpIntent).toContain("9:16");
+    expect(parsed.aspectOverride).toBe("1:3");
     expect(JSON.stringify(parsed)).not.toContain("hallucinated-cover");
     expect(JSON.stringify(parsed)).not.toContain("Fake Cover");
+  });
+
+  it("overrides Gemini 9:16 with swapped 7x29cm when the last size was custom", () => {
+    const parsed = parseFollowUpRecallPayload(
+      JSON.stringify({
+        summary: "Rebuild vertical as 9:16",
+        followUpIntent: "Make it 9:16",
+        keepCopy: true,
+        keepIngredients: true,
+        aspectOverride: "9:16",
+      }),
+      {
+        followUpPrompt: "ปรับเป็นแนวตั้ง",
+        lastGeneration: {
+          ...lastGeneration,
+          userPrompt: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%",
+          aspectRatio: "2048x688",
+        },
+      },
+    );
+    expect(parsed.aspectOverride).toMatch(/7x29/i);
+    expect(parsed.aspectOverride).not.toBe("9:16");
   });
 
   it("falls back locally when Gemini returns non-JSON", () => {

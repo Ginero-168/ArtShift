@@ -1326,6 +1326,9 @@ export default function AICoPilotBar() {
                       firstSucceededTask?.requestedDimensions?.height ??
                       1024,
                     aspectRatio: firstSucceededTask?.requestedDimensions?.aspectRatio ?? "1:1",
+                    ratioClamped: firstSucceededTask?.requestedDimensions?.ratioClamped,
+                    printWidth: firstSucceededTask?.requestedDimensions?.printWidth,
+                    printHeight: firstSucceededTask?.requestedDimensions?.printHeight,
                     refinementMode:
                       locksFromHelper?.refinementMode ??
                       priorGeneration?.refinementMode ??
@@ -1784,6 +1787,9 @@ export default function AICoPilotBar() {
               width: generated.width,
               height: generated.height,
               aspectRatio: directedTask.requestedDimensions?.aspectRatio ?? "1:1",
+              ratioClamped: directedTask.requestedDimensions?.ratioClamped,
+              printWidth: directedTask.requestedDimensions?.printWidth,
+              printHeight: directedTask.requestedDimensions?.printHeight,
               modelId: generated.model,
               outputElementId: generated.elementId,
               outputFileId: generated.fileId,
