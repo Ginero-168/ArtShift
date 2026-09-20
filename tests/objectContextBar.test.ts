@@ -61,6 +61,15 @@ describe("ObjectContextBar Hook Rules and Brief Action", () => {
     expect(fileContent).toContain("{label}");
   });
 
+  it("uses the shared app UI font token for Brief and other Option Bar labels", () => {
+    // Brief is chrome, not a live artwork preview — match Properties / --font-sans (Sarabun).
+    expect(fileContent).toContain('className="object-context-label"');
+    expect(fileContent).toContain('fontFamily: "var(--font-sans)"');
+    expect(fileContent).toContain("font-family: var(--font-sans);");
+    expect(fileContent).not.toContain("Mali");
+    expect(fileContent).not.toContain("Excalifont");
+  });
+
   it("provides Merge, Mix, and group actions for multi-selection", () => {
     expect(fileContent).toContain('mergeBusy ? "Merging..." : "Merge"');
     expect(fileContent).toContain('mixBusy ? "Mixing..." : "Mix"');

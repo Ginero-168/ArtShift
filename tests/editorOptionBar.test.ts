@@ -19,6 +19,12 @@ describe("EditorOptionBar vector tool rail", () => {
     expect(railSource).not.toContain("RASTER_TOOL_DEFINITIONS");
   });
 
+  it("uses the shared app UI font token for rail labels", () => {
+    expect(railSource).toContain('fontFamily: "var(--font-sans)"');
+    expect(railSource).not.toContain("Mali");
+    expect(railSource).not.toContain("Excalifont");
+  });
+
   it("does not frame any tool in a separate outlined box", () => {
     expect(railSource).not.toContain("IconBrief");
     expect(railSource).not.toContain("Briefing");

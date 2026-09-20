@@ -21,6 +21,10 @@ describe("Thai Google Fonts catalog", () => {
     expect(resolveThaiFontCssFamily("'Sarabun', sans-serif")).toBe(DEFAULT_THAI_FONT_FAMILY);
     expect(findThaiFont("Kanit")?.family).toBe("Kanit");
     expect(resolveThaiFontCssFamily("Totally Unknown Font")).toBe(DEFAULT_THAI_FONT_FAMILY);
+    // Brief used to store Inter + Mali; Properties already reported Sarabun.
+    expect(resolveThaiFontCssFamily("'Inter', 'Mali', 'Noto Sans Thai', sans-serif")).toBe(
+      DEFAULT_THAI_FONT_FAMILY,
+    );
   });
 
   it("cycles through Thai fonts for the quick Font action", () => {
