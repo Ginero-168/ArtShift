@@ -21,6 +21,7 @@ import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/d
 import {
   applyOrientationToPriorSize,
   DIRECTOR_CONVERSATION_HISTORY_LIMIT,
+  followUpAskText,
   followUpCommandText,
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
@@ -401,6 +402,9 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - Phrases like 'จาก 2 ปกนี้', 'จาก 3 รูปนี้', 'อิงจาก 2 ภาพ', 'from these 2 covers/photos' specify INPUT REFERENCE SOURCES, NOT the number of images to generate! Do NOT count input references as requested output count.",
   "  - Unless the user explicitly requests multiple created outputs (e.g. 'ขอ 2 แบบ', 'สร้าง 3 รูป', '2 images', '3 variations'), always default to requestedOutputCount: 1.",
   "  - When multiple references are attached for a single requested item (e.g. 'ออกแบบป้าย... จาก 2 ปกนี้'), synthesize both references into ONE unified design artwork (requestedOutputCount: 1).",
+  "  - NEVER INVENT A VARIATION COUNT: Do not set requestedOutputCount > 1 for size/orientation edits ('ปรับเป็นแนวตั้ง', 'ทำให้เป็นแนวตั้ง', 'make it vertical', cm/px resize) or other short revisions. Those are ONE output.",
+  "  - Only set requestedOutputCount > 1 when the user explicitly asks for multiple created files (e.g. 'ขอ 2 แบบ', 'สร้าง 3 รูป', '3 variations') OR lists multiple distinct sizes/ratios in the same ask.",
+  "  - If the user does not state N and does not list multiple sizes, requestedOutputCount MUST be 1 — never infer 2–5 from campaign types, 'options', or creative preference.",
   "For image creation, return exactly one concise outputBrief in outputBriefs per requested output, written in the user's language (e.g. Thai if user asked in Thai). Each outputBrief must be a short, natural descriptive title (2-6 words) characterizing that standalone image (e.g. 'หมูน่ารัก', 'หมูตัวน้อยสีชมพู', 'หมูในฟาร์มสีเขียว', 'แมวยกสองนิ้วร่าเริง') so the user clearly sees what was created in each picture. Never output full English diffusion prompts in outputBriefs, never use generic labels like 'แบบที่ 1', and never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
   "For summary, write a concise, elegant, and professional Thai summary (1-2 sentences) of your creative direction and thought process. If editing an image, describe what is being modified or added in natural Thai without technical prefixes (e.g. 'ปรับแต่งภาพโดยเพิ่มมังกรบินเหนือเทือกเขา พร้อมคุมโทนแสงยามเย็นให้กลมกลืน'). If generating new images, describe the theme, composition, and mood in natural Thai. Never output raw command strings like 'Edit ภาพ... ด้วย Prompt :...' or unparsed JSON.",
   "Execution creates up to 5 separate outputs concurrently. Do not ask the user which single image to start with when 1 to 5 images are requested.",
@@ -421,6 +425,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') OR a short revision of the last image (e.g. 'ปรับเป็นแนวตั้ง', 'ทำให้เป็นแนวตั้ง', 'make it vertical', 'ปรับโทน') after a prior image generation in this conversation:",
   "      * Treat the prior refinedPrompt + chat recall as the BASE brief. Restate and enrich it; do not invent a new unrelated subject or a blank campaign.",
   "      * KEEP the prior exact size (cm / px / named aspect) unless the follow-up names a new size. Orientation-only commands (แนวตั้ง / แนวนอน / vertical / portrait / landscape) SWAP custom WxH axes (29×7cm → 7×29cm) or FLIP a named aspect (16:9→9:16, 3:4→4:3, 3:1→1:3). Never substitute a default 9:16 when a custom size exists.",
+  "      * Orientation-only or single-size revisions (แนวตั้ง / แนวนอน / cm resize) MUST use requestedOutputCount: 1 unless the user also says ขอ N แบบ / สร้าง N รูป or lists multiple distinct sizes.",
   "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio — unless this is a revision, in which case apply the new instruction and keep everything else.",
   "      * If the message includes === LAST IMAGE GENERATION PACKAGE or === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief, ingredients, copy, and ratio.",
   "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package. If it lists Resolved generation size (authoritative), that size wins over แนวตั้ง→9:16.",
@@ -1168,6 +1173,29 @@ export function extractExplicitRequestedOutputCount(
   return undefined;
 }
 
+const MAX_REQUESTED_OUTPUT_COUNT = 5;
+
+function clampRequestedOutputCount(count: number): number {
+  return Math.max(1, Math.min(MAX_REQUESTED_OUTPUT_COUNT, count));
+}
+
+/**
+ * Deterministic image-run count: honor explicit N (or a multi-size list) from
+ * the user ask; otherwise 1. Director-invented counts are ignored.
+ */
+export function resolveRequestedOutputCountFromUserAsk(
+  prompt: string | undefined,
+  extraAsks: readonly (string | undefined)[] = [],
+): number {
+  const fromPrompt = extractExplicitRequestedOutputCount(followUpAskText(prompt) || prompt);
+  if (fromPrompt !== undefined) return clampRequestedOutputCount(fromPrompt);
+  for (const extra of extraAsks) {
+    const fromExtra = extractExplicitRequestedOutputCount(followUpAskText(extra) || extra);
+    if (fromExtra !== undefined) return clampRequestedOutputCount(fromExtra);
+  }
+  return 1;
+}
+
 export function parseCreativeDirection(
   rawValue: unknown,
   input: CreativeDirectorInput,
@@ -1218,40 +1246,17 @@ export function parseCreativeDirection(
   if (value.outputCount !== undefined && value.outputCount !== 1) {
     return invalidDirection("outputCount must be 1 when specified");
   }
-  const explicitRequestedCount = extractExplicitRequestedOutputCount(input.prompt);
-  const rawCount = explicitRequestedCount ?? value.requestedOutputCount ?? value.outputCount;
-  let requestedOutputCount = Number(rawCount);
+  const rawCount = value.requestedOutputCount ?? value.outputCount;
   if (
-    !Number.isInteger(requestedOutputCount) ||
-    requestedOutputCount < 1 ||
-    requestedOutputCount > 100
+    rawCount !== undefined &&
+    (!Number.isInteger(Number(rawCount)) || Number(rawCount) < 1 || Number(rawCount) > 100)
   ) {
     return invalidDirection("requestedOutputCount is not an integer between 1 and 100");
   }
 
-  // Deterministic guard:
-  // 1. If user explicitly requested N outputs (e.g. "ขอตัวเลือก 3 แบบ", "สร้างมา 3 รูป", "3 variations"), strictly honor it (clamped 1-5).
-  // 2. If user referenced multiple inputs (e.g. "จาก 2 ปกนี้") and did NOT request multiple outputs, normalize to 1.
-  if (explicitRequestedCount !== undefined) {
-    requestedOutputCount = Math.max(1, Math.min(5, explicitRequestedCount));
-  } else if (requestedOutputCount > 1 && typeof input.prompt === "string") {
-    const hasInputRef =
-      /(?:จาก|อิงจาก|ตาม|based\s+on|from)\s*(\d+|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:ปก|รูป|ภาพ|ภาพถ่าย|ไฟล์|ชิ้น|covers?|photos?|images?|pictures?)/i.test(
-        input.prompt,
-      );
-    const hasExplicitOutputQty =
-      /(?:ขอ|สร้าง|ทำ|เอา|ผลิต|เจน|วาด|generate|create|make|give\s+me)\s*(\d+|สอง|สาม|สี่|ห้า|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ชิ้น|ดีไซน์|variations?|options?|versions?|images?|designs?)/i.test(
-        input.prompt,
-      ) ||
-      /\b(\d+|สอง|สาม|สี่|ห้า)\s*(?:แบบ|ตัวเลือก|ดีไซน์|variations?|options?|versions?)\b/i.test(
-        input.prompt,
-      ) ||
-      /\b(?:ขอ|สร้าง|ทำ|เอา)\s*\d+\s*(?:รูป|ภาพ|ใบ)\b/i.test(input.prompt);
-
-    if (hasInputRef && !hasExplicitOutputQty) {
-      requestedOutputCount = 1;
-    }
-  }
+  // Deterministic guard: Director-invented counts are ignored.
+  // Honor explicit N (e.g. "ขอ 3 แบบ", "สร้าง 3 รูป") or a multi-size list; otherwise 1.
+  const requestedOutputCount = resolveRequestedOutputCountFromUserAsk(input.prompt);
   if (!isBoundedString(value.summary, 2_000)) {
     return invalidDirection("summary is missing or exceeds 2000 chars");
   }

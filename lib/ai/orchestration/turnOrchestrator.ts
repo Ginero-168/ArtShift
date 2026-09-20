@@ -28,8 +28,8 @@ import {
 import {
   applyCreativeDirectionToTask,
   type CreativeDirection,
-  extractExplicitRequestedOutputCount,
   parseCreativeDirection,
+  resolveRequestedOutputCountFromUserAsk,
 } from "./creativeDirector";
 import { prepareRemoteOrchestratorTurn } from "./creativeDirectorClient";
 import {
@@ -343,11 +343,15 @@ export function createDirectedImageRun(
   direction: Extract<CreativeDirection, { kind: "image-task" }>,
   options: { runId?: string } = {},
 ): DirectedImageRun {
-  const explicitCount = extractExplicitRequestedOutputCount(input.prompt);
   // Orientation-only follow-ups (ปรับเป็นแนวตั้ง) must invert the remembered size
   // in resolveTaskDimensionsWithContext. Do not let Director prose like "9:16"
   // override a custom 29×7cm → 7×29cm swap.
   const lockFollowUpSize = isOrientationOnlyFollowUpPrompt(input.prompt);
+  // Count comes only from the user ask (explicit N or a multi-size list).
+  // Director-invented requestedOutputCount and sizes in summary/refinedPrompt are ignored.
+  const count = resolveRequestedOutputCountFromUserAsk(input.prompt, [
+    input.clarification?.originalPrompt,
+  ]);
   // Multi-size campaigns list several WxH / cm sizes or named A:B ratios.
   // Assign each task its own target so we do not stamp every output as 1:1 / first ratio only.
   const sizeSpecs = lockFollowUpSize
@@ -360,20 +364,6 @@ export function createDirectedImageRun(
       ].filter((spec, index, all) => {
         return all.findIndex((s) => s.aspectRatio === spec.aspectRatio) === index;
       });
-  const sizeListCount = sizeSpecs.length >= 2 ? Math.min(5, sizeSpecs.length) : undefined;
-  const count = Math.min(
-    5,
-    Math.max(
-      1,
-      direction.requestedOutputCount && direction.requestedOutputCount > 1
-        ? Math.max(direction.requestedOutputCount, sizeListCount ?? 1)
-        : (explicitCount ??
-            sizeListCount ??
-            direction.requestedOutputCount ??
-            direction.outputCount ??
-            1),
-    ),
-  );
   const briefs =
     direction.outputBriefs && direction.outputBriefs.length === count
       ? direction.outputBriefs
