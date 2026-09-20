@@ -246,6 +246,28 @@ function LandingPageContent() {
           )}
         </div>
       </main>
+
+      <footer
+        style={{
+          position: "relative",
+          zIndex: 10,
+          padding: "0 24px 28px",
+          textAlign: "center",
+        }}
+      >
+        <Link
+          href="/features"
+          style={{
+            color: "#64748b",
+            fontSize: 12,
+            fontWeight: 500,
+            textDecoration: "underline",
+            textUnderlineOffset: 3,
+          }}
+        >
+          ดูฟีเจอร์
+        </Link>
+      </footer>
     </div>
   );
 }

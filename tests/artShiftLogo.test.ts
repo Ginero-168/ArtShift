@@ -5,6 +5,7 @@ const logoSource = readFileSync("components/Brand/ArtShiftLogo.tsx", "utf8");
 const logoCss = readFileSync("components/Brand/ArtShiftLogo.module.css", "utf8");
 const globalsCss = readFileSync("app/globals.css", "utf8");
 const landing = readFileSync("app/page.tsx", "utf8");
+const features = readFileSync("components/Marketing/FeaturesLanding.tsx", "utf8");
 const projects = readFileSync("app/projects/page.tsx", "utf8");
 const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
 const present = readFileSync("app/present/page.tsx", "utf8");
@@ -52,6 +53,9 @@ describe("ArtShift Heatmap wordmark", () => {
     expect(landing).toContain("AI Powered Design Tools");
     expect(landing).not.toContain("<header");
     expect(landing).not.toContain("<IconBrand");
+    expect(features).toContain("<ArtShiftLogo");
+    expect(features).toContain('size="hero"');
+    expect(features).toContain('size="header"');
     expect(projects).toContain("<ArtShiftLogo");
     expect(editor).toContain("<ArtShiftLogo");
     expect(editor).toContain('size="compact"');
