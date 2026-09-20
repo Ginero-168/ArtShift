@@ -1,13 +1,5 @@
-@property --logo-ink {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: #f5f5fa;
-}
-
 .root {
   --logo-size: 34px;
-  --logo-ink: currentColor;
-  --ink: var(--logo-ink);
   --ink-2: #ff4fd8;
   --ink-3: #4ff8ff;
   color: inherit;
@@ -37,8 +29,9 @@
   font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-size-adjust: from-font;
   letter-spacing: 0.12em;
-  color: transparent;
-  background: conic-gradient(from 0deg, var(--ink-2), var(--ink), var(--ink-3), var(--ink-2));
+  color: inherit;
+  -webkit-text-fill-color: transparent;
+  background: conic-gradient(from 0deg, var(--ink-2), currentColor, var(--ink-3), var(--ink-2));
   -webkit-background-clip: text;
   background-clip: text;
   animation: fx-portal 3.6s linear infinite;
@@ -50,7 +43,8 @@
   content: attr(data-text) / "";
   position: absolute;
   inset: 0;
-  color: transparent;
+  color: inherit;
+  -webkit-text-fill-color: transparent;
   background: radial-gradient(circle, transparent 0 30%, #fff 34% 36%, transparent 40% 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -93,8 +87,8 @@
 @media (forced-colors: active) {
   .root :global(.fx-portal) {
     color: CanvasText;
-    background: none;
     -webkit-text-fill-color: CanvasText;
+    background: none;
     animation: none;
   }
 
