@@ -54,9 +54,15 @@ export function getObjectContextBarLeft(
 
 /**
  * Vertical offset between the object bounding box and the option bar in world units.
- * Previously 25px, increased by 30px to 55px so the bar sits higher above the object.
+ * Scaled with canvas zoom so the gap grows when zooming in.
  */
-export const OBJECT_CONTEXT_BAR_OFFSET = 55;
+export const OBJECT_CONTEXT_BAR_OFFSET = 25;
+
+/**
+ * Extra screen-space gap (CSS pixels, not scaled) so the bar sits 30px higher
+ * than the scaled world offset alone.
+ */
+export const OBJECT_CONTEXT_BAR_SCREEN_LIFT = 30;
 
 export function getObjectContextBarTop(params: {
   topPointY: number;
@@ -65,7 +71,8 @@ export function getObjectContextBarTop(params: {
   scale: number;
   offset?: number;
 }): { top: number; placeBelow: boolean } {
-  const offset = (params.offset ?? OBJECT_CONTEXT_BAR_OFFSET) * params.scale;
+  const offset =
+    (params.offset ?? OBJECT_CONTEXT_BAR_OFFSET) * params.scale + OBJECT_CONTEXT_BAR_SCREEN_LIFT;
   const placeBelow = params.topPointY - params.barHeight - offset < 4;
   const top = placeBelow
     ? params.bottomPointY + offset
