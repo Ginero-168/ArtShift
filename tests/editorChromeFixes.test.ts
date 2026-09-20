@@ -13,7 +13,7 @@ describe("Editor chrome: logo, selection, Appearance image group", () => {
     expect(css).toContain("place-items: center");
   });
 
-  it("uses the shared Portal ArtShift wordmark in editor chrome", () => {
+  it("uses the shared Heatmap ArtShift wordmark in editor chrome", () => {
     const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
     expect(editor).toContain('<ArtShiftLogo size="compact" />');
     expect(editor).not.toContain('<div className="brand-mark">');
