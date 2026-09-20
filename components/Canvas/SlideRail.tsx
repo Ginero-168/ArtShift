@@ -12,6 +12,11 @@
 import { useEffect, useRef, useState } from "react";
 import { IconTrash } from "@/components/icons";
 import { getImageCache } from "@/lib/engine/imageCache";
+import {
+  INFINITY_CANVAS_EXPORT_NOTE,
+  INFINITY_CANVAS_LABEL,
+  isInfinityCanvasSlide,
+} from "@/lib/engine/slideKind";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
 import { renderSlideThumbnail, renderSlideThumbnailAsync } from "@/lib/renderer/thumbnail";
@@ -23,6 +28,7 @@ export default function SlideRail() {
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const setCurrentSlide = useEngine((s) => s.setCurrentSlide);
   const addSlide = useEngine((s) => s.addSlide);
+  const addInfinityCanvasSlide = useEngine((s) => s.addInfinityCanvasSlide);
   const deleteSlide = useEngine((s) => s.deleteSlide);
   const renameSlide = useEngine((s) => s.renameSlide);
   const reorderSlides = useEngine((s) => s.reorderSlides);
@@ -235,6 +241,29 @@ export default function SlideRail() {
           </button>
 
           <button
+            onClick={addInfinityCanvasSlide}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 3,
+              border: "1px solid var(--stroke, #d1d5db)",
+              background: "var(--surface-solid, #fff)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              color: "var(--ink-muted, #374151)",
+              lineHeight: 1,
+              transition: "all 0.15s ease",
+            }}
+            title={`${INFINITY_CANVAS_LABEL} — ${INFINITY_CANVAS_EXPORT_NOTE}`}
+            aria-label={`Add ${INFINITY_CANVAS_LABEL}`}
+          >
+            ∞
+          </button>
+
+          <button
             onClick={handleDelete}
             disabled={!canDelete}
             style={{
@@ -337,6 +366,13 @@ export default function SlideRail() {
             label="New Slide"
             onClick={() => {
               addSlide();
+              setCtxMenu(null);
+            }}
+          />
+          <CtxItem
+            label={`New ${INFINITY_CANVAS_LABEL}`}
+            onClick={() => {
+              addInfinityCanvasSlide();
               setCtxMenu(null);
             }}
           />
@@ -516,8 +552,29 @@ function SlideThumb({
             lineHeight: 1,
           }}
         >
-          {slide.width}×{slide.height}
+          {isInfinityCanvasSlide(slide) ? "∞" : `${slide.width}×${slide.height}`}
         </div>
+        {isInfinityCanvasSlide(slide) ? (
+          <div
+            title={INFINITY_CANVAS_EXPORT_NOTE}
+            style={{
+              position: "absolute",
+              bottom: 2,
+              left: 2,
+              padding: "1px 4px",
+              fontSize: 7,
+              fontWeight: 700,
+              letterSpacing: 0.2,
+              color: "#4338ca",
+              background: "rgba(238, 242, 255, 0.92)",
+              borderRadius: 2,
+              pointerEvents: "none",
+              lineHeight: 1.2,
+            }}
+          >
+            {INFINITY_CANVAS_LABEL}
+          </div>
+        ) : null}
         {/* Delete button overlay */}
         {onDelete && (
           <button

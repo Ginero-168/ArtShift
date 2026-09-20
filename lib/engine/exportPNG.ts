@@ -7,6 +7,7 @@
  */
 
 import { renderSlide } from "../renderer/canvas";
+import { assertExportableSlide, requireExportableSlides } from "./slideKind";
 import type { EngineDoc, EngineSlide } from "./types";
 
 export async function exportSlideToPNG(
@@ -119,6 +120,7 @@ export async function exportCurrentSlidePNG(
   _doc: EngineDoc,
   images?: Map<string, HTMLImageElement>,
 ) {
+  assertExportableSlide(slide);
   const blob = await exportSlideToPNG(slide, slide.width, slide.height, images, 2);
   download(blob, `${slugify(slide.name || "slide")}.png`);
 }
@@ -130,6 +132,7 @@ export async function exportCurrentSlideWebP(
   images?: Map<string, HTMLImageElement>,
   quality = 0.88,
 ) {
+  assertExportableSlide(slide);
   const blob = await exportSlideToWebP(slide, slide.width, slide.height, images, quality, 2);
   download(blob, `${slugify(slide.name || "slide")}.webp`);
 }
@@ -141,14 +144,16 @@ export async function exportCurrentSlideJPEG(
   images?: Map<string, HTMLImageElement>,
   quality = 0.9,
 ) {
+  assertExportableSlide(slide);
   const blob = await exportSlideToJPEG(slide, slide.width, slide.height, images, quality, 2);
   download(blob, `${slugify(slide.name || "slide")}.jpg`);
 }
 
 /** Export all slides as individual PNGs. */
 export async function exportAllPNG(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
-  for (let i = 0; i < doc.slides.length; i++) {
-    const slide = doc.slides[i];
+  const slides = requireExportableSlides(doc);
+  for (let i = 0; i < slides.length; i++) {
+    const slide = slides[i];
     const blob = await exportSlideToPNG(slide, slide.width, slide.height, images, 2);
     download(blob, `${String(i + 1).padStart(2, "0")}-${slugify(slide.name)}.png`);
   }
@@ -160,8 +165,9 @@ export async function exportAllWebP(
   images?: Map<string, HTMLImageElement>,
   quality = 0.88,
 ) {
-  for (let i = 0; i < doc.slides.length; i++) {
-    const slide = doc.slides[i];
+  const slides = requireExportableSlides(doc);
+  for (let i = 0; i < slides.length; i++) {
+    const slide = slides[i];
     const blob = await exportSlideToWebP(slide, slide.width, slide.height, images, quality, 2);
     download(blob, `${String(i + 1).padStart(2, "0")}-${slugify(slide.name)}.webp`);
   }
@@ -169,26 +175,27 @@ export async function exportAllWebP(
 
 /** Export all slides stitched into a single PDF. */
 export async function exportPDF(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
+  const slides = requireExportableSlides(doc);
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({
     orientation:
-      (doc.slides[0]?.width ?? doc.width) >= (doc.slides[0]?.height ?? doc.height)
+      (slides[0]?.width ?? doc.width) >= (slides[0]?.height ?? doc.height)
         ? "landscape"
         : "portrait",
     unit: "px",
-    format: [doc.slides[0]?.width ?? doc.width, doc.slides[0]?.height ?? doc.height],
+    format: [slides[0]?.width ?? doc.width, slides[0]?.height ?? doc.height],
     hotfixes: ["px_scaling"],
   });
 
-  for (let i = 0; i < doc.slides.length; i++) {
+  for (let i = 0; i < slides.length; i++) {
     if (i > 0) {
-      const slide = doc.slides[i];
+      const slide = slides[i];
       pdf.addPage(
         [slide.width, slide.height],
         slide.width >= slide.height ? "landscape" : "portrait",
       );
     }
-    const slide = doc.slides[i];
+    const slide = slides[i];
     const blob = await exportSlideToPNG(slide, slide.width, slide.height, images, 2);
     const dataUrl = await blobToDataURL(blob);
     pdf.addImage(dataUrl, "PNG", 0, 0, slide.width, slide.height);

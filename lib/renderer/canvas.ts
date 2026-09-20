@@ -85,14 +85,15 @@ export function renderSlide(
   render: RenderCtx,
   slideW: number,
   slideH: number,
-  options: { afterBackground?: () => void; showFrames?: boolean } = {},
+  options: { afterBackground?: () => void; showFrames?: boolean; fillBackground?: boolean } = {},
 ) {
   const { ctx } = render;
-  // Background.
-  ctx.save();
-  ctx.fillStyle = slide.background;
-  ctx.fillRect(0, 0, slideW, slideH);
-  ctx.restore();
+  if (options.fillBackground !== false) {
+    ctx.save();
+    ctx.fillStyle = slide.background;
+    ctx.fillRect(0, 0, slideW, slideH);
+    ctx.restore();
+  }
   options.afterBackground?.();
 
   const ordered = getRenderableElements(slide).filter(

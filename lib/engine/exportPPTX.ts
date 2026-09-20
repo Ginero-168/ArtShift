@@ -6,6 +6,7 @@
 
 import { type RenderCtx, renderElement } from "../renderer/canvas";
 import { getRenderableElements } from "./layers";
+import { requireExportableSlides, withExportableSlides } from "./slideKind";
 import type { EngineDoc, EngineElement, EngineSlide, FrameElement, ImageElement } from "./types";
 
 export type PptxSlideTransform = {
@@ -227,10 +228,12 @@ async function toDataUrl(src: string): Promise<string> {
  * Exports the engine document to PPTX format by sending payload to /api/export/pptx.
  */
 export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageElement>) {
+  const exportDoc = withExportableSlides(doc);
+  requireExportableSlides(exportDoc);
   const rasterizedImages: Record<string, string> = {};
 
   // Pre-rasterize frames, clipped children, rough/complex elements, and images.
-  for (const slide of doc.slides) {
+  for (const slide of exportDoc.slides) {
     const ordered = getRenderableElements(slide);
     const clippedChildIds = getPptxClippedChildIds(slide);
     for (const el of ordered) {
@@ -271,7 +274,7 @@ export async function exportPPTX(doc: EngineDoc, images?: Map<string, HTMLImageE
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      doc,
+      doc: exportDoc,
       rasterizedImages,
     }),
   });

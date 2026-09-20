@@ -13,6 +13,7 @@ import {
 import { getElementDefaultName } from "@/lib/engine/layers";
 import { isSelectionModifierPressed } from "@/lib/engine/selection";
 import { buildLayerHierarchy, type LayerTreeNode } from "@/lib/engine/selectionGroups";
+import { isInfinityCanvasSlide } from "@/lib/engine/slideKind";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement } from "@/lib/engine/types";
 import AutoLayoutAction from "./AutoLayoutAction";
@@ -293,7 +294,7 @@ export default function LayerPanel() {
         </button>
         <div className={styles.layerDockActions} role="group" aria-label="Artwork actions">
           <AutoLayoutAction />
-          <ResizeArtworkAction />
+          {slide && !isInfinityCanvasSlide(slide) ? <ResizeArtworkAction /> : null}
         </div>
       </div>
     </div>

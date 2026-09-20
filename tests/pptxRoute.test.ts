@@ -78,4 +78,30 @@ describe("PPTX export route boundary", () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect(bytes.byteLength).toBeGreaterThan(1000);
   });
+
+  it("omits Infinity Canvas slides from the PPTX deck", async () => {
+    const { createEmptyEngineDoc } = await import("@/lib/engine/store");
+    const doc = createEmptyEngineDoc("Mixed");
+    doc.slides.push({
+      id: "infinity-1",
+      name: "Infinity Canvas",
+      kind: "infinityCanvas",
+      background: "#fff",
+      width: 1920,
+      height: 1080,
+      elements: [],
+      layers: doc.slides[0].layers,
+    });
+
+    const response = await POST(request(JSON.stringify({ doc })));
+    expect(response.status).toBe(200);
+
+    const empty = createEmptyEngineDoc("Only infinity");
+    empty.slides[0].kind = "infinityCanvas";
+    const skipped = await POST(request(JSON.stringify({ doc: empty })));
+    expect(skipped.status).toBe(400);
+    await expect(skipped.json()).resolves.toMatchObject({
+      error: "No exportable slides. Infinity Canvas slides are excluded from export.",
+    });
+  });
 });

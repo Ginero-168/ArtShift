@@ -6,7 +6,7 @@ Updated: 2026-09-20 — Extrude / Emboss are first-class Appearance effects (eng
 ## Reality check
 
 - Phase 1 foundation (`lib/appearance/*`) **landed** in the #12 lineage. MVP UI: Appearance panel + Shadow/Glow + Text Arc.
-- Engine `ENGINE_SCHEMA_VERSION` is **11**. Canonical `appearance` landed in schema v7 and is dual-written to legacy flat fields. v8 adds item-level gradient/conic, clip-to-glyphs, multi-shadow `layers`, item blend, offset paint layers, and static blur. v9 adds named `extrude` and `emboss` effects (not dual-written to legacy shadow/glow). v10 adds Extrude `taper` (0 = parallel; 1 = scale toward bounds center). Missing taper normalizes to 0. v11 adds atomic `vectorized` objects from Vectorize (one SVG payload).
+- Engine `ENGINE_SCHEMA_VERSION` is **12**. Canonical `appearance` landed in schema v7 and is dual-written to legacy flat fields. v8 adds item-level gradient/conic, clip-to-glyphs, multi-shadow `layers`, item blend, offset paint layers, and static blur. v9 adds named `extrude` and `emboss` effects (not dual-written to legacy shadow/glow). v10 adds Extrude `taper` (0 = parallel; 1 = scale toward bounds center). Missing taper normalizes to 0. v11 adds atomic `vectorized` objects from Vectorize (one SVG payload). v12 adds optional `EngineSlide.kind` (`artwork` default, `infinityCanvas` skipped on export).
 - **v6 = Block bake** (unrelated). Appearance persist started as **schema v7**. Do not reuse v6.
 - Load prefers `appearance` when present and valid; otherwise synthesizes from legacy fields. Save always writes both.
 - Extra Fill/Stroke items live on `appearance.items` (legacy dual-write still stores only the first visible fill and stroke). Canvas2D paints the full stack.

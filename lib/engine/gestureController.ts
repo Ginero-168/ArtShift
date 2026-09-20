@@ -6,6 +6,7 @@ import {
   type SelectionModifierEvent,
   shouldPreserveMultiSelectionForDrag,
 } from "./selection";
+import { isInfinityCanvasSlide } from "./slideKind";
 import type { Guide } from "./snap";
 import { snapBBox } from "./snap";
 import type { EngineElement, EngineSlide } from "./types";
@@ -89,7 +90,9 @@ export function calculateMovePreview(input: {
       dx += targetX - bbox.x;
       dy += targetY - bbox.y;
     } else {
-      const snap = snapBBox(bbox, others, input.snapThreshold);
+      const snap = snapBBox(bbox, others, input.snapThreshold, {
+        pageBounds: !isInfinityCanvasSlide(input.slide),
+      });
       dx += snap.dx;
       dy += snap.dy;
       return {

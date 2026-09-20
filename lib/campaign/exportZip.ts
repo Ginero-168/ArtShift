@@ -7,6 +7,7 @@
 import JSZip from "jszip";
 import { exportSlideToPNG } from "../engine/exportPNG";
 import { getImageCache } from "../engine/imageCache";
+import { isExportableSlide } from "../engine/slideKind";
 import type { GeneratedBatchItem } from "./generator";
 import type { BatchExportProgress } from "./types";
 
@@ -37,8 +38,9 @@ export async function exportCampaignBatchToZip(
   } = options;
 
   const zip = new JSZip();
+  const exportItems = batchItems.filter((item) => isExportableSlide(item.slide));
   const images = getImageCache();
-  const total = batchItems.length;
+  const total = exportItems.length;
 
   const manifestItems: Array<{
     isbn: string;
@@ -56,7 +58,7 @@ export async function exportCampaignBatchToZip(
   ];
 
   for (let i = 0; i < total; i++) {
-    const item = batchItems[i];
+    const item = exportItems[i];
     const { slide, book, channel } = item;
 
     onProgress?.({
