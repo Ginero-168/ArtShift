@@ -231,6 +231,7 @@ describe("Photopea is the primary Edit Raster path", () => {
     const canvas = readFileSync("components/Canvas/CanvasEditor.tsx", "utf8");
     const contextMenu = readFileSync("components/Canvas/ContextMenu.tsx", "utf8");
     const inspector = readFileSync("components/Builder/BuilderInspector.tsx", "utf8");
+    const appearance = readFileSync("components/Builder/AppearancePanel.tsx", "utf8");
 
     expect(session).toContain('surface: "photopea"');
     expect(session).toContain("openRasterEditForElement");
@@ -251,7 +252,9 @@ describe("Photopea is the primary Edit Raster path", () => {
     expect(contextBar).not.toContain("Photopea");
     expect(canvas).toContain("openRasterEditForElement");
     expect(contextMenu).toContain("openRasterEditForElement");
-    expect(inspector).toContain("openRasterEditForElement");
-    expect(inspector).toContain("Pixel edit");
+    expect(inspector).not.toContain("openRasterEditForElement");
+    expect(inspector).not.toContain("Pixel edit");
+    expect(appearance).toContain('data-appearance-row="imageAdjust"');
+    expect(appearance).toContain("reset image adjustments");
   });
 });

@@ -7,6 +7,8 @@ export type AppearanceCapability = {
   glow: boolean;
   /** Text Arc is `pathCurvature` on TextElement — not a persisted Appearance item. */
   textArc: boolean;
+  /** Image tone sliders write `adjustments` / `filterBlur` — not Appearance items. */
+  imageAdjust: boolean;
   multipleFills: boolean;
   multipleStrokes: boolean;
   blendMode: boolean;
@@ -33,6 +35,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       shadow: true,
       glow: true,
       textArc: false,
+      imageAdjust: type === "image",
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -46,6 +49,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       shadow: true,
       glow: true,
       textArc: true,
+      imageAdjust: false,
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -59,6 +63,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       shadow: true,
       glow: true,
       textArc: false,
+      imageAdjust: false,
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -72,6 +77,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       shadow: true,
       glow: true,
       textArc: false,
+      imageAdjust: false,
       multipleFills: false,
       multipleStrokes: false,
       blendMode: true,
@@ -85,6 +91,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       shadow: true,
       glow: true,
       textArc: false,
+      imageAdjust: false,
       multipleFills: true,
       multipleStrokes: true,
       blendMode: true,
@@ -97,6 +104,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     shadow: true,
     glow: true,
     textArc: false,
+    imageAdjust: false,
     multipleFills: false,
     multipleStrokes: false,
     blendMode: true,

@@ -77,5 +77,6 @@ describe("unified group bounding box", () => {
     expect(canvasRootSource).toContain("other.groupIds.some((g) => current.groupIds.includes(g))");
     expect(canvasRootSource).toContain("const bbox = unionBBox(cluster);");
     expect(canvasRootSource).toContain("ctx.strokeRect(bbox.x, bbox.y, bbox.width, bbox.height);");
+    expect(canvasRootSource).toContain("ctx.setLineDash([])");
   });
 });

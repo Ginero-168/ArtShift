@@ -25,8 +25,28 @@ function svg(size: number | undefined, children: React.ReactNode, props: Props) 
   );
 }
 
-export const IconBrand = (p: Props) =>
-  svg(p.size, <path d="M4 20V6l4 8 4-8 4 8 4-8v14" strokeWidth="2.2" />, p);
+export const IconBrand = (p: Props) => {
+  const s = p.size ?? 16;
+  const { size: _ignored, ...rest } = p;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={s}
+      height={s}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      shapeRendering="geometricPrecision"
+      {...rest}
+    >
+      {/* Symmetric two-peak M, centered on 12,12 so the mark stays upright at 16–22px. */}
+      <path d="M7 17.5V6.5L12 14L17 6.5V17.5" />
+    </svg>
+  );
+};
 
 export const IconPalette = (p: Props) =>
   svg(

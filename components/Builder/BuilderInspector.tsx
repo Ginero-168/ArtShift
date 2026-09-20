@@ -34,7 +34,6 @@ import {
   type TextPresetId,
   textPresetPatch,
 } from "@/lib/builder/textPresets";
-import type { ColorAdjustments } from "@/lib/color/adjustments";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { fileToDataURL, loadDataURL } from "@/lib/engine/imageCache";
 import { getLayerForObject } from "@/lib/engine/layers";
@@ -51,7 +50,6 @@ import type {
 } from "@/lib/engine/types";
 import { isShapeElement } from "@/lib/engine/vectorBoolean";
 import { convertElementToVectorPath, smoothVectorPathNodes } from "@/lib/engine/vectorPath";
-import { openRasterEditForElement } from "@/lib/raster/studio/sessionStore";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import AppearancePanel from "./AppearancePanel";
 import { BlockIcon } from "./BlockIcon";
@@ -1266,163 +1264,6 @@ function MediaOptions({
           <strong title={element.sourceName}>{element.sourceName}</strong>
         </div>
       ) : null}
-
-      {element.type === "image" ? <ImageAdjustments element={element} apply={apply} /> : null}
-    </div>
-  );
-}
-
-const IMAGE_ADJUSTMENT_CONTROLS: Array<{
-  key: keyof ColorAdjustments;
-  label: string;
-  min: number;
-  max: number;
-}> = [
-  { key: "exposure", label: "Exposure", min: -100, max: 100 },
-  { key: "contrast", label: "Contrast", min: -100, max: 100 },
-  { key: "highlights", label: "Highlights", min: -100, max: 100 },
-  { key: "shadows", label: "Shadows", min: -100, max: 100 },
-  { key: "whites", label: "Whites", min: -100, max: 100 },
-  { key: "blacks", label: "Blacks", min: -100, max: 100 },
-  { key: "vibrance", label: "Vibrance", min: -100, max: 100 },
-  { key: "saturation", label: "Saturation", min: -100, max: 100 },
-  { key: "warmth", label: "Warmth", min: -100, max: 100 },
-  { key: "tint", label: "Tint", min: -100, max: 100 },
-  { key: "clarity", label: "Clarity", min: -100, max: 100 },
-];
-
-function ImageAdjustments({
-  element,
-  apply,
-}: {
-  element: ImageElement;
-  apply: (patch: Partial<EngineElement>, label: string) => void;
-}) {
-  return (
-    <div className={styles.subsection}>
-      <div className={styles.metaRow}>
-        <span>Pixel edit</span>
-        <button
-          type="button"
-          className={styles.textButton}
-          onClick={() =>
-            apply(
-              { adjustments: {}, filterBlur: 0, rasterMask: [], rasterEdits: [] },
-              "reset image adjustments",
-            )
-          }
-        >
-          Reset
-        </button>
-      </div>
-      <div className={styles.metaRow}>
-        <span>Pixel mask</span>
-        <div className={styles.buttonRow}>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => openRasterEditForElement(element)}
-          >
-            Edit Raster
-          </button>
-          <button
-            type="button"
-            className={styles.textButton}
-            disabled={!element.rasterMask?.length}
-            onClick={() => apply({ rasterMask: [] }, "clear pixel mask")}
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-      <div className={styles.metaRow}>
-        <span>Retouch patches</span>
-        <button
-          type="button"
-          className={styles.textButton}
-          disabled={!element.rasterEdits?.length}
-          onClick={() => apply({ rasterEdits: [] }, "clear retouch patches")}
-        >
-          Clear {element.rasterEdits?.length ? `(${element.rasterEdits.length})` : ""}
-        </button>
-      </div>
-      <label className={styles.field}>
-        <span>Image mask</span>
-        <select
-          value={element.mask?.shape ?? "rect"}
-          onChange={(event) => {
-            const shape = event.currentTarget.value as "rect" | "rounded" | "ellipse" | "hexagon";
-            apply(
-              {
-                mask:
-                  shape === "rect"
-                    ? undefined
-                    : { shape, radius: shape === "rounded" ? 32 : undefined },
-              },
-              "image mask",
-            );
-          }}
-        >
-          <option value="rect">Rectangle</option>
-          <option value="rounded">Rounded</option>
-          <option value="ellipse">Ellipse</option>
-          <option value="hexagon">Hexagon</option>
-        </select>
-      </label>
-      {element.mask?.shape === "rounded" ? (
-        <label className={styles.rangeField}>
-          <span>Corner radius</span>
-          <input
-            type="range"
-            min={0}
-            max={Math.round(Math.min(element.width, element.height) / 2)}
-            value={element.mask.radius ?? 32}
-            onChange={(event) =>
-              apply(
-                { mask: { shape: "rounded", radius: Number(event.currentTarget.value) } },
-                "image mask radius",
-              )
-            }
-          />
-          <output>{element.mask.radius ?? 32}</output>
-        </label>
-      ) : null}
-      {IMAGE_ADJUSTMENT_CONTROLS.map((control) => (
-        <label className={styles.rangeField} key={control.key}>
-          <span>{control.label}</span>
-          <input
-            type="range"
-            min={control.min}
-            max={control.max}
-            value={element.adjustments?.[control.key] ?? 0}
-            onChange={(event) =>
-              apply(
-                {
-                  adjustments: {
-                    ...element.adjustments,
-                    [control.key]: Number(event.currentTarget.value),
-                  },
-                },
-                `image ${control.key}`,
-              )
-            }
-          />
-          <output>{element.adjustments?.[control.key] ?? 0}</output>
-        </label>
-      ))}
-      <label className={styles.rangeField}>
-        <span>Blur</span>
-        <input
-          type="range"
-          min={0}
-          max={40}
-          value={element.filterBlur ?? 0}
-          onChange={(event) =>
-            apply({ filterBlur: Number(event.currentTarget.value) }, "image blur")
-          }
-        />
-        <output>{element.filterBlur ?? 0}</output>
-      </label>
     </div>
   );
 }

@@ -27,10 +27,30 @@ import {
   strokePatchOperation,
   toggleStackKindVisible,
 } from "@/lib/appearance";
+import type { ColorAdjustments } from "@/lib/color/adjustments";
 import { useEngine } from "@/lib/engine/store";
-import type { EngineElement } from "@/lib/engine/types";
+import type { EngineElement, ImageElement } from "@/lib/engine/types";
 import styles from "./Builder.module.css";
 import ColorPickerInput from "./ColorPickerInput";
+
+const IMAGE_ADJUSTMENT_CONTROLS: Array<{
+  key: keyof ColorAdjustments;
+  label: string;
+  min: number;
+  max: number;
+}> = [
+  { key: "exposure", label: "Exposure", min: -100, max: 100 },
+  { key: "contrast", label: "Contrast", min: -100, max: 100 },
+  { key: "highlights", label: "Highlights", min: -100, max: 100 },
+  { key: "shadows", label: "Shadows", min: -100, max: 100 },
+  { key: "whites", label: "Whites", min: -100, max: 100 },
+  { key: "blacks", label: "Blacks", min: -100, max: 100 },
+  { key: "vibrance", label: "Vibrance", min: -100, max: 100 },
+  { key: "saturation", label: "Saturation", min: -100, max: 100 },
+  { key: "warmth", label: "Warmth", min: -100, max: 100 },
+  { key: "tint", label: "Tint", min: -100, max: 100 },
+  { key: "clarity", label: "Clarity", min: -100, max: 100 },
+];
 
 const DEFAULT_GRADIENT_COLORS: string[] = ["#6366f1", "#a855f7"];
 const DEFAULT_GRADIENT_STOPS: number[] = [0, 1];
@@ -44,9 +64,13 @@ export default function AppearancePanel({
 }) {
   const updateAppearance = useEngine((state) => state.updateAppearance);
   const previewAppearance = useEngine((state) => state.previewAppearance);
+  const updateElements = useEngine((state) => state.updateElements);
   const checkpointInteraction = useEngine((state) => state.checkpointInteraction);
   const commitInteraction = useEngine((state) => state.commitInteraction);
   const previewElements = useEngine((state) => state.previewElements);
+  const slide = useEngine((state) =>
+    state.doc.slides.find((candidate) => candidate.id === state.currentSlideId),
+  );
 
   const ids = selectedIds.length ? selectedIds : [element.id];
   const appearance = readAppearance(element);
@@ -304,6 +328,115 @@ export default function AppearancePanel({
           </select>
         </label>
       ) : null}
+
+      {caps.imageAdjust && element.type === "image" ? (
+        <ImageAdjustmentsGroup
+          element={element}
+          selectedIds={ids}
+          slideElements={slide?.elements ?? []}
+          updateElements={updateElements}
+          beginSlider={beginSlider}
+          previewElements={previewElements}
+          endSlider={endSlider}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function imageTargetIds(selectedIds: string[], elements: EngineElement[]): string[] {
+  const selected = new Set(selectedIds);
+  return elements
+    .filter((item) => selected.has(item.id) && item.type === "image")
+    .map((item) => item.id);
+}
+
+function ImageAdjustmentsGroup({
+  element,
+  selectedIds,
+  slideElements,
+  updateElements,
+  beginSlider,
+  previewElements,
+  endSlider,
+}: {
+  element: ImageElement;
+  selectedIds: string[];
+  slideElements: EngineElement[];
+  updateElements: (
+    patches: Array<{ id: string; patch: Partial<EngineElement> }>,
+    label: string,
+  ) => void;
+  beginSlider: (label: string) => void;
+  previewElements: (patches: Array<{ id: string; patch: Partial<EngineElement> }>) => void;
+  endSlider: () => void;
+}) {
+  const targetIds = imageTargetIds(selectedIds, slideElements);
+  const ids = targetIds.length ? targetIds : [element.id];
+
+  const applyPatch = (patch: Partial<ImageElement>, label: string) => {
+    updateElements(
+      ids.map((id) => ({ id, patch })),
+      label,
+    );
+  };
+
+  const previewPatch = (patch: Partial<ImageElement>) => {
+    previewElements(ids.map((id) => ({ id, patch })));
+  };
+
+  return (
+    <div className={styles.appearanceRow} role="group" data-appearance-row="imageAdjust">
+      <div className={styles.appearanceRowHeader}>
+        <span className={styles.appearanceRowType}>Img</span>
+        <span className={styles.appearanceRowTitle}>ปรับโทนภาพ</span>
+        <button
+          type="button"
+          className={styles.textButton}
+          onClick={() => applyPatch({ adjustments: {}, filterBlur: 0 }, "reset image adjustments")}
+        >
+          รีเซ็ต
+        </button>
+      </div>
+      <div className={styles.appearanceRowBody}>
+        {IMAGE_ADJUSTMENT_CONTROLS.map((control) => (
+          <label className={styles.rangeField} key={control.key}>
+            <span>{control.label}</span>
+            <input
+              type="range"
+              min={control.min}
+              max={control.max}
+              value={element.adjustments?.[control.key] ?? 0}
+              aria-label={control.label}
+              onPointerDown={() => beginSlider(`image ${control.key}`)}
+              onChange={(event) =>
+                previewPatch({
+                  adjustments: {
+                    ...element.adjustments,
+                    [control.key]: Number(event.currentTarget.value),
+                  },
+                })
+              }
+              onPointerUp={endSlider}
+            />
+            <output>{element.adjustments?.[control.key] ?? 0}</output>
+          </label>
+        ))}
+        <label className={styles.rangeField}>
+          <span>Blur</span>
+          <input
+            type="range"
+            min={0}
+            max={40}
+            value={element.filterBlur ?? 0}
+            aria-label="Blur"
+            onPointerDown={() => beginSlider("image blur")}
+            onChange={(event) => previewPatch({ filterBlur: Number(event.currentTarget.value) })}
+            onPointerUp={endSlider}
+          />
+          <output>{element.filterBlur ?? 0}</output>
+        </label>
+      </div>
     </div>
   );
 }

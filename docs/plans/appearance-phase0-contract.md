@@ -25,6 +25,7 @@ In scope:
 - Appearance panel in the live Builder Inspector
 - Shadow + Glow (both allowed)
 - Text Arc for text objects via existing `pathCurvature` (no path envelope warp)
+- Image tone sliders (`adjustments` / `filterBlur`) as one Appearance UI group for images; not Appearance stack items and not Brand Graphic Styles
 
 Out of scope:
 

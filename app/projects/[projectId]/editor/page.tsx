@@ -596,8 +596,8 @@ export default function ProjectEditorPage() {
             }}
             className="brand-link"
           >
-            <div className="brand-mark" style={{ display: "flex", alignItems: "center" }}>
-              <IconBrand />
+            <div className="brand-mark">
+              <IconBrand size={14} />
             </div>
           </Link>
 
