@@ -28,9 +28,9 @@ const IMAGE_PRICING_PER_RUN = {
 
 export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>> = {
   "assistant.chat": "quality",
-  "vision.describe": "economy",
+  "vision.describe": "quality",
   "vision.propose": "quality",
-  "vision.ocr": "economy",
+  "vision.ocr": "quality",
   "vectorize.recraft": "quality",
   "prompt.enhance": "quality",
   "image.generate": "quality",

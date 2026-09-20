@@ -28,6 +28,7 @@ import { expandImageToAspectRatio } from "./imageExpand";
 import { deriveGeneratedImageName } from "./imageNaming";
 import type { ComposerImageRef } from "./imageReferences";
 import { decideRecovery, type RecoveryFailureKind } from "./recoveryPolicy";
+import { tryCloudVisionTurbo } from "./referenceAnalysis";
 import { type GeneratedOutputAnalysis, runGeneratedImageQualityGate } from "./resultQualityGate";
 import {
   type AiTask,
@@ -38,6 +39,7 @@ import {
   registerAiTask,
 } from "./taskMachine";
 import { renderVisibleReference } from "./visibleReferenceRenderer";
+import { DEFAULT_CLOUD_VISION_LABEL } from "./visionPreference";
 
 export type ContextAwareTaskStage =
   | "queued"
@@ -335,12 +337,23 @@ export async function runContextAwareImageTask(
           });
           let outputAnalysis: GeneratedOutputAnalysis | undefined;
           let technicalFallback = false;
-          const requiresLocalOutputReview =
+          const requiresOutputReview =
             Boolean(task.requiredSubjects?.length) ||
             Boolean(task.requiredText?.trim()) ||
             Boolean(task.reviewCriteria?.length) ||
             task.selectedImages.length > 0;
-          if (requiresLocalOutputReview) {
+          if (requiresOutputReview) {
+            const visionStatus = `กำลังตรวจผลลัพธ์ด้วย ${DEFAULT_CLOUD_VISION_LABEL}…`;
+            options.onUpdate?.({
+              stage: "quality-check",
+              message: visionStatus,
+              attempt,
+              quality: task.quality,
+            });
+            context.update({
+              progress: 0.45,
+              message: visionStatus,
+            });
             try {
               outputAnalysis = await (options.analyzeOutput ?? analyzeGeneratedOutput)(
                 generated.dataUrl,
@@ -354,6 +367,7 @@ export async function runContextAwareImageTask(
                   ),
                   needOcr: Boolean(task.requiredText?.trim()),
                 },
+                { cloudConsent: options.cloudConsent === true },
               );
             } catch (error) {
               if (isAbortError(error)) throw error;
@@ -361,7 +375,7 @@ export async function runContextAwareImageTask(
               context.update({
                 progress: 0.7,
                 message:
-                  "ตรวจภาพเชิงความหมายไม่ทันเวลา (Timeout 6s) จึงตัดเข้า Fallback ตรวจสอบขนาดและ Aspect Ratio ทางเทคนิค",
+                  "ตรวจภาพเชิงความหมายไม่ทันเวลา จึงตัดเข้า Fallback ตรวจสอบขนาดและ Aspect Ratio ทางเทคนิค",
               });
             }
           } else {
@@ -969,8 +983,37 @@ async function analyzeGeneratedOutput(
     needDetection?: boolean;
     needOcr?: boolean;
   },
+  analysisOptions?: {
+    cloudConsent?: boolean;
+    allowLocalFallback?: boolean;
+  },
 ): Promise<GeneratedOutputAnalysis> {
   throwIfAborted(signal);
+
+  const cloudConsent = analysisOptions?.cloudConsent === true;
+  const allowLocalFallback = analysisOptions?.allowLocalFallback !== false;
+
+  if (cloudConsent) {
+    const turbo = await tryCloudVisionTurbo(dataURL, signal, undefined, {
+      cloudConsent: true,
+      timeoutMs: 12_000,
+    });
+    if (turbo && (turbo.caption || turbo.visibleText || turbo.objects.length > 0)) {
+      return {
+        caption: turbo.caption.trim(),
+        objects: turbo.objects
+          .map((object) => object.trim())
+          .filter(Boolean)
+          .slice(0, 50),
+        visibleText: turbo.visibleText.trim(),
+        limitations: [],
+      };
+    }
+  }
+
+  if (!allowLocalFallback) {
+    throw new Error("Cloud vision output analysis unavailable");
+  }
 
   const LOCAL_VISION_TIMEOUT_MS = 6_000;
   let timer: ReturnType<typeof setTimeout> | undefined;

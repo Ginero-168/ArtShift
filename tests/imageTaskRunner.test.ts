@@ -111,6 +111,12 @@ describe("context-aware image task runner", () => {
     visionCaptionMock.mockResolvedValue("a usable generated image");
     visionDetectMock.mockResolvedValue({ objects: [] });
     visionOcrMock.mockResolvedValue("");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("vision api not mocked");
+      }),
+    );
     generateImageMock.mockResolvedValue({
       dataUrl: "data:image/png;base64,AA==",
       fileId: "generated-file",
@@ -130,6 +136,7 @@ describe("context-aware image task runner", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     expect(getProcessingPreviews()).toHaveLength(0);
   });
 
@@ -930,5 +937,88 @@ describe("context-aware image task runner", () => {
     expect(result.width).toBe(688);
     expect(result.height).toBe(2848);
     expect(result.height / result.width).toBeCloseTo(29 / 7, 1);
+  });
+
+  it("prefers Gemini cloud vision over Florence for post-generate understanding", async () => {
+    const callOrder: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("/api/ai/vision-analyze")) {
+          callOrder.push("cloud-api");
+          return {
+            ok: true,
+            json: async () => ({
+              success: true,
+              result: {
+                caption: "a studio product mug",
+                objects: ["mug"],
+                visibleText: "",
+              },
+              model: "google/gemini-3-flash",
+            }),
+          };
+        }
+        throw new Error(`unexpected fetch: ${String(input)}`);
+      }),
+    );
+    visionCaptionMock.mockImplementation(async () => {
+      callOrder.push("local-florence");
+      return "florence caption";
+    });
+
+    const events: string[] = [];
+    const result = await runContextAwareImageTask(
+      createAiTask({
+        ...plan,
+        id: "cloud-vision-first",
+        requiredSubjects: ["mug"],
+      }),
+      [],
+      {
+        cloudConsent: true,
+        onUpdate: (update) => events.push(`${update.stage}:${update.message}`),
+      },
+    );
+
+    expect(result.width).toBe(1024);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/ai/vision-analyze",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(visionCaptionMock).not.toHaveBeenCalled();
+    expect(callOrder).toEqual(["cloud-api"]);
+    expect(events.some((event) => event.includes("Gemini 3 Flash"))).toBe(true);
+    expect(events.some((event) => /florence/i.test(event))).toBe(false);
+  });
+
+  it("falls back to local Florence only after the cloud vision API misses", async () => {
+    const callOrder: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        callOrder.push("cloud-api");
+        throw new Error("vision api down");
+      }),
+    );
+    visionCaptionMock.mockImplementation(async () => {
+      callOrder.push("local-florence");
+      return "a usable generated mug";
+    });
+    visionDetectMock.mockResolvedValue({ objects: [{ label: "mug" }] });
+
+    await runContextAwareImageTask(
+      createAiTask({
+        ...plan,
+        id: "vision-local-fallback",
+        requiredSubjects: ["mug"],
+      }),
+      [],
+      { cloudConsent: true },
+    );
+
+    expect(callOrder[0]).toBe("cloud-api");
+    expect(callOrder).toContain("local-florence");
+    expect(callOrder.indexOf("local-florence")).toBeGreaterThan(callOrder.indexOf("cloud-api"));
   });
 });

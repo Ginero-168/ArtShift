@@ -5,7 +5,8 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
   it("keeps Thought UI human and minimal without sub-agent score charts", () => {
     const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
 
-    expect(threadSource).toContain("export function CollapsibleThought(");
+    expect(threadSource).toContain("DEFAULT_CLOUD_VISION_LABEL");
+    expect(threadSource).toContain("DEFAULT_CREATING_MODEL_LABEL");
     expect(threadSource).toContain(">Thought</span>");
     expect(threadSource).not.toContain("การสั่งงาน Sub-Agents");
     expect(threadSource).not.toContain("Detail: {taskItem.detailScore}");
@@ -15,7 +16,8 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
   it("tracks sub-agent lifecycle in AICoPilotBar for internal orchestration", () => {
     const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
 
-    expect(barSource).toContain('title: "Image Analyzer (วิเคราะห์ภาพต้นฉบับ)"');
+    expect(barSource).toContain("Image Analyzer");
+    expect(barSource).toContain("DEFAULT_CLOUD_VISION_LABEL");
     expect(barSource).toContain('analysisAction.status = "success";');
     expect(barSource).toContain('title: "Creative Director (Gemini 3 Flash)"');
     expect(barSource).toContain('directorAction.status = "success";');

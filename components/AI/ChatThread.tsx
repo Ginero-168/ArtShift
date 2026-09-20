@@ -34,6 +34,7 @@ import {
   type InlineTagToken,
   parseInlineTagTokens,
 } from "@/lib/ai/orchestration/inlineTagSynthesis";
+import { DEFAULT_CLOUD_VISION_LABEL } from "@/lib/ai/orchestration/visionPreference";
 import { UNIFIED_AI_SYSTEM } from "@/lib/ai/unifiedSystem";
 import { getCached, subscribeImageCache } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
@@ -1106,8 +1107,9 @@ export default function ChatThread({
               toolLabel={liveAssistantState.toolLabel}
             />
 
-            {/* Minimal process + skeleton */}
-            {liveAssistantState.stage === "generating" && (
+            {/* Vision / generate process label */}
+            {(liveAssistantState.stage === "analyzing" ||
+              liveAssistantState.stage === "generating") && (
               <>
                 <div
                   style={{
@@ -1123,48 +1125,56 @@ export default function ChatThread({
                   }}
                 >
                   <SpinnerIcon style={{ color: "#64748b", width: 12, height: 12 }} />
-                  <span>{liveAssistantState.toolLabel || DEFAULT_CREATING_MODEL_LABEL}</span>
+                  <span>
+                    {liveAssistantState.toolLabel ||
+                      (liveAssistantState.stage === "analyzing"
+                        ? DEFAULT_CLOUD_VISION_LABEL
+                        : DEFAULT_CREATING_MODEL_LABEL)}
+                  </span>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    marginTop: 4,
-                    width: "100%",
-                  }}
-                >
-                  {Array.from({
-                    length: Math.max(1, liveAssistantState.requestedCount || 1),
-                  }).map((_, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        width: (liveAssistantState.requestedCount || 1) === 1 ? 168 : 120,
-                        maxWidth: "100%",
-                        aspectRatio: "1 / 1",
-                        borderRadius: 12,
-                        background: "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
-                        backgroundSize: "200% 100%",
-                        animation: "artshiftPulse 1.5s ease-in-out infinite",
-                        border: "1px dashed #cbd5e1",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <ImageSparkleIcon
+                {liveAssistantState.stage === "generating" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      marginTop: 4,
+                      width: "100%",
+                    }}
+                  >
+                    {Array.from({
+                      length: Math.max(1, liveAssistantState.requestedCount || 1),
+                    }).map((_, idx) => (
+                      <div
+                        key={idx}
                         style={{
-                          width: 20,
-                          height: 20,
-                          color: "#94a3b8",
-                          opacity: 0.5,
+                          width: (liveAssistantState.requestedCount || 1) === 1 ? 168 : 120,
+                          maxWidth: "100%",
+                          aspectRatio: "1 / 1",
+                          borderRadius: 12,
+                          background:
+                            "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
+                          backgroundSize: "200% 100%",
+                          animation: "artshiftPulse 1.5s ease-in-out infinite",
+                          border: "1px dashed #cbd5e1",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
                         }}
-                      />
-                    </div>
-                  ))}
-                </div>
+                      >
+                        <ImageSparkleIcon
+                          style={{
+                            width: 20,
+                            height: 20,
+                            color: "#94a3b8",
+                            opacity: 0.5,
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>

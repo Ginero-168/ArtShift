@@ -17,4 +17,16 @@ describe("CoPilot cloud consent gate", () => {
     expect(inventoryIndex).toBeGreaterThan(0);
     expect(consentIndex).toBeGreaterThan(inventoryIndex);
   });
+
+  it("asks consent before reference vision and sends cloudConsent to Gemini analysis", () => {
+    const analysisIndex = source.indexOf("hasImageContext && analysesForTurn.length === 0");
+    const visionConsentIndex = source.indexOf("const visionConsent = ensureCloudConsent()");
+    const directorConsentIndex = source.indexOf("const consent = ensureCloudConsent()");
+    expect(analysisIndex).toBeGreaterThan(0);
+    expect(visionConsentIndex).toBeGreaterThan(analysisIndex);
+    expect(visionConsentIndex).toBeLessThan(directorConsentIndex);
+    expect(source).toContain("{ cloudConsent: true }");
+    expect(source).toContain("DEFAULT_CLOUD_VISION_LABEL");
+    expect(source).toContain("cloudVisionStatusMessage");
+  });
 });

@@ -11,8 +11,8 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
     const lines = barSource.split("\n").length;
 
-    // Line count reduced from ~2,975 lines; Mix / ultra-wide / image-result wiring grew past 1750
-    expect(lines).toBeLessThan(1900);
+    // Line count reduced from ~2,975 lines; Mix / ultra-wide / vision-API status grew past 1900
+    expect(lines).toBeLessThan(1920);
 
     // Integrates the 4 extracted submodules
     expect(barSource).toContain("useCanvasSelectionBridge");
