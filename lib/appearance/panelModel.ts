@@ -8,6 +8,26 @@ export type AppearanceStackRow =
   | { key: "textArc"; kind: "textArc"; value: number };
 
 /**
+ * Exclusive accordion that still allows none selected: click a closed row to
+ * open it (closing any other), click the open row again to collapse.
+ */
+export function toggleAppearanceExpandedKey(
+  currentKey: string | null,
+  clickedKey: string,
+): string | null {
+  return currentKey === clickedKey ? null : clickedKey;
+}
+
+/** Drop a stale id (removed stack item) so the panel can sit fully collapsed. */
+export function resolveAppearanceExpandedKey(
+  expandedKey: string | null,
+  rowKeys: readonly string[],
+): string | null {
+  if (expandedKey && rowKeys.includes(expandedKey)) return expandedKey;
+  return null;
+}
+
+/**
  * UI lists items top-to-bottom as front-to-back (reverse of stored back-to-front).
  * Text Arc is a text-only geometry attribute (`pathCurvature`), not an Appearance item.
  */

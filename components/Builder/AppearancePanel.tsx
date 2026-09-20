@@ -22,11 +22,13 @@ import {
   nudgeItemOperation,
   readAppearance,
   removeItemOperation,
+  resolveAppearanceExpandedKey,
   setRootBlendOperation,
   setRootOpacityOperation,
   shadowPatchOperation,
   stackKindOf,
   strokePatchOperation,
+  toggleAppearanceExpandedKey,
   toggleItemVisibleOperation,
 } from "@/lib/appearance";
 import { APPEARANCE_MAX_ITEMS } from "@/lib/appearance/types";
@@ -85,10 +87,16 @@ export default function AppearancePanel({
   const hasStroke = caps.strokes && !!findStroke(appearance);
 
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const activeKey = useMemo(() => {
-    if (expandedKey && rows.some((row) => row.key === expandedKey)) return expandedKey;
-    return rows[0]?.key ?? null;
-  }, [expandedKey, rows]);
+  const rowKeys = useMemo(() => rows.map((row) => row.key), [rows]);
+  const activeKey = useMemo(
+    () => resolveAppearanceExpandedKey(expandedKey, rowKeys),
+    [expandedKey, rowKeys],
+  );
+  const expandRow = (key: string) => {
+    setExpandedKey((current) =>
+      toggleAppearanceExpandedKey(resolveAppearanceExpandedKey(current, rowKeys), key),
+    );
+  };
 
   const applyOp = (
     operation: AppearanceOperation | ((target: EngineElement) => AppearanceOperation | null),
@@ -128,7 +136,7 @@ export default function AppearancePanel({
                   type="button"
                   className={styles.appearanceRowHeader}
                   aria-expanded={expanded}
-                  onClick={() => setExpandedKey(row.key)}
+                  onClick={() => expandRow(row.key)}
                 >
                   <span className={styles.appearanceRowType}>Arc</span>
                   <span className={styles.appearanceRowTitle}>Text Arc</span>
@@ -173,7 +181,7 @@ export default function AppearancePanel({
                   type="button"
                   className={styles.appearanceRowSelect}
                   aria-expanded={expanded}
-                  onClick={() => setExpandedKey(row.key)}
+                  onClick={() => expandRow(row.key)}
                 >
                   <span
                     className={styles.appearanceSwatch}

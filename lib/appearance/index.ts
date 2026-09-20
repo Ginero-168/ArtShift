@@ -51,7 +51,9 @@ export {
   findFills,
   findStroke,
   findStrokes,
+  resolveAppearanceExpandedKey,
   stackKindOf,
+  toggleAppearanceExpandedKey,
 } from "./panelModel";
 export {
   appearanceElementPatch,

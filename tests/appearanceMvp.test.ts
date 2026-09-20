@@ -10,7 +10,9 @@ import {
   findEffect,
   glowPatchOperation,
   readAppearance,
+  resolveAppearanceExpandedKey,
   shadowPatchOperation,
+  toggleAppearanceExpandedKey,
 } from "@/lib/appearance";
 import { createImage, createRect, createText } from "@/lib/engine/factory";
 import { useEngine } from "@/lib/engine/store";
@@ -177,6 +179,35 @@ describe("updateAppearance store adapter", () => {
     const result = st.updateAppearance(["missing-id", rect.id], addShadowOperation(), "shadow");
     expect(result.ok).toBe(false);
     expect(useEngine.getState().currentSlide()?.elements[0]?.shadow).toBeUndefined();
+  });
+});
+
+describe("Appearance stack expand/collapse", () => {
+  const rowKeys = ["textArc", "stroke-1", "fill-1"] as const;
+
+  function click(current: string | null, key: string): string | null {
+    return toggleAppearanceExpandedKey(resolveAppearanceExpandedKey(current, rowKeys), key);
+  }
+
+  it("collapses the open item when the same id is selected again", () => {
+    expect(click(null, "fill-1")).toBe("fill-1");
+    expect(click("fill-1", "fill-1")).toBe(null);
+    expect(resolveAppearanceExpandedKey(null, rowKeys)).toBe(null);
+  });
+
+  it("still switches to a different item and drops stale ids", () => {
+    expect(click("fill-1", "stroke-1")).toBe("stroke-1");
+    expect(click("stroke-1", "textArc")).toBe("textArc");
+    expect(click("textArc", "textArc")).toBe(null);
+    expect(resolveAppearanceExpandedKey("removed-id", rowKeys)).toBe(null);
+  });
+
+  it("wires stack headers to toggle instead of radio-select", () => {
+    const panel = readFileSync("components/Builder/AppearancePanel.tsx", "utf8");
+    expect(panel).toContain("toggleAppearanceExpandedKey");
+    expect(panel).toContain("expandRow(row.key)");
+    expect(panel).not.toContain("return rows[0]?.key ?? null");
+    expect(panel).not.toContain("onClick={() => setExpandedKey(row.key)}");
   });
 });
 
