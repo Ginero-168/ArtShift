@@ -7,6 +7,7 @@ import {
   MAX_EMBOSS_SOFTNESS,
   MAX_EXTRUDE_DEPTH,
   MAX_EXTRUDE_STEPS,
+  MAX_EXTRUDE_TAPER,
 } from "./types";
 
 type Padding = { top: number; right: number; bottom: number; left: number };
@@ -22,6 +23,8 @@ export type DepthEffectPass = {
   blur: number;
   offsetX: number;
   offsetY: number;
+  /** 1 = parallel copy. <1 scales the copy toward the element bounds center. */
+  scale?: number;
 };
 
 const SIDE_DARKEN = 0.42;
@@ -39,6 +42,19 @@ export function clampExtrudeSteps(value: number): number {
 export function clampEmbossSoftness(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(MAX_EMBOSS_SOFTNESS, value));
+}
+
+export function clampExtrudeTaper(value: number | undefined): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(MAX_EXTRUDE_TAPER, value as number));
+}
+
+/** Scale of a copy at `progress` along depth (0 = face, 1 = farthest). */
+export function extrudeCopyScale(taper: number, progress: number): number {
+  const amount = clampExtrudeTaper(taper);
+  if (amount <= 0) return 1;
+  const t = Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0;
+  return Math.max(0, 1 - amount * t);
 }
 
 export function offsetFromAngle(angle: number, distance: number): { x: number; y: number } {
@@ -90,6 +106,7 @@ export function normalizeExtrudeEffect(effect: AppearanceExtrudeEffect): Appeara
     steps: clampExtrudeSteps(effect.steps),
     sideColor: effect.sideColor || "#2a2438",
     sideFromFill: effect.sideFromFill === true,
+    taper: clampExtrudeTaper(effect.taper),
   };
 }
 
@@ -127,14 +144,18 @@ export function expandExtrudePasses(
   const color = applyColorOpacity(options.color, options.opacity ?? 1);
   const unit = offsetFromAngle(effect.angle, 1);
   const step = depth / count;
+  const taper = clampExtrudeTaper(effect.taper);
   const passes: DepthEffectPass[] = [];
   for (let i = count; i >= 1; i--) {
     const distance = i * step;
+    const scale = extrudeCopyScale(taper, distance / depth);
+    if (scale <= 0) continue;
     passes.push({
       color,
       blur: 0,
       offsetX: unit.x * distance,
       offsetY: unit.y * distance,
+      scale,
     });
   }
   return passes;

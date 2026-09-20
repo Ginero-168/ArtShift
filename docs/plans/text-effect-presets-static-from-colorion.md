@@ -142,10 +142,10 @@ Colorion CSS capability (frequency) maps onto the existing Appearance **stack**,
 | text box | Background item (unchanged) |
 | `letter-spacing` | recipe `letterSpacingEm` → `TextElement.letterSpacingEm` on apply |
 | Text Arc | existing `pathCurvature` — not used by these presets |
-| 3D block / long cast / comic depth (Deep-Type, Pop-Riot, Sundial, Keycap) | named `extrude` effect (depth, angle, steps, side color) — not an uneditable shadow stack |
+| 3D block / long cast / comic depth (Deep-Type, Pop-Riot, Sundial, Keycap) | named `extrude` effect (depth, angle, steps, taper, side color) — not an uneditable shadow stack. Presets leave taper at 0 unless a look benefits. |
 | Emboss / dual-color relief (Parallax, Keycap face) | named `emboss` effect (mode, depth, light angle, softness, highlight+shadow colors) |
 
-Engine **schema v9** documents named Extrude/Emboss effects. v8 item fields stay. `Appearance.schemaVersion` stays **1**. v7 documents load: missing fields normalize to defaults. Dual-write still copies the first visible Fill/Stroke/Shadow/Glow onto legacy flat fields. Extrude/Emboss live on `appearance` only.
+Engine **schema v10** adds Extrude `taper` on top of v9 named Extrude/Emboss effects. v8 item fields stay. `Appearance.schemaVersion` stays **1**. v7/v9 documents load: missing fields (including taper) normalize to defaults (taper 0). Dual-write still copies the first visible Fill/Stroke/Shadow/Glow onto legacy flat fields. Extrude/Emboss live on `appearance` only.
 
 ### Schema v8 item fields
 

@@ -1,10 +1,11 @@
 /**
  * Canonical Appearance stack types (Illustrator-inspired).
- * Engine schema v9 persists this object on EngineElement (v7 introduced the
- * field; v8 added text-effect stack fields) and dual-writes legacy flat fields
- * (fill/stroke/shadow/glow/opacity/blendMode) for older readers.
- * Appearance.schemaVersion stays 1; new item fields (including extrude/emboss
- * effects) are additive and normalize to defaults when missing.
+ * Engine schema v10 persists this object on EngineElement (v7 introduced the
+ * field; v8 added text-effect stack fields; v9 named extrude/emboss; v10
+ * extrude taper) and dual-writes legacy flat fields (fill/stroke/shadow/glow/
+ * opacity/blendMode) for older readers.
+ * Appearance.schemaVersion stays 1; new item fields (including extrude taper)
+ * are additive and normalize to defaults when missing.
  */
 
 import type { ColorAdjustments } from "@/lib/color/adjustments";
@@ -122,6 +123,12 @@ export type AppearanceExtrudeEffect = {
   sideColor: string;
   /** When true, the renderer darkens the current Fill instead of `sideColor`. */
   sideFromFill?: boolean;
+  /**
+   * 0 = parallel copies along `angle` (legacy). 1 = farthest copy scales to 0
+   * toward the element bounds center so the side leans inward.
+   * Missing values normalize to 0.
+   */
+  taper?: number;
 };
 
 export type AppearanceEmbossEffect = {
@@ -227,4 +234,5 @@ export const APPEARANCE_SCHEMA_VERSION = 1 as const;
 export const APPEARANCE_MAX_ITEMS = 24;
 export const MAX_EXTRUDE_DEPTH = 80;
 export const MAX_EXTRUDE_STEPS = 48;
+export const MAX_EXTRUDE_TAPER = 1;
 export const MAX_EMBOSS_SOFTNESS = 32;

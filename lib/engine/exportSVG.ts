@@ -212,6 +212,12 @@ function serializeText(element: Extract<EngineElement, { type: "text" }>): strin
   }
 
   const parts: string[] = [];
+  for (const pass of canvasShadowPasses(element)) {
+    if (pass.source !== "extrude" || (pass.scale ?? 1) === 1) continue;
+    parts.push(
+      `<text fill="${escapeXml(pass.color)}" stroke="none" ${fontAttrs} transform="${taperedExtrudeTransform(pass, element.width, element.height)}">${lines}</text>`,
+    );
+  }
   for (const [index, pass] of passes.entries()) {
     const blend = svgBlend(pass.item.blendMode);
     const blendAttr = blend !== "normal" ? ` style="mix-blend-mode:${blend}"` : "";
@@ -242,7 +248,21 @@ function serializeText(element: Extract<EngineElement, { type: "text" }>): strin
 }
 
 function textFilterNeeded(element: EngineElement): boolean {
-  return canvasShadowPasses(element).length > 0 || canvasGaussianBlurRadius(element) > 0;
+  return (
+    canvasShadowPasses(element).some((pass) => (pass.scale ?? 1) === 1) ||
+    canvasGaussianBlurRadius(element) > 0
+  );
+}
+
+function taperedExtrudeTransform(
+  pass: { offsetX: number; offsetY: number; scale?: number },
+  width: number,
+  height: number,
+): string {
+  const scale = pass.scale ?? 1;
+  const cx = width / 2;
+  const cy = height / 2;
+  return `translate(${n(cx + pass.offsetX)} ${n(cy + pass.offsetY)}) scale(${n(scale)}) translate(${n(-cx)} ${n(-cy)})`;
 }
 
 function svgBlend(mode?: string): string {
@@ -341,6 +361,7 @@ function textAppearanceDefinitions(element: Extract<EngineElement, { type: "text
   const blur = canvasGaussianBlurRadius(element);
   const primitives: string[] = [];
   for (const pass of shadows) {
+    if ((pass.scale ?? 1) !== 1) continue;
     primitives.push(
       `<feDropShadow dx="${n(pass.offsetX)}" dy="${n(pass.offsetY)}" stdDeviation="${n(pass.blur / 2)}" flood-color="${escapeXml(pass.color)}" flood-opacity="1"/>`,
     );

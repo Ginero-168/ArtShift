@@ -23,6 +23,8 @@ export type CanvasShadowPass = {
   blur: number;
   offsetX: number;
   offsetY: number;
+  /** Extrude taper: 1 = parallel. Absent on shadow/glow/emboss. */
+  scale?: number;
   source: "shadow" | "glow" | "extrude" | "emboss";
 };
 

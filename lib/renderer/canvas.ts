@@ -174,13 +174,48 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   } else {
     // Canvas shadow* draws source + halo. Paint each halo, then the still once
     // on top so multi-layer text-shadow/glow is not XOR'd and glyphs are not
-    // restacked as N opaque copies.
+    // restacked as N opaque copies. Tapered extrude copies scale toward the
+    // element center — those cannot use shadowOffset, so they tint + transform.
+    let tint: HTMLCanvasElement | null = null;
+    let tintColor: string | null = null;
     for (const pass of effectPasses) {
-      ctx.shadowColor = pass.color;
-      ctx.shadowBlur = pass.blur;
-      ctx.shadowOffsetX = pass.offsetX;
-      ctx.shadowOffsetY = pass.offsetY;
-      ctx.drawImage(cached.canvas, 0, 0);
+      const scale = pass.scale ?? 1;
+      if (scale === 1) {
+        ctx.shadowColor = pass.color;
+        ctx.shadowBlur = pass.blur;
+        ctx.shadowOffsetX = pass.offsetX;
+        ctx.shadowOffsetY = pass.offsetY;
+        ctx.drawImage(cached.canvas, 0, 0);
+        continue;
+      }
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      if (!tint || tintColor !== pass.color) {
+        tint ??= document.createElement("canvas");
+        tint.width = cached.canvas.width;
+        tint.height = cached.canvas.height;
+        const tctx = tint.getContext("2d");
+        if (tctx) {
+          tctx.clearRect(0, 0, tint.width, tint.height);
+          tctx.drawImage(cached.canvas, 0, 0);
+          tctx.globalCompositeOperation = "source-in";
+          tctx.fillStyle = pass.color;
+          tctx.fillRect(0, 0, tint.width, tint.height);
+          tctx.globalCompositeOperation = "source-over";
+        }
+        tintColor = pass.color;
+      }
+      ctx.save();
+      const cx = cached.pad + el.width / 2;
+      const cy = cached.pad + el.height / 2;
+      ctx.translate(cx + pass.offsetX, cy + pass.offsetY);
+      ctx.scale(scale, scale);
+      ctx.translate(-cx, -cy);
+      if (pass.blur > 0) ctx.filter = `blur(${pass.blur}px)`;
+      ctx.drawImage(tint, 0, 0);
+      ctx.restore();
     }
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;

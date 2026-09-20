@@ -25,6 +25,7 @@ export const DEFAULT_EXTRUDE = {
   steps: 0,
   sideColor: "#2a2438",
   sideFromFill: true,
+  taper: 0,
 } as const satisfies Omit<AppearanceExtrudeEffect, "type">;
 
 export const DEFAULT_EMBOSS = {

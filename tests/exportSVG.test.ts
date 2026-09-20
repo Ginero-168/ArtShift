@@ -137,4 +137,41 @@ describe("text effect SVG export", () => {
     expect(svg).toContain("letter-spacing");
     expect(svg).not.toContain("@keyframes");
   });
+
+  it("exports tapered extrude as scaled copies instead of drop shadows", async () => {
+    const { addExtrudeOperation, changeAppearance, extrudePatchOperation } = await import(
+      "@/lib/appearance"
+    );
+    const text = createText({ x: 40, y: 50, width: 240, height: 80, text: "TAPER" });
+    const started = changeAppearance(text, addExtrudeOperation());
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const tapered = changeAppearance(
+      started.element,
+      extrudePatchOperation(started.element, {
+        depth: 12,
+        steps: 3,
+        taper: 0.6,
+        sideFromFill: false,
+        sideColor: "#334455",
+      }),
+    );
+    expect(tapered.ok).toBe(true);
+    if (!tapered.ok) return;
+    const layer = createEngineLayer("free");
+    layer.objectIds = [tapered.element.id];
+    const slide: EngineSlide = {
+      id: "slide-taper",
+      name: "Taper",
+      background: "#ffffff",
+      width: 600,
+      height: 400,
+      elements: [tapered.element],
+      layers: [layer],
+    };
+    const svg = serializeSlideToSVG(slide);
+    expect(svg).toContain("TAPER");
+    expect(svg).toContain("scale(");
+    expect(svg).not.toContain("feDropShadow");
+  });
 });
