@@ -264,7 +264,7 @@ describe("Infinity Canvas UI wiring", () => {
   it("lets the slide rail create Infinity Canvas and documents the export skip", () => {
     const rail = readFileSync("components/Canvas/SlideRail.tsx", "utf8");
     expect(rail).toContain("addInfinityCanvasSlide");
-    expect(rail).toContain(`New ${INFINITY_CANVAS_LABEL}`);
+    expect(rail).toContain("New ${INFINITY_CANVAS_LABEL}");
     expect(rail).toContain("INFINITY_CANVAS_EXPORT_NOTE");
   });
 
