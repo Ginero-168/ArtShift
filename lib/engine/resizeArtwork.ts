@@ -1,3 +1,4 @@
+import { scaledAppearancePatch } from "@/lib/appearance";
 import { recomputeArrowBindings } from "./binding";
 import { isMediaElement } from "./mediaLayout";
 import type { EngineElement, EngineSlide } from "./types";
@@ -33,15 +34,10 @@ export function resizeArtworkSlide(
       version: element.version + 1,
     } as EngineElement;
     if (next.type === "text") next.fontSize *= typeScale;
-    if (next.shadow) {
-      next.shadow = {
-        ...next.shadow,
-        blur: next.shadow.blur * typeScale,
-        offsetX: next.shadow.offsetX * scaleX,
-        offsetY: next.shadow.offsetY * scaleY,
-      };
-    }
-    return next;
+    const appearanceScale = media ? typeScale : undefined;
+    const sx = appearanceScale ?? scaleX;
+    const sy = appearanceScale ?? scaleY;
+    return { ...next, ...scaledAppearancePatch(element, sx, sy) } as EngineElement;
   });
   return recomputeArrowBindings({
     ...slide,

@@ -16,6 +16,7 @@ export {
   defaultStrokeItem,
   defaultTextStrokeItem,
 } from "./defaults";
+export type { DepthEffectComposite, DepthEffectPass, DepthEffectRole } from "./depthEffects";
 export {
   applyColorOpacity,
   clampEmbossSoftness,
@@ -104,8 +105,15 @@ export {
   canvasPaintPasses,
   canvasPaintRoles,
   canvasShadowPasses,
+  effectPassUsesTint,
   usesStackedPaint,
 } from "./renderPlan";
+export type { AppearanceScaleFactors } from "./scale";
+export {
+  appearanceScaleFactors,
+  scaleAppearance,
+  scaledAppearancePatch,
+} from "./scale";
 export type { TextEffectFamily, TextEffectPreset, TextEffectStaticCap } from "./textEffectPresets";
 export {
   applyTextEffectPreset,

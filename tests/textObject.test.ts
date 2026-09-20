@@ -134,6 +134,7 @@ describe("canvas wiring for Illustrator text", () => {
   it("scales selected text glyphs with the transformer box", () => {
     const transformer = readFileSync("components/Canvas/Transformer.tsx", "utf8");
     expect(transformer).toContain("scaleTextWithBox");
+    expect(transformer).toContain("scaledAppearancePatch");
     expect(transformer).toContain('start.type === "text"');
     expect(transformer).not.toContain("getTextMinimumHeight");
   });

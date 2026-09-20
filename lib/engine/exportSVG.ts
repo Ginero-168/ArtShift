@@ -363,7 +363,7 @@ function textAppearanceDefinitions(element: Extract<EngineElement, { type: "text
   for (const pass of shadows) {
     if ((pass.scale ?? 1) !== 1) continue;
     primitives.push(
-      `<feDropShadow dx="${n(pass.offsetX)}" dy="${n(pass.offsetY)}" stdDeviation="${n(pass.blur / 2)}" flood-color="${escapeXml(pass.color)}" flood-opacity="1"/>`,
+      `<feDropShadow dx="${n(pass.offsetX)}" dy="${n(pass.offsetY)}" stdDeviation="${n(pass.blur / 2)}" ${svgFloodAttrs(pass.color)}/>`,
     );
   }
   if (blur > 0) {
@@ -578,6 +578,15 @@ function strokeDash(element: EngineElement): string {
   if (element.strokeStyle === "dashed") return "12 8";
   if (element.strokeStyle === "dotted") return "2 7";
   return "none";
+}
+
+function svgFloodAttrs(color: string): string {
+  const parsed = parseCssColor(color);
+  const hex = `#${[parsed.r, parsed.g, parsed.b]
+    .map((channel) => Math.round(channel).toString(16).padStart(2, "0"))
+    .join("")}`;
+  const opacity = Number.isFinite(parsed.a) ? Math.min(1, Math.max(0, parsed.a)) : 1;
+  return `flood-color="${escapeXml(hex)}" flood-opacity="${n(opacity)}"`;
 }
 
 function n(value: number): string {

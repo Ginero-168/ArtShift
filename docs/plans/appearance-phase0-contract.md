@@ -75,6 +75,8 @@ Out of scope:
 - The canvas compositor expands them into sequential offset copies of the cached still (same path as multi-layer shadow), then paints the unshadowed face on top. Face color is the Fill; side color is `sideColor` or a darkened Fill when `sideFromFill` is true.
 - **Extrude controls:** depth (px), angle (0° = right, 90° = down), steps (0 = smooth 1px copies), taper (0–100% toward bounds center), side color. Taper 0 keeps the v9 parallel compositor path.
 - **Emboss controls:** mode (emboss / deboss / bevel), depth, light angle (shadow falls this way; highlight opposite), softness, highlight + shadow colors.
+- **Emboss highlight paint:** the compositor tints the cached still’s alpha (`source-in` fill) and draws that copy opposite the shadow. Canvas `shadow*` of a colored still drops light flood colors, so highlight must not use `shadowColor`.
+- **Scale with object:** resizing/transforming an object multiplies size-like Appearance fields (extrude depth, emboss depth/softness, shadow blur + offsets, glow blur, stroke width, gaussian radius, paint-layer offsets) by the scale factor. Angles, colors, blend modes, and unitless taper % stay unchanged. Existing documents are not rewritten until the user scales.
 - Text is the primary target. Path / freedraw / shapes reuse the same compositor when cheap. Images do not get these add-buttons.
 - Colorion 3D stills (Deep-Type, Pop-Riot, Sundial, Parallax, Keycap) compile into these named items instead of an uneditable shadow stack.
 
