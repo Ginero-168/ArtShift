@@ -6,6 +6,7 @@ import {
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
   parseFollowUpOrientation,
+  resolvePriorRequestedSize,
   serializeConversationHistoryForDirector,
 } from "@/lib/ai/orchestration/chatContinuity";
 import type { AiAssistantChatInput, AiExecution, AiRuntime } from "@/lib/ai-runtime/contracts";
@@ -15,15 +16,18 @@ export const FOLLOW_UP_RECALL_STATUS_MESSAGE =
 
 export const FOLLOW_UP_RECALL_SYSTEM = [
   "You are ArtShift Memory Recall running on Gemini 3 Flash.",
+  "This is step 1 of follow-up image work: SUMMARIZE requirements from the full prior chat plus the LAST IMAGE GENERATION PACKAGE before any Creative Director plan or image generate.",
   "The user sent a short follow-up that revises or continues the last generated image.",
-  "Read the conversation plus the structured LAST IMAGE GENERATION PACKAGE.",
+  "Read the conversation plus the structured LAST IMAGE GENERATION PACKAGE (prompt, exact size/aspect including cm such as 29x7cm, style, model, refs, briefs/constraints).",
   "Summarize only what was actually discussed or stored. Never invent ingredients, brands, slogans, book titles, or photos that are not in the package or chat.",
   "If the package lists ingredients, those are the only allowed reference photos.",
   "Return JSON only with this shape:",
-  '{ "summary": string, "agreedConstraints": string[], "styleNotes": string, "campaignNotes": string, "followUpIntent": string, "keepCopy": boolean, "keepIngredients": boolean, "aspectOverride": string | null }',
-  "summary: 2–6 sentences covering prior brief, agreed style/copy, ingredients, last output, and how the new command should apply.",
-  "followUpIntent: the new instruction interpreted in light of that memory (not a blank new brief).",
-  "aspectOverride: only if the user names a specific ratio/size (e.g. 9:16, 7x29cm). For orientation-only commands (แนวตั้ง / portrait / แนวนอน), return the swapped prior custom size (29x7cm → 7x29cm) or the flipped named aspect (16:9 → 9:16). Never default แนวตั้ง to 9:16 when a custom WxH exists.",
+  '{ "summary": string, "agreedConstraints": string[], "styleNotes": string, "campaignNotes": string, "followUpIntent": string, "keepCopy": boolean, "keepIngredients": boolean, "priorExactSize": string | null, "resolvedExactSize": string | null, "aspectOverride": string | null }',
+  "summary: 2–6 sentences covering prior brief, agreed style/copy, ingredients, last output, prior exact size, resolved follow-up size, and how the new command should apply.",
+  "summary MUST name the prior exact size (e.g. 29x7cm) AND the resolved follow-up size. Orientation-only (แนวตั้ง / portrait / แนวนอน): SWAP custom WxH (29x7cm → 7x29cm) or FLIP a named aspect (16:9 → 9:16). Never write 9:16 when a custom WxH exists.",
+  "followUpIntent: the new instruction interpreted in light of that memory, including the resolved exact size (not a blank new brief and not a default 9:16).",
+  "priorExactSize: last stored size label (29x7cm, 16:9, …). resolvedExactSize: size to generate now (7x29cm after a vertical follow-up on 29x7cm).",
+  "aspectOverride: same as resolvedExactSize when size changes; otherwise null.",
 ].join(" ");
 
 export type FollowUpRecallResult = {
@@ -35,6 +39,8 @@ export type FollowUpRecallResult = {
   keepCopy: boolean;
   keepIngredients: boolean;
   aspectOverride?: string;
+  priorExactSize?: string;
+  resolvedExactSize?: string;
   model?: string;
   source: "cloud-api" | "local-fallback";
 };
@@ -47,6 +53,48 @@ export type FollowUpRecallInput = {
 
 function clip(value: string | undefined, max: number): string {
   return (value ?? "").trim().slice(0, max);
+}
+
+const PRESET_PORTRAIT_SIZE_RE = /9\s*:\s*16|3\s*:\s*4/giu;
+
+export function priorExactSizeLabel(prior: PriorImageGenerationContext): string {
+  const resolved = resolvePriorRequestedSize(prior);
+  if (resolved.sizeLabel?.trim()) return resolved.sizeLabel.trim();
+  if (prior.sizeLabel?.trim()) return prior.sizeLabel.trim();
+  return prior.aspectRatio;
+}
+
+function resolvedOrientationAspectOverride(input: FollowUpRecallInput): string | undefined {
+  const orientation = parseFollowUpOrientation(input.followUpPrompt);
+  if (!orientation || hasNumericOrNamedSizeInText(input.followUpPrompt)) return undefined;
+  const inverted = applyOrientationToPriorSize(input.lastGeneration, orientation);
+  return inverted.sizeLabel || inverted.aspectRatio;
+}
+
+/** Size the next generate must use: flipped custom/named size, or the prior size if orientation did not change. */
+export function resolvedFollowUpSizeLabel(input: FollowUpRecallInput): string {
+  return resolvedOrientationAspectOverride(input) || priorExactSizeLabel(input.lastGeneration);
+}
+
+function isPresetPortraitSize(value: string): boolean {
+  return /^\s*(9\s*:\s*16|3\s*:\s*4)\s*$/i.test(value);
+}
+
+export function stampResolvedSizeIntoRecallText(
+  text: string,
+  resolvedSize: string,
+  priorSize: string,
+): string {
+  let next = (text || "").trim();
+  if (!resolvedSize) return next;
+  if (!isPresetPortraitSize(resolvedSize)) {
+    next = next.replace(PRESET_PORTRAIT_SIZE_RE, resolvedSize);
+  }
+  if (!next.toLowerCase().includes(resolvedSize.toLowerCase())) {
+    next =
+      `${next} Prior exact size ${priorSize}; resolved follow-up size ${resolvedSize} (do not substitute a portrait preset when a custom WxH was stored).`.trim();
+  }
+  return next;
 }
 
 function stringArray(value: unknown, maxItems: number, maxLength: number): string[] {
@@ -66,23 +114,24 @@ export function buildFollowUpRecallUserPrompt(input: FollowUpRecallInput): strin
       ? history.map((message) => `${message.role.toUpperCase()}: ${message.content}`).join("\n\n")
       : "(no earlier chat turns)";
 
+  const priorSize = priorExactSizeLabel(input.lastGeneration);
+  const orientationSize = resolvedOrientationAspectOverride(input);
+
   return [
     `User follow-up command: ${clip(input.followUpPrompt, 2_000)}`,
+    "",
+    `Prior exact size (authoritative): ${priorSize}`,
+    orientationSize
+      ? `Orientation-only follow-up: resolved size MUST be ${orientationSize} — never default แนวตั้ง/portrait to 9:16 when a custom WxH exists.`
+      : `Keep the prior exact size ${priorSize} unless the user named a new size.`,
     "",
     "=== RECENT CHAT ===",
     historyBlock.slice(0, 60_000),
     "",
     formatGenerationPackageForPrompt(input.lastGeneration),
     "",
-    "Summarize the chat + package, then interpret the follow-up. Do not invent ingredients.",
+    "Summarize the chat + package (including exact size), then interpret the follow-up. Do not invent ingredients.",
   ].join("\n");
-}
-
-function resolvedOrientationAspectOverride(input: FollowUpRecallInput): string | undefined {
-  const orientation = parseFollowUpOrientation(input.followUpPrompt);
-  if (!orientation || hasNumericOrNamedSizeInText(input.followUpPrompt)) return undefined;
-  const inverted = applyOrientationToPriorSize(input.lastGeneration, orientation);
-  return inverted.sizeLabel || inverted.aspectRatio;
 }
 
 export function buildLocalFollowUpRecall(input: FollowUpRecallInput): FollowUpRecallResult {
@@ -92,38 +141,51 @@ export function buildLocalFollowUpRecall(input: FollowUpRecallInput): FollowUpRe
     .slice(-6)
     .map((message) => message.content.replace(/\s+/g, " ").trim().slice(0, 240));
   const ingredientNames = prior.ingredients?.map((item) => item.displayName).filter(Boolean) ?? [];
+  const priorSize = priorExactSizeLabel(prior);
+  const resolvedSize = resolvedFollowUpSizeLabel(input);
+  const aspectOverride = resolvedOrientationAspectOverride(input);
   const constraintBits = [
     ...(prior.sharedAnchors?.map((anchor) => `${anchor.label}: ${anchor.detail}`) ?? []),
+    `exact size ${resolvedSize}`,
     prior.aspectRatio ? `aspect ${prior.aspectRatio}` : "",
     prior.campaignNotes ?? "",
   ].filter(Boolean);
 
-  const summary = [
-    `Prior brief: ${clip(prior.userPrompt, 400) || "image generation"}`,
-    prior.summary ? `Last result: ${clip(prior.summary, 280)}` : "",
-    ingredientNames.length
-      ? `Ingredients: ${ingredientNames.join(", ")}`
-      : "No stored ingredient photos.",
-    prior.outputElementId || prior.outputFileId
-      ? "Last generated output is available to revise."
-      : "",
-    recentUserTurns.length ? `Recent user requests: ${recentUserTurns.join(" · ")}` : "",
-    `New command: ${clip(input.followUpPrompt, 200)}`,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const aspectOverride = resolvedOrientationAspectOverride(input);
+  const summary = stampResolvedSizeIntoRecallText(
+    [
+      `Prior brief: ${clip(prior.userPrompt, 400) || "image generation"}`,
+      prior.summary ? `Last result: ${clip(prior.summary, 280)}` : "",
+      `Prior exact size: ${priorSize}.`,
+      ingredientNames.length
+        ? `Ingredients: ${ingredientNames.join(", ")}`
+        : "No stored ingredient photos.",
+      prior.outputElementId || prior.outputFileId
+        ? "Last generated output is available to revise."
+        : "",
+      recentUserTurns.length ? `Recent user requests: ${recentUserTurns.join(" · ")}` : "",
+      `New command: ${clip(input.followUpPrompt, 200)}`,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    resolvedSize,
+    priorSize,
+  );
 
   return {
     summary,
     agreedConstraints: constraintBits.slice(0, 12),
     styleNotes: prior.styleTags?.join(", ") || undefined,
     campaignNotes: prior.campaignNotes || prior.summary,
-    followUpIntent: clip(input.followUpPrompt, 500) || "Revise the last generated image.",
+    followUpIntent: stampResolvedSizeIntoRecallText(
+      clip(input.followUpPrompt, 500) || "Revise the last generated image.",
+      resolvedSize,
+      priorSize,
+    ),
     keepCopy: true,
     keepIngredients: true,
     ...(aspectOverride ? { aspectOverride } : {}),
+    priorExactSize: priorSize,
+    resolvedExactSize: resolvedSize,
     source: "local-fallback",
   };
 }
@@ -164,13 +226,20 @@ export function parseFollowUpRecallPayload(
         : null;
   if (!record) return fallback;
 
-  const summary = clip(
-    typeof record.summary === "string" ? record.summary : fallback.summary,
-    4_000,
+  const priorExactSize = priorExactSizeLabel(input.lastGeneration);
+  const resolvedExactSize = resolvedFollowUpSizeLabel(input);
+  const summary = stampResolvedSizeIntoRecallText(
+    clip(typeof record.summary === "string" ? record.summary : fallback.summary, 4_000),
+    resolvedExactSize,
+    priorExactSize,
   );
-  const followUpIntent = clip(
-    typeof record.followUpIntent === "string" ? record.followUpIntent : fallback.followUpIntent,
-    1_000,
+  const followUpIntent = stampResolvedSizeIntoRecallText(
+    clip(
+      typeof record.followUpIntent === "string" ? record.followUpIntent : fallback.followUpIntent,
+      1_000,
+    ),
+    resolvedExactSize,
+    priorExactSize,
   );
   const styleNotes = clip(
     typeof record.styleNotes === "string" ? record.styleNotes : fallback.styleNotes,
@@ -185,14 +254,16 @@ export function parseFollowUpRecallPayload(
     clip(typeof record.aspectOverride === "string" ? record.aspectOverride : "", 32);
 
   return {
-    summary: summary || fallback.summary,
+    summary: clip(summary || fallback.summary, 4_000),
     agreedConstraints: stringArray(record.agreedConstraints, 12, 300),
     ...(styleNotes ? { styleNotes } : {}),
     ...(campaignNotes ? { campaignNotes } : {}),
-    followUpIntent: followUpIntent || fallback.followUpIntent,
+    followUpIntent: clip(followUpIntent || fallback.followUpIntent, 1_000),
     keepCopy: record.keepCopy !== false,
     keepIngredients: record.keepIngredients !== false,
     ...(aspectOverride ? { aspectOverride } : {}),
+    priorExactSize,
+    resolvedExactSize,
     ...(model ? { model } : {}),
     source: "cloud-api",
   };

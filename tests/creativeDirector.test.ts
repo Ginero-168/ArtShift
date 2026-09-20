@@ -150,6 +150,8 @@ describe("gpt-oss-120b Creative Director", () => {
     expect(payload).toContain("lastImageSize");
     expect(payload).toContain("sourceWidth");
     expect(payload).toContain("sourceHeight");
+    expect(payload).toContain("resolvedExactSize");
+    expect(payload).toMatch(/7x29/i);
   });
 
   it("rejects a model or capability that is not available", async () => {

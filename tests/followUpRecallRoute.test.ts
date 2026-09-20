@@ -85,7 +85,8 @@ describe("Follow-up recall route", () => {
     const payload = await response.json();
     expect(payload.model).toBe("google/gemini-3-flash");
     expect(payload.recall.summary).toContain("Nain");
-    expect(payload.recall.followUpIntent).toContain("9:16");
+    expect(payload.recall.followUpIntent).toContain("1:3");
+    expect(payload.recall.resolvedExactSize).toBe("1:3");
     expect(executeMock).toHaveBeenCalledWith(
       "assistant.chat",
       expect.objectContaining({
@@ -121,6 +122,9 @@ describe("Follow-up recall route", () => {
     expect(userText).toContain("29x7cm");
     expect(userText).toContain("29");
     expect(userText).toContain("7");
+    const payload = await response.json();
+    expect(payload.recall.resolvedExactSize).toMatch(/7x29/i);
+    expect(payload.recall.followUpIntent).not.toContain("9:16");
   });
 
   it("accepts 24 conversation turns for follow-up memory", async () => {

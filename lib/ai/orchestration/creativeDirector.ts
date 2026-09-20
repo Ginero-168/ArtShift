@@ -1,5 +1,8 @@
 import { attachRuntimeModel } from "@/lib/ai/chatModelAttribution";
-import { extractRequestedSizeSpecsFromText } from "@/lib/ai/imageGeneration";
+import {
+  extractRequestedSizeSpecsFromText,
+  hasNumericOrNamedSizeInText,
+} from "@/lib/ai/imageGeneration";
 import type {
   AiAssistantChatInput,
   AiExecution,
@@ -16,9 +19,12 @@ import {
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
 import {
+  applyOrientationToPriorSize,
   DIRECTOR_CONVERSATION_HISTORY_LIMIT,
+  followUpCommandText,
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
+  parseFollowUpOrientation,
 } from "./chatContinuity";
 import {
   CREATING_MODEL_CATALOG,
@@ -417,7 +423,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "      * KEEP the prior exact size (cm / px / named aspect) unless the follow-up names a new size. Orientation-only commands (แนวตั้ง / แนวนอน / vertical / portrait / landscape) SWAP custom WxH axes (29×7cm → 7×29cm) or FLIP a named aspect (16:9→9:16, 3:4→4:3, 3:1→1:3). Never substitute a default 9:16 when a custom size exists.",
   "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio — unless this is a revision, in which case apply the new instruction and keep everything else.",
   "      * If the message includes === LAST IMAGE GENERATION PACKAGE or === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief, ingredients, copy, and ratio.",
-  "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package.",
+  "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package. If it lists Resolved generation size (authoritative), that size wins over แนวตั้ง→9:16.",
   "      * Never invent ingredient photos, slogans, or brand marks that are not listed in the package.",
   "      * Attached images on a revision: first image is the last output to revise (image_editor / image-to-image); later images are original ingredients. Re-include them.",
   "      * If === SHARED ANCHORS (Layer 1 === is present: those locks (copy, logo, brand colors, ratio, hierarchy, reference set) MUST stay identical on every new output unless the user overrides them.",
@@ -511,21 +517,32 @@ export async function prepareCreativeDirection(
       ? `\n\n${formatGenerationPackageForPrompt(input.lastGeneration)}`
       : "";
   const lastSizeHint = input.lastGeneration
-    ? {
-        exactSize:
-          input.lastGeneration.sizeLabel ||
-          (input.lastGeneration.sourceWidth && input.lastGeneration.sourceHeight
-            ? `${input.lastGeneration.sourceWidth}x${input.lastGeneration.sourceHeight}${input.lastGeneration.sizeUnit ?? ""}`
-            : undefined),
-        aspectRatio: input.lastGeneration.aspectRatio,
-        width: input.lastGeneration.width,
-        height: input.lastGeneration.height,
-        printWidth: input.lastGeneration.printWidth,
-        printHeight: input.lastGeneration.printHeight,
-        sourceWidth: input.lastGeneration.sourceWidth,
-        sourceHeight: input.lastGeneration.sourceHeight,
-        sizeUnit: input.lastGeneration.sizeUnit,
-      }
+    ? (() => {
+        const prior = input.lastGeneration;
+        const command = followUpCommandText(input.prompt);
+        const orientation = parseFollowUpOrientation(command);
+        const inverted =
+          orientation && !hasNumericOrNamedSizeInText(command)
+            ? applyOrientationToPriorSize(prior, orientation)
+            : null;
+        const exactSize =
+          prior.sizeLabel ||
+          (prior.sourceWidth && prior.sourceHeight
+            ? `${prior.sourceWidth}x${prior.sourceHeight}${prior.sizeUnit ?? ""}`
+            : undefined);
+        return {
+          exactSize,
+          resolvedExactSize: inverted?.sizeLabel || inverted?.aspectRatio || exactSize,
+          aspectRatio: inverted?.aspectRatio || prior.aspectRatio,
+          width: inverted?.width ?? prior.width,
+          height: inverted?.height ?? prior.height,
+          printWidth: inverted?.printWidth ?? prior.printWidth,
+          printHeight: inverted?.printHeight ?? prior.printHeight,
+          sourceWidth: inverted?.sourceWidth ?? prior.sourceWidth,
+          sourceHeight: inverted?.sourceHeight ?? prior.sourceHeight,
+          sizeUnit: inverted?.sizeUnit ?? prior.sizeUnit,
+        };
+      })()
     : null;
   const messages: AiAssistantChatInput["messages"] = [
     ...normalizeConversationHistory(input.conversationHistory, input.prompt),

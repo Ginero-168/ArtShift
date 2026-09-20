@@ -155,6 +155,9 @@ export type FollowUpRecallSummary = {
   styleNotes?: string;
   campaignNotes?: string;
   followUpIntent?: string;
+  aspectOverride?: string;
+  priorExactSize?: string;
+  resolvedExactSize?: string;
 };
 
 const BUILTIN_IMAGE_TOOL_RE =
@@ -797,12 +800,19 @@ export function formatGenerationPackageForPrompt(prior: PriorImageGenerationCont
 }
 
 function formatRecallBlock(recall: FollowUpRecallSummary | undefined): string[] {
-  if (!recall?.summary && !recall?.followUpIntent) return [];
+  if (!recall?.summary && !recall?.followUpIntent && !recall?.resolvedExactSize) return [];
+  const resolvedSize = recall.resolvedExactSize || recall.aspectOverride;
   return [
     "=== SMART RECALL (Gemini 3 Flash summary of chat + last package) ===",
     ...(recall.summary ? [recall.summary.slice(0, 4_000)] : []),
     ...(recall.followUpIntent
       ? [`Interpreted follow-up intent: ${recall.followUpIntent.slice(0, 1_000)}`]
+      : []),
+    ...(recall.priorExactSize ? [`Prior exact size: ${recall.priorExactSize.slice(0, 64)}`] : []),
+    ...(resolvedSize
+      ? [
+          `Resolved generation size (authoritative): ${resolvedSize.slice(0, 64)}. Use this size for the image task — do not substitute 9:16 when a custom WxH was stored.`,
+        ]
       : []),
     ...(recall.styleNotes ? [`Recalled style: ${recall.styleNotes.slice(0, 500)}`] : []),
     ...(recall.campaignNotes ? [`Recalled campaign: ${recall.campaignNotes.slice(0, 800)}`] : []),
@@ -812,7 +822,7 @@ function formatRecallBlock(recall: FollowUpRecallSummary | undefined): string[] 
           ...recall.agreedConstraints.slice(0, 12).map((item) => `- ${item.slice(0, 300)}`),
         ]
       : []),
-    "Use this recall together with the structured package below. The package wins if they disagree on ingredients or copy.",
+    "Use this recall together with the structured package below. The package wins if they disagree on ingredients or copy. Resolved generation size wins over แนวตั้ง→9:16.",
     "",
   ];
 }

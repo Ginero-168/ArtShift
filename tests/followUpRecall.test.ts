@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFollowUpRecallUserPrompt,
   buildLocalFollowUpRecall,
   parseFollowUpRecallPayload,
 } from "@/lib/ai/orchestration/followUpRecall";
@@ -36,6 +37,9 @@ describe("follow-up recall", () => {
     expect(recall.followUpIntent).toContain("ปรับเป็นแนวตั้ง");
     expect(recall.keepIngredients).toBe(true);
     expect(recall.summary).not.toContain("Cover C");
+    expect(recall.summary).toContain("3:1");
+    expect(recall.resolvedExactSize).toBe("1:3");
+    expect(recall.priorExactSize).toBe("3:1");
     expect(recall.aspectOverride).toBe("1:3");
   });
 
@@ -56,7 +60,8 @@ describe("follow-up recall", () => {
     });
     expect(parsed.source).toBe("cloud-api");
     expect(parsed.summary).toContain("pink Nain");
-    expect(parsed.followUpIntent).toContain("9:16");
+    expect(parsed.followUpIntent).toContain("1:3");
+    expect(parsed.followUpIntent).not.toContain("9:16");
     expect(parsed.aspectOverride).toBe("1:3");
     expect(JSON.stringify(parsed)).not.toContain("hallucinated-cover");
     expect(JSON.stringify(parsed)).not.toContain("Fake Cover");
@@ -82,6 +87,12 @@ describe("follow-up recall", () => {
     );
     expect(parsed.aspectOverride).toMatch(/7x29/i);
     expect(parsed.aspectOverride).not.toBe("9:16");
+    expect(parsed.summary).toMatch(/7x29/i);
+    expect(parsed.summary).not.toContain("9:16");
+    expect(parsed.followUpIntent).toMatch(/7x29/i);
+    expect(parsed.followUpIntent).not.toContain("9:16");
+    expect(parsed.priorExactSize).toMatch(/29x7/i);
+    expect(parsed.resolvedExactSize).toMatch(/7x29/i);
   });
 
   it("falls back locally when Gemini returns non-JSON", () => {
@@ -91,5 +102,28 @@ describe("follow-up recall", () => {
     });
     expect(parsed.source).toBe("local-fallback");
     expect(parsed.summary).toContain("Cover A");
+  });
+
+  it("asks Gemini to summarize exact prior size before planning an orientation follow-up", () => {
+    const prompt = buildFollowUpRecallUserPrompt({
+      followUpPrompt: "ปรับเป็นแนวตั้ง",
+      conversationHistory: [
+        { role: "user", content: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%" },
+        { role: "assistant", content: "สร้างป้ายแนวนอนแล้วครับ" },
+      ],
+      lastGeneration: {
+        ...lastGeneration,
+        userPrompt: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%",
+        sizeLabel: "29x7cm",
+        sizeUnit: "cm",
+        sourceWidth: 29,
+        sourceHeight: 7,
+      },
+    });
+    expect(prompt).toContain("User follow-up command: ปรับเป็นแนวตั้ง");
+    expect(prompt).toContain("Prior exact size (authoritative): 29x7cm");
+    expect(prompt).toMatch(/resolved size MUST be 7x29/i);
+    expect(prompt).toContain("LAST IMAGE GENERATION PACKAGE");
+    expect(prompt).toContain("29x7cm");
   });
 });

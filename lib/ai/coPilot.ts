@@ -23,6 +23,7 @@ import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
+import { recallFollowUpContext } from "@/lib/ai/orchestration/followUpRecallClient";
 import { runContextAwareImageRun } from "@/lib/ai/orchestration/imageBatchRunner";
 import {
   buildComposerImageSelection,
@@ -354,9 +355,23 @@ export async function executeCoPilotInstruction(
       act.stage = "analyzing";
       act.description = "กำลังส่ง brief ให้ Gemini 3 Flash Creative Director วางแผน…";
       onActionUpdate?.({ ...act });
+      const followUpRecall =
+        !pending && isFollowUpTurn && priorGeneration
+          ? await recallFollowUpContext(
+              {
+                followUpPrompt: prompt,
+                conversationHistory: history,
+                lastGeneration: priorGeneration,
+              },
+              { signal: options.signal, cloudConsent: true },
+            )
+          : null;
       const directorPrompt =
         !pending && isFollowUpTurn && priorGeneration
-          ? composeFollowUpDirectorPrompt(prompt, priorGeneration, { kind: followUpKind })
+          ? composeFollowUpDirectorPrompt(prompt, priorGeneration, {
+              kind: followUpKind,
+              ...(followUpRecall ? { recall: followUpRecall } : {}),
+            })
           : prompt;
       const direction = await prepareRemoteCreativeDirection(
         {

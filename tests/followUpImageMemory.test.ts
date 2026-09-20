@@ -121,8 +121,11 @@ describe("image follow-up memory", () => {
       kind: "revision",
       recall: {
         summary: "แคมเปญ Nain ชมพู ลด 35% จากปกหนังสือที่แนบไว้ ต้องคง copy และโทน",
-        followUpIntent: "Rebuild the same campaign as a 9:16 vertical poster",
+        followUpIntent: "Rebuild the same campaign as a 1:3 vertical banner",
         agreedConstraints: ["คงข้อความลด 35%", "โทนชมพูดอกไม้"],
+        priorExactSize: "3:1",
+        resolvedExactSize: "1:3",
+        aspectOverride: "1:3",
       },
     });
     expect(composed).toContain("ปรับเป็นแนวตั้ง");
@@ -131,6 +134,7 @@ describe("image follow-up memory", () => {
     expect(composed).toContain("cover-a");
     expect(composed).toContain("gen-output-1");
     expect(composed).toContain("SMART RECALL");
+    expect(composed).toContain("Resolved generation size (authoritative): 1:3");
     expect(composed).toContain("This is a REVISION");
     expect(composed).toContain("Never invent extra reference photos");
     expect(composed).not.toContain("Random extra book");
@@ -163,7 +167,14 @@ describe("AICoPilotBar follow-up wiring", () => {
     const barSource = readFileSync("components/AI/AICoPilotBar.tsx", "utf8");
     expect(barSource).toContain("Memory Recall");
     expect(barSource).toContain("FOLLOW_UP_RECALL_STATUS_MESSAGE");
-    expect(barSource).toContain("recallFollowUpContext");
+    expect(barSource).toContain("await recallFollowUpContext");
+    expect(barSource).toContain("recall: followUpRecall");
+    expect(barSource.indexOf("await recallFollowUpContext")).toBeLessThan(
+      barSource.indexOf("await prepareRemoteCreativeDirection"),
+    );
+    expect(barSource.indexOf("await prepareRemoteCreativeDirection")).toBeLessThan(
+      barSource.indexOf("createDirectedImageRun(contextDecision.input, direction)"),
+    );
     expect(barSource).toContain("resolveFollowUpImageRefs");
     expect(barSource).toContain("serializeConversationHistoryForDirector");
     expect(barSource).toContain("isFollowUpTurn");
@@ -172,5 +183,16 @@ describe("AICoPilotBar follow-up wiring", () => {
     expect(barSource).toMatch(/createDirectedImageTask\(\s*\{[\s\S]*?prompt: promptToSend/);
     expect(barSource).toContain("conversationHistory: historyForContinuity");
     expect(barSource).not.toContain("florenceModelStep");
+  });
+});
+
+describe("coPilot follow-up wiring", () => {
+  it("runs Gemini recall before Creative Director on short image follow-ups", () => {
+    const coPilotSource = readFileSync("lib/ai/coPilot.ts", "utf8");
+    expect(coPilotSource).toContain("await recallFollowUpContext");
+    expect(coPilotSource).toContain("recall: followUpRecall");
+    expect(coPilotSource.indexOf("await recallFollowUpContext")).toBeLessThan(
+      coPilotSource.indexOf("await prepareRemoteCreativeDirection"),
+    );
   });
 });
