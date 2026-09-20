@@ -3,6 +3,7 @@ import { resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
 import {
   extractDimensionSpecsFromText,
   extractRequestedSizeSpecsFromText,
+  hasNumericOrNamedSizeInText,
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
@@ -104,6 +105,20 @@ describe("extractDimensionSpecsFromText", () => {
     expect(specs[2]?.aspectRatio).toBe("2048x2048");
     expect(specs[0]?.aspectRatio).not.toBe("1:1");
     expect(specs[2]?.width / specs[2]!.height).toBe(1);
+    expect(specs[1]?.unit).toBe("cm");
+    expect(specs[1]?.label).toBe("29x7cm");
+    expect(specs[2]?.unit).toBe("px");
+  });
+});
+
+describe("hasNumericOrNamedSizeInText", () => {
+  it("ignores orientation-only follow-ups so they can invert a remembered size", () => {
+    expect(hasNumericOrNamedSizeInText("ปรับเป็นแนวตั้ง")).toBe(false);
+    expect(hasNumericOrNamedSizeInText("ทำเป็นแนวตั้ง")).toBe(false);
+    expect(hasNumericOrNamedSizeInText("portrait")).toBe(false);
+    expect(hasNumericOrNamedSizeInText("make it vertical")).toBe(false);
+    expect(hasNumericOrNamedSizeInText("29x7 cm")).toBe(true);
+    expect(hasNumericOrNamedSizeInText("16:9")).toBe(true);
   });
 });
 

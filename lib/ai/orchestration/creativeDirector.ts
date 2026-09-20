@@ -1,5 +1,8 @@
 import { attachRuntimeModel } from "@/lib/ai/chatModelAttribution";
-import { extractRequestedSizeSpecsFromText } from "@/lib/ai/imageGeneration";
+import {
+  extractRequestedSizeSpecsFromText,
+  hasNumericOrNamedSizeInText,
+} from "@/lib/ai/imageGeneration";
 import type {
   AiAssistantChatInput,
   AiExecution,
@@ -15,7 +18,14 @@ import {
 } from "@/lib/designAgent/contracts";
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
-import { DIRECTOR_CONVERSATION_HISTORY_LIMIT } from "./chatContinuity";
+import {
+  applyOrientationToPriorSize,
+  DIRECTOR_CONVERSATION_HISTORY_LIMIT,
+  followUpCommandText,
+  formatGenerationPackageForPrompt,
+  type PriorImageGenerationContext,
+  parseFollowUpOrientation,
+} from "./chatContinuity";
 import {
   CREATING_MODEL_CATALOG,
   detectRequestedCreatingModel,
@@ -87,6 +97,8 @@ export type CreativeDirectorInput = {
     role: "user" | "assistant";
     content: string;
   }[];
+  /** Structured last image package — required for orientation follow-ups like ปรับเป็นแนวตั้ง. */
+  lastGeneration?: PriorImageGenerationContext;
   artworkContext?: unknown;
   designContext?: ArtworkExecutionContext;
   canvasSummary: {
@@ -408,10 +420,10 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - MULTI-SIZE LISTS: When the user lists multiple distinct print/pixel sizes OR named aspect ratios (e.g. '53x20 cm, 29x7 cm, 1040x1040' or '16:9, 3:4 และ 9:16'), set requestedOutputCount to that count and put EACH size/ratio into the matching outputBrief. Never collapse every size into one output or one 1:1 square variation set.",
   "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') OR a short revision of the last image (e.g. 'ปรับเป็นแนวตั้ง', 'ทำให้เป็นแนวตั้ง', 'make it vertical', 'ปรับโทน') after a prior image generation in this conversation:",
   "      * Treat the prior refinedPrompt + chat recall as the BASE brief. Restate and enrich it; do not invent a new unrelated subject or a blank campaign.",
-  "      * KEEP the prior aspect ratio / dimensions unless the follow-up explicitly changes them (แนวตั้ง / vertical / 9:16 may change the ratio).",
+  "      * KEEP the prior exact size (cm / px / named aspect) unless the follow-up names a new size. Orientation-only commands (แนวตั้ง / แนวนอน / vertical / portrait / landscape) SWAP custom WxH axes (29×7cm → 7×29cm) or FLIP a named aspect (16:9→9:16, 3:4→4:3, 3:1→1:3). Never substitute a default 9:16 when a custom size exists.",
   "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio — unless this is a revision, in which case apply the new instruction and keep everything else.",
   "      * If the message includes === LAST IMAGE GENERATION PACKAGE or === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief, ingredients, copy, and ratio.",
-  "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package.",
+  "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package. If it lists Resolved generation size (authoritative), that size wins over แนวตั้ง→9:16.",
   "      * Never invent ingredient photos, slogans, or brand marks that are not listed in the package.",
   "      * Attached images on a revision: first image is the last output to revise (image_editor / image-to-image); later images are original ingredients. Re-include them.",
   "      * If === SHARED ANCHORS (Layer 1 === is present: those locks (copy, logo, brand colors, ratio, hierarchy, reference set) MUST stay identical on every new output unless the user overrides them.",
@@ -500,6 +512,38 @@ export async function prepareCreativeDirection(
       ? `\n\n=== ATTACHED IMAGE(S) TO INVENTORY ===\nFollow IMAGE ANALYSIS ANSWER PROTOCOL. Use the OCR transcript and spatial inventory below as authoritative evidence. Reply as a thorough structured inventory — do not generate a new image.\n${formattedReferences}`
       : `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Each has a display name and inferred role. Analyze and incorporate them into your creative direction. In refinedPrompt, refer to Reference N by display name + role only — never emit @[Name:id] or UUIDs. Images are also supplied as input_images in this same order:\n${formattedReferences}`
     : "";
+  const lastPackageBlock =
+    input.lastGeneration && !input.prompt.includes("LAST IMAGE GENERATION PACKAGE")
+      ? `\n\n${formatGenerationPackageForPrompt(input.lastGeneration)}`
+      : "";
+  const lastSizeHint = input.lastGeneration
+    ? (() => {
+        const prior = input.lastGeneration;
+        const command = followUpCommandText(input.prompt);
+        const orientation = parseFollowUpOrientation(command);
+        const inverted =
+          orientation && !hasNumericOrNamedSizeInText(command)
+            ? applyOrientationToPriorSize(prior, orientation)
+            : null;
+        const exactSize =
+          prior.sizeLabel ||
+          (prior.sourceWidth && prior.sourceHeight
+            ? `${prior.sourceWidth}x${prior.sourceHeight}${prior.sizeUnit ?? ""}`
+            : undefined);
+        return {
+          exactSize,
+          resolvedExactSize: inverted?.sizeLabel || inverted?.aspectRatio || exactSize,
+          aspectRatio: inverted?.aspectRatio || prior.aspectRatio,
+          width: inverted?.width ?? prior.width,
+          height: inverted?.height ?? prior.height,
+          printWidth: inverted?.printWidth ?? prior.printWidth,
+          printHeight: inverted?.printHeight ?? prior.printHeight,
+          sourceWidth: inverted?.sourceWidth ?? prior.sourceWidth,
+          sourceHeight: inverted?.sourceHeight ?? prior.sourceHeight,
+          sizeUnit: inverted?.sizeUnit ?? prior.sizeUnit,
+        };
+      })()
+    : null;
   const messages: AiAssistantChatInput["messages"] = [
     ...normalizeConversationHistory(input.conversationHistory, input.prompt),
     {
@@ -507,7 +551,7 @@ export async function prepareCreativeDirection(
       content: [
         {
           type: "text",
-          text: `User request:\n${input.prompt.slice(0, 20_000)}${
+          text: `User request:\n${input.prompt.slice(0, 20_000)}${lastPackageBlock}${
             inlineSynthesis?.semanticMappingText ? `\n\n${inlineSynthesis.semanticMappingText}` : ""
           }${referenceBlock}`,
         },
@@ -519,6 +563,7 @@ export async function prepareCreativeDirection(
             executionContext: input.designContext
               ? normalizeDesignContext(input.designContext)
               : null,
+            lastImageSize: lastSizeHint,
             vision: normalizeReferenceAnalyses(input.referenceAnalyses),
             knowledge,
             executionLimits: {

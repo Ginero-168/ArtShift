@@ -897,6 +897,7 @@ export default function AICoPilotBar() {
                     historyForContinuity,
                     { currentPrompt: promptToSend },
                   ),
+                  ...(priorGeneration ? { lastGeneration: priorGeneration } : {}),
                   designContext: buildDesignAgentContext(),
                   canvasSummary: {
                     objectCount: elementCount,
@@ -923,7 +924,7 @@ export default function AICoPilotBar() {
                     requestedOutputCount: 1,
                     outputBriefs: ["ภาพผลลัพธ์"],
                     summary: isEdit ? "แก้ไขและปรับแต่งภาพตามที่เลือก" : "สร้างสรรค์ภาพใหม่ตามคำอธิบาย",
-                    refinedPrompt: promptToSend,
+                    refinedPrompt: directorPrompt,
                     specialist: isEdit ? ("image_editor" as const) : ("image_generator" as const),
                     capability: isEdit ? ("IMAGE_EDIT" as const) : ("IMAGE_DEFAULT" as const),
                     modelAlias: "image-gpt-2" as const,
@@ -1326,6 +1327,13 @@ export default function AICoPilotBar() {
                       firstSucceededTask?.requestedDimensions?.height ??
                       1024,
                     aspectRatio: firstSucceededTask?.requestedDimensions?.aspectRatio ?? "1:1",
+                    ratioClamped: firstSucceededTask?.requestedDimensions?.ratioClamped,
+                    printWidth: firstSucceededTask?.requestedDimensions?.printWidth,
+                    printHeight: firstSucceededTask?.requestedDimensions?.printHeight,
+                    sourceWidth: firstSucceededTask?.requestedDimensions?.sourceWidth,
+                    sourceHeight: firstSucceededTask?.requestedDimensions?.sourceHeight,
+                    sizeLabel: firstSucceededTask?.requestedDimensions?.sizeLabel,
+                    sizeUnit: firstSucceededTask?.requestedDimensions?.sizeUnit,
                     refinementMode:
                       locksFromHelper?.refinementMode ??
                       priorGeneration?.refinementMode ??
@@ -1561,8 +1569,9 @@ export default function AICoPilotBar() {
           const designContext = buildDesignAgentContext();
           const result = await prepareRemoteCreativeDirection(
             {
-              prompt: promptToSend,
+              prompt: directorPrompt,
               conversationHistory: history,
+              ...(priorGeneration ? { lastGeneration: priorGeneration } : {}),
               designContext,
               canvasSummary: {
                 objectCount: elementCount,
@@ -1674,6 +1683,8 @@ export default function AICoPilotBar() {
                 prompt: promptToSend,
                 refs: refsForTurn,
                 analyses: analysesForTurn,
+                conversationHistory: historyForContinuity,
+                priorGeneration,
                 canvas: slide ? { slide, selectedIds } : undefined,
                 preferredQuality: selectedQuality !== "auto" ? selectedQuality : undefined,
               },
@@ -1784,6 +1795,13 @@ export default function AICoPilotBar() {
               width: generated.width,
               height: generated.height,
               aspectRatio: directedTask.requestedDimensions?.aspectRatio ?? "1:1",
+              ratioClamped: directedTask.requestedDimensions?.ratioClamped,
+              printWidth: directedTask.requestedDimensions?.printWidth,
+              printHeight: directedTask.requestedDimensions?.printHeight,
+              sourceWidth: directedTask.requestedDimensions?.sourceWidth,
+              sourceHeight: directedTask.requestedDimensions?.sourceHeight,
+              sizeLabel: directedTask.requestedDimensions?.sizeLabel,
+              sizeUnit: directedTask.requestedDimensions?.sizeUnit,
               modelId: generated.model,
               outputElementId: generated.elementId,
               outputFileId: generated.fileId,

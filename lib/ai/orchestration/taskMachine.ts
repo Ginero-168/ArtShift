@@ -1,3 +1,4 @@
+import type { RequestedSizeUnit } from "@/lib/ai/imageGeneration";
 import type { AiImageAspectRatio, AiImageRenderQuality } from "../../ai-runtime/contracts";
 import { ARTSHIFT_HARNESS_RULE_IDS, ARTSHIFT_HARNESS_VERSION } from "./harnessPolicy";
 
@@ -12,6 +13,12 @@ export type AiTaskDimensions = {
   /** True print canvas when ratio exceeds 3:1 — expand+stitch into this after generate. */
   printWidth?: number;
   printHeight?: number;
+  /** Exact requested size label such as 7x29cm or 9:16. */
+  sizeLabel?: string;
+  /** Original requested size before model clamp (cm/px/named). */
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sizeUnit?: RequestedSizeUnit;
 };
 
 export type AiTaskStatus =

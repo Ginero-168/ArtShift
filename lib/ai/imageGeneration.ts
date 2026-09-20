@@ -36,13 +36,28 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
 ];
 
 const DIMENSION_PAIR_RE =
-  /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:cm|mm|m|in|นิ้ว|ซม|ซม\.|px|pixels)?/giu;
+  /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(cm|mm|m|in|นิ้ว|ซม\.?|px|pixels)?/giu;
 const COLON_RATIO_RE = /(\d+)\s*:\s*(\d+)/gu;
+const NAMED_OR_COLON_ASPECT_RE =
+  /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|3\s*:\s*2|2\s*:\s*3|1\s*:\s*1)\b/u;
+
+function normalizeCapturedSizeUnit(raw?: string): RequestedSizeUnit | undefined {
+  if (!raw) return undefined;
+  const value = raw.toLocaleLowerCase().replace(/\./g, "");
+  if (value === "cm" || value === "ซม") return "cm";
+  if (value === "mm") return "mm";
+  if (value === "m") return "m";
+  if (value === "in" || value === "นิ้ว") return "in";
+  if (value === "px" || value === "pixels") return "px";
+  return undefined;
+}
 
 function textHasDimensionPair(text: string): boolean {
   DIMENSION_PAIR_RE.lastIndex = 0;
   return DIMENSION_PAIR_RE.test(text);
 }
+
+export type RequestedSizeUnit = "cm" | "mm" | "m" | "in" | "px" | "named";
 
 export type RequestedSizeSpec = {
   width: number;
@@ -51,10 +66,11 @@ export type RequestedSizeSpec = {
   ratioClamped?: boolean;
   printWidth?: number;
   printHeight?: number;
-  /** Original mention, e.g. "16:9" or "53x20". */
+  /** Original mention, e.g. "16:9" or "29x7cm". */
   label: string;
   sourceWidth: number;
   sourceHeight: number;
+  unit?: RequestedSizeUnit;
 };
 
 export function hasExplicitDimensionsInText(text?: string): boolean {
@@ -62,13 +78,33 @@ export function hasExplicitDimensionsInText(text?: string): boolean {
   const val = text.toLocaleLowerCase();
   return (
     textHasDimensionPair(val) ||
-    /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|1\s*:\s*1)\b/u.test(
-      val,
-    ) ||
+    NAMED_OR_COLON_ASPECT_RE.test(val) ||
     /(?:60x20|120x40|2048x688|1536x512|wide panoramic|พาโนรามา|แนวตั้ง|แนวนอน|landscape|portrait|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(
       val,
     )
   );
+}
+
+/**
+ * True when the text names a concrete WxH (cm/px/…) or A:B ratio.
+ * Orientation words alone (แนวตั้ง / portrait) do NOT count — those must
+ * invert a remembered size on follow-ups instead of mapping to 9:16.
+ */
+export function hasNumericOrNamedSizeInText(text?: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  if (textHasDimensionPair(text)) return true;
+  if (NAMED_OR_COLON_ASPECT_RE.test(text)) return true;
+  COLON_RATIO_RE.lastIndex = 0;
+  let match = COLON_RATIO_RE.exec(text);
+  while (match) {
+    const sourceWidth = Number(match[1]);
+    const sourceHeight = Number(match[2]);
+    if (sourceWidth > 0 && sourceHeight > 0 && sourceWidth <= 64 && sourceHeight <= 64) {
+      return true;
+    }
+    match = COLON_RATIO_RE.exec(text);
+  }
+  return false;
 }
 
 function resolveColonRatioDimensions(
@@ -105,6 +141,7 @@ export function extractDimensionSpecsFromText(text?: string): RequestedSizeSpec[
     if (prev && prev.sourceWidth === sourceWidth && prev.sourceHeight === sourceHeight) {
       continue;
     }
+    const unit = normalizeCapturedSizeUnit(current[3]);
     const resolved = resolveGenerationSizeFromRatio(sourceWidth, sourceHeight);
     specs.push({
       width: resolved.width,
@@ -113,9 +150,10 @@ export function extractDimensionSpecsFromText(text?: string): RequestedSizeSpec[
       ratioClamped: resolved.ratioClamped,
       printWidth: resolved.printWidth,
       printHeight: resolved.printHeight,
-      label: `${sourceWidth}x${sourceHeight}`,
+      label: unit ? `${sourceWidth}x${sourceHeight}${unit}` : `${sourceWidth}x${sourceHeight}`,
       sourceWidth,
       sourceHeight,
+      ...(unit ? { unit } : {}),
     });
   }
   return specs;
@@ -152,6 +190,7 @@ export function extractAspectRatioSpecsFromText(text?: string): RequestedSizeSpe
       label: `${sourceWidth}:${sourceHeight}`,
       sourceWidth,
       sourceHeight,
+      unit: "named",
     });
   }
   return specs;

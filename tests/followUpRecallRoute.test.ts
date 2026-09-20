@@ -85,7 +85,8 @@ describe("Follow-up recall route", () => {
     const payload = await response.json();
     expect(payload.model).toBe("google/gemini-3-flash");
     expect(payload.recall.summary).toContain("Nain");
-    expect(payload.recall.followUpIntent).toContain("9:16");
+    expect(payload.recall.followUpIntent).toContain("1:3");
+    expect(payload.recall.resolvedExactSize).toBe("1:3");
     expect(executeMock).toHaveBeenCalledWith(
       "assistant.chat",
       expect.objectContaining({
@@ -96,6 +97,34 @@ describe("Follow-up recall route", () => {
         cloudConsent: true,
       }),
     );
+  });
+
+  it("forwards lastGeneration exact 29×7cm into Gemini recall, not just the follow-up text", async () => {
+    const response = await POST(
+      request({
+        ...body,
+        lastGeneration: {
+          ...lastGeneration,
+          userPrompt: "สร้างป้าย shelftalk 29x7 cm",
+          sourceWidth: 29,
+          sourceHeight: 7,
+          sizeLabel: "29x7cm",
+          sizeUnit: "cm",
+          ratioClamped: true,
+          printWidth: 2848,
+          printHeight: 688,
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const chatInput = executeMock.mock.calls[0]?.[1] as { messages?: { content?: unknown }[] };
+    const userText = JSON.stringify(chatInput?.messages ?? []);
+    expect(userText).toContain("29x7cm");
+    expect(userText).toContain("29");
+    expect(userText).toContain("7");
+    const payload = await response.json();
+    expect(payload.recall.resolvedExactSize).toMatch(/7x29/i);
+    expect(payload.recall.followUpIntent).not.toContain("9:16");
   });
 
   it("accepts 24 conversation turns for follow-up memory", async () => {

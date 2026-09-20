@@ -5,6 +5,7 @@ import {
   CreativeDirectorValidationError,
   prepareOrchestratorTurn,
 } from "@/lib/ai/orchestration/creativeDirector";
+import { parsePriorImageGenerationPayload } from "@/lib/ai/orchestration/priorGenerationParse";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { isImageSearchConfigured, searchImageReferences } from "@/lib/server/ai/contextImageSearch";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
@@ -169,9 +170,12 @@ function parseDirectorInput(
       limitations: candidate.limitations,
     });
   }
+  const lastGeneration = parsePriorImageGenerationPayload(value.lastGeneration);
+  if (value.lastGeneration !== undefined && !lastGeneration) return null;
   return {
     prompt: value.prompt,
     ...(conversationHistory ? { conversationHistory } : {}),
+    ...(lastGeneration ? { lastGeneration } : {}),
     ...(artworkContext !== undefined ? { artworkContext } : {}),
     ...(designContext ? { designContext } : {}),
     canvasSummary: {
