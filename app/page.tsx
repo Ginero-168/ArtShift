@@ -145,7 +145,7 @@ function LandingPageContent() {
             background: "rgba(255, 255, 255, 0.04)",
             border: "1px solid rgba(255, 255, 255, 0.1)",
             borderRadius: 20,
-            padding: "32px 28px",
+            padding: "32px 32px",
             backdropFilter: "blur(16px)",
             boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
             display: "flex",
@@ -153,7 +153,7 @@ function LandingPageContent() {
             alignItems: "center",
             gap: 16,
             width: "100%",
-            maxWidth: 460,
+            maxWidth: 520,
           }}
         >
           {loading ? (
@@ -252,7 +252,7 @@ function LandingPageContent() {
 
 function GoogleGIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24">
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
