@@ -9,13 +9,14 @@
  * - Single Primary "Log in with Google" button
  * - If already logged in, shows "Go to Projects"
  * - Handles OAuth query parameters (?auth=...)
- * - Rich, premium aesthetics (dark indigo gradient, ambient light, glassmorphism)
+ * - Shape Wave canvas background (CodePen yyapzOP / donotfold) behind the hero
  */
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
+import HomeShapeWaveBackground from "@/components/Marketing/HomeShapeWaveBackground";
 import { useAuth } from "@/lib/auth/useAuth";
 
 export default function LandingRootPage() {
@@ -31,7 +32,7 @@ function LandingLoadingState() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#090d16",
+        background: "#080808",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -65,7 +66,7 @@ function LandingPageContent() {
     <div
       style={{
         minHeight: "100vh",
-        background: "radial-gradient(circle at 50% -10%, #1e1b4b 0%, #0b0f19 60%, #030712 100%)",
+        background: "#080808",
         color: "#ffffff",
         display: "flex",
         flexDirection: "column",
@@ -74,25 +75,12 @@ function LandingPageContent() {
         overflowX: "hidden",
       }}
     >
-      {/* Background Ambient Glow Elements */}
-      <div
-        style={{
-          position: "absolute",
-          top: -120,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 700,
-          height: 380,
-          background:
-            "radial-gradient(ellipse, rgba(99, 102, 241, 0.28) 0%, rgba(139, 92, 246, 0) 70%)",
-          filter: "blur(40px)",
-          pointerEvents: "none",
-        }}
-      />
+      <HomeShapeWaveBackground />
 
       {/* Hero Section */}
       <main
         style={{
+          position: "relative",
           flex: 1,
           display: "flex",
           flexDirection: "column",
@@ -105,145 +93,155 @@ function LandingPageContent() {
           zIndex: 10,
         }}
       >
-        {/* Auth Alert Banner */}
-        {authAlert && (
-          <div
-            style={{
-              padding: "10px 20px",
-              borderRadius: 8,
-              background: "rgba(239, 68, 68, 0.15)",
-              border: "1px solid rgba(239, 68, 68, 0.35)",
-              color: "#fca5a5",
-              fontSize: 13,
-              fontWeight: 500,
-              marginBottom: 28,
-            }}
-          >
-            {authAlert}
-          </div>
-        )}
-
-        <ArtShiftLogo as="h1" size="hero" style={{ margin: "0 0 24px" }} />
-
-        {/* Tagline */}
-        <p
-          style={{
-            fontSize: "clamp(16px, 2.5vw, 20px)",
-            color: "#94a3b8",
-            lineHeight: 1.6,
-            maxWidth: 640,
-            margin: "0 0 48px",
-            textWrap: "balance",
-          }}
-        >
-          AI Powered Design Tools
-        </p>
-
-        {/* Action Card: Sign in with Google OR Go to Projects */}
         <div
+          data-shape-mask
           style={{
-            background: "rgba(255, 255, 255, 0.04)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-            borderRadius: 20,
-            padding: "32px 32px",
-            backdropFilter: "blur(16px)",
-            boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 16,
             width: "100%",
-            maxWidth: 520,
           }}
         >
-          {loading ? (
-            <div style={{ padding: "12px 0", color: "#94a3b8", fontSize: 13 }}>
-              กำลังโหลดสถานะผู้ใช้…
-            </div>
-          ) : authenticated ? (
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 13, color: "#cbd5e1" }}>
-                ยินดีต้อนรับกลับ, <strong>{user?.name || user?.email}</strong>
-              </div>
-
-              <Link
-                href="/projects"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                  width: "100%",
-                  minBlockSize: 56,
-                  padding: "16px 24px",
-                  borderRadius: 14,
-                  background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-                  color: "#ffffff",
-                  fontSize: 16,
-                  fontWeight: 700,
-                  textDecoration: "none",
-                  boxShadow: "0 4px 20px rgba(99, 102, 241, 0.45)",
-                  transition: "transform 0.15s ease",
-                  boxSizing: "border-box",
-                }}
-              >
-                <span>เปิดหน้ารายการโปรเจกต์</span>
-                <span>→</span>
-              </Link>
-
-              <button
-                type="button"
-                onClick={signOut}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#94a3b8",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  marginTop: 2,
-                }}
-              >
-                ออกจากระบบ (Sign out)
-              </button>
-            </div>
-          ) : (
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-              <button
-                type="button"
-                onClick={signInWithGoogle}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 14,
-                  width: "100%",
-                  minBlockSize: 56,
-                  padding: "18px 24px",
-                  borderRadius: 14,
-                  background: "#ffffff",
-                  color: "#0f172a",
-                  fontSize: 17,
-                  fontWeight: 700,
-                  lineHeight: 1.3,
-                  border: "none",
-                  cursor: "pointer",
-                  boxSizing: "border-box",
-                  boxShadow: "0 8px 28px rgba(255, 255, 255, 0.28)",
-                  transition: "transform 0.15s ease",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-              >
-                <GoogleGIcon size={22} />
-                <span>เข้าสู่ระบบด้วย Google (Log in with Google)</span>
-              </button>
-
-              <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>
-                เข้าสู่ระบบเพื่อระบุตัวตนและเริ่มจัดการโปรเจกต์ของคุณ ข้อมูลทั้งหมดจะจัดเก็บในเครื่องของคุณอย่างปลอดภัย
-              </div>
+          {/* Auth Alert Banner */}
+          {authAlert && (
+            <div
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.35)",
+                color: "#fca5a5",
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 28,
+              }}
+            >
+              {authAlert}
             </div>
           )}
+
+          <ArtShiftLogo as="h1" size="hero" style={{ margin: "0 0 24px" }} />
+
+          {/* Tagline */}
+          <p
+            style={{
+              fontSize: "clamp(16px, 2.5vw, 20px)",
+              color: "#cbd5e1",
+              lineHeight: 1.6,
+              maxWidth: 640,
+              margin: "0 0 48px",
+              textWrap: "balance",
+            }}
+          >
+            AI Powered Design Tools
+          </p>
+
+          {/* Action Card: Sign in with Google OR Go to Projects */}
+          <div
+            style={{
+              background: "rgba(8, 8, 8, 0.72)",
+              border: "1px solid rgba(255, 255, 255, 0.14)",
+              borderRadius: 20,
+              padding: "32px 32px",
+              backdropFilter: "blur(18px)",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.45)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 16,
+              width: "100%",
+              maxWidth: 520,
+            }}
+          >
+            {loading ? (
+              <div style={{ padding: "12px 0", color: "#94a3b8", fontSize: 13 }}>
+                กำลังโหลดสถานะผู้ใช้…
+              </div>
+            ) : authenticated ? (
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ fontSize: 13, color: "#cbd5e1" }}>
+                  ยินดีต้อนรับกลับ, <strong>{user?.name || user?.email}</strong>
+                </div>
+
+                <Link
+                  href="/projects"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    width: "100%",
+                    minBlockSize: 56,
+                    padding: "16px 24px",
+                    borderRadius: 14,
+                    background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+                    color: "#ffffff",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    textDecoration: "none",
+                    boxShadow: "0 4px 20px rgba(99, 102, 241, 0.45)",
+                    transition: "transform 0.15s ease",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <span>เปิดหน้ารายการโปรเจกต์</span>
+                  <span>→</span>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={signOut}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#94a3b8",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    marginTop: 2,
+                  }}
+                >
+                  ออกจากระบบ (Sign out)
+                </button>
+              </div>
+            ) : (
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+                <button
+                  type="button"
+                  onClick={signInWithGoogle}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 14,
+                    width: "100%",
+                    minBlockSize: 56,
+                    padding: "18px 24px",
+                    borderRadius: 14,
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    fontSize: 17,
+                    fontWeight: 700,
+                    lineHeight: 1.3,
+                    border: "none",
+                    cursor: "pointer",
+                    boxSizing: "border-box",
+                    boxShadow: "0 8px 28px rgba(255, 255, 255, 0.28)",
+                    transition: "transform 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+                >
+                  <GoogleGIcon size={22} />
+                  <span>เข้าสู่ระบบด้วย Google (Log in with Google)</span>
+                </button>
+
+                <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>
+                  เข้าสู่ระบบเพื่อระบุตัวตนและเริ่มจัดการโปรเจกต์ของคุณ ข้อมูลทั้งหมดจะจัดเก็บในเครื่องของคุณอย่างปลอดภัย
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
