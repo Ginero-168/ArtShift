@@ -4,6 +4,7 @@
  * edits visuals (RemoveBG, Vectorize), and arranges layouts (60-30-10).
  */
 
+import type { ChatModelStep } from "@/lib/ai/chatModelAttribution";
 import {
   isImageEditPrompt,
   isImageGenerationPrompt,
@@ -112,6 +113,8 @@ export interface CoPilotMessage {
   resultSummary?: ImageResultSummary;
   /** Quality tier used for this generation (auto/low/medium/high/…). */
   qualityLabel?: string;
+  /** Runtime models that produced this reply (adapter ids, never invented names). */
+  usedModels?: ChatModelStep[];
 }
 
 export interface WorkspaceContext {

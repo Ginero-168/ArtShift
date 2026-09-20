@@ -213,6 +213,7 @@ describe("Cloud Vision Turbo Fast-Lane", () => {
       expect(result.visibleText).toBe("FAST TEXT");
       expect(result.source).toBe("cloud-api");
       expect(result.modelLabel).toBe("Gemini 3 Flash");
+      expect(result.visionModel).toBe("google/gemini-3-flash");
     });
 
     it("falls back to local passes when turbo returns null", async () => {

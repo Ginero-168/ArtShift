@@ -58,6 +58,7 @@ describe("vision backend preference", () => {
     expect(coPilot).toContain("{ cloudConsent: true }");
     expect(runner).toContain("tryCloudVisionTurbo");
     expect(runner).toContain("DEFAULT_CLOUD_VISION_LABEL");
+    expect(runner).not.toContain('visionModelUsed = "florence-2"');
     expect(analysis).toContain('order[0] === "cloud-api"');
     expect(analysis).not.toMatch(/Local Florence-2 Fallback pass[\s\S]{0,80}if \(!turboSuccess\)/);
   });

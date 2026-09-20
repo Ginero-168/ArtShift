@@ -62,6 +62,7 @@ describe("Creative Director route", () => {
       knowledgeSkillIds: ["product-image"],
       reviewCriteria: ["clear product"],
       search: { required: false, queries: [], sources: [] },
+      runtimeModel: "google/gemini-3-flash",
     });
     reviewMock.mockResolvedValue({
       passed: true,
@@ -103,6 +104,9 @@ describe("Creative Director route", () => {
       }),
     );
     expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.model).toBe("google/gemini-3-flash");
+    expect(payload.direction.runtimeModel).toBe("google/gemini-3-flash");
     expect(prepareMock).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: body.prompt,

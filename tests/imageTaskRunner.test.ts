@@ -148,6 +148,7 @@ describe("context-aware image task runner", () => {
     });
 
     expect(result.width).toBe(1024);
+    expect(result.model).toBe("openai/gpt-image-2");
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
     expect(events).toEqual(
       expect.arrayContaining([
@@ -990,6 +991,7 @@ describe("context-aware image task runner", () => {
     expect(callOrder).toEqual(["cloud-api"]);
     expect(events.some((event) => event.includes("Gemini 3 Flash"))).toBe(true);
     expect(events.some((event) => /florence/i.test(event))).toBe(false);
+    expect(result.visionModel).toBe("google/gemini-3-flash");
   });
 
   it("falls back to local Florence only after the cloud vision API misses", async () => {

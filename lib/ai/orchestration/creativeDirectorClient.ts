@@ -1,3 +1,4 @@
+import { normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import type {
   CreativeDirection,
   CreativeDirectorInput,
@@ -19,6 +20,7 @@ export async function prepareRemoteOrchestratorTurn(
   });
   const payload = (await response.json().catch(() => null)) as {
     direction?: unknown;
+    model?: unknown;
     error?: string;
   } | null;
 
@@ -71,7 +73,13 @@ export async function prepareRemoteOrchestratorTurn(
   }
 
   try {
-    return normalizeCreativeDirection(rawDirection, input);
+    const direction = normalizeCreativeDirection(rawDirection, input);
+    const runtimeModel =
+      normalizeRuntimeModelId(typeof payload?.model === "string" ? payload.model : null) ??
+      (isRecord(rawDirection) && typeof rawDirection.runtimeModel === "string"
+        ? normalizeRuntimeModelId(rawDirection.runtimeModel)
+        : null);
+    return runtimeModel ? { ...direction, runtimeModel } : direction;
   } catch (err) {
     throw new Error(
       payload?.error || `Invalid Creative Director response: ${(err as Error).message}`,

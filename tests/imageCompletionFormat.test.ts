@@ -20,15 +20,21 @@ describe("Image Completion Summary Format", () => {
   });
 
   it("extracts clean subject from prompt or direction summary without clarification history leak", () => {
-    expect(source).toContain("function extractSubject(");
-    expect(source).toContain("cleanFromSummary");
-    expect(source).toContain("User reply:");
-    expect(source).toContain("Director question:");
+    expect(replySource).toContain("function extractSubject(");
+    expect(replySource).toContain("cleanFromSummary");
+    expect(replySource).toContain("User reply:");
+    expect(replySource).toContain("Director question:");
   });
 
   it("uses formatImageCompletionReply in both context-aware batch run and remote turn paths", () => {
-    expect(source).toContain("runResult.completedCount");
+    expect(source).toContain("usedModels: turnModels.snapshot()");
+    expect(source).toContain("activeModels:");
+    expect(source).toContain("turnModels.label()");
     expect(source).toContain("direction.outputBriefs");
+    expect(source).toContain("{ cloudConsent: true }");
+    expect(source).toContain("visionConsent");
+    expect(source).toContain("visionModelStep");
+    expect(source).not.toContain("florenceModelStep");
     expect(source).toMatch(/formatImageCompletionReply\(subject,\s*1,\s*briefs/);
   });
 
@@ -36,6 +42,14 @@ describe("Image Completion Summary Format", () => {
     expect(threadSource).toContain("ChatResultImageThumb");
     expect(threadSource).toContain("ImageResultSummaryBlock");
     expect(threadSource).toContain("Thought");
+    expect(threadSource).toContain("export function ChatModelDisclosure(");
+    expect(threadSource).toContain("chat-model-status");
+    expect(threadSource).toContain("chat-model-meta");
+    expect(threadSource).toContain("ImageSparkleIcon");
+    expect(threadSource).toContain("SpinnerIcon");
+    expect(threadSource).not.toContain("chat-header-model");
+    expect(threadSource).not.toContain("export function ChatModelMeta(");
+    expect(threadSource).not.toContain("DEFAULT_CREATING_MODEL_LABEL");
   });
 
   it("expands AI Assistance tab to 2x width (476px)", () => {

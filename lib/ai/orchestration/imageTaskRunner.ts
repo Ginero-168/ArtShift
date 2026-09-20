@@ -1,3 +1,4 @@
+import { DEFAULT_DIRECTOR_MODEL_ID, normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import {
   cleanImagePrompt,
   generateAIImage,
@@ -68,6 +69,10 @@ export type ContextAwareTaskResult = {
   dataUrl?: string;
   width: number;
   height: number;
+  /** Adapter-reported image model id when generation succeeded. */
+  model?: string;
+  /** Local or cloud vision model used to caption/review the result. */
+  visionModel?: string;
 };
 
 export type ContextAwareImageTaskOptions = {
@@ -187,6 +192,8 @@ export async function runContextAwareImageTask(
   let committed: ContextAwareTaskResult | null = null;
   let lastError: unknown;
   let qualityRepairInstruction: string | undefined;
+  let generatedModel: string | undefined;
+  let visionModelUsed: string | undefined;
 
   task = transition(task, { type: "consent-granted" }, options, {
     stage: "queued",
@@ -276,6 +283,7 @@ export async function runContextAwareImageTask(
           // filled 3:1 first; after quality gates we side-panel expand + stitch
           // to the true print canvas (no empty bars, no over-crop).
           let generated = generatedRaw;
+          generatedModel = generatedRaw.model;
           const targetRatio = dimensions.width / Math.max(1, dimensions.height);
           const generatedRatio = generatedRaw.width / Math.max(1, generatedRaw.height);
           if (Math.abs(generatedRatio - targetRatio) > 0.03) {
@@ -369,6 +377,7 @@ export async function runContextAwareImageTask(
                 },
                 { cloudConsent: options.cloudConsent === true },
               );
+              visionModelUsed = normalizeRuntimeModelId(outputAnalysis?.model) ?? undefined;
             } catch (error) {
               if (isAbortError(error)) throw error;
               technicalFallback = true;
@@ -622,6 +631,8 @@ export async function runContextAwareImageTask(
               dataUrl: preloaded.dataURL,
               width: preloaded.width,
               height: preloaded.height,
+              ...(generatedModel ? { model: generatedModel } : {}),
+              ...(visionModelUsed ? { visionModel: visionModelUsed } : {}),
             };
             return;
           }
@@ -666,6 +677,8 @@ export async function runContextAwareImageTask(
             dataUrl: preloaded.dataURL,
             width: preloaded.width,
             height: preloaded.height,
+            ...(generatedModel ? { model: generatedModel } : {}),
+            ...(visionModelUsed ? { visionModel: visionModelUsed } : {}),
           };
           return;
         } catch (error) {
@@ -1007,6 +1020,7 @@ async function analyzeGeneratedOutput(
           .slice(0, 50),
         visibleText: turbo.visibleText.trim(),
         limitations: [],
+        model: normalizeRuntimeModelId(turbo.model) ?? DEFAULT_DIRECTOR_MODEL_ID,
       };
     }
   }

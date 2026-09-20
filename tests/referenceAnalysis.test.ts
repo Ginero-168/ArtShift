@@ -23,6 +23,7 @@ import {
   analyzeImageReference,
   analyzeImageReferences,
 } from "@/lib/ai/orchestration/referenceAnalysis";
+import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 
 const ref: ComposerImageRef = {
   objectId: "image-1",
@@ -71,6 +72,7 @@ describe("local selected-image analysis", () => {
       visibleText: "SALE 20%",
       dimensions: { width: 400, height: 300 },
       limitations: ["test visible render"],
+      visionModel: "florence-2",
     });
     expect(configuredAnalyzers.caption).toHaveBeenCalledWith(
       "data:image/png;base64,VISIBLE_RENDER",
@@ -103,5 +105,44 @@ describe("local selected-image analysis", () => {
       analyzeImageReference(ref, controller.signal, undefined, analyzers()),
     ).rejects.toMatchObject({ name: "AbortError" });
     expect(getCachedMock).not.toHaveBeenCalled();
+  });
+
+  it("prefers cloud vision turbo over local Florence when cloudConsent is true", async () => {
+    getCachedMock.mockReturnValue({
+      dataURL: "data:image/png;base64,AA==",
+      width: 400,
+      height: 300,
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        result: {
+          caption: "cloud caption",
+          objects: ["logo"],
+          visibleText: "API",
+        },
+        model: "google/gemini-3-flash",
+      }),
+    })) as unknown as typeof fetch;
+    try {
+      const result = await analyzeImageReference(
+        ref,
+        new AbortController().signal,
+        undefined,
+        undefined,
+        { cloudConsent: true },
+      );
+      expect(result.caption).toBe("cloud caption");
+      expect(result.objects).toEqual(["logo"]);
+      expect(result.visibleText).toBe("API");
+      expect(result.visionModel).toBe("google/gemini-3-flash");
+      expect(visionCaption).not.toHaveBeenCalled();
+      expect(visionDetect).not.toHaveBeenCalled();
+      expect(visionOcr).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

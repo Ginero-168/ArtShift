@@ -5,6 +5,8 @@ export type GeneratedOutputAnalysis = {
   objects: readonly string[];
   visibleText: string;
   limitations: readonly string[];
+  /** Runtime vision model when cloud Gemini analysis produced this result. */
+  model?: string;
 };
 
 export type GeneratedImageQualityInput = {

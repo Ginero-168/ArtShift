@@ -1,3 +1,4 @@
+import { DEFAULT_DIRECTOR_MODEL_ID, normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import { getAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 import { visionCaption, visionDetect, visionOcr } from "@/lib/vision/visionEngine";
 import { parseVisionResponse, visionExtrasAsAppearanceNotes } from "./cloudVisionParser";
@@ -19,6 +20,8 @@ export type ImageReferenceAnalysis = {
   transparency: "none" | "partial" | "unknown";
   appearanceNotes: string[];
   limitations: string[];
+  /** Runtime vision model that produced this analysis (Gemini API id or florence-2). */
+  visionModel?: string;
   source?: VisionBackendId | "none";
   modelLabel?: string;
 };
@@ -89,7 +92,7 @@ export async function tryCloudVisionTurbo(
     if (data.success && data.result) {
       onProgress?.(`${DEFAULT_CLOUD_VISION_LABEL} วิเคราะห์เสร็จสิ้น`, 0.95);
       const parsed = parseVisionResponse(JSON.stringify(data.result));
-      const model = typeof data.model === "string" ? data.model : undefined;
+      const model = normalizeRuntimeModelId(typeof data.model === "string" ? data.model : null);
       return {
         caption: parsed.caption,
         objects: parsed.objects,
@@ -158,6 +161,7 @@ export async function analyzeImageReference(
   });
 
   let turboSuccess = false;
+  let visionModel: string | undefined;
   if (order[0] === "cloud-api" && resolvedAnalyzers.turbo) {
     const turboResult = await resolvedAnalyzers.turbo(visible.dataUrl, signal, onProgress);
     if (
@@ -171,6 +175,7 @@ export async function analyzeImageReference(
       source = "cloud-api";
       modelLabel = turboResult.modelLabel || formatVisionModelLabel(turboResult.model, "cloud-api");
       turboSuccess = true;
+      visionModel = normalizeRuntimeModelId(turboResult.model) ?? DEFAULT_DIRECTOR_MODEL_ID;
     }
   }
 
@@ -189,6 +194,7 @@ export async function analyzeImageReference(
     caption = localCaption;
     objects = detection.objects.map((object) => object.label.trim()).filter(Boolean);
     visibleText = localText;
+    visionModel = "florence-2";
     source = "local-florence";
     modelLabel = formatVisionModelLabel(undefined, "local-florence");
   }
@@ -225,6 +231,7 @@ export async function analyzeImageReference(
         : []),
       ...(source === "none" ? ["cloud vision unavailable; local fallback disabled"] : []),
     ],
+    ...(visionModel ? { visionModel } : {}),
     source,
     modelLabel,
   };

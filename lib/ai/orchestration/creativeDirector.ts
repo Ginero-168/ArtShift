@@ -1,3 +1,4 @@
+import { attachRuntimeModel } from "@/lib/ai/chatModelAttribution";
 import { extractRequestedSizeSpecsFromText } from "@/lib/ai/imageGeneration";
 import type {
   AiAssistantChatInput,
@@ -48,12 +49,17 @@ export type CreativeSearchPlan = {
   sources: ("web" | "images" | "website")[];
 };
 
+export type CreativeRuntimeMeta = {
+  /** Adapter-reported model id for this director pass. Never an invented display name. */
+  runtimeModel?: string;
+};
+
 export type CreativeDirection =
-  | { kind: "answer"; text: string }
-  | { kind: "clarification"; question: string; options: string[] }
-  | { kind: "design-plan"; proposal: PlanProposal }
-  | { kind: "sequential-plan"; plan: SequentialExecutionPlan }
-  | {
+  | ({ kind: "answer"; text: string } & CreativeRuntimeMeta)
+  | ({ kind: "clarification"; question: string; options: string[] } & CreativeRuntimeMeta)
+  | ({ kind: "design-plan"; proposal: PlanProposal } & CreativeRuntimeMeta)
+  | ({ kind: "sequential-plan"; plan: SequentialExecutionPlan } & CreativeRuntimeMeta)
+  | ({
       kind: "image-task";
       outputCount?: 1;
       requestedOutputCount?: number;
@@ -70,7 +76,7 @@ export type CreativeDirection =
       requiredText?: string;
       detailScore?: number;
       precisionScore?: number;
-    };
+    } & CreativeRuntimeMeta);
 
 export type OrchestratorDirection = CreativeDirection;
 
@@ -690,6 +696,15 @@ async function executeDirectorPass(
     }
     throw error;
   }
+  const direction = resolveDirectionFromExecution(execution, input, knowledgeIds);
+  return attachRuntimeModel(direction, execution.metadata?.model);
+}
+
+function resolveDirectionFromExecution(
+  execution: AiExecution<import("@/lib/ai-runtime/contracts").AiAssistantChatOutput>,
+  input: CreativeDirectorInput,
+  knowledgeIds: readonly string[],
+): CreativeDirection {
   const call = execution.output.toolCalls.find(
     (candidate) => candidate.name === CREATIVE_DIRECTION_TOOL.name,
   );

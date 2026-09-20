@@ -115,6 +115,7 @@ describe("gpt-oss-120b Creative Director", () => {
       }),
     );
     expect(result).toMatchObject({ kind: "image-task", outputCount: 1, modelAlias: "image-gpt-2" });
+    expect(result.runtimeModel).toBe("openai/gpt-oss-120b");
   });
 
   it("rejects a model or capability that is not available", async () => {
