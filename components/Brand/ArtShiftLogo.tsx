@@ -30,8 +30,8 @@ export default function ArtShiftLogo({
 
   return (
     <Tag className={classes} style={style} {...rest}>
-      <span className="fx-portal" data-text={ARTSHIFT_WORDMARK}>
-        {ARTSHIFT_WORDMARK}
+      <span className="fx-portal" data-text="ArtShift">
+        ArtShift
       </span>
     </Tag>
   );

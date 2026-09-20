@@ -13,10 +13,11 @@ const portalPreset = readFileSync("lib/appearance/textEffectPresets/source.ts", 
 describe("ArtShift Portal wordmark", () => {
   it("renders the Colorion Portal markup with ArtShift as visible text and data-text", () => {
     expect(logoSource).toContain('className="fx-portal"');
-    expect(logoSource).toContain("data-text={ARTSHIFT_WORDMARK}");
+    expect(logoSource).toContain('data-text="ArtShift"');
+    expect(logoSource).toMatch(/data-text="ArtShift">\s*ArtShift\s*</);
     expect(logoSource).toContain('export const ARTSHIFT_WORDMARK = "ArtShift"');
-    expect(logoSource).toContain("{ARTSHIFT_WORDMARK}");
     expect(logoSource).not.toContain("PORTAL");
+    expect(logoSource).not.toContain('data-text="PORTAL"');
     expect(logoSource).toContain("--logo-size");
   });
 
