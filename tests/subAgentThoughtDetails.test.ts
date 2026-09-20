@@ -5,8 +5,8 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
   it("keeps Thought UI human and minimal without sub-agent score charts", () => {
     const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
 
-    expect(threadSource).toContain("DEFAULT_CLOUD_VISION_LABEL");
-    expect(threadSource).toContain("DEFAULT_CREATING_MODEL_LABEL");
+    expect(threadSource).toContain("ChatModelDisclosure");
+    expect(threadSource).toContain("formatModelDisclosure");
     expect(threadSource).toContain(">Thought</span>");
     expect(threadSource).not.toContain("การสั่งงาน Sub-Agents");
     expect(threadSource).not.toContain("Detail: {taskItem.detailScore}");
