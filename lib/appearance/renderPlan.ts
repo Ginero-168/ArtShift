@@ -4,6 +4,19 @@ import { readAppearance } from "./legacyAdapter";
 import { isMvpStackItem } from "./panelModel";
 import type { BackgroundAppearance, FillAppearance, StrokeAppearance } from "./types";
 
+function isInvisiblePaintColor(color: string): boolean {
+  const value = color.trim().toLowerCase();
+  return (
+    !value ||
+    value === "transparent" ||
+    value === "none" ||
+    value.endsWith(",0)") ||
+    value.endsWith(", 0)") ||
+    value.endsWith(",0.0)") ||
+    value.endsWith(", 0.0)")
+  );
+}
+
 export type CanvasShadowPass = {
   color: string;
   blur: number;
@@ -29,14 +42,17 @@ export function canvasShadowPasses(element: EngineElement): CanvasShadowPass[] {
   for (const item of appearance.items) {
     if (!item.visible || !isMvpStackItem(item, caps) || item.kind !== "effect") continue;
     if (item.effect.type === "shadow") {
-      passes.push({
-        color: item.effect.color,
-        blur: item.effect.blur,
-        offsetX: item.effect.offsetX,
-        offsetY: item.effect.offsetY,
-        source: "shadow",
-      });
-      for (const layer of item.effect.layers ?? []) {
+      const layers = [
+        {
+          color: item.effect.color,
+          blur: item.effect.blur,
+          offsetX: item.effect.offsetX,
+          offsetY: item.effect.offsetY,
+        },
+        ...(item.effect.layers ?? []),
+      ];
+      for (const layer of layers) {
+        if (isInvisiblePaintColor(layer.color)) continue;
         passes.push({
           color: layer.color,
           blur: layer.blur,
@@ -46,14 +62,12 @@ export function canvasShadowPasses(element: EngineElement): CanvasShadowPass[] {
         });
       }
     } else if (item.effect.type === "glow") {
-      passes.push({
-        color: item.effect.color,
-        blur: item.effect.blur,
-        offsetX: 0,
-        offsetY: 0,
-        source: "glow",
-      });
-      for (const layer of item.effect.layers ?? []) {
+      const layers = [
+        { color: item.effect.color, blur: item.effect.blur },
+        ...(item.effect.layers ?? []),
+      ];
+      for (const layer of layers) {
+        if (isInvisiblePaintColor(layer.color)) continue;
         passes.push({
           color: layer.color,
           blur: layer.blur,

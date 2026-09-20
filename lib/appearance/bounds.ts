@@ -75,3 +75,9 @@ export function appearancePadding(appearance: Appearance): AppearancePadding {
     { top: 0, right: 0, bottom: 0, left: 0 },
   );
 }
+
+/** Offscreen bitmap inset so glow stacks, offsets, and blur are not clipped. */
+export function appearanceRenderPad(appearance: Appearance): number {
+  const pad = appearancePadding(appearance);
+  return Math.max(pad.top, pad.right, pad.bottom, pad.left);
+}

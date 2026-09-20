@@ -261,6 +261,11 @@ export type TextElement = BaseElement & {
   cornerRadius?: number;
   /** Optional curvature for Text on Path / Curved Text (-100..100). */
   pathCurvature?: number;
+  /**
+   * Extra space between glyphs, in em (font-size units). Written by Text
+   * Effect Presets; 0 / omitted is default tracking.
+   */
+  letterSpacingEm?: number;
 };
 
 export type ImageElement = BaseElement & {

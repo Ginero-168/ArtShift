@@ -1831,7 +1831,14 @@ function appearancePatchesFor(
     const result = changeAppearance(element, resolved);
     if (!result.ok) return result;
     if (!result.changed) continue;
-    patches.push({ id, patch: appearanceElementPatch(result.appearance, element) });
+    const patch: Partial<EngineElement> = appearanceElementPatch(result.appearance, element);
+    if (result.element.type === "text") {
+      const spacing = (result.element as import("./types").TextElement).letterSpacingEm;
+      if (spacing !== undefined) {
+        (patch as Partial<import("./types").TextElement>).letterSpacingEm = spacing;
+      }
+    }
+    patches.push({ id, patch });
   }
   return { ok: true, changed: patches.length > 0, patches };
 }

@@ -183,7 +183,13 @@ export type AppearanceOperation =
   | { type: "updateItem"; itemId: string; patch: Partial<AppearanceItem> }
   | { type: "removeItem"; itemId: string }
   | { type: "moveItem"; itemId: string; toIndex: number }
-  | { type: "duplicateItem"; itemId: string };
+  | { type: "duplicateItem"; itemId: string }
+  | {
+      type: "replaceStack";
+      appearance: Appearance;
+      /** Text-only tracking written onto `TextElement.letterSpacingEm`. */
+      letterSpacingEm?: number;
+    };
 
 export const APPEARANCE_SCHEMA_VERSION = 1 as const;
 /** Raised in v8 so neon stacks + offset duplicate fills can coexist. */

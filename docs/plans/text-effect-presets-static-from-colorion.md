@@ -1,6 +1,6 @@
 # Text Effect Presets — static stills from Colorion 90 CSS
 
-Status: **Phase A foundation (this PR)**  
+Status: **Phases A–D complete (static only)**  
 Date: 20 September 2026  
 Owner lock: Peerawat 2026-09-20
 
@@ -140,7 +140,7 @@ Colorion CSS capability (frequency) maps onto the existing Appearance **stack**,
 | `mix-blend-mode` | item `blendMode` (`difference`, `screen`, `soft-light`, …) |
 | `::before/::after` / `data-text` duplicates | extra Fill items with `offsetX/offsetY` |
 | text box | Background item (unchanged) |
-| `letter-spacing` | stored on the preset recipe (`letterSpacingEm`); not an Appearance item yet |
+| `letter-spacing` | recipe `letterSpacingEm` → `TextElement.letterSpacingEm` on apply |
 | Text Arc | existing `pathCurvature` — not used by these presets |
 
 Engine **schema v8** documents the additive item fields. `Appearance.schemaVersion` stays **1**. v7 documents load: missing fields normalize to defaults. Dual-write still copies the first visible Fill/Stroke/Shadow/Glow onto legacy flat fields.
@@ -152,34 +152,68 @@ Engine **schema v8** documents the additive item fields. `Appearance.schemaVersi
 - Fill / Stroke / Background `blendMode`, `offsetX`, `offsetY`
 - Stroke `paintOrder`
 - Shadow/Glow `layers[]`
-- `gaussianBlur` remains an effect; now painted as a static canvas filter
+- `gaussianBlur` remains an effect; painted as a static canvas filter
+- `replaceStack` appearance command applies a full recipe undo-safely
 
 `APPEARANCE_MAX_ITEMS` is 24 so offset fills can sit beside a shadow stack.
 
 ---
 
-## Deferred (not this PR / not this track)
+## Renderer (Phase B)
+
+Canvas2D (live editor + PNG/thumbnail path) paints the Appearance stack for text:
+
+| Capability | Canvas | SVG export |
+|---|---|---|
+| Glyph-clipped linear / radial / conic fills | `fillText` with gradient `fillStyle`; conic falls back to radial if `createConicGradient` is missing | gradient `url(#)` fills; conic approximated as radial |
+| Pattern fills (dots / stripes / grid) | offscreen pattern + `destination-in` glyph mask | foreground solid (pattern not reconstructed) |
+| Multi-layer text-shadow / glow | sequential `shadow*` passes, then the unshadowed still on top | stacked `feDropShadow` |
+| Text stroke | `strokeText` | `<text fill="none" stroke>` |
+| Static gaussian blur | `ctx.filter = blur()` at composite | `feGaussianBlur` |
+| Per-item blend | `globalCompositeOperation` | `mix-blend-mode` |
+| Offset duplicate fills | `translate(offsetX, offsetY)` per fill | `transform="translate"` per `<text>` |
+| Letter-spacing | `ctx.letterSpacing` + layout measure | `letter-spacing` attribute |
+
+Offscreen bitmap padding uses `appearanceRenderPad` so neon halos and offset ears are not clipped.
+
+Blend-mode offset fills (duotone `screen`, Negativ `difference`) paint **in front** of the main fill; RGB-split offsets without a blend paint **behind** so only the sticking-out ears show.
+
+---
+
+## Residual CSS-only gaps
+
+`rendererSupport: false` only when the still cannot be claimed as canvas-faithful:
+
+| Preset | Gap |
+|---|---|
+| Still-Water (`mirror`) | true `-webkit-box-reflect` (recipe uses a faded offset fill as a hint, not a flipped reflection) |
+| Liquid-Lens (`lens`) | radial `mask-image` of a magnified copy + `backdrop-filter` puck |
+
+Approximated (support **true**): clip-path shards → offset fills; LED/lenticular CSS masks → pattern or stripe fills; per-letter hue/flap/decoder scramble → family-level still (not glyph-run styling).
+
+Do **not** treat those approximations as motion. No `@keyframes` in recipes, previews, or export.
+
+---
+
+## Deferred (not this track)
 
 | Deferred | Why |
 |---|---|
 | True motion / `@keyframes` | Product lock — static only |
 | Typewriter timing, karaoke sweep motion, zoetrope spin | Timing, not a still |
-| `-webkit-box-reflect` | DOM-only unless a later canvas approximation |
-| CSS `mask` / `clip-path` shards | Recipe approximates with offset Fills; `rendererSupport: false` when mask/reflect is the look |
+| True `-webkit-box-reflect` | CSS-only; see residual gaps |
+| True CSS `mask` / `clip-path` shards | Approximated; Liquid-Lens remains unsupported |
 | Per-letter hue / flap plates / decoder scramble | Needs glyph-run styling, not a stack item |
-| Full exotic canvas parity for every look | Phase A stubs recipes; P2 renderer polish |
-| Preset picker UX polish | Minimal Appearance select only |
-| Moodboard / Affinity PDF | Out of scope |
-
-`rendererSupport: false` means the catalog entry exists (name + recipe stub) but mask/reflect stills are not claimed as canvas-faithful.
+| Graphic Styles / Moodboard / Affinity PDF | Out of scope |
 
 ---
 
 ## Phases
 
-- **A (this PR):** docs + 90 catalog + Appearance model v8 + round-trip tests + minimal picker hook
-- **B:** canvas/SVG fidelity for remaining stubs
-- **C:** picker grouping, letter-spacing write, optional Graphic Style export later
+- **A (done, #27):** docs + 90 catalog + Appearance model v8 + round-trip tests + minimal picker hook
+- **B (done):** canvas/SVG paints the stack (gradients, multi-shadow, stroke, blur, blend, offset fills); `rendererSupport` accurate
+- **C (done):** 90 still-frame recipes revisited; keep 90 named entries; letter-spacing writes onto text
+- **D (done):** Appearance picker with family groups, search, CSS still previews; apply via `replaceStack` / `updateAppearance`
 
 ---
 
@@ -196,4 +230,6 @@ Engine **schema v8** documents the additive item fields. `Appearance.schemaVersi
 5. blend ต่อชั้น
 6. ชั้นสีเลื่อน offset สำหรับ glitch / anaglyph / duotone
 
-สิ่งที่เลื่อน: motion จริง, `box-reflect`, mask/clip-path แบบ DOM, UI เลือกพรีเซ็ตแบบเต็ม, Moodboard / PDF
+ผู้ใช้เลือก Text บนแคนวาส เปิด Appearance แล้วค้นหา/เลือกพรีเซ็ตตามครอบครัว พร้อมภาพตัวอย่างนิ่ง แล้วเห็นลุคบนแคนวาสทันที
+
+สิ่งที่ยังเป็น CSS-only: true `box-reflect` (Still-Water) และ radial mask + backdrop-filter ของ Liquid-Lens

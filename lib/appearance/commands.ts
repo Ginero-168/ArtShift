@@ -1,4 +1,4 @@
-import type { EngineElement } from "@/lib/engine/types";
+import type { EngineElement, TextElement } from "@/lib/engine/types";
 import { readAppearance } from "./legacyAdapter";
 import { normalizeAppearance, normalizeItem, validateAppearance } from "./normalize";
 import { appearanceElementPatch } from "./persist";
@@ -129,6 +129,23 @@ function applyOperation(
       next.items.splice(index + 1, 0, copy);
       break;
     }
+    case "replaceStack": {
+      const replacement = normalizeAppearance(operation.appearance);
+      if (replacement.items.length > APPEARANCE_MAX_ITEMS) {
+        return {
+          ok: false,
+          error: {
+            code: "invariant_violation",
+            message: `Cannot replace: appearance already has ${APPEARANCE_MAX_ITEMS} items`,
+          },
+        };
+      }
+      next.opacity = replacement.opacity;
+      next.blendMode = replacement.blendMode;
+      next.items = replacement.items;
+      next.paintSemantics = replacement.paintSemantics ?? "object";
+      break;
+    }
     default:
       return {
         ok: false,
@@ -155,7 +172,13 @@ export function changeAppearance(
   if (!applied.ok) return applied;
 
   const patch = appearanceElementPatch(applied.appearance, element);
-  const nextElement = { ...element, ...patch } as EngineElement;
+  let nextElement = { ...element, ...patch } as EngineElement;
+  if (operation.type === "replaceStack" && element.type === "text") {
+    nextElement = {
+      ...nextElement,
+      letterSpacingEm: operation.letterSpacingEm ?? 0,
+    } as TextElement;
+  }
   return {
     ok: true,
     element: nextElement,

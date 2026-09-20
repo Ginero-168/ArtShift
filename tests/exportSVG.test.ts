@@ -111,3 +111,30 @@ describe("editable SVG export", () => {
     expect(svg).toContain("<polygon");
   });
 });
+
+describe("text effect SVG export", () => {
+  it("exports stacked glyph fills, stroke, shadows, and letter-spacing", async () => {
+    const { applyTextEffectPreset } = await import("@/lib/appearance");
+    const text = createText({ x: 40, y: 50, width: 240, height: 80, text: "NEON" });
+    const applied = applyTextEffectPreset(text, "neon");
+    expect(applied).toBeTruthy();
+    if (!applied) return;
+    const layer = createEngineLayer("free");
+    layer.objectIds = [applied.id];
+    const slide: EngineSlide = {
+      id: "slide-text-fx",
+      name: "Text FX",
+      background: "#111111",
+      width: 600,
+      height: 400,
+      elements: [applied],
+      layers: [layer],
+    };
+    const svg = serializeSlideToSVG(slide);
+    expect(svg).toContain("<text");
+    expect(svg).toContain("NEON");
+    expect(svg).toContain("feDropShadow");
+    expect(svg).toContain("letter-spacing");
+    expect(svg).not.toContain("@keyframes");
+  });
+});

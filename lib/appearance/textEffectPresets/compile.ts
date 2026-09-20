@@ -8,6 +8,7 @@ import type {
   StrokeAppearance,
 } from "../types";
 import { PRESET_FILL_PAINT } from "./paints";
+import { applyRecipeStill } from "./stills";
 import { COLORION_INK, resolveColorionColor } from "./tokens";
 import type { TextEffectPreset, TextEffectSourceSpec } from "./types";
 
@@ -46,15 +47,24 @@ function outlineStroke(spec: TextEffectSourceSpec): StrokeAppearance {
     opacity: 1,
     color: resolveColorionColor(spec.stroke.color),
     width: spec.stroke.width,
-    style: "solid",
+    style: spec.slug === "contour" || spec.slug === "stamp" ? "dashed" : "solid",
     alignment: "center",
     paintOrder: "fill",
   };
 }
 
 function shadowItem(spec: TextEffectSourceSpec): EffectAppearance | null {
-  if (!spec.shadows.length) return null;
-  const [primary, ...layers] = spec.shadows.map((layer) => ({
+  const visible = spec.shadows.filter((layer) => {
+    const color = resolveColorionColor(layer.color);
+    return (
+      color !== "transparent" &&
+      color !== "none" &&
+      !color.endsWith(",0)") &&
+      !color.endsWith(", 0)")
+    );
+  });
+  if (!visible.length) return null;
+  const [primary, ...layers] = visible.map((layer) => ({
     ...layer,
     color: resolveColorionColor(layer.color),
   }));
@@ -87,19 +97,28 @@ function blurItem(spec: TextEffectSourceSpec): EffectAppearance | null {
   };
 }
 
-function offsetFills(spec: TextEffectSourceSpec): FillAppearance[] {
-  return (spec.offsetFills ?? []).map((layer, index) => ({
-    id: itemId("fill", spec.slug, `offset-${index}`),
-    kind: "fill",
-    visible: true,
-    opacity: layer.opacity ?? 0.85,
-    clipToGlyphs: true,
-    fillStyle: "solid",
-    paint: { type: "solid", color: resolveColorionColor(layer.color) },
-    offsetX: layer.offsetX,
-    offsetY: layer.offsetY,
-    blendMode: layer.blendMode ?? spec.blend,
-  }));
+function usesFrontBlend(blend: FillAppearance["blendMode"] | undefined): boolean {
+  return !!blend && blend !== "source-over";
+}
+
+function offsetFills(spec: TextEffectSourceSpec, side: "behind" | "front"): FillAppearance[] {
+  return (spec.offsetFills ?? [])
+    .filter((layer) => {
+      const front = usesFrontBlend(layer.blendMode ?? spec.blend);
+      return side === "front" ? front : !front;
+    })
+    .map((layer, index) => ({
+      id: itemId("fill", spec.slug, `offset-${side}-${index}`),
+      kind: "fill",
+      visible: true,
+      opacity: layer.opacity ?? 0.85,
+      clipToGlyphs: true,
+      fillStyle: "solid",
+      paint: { type: "solid", color: resolveColorionColor(layer.color) },
+      offsetX: layer.offsetX,
+      offsetY: layer.offsetY,
+      blendMode: layer.blendMode ?? spec.blend,
+    }));
 }
 
 function deferredNotes(spec: TextEffectSourceSpec): string[] {
@@ -107,25 +126,33 @@ function deferredNotes(spec: TextEffectSourceSpec): string[] {
   if (spec.sourceHasAnimation) notes.push("source_keyframes_stripped");
   if (spec.hasClipPath) notes.push("clip_path_approximated_with_offset_fills");
   if (spec.hasPseudo) notes.push("pseudo_layers_baked_to_stack");
-  if (spec.hasBoxReflect) notes.push("box_reflect_deferred");
-  if (spec.hasMask) notes.push("css_mask_deferred");
+  if (spec.hasBoxReflect) notes.push("box_reflect_css_only");
+  if (spec.hasMask && spec.slug === "lens") notes.push("radial_mask_and_backdrop_filter_css_only");
+  else if (spec.hasMask) notes.push("css_mask_approximated_with_pattern_or_offsets");
   if (spec.staticCaps.includes("skew_rotate")) notes.push("per_letter_transform_frozen");
   return notes;
 }
 
+/**
+ * True when the canvas/SVG stack can paint a recognizable still.
+ * Remaining CSS-only: true `box-reflect`, and Liquid-Lens radial mask + backdrop-filter puck.
+ */
 function rendererSupport(spec: TextEffectSourceSpec): boolean {
-  if (spec.hasBoxReflect || spec.hasMask) return false;
+  if (spec.hasBoxReflect) return false;
+  if (spec.slug === "lens") return false;
   return true;
 }
 
 export function compileTextEffectAppearance(spec: TextEffectSourceSpec): Appearance {
+  const still = applyRecipeStill(spec);
   const items: AppearanceItem[] = [];
-  items.push(...offsetFills(spec));
-  items.push(glyphFill(spec));
-  items.push(outlineStroke(spec));
-  const shadow = shadowItem(spec);
+  items.push(...offsetFills(still, "behind"));
+  items.push(glyphFill(still));
+  items.push(...offsetFills(still, "front"));
+  items.push(outlineStroke(still));
+  const shadow = shadowItem(still);
   if (shadow) items.push(shadow);
-  const blur = blurItem(spec);
+  const blur = blurItem(still);
   if (blur) items.push(blur);
   return normalizeAppearance({
     ...emptyAppearance({ opacity: 1, blendMode: "source-over", paintSemantics: "object" }),
@@ -134,6 +161,7 @@ export function compileTextEffectAppearance(spec: TextEffectSourceSpec): Appeara
 }
 
 export function compileTextEffectPreset(spec: TextEffectSourceSpec): TextEffectPreset {
+  const still = applyRecipeStill(spec);
   return {
     id: spec.id,
     name: spec.name,
@@ -143,11 +171,11 @@ export function compileTextEffectPreset(spec: TextEffectSourceSpec): TextEffectP
     staticCaps: spec.staticCaps,
     sourceHasAnimation: spec.sourceHasAnimation,
     staticStrategy: "freeze_key_visual",
-    rendererSupport: rendererSupport(spec),
-    deferredNotes: deferredNotes(spec),
+    rendererSupport: rendererSupport(still),
+    deferredNotes: deferredNotes(still),
     recipe: {
       appearance: compileTextEffectAppearance(spec),
-      letterSpacingEm: spec.letterSpacingEm,
+      letterSpacingEm: still.letterSpacingEm,
     },
   };
 }

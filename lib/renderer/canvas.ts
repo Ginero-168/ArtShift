@@ -10,6 +10,8 @@
  */
 
 import type { RoughCanvas } from "roughjs/bin/canvas";
+import { appearanceRenderPad } from "../appearance/bounds";
+import { readAppearance } from "../appearance/legacyAdapter";
 import {
   appearanceMaxStrokeWidth,
   type CanvasPaintPass,
@@ -33,6 +35,7 @@ import { buildRoughShape } from "../engine/rough";
 import {
   createCanvasTextMeasure,
   layoutText,
+  letterSpacingPx,
   measureRichText,
   parseRichText,
   setCanvasTextFont,
@@ -134,10 +137,13 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   let cached = getCachedElement(el);
 
   if (!cached) {
+    const letterPad = el.type === "text" ? Math.ceil(letterSpacingPx(el as TextElement) * 4) : 0;
     const pad = Math.max(
       32,
       appearanceMaxStrokeWidth(el) * 4 + 48,
       canvasGaussianBlurRadius(el) * 2 + 24,
+      appearanceRenderPad(readAppearance(el)) + 16,
+      letterPad,
     );
     const offscreen = document.createElement("canvas");
     offscreen.width = Math.max(1, Math.ceil(el.width + pad * 2));
@@ -166,6 +172,9 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
   if (effectPasses.length === 0) {
     ctx.drawImage(cached.canvas, 0, 0);
   } else {
+    // Canvas shadow* draws source + halo. Paint each halo, then the still once
+    // on top so multi-layer text-shadow/glow is not XOR'd and glyphs are not
+    // restacked as N opaque copies.
     for (const pass of effectPasses) {
       ctx.shadowColor = pass.color;
       ctx.shadowBlur = pass.blur;
@@ -177,6 +186,7 @@ export function renderElement(el: EngineElement, render: RenderCtx) {
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
+    ctx.drawImage(cached.canvas, 0, 0);
   }
   if (blur > 0) ctx.filter = "none";
   ctx.restore();
@@ -609,15 +619,26 @@ function createConicAppearanceGradient(
 ): CanvasGradient {
   const cx = el.width / 2;
   const cy = el.height / 2;
-  const grad = ctx.createConicGradient((paint.angle * Math.PI) / 180, cx, cy);
-  const stops = resolveMultiGradientStops(
+  if (typeof ctx.createConicGradient === "function") {
+    const grad = ctx.createConicGradient((paint.angle * Math.PI) / 180, cx, cy);
+    const stops = resolveMultiGradientStops(
+      paint.stops.map((stop) => stop.color),
+      paint.stops.map((stop) => stop.offset),
+    );
+    for (const stop of stops) {
+      grad.addColorStop(stop.offset, stop.color);
+    }
+    return grad;
+  }
+  return createSizedGradient(
+    ctx,
+    el.width,
+    el.height,
+    "radial",
+    paint.angle,
     paint.stops.map((stop) => stop.color),
     paint.stops.map((stop) => stop.offset),
   );
-  for (const stop of stops) {
-    grad.addColorStop(stop.offset, stop.color);
-  }
-  return grad;
 }
 
 function createSizedGradient(
@@ -684,13 +705,7 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
       if (pass.kind === "background") {
         paintTextBackground(ctx, el, pass.item);
       } else if (pass.kind === "fill") {
-        if (applyFillAppearance(ctx, el, pass.item.paint)) {
-          if (el.pathCurvature && el.pathCurvature !== 0) {
-            paintCurvedTextGlyphs(ctx, el, layout, "fill");
-          } else {
-            paintTextGlyphs(ctx, el, layout, "fill");
-          }
-        }
+        paintTextFill(ctx, el, layout, pass.item);
       } else {
         applyStrokeAppearance(ctx, pass.item);
         if (el.pathCurvature && el.pathCurvature !== 0) {
@@ -718,6 +733,65 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
     return;
   }
   paintTextGlyphs(ctx, el, layout, "fill");
+}
+
+function paintTextFill(
+  ctx: CanvasRenderingContext2D,
+  el: TextElement,
+  layout: import("../engine/textLayout").TextLayout,
+  item: FillAppearance,
+) {
+  const paintGlyphs = (target: CanvasRenderingContext2D) => {
+    if (el.pathCurvature && el.pathCurvature !== 0) {
+      paintCurvedTextGlyphs(target, el, layout, "fill");
+    } else {
+      paintTextGlyphs(target, el, layout, "fill");
+    }
+  };
+  if (item.paint.type === "pattern") {
+    paintGlyphClippedPattern(ctx, el, item, paintGlyphs);
+    return;
+  }
+  if (!applyFillAppearance(ctx, el, item.paint)) return;
+  paintGlyphs(ctx);
+}
+
+function paintGlyphClippedPattern(
+  ctx: CanvasRenderingContext2D,
+  el: TextElement,
+  item: FillAppearance,
+  paintGlyphs: (target: CanvasRenderingContext2D) => void,
+) {
+  const paint = item.paint;
+  if (paint.type !== "pattern") return;
+  const layer = document.createElement("canvas");
+  layer.width = ctx.canvas.width;
+  layer.height = ctx.canvas.height;
+  const layerContext = layer.getContext("2d");
+  if (!layerContext) return;
+  const transform = ctx.getTransform();
+  layerContext.setTransform(
+    transform.a,
+    transform.b,
+    transform.c,
+    transform.d,
+    transform.e,
+    transform.f,
+  );
+  layerContext.globalAlpha = ctx.globalAlpha;
+  if (paint.background !== "transparent" && paint.background !== "none") {
+    layerContext.fillStyle = paint.background;
+    layerContext.fillRect(0, 0, el.width, el.height);
+  }
+  drawPattern(layerContext, el, paint.pattern, paint.foreground, 0.92);
+  layerContext.globalAlpha = 1;
+  layerContext.globalCompositeOperation = "destination-in";
+  layerContext.fillStyle = "#000000";
+  paintGlyphs(layerContext);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(layer, 0, 0);
+  ctx.restore();
 }
 
 function paintTextBackground(
@@ -1481,10 +1555,11 @@ function drawPattern(
   el: EngineElement,
   pattern: "dots" | "stripes" | "grid",
   color: string = el.strokeColor,
+  alpha = 0.25,
 ) {
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  ctx.globalAlpha = 0.25;
+  ctx.globalAlpha = alpha;
   const spacing = 12;
   switch (pattern) {
     case "dots": {

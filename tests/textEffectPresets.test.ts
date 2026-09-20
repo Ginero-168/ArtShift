@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   applyTextEffectPreset,
@@ -8,8 +9,10 @@ import {
   getTextEffectPreset,
   hydrateElementAppearance,
   readAppearance,
+  searchTextEffectPresets,
   TEXT_EFFECT_PRESET_COUNT,
   TEXT_EFFECT_PRESETS,
+  textEffectPresetsByFamily,
   validateAppearance,
 } from "@/lib/appearance";
 import { COLORION_INK } from "@/lib/appearance/textEffectPresets/tokens";
@@ -279,5 +282,79 @@ describe("text effect appearance model round-trip", () => {
     expect(tweaked.ok).toBe(true);
     if (!tweaked.ok) return;
     expect(canvasGaussianBlurRadius(tweaked.element)).toBeGreaterThan(0);
+  });
+});
+
+describe("text effect renderer + command apply", () => {
+  it("writes presets through replaceStack and letter-spacing (undo-safe appearance command)", () => {
+    const text = createText({ x: 0, y: 0, width: 200, text: "NEON" });
+    const applied = applyTextEffectPreset(text, "neon");
+    expect(applied?.type).toBe("text");
+    if (applied?.type !== "text") return;
+    expect(applied.letterSpacingEm).toBeGreaterThan(0);
+    expect(applied.appearance?.items.some((item) => item.kind === "effect")).toBe(true);
+
+    const contour = applyTextEffectPreset(text, "contour");
+    expect(contour).toBeTruthy();
+    if (!contour) return;
+    const stroke = readAppearance(contour).items.find((item) => item.kind === "stroke");
+    expect(stroke?.kind === "stroke" && stroke.width).toBeGreaterThan(0);
+    const fill = readAppearance(contour).items.find((item) => item.kind === "fill");
+    expect(fill?.kind === "fill" && fill.clipToGlyphs).toBe(true);
+  });
+
+  it("keeps 90 named stills visually distinct after freeze and marks CSS-only gaps", () => {
+    const fingerprints = TEXT_EFFECT_PRESETS.map((preset) =>
+      JSON.stringify({
+        family: preset.family,
+        letter: preset.recipe.letterSpacingEm,
+        items: preset.recipe.appearance.items.map((item) => ({
+          kind: item.kind,
+          paint: item.kind === "fill" || item.kind === "background" ? item.paint : undefined,
+          offsetX: item.kind === "fill" ? item.offsetX : undefined,
+          offsetY: item.kind === "fill" ? item.offsetY : undefined,
+          blend: item.kind === "fill" ? item.blendMode : undefined,
+          stroke: item.kind === "stroke" ? { width: item.width, color: item.color } : undefined,
+          effect: item.kind === "effect" ? item.effect : undefined,
+        })),
+      }),
+    );
+    expect(new Set(fingerprints).size).toBe(90);
+
+    const mirror = getTextEffectPreset("mirror")!;
+    expect(mirror.rendererSupport).toBe(false);
+    expect(mirror.deferredNotes).toContain("box_reflect_css_only");
+
+    const lens = getTextEffectPreset("lens")!;
+    expect(lens.rendererSupport).toBe(false);
+
+    const led = getTextEffectPreset("led")!;
+    expect(led.rendererSupport).toBe(true);
+    const ledFill = led.recipe.appearance.items.find((item) => item.kind === "fill");
+    expect(ledFill?.kind === "fill" && ledFill.paint.type).toBe("pattern");
+
+    const duotone = getTextEffectPreset("duotone")!;
+    const front = duotone.recipe.appearance.items.filter(
+      (item) => item.kind === "fill" && item.blendMode === "screen",
+    );
+    expect(front.length).toBeGreaterThan(0);
+  });
+
+  it("paints glyph-clipped patterns, multi-shadow, and blur without animation", () => {
+    const canvas = readFileSync("lib/renderer/canvas.ts", "utf8");
+    expect(canvas).toContain("paintGlyphClippedPattern");
+    expect(canvas).toContain('globalCompositeOperation = "destination-in"');
+    expect(canvas).toContain("appearanceRenderPad");
+    expect(canvas).toContain("createConicAppearanceGradient");
+    expect(canvas).not.toContain("@keyframes");
+    expect(canvas).toContain("ctx.drawImage(cached.canvas, 0, 0);");
+  });
+
+  it("groups and filters presets for the picker", () => {
+    const grouped = textEffectPresetsByFamily();
+    expect(Object.keys(grouped).length).toBeGreaterThanOrEqual(12);
+    expect(searchTextEffectPresets("neon-haus").map((preset) => preset.slug)).toEqual(["neon"]);
+    expect(searchTextEffectPresets("glitch").length).toBeGreaterThan(0);
+    expect(searchTextEffectPresets("zzzz-missing")).toEqual([]);
   });
 });
