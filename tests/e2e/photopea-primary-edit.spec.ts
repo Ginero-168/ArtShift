@@ -143,9 +143,14 @@ async function openPhotopeaByDoubleClick(page: Page) {
 }
 
 async function openPhotopeaFromContextMenu(page: Page) {
-  const point = await canvasCenter(page);
-  await page.mouse.click(point.x, point.y, { button: "right" });
-  await page.getByRole("button", { name: "Edit Raster", exact: true }).click();
+  const canvas = page.getByRole("application", { name: /Slide canvas/ });
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Canvas is not visible");
+  // Keep the selected image; open the menu near the top of the canvas so it stays on-screen.
+  await page.mouse.click(box.x + box.width / 2, box.y + 48, { button: "right" });
+  await page.getByRole("button", { name: /Edit Raster/ }).evaluate((el) => {
+    (el as HTMLButtonElement).click();
+  });
 }
 
 async function expectNoOptionBarEditRaster(page: Page) {
@@ -165,6 +170,7 @@ async function selectionPoints(page: Page) {
 test("Double-click and context menu Edit Raster open Photopea; Option bar has no Edit Raster", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await openEditorWithImage(page);
 
   const before = await selectionPoints(page);

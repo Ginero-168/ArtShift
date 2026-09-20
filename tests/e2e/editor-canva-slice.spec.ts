@@ -1,9 +1,38 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+async function mockAuth(page: Page) {
+  await page.route("**/api/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true,
+        user: {
+          id: "e2e-user",
+          provider: "google",
+          email: "e2e@example.com",
+          name: "E2E",
+          picture: null,
+          createdAt: Date.now(),
+        },
+      }),
+    });
+  });
+}
 
 test("Block tab has no Composition presets and still exposes smart editor controls", async ({
   page,
 }) => {
-  await page.goto("/");
+  await mockAuth(page);
+  await page.goto("/projects");
+  await page
+    .getByRole("button", { name: /New Project/i })
+    .first()
+    .click();
+  await expect(page.getByRole("application", { name: /Slide canvas/ })).toBeVisible({
+    timeout: 20_000,
+  });
+
   const library = page.getByLabel("Blocks and AI Assistance");
   await expect(page.getByRole("tab", { name: /Block/ })).toBeVisible();
   await page.getByRole("tab", { name: /Block/ }).click();
@@ -26,7 +55,7 @@ test("Block tab has no Composition presets and still exposes smart editor contro
   await expect(page.getByRole("toolbar", { name: /options/ })).toBeVisible();
 
   await page.getByRole("button", { name: "Open layers" }).click();
-  await expect(page.getByLabel("Layers")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Layers" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse Hero composition group" })).toHaveCount(
     0,
   );
