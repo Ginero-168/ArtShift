@@ -19,6 +19,7 @@ const toolButtonStyle = (active: boolean) => ({
   background: active ? "var(--accent, #6366f1)" : "transparent",
   color: active ? "#fff" : "var(--ink, #111827)",
   cursor: "pointer",
+  fontFamily: "var(--font-sans)",
   fontSize: 8,
   lineHeight: "10px",
   fontWeight: active ? 700 : 600,

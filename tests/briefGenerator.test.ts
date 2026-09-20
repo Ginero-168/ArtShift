@@ -2,7 +2,8 @@ import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 import { generateBriefElements } from "@/lib/ai/briefGenerator";
 import { type ConvertToBriefData, resolveFooterBarDirection } from "@/lib/ai/briefParser";
-import type { ImageElement } from "@/lib/engine/types";
+import type { ImageElement, TextElement } from "@/lib/engine/types";
+import { DEFAULT_THAI_FONT_FAMILY } from "@/lib/fonts";
 
 describe("Brief Generator Service & Layout Geometry", () => {
   const mockImageElement: ImageElement = {
@@ -430,6 +431,22 @@ describe("Brief Generator Service & Layout Geometry", () => {
         80,
       ),
     ).toBe("column");
+  });
+
+  it("uses the document default typeface (Sarabun) for Brief text, matching Properties", () => {
+    const generatorSource = readFileSync("lib/ai/briefGenerator.ts", "utf8");
+    expect(generatorSource).toContain("DEFAULT_THAI_FONT_FAMILY");
+    expect(generatorSource).not.toContain("Mali");
+    expect(generatorSource).not.toContain("'Inter'");
+
+    const texts = generateBriefElements(sampleBriefData, mockImageElement).filter(
+      (element): element is TextElement => element.type === "text",
+    );
+    expect(texts.length).toBeGreaterThan(0);
+    for (const text of texts) {
+      expect(text.fontFamily).toBe(DEFAULT_THAI_FONT_FAMILY);
+      expect(text.fontFamily).toContain("Sarabun");
+    }
   });
 
   it("keeps Brief on the image context bar, not the vector tool rail", () => {

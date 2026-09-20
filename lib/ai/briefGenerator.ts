@@ -18,6 +18,7 @@ import {
 import { enqueueProcessingJob } from "@/lib/engine/processingQueue";
 import { useEngine } from "@/lib/engine/store";
 import type { EngineElement, EngineSlide, ImageElement } from "@/lib/engine/types";
+import { DEFAULT_THAI_FONT_FAMILY } from "@/lib/fonts";
 
 export type ConvertToBriefOptions = {
   signal?: AbortSignal;
@@ -132,6 +133,7 @@ export async function fetchBriefDataForImage(
   throw lastError instanceof Error ? lastError : new Error(BRIEF_FAILURE_AFTER_RETRIES);
 }
 
+/** Layout-guide elements. Text uses DEFAULT_THAI_FONT_FAMILY (Sarabun) so canvas + Properties agree. */
 export function generateBriefElements(
   data: ConvertToBriefData,
   imageElement: ImageElement,
@@ -223,7 +225,7 @@ export function generateBriefElements(
         width: Math.max(40, hw - 16),
         text: data.headlineCard.text,
         fontSize: hlFontSize,
-        fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+        fontFamily: DEFAULT_THAI_FONT_FAMILY,
       });
       styleBriefGuideText(hlText);
       hlText.textAlign = "center";
@@ -267,7 +269,7 @@ export function generateBriefElements(
         width: Math.max(20, bw - 8),
         text: data.badge.text,
         fontSize: badgeFontSize,
-        fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+        fontFamily: DEFAULT_THAI_FONT_FAMILY,
       });
       styleBriefGuideText(badgeText);
       badgeText.textAlign = "center";
@@ -308,7 +310,7 @@ export function generateBriefElements(
         width: Math.max(20, stw - 16),
         text: data.subtextCard.text,
         fontSize: stFontSize,
-        fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+        fontFamily: DEFAULT_THAI_FONT_FAMILY,
       });
       styleBriefGuideText(stText);
       stText.textAlign = "center";
@@ -341,7 +343,7 @@ export function generateBriefElements(
           width: Math.max(20, tw - 8),
           text: tag.text,
           fontSize: tagFontSize,
-          fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+          fontFamily: DEFAULT_THAI_FONT_FAMILY,
         });
         styleBriefGuideText(tagText);
         tagText.textAlign = "center";
@@ -386,7 +388,7 @@ export function generateBriefElements(
         width: Math.max(20, lw - 8),
         text: logoDisplayText,
         fontSize: logoFontSize,
-        fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+        fontFamily: DEFAULT_THAI_FONT_FAMILY,
       });
       styleBriefGuideText(logoText);
       logoText.textAlign = "center";
@@ -456,7 +458,7 @@ export function generateBriefElements(
             width: Math.max(20, iw - 8),
             text: item.text,
             fontSize: itemFontSize,
-            fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+            fontFamily: DEFAULT_THAI_FONT_FAMILY,
           });
           styleBriefGuideText(itemText, true);
           itemText.textAlign = "center";
@@ -515,7 +517,7 @@ export function generateBriefElements(
           width: Math.max(80, Math.min(200, pw - 24)),
           text: partition.name,
           fontSize: labelFontSize,
-          fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+          fontFamily: DEFAULT_THAI_FONT_FAMILY,
         });
         styleBriefGuideText(pLabel);
         pLabel.textAlign = textAlign;
@@ -555,7 +557,7 @@ export function generateBriefElements(
           width: Math.max(20, ow - 8),
           text: obj.text,
           fontSize: badgeFontSize,
-          fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+          fontFamily: DEFAULT_THAI_FONT_FAMILY,
         });
         styleBriefGuideText(badgeText);
         badgeText.textAlign = "center";
@@ -592,7 +594,7 @@ export function generateBriefElements(
       width: tw,
       text: cleanText,
       fontSize,
-      fontFamily: "'Inter', 'Mali', 'Noto Sans Thai', sans-serif",
+      fontFamily: DEFAULT_THAI_FONT_FAMILY,
     });
     styleBriefGuideText(textEl);
     textEl.textAlign = t.align || "center";

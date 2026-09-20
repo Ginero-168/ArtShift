@@ -50,6 +50,7 @@ const buttonStyle = {
   borderRadius: 7,
   background: "transparent",
   color: "var(--ink-muted, #475569)",
+  fontFamily: "var(--font-sans)",
   cursor: "pointer",
   whiteSpace: "nowrap" as const,
   transition: "background-color 120ms ease, border-color 120ms ease, color 120ms ease",
@@ -92,6 +93,7 @@ function action(label: string, onClick: () => void, disabled = false, active = f
         <span
           className="object-context-label"
           style={{
+            fontFamily: "var(--font-sans)",
             fontSize: 11,
             fontWeight: 500,
             lineHeight: 1,
@@ -554,6 +556,11 @@ export default function ObjectContextBar({
           width: 15px;
           height: 15px;
           overflow: visible;
+        }
+        .object-context-bar,
+        .object-context-button,
+        .object-context-label {
+          font-family: var(--font-sans);
         }
         .object-context-label {
           white-space: nowrap;
