@@ -126,6 +126,38 @@ describe("Creative Director route", () => {
     );
   });
 
+  it("accepts lastGeneration with exact 29×7cm so follow-ups are not refs-only", async () => {
+    const response = await POST(
+      request({
+        ...body,
+        prompt: "ปรับเป็นแนวตั้ง",
+        lastGeneration: {
+          userPrompt: "สร้างป้าย shelftalk 29x7 cm",
+          refinedPrompt: "Pink floral shelftalk 29x7cm",
+          width: 2048,
+          height: 688,
+          aspectRatio: "2048x688",
+          sourceWidth: 29,
+          sourceHeight: 7,
+          sizeLabel: "29x7cm",
+          sizeUnit: "cm",
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(prepareMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "ปรับเป็นแนวตั้ง",
+        lastGeneration: expect.objectContaining({
+          sizeLabel: "29x7cm",
+          sourceWidth: 29,
+          sourceHeight: 7,
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
   it("accepts a 24-turn conversation window for follow-up memory", async () => {
     const conversationHistory = Array.from({ length: 24 }, (_, index) => ({
       role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),

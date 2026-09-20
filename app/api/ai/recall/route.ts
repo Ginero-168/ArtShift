@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   DIRECTOR_CONVERSATION_HISTORY_LIMIT,
-  type GenerationIngredient,
   type PriorImageGenerationContext,
 } from "@/lib/ai/orchestration/chatContinuity";
 import { executeFollowUpRecall } from "@/lib/ai/orchestration/followUpRecall";
+import { parsePriorImageGenerationPayload } from "@/lib/ai/orchestration/priorGenerationParse";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
@@ -88,7 +88,7 @@ function parseRecallInput(value: Record<string, unknown>): {
   ) {
     return null;
   }
-  const lastGeneration = parseLastGeneration(value.lastGeneration);
+  const lastGeneration = parsePriorImageGenerationPayload(value.lastGeneration);
   if (!lastGeneration) return null;
   const conversationHistory = parseConversationHistory(value.conversationHistory);
   if (value.conversationHistory !== undefined && !conversationHistory) return null;
@@ -96,47 +96,6 @@ function parseRecallInput(value: Record<string, unknown>): {
     followUpPrompt: value.followUpPrompt,
     conversationHistory: conversationHistory ?? [],
     lastGeneration,
-  };
-}
-
-function parseLastGeneration(value: unknown): PriorImageGenerationContext | null {
-  if (!isRecord(value) || containsSensitivePayload(value)) return null;
-  if (!isSafeString(value.userPrompt, 8_000, 1) || !isSafeString(value.refinedPrompt, 16_000, 1)) {
-    return null;
-  }
-  if (
-    !isBoundedNumber(value.width, 1, 100_000) ||
-    !isBoundedNumber(value.height, 1, 100_000) ||
-    !isSafeString(value.aspectRatio, 32, 1)
-  ) {
-    return null;
-  }
-  const ingredients: GenerationIngredient[] = [];
-  if (value.ingredients !== undefined) {
-    if (!Array.isArray(value.ingredients) || value.ingredients.length > 8) return null;
-    for (const item of value.ingredients) {
-      if (!isRecord(item) || !isSafeString(item.objectId, 200, 1)) return null;
-      if (item.displayName !== undefined && !isSafeString(item.displayName, 200)) return null;
-      if (item.fileId !== undefined && !isSafeString(item.fileId, 200)) return null;
-      ingredients.push({
-        objectId: item.objectId,
-        displayName: typeof item.displayName === "string" ? item.displayName : "Photo",
-        ...(typeof item.fileId === "string" && item.fileId ? { fileId: item.fileId } : {}),
-      });
-    }
-  }
-  return {
-    userPrompt: value.userPrompt,
-    refinedPrompt: value.refinedPrompt,
-    ...(isSafeString(value.summary, 2_000) ? { summary: value.summary } : {}),
-    width: value.width,
-    height: value.height,
-    aspectRatio: value.aspectRatio,
-    ...(isSafeString(value.modelId, 120) ? { modelId: value.modelId } : {}),
-    ...(isSafeString(value.outputElementId, 200) ? { outputElementId: value.outputElementId } : {}),
-    ...(isSafeString(value.outputFileId, 200) ? { outputFileId: value.outputFileId } : {}),
-    ...(ingredients.length ? { ingredients } : {}),
-    ...(isSafeString(value.campaignNotes, 2_000) ? { campaignNotes: value.campaignNotes } : {}),
   };
 }
 
@@ -172,10 +131,6 @@ function containsSensitivePayload(value: unknown, seen = new Set<object>()): boo
   return Object.values(value as Record<string, unknown>).some((item) =>
     containsSensitivePayload(item, seen),
   );
-}
-
-function isBoundedNumber(value: unknown, min: number, max: number): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
 }
 
 function isSafeString(value: unknown, max: number, min = 0): value is string {

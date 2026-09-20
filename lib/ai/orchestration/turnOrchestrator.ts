@@ -3,6 +3,7 @@ import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
   hasExplicitDimensionsInText,
+  type RequestedSizeUnit,
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
@@ -16,8 +17,12 @@ import { createAtomicVectorizedFromResult } from "@/lib/vectorize/atomicVectoriz
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import {
+  applyOrientationToPriorSize,
+  followUpCommandText,
+  isImageFollowUpPrompt,
   isOrientationOnlyFollowUpPrompt,
   type PriorImageGenerationContext,
+  parseFollowUpOrientation,
   resolveFollowUpDimensions,
 } from "./chatContinuity";
 import {
@@ -49,7 +54,7 @@ import { extractInlineTagRefs } from "./inlineTagSynthesis";
 import type { ClarificationOption } from "./intentCompleteness";
 import type { ImageReferenceAnalysis } from "./referenceAnalysis";
 import { useDirectorSession } from "./sessionState";
-import { type AiTask, type AiTaskPlan, createAiTask } from "./taskMachine";
+import { type AiTask, type AiTaskDimensions, type AiTaskPlan, createAiTask } from "./taskMachine";
 
 export type { DirectedImageRun, SequentialExecutionPlan, SequentialExecutionStep };
 
@@ -113,10 +118,67 @@ export function prepareContextAwareTurn(input: ContextAwareTurnInput): ContextAw
   return { kind: "director-ready", input };
 }
 
+function toTaskDimensions(dims: {
+  width: number;
+  height: number;
+  aspectRatio: string;
+  ratioClamped?: boolean;
+  printWidth?: number;
+  printHeight?: number;
+  sizeLabel?: string;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sizeUnit?: RequestedSizeUnit;
+}): AiTaskDimensions {
+  return {
+    width: dims.width,
+    height: dims.height,
+    aspectRatio: dims.aspectRatio as AiImageAspectRatio,
+    ...(dims.ratioClamped
+      ? {
+          ratioClamped: true,
+          printWidth: dims.printWidth,
+          printHeight: dims.printHeight,
+        }
+      : {}),
+    ...(dims.sizeLabel ? { sizeLabel: dims.sizeLabel } : {}),
+    ...(typeof dims.sourceWidth === "number" && dims.sourceWidth > 0
+      ? { sourceWidth: dims.sourceWidth }
+      : {}),
+    ...(typeof dims.sourceHeight === "number" && dims.sourceHeight > 0
+      ? { sourceHeight: dims.sourceHeight }
+      : {}),
+    ...(dims.sizeUnit ? { sizeUnit: dims.sizeUnit } : {}),
+  };
+}
+
 export function resolveTaskDimensionsWithContext(
   input: ContextAwareTurnInput,
   direction?: Extract<CreativeDirection, { kind: "image-task" }>,
-) {
+): AiTaskDimensions {
+  const command = followUpCommandText(input.prompt);
+  const orientation = parseFollowUpOrientation(command);
+  const orientationFollowUp =
+    Boolean(orientation) &&
+    (isOrientationOnlyFollowUpPrompt(command) || isImageFollowUpPrompt(command));
+
+  if (orientation && orientationFollowUp && input.priorGeneration) {
+    return toTaskDimensions(applyOrientationToPriorSize(input.priorGeneration, orientation));
+  }
+
+  // Package missing: invert the last output / attached ref instead of defaulting to 9:16.
+  if (orientationFollowUp) {
+    const sourceRef = input.refs[0];
+    const w = sourceRef?.sourceWidth || sourceRef?.width;
+    const h = sourceRef?.sourceHeight || sourceRef?.height;
+    if (w && h && w > 0 && h > 0) {
+      const landscape = w >= h;
+      const swap =
+        (orientation === "portrait" && landscape) || (orientation === "landscape" && !landscape);
+      return resolveDimensionsFromPixelSize(swap ? h : w, swap ? w : h);
+    }
+  }
+
   const followUpDims = resolveFollowUpDimensions({
     prompt: input.prompt,
     prior: input.priorGeneration,
@@ -126,18 +188,7 @@ export function resolveTaskDimensionsWithContext(
     directionSummary: direction?.summary,
   });
   if (followUpDims) {
-    return {
-      width: followUpDims.width,
-      height: followUpDims.height,
-      aspectRatio: followUpDims.aspectRatio as AiImageAspectRatio,
-      ...(followUpDims.ratioClamped
-        ? {
-            ratioClamped: true,
-            printWidth: followUpDims.printWidth,
-            printHeight: followUpDims.printHeight,
-          }
-        : {}),
-    };
+    return toTaskDimensions(followUpDims);
   }
 
   // With a source/reference image and no explicit size, match the original aspect.
@@ -379,12 +430,15 @@ export function createDirectedImageRun(
             ratioClamped: listDims.ratioClamped,
             printWidth: listDims.printWidth,
             printHeight: listDims.printHeight,
+            sizeLabel: listDims.label,
           }
         : baseTask.requestedDimensions;
+    const exactSizeNote =
+      dims && "sizeLabel" in dims && dims.sizeLabel ? ` Exact size ${dims.sizeLabel}.` : "";
     const ratioClause = dims
       ? dims.ratioClamped
-        ? ` Target generation size ${dims.width}×${dims.height} (model max 3:1). The pipeline will then expand the overflowing edges (left/right or top/bottom) and stitch to the true print canvas ${dims.printWidth}×${dims.printHeight}. Deliver a filled edge-to-edge ≤3:1 center panel — no empty bars and no extra crop into a narrower strip.`
-        : ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}). Fill the full frame edge-to-edge; no letterboxing.`
+        ? ` Target generation size ${dims.width}×${dims.height} (model max 3:1). The pipeline will then expand the overflowing edges (left/right or top/bottom) and stitch to the true print canvas ${dims.printWidth}×${dims.printHeight}.${exactSizeNote} Deliver a filled edge-to-edge ≤3:1 center panel — no empty bars and no extra crop into a narrower strip.`
+        : ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}).${exactSizeNote} Fill the full frame edge-to-edge; no letterboxing.`
       : "";
     const taskPrompt =
       count === 1

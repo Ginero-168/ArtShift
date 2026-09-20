@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   composeFollowUpDirectorPrompt,
   extractPriorImageGenerationContext,
+  followUpCommandText,
   isImageFollowUpPrompt,
+  isOrientationOnlyFollowUpPrompt,
   resolveFollowUpDimensions,
   snapshotGenerationContext,
 } from "@/lib/ai/orchestration/chatContinuity";
@@ -138,6 +140,26 @@ describe("chatContinuity", () => {
     expect(dims?.height).toBeGreaterThan(dims?.width ?? 0);
     expect((dims?.printHeight ?? 0) / (dims?.printWidth ?? 1)).toBeCloseTo(29 / 7, 2);
     expect(dims?.aspectRatio).not.toBe("9:16");
+  });
+
+  it("ignores 29×7cm inside the injected last-package when resolving 'ปรับเป็นแนวตั้ง'", () => {
+    const composed = composeFollowUpDirectorPrompt("ปรับเป็นแนวตั้ง", {
+      userPrompt: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%",
+      refinedPrompt: "Pink floral bookstore shelftalk, 35% off, 29x7cm",
+      width: 2048,
+      height: 688,
+      aspectRatio: "2048x688",
+      ratioClamped: true,
+      printWidth: 2848,
+      printHeight: 688,
+      sourceWidth: 29,
+      sourceHeight: 7,
+      sizeLabel: "29x7cm",
+      sizeUnit: "cm",
+    });
+    expect(followUpCommandText(composed)).toBe("ปรับเป็นแนวตั้ง");
+    expect(isOrientationOnlyFollowUpPrompt(composed)).toBe(true);
+    expect(isOrientationOnlyFollowUpPrompt("ปรับเป็นแนวตั้ง")).toBe(true);
   });
 
   it("flips named 16:9 to 9:16 on a vertical follow-up", () => {

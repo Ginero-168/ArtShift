@@ -364,6 +364,7 @@ export async function executeCoPilotInstruction(
           conversationHistory: serializeConversationHistoryForDirector(history, {
             currentPrompt: prompt,
           }),
+          ...(priorGeneration ? { lastGeneration: priorGeneration } : {}),
           canvasSummary: {
             objectCount: context.elementCount,
             selectedCount: context.selectedIds.length,

@@ -167,6 +167,10 @@ describe("AICoPilotBar follow-up wiring", () => {
     expect(barSource).toContain("resolveFollowUpImageRefs");
     expect(barSource).toContain("serializeConversationHistoryForDirector");
     expect(barSource).toContain("isFollowUpTurn");
+    expect(barSource).toContain("lastGeneration: priorGeneration");
+    expect(barSource).toContain("priorGeneration,");
+    expect(barSource).toMatch(/createDirectedImageTask\(\s*\{[\s\S]*?prompt: promptToSend/);
+    expect(barSource).toContain("conversationHistory: historyForContinuity");
     expect(barSource).not.toContain("florenceModelStep");
   });
 });

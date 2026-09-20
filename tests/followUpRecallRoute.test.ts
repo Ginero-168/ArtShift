@@ -98,6 +98,31 @@ describe("Follow-up recall route", () => {
     );
   });
 
+  it("forwards lastGeneration exact 29×7cm into Gemini recall, not just the follow-up text", async () => {
+    const response = await POST(
+      request({
+        ...body,
+        lastGeneration: {
+          ...lastGeneration,
+          userPrompt: "สร้างป้าย shelftalk 29x7 cm",
+          sourceWidth: 29,
+          sourceHeight: 7,
+          sizeLabel: "29x7cm",
+          sizeUnit: "cm",
+          ratioClamped: true,
+          printWidth: 2848,
+          printHeight: 688,
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const chatInput = executeMock.mock.calls[0]?.[1] as { messages?: { content?: unknown }[] };
+    const userText = JSON.stringify(chatInput?.messages ?? []);
+    expect(userText).toContain("29x7cm");
+    expect(userText).toContain("29");
+    expect(userText).toContain("7");
+  });
+
   it("accepts 24 conversation turns for follow-up memory", async () => {
     const conversationHistory = Array.from({ length: 24 }, (_, index) => ({
       role: index % 2 === 0 ? "user" : "assistant",

@@ -118,6 +118,40 @@ describe("gpt-oss-120b Creative Director", () => {
     expect(result.runtimeModel).toBe("openai/gpt-oss-120b");
   });
 
+  it("injects lastGeneration exact 29×7cm into the director payload when the user prompt is a short follow-up", async () => {
+    const execute = vi.fn().mockResolvedValue(toolResult);
+    await prepareCreativeDirection(
+      {
+        prompt: "ปรับเป็นแนวตั้ง",
+        canvasSummary: { objectCount: 1, selectedCount: 1, width: 1920, height: 1080 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+        lastGeneration: {
+          userPrompt: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%",
+          refinedPrompt: "Pink floral bookstore shelftalk, 35% off, 29x7cm",
+          width: 2048,
+          height: 688,
+          aspectRatio: "2048x688",
+          sourceWidth: 29,
+          sourceHeight: 7,
+          sizeLabel: "29x7cm",
+          sizeUnit: "cm",
+          ratioClamped: true,
+          printWidth: 2848,
+          printHeight: 688,
+        },
+      },
+      { execute },
+    );
+    const payload = JSON.stringify(execute.mock.calls[0]?.[1]);
+    expect(payload).toContain("LAST IMAGE GENERATION PACKAGE");
+    expect(payload).toContain("29x7cm");
+    expect(payload).toContain("lastImageSize");
+    expect(payload).toContain("sourceWidth");
+    expect(payload).toContain("sourceHeight");
+  });
+
   it("rejects a model or capability that is not available", async () => {
     const invalid = structuredClone(toolResult);
     invalid.output.toolCalls[0].input.modelAlias = "flux-unknown";

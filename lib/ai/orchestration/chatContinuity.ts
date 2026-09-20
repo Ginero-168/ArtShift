@@ -26,6 +26,40 @@ export const DIRECTOR_HISTORY_MESSAGE_MAX_CHARS = 4_000;
 
 export const LAST_GENERATION_FOLLOW_UP_NOTE = "แก้ต่อจากภาพล่าสุด — ใช้ภาพต้นฉบับและข้อตกลงในแชท";
 
+const FOLLOW_UP_CONTEXT_MARKERS = [
+  "=== LAST IMAGE GENERATION PACKAGE",
+  "=== SMART RECALL",
+  "=== PRIOR IMAGE GENERATION TO CONTINUE",
+  "=== SHARED ANCHORS",
+  "=== PRIOR VARIANT AXES",
+  "=== VARIATION STRATEGY",
+  "=== REVISION STRATEGY",
+  "CONTINUATION RULES:",
+  "=== ATTACHED REFERENCE",
+  "=== UNTRUSTED LOCAL CONTEXT",
+];
+
+/**
+ * The user's short follow-up command, ignoring injected last-package / recall text.
+ * "ปรับเป็นแนวตั้ง" plus a 29×7cm package must still count as orientation-only — not a new 29×7 size.
+ */
+export function followUpCommandText(prompt: string): string {
+  const text = (prompt || "").trim();
+  if (!text) return "";
+  const labeled = /User follow-up (?:request|command):\s*([^\n]+)/iu.exec(text);
+  if (labeled?.[1]?.trim()) return labeled[1].trim().slice(0, 500);
+  let cut = text;
+  for (const marker of FOLLOW_UP_CONTEXT_MARKERS) {
+    const idx = cut.indexOf(marker);
+    if (idx >= 0) cut = cut.slice(0, idx);
+  }
+  const firstLine = cut
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return (firstLine || cut).trim().slice(0, 500);
+}
+
 /** Layer-1 locks carried across Orchestrator turns (must not drift on follow-ups). */
 export type SharedAnchorLock = {
   id: string;
@@ -99,6 +133,7 @@ export type FollowUpResolvedSize = {
   ratioClamped?: boolean;
   printWidth?: number;
   printHeight?: number;
+  sizeLabel?: string;
 };
 
 export type ContinuityHistoryMessage = {
@@ -363,8 +398,15 @@ function resolveSizeFromSource(
 }
 
 function toPublicFollowUpSize(
-  size: FollowUpResolvedSize & { sourceWidth?: number; sourceHeight?: number },
+  size: FollowUpResolvedSize & {
+    sourceWidth?: number;
+    sourceHeight?: number;
+    sizeLabel?: string;
+    sizeUnit?: RequestedSizeUnit;
+  },
 ): FollowUpResolvedSize {
+  const includeExactLabel =
+    Boolean(size.sizeLabel) && size.sizeUnit !== "named" && !isColonAspect(size.sizeLabel);
   return {
     width: size.width,
     height: size.height,
@@ -376,6 +418,7 @@ function toPublicFollowUpSize(
           printHeight: size.printHeight,
         }
       : {}),
+    ...(includeExactLabel ? { sizeLabel: size.sizeLabel } : {}),
   };
 }
 
@@ -394,7 +437,7 @@ export function parseFollowUpOrientation(prompt: string): FollowUpOrientation | 
 }
 
 export function isOrientationOnlyFollowUpPrompt(prompt: string): boolean {
-  const text = (prompt || "").trim();
+  const text = followUpCommandText(prompt);
   if (!text || hasNumericOrNamedSizeInText(text)) return false;
   if (!parseFollowUpOrientation(text)) return false;
   return isImageFollowUpPrompt(text);
@@ -990,30 +1033,31 @@ export function resolveFollowUpDimensions(options: {
     directionSummary,
   } = options;
 
-  const orientation = parseFollowUpOrientation(prompt);
-  const hasConcreteSize = hasNumericOrNamedSizeInText(prompt);
+  const command = followUpCommandText(prompt);
+  const orientation = parseFollowUpOrientation(command);
+  const hasConcreteSize = hasNumericOrNamedSizeInText(command);
   const priorFromHistory = prior ?? extractPriorImageGenerationContext(conversationHistory);
 
   if (hasConcreteSize) {
-    return resolveImageGenerationDimensions(prompt);
+    return resolveImageGenerationDimensions(command);
   }
   if (clarificationOriginalPrompt && hasNumericOrNamedSizeInText(clarificationOriginalPrompt)) {
     return resolveImageGenerationDimensions(clarificationOriginalPrompt);
   }
 
-  if (orientation && isImageFollowUpPrompt(prompt) && priorFromHistory) {
+  if (orientation && isImageFollowUpPrompt(command) && priorFromHistory) {
     return toPublicFollowUpSize(applyOrientationToPriorSize(priorFromHistory, orientation));
   }
 
   // Fresh requests (and follow-ups with no prior size) still honor แนวตั้ง→9:16 / แนวนอน→16:9.
-  if (hasExplicitDimensionsInText(prompt)) {
-    return resolveImageGenerationDimensions(prompt);
+  if (hasExplicitDimensionsInText(command)) {
+    return resolveImageGenerationDimensions(command);
   }
   if (clarificationOriginalPrompt && hasExplicitDimensionsInText(clarificationOriginalPrompt)) {
     return resolveImageGenerationDimensions(clarificationOriginalPrompt);
   }
 
-  if (!isImageFollowUpPrompt(prompt)) return null;
+  if (!isImageFollowUpPrompt(command)) return null;
 
   if (priorFromHistory?.aspectRatio && priorFromHistory.width > 0 && priorFromHistory.height > 0) {
     return toPublicFollowUpSize(resolvePriorRequestedSize(priorFromHistory));

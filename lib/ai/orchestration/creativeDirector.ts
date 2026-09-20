@@ -15,7 +15,11 @@ import {
 } from "@/lib/designAgent/contracts";
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
-import { DIRECTOR_CONVERSATION_HISTORY_LIMIT } from "./chatContinuity";
+import {
+  DIRECTOR_CONVERSATION_HISTORY_LIMIT,
+  formatGenerationPackageForPrompt,
+  type PriorImageGenerationContext,
+} from "./chatContinuity";
 import {
   CREATING_MODEL_CATALOG,
   detectRequestedCreatingModel,
@@ -87,6 +91,8 @@ export type CreativeDirectorInput = {
     role: "user" | "assistant";
     content: string;
   }[];
+  /** Structured last image package — required for orientation follow-ups like ปรับเป็นแนวตั้ง. */
+  lastGeneration?: PriorImageGenerationContext;
   artworkContext?: unknown;
   designContext?: ArtworkExecutionContext;
   canvasSummary: {
@@ -500,6 +506,27 @@ export async function prepareCreativeDirection(
       ? `\n\n=== ATTACHED IMAGE(S) TO INVENTORY ===\nFollow IMAGE ANALYSIS ANSWER PROTOCOL. Use the OCR transcript and spatial inventory below as authoritative evidence. Reply as a thorough structured inventory — do not generate a new image.\n${formattedReferences}`
       : `\n\n=== ATTACHED REFERENCE IMAGES & NAME TAGS ===\nThe user attached reference image(s) from the canvas / name tags. Each has a display name and inferred role. Analyze and incorporate them into your creative direction. In refinedPrompt, refer to Reference N by display name + role only — never emit @[Name:id] or UUIDs. Images are also supplied as input_images in this same order:\n${formattedReferences}`
     : "";
+  const lastPackageBlock =
+    input.lastGeneration && !input.prompt.includes("LAST IMAGE GENERATION PACKAGE")
+      ? `\n\n${formatGenerationPackageForPrompt(input.lastGeneration)}`
+      : "";
+  const lastSizeHint = input.lastGeneration
+    ? {
+        exactSize:
+          input.lastGeneration.sizeLabel ||
+          (input.lastGeneration.sourceWidth && input.lastGeneration.sourceHeight
+            ? `${input.lastGeneration.sourceWidth}x${input.lastGeneration.sourceHeight}${input.lastGeneration.sizeUnit ?? ""}`
+            : undefined),
+        aspectRatio: input.lastGeneration.aspectRatio,
+        width: input.lastGeneration.width,
+        height: input.lastGeneration.height,
+        printWidth: input.lastGeneration.printWidth,
+        printHeight: input.lastGeneration.printHeight,
+        sourceWidth: input.lastGeneration.sourceWidth,
+        sourceHeight: input.lastGeneration.sourceHeight,
+        sizeUnit: input.lastGeneration.sizeUnit,
+      }
+    : null;
   const messages: AiAssistantChatInput["messages"] = [
     ...normalizeConversationHistory(input.conversationHistory, input.prompt),
     {
@@ -507,7 +534,7 @@ export async function prepareCreativeDirection(
       content: [
         {
           type: "text",
-          text: `User request:\n${input.prompt.slice(0, 20_000)}${
+          text: `User request:\n${input.prompt.slice(0, 20_000)}${lastPackageBlock}${
             inlineSynthesis?.semanticMappingText ? `\n\n${inlineSynthesis.semanticMappingText}` : ""
           }${referenceBlock}`,
         },
@@ -519,6 +546,7 @@ export async function prepareCreativeDirection(
             executionContext: input.designContext
               ? normalizeDesignContext(input.designContext)
               : null,
+            lastImageSize: lastSizeHint,
             vision: normalizeReferenceAnalyses(input.referenceAnalyses),
             knowledge,
             executionLimits: {
