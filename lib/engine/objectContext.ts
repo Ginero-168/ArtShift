@@ -54,9 +54,9 @@ export function getObjectContextBarLeft(
 
 /**
  * Vertical offset between the object bounding box and the option bar in world units.
- * Previously 10px, increased by 15px to 25px.
+ * Previously 25px, increased by 30px to 55px so the bar sits higher above the object.
  */
-export const OBJECT_CONTEXT_BAR_OFFSET = 25;
+export const OBJECT_CONTEXT_BAR_OFFSET = 55;
 
 export function getObjectContextBarTop(params: {
   topPointY: number;

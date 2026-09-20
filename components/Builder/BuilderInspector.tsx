@@ -496,16 +496,7 @@ export default function BuilderInspector() {
             ) : null}
 
             {homogeneousType && (first.type === "image" || first.type === "bookMockup") ? (
-              <MediaOptions
-                element={first}
-                apply={apply}
-                cropActive={croppingImageId === first.id}
-                onToggleCrop={() =>
-                  first.type === "image"
-                    ? setCroppingImageId(croppingImageId === first.id ? null : first.id)
-                    : undefined
-                }
-              />
+              <MediaOptions element={first} apply={apply} />
             ) : null}
 
             {homogeneousType && first.type === "bookMockup" ? (
@@ -1201,13 +1192,9 @@ function TextOptions({
 function MediaOptions({
   element,
   apply,
-  cropActive,
-  onToggleCrop,
 }: {
   element: ImageElement | BookMockupElement;
   apply: (patch: Partial<EngineElement>, label: string) => void;
-  cropActive: boolean;
-  onToggleCrop: () => void;
 }) {
   async function upload(file: File | undefined) {
     if (!file) return;
@@ -1245,11 +1232,6 @@ function MediaOptions({
             onChange={(event) => upload(event.currentTarget.files?.[0])}
           />
         </label>
-        {element.type === "image" ? (
-          <button className={styles.secondaryButton} type="button" onClick={onToggleCrop}>
-            {cropActive ? "Finish crop" : "Crop"}
-          </button>
-        ) : null}
       </div>
       <div className={styles.metaRow}>
         <span>Original</span>

@@ -27,17 +27,17 @@ describe("object context categories", () => {
     expect(getObjectContextBarLeft(100, 1200, 1000)).toBe(0);
   });
 
-  it("positions option bar 25px (scaled) above the object by default (15px higher than before)", () => {
-    expect(OBJECT_CONTEXT_BAR_OFFSET).toBe(25);
+  it("positions option bar 55px (scaled) above the object by default (30px higher than before)", () => {
+    expect(OBJECT_CONTEXT_BAR_OFFSET).toBe(55);
     const result = getObjectContextBarTop({
       topPointY: 300,
       bottomPointY: 450,
       barHeight: 38,
       scale: 1,
     });
-    // 300 - 38 - 25 = 237
+    // 300 - 38 - 55 = 207
     expect(result.placeBelow).toBe(false);
-    expect(result.top).toBe(237);
+    expect(result.top).toBe(207);
   });
 
   it("scales offset proportionally with zoom scale", () => {
@@ -47,9 +47,9 @@ describe("object context categories", () => {
       barHeight: 38,
       scale: 1.5,
     });
-    // 400 - 38 - (25 * 1.5) = 400 - 38 - 37.5 = 324.5
+    // 400 - 38 - (55 * 1.5) = 400 - 38 - 82.5 = 279.5
     expect(result.placeBelow).toBe(false);
-    expect(result.top).toBe(324.5);
+    expect(result.top).toBe(279.5);
   });
 
   it("places option bar below the object when top clearance is tight", () => {
@@ -59,9 +59,9 @@ describe("object context categories", () => {
       barHeight: 38,
       scale: 1,
     });
-    // 20 - 38 - 25 = -43 < 4 => placeBelow = true
-    // bottomPoint.y + 25 = 150 + 25 = 175
+    // 20 - 38 - 55 = -73 < 4 => placeBelow = true
+    // bottomPoint.y + 55 = 150 + 55 = 205
     expect(result.placeBelow).toBe(true);
-    expect(result.top).toBe(175);
+    expect(result.top).toBe(205);
   });
 });
