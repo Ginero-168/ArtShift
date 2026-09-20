@@ -88,9 +88,9 @@ describe("appearance Phase 1 foundation", () => {
     expect(
       appearanceCapabilities(createRect({ x: 0, y: 0, width: 1, height: 1 })).multipleFills,
     ).toBe(true);
-    expect(appearanceCapabilities(createText({ x: 0, y: 0, width: 40, text: "Hi" })).fills).toBe(
-      true,
-    );
+    expect(
+      appearanceCapabilities(createText({ x: 0, y: 0, width: 40, text: "Hi" })).multipleFills,
+    ).toBe(true);
     expect(appearanceCapabilities(createText({ x: 0, y: 0, width: 40, text: "Hi" })).textArc).toBe(
       true,
     );

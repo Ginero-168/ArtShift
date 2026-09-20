@@ -1,9 +1,9 @@
 # แผนระบบ Appearance สำหรับ ArtShift
 
-สถานะ: **Phase 1 foundation + MVP UI (#12)** shipped. **PR นี้ = schema v7 persist** (`appearance` + dual-write legacy fields)
+สถานะ: **Phase 1 foundation + MVP UI (#12) + schema v7 persist + multi Fill/Stroke (2026-09-20)**
 
 วันที่จัดทำ: 15 กันยายน 2026  
-อัปเดต: 19 กันยายน 2026
+อัปเดต: 20 กันยายน 2026
 
 ## 0. สถานะจริงและขอบเขตที่ล็อก (Peerawat 2026-09-19)
 
@@ -14,10 +14,10 @@
 | `lib/appearance/*` (`readAppearance` / `changeAppearance` / capabilities / bounds / fingerprints) | มีแล้ว — อ่าน prefer `appearance` ถ้ามี ไม่เช่นนั้นสังเคราะห์จาก legacy |
 | Engine schema | **v6 = Block bake → Free pixels**. **v7 = persist canonical `appearance`** (งานนี้) |
 | Canonical `appearance` field บน `EngineElement` | **มีแล้วใน schema v7** พร้อม dual-write ไปยัง flat fields เดิม |
-| Live Inspector Appearance stack UI | มีในสาย #12 (Fill / Stroke / Shadow / Glow / Text Arc) |
+| Live Inspector Appearance stack UI | มีในสาย #12 (Fill / Stroke / Shadow / Glow / Text Arc) — **multi Fill/Stroke เปิดเป็น product feature แล้ว** |
 | Graphic Styles ที่ผูก Brand Kit | **นอกขอบเขต** |
 | Path envelope warp | **นอกขอบเขต** — Arc = text only ผ่าน `pathCurvature` |
-| Group Appearance / multi fill-stroke เป็น product feature / Affinity PDF | **นอกขอบเขต** |
+| Group Appearance / Graphic Styles ที่ผูก Brand Kit / Affinity PDF | **นอกขอบเขต** |
 
 ### MVP slice ที่ล็อกแล้ว
 
@@ -33,9 +33,9 @@
 
 Renderer: Canvas2D มี shadow state เดียวต่อ `drawImage` — ถ้ามีทั้ง Shadow และ Glow จะวาด **ตามลำดับ stack (back-to-front)** ไม่ XOR ทิ้งอย่างเงียบ ๆ
 
-### สิ่งที่แผ่นยาวด้านล่างยังเป็นแผนเต็ม (อย่าทำใน PR นี้)
+สิ่งที่แผ่นยาวด้านล่างยังเป็นแผนเต็ม (อย่าทำใน PR นี้): Graphic Styles / Brand Kit, path warp, Group Appearance, Vector/Affinity PDF rewrite, Moodboard
 
-Multi fill/stroke เป็น product feature, Graphic Styles / Brand Kit, path warp, Group Appearance, Vector/Affinity PDF rewrite, Moodboard
+Multi fill/stroke เป็น product feature แล้ว (Appearance stack + Canvas paint order)
 
 ---
 
@@ -483,7 +483,7 @@ Appearance panel ใน `BuilderInspector`:
 - Fill / Stroke / Shadow / Glow
 - Text Arc ผ่าน `pathCurvature` (text only)
 - ไม่มี Graphic Styles / Brand Kit
-- ไม่เปิด multi fill/stroke เป็นปุ่ม product
+- เปิด multi Fill/Stroke เป็นปุ่ม product (add / remove / reorder)
 
 ### Phase 4: Canvas renderer
 

@@ -59,6 +59,14 @@ export function findStroke(appearance: { items: AppearanceItem[] }): AppearanceI
   return appearance.items.find((item) => item.kind === "stroke");
 }
 
+export function findFills(appearance: { items: AppearanceItem[] }): AppearanceItem[] {
+  return appearance.items.filter((item) => item.kind === "fill");
+}
+
+export function findStrokes(appearance: { items: AppearanceItem[] }): AppearanceItem[] {
+  return appearance.items.filter((item) => item.kind === "stroke");
+}
+
 export function appearanceItemLabel(
   item: AppearanceItem,
   elementType?: EngineElement["type"],

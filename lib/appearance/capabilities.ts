@@ -50,8 +50,8 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
       glow: true,
       textArc: true,
       imageAdjust: false,
-      multipleFills: false,
-      multipleStrokes: false,
+      multipleFills: true,
+      multipleStrokes: true,
       blendMode: true,
       rootOpacity: true,
     };
@@ -71,15 +71,16 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     };
   }
   if (type === "path" || type === "freedraw" || type === "line" || type === "arrow") {
+    const canFill = type === "path" || type === "freedraw";
     return {
-      fills: type === "path" || type === "freedraw",
+      fills: canFill,
       strokes: true,
       shadow: true,
       glow: true,
       textArc: false,
       imageAdjust: false,
-      multipleFills: false,
-      multipleStrokes: false,
+      multipleFills: canFill,
+      multipleStrokes: true,
       blendMode: true,
       rootOpacity: true,
     };

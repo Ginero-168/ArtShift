@@ -27,8 +27,11 @@ export {
   addGlowOperation,
   addShadowOperation,
   addStrokeOperation,
+  fillItemPatchOperation,
   fillPaintOperation,
   glowPatchOperation,
+  nudgeItemOperation,
+  paintInsertIndex,
   removeItemOperation,
   removeStackKind,
   setRootBlendOperation,
@@ -45,7 +48,9 @@ export {
   appearanceStackRows,
   findEffect,
   findFill,
+  findFills,
   findStroke,
+  findStrokes,
   stackKindOf,
 } from "./panelModel";
 export {
@@ -57,7 +62,14 @@ export {
   syncElementAppearance,
   tryNormalizeAppearance,
 } from "./persist";
-export { type CanvasShadowPass, canvasShadowPasses } from "./renderPlan";
+export {
+  appearanceMaxStrokeWidth,
+  type CanvasPaintPass,
+  type CanvasShadowPass,
+  canvasPaintPasses,
+  canvasShadowPasses,
+  usesStackedPaint,
+} from "./renderPlan";
 export type {
   Appearance,
   AppearanceBlendMode,
