@@ -117,6 +117,8 @@
 }
 
 .heroLogo {
+  display: flex;
+  justify-content: center;
   margin: 0 0 1.75rem;
 }
 
@@ -328,24 +330,37 @@
 
 .polaroid {
   position: absolute;
-  width: 38%;
+  width: 32%;
   aspect-ratio: 4 / 5;
-  padding: 0.4rem 0.4rem 1.1rem;
+  padding: 0.35rem 0.35rem 0.85rem;
   border-radius: 4px;
   background: #f8fafc;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
 .polaroid:nth-child(1) {
-  top: 14%;
-  left: 12%;
-  rotate: -8deg;
+  top: 16%;
+  left: 16%;
+  rotate: -7deg;
 }
 
 .polaroid:nth-child(2) {
-  top: 22%;
+  top: 28%;
   right: 14%;
-  rotate: 7deg;
+  rotate: 8deg;
+}
+
+.searchChip {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  transform: translateX(-50%);
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #e2e8f0;
+  font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .swatch {

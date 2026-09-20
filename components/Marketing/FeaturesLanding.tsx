@@ -86,6 +86,7 @@ function FeatureVisual({ kind }: { kind: (typeof FEATURES)[number]["visual"] }) 
             style={{ background: "linear-gradient(135deg, #fde68a, #ea580c)" }}
           />
         </div>
+        <span className={styles.searchChip}>keyword → stock</span>
       </div>
     );
   }
