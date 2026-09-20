@@ -227,6 +227,10 @@ describe("Appearance UI wiring", () => {
     expect(panel).toContain("Text Arc");
     expect(panel).toContain("pathCurvature");
     expect(panel).toContain("updateAppearance");
+    expect(panel).toContain('data-appearance-add="background"');
+    expect(panel).toContain("appearanceItemLabel(item)");
+    expect(panel).not.toContain('element.type === "text" ? "Background"');
+    expect(panel).not.toContain('element.type === "text" ? "Text"');
     expect(panel).toContain('data-appearance-row="imageAdjust"');
     expect(panel).toContain("ปรับโทนภาพ");
     expect(inspector).not.toContain("Pixel edit");

@@ -2,17 +2,19 @@ import type { EngineElement } from "@/lib/engine/types";
 import {
   DEFAULT_GLOW,
   DEFAULT_SHADOW,
+  defaultBackgroundItem,
   defaultFillItem,
   defaultGlowItem,
   defaultShadowItem,
   defaultStrokeItem,
 } from "./defaults";
 import { readAppearance } from "./legacyAdapter";
-import { findEffect, findFill, findStroke } from "./panelModel";
+import { findBackground, findEffect, findFill, findStroke } from "./panelModel";
 import type {
   Appearance,
   AppearanceOperation,
   AppearancePaint,
+  BackgroundAppearance,
   FillAppearance,
   StrokeAppearance,
 } from "./types";
@@ -229,6 +231,65 @@ export function addStrokeOperation(element?: EngineElement): AppearanceOperation
   return { type: "insertItem", item, index: paintInsertIndex(appearance) };
 }
 
+/**
+ * Insert a behind-text Background at the back of the paint stack.
+ * Text only — not a shape fill.
+ */
+export function addBackgroundOperation(element?: EngineElement): AppearanceOperation {
+  const item = defaultBackgroundItem();
+  if (!element) {
+    return { type: "insertItem", item, index: 0 };
+  }
+  const appearance = readAppearance(element);
+  const source = appearance.items.findLast((candidate) => candidate.kind === "background");
+  if (source?.kind === "background") {
+    item.paint = structuredClone(source.paint);
+    item.opacity = source.opacity;
+    item.visible = true;
+  }
+  return { type: "insertItem", item, index: backgroundInsertIndex(appearance) };
+}
+
+export function backgroundPaintOperation(
+  element: EngineElement,
+  paint: AppearancePaint,
+  options: { itemId?: string } = {},
+): AppearanceOperation {
+  const background = resolveBackgroundItem(element, options.itemId);
+  if (background?.kind !== "background") {
+    return {
+      type: "insertItem",
+      item: { ...defaultBackgroundItem(), paint },
+      index: backgroundInsertIndex(readAppearance(element)),
+    };
+  }
+  return {
+    type: "updateItem",
+    itemId: background.id,
+    patch: { kind: "background", paint },
+  };
+}
+
+export function backgroundItemPatchOperation(
+  element: EngineElement,
+  itemId: string,
+  patch: Partial<Pick<BackgroundAppearance, "visible" | "opacity" | "paint">>,
+): AppearanceOperation {
+  const background = resolveBackgroundItem(element, itemId);
+  if (background?.kind !== "background") {
+    return {
+      type: "insertItem",
+      item: { ...defaultBackgroundItem(), ...patch },
+      index: backgroundInsertIndex(readAppearance(element)),
+    };
+  }
+  return {
+    type: "updateItem",
+    itemId: background.id,
+    patch: { kind: "background", ...patch },
+  };
+}
+
 export function toggleItemVisibleOperation(
   element: EngineElement,
   itemId: string,
@@ -240,7 +301,7 @@ export function toggleItemVisibleOperation(
 
 export function toggleStackKindVisible(
   element: EngineElement,
-  kind: "fill" | "stroke" | "shadow" | "glow",
+  kind: "fill" | "stroke" | "background" | "shadow" | "glow",
 ): AppearanceOperation | null {
   const item = stackKindItem(element, kind);
   if (!item) return null;
@@ -249,17 +310,21 @@ export function toggleStackKindVisible(
 
 export function removeStackKind(
   element: EngineElement,
-  kind: "fill" | "stroke" | "shadow" | "glow",
+  kind: "fill" | "stroke" | "background" | "shadow" | "glow",
 ): AppearanceOperation | null {
   const item = stackKindItem(element, kind);
   if (!item) return null;
   return { type: "removeItem", itemId: item.id };
 }
 
-function stackKindItem(element: EngineElement, kind: "fill" | "stroke" | "shadow" | "glow") {
+function stackKindItem(
+  element: EngineElement,
+  kind: "fill" | "stroke" | "background" | "shadow" | "glow",
+) {
   const appearance = readAppearance(element);
   if (kind === "fill") return findFill(appearance);
   if (kind === "stroke") return findStroke(appearance);
+  if (kind === "background") return findBackground(appearance);
   return findEffect(appearance, kind);
 }
 
@@ -300,6 +365,14 @@ export function paintInsertIndex(appearance: Appearance | { items: Appearance["i
   return firstEffect === -1 ? appearance.items.length : firstEffect;
 }
 
+/** Backgrounds paint first (behind). Insert after existing backgrounds. */
+export function backgroundInsertIndex(
+  appearance: Appearance | { items: Appearance["items"] },
+): number {
+  const lastBackground = appearance.items.findLastIndex((item) => item.kind === "background");
+  return lastBackground === -1 ? 0 : lastBackground + 1;
+}
+
 function resolveFillItem(element: EngineElement, itemId?: string) {
   const appearance = readAppearance(element);
   if (itemId) {
@@ -316,4 +389,13 @@ function resolveStrokeItem(element: EngineElement, itemId?: string) {
     return match?.kind === "stroke" ? match : undefined;
   }
   return findStroke(appearance);
+}
+
+function resolveBackgroundItem(element: EngineElement, itemId?: string) {
+  const appearance = readAppearance(element);
+  if (itemId) {
+    const match = appearance.items.find((item) => item.id === itemId);
+    return match?.kind === "background" ? match : undefined;
+  }
+  return findBackground(appearance);
 }

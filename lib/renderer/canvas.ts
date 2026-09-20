@@ -17,7 +17,12 @@ import {
   canvasShadowPasses,
   usesStackedPaint,
 } from "../appearance/renderPlan";
-import type { AppearancePaint, FillAppearance, StrokeAppearance } from "../appearance/types";
+import type {
+  AppearancePaint,
+  BackgroundAppearance,
+  FillAppearance,
+  StrokeAppearance,
+} from "../appearance/types";
 import type { ColorAdjustments } from "../color/adjustments";
 import { resolveMultiGradientStops } from "../color/swatches";
 import { getFramePolaroidCutout, traceFrameShapePath } from "../engine/frameMask";
@@ -283,7 +288,7 @@ function paintStackedGeometry(
     ctx.globalAlpha *= pass.item.opacity;
     if (pass.kind === "fill") {
       paintFillPass(ctx, el, pass.item);
-    } else {
+    } else if (pass.kind === "stroke") {
       applyStrokeAppearance(ctx, pass.item);
       strokeElementGeometry(ctx, el);
     }
@@ -445,7 +450,7 @@ function drawVectorPath(
         if (el.closed && applyFillAppearance(ctx, el, pass.item.paint)) {
           ctx.fill(path, el.fillRule);
         }
-      } else {
+      } else if (pass.kind === "stroke") {
         applyStrokeAppearance(ctx, pass.item);
         ctx.stroke(path);
       }
@@ -628,19 +633,28 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
   const measure = createCanvasTextMeasure(ctx, el);
   const layout = layoutText(el, measure);
   const paintPasses = canvasPaintPasses(el);
-  if (usesStackedPaint(paintPasses)) {
+
+  if (paintPasses.length > 0) {
     for (const pass of paintPasses) {
       ctx.save();
       ctx.globalAlpha *= pass.item.opacity;
-      if (pass.kind === "fill") {
+      if (pass.kind === "background") {
+        paintTextBackground(ctx, el, pass.item);
+      } else if (pass.kind === "fill") {
         if (applyFillAppearance(ctx, el, pass.item.paint)) {
-          roundedRectPath(ctx, 0, 0, el.width, el.height, el.cornerRadius ?? 0);
-          ctx.fill();
+          if (el.pathCurvature && el.pathCurvature !== 0) {
+            paintCurvedTextGlyphs(ctx, el, layout, "fill");
+          } else {
+            paintTextGlyphs(ctx, el, layout, "fill");
+          }
         }
-      } else if (el.pathCurvature && el.pathCurvature !== 0) {
-        drawCurvedText(ctx, el, layout, pass.item.color);
       } else {
-        drawTextGlyphs(ctx, el, layout, pass.item.color);
+        applyStrokeAppearance(ctx, pass.item);
+        if (el.pathCurvature && el.pathCurvature !== 0) {
+          paintCurvedTextGlyphs(ctx, el, layout, "stroke");
+        } else {
+          paintTextGlyphs(ctx, el, layout, "stroke");
+        }
       }
       ctx.restore();
     }
@@ -655,23 +669,32 @@ function drawText(ctx: CanvasRenderingContext2D, el: TextElement) {
     ctx.restore();
   }
 
+  ctx.fillStyle = el.strokeColor;
   if (el.pathCurvature && el.pathCurvature !== 0) {
-    drawCurvedText(ctx, el, layout);
+    paintCurvedTextGlyphs(ctx, el, layout, "fill");
     return;
   }
-
-  drawTextGlyphs(ctx, el, layout, el.strokeColor);
+  paintTextGlyphs(ctx, el, layout, "fill");
 }
 
-function drawTextGlyphs(
+function paintTextBackground(
+  ctx: CanvasRenderingContext2D,
+  el: TextElement,
+  item: BackgroundAppearance,
+) {
+  if (!applyFillAppearance(ctx, el, item.paint)) return;
+  roundedRectPath(ctx, 0, 0, el.width, el.height, el.cornerRadius ?? 0);
+  ctx.fill();
+}
+
+function paintTextGlyphs(
   ctx: CanvasRenderingContext2D,
   el: TextElement,
   layout: import("../engine/textLayout").TextLayout,
-  color: string,
+  mode: "fill" | "stroke",
 ) {
   const measure = createCanvasTextMeasure(ctx, el);
   const { padding, lines, lineHeight: lh, contentHeight: totalH } = layout;
-  ctx.fillStyle = color;
   ctx.textBaseline = "top";
   ctx.textAlign =
     el.textAlign === "center" ? "center" : el.textAlign === "right" ? "right" : "left";
@@ -683,6 +706,11 @@ function drawTextGlyphs(
     y = lastSafeStart;
   }
 
+  const drawRun = (text: string, x: number, baseline: number) => {
+    if (mode === "stroke") ctx.strokeText(text, x, baseline);
+    else ctx.fillText(text, x, baseline);
+  };
+
   for (const line of lines) {
     const segments = parseRichText(line.text);
     const lineWidth = measureRichText(line.text, measure);
@@ -693,14 +721,14 @@ function drawTextGlyphs(
     if (line.bullet) {
       setCanvasTextFont(ctx, el, false, false);
       ctx.textAlign = "left";
-      ctx.fillText("•", x - line.bulletIndent, y);
+      drawRun("•", x - line.bulletIndent, y);
     }
 
     ctx.textAlign = "left";
     for (const seg of segments) {
       setCanvasTextFont(ctx, el, seg.bold, seg.italic);
       const segWidth = ctx.measureText(seg.text).width;
-      ctx.fillText(seg.text, x, y);
+      drawRun(seg.text, x, y);
       x += segWidth;
     }
 
@@ -708,11 +736,11 @@ function drawTextGlyphs(
   }
 }
 
-function drawCurvedText(
+function paintCurvedTextGlyphs(
   ctx: CanvasRenderingContext2D,
   el: TextElement,
   layout: import("../engine/textLayout").TextLayout,
-  color: string = el.strokeColor,
+  mode: "fill" | "stroke",
 ) {
   const curvature = el.pathCurvature ?? 0;
   if (curvature === 0) return;
@@ -728,9 +756,8 @@ function drawCurvedText(
   const totalTextWidth = charWidths.reduce((a, b) => a + b, 0);
   if (totalTextWidth <= 0) return;
 
-  // Normalized curvature -1..1
   const k = curvature / 100;
-  const maxSweep = Math.PI * 0.85; // Max 153 degrees arc
+  const maxSweep = Math.PI * 0.85;
   const sweepAngle = k * maxSweep;
   const radius = Math.max(20, Math.abs(totalTextWidth / sweepAngle));
 
@@ -741,7 +768,6 @@ function drawCurvedText(
   const startAngle = k > 0 ? -Math.PI / 2 - sweepAngle / 2 : Math.PI / 2 - sweepAngle / 2;
 
   ctx.save();
-  ctx.fillStyle = color;
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
 
@@ -760,7 +786,8 @@ function drawCurvedText(
     ctx.translate(px, py);
     ctx.rotate(tangent);
     setCanvasTextFont(ctx, el, false, false);
-    ctx.fillText(char, 0, 0);
+    if (mode === "stroke") ctx.strokeText(char, 0, 0);
+    else ctx.fillText(char, 0, 0);
     ctx.restore();
 
     currentDist += charW;

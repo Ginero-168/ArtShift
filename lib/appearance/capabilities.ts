@@ -3,6 +3,8 @@ import type { EngineElement, EngineElementType } from "@/lib/engine/types";
 export type AppearanceCapability = {
   fills: boolean;
   strokes: boolean;
+  /** Behind-text backdrop. Text only — not a shape fill. */
+  background: boolean;
   shadow: boolean;
   glow: boolean;
   /** Text Arc is `pathCurvature` on TextElement — not a persisted Appearance item. */
@@ -32,6 +34,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     return {
       fills: false,
       strokes: false,
+      background: false,
       shadow: true,
       glow: true,
       textArc: false,
@@ -46,6 +49,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     return {
       fills: true,
       strokes: true,
+      background: true,
       shadow: true,
       glow: true,
       textArc: true,
@@ -60,6 +64,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     return {
       fills: true,
       strokes: true,
+      background: false,
       shadow: true,
       glow: true,
       textArc: false,
@@ -75,6 +80,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     return {
       fills: canFill,
       strokes: true,
+      background: false,
       shadow: true,
       glow: true,
       textArc: false,
@@ -89,6 +95,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
     return {
       fills: true,
       strokes: true,
+      background: false,
       shadow: true,
       glow: true,
       textArc: false,
@@ -102,6 +109,7 @@ export function appearanceCapabilities(element: EngineElement): AppearanceCapabi
   return {
     fills: true,
     strokes: true,
+    background: false,
     shadow: true,
     glow: true,
     textArc: false,

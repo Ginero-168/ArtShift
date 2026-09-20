@@ -1,7 +1,12 @@
 import type { EngineElement, TextElement } from "@/lib/engine/types";
 import { appearanceCapabilities } from "./capabilities";
 import { readAppearance } from "./legacyAdapter";
-import type { AppearanceItem, AppearanceSnapshot, EffectAppearance } from "./types";
+import type {
+  AppearanceItem,
+  AppearanceSnapshot,
+  BackgroundAppearance,
+  EffectAppearance,
+} from "./types";
 
 export type AppearanceStackRow =
   | { key: string; kind: "item"; item: AppearanceItem }
@@ -57,6 +62,7 @@ export function isMvpStackItem(
 ): boolean {
   if (item.kind === "fill") return caps.fills;
   if (item.kind === "stroke") return caps.strokes;
+  if (item.kind === "background") return caps.background;
   if (item.kind === "effect" && item.effect.type === "shadow") return caps.shadow;
   if (item.kind === "effect" && item.effect.type === "glow") return caps.glow;
   return false;
@@ -79,6 +85,12 @@ export function findStroke(appearance: { items: AppearanceItem[] }): AppearanceI
   return appearance.items.find((item) => item.kind === "stroke");
 }
 
+export function findBackground(appearance: {
+  items: AppearanceItem[];
+}): BackgroundAppearance | undefined {
+  return appearance.items.find((item): item is BackgroundAppearance => item.kind === "background");
+}
+
 export function findFills(appearance: { items: AppearanceItem[] }): AppearanceItem[] {
   return appearance.items.filter((item) => item.kind === "fill");
 }
@@ -87,20 +99,35 @@ export function findStrokes(appearance: { items: AppearanceItem[] }): Appearance
   return appearance.items.filter((item) => item.kind === "stroke");
 }
 
-export function appearanceItemLabel(
-  item: AppearanceItem,
-  elementType?: EngineElement["type"],
-): string {
-  if (item.kind === "fill") return elementType === "text" ? "Background" : "Fill";
-  if (item.kind === "stroke") return elementType === "text" ? "Text" : "Stroke";
+export function findBackgrounds(appearance: { items: AppearanceItem[] }): BackgroundAppearance[] {
+  return appearance.items.filter(
+    (item): item is BackgroundAppearance => item.kind === "background",
+  );
+}
+
+/**
+ * Illustrator-like names for every object type.
+ * Fill = object fill (glyphs on text). Stroke = outline. Background = behind-text box.
+ */
+export function appearanceItemLabel(item: AppearanceItem): string {
+  if (item.kind === "fill") return "Fill";
+  if (item.kind === "stroke") return "Stroke";
+  if (item.kind === "background") return "Background";
   if (item.kind !== "effect") return "Item";
   if (item.effect.type === "shadow") return "Shadow";
   if (item.effect.type === "glow") return "Glow";
   return item.effect.type;
 }
 
+export function appearanceItemTypeLabel(item: AppearanceItem): string {
+  if (item.kind === "fill") return "Fill";
+  if (item.kind === "stroke") return "Line";
+  if (item.kind === "background") return "Bg";
+  return "Fx";
+}
+
 export function appearanceItemSwatch(item: AppearanceItem): string {
-  if (item.kind === "fill") {
+  if (item.kind === "fill" || item.kind === "background") {
     if (item.paint.type === "solid") return item.paint.color;
     if (item.paint.type === "pattern") return item.paint.foreground;
     return item.paint.stops[0]?.color ?? "transparent";
@@ -112,9 +139,12 @@ export function appearanceItemSwatch(item: AppearanceItem): string {
   return "transparent";
 }
 
-export function stackKindOf(item: AppearanceItem): "fill" | "stroke" | "shadow" | "glow" | null {
+export function stackKindOf(
+  item: AppearanceItem,
+): "fill" | "stroke" | "background" | "shadow" | "glow" | null {
   if (item.kind === "fill") return "fill";
   if (item.kind === "stroke") return "stroke";
+  if (item.kind === "background") return "background";
   if (item.kind === "effect" && (item.effect.type === "shadow" || item.effect.type === "glow")) {
     return item.effect.type;
   }

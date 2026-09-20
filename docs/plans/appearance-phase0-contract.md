@@ -25,6 +25,7 @@ In scope:
 
 - Appearance panel in the live Builder Inspector
 - **Multiple Fill and Stroke layers** (add / remove / reorder); Canvas paints in stored stack order
+- **Text paint roles (Illustrator-like):** Fill = glyph fill (สีพื้นของตัวอักษร), Stroke = glyph outline (สีขอบ), Background = optional behind-text backdrop (separate stack item — not the Fill row renamed)
 - Shadow + Glow (both allowed)
 - Text Arc for text objects via existing `pathCurvature` (no path envelope warp)
 - Image tone sliders (`adjustments` / `filterBlur`) as one Appearance UI group for images; not Appearance stack items and not Brand Graphic Styles
@@ -46,6 +47,8 @@ Out of scope:
 - `canvasPaintPasses` emits visible fills/strokes in stored order. When more than one fill or stroke is visible, or a fill paints in front of a stroke, the Canvas renderer composites those passes instead of the single legacy fill+stroke draw.
 - Dual-write still copies the **first visible** fill and stroke onto legacy flat fields so older readers (SVG/PPTX, FillSection) keep a primary style. Extra layers are not dropped from `appearance`.
 - New shapes/text keep today’s factory defaults (typically one fill and/or one stroke after hydrate).
+- **Text dual-write:** first visible Fill → `strokeColor` (legacy glyph color, so SVG `<text fill>` stays correct). First visible Background → `backgroundColor`. Glyph Stroke (outline) lives on `appearance.items`; `strokeWidth` is dual-written for the outline weight. Do not treat Fill as the text box.
+- Older text stacks that stored the box as Fill and the glyph color as Stroke are remapped on read/hydrate (`paintSemantics: "object"`). Transparent boxes are dropped rather than kept as a Fill named Background.
 
 ## Stack order
 

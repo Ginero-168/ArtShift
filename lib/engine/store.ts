@@ -1846,7 +1846,7 @@ function appearancePatchesFor(
     const result = changeAppearance(element, resolved);
     if (!result.ok) return result;
     if (!result.changed) continue;
-    patches.push({ id, patch: appearanceElementPatch(result.appearance) });
+    patches.push({ id, patch: appearanceElementPatch(result.appearance, element) });
   }
   return { ok: true, changed: patches.length > 0, patches };
 }

@@ -154,7 +154,7 @@ export function changeAppearance(
   const applied = applyOperation(snapshot, operation);
   if (!applied.ok) return applied;
 
-  const patch = appearanceElementPatch(applied.appearance);
+  const patch = appearanceElementPatch(applied.appearance, element);
   const nextElement = { ...element, ...patch } as EngineElement;
   return {
     ok: true,

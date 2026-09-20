@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { IconChevronDown, IconEye, IconEyeOff, IconPlus, IconTrash } from "@/components/icons";
 import {
   type AppearanceOperation,
+  addBackgroundOperation,
   addFillOperation,
   addGlowOperation,
   addShadowOperation,
@@ -11,10 +12,14 @@ import {
   appearanceCapabilities,
   appearanceItemLabel,
   appearanceItemSwatch,
+  appearanceItemTypeLabel,
   appearanceStackRows,
+  backgroundItemPatchOperation,
+  backgroundPaintOperation,
   clampPathCurvature,
   fillItemPatchOperation,
   fillPaintOperation,
+  findBackground,
   findEffect,
   findFill,
   findStroke,
@@ -85,6 +90,7 @@ export default function AppearancePanel({
   const hasGlow = !!findEffect(appearance, "glow");
   const hasFill = caps.fills && !!findFill(appearance);
   const hasStroke = caps.strokes && !!findStroke(appearance);
+  const hasBackground = caps.background && !!findBackground(appearance);
 
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const rowKeys = useMemo(() => rows.map((row) => row.key), [rows]);
@@ -188,18 +194,8 @@ export default function AppearancePanel({
                     style={{ background: appearanceItemSwatch(item) }}
                     aria-hidden="true"
                   />
-                  <span className={styles.appearanceRowType}>
-                    {item.kind === "effect" && item.effect.type === "glow"
-                      ? "Fx"
-                      : item.kind === "effect"
-                        ? "Fx"
-                        : item.kind === "fill"
-                          ? "Fill"
-                          : "Line"}
-                  </span>
-                  <span className={styles.appearanceRowTitle}>
-                    {appearanceItemLabel(item, element.type)}
-                  </span>
+                  <span className={styles.appearanceRowType}>{appearanceItemTypeLabel(item)}</span>
+                  <span className={styles.appearanceRowTitle}>{appearanceItemLabel(item)}</span>
                 </button>
                 <div className={styles.appearanceRowActions}>
                   <button
@@ -308,6 +304,20 @@ export default function AppearancePanel({
             }}
           >
             <IconPlus size={12} /> Stroke
+          </button>
+        ) : null}
+        {caps.background && !hasBackground && appearance.items.length < APPEARANCE_MAX_ITEMS ? (
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            data-appearance-add="background"
+            aria-label="Add background"
+            onClick={() => {
+              applyOp((target) => addBackgroundOperation(target), "add background");
+              setExpandedKey(null);
+            }}
+          >
+            <IconPlus size={12} /> Background
           </button>
         ) : null}
         {caps.shadow && !hasShadow ? (
@@ -514,8 +524,10 @@ function AppearanceItemEditor({
   ) => void;
   endSlider: () => void;
 }) {
-  if (item.kind === "fill") {
+  if (item.kind === "fill" || item.kind === "background") {
     const paint = item.paint;
+    const isBackground = item.kind === "background";
+    const label = isBackground ? "Background" : "Fill";
     const fillType =
       paint.type === "linearGradient"
         ? "linear"
@@ -535,14 +547,20 @@ function AppearanceItemEditor({
     return (
       <>
         <div className={styles.field}>
-          <span>{element.type === "text" ? "Background" : "Fill"}</span>
+          <span>{label}</span>
           <ColorPickerInput
             value={solidColor}
             onChange={(color) =>
               applyOp(
                 (target) =>
-                  fillPaintOperation(target, { type: "solid", color }, { itemId: item.id }),
-                "fill",
+                  isBackground
+                    ? backgroundPaintOperation(
+                        target,
+                        { type: "solid", color },
+                        { itemId: item.id },
+                      )
+                    : fillPaintOperation(target, { type: "solid", color }, { itemId: item.id }),
+                isBackground ? "background" : "fill",
               )
             }
             supportsGradient={true}
@@ -555,24 +573,24 @@ function AppearanceItemEditor({
                 offset,
                 color: colors[index] ?? colors[0] ?? "#ffffff",
               }));
+              const nextPaint =
+                type === "radial"
+                  ? ({ type: "radialGradient", stops: nextStops } as const)
+                  : {
+                      type: "linearGradient" as const,
+                      angle: angle ?? 90,
+                      stops: nextStops,
+                    };
               applyOp(
                 (target) =>
-                  fillPaintOperation(
-                    target,
-                    type === "radial"
-                      ? { type: "radialGradient", stops: nextStops }
-                      : {
-                          type: "linearGradient",
-                          angle: angle ?? 90,
-                          stops: nextStops,
-                        },
-                    { itemId: item.id },
-                  ),
-                "fill gradient",
+                  isBackground
+                    ? backgroundPaintOperation(target, nextPaint, { itemId: item.id })
+                    : fillPaintOperation(target, nextPaint, { itemId: item.id }),
+                isBackground ? "background gradient" : "fill gradient",
               );
             }}
             allowTransparent={true}
-            title="Fill color"
+            title={`${label} color`}
           />
         </div>
         <label className={styles.rangeField}>
@@ -582,13 +600,17 @@ function AppearanceItemEditor({
             min={0}
             max={100}
             value={Math.round(item.opacity * 100)}
-            aria-label="Fill opacity"
-            onPointerDown={() => beginSlider("fill opacity")}
+            aria-label={`${label} opacity`}
+            onPointerDown={() => beginSlider(`${isBackground ? "background" : "fill"} opacity`)}
             onChange={(event) =>
               slideOp((target) =>
-                fillItemPatchOperation(target, item.id, {
-                  opacity: Number(event.currentTarget.value) / 100,
-                }),
+                isBackground
+                  ? backgroundItemPatchOperation(target, item.id, {
+                      opacity: Number(event.currentTarget.value) / 100,
+                    })
+                  : fillItemPatchOperation(target, item.id, {
+                      opacity: Number(event.currentTarget.value) / 100,
+                    }),
               )
             }
             onPointerUp={endSlider}
@@ -603,14 +625,14 @@ function AppearanceItemEditor({
     return (
       <>
         <div className={styles.field}>
-          <span>{element.type === "text" ? "Text" : "Stroke"}</span>
+          <span>Stroke</span>
           <ColorPickerInput
             value={item.color}
             onChange={(color) =>
               applyOp((target) => strokePatchOperation(target, { color }, item.id), "stroke color")
             }
-            allowTransparent={element.type !== "text"}
-            title={element.type === "text" ? "Text color" : "Stroke color"}
+            allowTransparent={true}
+            title="Stroke color"
           />
         </div>
         <label className={styles.rangeField}>

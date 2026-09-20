@@ -94,6 +94,12 @@ describe("appearance Phase 1 foundation", () => {
     expect(appearanceCapabilities(createText({ x: 0, y: 0, width: 40, text: "Hi" })).textArc).toBe(
       true,
     );
+    expect(
+      appearanceCapabilities(createText({ x: 0, y: 0, width: 40, text: "Hi" })).background,
+    ).toBe(true);
+    expect(appearanceCapabilities(createRect({ x: 0, y: 0, width: 1, height: 1 })).background).toBe(
+      false,
+    );
     const image = createImage({
       x: 0,
       y: 0,

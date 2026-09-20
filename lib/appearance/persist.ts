@@ -1,5 +1,9 @@
 import type { EngineDoc, EngineElement, EngineSlide } from "@/lib/engine/types";
-import { appearanceToLegacyPatch, synthesizeAppearanceFromLegacy } from "./legacyAdapter";
+import {
+  appearanceToLegacyPatch,
+  migrateTextPaintSemantics,
+  synthesizeAppearanceFromLegacy,
+} from "./legacyAdapter";
 import { normalizeAppearance, validateAppearance } from "./normalize";
 import type { Appearance, AppearanceItem, AppearanceSnapshot, EffectAppearance } from "./types";
 
@@ -27,6 +31,7 @@ export function persistedAppearance(appearance: Appearance): Appearance {
     opacity: appearance.opacity,
     blendMode: appearance.blendMode,
     items: appearance.items,
+    paintSemantics: appearance.paintSemantics ?? "object",
   });
 }
 
@@ -52,15 +57,18 @@ export function dualWriteElement(element: EngineElement, appearance: Appearance)
   const canonical = persistedAppearance(appearance);
   return {
     ...element,
-    ...appearanceToLegacyPatch(canonical),
+    ...appearanceToLegacyPatch(canonical, element),
     appearance: canonical,
   } as EngineElement;
 }
 
-export function appearanceElementPatch(appearance: Appearance): Partial<EngineElement> {
+export function appearanceElementPatch(
+  appearance: Appearance,
+  element?: Pick<EngineElement, "type">,
+): Partial<EngineElement> {
   const canonical = persistedAppearance(appearance);
   return {
-    ...appearanceToLegacyPatch(canonical),
+    ...appearanceToLegacyPatch(canonical, element),
     appearance: canonical,
   };
 }
@@ -77,7 +85,9 @@ export function patchTouchesLegacyAppearance(patch: Partial<EngineElement>): boo
 export function hydrateElementAppearance(element: EngineElement): EngineElement {
   const stored = element.appearance;
   const normalized = tryNormalizeAppearance(stored);
-  if (normalized) return dualWriteElement(element, normalized);
+  if (normalized) {
+    return dualWriteElement(element, migrateTextPaintSemantics(element, normalized));
+  }
   if (stored) return element;
   return dualWriteElement(element, snapshotToAppearance(synthesizeAppearanceFromLegacy(element)));
 }
@@ -106,7 +116,9 @@ export function syncAppearanceFromLegacy(
 ): EngineElement {
   const synthesized = snapshotToAppearance(synthesizeAppearanceFromLegacy(merged));
   const existing = tryNormalizeAppearance(previous.appearance);
-  const appearance = existing ? replacePrimaryItems(existing, synthesized) : synthesized;
+  const appearance = existing
+    ? replacePrimaryItems(existing, synthesized, merged.type)
+    : synthesized;
   return dualWriteElement(merged, appearance);
 }
 
@@ -116,25 +128,41 @@ export function syncElementAppearance(
   patch: Partial<EngineElement>,
 ): EngineElement {
   const fromPatch = tryNormalizeAppearance(patch.appearance);
-  if (fromPatch) return dualWriteElement(merged, fromPatch);
+  if (fromPatch) return dualWriteElement(merged, migrateTextPaintSemantics(merged, fromPatch));
   if (patchTouchesLegacyAppearance(patch)) {
     return syncAppearanceFromLegacy(previous, merged);
   }
   return merged;
 }
 
-function replacePrimaryItems(existing: Appearance, synthesized: Appearance): Appearance {
+function replacePrimaryItems(
+  existing: Appearance,
+  synthesized: Appearance,
+  elementType?: EngineElement["type"],
+): Appearance {
   const items = [...existing.items];
   replaceFirst(
     items,
     (item) => item.kind === "fill",
     synthesized.items.find((item) => item.kind === "fill"),
   );
-  replaceFirst(
-    items,
-    (item) => item.kind === "stroke",
-    synthesized.items.find((item) => item.kind === "stroke"),
-  );
+  if (elementType === "text") {
+    replaceFirst(
+      items,
+      (item) => item.kind === "background",
+      synthesized.items.find((item) => item.kind === "background"),
+    );
+    if (!items.some((item) => item.kind === "stroke")) {
+      const stroke = synthesized.items.find((item) => item.kind === "stroke");
+      if (stroke) items.push(stroke);
+    }
+  } else {
+    replaceFirst(
+      items,
+      (item) => item.kind === "stroke",
+      synthesized.items.find((item) => item.kind === "stroke"),
+    );
+  }
   replaceFirst(
     items,
     (item) => item.kind === "effect" && item.effect.type === "shadow",

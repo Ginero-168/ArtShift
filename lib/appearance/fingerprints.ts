@@ -1,7 +1,7 @@
 import type { Appearance, AppearanceItem } from "./types";
 
 function paintKey(item: AppearanceItem): string {
-  if (item.kind === "fill") return JSON.stringify(item.paint);
+  if (item.kind === "fill" || item.kind === "background") return JSON.stringify(item.paint);
   if (item.kind === "stroke") {
     return [item.color, item.width, item.style, item.alignment ?? "center"].join(":");
   }

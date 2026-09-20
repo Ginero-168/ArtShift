@@ -532,7 +532,7 @@ UI ของ Fill ใช้ `ColorPickerInput` เดิมเป็น editor a
 Capability เบื้องต้น:
 
 - Shape/Path: Fill + Stroke + Effect
-- Text: Text color/Fill + Effect
+- Text: Fill (glyphs) + Stroke (outline) + optional Background (behind text) + Effect
 - Line/Arrow/Freedraw: Stroke + Effect
 - Image: Effect + opacity; ไม่แสดง Fill/Stroke ที่ไม่เกี่ยวข้อง
 - Book Mockup: คง lighting และ ground shadow แบบเฉพาะทาง
