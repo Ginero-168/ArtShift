@@ -76,6 +76,19 @@ describe("Appearance MVP panel slice", () => {
         }),
       ).textArc,
     ).toBe(false);
+    expect(
+      appearanceCapabilities(
+        createImage({
+          x: 0,
+          y: 0,
+          width: 10,
+          height: 10,
+          fileId: "f",
+          naturalWidth: 10,
+          naturalHeight: 10,
+        }),
+      ).imageAdjust,
+    ).toBe(true);
   });
 
   it("keeps both shadow and glow in stack order instead of XOR", () => {
@@ -183,6 +196,11 @@ describe("Appearance UI wiring", () => {
     expect(panel).toContain("Text Arc");
     expect(panel).toContain("pathCurvature");
     expect(panel).toContain("updateAppearance");
+    expect(panel).toContain('data-appearance-row="imageAdjust"');
+    expect(panel).toContain("ปรับโทนภาพ");
+    expect(inspector).not.toContain("Pixel edit");
+    expect(inspector).not.toContain("Pixel mask");
+    expect(inspector).not.toContain("Retouch patches");
     expect(fillSection).not.toContain("glow: undefined");
     expect(fillSection).not.toContain("shadow: undefined");
     expect(contract).toContain("schema v7");

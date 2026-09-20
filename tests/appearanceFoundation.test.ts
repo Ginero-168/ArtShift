@@ -105,6 +105,7 @@ describe("appearance Phase 1 foundation", () => {
     });
     expect(appearanceCapabilities(image).fills).toBe(false);
     expect(appearanceCapabilities(image).shadow).toBe(true);
+    expect(appearanceCapabilities(image).imageAdjust).toBe(true);
   });
 
   it("writes legacy patch without inventing unsupported image effects", () => {

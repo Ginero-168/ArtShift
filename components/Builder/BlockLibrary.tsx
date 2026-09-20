@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { IconChevronDown, IconLayoutGrid, IconSearch, IconSparkles } from "@/components/icons";
 import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import {
@@ -20,6 +20,14 @@ import {
   type VectorIconDefinition,
 } from "@/lib/builder/vectorIconLibrary";
 import { type LineSubtype, type Tool, useEngine } from "@/lib/engine/store";
+import {
+  clampLibraryAssistantWidth,
+  LIBRARY_ASSISTANT_DEFAULT_WIDTH,
+  LIBRARY_ASSISTANT_MAX_WIDTH,
+  libraryBlockWidth,
+  persistLibraryAssistantWidth,
+  readLibraryAssistantWidth,
+} from "@/lib/ui/libraryPanelSize";
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 import IconLibraryModal from "./IconLibraryModal";
@@ -79,12 +87,76 @@ export default function BlockLibrary() {
   const [query, setQuery] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<LibraryTab>("assistant");
+  const [assistantWidth, setAssistantWidth] = useState(LIBRARY_ASSISTANT_DEFAULT_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
+  const assistantWidthRef = useRef(assistantWidth);
+  const resizeDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  assistantWidthRef.current = assistantWidth;
+
+  useLayoutEffect(() => {
+    setAssistantWidth(readLibraryAssistantWidth());
+  }, []);
 
   useEffect(() => {
     return subscribeCoPilotExternalTurn((request) => {
       if (request.openAssistant !== false) setActiveTab("assistant");
     });
   }, []);
+
+  const commitAssistantWidth = useCallback((width: number) => {
+    const next = persistLibraryAssistantWidth(width);
+    setAssistantWidth(next);
+    return next;
+  }, []);
+
+  const onResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      resizeDragRef.current = { startX: event.clientX, startWidth: assistantWidth };
+      setIsResizing(true);
+    },
+    [assistantWidth],
+  );
+
+  const onResizePointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = resizeDragRef.current;
+    if (!drag) return;
+    setAssistantWidth(clampLibraryAssistantWidth(drag.startWidth + (event.clientX - drag.startX)));
+  }, []);
+
+  const onResizePointerUp = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (!resizeDragRef.current) return;
+      resizeDragRef.current = null;
+      setIsResizing(false);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      commitAssistantWidth(assistantWidthRef.current);
+    },
+    [commitAssistantWidth],
+  );
+
+  const onResizeKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      const minWidth = libraryBlockWidth();
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        commitAssistantWidth(assistantWidth - 16);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        commitAssistantWidth(assistantWidth + 16);
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        commitAssistantWidth(minWidth);
+      } else if (event.key === "End") {
+        event.preventDefault();
+        commitAssistantWidth(LIBRARY_ASSISTANT_MAX_WIDTH);
+      }
+    },
+    [assistantWidth, commitAssistantWidth],
+  );
   const [isIconModalOpen, setIsIconModalOpen] = useState(false);
 
   const filtered = useMemo(() => {
@@ -163,6 +235,8 @@ export default function BlockLibrary() {
     <aside
       className={`${styles.library} ${activeTab === "assistant" ? styles.libraryAssistantActive : ""}`}
       aria-label="Blocks and AI Assistance"
+      data-resizing={isResizing ? "true" : undefined}
+      style={activeTab === "assistant" ? { width: assistantWidth } : undefined}
     >
       <div className={styles.libraryTabs} role="tablist" aria-label="Workspace tools">
         <button
@@ -300,6 +374,25 @@ export default function BlockLibrary() {
       >
         <AIAssistancePanel />
       </div>
+
+      {activeTab === "assistant" ? (
+        <button
+          type="button"
+          role="separator"
+          className={styles.libraryResizeHandle}
+          aria-label="ปรับขนาดแผง AI Assistance"
+          aria-orientation="vertical"
+          aria-valuemin={libraryBlockWidth()}
+          aria-valuemax={LIBRARY_ASSISTANT_MAX_WIDTH}
+          aria-valuenow={assistantWidth}
+          title="ลากเพื่อปรับขนาด"
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={onResizePointerUp}
+          onPointerCancel={onResizePointerUp}
+          onKeyDown={onResizeKeyDown}
+        />
+      ) : null}
 
       <IconLibraryModal
         isOpen={isIconModalOpen}

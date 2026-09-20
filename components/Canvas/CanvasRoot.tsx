@@ -269,7 +269,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
         ctx.save();
         ctx.strokeStyle = "#6366f1";
         ctx.lineWidth = 1.5 / view.scale;
-        ctx.setLineDash([6 / view.scale, 4 / view.scale]);
+        ctx.setLineDash([]);
 
         // Cluster elements that belong to the same group
         const clusters: EngineElement[][] = [];

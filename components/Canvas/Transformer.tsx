@@ -804,14 +804,14 @@ export default function Transformer({
       }}
     >
       {lineScreenPts ? (
-        /* For lines/arrows: draw dashed guide polyline through all control points */
+        /* For lines/arrows: solid guide polyline through all control points */
         <polyline
           points={lineScreenPts.map((p) => `${p.x},${p.y}`).join(" ")}
           fill="none"
           stroke="var(--accent, #4f46e5)"
           strokeWidth={1}
-          strokeDasharray="3 3"
           strokeOpacity={0.6}
+          vectorEffect="non-scaling-stroke"
         />
       ) : outlineCorners ? (
         <polygon

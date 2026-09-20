@@ -39,6 +39,10 @@ describe("Transformer Bounding Box UI (Adobe Illustrator style)", () => {
     expect(polygonMatch![0]).toContain('vectorEffect="non-scaling-stroke"');
   });
 
+  it("draws line and arrow selection guides as solid strokes", () => {
+    expect(source).not.toContain("strokeDasharray");
+  });
+
   it("includes an invisible touch area for effortless grabbing", () => {
     expect(source).toContain('fill="transparent"');
   });

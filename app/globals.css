@@ -423,6 +423,10 @@ button {
   width: 22px; height: 22px; border-radius: 6px;
   background: var(--accent); color: var(--accent-ink);
   display: grid; place-items: center;
+  overflow: hidden;
+}
+.brand-mark svg {
+  display: block;
 }
 .sep { width: 1px; height: 15px; background: var(--stroke); }
 .title-input {
