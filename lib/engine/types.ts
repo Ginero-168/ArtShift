@@ -221,9 +221,18 @@ export type VectorPathElement = BaseElement & {
   arrowheadScale?: number;
 };
 
+/** Illustrator-style text: point hugs content; area wraps inside a fixed frame. */
+export type TextMode = "point" | "area";
+
 export type TextElement = BaseElement & {
   type: "text";
   text: string;
+  /**
+   * Point text (click-create) auto-sizes to its glyphs.
+   * Area text / Text Frame (drag-create) wraps inside a fixed box.
+   * Missing on older documents — treat as `"area"`.
+   */
+  textMode?: TextMode;
   /** Optional semantic style chosen from the Builder's unified Text presets. */
   textPreset?:
     | "title"

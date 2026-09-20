@@ -39,6 +39,7 @@ import { fileToDataURL, loadDataURL } from "@/lib/engine/imageCache";
 import { getLayerForObject } from "@/lib/engine/layers";
 import { useEngine } from "@/lib/engine/store";
 import { getTextSafePadding, measureTextElementHeight } from "@/lib/engine/textLayout";
+import { normalizeTextPatch } from "@/lib/engine/textObject";
 import type {
   BookMockupElement,
   EngineElement,
@@ -1084,9 +1085,7 @@ function TextOptions({
   const selectedPreset = getTextPreset(selectedPresetId);
   const withSafeHeight = (patch: Partial<TextElement>) => {
     if (blockManaged) return patch;
-    const next = { ...text, ...patch };
-    const minimumHeight = measureTextElementHeight(next);
-    return { ...patch, height: Math.max(next.height, minimumHeight) };
+    return normalizeTextPatch(text, patch);
   };
 
   return (

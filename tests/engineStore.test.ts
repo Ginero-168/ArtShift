@@ -8,7 +8,6 @@ import {
   createText,
 } from "@/lib/engine/factory";
 import { useEngine } from "@/lib/engine/store";
-import { measureTextElementHeight } from "@/lib/engine/textLayout";
 import { ENGINE_SCHEMA_VERSION } from "@/lib/engine/types";
 import { createRasterSelectionOperation } from "@/lib/raster/selection";
 
@@ -182,9 +181,16 @@ describe("engine store", () => {
     expect(pastedArrow?.groupIds[0]).not.toBe(groupId);
   });
 
-  it("grows Free text height when wrapped Thai text needs more lines", () => {
+  it("keeps area text frames fixed when copy wraps instead of auto-growing like PowerPoint", () => {
     const st = useEngine.getState();
-    const text = createText({ x: 100, y: 100, width: 240, height: 60, text: "สั้น" });
+    const text = createText({
+      x: 100,
+      y: 100,
+      width: 240,
+      height: 60,
+      text: "สั้น",
+      textMode: "area",
+    });
     st.addElement(text);
 
     st.updateElements([
@@ -198,9 +204,41 @@ describe("engine store", () => {
 
     const afterSlide = useEngine.getState().currentSlide()!;
     expect("placements" in afterSlide.layers[0]).toBe(false);
-    expect(afterSlide.elements.find((element) => element.id === text.id)!.height).toBeGreaterThan(
-      60,
-    );
+    const after = afterSlide.elements.find((element) => element.id === text.id);
+    expect(after?.type).toBe("text");
+    if (after?.type !== "text") return;
+    expect(after.height).toBe(60);
+    expect(after.width).toBe(240);
+  });
+
+  it("grows and shrinks point text bounds with the typed content", () => {
+    const st = useEngine.getState();
+    const text = createText({ x: 100, y: 100, text: "สั้น", textMode: "point" });
+    st.addElement(text);
+    const afterCreate = useEngine.getState().currentSlide()?.elements[0];
+    expect(afterCreate?.type).toBe("text");
+    if (afterCreate?.type !== "text") return;
+    const startWidth = afterCreate.width;
+    const startHeight = afterCreate.height;
+
+    st.updateElements([
+      {
+        id: text.id,
+        patch: { text: "หนังสือเล่มนี้จะช่วยให้คุณเข้าใจการออกแบบ" },
+      },
+    ]);
+    const grown = useEngine.getState().currentSlide()?.elements[0];
+    expect(grown?.type).toBe("text");
+    if (grown?.type !== "text") return;
+    expect(grown.width).toBeGreaterThan(startWidth);
+    expect(grown.height).toBeCloseTo(startHeight, 5);
+
+    st.updateElements([{ id: text.id, patch: { text: "สั้น" } }]);
+    const shrunk = useEngine.getState().currentSlide()?.elements[0];
+    expect(shrunk?.type).toBe("text");
+    if (shrunk?.type !== "text") return;
+    expect(shrunk.width).toBeCloseTo(startWidth, 5);
+    expect(shrunk.height).toBeCloseTo(startHeight, 5);
   });
 
   it("supports undo and redo", () => {
@@ -384,7 +422,7 @@ describe("engine store", () => {
     expect(resized.width / resized.height).toBeCloseTo(1.6, 5);
   });
 
-  it("grows Free text when a width change creates more wrapped lines", () => {
+  it("keeps an area text frame when its box is edited without a scale transform", () => {
     const st = useEngine.getState();
     const title = createText({
       x: 100,
@@ -393,17 +431,18 @@ describe("engine store", () => {
       height: 120,
       fontSize: 70,
       text: "นี่คือชื่อหนังสือภาษาไทยที่ยาวมากและไม่มีช่องว่างเพื่อทดสอบการตัดบรรทัดอย่างปลอดภัย",
+      textMode: "area",
     });
     st.addElement(title);
-    const beforeHeight = title.height;
 
     st.updateElements([{ id: title.id, patch: { width: 260, height: 20 } }], "narrow text");
 
     const resized = useEngine.getState().currentSlide()?.elements[0];
     expect(resized?.type).toBe("text");
     if (resized?.type !== "text") return;
-    expect(resized.height).toBeGreaterThan(beforeHeight);
-    expect(resized.height).toBeGreaterThanOrEqual(measureTextElementHeight(resized));
+    expect(resized.width).toBe(260);
+    expect(resized.height).toBe(20);
+    expect(resized.fontSize).toBe(70);
   });
 
   it("refits a media bounding box when its source ratio changes", () => {

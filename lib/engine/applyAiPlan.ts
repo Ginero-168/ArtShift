@@ -10,8 +10,8 @@ import type {
 import { createEllipse, createRect, createText, createTriangle } from "./factory";
 import { pushHistory } from "./history";
 import { useEngine } from "./store";
-import { measureTextElementHeight } from "./textLayout";
-import type { EngineDoc, EngineElement, EngineLayer, EngineSlide } from "./types";
+import { normalizeTextPatch } from "./textObject";
+import type { EngineDoc, EngineElement, EngineLayer, EngineSlide, TextElement } from "./types";
 
 export type AiRevision = Revision;
 export type AiTargetRef = TargetRef;
@@ -340,8 +340,11 @@ function applyCommand(
   }
 
   const next = { ...element, ...command.patch } as EngineElement;
-  if (next.type === "text" && VISUAL_PATCH_KEYS.has("text") && !next.containerId) {
-    next.height = Math.max(next.height, measureTextElementHeight(next));
+  if (next.type === "text") {
+    Object.assign(
+      next,
+      normalizeTextPatch(element as TextElement, command.patch as Partial<TextElement>),
+    );
   }
   if (Object.keys(command.patch).some((key) => VISUAL_PATCH_KEYS.has(key))) {
     next.version = element.version + 1;

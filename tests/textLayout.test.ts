@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createText } from "@/lib/engine/factory";
 import {
+  autosizePointText,
   fitTextElementToBox,
   getTextMinimumHeight,
   getTextSafePadding,
@@ -43,6 +44,22 @@ describe("text layout safety", () => {
       layout.lines.every((line) => measureRichText(line.text, measure) <= availableWidth),
     ).toBe(true);
     expect(layout.minimumHeight).toBeGreaterThan(text.height);
+    expect(layout.minimumWidth).toBeGreaterThan(layout.padding * 2);
+  });
+
+  it("does not wrap point text — the box tracks the unwrapped glyph width", () => {
+    const text = createText({
+      x: 0,
+      y: 0,
+      fontSize: 10,
+      text: "ภาษาไทยยาวมากโดยไม่มีช่องว่าง",
+      textMode: "point",
+    });
+    const measure = (value: string) => Array.from(value).length * 10;
+    const layout = layoutText(text, measure);
+    expect(layout.lines).toHaveLength(1);
+    expect(layout.minimumWidth).toBeGreaterThan(text.width * 0.5);
+    expect(autosizePointText(text, measure).width).toBe(layout.minimumWidth);
   });
 
   it("fits fixed template typography without changing its box", () => {

@@ -1,4 +1,4 @@
-import type { TextElement } from "./types";
+import type { TextElement, TextMode } from "./types";
 
 const MIN_TEXT_PADDING = 6;
 const FONT_PADDING_RATIO = 0.12;
@@ -25,9 +25,29 @@ export type TextLayout = {
   lines: TextLine[];
   padding: number;
   lineHeight: number;
+  contentWidth: number;
   contentHeight: number;
+  minimumWidth: number;
   minimumHeight: number;
 };
+
+/** Empty point text still needs a caret-sized box so the I-beam is hittable. */
+export const POINT_TEXT_CARET_EM = 0.55;
+
+export function resolveTextMode(element: {
+  textMode?: TextMode;
+  containerId?: TextElement["containerId"];
+}): TextMode {
+  if (element.containerId) return "area";
+  return element.textMode === "point" ? "point" : "area";
+}
+
+export function isPointText(element: {
+  textMode?: TextMode;
+  containerId?: TextElement["containerId"];
+}): boolean {
+  return resolveTextMode(element) === "point";
+}
 
 /**
  * Canvas text is cached into a bitmap with the exact element bounds. Keeping
@@ -63,36 +83,81 @@ export function layoutText(
   element: Pick<
     TextElement,
     "text" | "fontSize" | "fontFamily" | "fontStyle" | "lineHeight" | "padding" | "width" | "height"
-  >,
+  > &
+    Partial<Pick<TextElement, "textMode" | "containerId">>,
   measure: TextMeasure = (text) => estimateTextWidth(text, element.fontSize),
 ): TextLayout {
   const padding = getTextSafePadding(element.fontSize, element.padding ?? 0);
-  const availableWidth = Math.max(1, element.width - padding * 2);
+  const wrap = !isPointText(element);
+  const availableWidth = wrap ? Math.max(1, element.width - padding * 2) : Number.POSITIVE_INFINITY;
   const lines = element.text
     .split("\n")
     .flatMap((rawLine) => wrapExplicitLine(rawLine, availableWidth, element.fontSize, measure));
   const lineHeight = element.fontSize * element.lineHeight;
   const contentHeight = Math.max(1, lines.length) * lineHeight;
+  const contentWidth = lines.reduce((maxWidth, line) => {
+    const lineWidth = measureRichText(line.text, measure) + line.bulletIndent;
+    return Math.max(maxWidth, lineWidth);
+  }, 0);
+  const caretWidth =
+    !element.text && isPointText(element) ? element.fontSize * POINT_TEXT_CARET_EM : 0;
   return {
     lines,
     padding,
     lineHeight,
+    contentWidth,
     contentHeight,
+    minimumWidth: Math.max(contentWidth, caretWidth) + padding * 2,
     minimumHeight: contentHeight + padding * 2,
   };
+}
+
+function layoutTextWithBestMeasure(
+  element: Pick<
+    TextElement,
+    "text" | "fontSize" | "fontFamily" | "fontStyle" | "lineHeight" | "padding" | "width" | "height"
+  > &
+    Partial<Pick<TextElement, "textMode" | "containerId">>,
+  measure?: TextMeasure,
+): TextLayout {
+  if (measure) return layoutText(element, measure);
+  const context = browserMeasureContext();
+  if (!context) return layoutText(element);
+  return layoutText(element, createCanvasTextMeasure(context, element));
 }
 
 export function measureTextElementHeight(
   element: Pick<
     TextElement,
     "text" | "fontSize" | "fontFamily" | "fontStyle" | "lineHeight" | "padding" | "width" | "height"
-  >,
+  > &
+    Partial<Pick<TextElement, "textMode" | "containerId">>,
   measure?: TextMeasure,
 ): number {
-  if (measure) return layoutText(element, measure).minimumHeight;
-  const context = browserMeasureContext();
-  if (!context) return layoutText(element).minimumHeight;
-  return layoutText(element, createCanvasTextMeasure(context, element)).minimumHeight;
+  return layoutTextWithBestMeasure(element, measure).minimumHeight;
+}
+
+export function measureTextElementWidth(
+  element: Pick<
+    TextElement,
+    "text" | "fontSize" | "fontFamily" | "fontStyle" | "lineHeight" | "padding" | "width" | "height"
+  > &
+    Partial<Pick<TextElement, "textMode" | "containerId">>,
+  measure?: TextMeasure,
+): number {
+  return layoutTextWithBestMeasure(element, measure).minimumWidth;
+}
+
+/** Point text: the frame is the glyph bounds. Area text is left unchanged. */
+export function autosizePointText(element: TextElement, measure?: TextMeasure): TextElement {
+  if (!isPointText(element)) return element;
+  const layout = layoutTextWithBestMeasure(element, measure);
+  return {
+    ...element,
+    width: Math.max(1, layout.minimumWidth),
+    height: Math.max(1, layout.minimumHeight),
+    padding: layout.padding,
+  };
 }
 
 /** Reduce typography only when a fixed template box cannot safely contain it. */

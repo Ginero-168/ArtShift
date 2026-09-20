@@ -1,5 +1,6 @@
 import { createText } from "../engine/factory";
-import { getTextSafePadding, measureTextElementHeight } from "../engine/textLayout";
+import { getTextSafePadding } from "../engine/textLayout";
+import { normalizeTextPatch } from "../engine/textObject";
 import type { TextElement } from "../engine/types";
 import { DEFAULT_THAI_FONT_FAMILY } from "../fonts";
 
@@ -169,8 +170,7 @@ export function textPresetPatch(
     builderKind: "text",
   };
   if (!blockManaged) {
-    const next = { ...text, ...patch };
-    patch.height = Math.max(text.height, measureTextElementHeight(next));
+    Object.assign(patch, normalizeTextPatch(text, patch));
   }
   return patch;
 }

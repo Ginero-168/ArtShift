@@ -58,6 +58,11 @@ import {
   type Tool,
   useEngine,
 } from "@/lib/engine/store";
+import {
+  createTextFrameDraft,
+  createTextFromGesture,
+  TEXT_CREATE_DRAG_THRESHOLD_PX,
+} from "@/lib/engine/textObject";
 import { toolToCursor } from "@/lib/engine/toolBehavior";
 import type {
   EngineElement,
@@ -370,12 +375,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       }
       if (!slide) return;
 
-      // Text tool: place a new text element and enter edit mode.
+      // Text tool: click = point text; drag = area Text Frame (Illustrator).
       if (tool === "text") {
-        const el = createText({ x: p.x, y: p.y, text: "" });
-        addElement(el, "add text");
-        setEditingTextId(el.id);
-        setTool("select");
+        dragRef.current = { kind: "draw", start: p };
+        setDraft(null);
         return;
       }
 
@@ -558,9 +561,14 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
         if (boundText) {
           setEditingTextId(boundText.id);
         } else {
-          const el = createText({ x: hit.x, y: hit.y, text: "" });
-          el.width = hit.width;
-          el.height = hit.height;
+          const el = createText({
+            x: hit.x,
+            y: hit.y,
+            width: hit.width,
+            height: hit.height,
+            text: "",
+            textMode: "area",
+          });
           el.containerId = hit.id;
           el.verticalAlign = "middle";
           el.textAlign = "center";
@@ -654,6 +662,15 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       if (d.kind === "erase") {
         const hit = pickTopMost(p, slide);
         if (hit) deleteElements([hit.id]);
+        return;
+      }
+      if (tool === "text") {
+        const threshold = TEXT_CREATE_DRAG_THRESHOLD_PX / view.scale;
+        if (isMeaningfulMove(d.start, p, threshold)) {
+          setDraft(createTextFrameDraft(d.start, p, _e.shiftKey));
+        } else {
+          setDraft(null);
+        }
         return;
       }
       // draw
@@ -754,6 +771,15 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       }
       // draw commit
       if (d.kind !== "draw") return;
+      if (tool === "text") {
+        const threshold = TEXT_CREATE_DRAG_THRESHOLD_PX / view.scale;
+        const textEl = createTextFromGesture(d.start, p, threshold, e?.shiftKey ?? false);
+        setDraft(null);
+        addElement(textEl, textEl.textMode === "point" ? "add point text" : "add text frame");
+        setEditingTextId(textEl.id);
+        setTool("select");
+        return;
+      }
       const el = makeDraftFor(tool, d.start, p, lineSubtype, e?.shiftKey ?? false);
       if (tool === "arrow" && el && slide) {
         const startHit = pickTopMost(d.start, slide);
@@ -811,6 +837,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, CanvasEditorProps>(function 
       slide,
       tool,
       editorController,
+      view.scale,
     ],
   );
 

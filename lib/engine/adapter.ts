@@ -219,6 +219,7 @@ function convertText(
     fontFamily: obj.fontFamily,
     width: geom.width,
     height: geom.height,
+    textMode: obj.autoFit ? "point" : "area",
   });
   return applyCommon(
     {

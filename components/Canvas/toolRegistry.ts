@@ -76,7 +76,7 @@ export const VECTOR_TOOL_DEFINITIONS: ToolDefinition[] = [
     id: "text",
     icon: IconText,
     label: "Text",
-    title: "Create text (T)",
+    title: "Click for point text, drag for a text frame (T)",
     ...shortcutFor("text"),
   },
 ];
