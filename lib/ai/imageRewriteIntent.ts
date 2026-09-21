@@ -80,6 +80,15 @@ export function userInstructionTokens(prompt: string): string[] {
       ),
     );
   }
+  const thaiChunks = command.match(/[\u0E00-\u0E7F]{2,}/g);
+  if (thaiChunks) {
+    tokens.push(
+      ...thaiChunks.filter(
+        (chunk) =>
+          !/^(?:ปรับ|ทำให้|เปลี่ยน|แปลง|ทำ|เป็น|ให้เป็น|จาก|ภาพ|รูป|นี้|นั้น|หน่อย|ครับ|ค่ะ)$/u.test(chunk),
+      ),
+    );
+  }
   return [...new Set(tokens.map((item) => item.trim()).filter((item) => item.length >= 2))];
 }
 
@@ -96,9 +105,13 @@ export function preserveUserInstructionInPrompt(
   if (!command) return compiled;
   if (!compiled) return command;
   if (compiled.toLocaleLowerCase().includes(command.toLocaleLowerCase())) return compiled;
-  const missing = userInstructionTokens(command).filter(
+  const tokens = userInstructionTokens(command);
+  const missing = tokens.filter(
     (token) => !compiled.toLocaleLowerCase().includes(token.toLocaleLowerCase()),
   );
-  if (missing.length === 0) return compiled;
-  return `User instruction (authoritative): ${command}\n\n${compiled}`;
+  // No extractable tokens (or any still missing) → keep the raw current ask.
+  if (tokens.length === 0 || missing.length > 0) {
+    return `User instruction (authoritative): ${command}\n\n${compiled}`;
+  }
+  return compiled;
 }

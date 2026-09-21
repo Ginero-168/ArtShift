@@ -49,6 +49,8 @@ describe("directed rewrite intent is general, not subject-specific", () => {
     expect(isDirectedImageRewrite("@Photo ปรับให้เป็น Pixel Art สัดส่วน 1:1")).toBe(true);
     expect(isDirectedImageRewrite("ทำให้เป็น watercolor 16:9")).toBe(true);
     expect(isDirectedImageRewrite("convert this coffee shot to flat vector")).toBe(true);
+    expect(isDirectedImageRewrite("ปรับให้เป็นภาพการ์ตูน")).toBe(true);
+    expect(isDirectedImageRewrite("ทำเป็นภาพลายเส้นจากรูปดอกไม้")).toBe(true);
     expect(isDirectedImageRewrite("สร้างมาอีก 3 รูป")).toBe(false);
   });
 
@@ -70,6 +72,15 @@ describe("directed rewrite intent is general, not subject-specific", () => {
     expect(vector).toMatch(/flat vector/i);
     expect(vector).toContain("1:1");
     expect(vector).toMatch(/coffee/i);
+
+    const cartoon = streamlinePromptForImageGen("ปรับให้เป็นภาพการ์ตูน");
+    expect(cartoon).toContain("การ์ตูน");
+    expect(cartoon).not.toMatch(/masterwork commercial art/i);
+
+    const lineArt = streamlinePromptForImageGen("ทำเป็นภาพลายเส้นจากรูปดอกไม้ สัดส่วน 3:4");
+    expect(lineArt).toContain("ลายเส้น");
+    expect(lineArt).toContain("ดอกไม้");
+    expect(lineArt).toContain("3:4");
   });
 
   it("reinstates missing style and aspect when Director emits a generic stock prompt", () => {
@@ -86,6 +97,13 @@ describe("directed rewrite intent is general, not subject-specific", () => {
     expect(coffee).toMatch(/flat vector/i);
     expect(coffee).toContain("1:1");
     expect(coffee).toMatch(/coffee/i);
+
+    const thaiOnly = preserveUserInstructionInPrompt(
+      "vibrant blooming colorful flowers, botanical garden, soft focus, 8k resolution",
+      "ปรับให้เป็นภาพการ์ตูน",
+    );
+    expect(thaiOnly).toContain("การ์ตูน");
+    expect(thaiOnly).toContain("User instruction (authoritative):");
   });
 });
 
@@ -136,6 +154,33 @@ describe("explicit current-ask size still beats last package and attached portra
     expect(run.tasks[0]?.prompt).toContain("1:1");
     expect(run.tasks[0]?.requiredSubjects).toEqual(["cat"]);
   });
+
+  it("uses a newly inserted square building photo instead of last-package 16:9", () => {
+    const building = {
+      objectId: "building-square",
+      elementVersion: 1,
+      fileId: "file-building",
+      displayName: "Building",
+      sourceWidth: 1200,
+      sourceHeight: 1200,
+      width: 400,
+      height: 400,
+      angle: 0,
+    };
+    const dims = resolveTaskDimensionsWithContext({
+      prompt: "@Building ทำโปสเตอร์จากภาพนี้",
+      refs: [building],
+      analyses: [],
+      priorGeneration: {
+        userPrompt: "สร้างรูปวิว 16:9",
+        refinedPrompt: "Landscape 16:9",
+        width: 1280,
+        height: 720,
+        aspectRatio: "16:9",
+      },
+    });
+    expect(dims.aspectRatio).toBe("1:1");
+  });
 });
 
 describe("quality gate does not hard-fail directed rewrites", () => {
@@ -165,6 +210,32 @@ describe("quality gate does not hard-fail directed rewrites", () => {
     expect(result.passed).toBe(true);
     expect(result.checks.find((check) => check.id === "reference")?.passed).toBe(true);
     expect(result.checks.find((check) => check.id === "subject")?.passed).toBe(true);
+  });
+
+  it("passes a Thai cartoon rewrite of a flower photo with the same policy", () => {
+    const result = runGeneratedImageQualityGate({
+      outputWidth: 1024,
+      outputHeight: 1024,
+      requestedAspectRatio: "1:1",
+      requiredSubjects: ["flower", "vase"],
+      referenceRequired: true,
+      referenceFacts: [
+        {
+          caption: "pink flowers in a glass vase",
+          objects: ["flower", "vase"],
+          visibleText: "",
+          limitations: ["cropped"],
+        },
+      ],
+      outputAnalysis: {
+        caption: "simple cartoon botanical drawing",
+        objects: ["drawing"],
+        visibleText: "",
+        limitations: ["stylized"],
+      },
+      directedRewrite: true,
+    });
+    expect(result.passed).toBe(true);
   });
 
   it("also passes a watercolor/dog rewrite with the same policy", () => {
