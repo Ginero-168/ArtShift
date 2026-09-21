@@ -52,7 +52,7 @@ describe("Prompt Helper plan route", () => {
     expect(response.status).toBe(200);
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "assistant.chat",
-      expect.objectContaining({ maxTokens: 1200 }),
+      expect.objectContaining({ maxTokens: 3200 }),
       expect.objectContaining({
         cloudConsent: true,
         allowFallback: false,

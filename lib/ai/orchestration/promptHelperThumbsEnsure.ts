@@ -1,19 +1,48 @@
 /**
  * Ensure Prompt Helper thumbnails exist on disk (VPS public folder).
  * Missing ids are generated via Replicate and persisted for later opens.
+ *
+ * Sensitive / hard failures are recorded so reopen does not burn the same
+ * Replicate call forever — a safer fallback prompt is tried once first.
  */
 
-import { access, mkdir, readdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { listPromptHelperThumbEntries, promptHelperThumbPrompt } from "./promptHelperThumbPrompts";
 
 const OUT_DIR = path.join(process.cwd(), "public/prompt-helper/thumbs");
 const MANIFEST_JSON = path.join(process.cwd(), "public/prompt-helper/manifest.json");
+const FAILED_JSON = path.join(OUT_DIR, "_failed.json");
 const MODEL = process.env.PROMPT_HELPER_THUMB_MODEL || "openai/gpt-image-2.5-sunburst";
 const CONCURRENCY = Math.max(1, Number(process.env.PROMPT_HELPER_THUMB_CONCURRENCY || 2));
+const FAILED_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 const inFlight = new Set<string>();
 let queueTail: Promise<void> = Promise.resolve();
+
+const SAFE_FALLBACK_PROMPTS: Readonly<Record<string, string>> = {
+  comic:
+    "Wholesome pop-art poster of a smiling coffee cup with thick black outlines and bright halftone dots, clean illustration, square crop, no text, no watermark",
+  pixel:
+    "Cute 8-bit pixel art gem icon on a bright blue background, wholesome game sprite, square crop, no text, no watermark",
+  clay:
+    "Soft clay sculpture of a round yellow smiling blob character, stop-motion clay look, wholesome, square crop, no text, no watermark",
+  ink: "Gentle Chinese ink wash of distant misty mountains on cream paper, traditional brush painting, square crop, no text, no watermark",
+  child:
+    "Wholesome illustration of a cheerful child silhouette playing with a kite at a park, soft daylight, square crop, no text, no watermark",
+  couple:
+    "Wholesome illustration of two people holding hands at sunset as distant silhouettes, romantic soft light, square crop, no text, no watermark",
+  model:
+    "Elegant adult fashion editorial portrait, soft studio light, wholesome magazine look, square crop, no text, no watermark",
+};
+
+type FailedEntry = {
+  at: number;
+  reason: string;
+  promptHash: string;
+  attempts: number;
+};
 
 async function exists(filePath: string): Promise<boolean> {
   try {
@@ -22,6 +51,41 @@ async function exists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function hashPrompt(prompt: string): string {
+  return createHash("sha1").update(prompt).digest("hex").slice(0, 12);
+}
+
+function isSensitiveError(message: string): boolean {
+  return /sensitive|E005|flagged|nsfw|safety|policy/i.test(message);
+}
+
+async function loadFailedMap(): Promise<Record<string, FailedEntry>> {
+  try {
+    const raw = await readFile(FAILED_JSON, "utf8");
+    const parsed = JSON.parse(raw) as Record<string, FailedEntry>;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+async function saveFailedMap(map: Record<string, FailedEntry>): Promise<void> {
+  await mkdir(OUT_DIR, { recursive: true });
+  await writeFile(FAILED_JSON, `${JSON.stringify(map, null, 2)}\n`);
+}
+
+function shouldSkipFailed(
+  entry: FailedEntry | undefined,
+  promptHash: string,
+  now = Date.now(),
+): boolean {
+  if (!entry) return false;
+  if (entry.promptHash !== promptHash) return false;
+  if (now - entry.at > FAILED_COOLDOWN_MS) return false;
+  return entry.attempts >= 1;
 }
 
 function firstOutputUrl(output: unknown): string | null {
@@ -114,20 +178,72 @@ async function writeJsonManifest() {
   return ids;
 }
 
-async function generateOne(token: string, optionId: string) {
-  const prompt = promptHelperThumbPrompt(optionId);
-  if (!prompt) return false;
-  const dest = path.join(OUT_DIR, `${optionId}.jpg`);
-  if (await exists(dest)) return true;
+async function runPredictionToFile(token: string, prompt: string, dest: string) {
   let prediction = await createPrediction(token, prompt);
   if (prediction.status !== "succeeded") {
     prediction = await waitPrediction(token, prediction);
   }
   const url = firstOutputUrl(prediction.output);
-  if (!url) throw new Error(`no output url for ${optionId}`);
+  if (!url) throw new Error("no output url");
   await mkdir(OUT_DIR, { recursive: true });
   await downloadToFile(url, dest);
+}
+
+async function generateOne(token: string, optionId: string) {
+  const primary = promptHelperThumbPrompt(optionId);
+  if (!primary) return false;
+  const dest = path.join(OUT_DIR, `${optionId}.jpg`);
+  if (await exists(dest)) {
+    const failed = await loadFailedMap();
+    if (failed[optionId]) {
+      delete failed[optionId];
+      await saveFailedMap(failed);
+    }
+    return true;
+  }
+
+  const promptHash = hashPrompt(primary);
+  try {
+    await runPredictionToFile(token, primary, dest);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const fallback = SAFE_FALLBACK_PROMPTS[optionId];
+    if (fallback && (isSensitiveError(message) || /prediction failed/i.test(message))) {
+      try {
+        console.warn(`[prompt-helper-thumbs] retry ${optionId} with safer prompt`);
+        await runPredictionToFile(token, fallback, dest);
+      } catch (fallbackError) {
+        await recordFailure(
+          optionId,
+          promptHash,
+          fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        );
+        throw fallbackError;
+      }
+    } else {
+      await recordFailure(optionId, promptHash, message);
+      throw error;
+    }
+  }
+
+  const failed = await loadFailedMap();
+  if (failed[optionId]) {
+    delete failed[optionId];
+    await saveFailedMap(failed);
+  }
   return true;
+}
+
+async function recordFailure(optionId: string, promptHash: string, reason: string) {
+  const failed = await loadFailedMap();
+  const prev = failed[optionId];
+  failed[optionId] = {
+    at: Date.now(),
+    reason: reason.slice(0, 400),
+    promptHash,
+    attempts: (prev?.promptHash === promptHash ? prev.attempts : 0) + 1,
+  };
+  await saveFailedMap(failed);
 }
 
 export async function listExistingPromptHelperThumbIds(): Promise<string[]> {
@@ -143,37 +259,50 @@ export async function listExistingPromptHelperThumbIds(): Promise<string[]> {
   }
 }
 
+export async function listFailedPromptHelperThumbIds(): Promise<string[]> {
+  const failed = await loadFailedMap();
+  const now = Date.now();
+  return Object.entries(failed)
+    .filter(([, entry]) => shouldSkipFailed(entry, entry.promptHash, now))
+    .map(([id]) => id)
+    .sort();
+}
+
 export type EnsureThumbsResult = {
   existing: string[];
   queued: string[];
   skippedNoPrompt: string[];
+  skippedFailed: string[];
   skippedNoToken: boolean;
 };
 
-/**
- * Queue missing thumbs for background generation. Returns immediately after scheduling.
- * Files land in `public/prompt-helper/thumbs/` so the next Helper open (or a poll) can show them.
- */
 export async function ensurePromptHelperThumbs(params: {
   optionIds: string[];
   token: string | null | undefined;
   maxQueue?: number;
 }): Promise<EnsureThumbsResult> {
-  const maxQueue = params.maxQueue ?? 24;
+  const maxQueue = params.maxQueue ?? 48;
   await mkdir(OUT_DIR, { recursive: true });
   const known = new Set(await listExistingPromptHelperThumbIds());
+  const failedMap = await loadFailedMap();
   const unique = [...new Set(params.optionIds.map((id) => id.trim()).filter(Boolean))];
   const existing: string[] = [];
   const missing: string[] = [];
   const skippedNoPrompt: string[] = [];
+  const skippedFailed: string[] = [];
 
   for (const id of unique) {
     if (known.has(id)) {
       existing.push(id);
       continue;
     }
-    if (!promptHelperThumbPrompt(id)) {
+    const prompt = promptHelperThumbPrompt(id);
+    if (!prompt) {
       skippedNoPrompt.push(id);
+      continue;
+    }
+    if (shouldSkipFailed(failedMap[id], hashPrompt(prompt))) {
+      skippedFailed.push(id);
       continue;
     }
     missing.push(id);
@@ -181,11 +310,15 @@ export async function ensurePromptHelperThumbs(params: {
 
   const queued = missing.filter((id) => !inFlight.has(id)).slice(0, maxQueue);
   if (!params.token) {
-    return { existing, queued: [], skippedNoPrompt, skippedNoToken: true };
+    return { existing, queued: [], skippedNoPrompt, skippedFailed, skippedNoToken: true };
   }
   if (queued.length === 0) {
-    return { existing, queued: [], skippedNoPrompt, skippedNoToken: false };
+    return { existing, queued: [], skippedNoPrompt, skippedFailed, skippedNoToken: false };
   }
+
+  console.info(
+    `[prompt-helper-thumbs] queue ${queued.length}/${missing.length} missing (have ${existing.length}): ${queued.slice(0, 12).join(",")}${queued.length > 12 ? "…" : ""}`,
+  );
 
   for (const id of queued) inFlight.add(id);
   const token = params.token;
@@ -220,7 +353,7 @@ export async function ensurePromptHelperThumbs(params: {
       console.error("[prompt-helper-thumbs] queue:", error);
     });
 
-  return { existing, queued, skippedNoPrompt, skippedNoToken: false };
+  return { existing, queued, skippedNoPrompt, skippedFailed, skippedNoToken: false };
 }
 
 export function allCatalogThumbIds(): string[] {

@@ -177,9 +177,24 @@ export default function AICoPilotBar() {
   const [promptRefinementData, setPromptRefinementData] = useState<PromptRefinementCardData | null>(
     null,
   );
+  const [promptHelperPlanning, setPromptHelperPlanning] = useState(false);
+  const [promptHelperPlanSource, setPromptHelperPlanSource] = useState<
+    "gemini" | "baseline" | null
+  >(null);
+  const [promptHelperRationale, setPromptHelperRationale] = useState("");
+  const [promptHelperPlanError, setPromptHelperPlanError] = useState("");
   const pendingRefinementLocksRef = useRef<ReturnType<
     typeof buildRefinementOrchestratorLocks
   > | null>(null);
+
+  const closePromptHelper = () => {
+    pendingRefinementLocksRef.current = null;
+    setPromptRefinementData(null);
+    setPromptHelperPlanning(false);
+    setPromptHelperPlanSource(null);
+    setPromptHelperRationale("");
+    setPromptHelperPlanError("");
+  };
 
   const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
 
@@ -193,7 +208,7 @@ export default function AICoPilotBar() {
   const handleClearHistory = () => {
     setMessages([createDefaultGreeting()]);
     setPendingClarification(null);
-    setPromptRefinementData(null);
+    closePromptHelper();
     setInput("");
     if (projectId) clearChatHistorySnapshot(projectId);
   };
@@ -384,33 +399,84 @@ export default function AICoPilotBar() {
     }
   };
 
-  const handleTogglePromptHelper = async () => {
-    if (promptRefinementData) {
-      pendingRefinementLocksRef.current = null;
-      setPromptRefinementData(null);
-      return;
-    }
-    const currentPrompt = (editorRef.current?.getValue() ?? input).trim();
-    const basePrompt = currentPrompt || "สร้างภาพ";
-    const baseline = createPromptRefinement(basePrompt);
-    setPromptRefinementData(baseline);
-    if (!ensureCloudConsent()) return;
+  const requestPromptHelperPlan = async (basePrompt: string) => {
+    setPromptHelperPlanning(true);
+    setPromptHelperRationale("");
+    setPromptHelperPlanError("");
     try {
       const res = await fetch("/api/ai/prompt-helper/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: basePrompt, cloudConsent: true }),
       });
-      if (!res.ok) return;
       const json = (await res.json().catch(() => null)) as {
-        card?: ReturnType<typeof createPromptRefinement>;
+        card?: PromptRefinementCardData;
+        planSource?: "gemini" | "baseline";
+        rationale?: string;
+        planError?: string | null;
+        error?: string;
       } | null;
+      if (!res.ok) {
+        setPromptHelperPlanSource("baseline");
+        setPromptHelperPlanError(
+          json?.error || json?.planError || `วางแผนไม่สำเร็จ (${res.status})`,
+        );
+        return;
+      }
       if (json?.card) {
         setPromptRefinementData(json.card);
+        setPromptHelperPlanSource(json.planSource === "gemini" ? "gemini" : "baseline");
+        setPromptHelperRationale(typeof json.rationale === "string" ? json.rationale.trim() : "");
+        if (json.planSource !== "gemini") {
+          setPromptHelperPlanError(
+            typeof json.planError === "string" && json.planError
+              ? `โมเดลยังคัดไม่สำเร็จ: ${json.planError}`
+              : "โมเดลยังคัดตัวเลือกไม่สำเร็จ — กดทบทวนได้อีกครั้ง",
+          );
+        }
+      } else {
+        setPromptHelperPlanSource("baseline");
+        setPromptHelperPlanError("ไม่ได้รับแผนจากเซิร์ฟเวอร์");
       }
     } catch {
-      // Baseline card already shown.
+      setPromptHelperPlanSource("baseline");
+      setPromptHelperPlanError("เชื่อมต่อแผน Prompt Helper ไม่สำเร็จ");
+    } finally {
+      setPromptHelperPlanning(false);
     }
+  };
+
+  const handleTogglePromptHelper = async () => {
+    if (promptRefinementData) {
+      closePromptHelper();
+      return;
+    }
+    const currentPrompt = (editorRef.current?.getValue() ?? input).trim();
+    const basePrompt = currentPrompt || "สร้างภาพ";
+    const consented = ensureCloudConsent();
+    setPromptRefinementData(createPromptRefinement(basePrompt));
+    setPromptHelperPlanSource("baseline");
+    setPromptHelperRationale("");
+    if (!consented) {
+      setPromptHelperPlanError("ต้องอนุญาต Cloud AI ก่อน โมเดลถึงจะคัดตัวเลือกให้ได้");
+      return;
+    }
+    await requestPromptHelperPlan(basePrompt);
+  };
+
+  const handleRethinkPromptHelper = async () => {
+    if (!promptRefinementData || promptHelperPlanning) return;
+    const basePrompt =
+      promptRefinementData.originalPrompt?.trim() ||
+      (editorRef.current?.getValue() ?? input).trim() ||
+      "สร้างภาพ";
+    setPromptRefinementData(createPromptRefinement(basePrompt));
+    setPromptHelperPlanSource("baseline");
+    if (!ensureCloudConsent()) {
+      setPromptHelperPlanError("ต้องอนุญาต Cloud AI ก่อน โมเดลถึงจะคัดตัวเลือกให้ได้");
+      return;
+    }
+    await requestPromptHelperPlan(basePrompt);
   };
 
   const handleSend = async (
@@ -422,7 +488,7 @@ export default function AICoPilotBar() {
     if (!rawPrompt || busy) return;
 
     if (promptRefinementData) {
-      setPromptRefinementData(null);
+      closePromptHelper();
     }
 
     const pending = pendingClarification;
@@ -1882,6 +1948,10 @@ export default function AICoPilotBar() {
               editorRef.current?.setValue(fallbackUserPrompt);
               editorRef.current?.focus();
               setPromptRefinementData(createPromptRefinement(fallbackUserPrompt));
+              setPromptHelperPlanSource("baseline");
+              setPromptHelperRationale("");
+              setPromptHelperPlanError("");
+              if (ensureCloudConsent()) void requestPromptHelperPlan(fallbackUserPrompt);
             }
             return;
           }
@@ -1908,12 +1978,16 @@ export default function AICoPilotBar() {
           editorRef.current?.focus();
           const refinement = createPromptRefinement(prompt);
           setPromptRefinementData(refinement);
+          setPromptHelperPlanSource("baseline");
+          setPromptHelperRationale("");
+          setPromptHelperPlanError("");
+          if (ensureCloudConsent()) void requestPromptHelperPlan(prompt);
         }}
       >
         <ChatActionCards
           promptRefinementData={promptRefinementData}
           onGenerateFromRefinement={(refined) => {
-            setPromptRefinementData(null);
+            closePromptHelper();
             handleSend(refined);
           }}
           onApplyRefinementToComposer={(refined) => {
@@ -1921,12 +1995,16 @@ export default function AICoPilotBar() {
             editorRef.current?.setValue(refined);
             editorRef.current?.focus();
           }}
-          onDismissRefinement={() => {
-            pendingRefinementLocksRef.current = null;
-            setPromptRefinementData(null);
-          }}
+          onDismissRefinement={closePromptHelper}
           onRefinementLocksChange={(locks) => {
             pendingRefinementLocksRef.current = locks;
+          }}
+          promptHelperPlanning={promptHelperPlanning}
+          promptHelperPlanSource={promptHelperPlanSource}
+          promptHelperRationale={promptHelperRationale}
+          promptHelperPlanError={promptHelperPlanError}
+          onRethinkPromptHelper={() => {
+            void handleRethinkPromptHelper();
           }}
           pendingPlan={pendingPlan}
           busy={busy}

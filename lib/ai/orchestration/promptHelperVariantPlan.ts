@@ -35,29 +35,53 @@ Return ONLY one JSON object. No markdown.
 
 Two layers:
 1) Shared Anchors (Level 1) — always accuracy: exact text/logo/brand colors/aspect ratio/reference identity. Never treat these as pickable variants.
-2) Variant axes (Level 2) — the ONLY safe differences. Choose axes that match THIS brief's visual language (background structure, signature motif, mood poles, layout density, tone, camera, style, etc.). Do NOT invent a fixed campaign brand; derive signature elements from the user's brief only.
+2) Variant axes (Level 2) — the ONLY safe differences. Choose axes that match THIS brief. Do NOT invent a fixed campaign brand; derive from the user's brief only.
+
+Image-prompt levers (use these mental categories):
+- atmosphere: emotional register (epic, whimsical, dark, serene…)
+- creative: concept twist that makes a thin prompt richer (surreal, mythic, chibi, epic scale…)
+- lighting: light quality/direction (rim, god rays, neon, moonlit…)
+- color: palette poles
+- background / scenery: place and supporting scene
+- weather: time of day / weather spice
+- detail: surface/material density
+- composition: framing and layout of the shot
+- camera / style: lens language and visual medium
+- breed: species/breed for pets (cats, dogs)
+- look: person appearance for portraits
+- Brand axes when preferBrandAxes: mood, structure, signature, density
 
 Situation table (pick one):
-- style_locked: user already said "like this" / tight style → tiny differences only (1–2 axes, 2–3 options each)
-- theme_broad: only a wide theme/tone → full poles so the user can choose a direction
-- strict_ci: brand guidelines tight → axes stay inside CI; vary composition/atmosphere only
-- experimental: free campaign → wider poles allowed
-- subject_explore: casual subject photo request → tone/background/camera/style
+- style_locked: user already said "like this" / tight style → 3–4 axes, up to 15 options each when the catalog allows
+- theme_broad: wide theme only → up to 10 axes, 15 options each so the user can explore
+- strict_ci: brand guidelines tight → axes stay inside CI; vary composition/atmosphere/lighting; still prefer rich option lists
+- experimental: free campaign → up to 10 axes, 15 options each, wider creative + atmosphere poles
+- subject_explore: casual subject (สร้างรูป… / draw a…) → prefer atmosphere + creative + lighting + background/scenery + weather + detail + composition + style + camera + color. Target up to 10 axes, 15 options each.
 
 Allowed axis ids (subset only what fits):
-mood, structure, signature, density, color, background, camera, style, scenery
+mood, structure, signature, density, color, background, camera, style, scenery, atmosphere, creative, lighting, detail, weather, composition, breed, look
+
+Relevance (critical):
+- Read the user prompt carefully. Option ids must feel useful for THAT subject.
+- Fantasy / creature / epic (มังกร, dragon, wizard, monster, myth): prefer atmosphere (atm_epic, atm_dark, atm_mysterious), creative (cre_mythic, cre_epic_scale, cre_surreal), lighting (light_dramatic, light_godrays, light_biolum), scenery/background (mountain, volcano, storm, aurora, cave, ruins), detail (det_scales, det_hyper), composition (comp_wide_est, comp_low_hero, comp_depth), cinematic cameras. NEVER pick kitchen, office, cafe, library, selfie, park for these.
+- Pets / cute animals: ALWAYS include breed + color as fur/coat (orange, tabby, scottish, golden…) — NEVER replace pet color with palette tones (vibrant, pastel, neon). Prefer domestic/garden backgrounds, atm_playful / atm_whimsical, cre_chibi ok.
+- People / portrait: ALWAYS include look; studio/room/cafe/city; lighting + atmosphere + composition matter; avoid volcano unless asked.
+- Landscapes: scenery + weather + lighting + atmosphere + composition.
+- Brand / ad: prefer mood/structure/signature/density when preferBrandAxes is true.
 
 Rules:
-- Prefer 3–4 axes max. Each axis 3–5 option ids from the allowed lists in the user message.
-- Poles on an axis must feel different enough to choose a direction (premium vs energy vs minimal, etc.).
+- For subject_explore / theme_broad / experimental: target up to 10 axes and exactly 15 option ids per axis from the allowed lists (use as many catalog ids as exist, prefer 15).
+- style_locked / strict_ci may use fewer axes but still fill each chosen axis toward 15 options when possible.
+- Poles on an axis must feel different enough to choose a direction.
 - Never put logo/text/ratio into axes.
+- rationale: one short Thai sentence explaining why these options fit THIS prompt.
 
 JSON shape:
 {
-  "situation": "theme_broad",
+  "situation": "subject_explore",
   "rationale": "short Thai why these axes fit",
   "preferBrandAxes": false,
-  "axes": [{ "id": "color", "optionIds": ["vibrant","pastel","earth","dark"] }]
+  "axes": [{ "id": "atmosphere", "optionIds": ["atm_epic","atm_dark","atm_mysterious"] }]
 }`;
 
 export function buildPromptHelperVariantUserMessage(
@@ -72,14 +96,15 @@ export function buildPromptHelperVariantUserMessage(
 
 export function parsePromptHelperVariantPlan(raw: string): PromptHelperVariantPlan | null {
   try {
-    const clean = raw
+    let clean = raw
       .trim()
       .replace(/```(?:json)?/gi, "")
       .replace(/```/g, "")
       .trim();
     const match = clean.match(/\{[\s\S]*\}/);
     if (!match) return null;
-    const parsed = JSON.parse(match[0]) as Partial<PromptHelperVariantPlan>;
+    clean = match[0].replace(/,\s*([}\]])/g, "$1");
+    const parsed = JSON.parse(clean) as Partial<PromptHelperVariantPlan>;
     if (!parsed || typeof parsed !== "object") return null;
     const situation = normalizeSituation(parsed.situation);
     if (!Array.isArray(parsed.axes) || parsed.axes.length === 0) return null;
@@ -89,7 +114,7 @@ export function parsePromptHelperVariantPlan(raw: string): PromptHelperVariantPl
       const optionIds = axis.optionIds
         .map((id) => String(id || "").trim())
         .filter(Boolean)
-        .slice(0, 6);
+        .slice(0, 15);
       if (optionIds.length === 0) continue;
       axes.push({ id: axis.id.trim(), optionIds });
     }
@@ -98,7 +123,7 @@ export function parsePromptHelperVariantPlan(raw: string): PromptHelperVariantPl
       situation,
       rationale: typeof parsed.rationale === "string" ? parsed.rationale.trim() : "",
       preferBrandAxes: Boolean(parsed.preferBrandAxes),
-      axes: axes.slice(0, 5),
+      axes: axes.slice(0, 10),
     };
   } catch {
     return null;

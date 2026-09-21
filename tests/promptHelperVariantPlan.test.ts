@@ -42,9 +42,43 @@ describe("prompt helper variant plan", () => {
         { id: "camera", optionIds: ["front", "closeup"] },
       ],
     });
-    expect(planned.dimensions.map((d) => d.id)).toEqual(["color", "camera"]);
-    expect(planned.dimensions[0]?.options.map((o) => o.id)).toEqual(["vibrant", "pastel"]);
-    expect(planned.dimensions[1]?.options).toHaveLength(2);
+    expect(planned.dimensions).toHaveLength(10);
+    expect(planned.dimensions[0]?.id).toBe("color");
+    expect(planned.dimensions[0]?.options).toHaveLength(15);
+    expect(planned.dimensions[0]?.options.map((o) => o.id).slice(0, 2)).toEqual([
+      "vibrant",
+      "pastel",
+    ]);
+    expect(planned.dimensions[1]?.id).toBe("camera");
+    expect(planned.dimensions[1]?.options).toHaveLength(15);
+    expect(planned.dimensions[1]?.options.map((o) => o.id).slice(0, 2)).toEqual([
+      "front",
+      "closeup",
+    ]);
+  });
+
+  it("keeps cat สี and สายพันธุ์ when Gemini plans generic palette color", () => {
+    const baseline = createPromptRefinement("สร้างรูปแมว");
+    const planned = applyPromptHelperVariantPlan(baseline, {
+      situation: "subject_explore",
+      rationale: "test",
+      preferBrandAxes: false,
+      axes: [
+        { id: "color", optionIds: ["vibrant", "pastel", "dark"] },
+        { id: "atmosphere", optionIds: ["atm_epic", "atm_playful"] },
+      ],
+    });
+    const ids = planned.dimensions.map((d) => d.id);
+    expect(ids).toContain("color");
+    expect(ids).toContain("breed");
+    expect(ids[0]).toBe("color");
+    const color = planned.dimensions.find((d) => d.id === "color");
+    expect(color?.title).toBe("สี");
+    expect(color?.options.map((o) => o.id)).toContain("orange");
+    expect(color?.options.map((o) => o.id)).not.toContain("vibrant");
+    const breed = planned.dimensions.find((d) => d.id === "breed");
+    expect(breed?.title).toBe("สายพันธุ์");
+    expect(breed?.options.map((o) => o.id)).toContain("scottish");
   });
 
   it("keeps system prompt free of hardcoded campaign brands", () => {

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   ensurePromptHelperThumbs,
   listExistingPromptHelperThumbIds,
+  listFailedPromptHelperThumbIds,
 } from "@/lib/ai/orchestration/promptHelperThumbsEnsure";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import {
@@ -15,7 +16,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const limiter = new RateLimiter(40, 60_000);
-const MAX_BODY_BYTES = 40_000;
+const MAX_BODY_BYTES = 80_000;
+const MAX_OPTION_IDS = 200;
+const MAX_QUEUE = 48;
 
 /**
  * GET — list thumb ids already on disk.
@@ -37,6 +40,7 @@ export async function GET(req: NextRequest) {
 
   const idsParam = req.nextUrl.searchParams.get("ids");
   const existing = await listExistingPromptHelperThumbIds();
+  const failed = await listFailedPromptHelperThumbIds();
   if (idsParam) {
     const wanted = new Set(
       idsParam
@@ -45,9 +49,14 @@ export async function GET(req: NextRequest) {
         .filter(Boolean),
     );
     const ready = existing.filter((id) => wanted.has(id));
-    return NextResponse.json({ ready, existingCount: existing.length });
+    const failedWanted = failed.filter((id) => wanted.has(id));
+    return NextResponse.json({
+      ready,
+      failed: failedWanted,
+      existingCount: existing.length,
+    });
   }
-  return NextResponse.json({ ids: existing });
+  return NextResponse.json({ ids: existing, failed });
 }
 
 export async function POST(req: NextRequest) {
@@ -87,9 +96,9 @@ export async function POST(req: NextRequest) {
   if (!access.ok) return access.response;
 
   const result = await ensurePromptHelperThumbs({
-    optionIds: optionIds.slice(0, 80),
+    optionIds: optionIds.slice(0, MAX_OPTION_IDS),
     token: access.replicateToken,
-    maxQueue: 24,
+    maxQueue: MAX_QUEUE,
   });
 
   return NextResponse.json(result);

@@ -83,6 +83,8 @@ describe("เสาหลักที่ 4: Architecture Refactoring and Prompt 
     expect(refinementSource).toContain("shared-anchors-strip");
     expect(refinementSource).toContain("onLocksChange");
     expect(refinementSource).toContain("ThumbnailOption");
+    expect(refinementSource).toContain("createPortal");
+    expect(refinementSource).toContain("prompt-helper-rethink");
   });
 
   it("validates dynamic prompt refinement live assembly for user cats prompt", () => {

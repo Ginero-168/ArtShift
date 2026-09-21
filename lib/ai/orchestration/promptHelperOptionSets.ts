@@ -311,6 +311,120 @@ const GENERIC_BACKGROUNDS: Opt[] = [
   { id: "kitchen", label: "ครัว", character: "บ้าน", modifier: "ฉากครัวบ้านแสงเช้า" },
   { id: "rooftop", label: "ดาดฟ้า", character: "สูง", modifier: "ฉากดาดฟ้าเมือง" },
   { id: "park", label: "สวนสาธารณะ", character: "พาร์ค", modifier: "ฉากสวนสาธารณะร่มรื่น" },
+  { id: "mountain-peak", label: "ยอดเขา", character: "เอพิค", modifier: "ฉากยอดเขาสูง เมฆและท้องฟ้าดราม่า" },
+  { id: "volcano", label: "ภูเขาไฟ", character: "ไฟ", modifier: "ฉากภูเขาไฟลาวาไหล ท้องฟ้าแดงควัน" },
+  { id: "storm-sky", label: "ท้องฟ้าพายุ", character: "พายุ", modifier: "ฉากท้องฟ้าพายุฟ้าผ่า แสงเงาดราม่า" },
+  { id: "cave", label: "ถ้ำคริสตัล", character: "ถ้ำ", modifier: "ฉากถ้ำคริสตัลเรืองแสง มืดลึกลับ" },
+  { id: "ruins", label: "ซากโบราณ", character: "โบราณ", modifier: "ฉากซากปราสาทโบราณปกคลุมด้วยเถาวัลย์" },
+  { id: "clouds", label: "เหนือเมฆ", character: "ฟ้า", modifier: "ฉากลอยเหนือทะเลเมฆ แสงพระอาทิตย์" },
+];
+
+const GENERIC_LIGHTING: Opt[] = [
+  { id: "light_soft", label: "แสงนุ่มกระจาย", character: "นุ่ม", modifier: "แสงนุ่มกระจาย Soft diffused light ไม่มีเงาแข็ง" },
+  { id: "light_rim", label: "Rim Light", character: "ขอบแสง", modifier: "Rim light ขอบแสงตัดตัวแบบจากพื้นหลัง ดราม่า" },
+  { id: "light_godrays", label: "God Rays", character: "ลำแสง", modifier: "Volumetric god rays ลำแสงทะลุหมอก มีมิติอากาศ" },
+  { id: "light_neon", label: "นีออนเรือง", character: "นีออน", modifier: "แสงนีออนเรืองสีตัดกัน Cyber glow" },
+  { id: "light_golden", label: "แสงทอง", character: "ทอง", modifier: "Golden hour backlight แสงทองยามเย็นอุ่นตา" },
+  { id: "light_moon", label: "แสงจันทร์", character: "จันทร์", modifier: "Moonlit cool blue light แสงจันทร์เย็นลึกลับ" },
+  { id: "light_dramatic", label: "แสงละคร", character: "เข้ม", modifier: "Dramatic chiaroscuro แสงเงาคอนทราสต์สูงแบบจิตรกรรม" },
+  { id: "light_overcast", label: "ท้องฟ้าครึ้ม", character: "นุ่มเทา", modifier: "Overcast soft sky light สม่ำเสมอ ไม่มีเงาแรง" },
+  { id: "light_candle", label: "แสงเทียน", character: "อุ่นใกล้", modifier: "Candlelit warm intimate glow แสงเทียนอบอุ่นใกล้ตัว" },
+  { id: "light_biolum", label: "เรืองชีวภาพ", character: "เรือง", modifier: "Bioluminescent glow แสงเรืองจากตัวแบบหรือสภาพแวดล้อม" },
+  { id: "light_studio", label: "สตูดิโอ 3 จุด", character: "สตูดิโอ", modifier: "Three-point studio lighting คมชัดมืออาชีพ" },
+  { id: "light_silhouette", label: "เงาดำย้อนแสง", character: "ซิลูเอต", modifier: "Backlit silhouette ตัวแบบเงาดำบนท้องฟ้าสีทอง" },
+  { id: "light_spotlight", label: "สปอตไลต์", character: "จุดโฟกัส", modifier: "Hard spotlight วงแสงโฟกัสตัวแบบ พื้นหลังมืด" },
+  { id: "light_under", label: "แสงจากด้านล่าง", character: "ล่างขึ้น", modifier: "Under-lighting จากด้านล่าง สร้างอารมณ์ลี้ลับหรือน่ากลัว" },
+  { id: "light_magic", label: "แสงเวทมนตร์", character: "แมจิก", modifier: "Magical colored light shafts แสงสีวิเศษลอยในอากาศ" },
+];
+
+const GENERIC_ATMOSPHERE: Opt[] = [
+  { id: "atm_epic", label: "เอพิคยิ่งใหญ่", character: "ยิ่งใหญ่", modifier: "บรรยากาศยิ่งใหญ่ epic majestic scale มีพลังตำนาน" },
+  { id: "atm_whimsical", label: "ฝันๆ น่ารัก", character: "วิมสิคอล", modifier: "บรรยากาศ whimsical น่ารักชวนฝัน สดใส" },
+  { id: "atm_dark", label: "มืดลึกลับ", character: "ดาร์ก", modifier: "บรรยากาศมืดลึกลับ ominous dark fantasy" },
+  { id: "atm_serene", label: "สงบละมุน", character: "สงบ", modifier: "บรรยากาศสงบละมุน serene peaceful" },
+  { id: "atm_chaotic", label: "วุ่นวายพลัง", character: "คาออส", modifier: "บรรยากาศพลังงานสูง chaotic dynamic energy" },
+  { id: "atm_mysterious", label: "ลี้ลับ", character: "มิสเทอรี", modifier: "บรรยากาศลี้ลับมีหมอกและความไม่แน่นอน" },
+  { id: "atm_heroic", label: "ฮีโรอิก", character: "กล้าหาญ", modifier: "บรรยากาศ heroic triumphant ความกล้าหาญ" },
+  { id: "atm_melancholy", label: "เศร้าละเมียด", character: "เมลันโคลี", modifier: "บรรยากาศ melancholy อบอุ่นแต่เศร้าละเมียด" },
+  { id: "atm_playful", label: "สนุกขี้เล่น", character: "เพลย์ฟูล", modifier: "บรรยากาศ playful สนุกขี้เล่น สีสันมีชีวิต" },
+  { id: "atm_luxurious", label: "หรูพรีเมียม", character: "ลักซ์", modifier: "บรรยากาศหรูหราพรีเมียม refined luxurious" },
+  { id: "atm_nostalgic", label: "ย้อนยุควินเทจ", character: "นอสเทลเจีย", modifier: "บรรยากาศ nostalgic vintage อบอุ่นย้อนเวลา" },
+  { id: "atm_futuristic", label: "อนาคตล้ำ", character: "ฟิวเจอร์", modifier: "บรรยากาศ futuristic sci-fi ล้ำยุค" },
+  { id: "atm_romantic", label: "โรแมนติก", character: "โรแมนซ์", modifier: "บรรยากาศโรแมนติกแสงอุ่นนุ่มนวล" },
+  { id: "atm_tense", label: "ตึงเครียด", character: "เทนชัน", modifier: "บรรยากาศตึงเครียด cinematic tension ก่อนเหตุการณ์สำคัญ" },
+  { id: "atm_sacred", label: "ศักดิ์สิทธิ์", character: "ศักดิ์สิทธิ์", modifier: "บรรยากาศศักดิ์สิทธิ์มีแสงศักดิ์สิทธิ์และพิธีกรรม" },
+];
+
+const GENERIC_CREATIVE: Opt[] = [
+  { id: "cre_surreal", label: "เซอร์เรียล", character: "เหนือจริง", modifier: "แนวคิด surreal เหนือจริง องค์ประกอบฝันผสมความจริง" },
+  { id: "cre_epic_scale", label: "สเกลมหึมา", character: "ไจแอนต์", modifier: "ตัวแบบขนาดมหึมาเทียบกับภูมิทัศน์เล็กจิ๋ว epic scale" },
+  { id: "cre_chibi", label: "ชิบุ/น่ารัก", character: "ชิบุ", modifier: "สัดส่วน chibi น่ารักหัวโต โทนเบาสมอง" },
+  { id: "cre_mythic", label: "ตำนานเทพนิยาย", character: "มิธิค", modifier: "แนวคิด mythic legendary ราวกับภาพประกอบตำนาน" },
+  { id: "cre_cyber", label: "ไซเบอร์ฟิวชัน", character: "ไซเบอร์", modifier: "ผสม cyberpunk neon กับตัวแบบหลักอย่างลงตัว" },
+  { id: "cre_paper", label: "เปเปอร์คราฟต์", character: "กระดาษ", modifier: "แนวคิด paper craft diorama ตัดกระดาษมีมิติ" },
+  { id: "cre_double", label: "ดับเบิลเอ็กซ์โพเชอร์", character: "ซ้อนภาพ", modifier: "เทคนิค double exposure ซ้อนเงาตัวแบบกับทิวทัศน์" },
+  { id: "cre_story", label: "ฉากเล่าเรื่อง", character: "สตอรี่", modifier: "จัดองค์ประกอบเล่าเรื่อง มี props และช่วงเวลาชัดเจน" },
+  { id: "cre_minimal", label: "มินิมอลสัญลักษณ์", character: "มินิมอล", modifier: "แนวคิดมินิมอลเหลือแก่นสาระ สัญลักษณ์คมชัด" },
+  { id: "cre_macro_world", label: "โลกมาโคร", character: "มาโคร", modifier: "มองโลกขนาดจิ๋วแบบ macro tilt-shift มีเวทมนตร์" },
+  { id: "cre_ancient_future", label: "โบราณ×อนาคต", character: "ไฮบริด", modifier: "ผสมสถาปัตย์โบราณกับเทคโนโลยีอนาคตในเฟรมเดียว" },
+  { id: "cre_emotion", label: "โฟกัสอารมณ์", character: "อารมณ์", modifier: "โฟกัสอารมณ์ตัวแบบเป็นศูนย์กลาง รายละเอียดฉากรอง" },
+  { id: "cre_mirror", label: "โลกกระจกเงา", character: "มิเรอร์", modifier: "โลกกระจกสะท้อน สมมาตรหรือมิติคู่ขนาน" },
+  { id: "cre_constellation", label: "กลุ่มดาวเวท", character: "คอสมิก", modifier: "ผสมกลุ่มดาว เนบิวลา และสัญลักษณ์จักรวาลเข้ากับตัวแบบ" },
+  { id: "cre_festival", label: "เทศกาลแสงสี", character: "เฟสติวัล", modifier: "ฉากเทศกาลโคมไฟ พลุ หรือขบวนแสงสีฉลอง" },
+];
+
+const GENERIC_DETAIL: Opt[] = [
+  { id: "det_hyper", label: "รายละเอียดสูงมาก", character: "ไฮเปอร์", modifier: "รายละเอียดพื้นผิวสูงมาก hyper-detailed crisp micro detail" },
+  { id: "det_painterly", label: "ฝีแปรงหลวม", character: "เพนเทอร์ลี", modifier: "รายละเอียดแบบ painterly ฝีแปรงเห็นชัด ไม่ต้องโฟโต้รีอัล" },
+  { id: "det_soft", label: "นุ่มเรียบง่าย", character: "ซอฟต์", modifier: "พื้นผิวนุ่มเรียบง่าย stylized soft forms" },
+  { id: "det_scales", label: "เกล็ด/ผิวสัมผัส", character: "เท็กซ์เจอร์", modifier: "เน้นเกล็ด ผิวสัมผัส หรือแพทเทิร์นบนตัวแบบให้เด่น" },
+  { id: "det_metallic", label: "โลหะเงาวาว", character: "เมทัล", modifier: "วัสดุโลหะเงาสะท้อน metallic reflections" },
+  { id: "det_matte", label: "แมตต์ดิน/เซรามิก", character: "แมตต์", modifier: "พื้นผิวแมตต์ดินเหนียวหรือเซรามิก ไม่เงาจัด" },
+  { id: "det_glass", label: "แก้ว/คริสตัล", character: "ใส", modifier: "วัสดุแก้วหรือคริสตัลโปร่งแสงหักเห" },
+  { id: "det_fabric", label: "ผ้าพลิ้ว", character: "ผ้า", modifier: "เน้นผ้าพลิ้ว ริ้วและรอยพับอย่างประณีต" },
+  { id: "det_weathered", label: "เก่าคร่ำ/สึกกร่อน", character: "เวเธอร์", modifier: "พื้นผิวเก่าคร่ำ weathered worn age detail" },
+  { id: "det_glow_edge", label: "ขอบเรืองแสง", character: "เอาท์ไลน์", modifier: "ขอบและไฮไลต์เรืองแสงเล็กน้อย ให้ดูมีพลัง" },
+  { id: "det_ember", label: "เถ้าถ่าน/สะเก็ดไฟ", character: "ไฟ", modifier: "มีสะเก็ดไฟ เถ้าถ่านลอย และรอยไหม้เล็กน้อย" },
+  { id: "det_frost", label: "น้ำแข็งเกาะ", character: "ฟรอสต์", modifier: "ผิวมีน้ำแข็งเกาะ ผลึกน้ำค้างแข็ง" },
+  { id: "det_floral", label: "ลายดอกไม้พรรณไม้", character: "ฟลอรัล", modifier: "มีลายดอกไม้ เถาวัลย์ หรือพรรณไม้ประดับตัวแบบ" },
+  { id: "det_rune", label: "อักขระรูน", character: "รูน", modifier: "มีอักขระรูนหรือสัญลักษณ์โบราณเรืองแสงบนผิว" },
+  { id: "det_inksplash", label: "สาดหมึก", character: "หมึก", modifier: "เอฟเฟกต์สาดหมึกหรือเส้นพู่กันพริ้วรอบตัวแบบ" },
+];
+
+const GENERIC_WEATHER: Opt[] = [
+  { id: "wx_dawn", label: "รุ่งอรุณหมอก", character: "รุ่ง", modifier: "ช่วงรุ่งอรุณมีหมอกบาง แสงเย็นชมพู" },
+  { id: "wx_sunset", label: "พระอาทิตย์ตก", character: "เย็น", modifier: "ช่วงพระอาทิตย์ตกท้องฟ้าไล่ส้มชมพูทอง" },
+  { id: "wx_midnight", label: "เที่ยงคืน", character: "ดึก", modifier: "ช่วงเที่ยงคืนท้องฟ้ามืดดาวและแสงจันทร์" },
+  { id: "wx_rain", label: "ฝนพรำ", character: "ฝน", modifier: "บรรยากาศฝนพรำพื้นเปียกสะท้อนแสง" },
+  { id: "wx_storm", label: "พายุฟ้าคะนอง", character: "พายุ", modifier: "พายุฟ้าคะนอง ลมแรง ฟ้าผ่าไกล" },
+  { id: "wx_snow", label: "หิมะโปรย", character: "หิมะ", modifier: "หิมะโปรยเบาๆ อากาศเย็นสะอาด" },
+  { id: "wx_fog", label: "หมอกลึก", character: "หมอก", modifier: "หมอกลึกล้อมตัวแบบ ระยะใกล้ชัดไกลจาง" },
+  { id: "wx_clear", label: "ฟ้าใสแดดจัด", character: "ใส", modifier: "ท้องฟ้าใสแดดจัด เงาคม" },
+  { id: "wx_autumn", label: "ลมใบไม้ร่วง", character: "ฤดูใบไม้ร่วง", modifier: "อากาศฤดูใบไม้ร่วงใบส้มทองลอย" },
+  { id: "wx_heat", label: "คลื่นความร้อน", character: "ร้อน", modifier: "คลื่นความร้อนเหนือพื้น แสงจ้าแห้งผาก" },
+  { id: "wx_bluehour", label: "บลูอาวร์", character: "ฟ้าเย็น", modifier: "ช่วง blue hour หลังพระอาทิตย์ตก ท้องฟ้าน้ำเงินม่วง" },
+  { id: "wx_eclipse", label: "สุริยุปราคา", character: "อุปราคา", modifier: "บรรยากาศสุริยุปราคา แสงสลัวทองแดงลึกลับ" },
+  { id: "wx_aurora", label: "แสงเหนือ", character: "ออโรร่า", modifier: "ท้องฟ้าแสงเหนือเขียวม่วงพริ้วไหว" },
+  { id: "wx_sandstorm", label: "พายุทราย", character: "ทราย", modifier: "พายุทรายสีทอง ทัศนวิสัยต่ำ มีพลัง" },
+  { id: "wx_monsoon", label: "มรสุมเขตร้อน", character: "มรสุม", modifier: "มรสุมเขตร้อน เมฆดำหนา ฝนหนักชื้น" },
+];
+
+const GENERIC_COMPOSITION: Opt[] = [
+  { id: "comp_centered", label: "กลางเฟรม", character: "กลาง", modifier: "จัดตัวแบบกลางเฟรม สมมาตร ชัดเจน" },
+  { id: "comp_thirds", label: "กฎสามส่วน", character: "สามส่วน", modifier: "Rule of thirds วางตัวแบบบนจุดตัด" },
+  { id: "comp_wide_est", label: "ภาพกว้างตั้งเรื่อง", character: "กว้าง", modifier: "Wide establishing shot ตัวแบบเล็กในภูมิทัศน์กว้าง" },
+  { id: "comp_close_detail", label: "เจาะรายละเอียด", character: "ใกล้", modifier: "เฟรมใกล้เจาะรายละเอียดผิวตาหรือพื้นผิวสำคัญ" },
+  { id: "comp_dutch", label: "มุมเฉียง", character: "เฉียง", modifier: "Dutch angle เฟรมเฉียงมีพลัง" },
+  { id: "comp_leading", label: "เส้นนำสายตา", character: "นำสายตา", modifier: "Leading lines พาสายตาไปที่ตัวแบบ" },
+  { id: "comp_frame", label: "กรอบในกรอบ", character: "กรอบ", modifier: "Frame within frame ซุ้มประตูหรือซุ้มใบไม้" },
+  { id: "comp_negative", label: "พื้นที่ว่าง", character: "ว่าง", modifier: "ตัวแบบเล็กกับ negative space กว้าง" },
+  { id: "comp_crowd", label: "แน่นทั้งเฟรม", character: "แน่น", modifier: "องค์ประกอบแน่นเต็มเฟรม งานเทศกาลหรือฝูงชน" },
+  { id: "comp_low_hero", label: "มุมต่ำฮีโร่", character: "ฮีโร่", modifier: "มุมต่ำมองขึ้น ตัวแบบดูเป็นฮีโร่" },
+  { id: "comp_overhead", label: "มุมบน", character: "บน", modifier: "Overhead flat lay หรือมองลงมาตรงๆ" },
+  { id: "comp_profile", label: "ซิลูเอตด้านข้าง", character: "โปรไฟล์", modifier: "ซิลูเอตด้านข้างตัดกับท้องฟ้า" },
+  { id: "comp_diagonal", label: "เส้นทแยง", character: "ทแยง", modifier: "องค์ประกอบเส้นทแยงมีพลังเคลื่อนไหว" },
+  { id: "comp_mirror", label: "เงาสะท้อน", character: "สะท้อน", modifier: "เงาสะท้อนสมมาตรบนน้ำนิ่ง" },
+  { id: "comp_depth", label: "ชั้นความลึก", character: "ลึก", modifier: "ชัดเจนทั้ง foreground midground background" },
 ];
 
 function dim(id: string, title: string, options: Opt[], hint?: string): OptionSetDimension {
@@ -356,8 +470,14 @@ export function createLandscapeDimensions(): OptionSetDimension[] {
 
 export function createGenericOptionSetDimensions(): OptionSetDimension[] {
   return [
+    dim("atmosphere", "อารมณ์ภาพ", GENERIC_ATMOSPHERE, "ความรู้สึกหลักของภาพ"),
+    dim("creative", "ทวิสต์สร้างสรรค์", GENERIC_CREATIVE, "แนวคิดเสริมที่ทำให้ prompt มีชีวิต"),
     dim("color", "โทนสี", GENERIC_TONES, "ขั้วสีของภาพ"),
+    dim("lighting", "แสง", GENERIC_LIGHTING, "ทิศทางและคุณภาพแสง"),
     dim("background", "พื้นหลัง", GENERIC_BACKGROUNDS, "ฉากที่รองรับตัวแบบ"),
+    dim("weather", "เวลา/อากาศ", GENERIC_WEATHER, "ช่วงวันและสภาพอากาศ"),
+    dim("detail", "รายละเอียดผิว", GENERIC_DETAIL, "ความละเอียดและวัสดุผิว"),
+    dim("composition", "องค์ประกอบ", GENERIC_COMPOSITION, "การจัดวางในเฟรม"),
     dim("camera", "มุมกล้อง", CAMERA_ANGLES, "มุมมองและการจัดเฟรม"),
     dim("style", "สไตล์ภาพ", ART_STYLES, "ภาษาภาพหลัก"),
   ];

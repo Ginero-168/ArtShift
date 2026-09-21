@@ -5,6 +5,7 @@ const accountMock = vi.hoisted(() => ({ value: { id: "account-test" } as { id: s
 const tokenMock = vi.hoisted(() => ({ value: "r8_account-token" as string | undefined }));
 const ensureMock = vi.hoisted(() => vi.fn());
 const listMock = vi.hoisted(() => vi.fn());
+const failedMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/server/ai/userCredentials", () => ({
   getUserAccount: () => accountMock.value,
@@ -14,6 +15,7 @@ vi.mock("@/lib/server/ai/userCredentials", () => ({
 vi.mock("@/lib/ai/orchestration/promptHelperThumbsEnsure", () => ({
   ensurePromptHelperThumbs: (...args: unknown[]) => ensureMock(...args),
   listExistingPromptHelperThumbIds: (...args: unknown[]) => listMock(...args),
+  listFailedPromptHelperThumbIds: (...args: unknown[]) => failedMock(...args),
 }));
 
 import { GET, POST } from "../app/api/ai/prompt-helper/thumbs/route";
@@ -42,7 +44,9 @@ describe("Prompt Helper thumbs API", () => {
     tokenMock.value = "r8_account-token";
     ensureMock.mockReset();
     listMock.mockReset();
+    failedMock.mockReset();
     listMock.mockResolvedValue(["cinematic"]);
+    failedMock.mockResolvedValue([]);
     ensureMock.mockResolvedValue({
       existing: ["cinematic"],
       queued: ["flat"],
@@ -87,6 +91,7 @@ describe("Prompt Helper thumbs API", () => {
       expect.objectContaining({
         optionIds: ["flat"],
         token: "r8_account-token",
+        maxQueue: 48,
       }),
     );
   });
