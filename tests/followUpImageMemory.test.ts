@@ -182,6 +182,7 @@ describe("AICoPilotBar follow-up wiring", () => {
     expect(barSource).toContain("serializeConversationHistoryForDirector");
     expect(barSource).toContain("isFollowUpTurn");
     expect(barSource).toContain("lastGeneration: priorGeneration");
+    expect(barSource).toContain("insertedRefs: userAttachedRefs");
     expect(barSource).toContain("priorGeneration,");
     expect(barSource).toMatch(/createDirectedImageTask\(\s*\{[\s\S]*?prompt: promptToSend/);
     expect(barSource).toContain("conversationHistory: historyForContinuity");
@@ -210,6 +211,7 @@ describe("coPilot follow-up wiring", () => {
   it("runs Gemini recall before Creative Director on short image follow-ups", () => {
     const coPilotSource = readFileSync("lib/ai/coPilot.ts", "utf8");
     expect(coPilotSource).toContain("await recallFollowUpContext");
+    expect(coPilotSource).toContain("insertedRefs:");
     expect(coPilotSource).toContain("recall: followUpRecall");
     expect(coPilotSource.indexOf("await recallFollowUpContext")).toBeLessThan(
       coPilotSource.indexOf("await prepareRemoteCreativeDirection"),

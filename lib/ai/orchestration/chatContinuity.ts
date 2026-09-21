@@ -174,6 +174,9 @@ export type FollowUpResolvedSize = {
   printWidth?: number;
   printHeight?: number;
   sizeLabel?: string;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sizeUnit?: RequestedSizeUnit;
 };
 
 export type ContinuityHistoryMessage = {
@@ -470,6 +473,12 @@ function toPublicFollowUpSize(
 ): FollowUpResolvedSize {
   const includeExactLabel =
     Boolean(size.sizeLabel) && size.sizeUnit !== "named" && !isColonAspect(size.sizeLabel);
+  const includeSource =
+    includeExactLabel &&
+    typeof size.sourceWidth === "number" &&
+    size.sourceWidth > 0 &&
+    typeof size.sourceHeight === "number" &&
+    size.sourceHeight > 0;
   return {
     width: size.width,
     height: size.height,
@@ -482,6 +491,13 @@ function toPublicFollowUpSize(
         }
       : {}),
     ...(includeExactLabel ? { sizeLabel: size.sizeLabel } : {}),
+    ...(includeSource
+      ? {
+          sourceWidth: size.sourceWidth,
+          sourceHeight: size.sourceHeight,
+          ...(size.sizeUnit ? { sizeUnit: size.sizeUnit } : {}),
+        }
+      : {}),
   };
 }
 
@@ -504,6 +520,119 @@ export function isOrientationOnlyFollowUpPrompt(prompt: string): boolean {
   if (!text || hasNumericOrNamedSizeInText(text)) return false;
   if (!parseFollowUpOrientation(text)) return false;
   return isImageFollowUpPrompt(text);
+}
+
+function refIdMatches(ref: Pick<ComposerImageRef, "objectId" | "fileId">, id?: string): boolean {
+  return Boolean(id) && (ref.objectId === id || (Boolean(ref.fileId) && ref.fileId === id));
+}
+
+function similarAspect(
+  widthA: number,
+  heightA: number,
+  widthB?: number,
+  heightB?: number,
+): boolean {
+  if (!(widthA > 0) || !(heightA > 0) || !(widthB && widthB > 0) || !(heightB && heightB > 0)) {
+    return false;
+  }
+  return Math.abs(widthA / heightA - widthB / heightB) / (widthB / heightB) <= 0.04;
+}
+
+/** Last output or a stored ingredient from the previous generation package. */
+export function isLastPackageImageRef(
+  ref: Pick<
+    ComposerImageRef,
+    "objectId" | "fileId" | "sourceWidth" | "sourceHeight" | "width" | "height"
+  >,
+  prior: PriorImageGenerationContext | null | undefined,
+): boolean {
+  if (!prior) return false;
+  if (refIdMatches(ref, prior.outputElementId) || refIdMatches(ref, prior.outputFileId)) {
+    return true;
+  }
+  if (
+    (prior.ingredients ?? []).some(
+      (item) => refIdMatches(ref, item.objectId) || refIdMatches(ref, item.fileId),
+    )
+  ) {
+    return true;
+  }
+  // Package ids are sometimes missing; the last banner still matches the stored aspect.
+  const refW = ref.sourceWidth || ref.width;
+  const refH = ref.sourceHeight || ref.height;
+  return (
+    similarAspect(refW, refH, prior.sourceWidth, prior.sourceHeight) ||
+    similarAspect(refW, refH, prior.printWidth, prior.printHeight) ||
+    similarAspect(refW, refH, prior.width, prior.height)
+  );
+}
+
+/**
+ * Images the user tagged/attached in THIS prompt — not auto-carried last output
+ * or prior ingredients. Their aspect is size-priority #2.
+ */
+export function userInsertedPromptImageRefs(
+  refs: readonly ComposerImageRef[] | undefined,
+  prior: PriorImageGenerationContext | null | undefined,
+): ComposerImageRef[] {
+  if (!refs?.length) return [];
+  return refs.filter((ref) => !isLastPackageImageRef(ref, prior));
+}
+
+function closestNamedAspectPreset(
+  width: number,
+  height: number,
+): (typeof ASPECT_RATIOS)[number] | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const ratio = width / height;
+  let best: (typeof ASPECT_RATIOS)[number] | null = null;
+  let bestErr = Number.POSITIVE_INFINITY;
+  for (const preset of ASPECT_RATIOS) {
+    const parts = preset.ratio.split(":");
+    const pw = Number(parts[0]);
+    const ph = Number(parts[1]);
+    if (!(pw > 0) || !(ph > 0)) continue;
+    const err = Math.abs(ratio - pw / ph) / (pw / ph);
+    if (err < bestErr) {
+      bestErr = err;
+      best = preset;
+    }
+  }
+  return best && bestErr <= 0.04 ? best : null;
+}
+
+function namedRatioParts(preset: (typeof ASPECT_RATIOS)[number]): {
+  sourceWidth: number;
+  sourceHeight: number;
+} {
+  const parts = preset.ratio.split(":");
+  return {
+    sourceWidth: Number(parts[0]) || preset.width,
+    sourceHeight: Number(parts[1]) || preset.height,
+  };
+}
+
+/** Pixel/natural size of a newly inserted @Photo / canvas / composer image. */
+export function resolveInsertedPromptImageSize(refs: readonly ComposerImageRef[]):
+  | (FollowUpResolvedSize & {
+      sourceWidth: number;
+      sourceHeight: number;
+      sizeLabel: string;
+      sizeUnit?: RequestedSizeUnit;
+    })
+  | null {
+  for (const ref of refs) {
+    const width = ref.sourceWidth || ref.width;
+    const height = ref.sourceHeight || ref.height;
+    if (!(width > 0) || !(height > 0)) continue;
+    const preset = closestNamedAspectPreset(width, height);
+    if (preset) {
+      const parts = namedRatioParts(preset);
+      return resolveSizeFromSource(parts.sourceWidth, parts.sourceHeight, preset.id, "named");
+    }
+    return resolveSizeFromSource(width, height, undefined, "px");
+  }
+  return null;
 }
 
 export function resolvePriorRequestedSize(
@@ -937,6 +1066,7 @@ export function composeFollowUpDirectorPrompt(
           "CONTINUATION RULES:",
           "- This is a REVISION of the last generated image, not a new brief from a blank slate.",
           "- Read the chat recall + structured package, then apply only the new instruction.",
+          "- Size priority: exact size in the user command > newly inserted/tagged prompt image > last package. A new @Photo / canvas / composer image beats last-package size.",
           "- Re-use the same ingredients and campaign copy unless the user overrides them. Never invent extra reference photos.",
           "- Attached images (when present): the first image is the last output to revise (image-to-image); later images are the original ingredients.",
           "- Prefer specialist image_editor when the last output is attached.",
@@ -1084,10 +1214,22 @@ export function extractPriorImageGenerationContext(
   return null;
 }
 
+function concreteSizeFromAsk(text: string): FollowUpResolvedSize | null {
+  const spec = extractRequestedSizeSpecsFromText(stripFollowUpMentions(text))[0];
+  if (spec) return toPublicFollowUpSize(specToResolvedSize(spec));
+  if (hasNumericOrNamedSizeInText(text)) return resolveImageGenerationDimensions(text);
+  return null;
+}
+
 /**
- * Resolves dimensions for a follow-up turn: current prompt → prior context → history scan.
- * Orientation-only commands invert the remembered custom size (29×7cm → 7×29cm)
- * or flip a named aspect (16:9 → 9:16) instead of defaulting to 9:16 / 16:9.
+ * Size priority for a chat turn (highest first):
+ * 1. Exact size named in the current user text (cm / px / A:B)
+ * 2. Dimensions of image(s) the user inserted/tagged in THIS prompt
+ * 3. Last generation package (short follow-up only)
+ * 4. Director prose / history / defaults (caller)
+ *
+ * Orientation-only commands invert the chosen base (29×7cm → 7×29cm, 16:9 → 9:16)
+ * instead of defaulting to 9:16.
  */
 export function resolveFollowUpDimensions(options: {
   prompt: string;
@@ -1096,6 +1238,8 @@ export function resolveFollowUpDimensions(options: {
   clarificationOriginalPrompt?: string;
   directionRefinedPrompt?: string;
   directionSummary?: string;
+  /** Tagged / attached composer refs for this turn. */
+  refs?: readonly ComposerImageRef[];
 }): FollowUpResolvedSize | null {
   const {
     prompt,
@@ -1104,22 +1248,51 @@ export function resolveFollowUpDimensions(options: {
     clarificationOriginalPrompt,
     directionRefinedPrompt,
     directionSummary,
+    refs,
   } = options;
 
   const command = followUpCommandText(prompt);
   const orientation = parseFollowUpOrientation(command);
-  const hasConcreteSize = hasNumericOrNamedSizeInText(command);
   const priorFromHistory = prior ?? extractPriorImageGenerationContext(conversationHistory);
+  const orientationFollowUp = Boolean(orientation) && isImageFollowUpPrompt(command);
 
-  if (hasConcreteSize) {
-    return resolveImageGenerationDimensions(command);
-  }
-  if (clarificationOriginalPrompt && hasNumericOrNamedSizeInText(clarificationOriginalPrompt)) {
-    return resolveImageGenerationDimensions(clarificationOriginalPrompt);
+  const namedSize = concreteSizeFromAsk(command);
+  if (namedSize) return namedSize;
+  if (clarificationOriginalPrompt) {
+    const clarificationSize = concreteSizeFromAsk(clarificationOriginalPrompt);
+    if (clarificationSize) return clarificationSize;
   }
 
-  if (orientation && isImageFollowUpPrompt(command) && priorFromHistory) {
-    return toPublicFollowUpSize(applyOrientationToPriorSize(priorFromHistory, orientation));
+  const insertedSize = resolveInsertedPromptImageSize(
+    userInsertedPromptImageRefs(refs, priorFromHistory),
+  );
+  if (insertedSize) {
+    if (
+      orientationFollowUp &&
+      Math.abs(insertedSize.sourceWidth - insertedSize.sourceHeight) > 1e-6
+    ) {
+      return toPublicFollowUpSize(
+        applyOrientationToPriorSize(
+          {
+            userPrompt: command,
+            refinedPrompt: command,
+            width: insertedSize.width,
+            height: insertedSize.height,
+            aspectRatio: insertedSize.aspectRatio,
+            sourceWidth: insertedSize.sourceWidth,
+            sourceHeight: insertedSize.sourceHeight,
+            sizeLabel: insertedSize.sizeLabel,
+            sizeUnit: insertedSize.sizeUnit,
+          },
+          orientation!,
+        ),
+      );
+    }
+    return toPublicFollowUpSize(insertedSize);
+  }
+
+  if (orientationFollowUp && priorFromHistory) {
+    return toPublicFollowUpSize(applyOrientationToPriorSize(priorFromHistory, orientation!));
   }
 
   // Fresh requests (and follow-ups with no prior size) still honor แนวตั้ง→9:16 / แนวนอน→16:9.

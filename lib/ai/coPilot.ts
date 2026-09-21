@@ -362,6 +362,7 @@ export async function executeCoPilotInstruction(
                 followUpPrompt: prompt,
                 conversationHistory: history,
                 lastGeneration: priorGeneration,
+                insertedRefs: selection.refs,
               },
               { signal: options.signal, cloudConsent: true },
             )

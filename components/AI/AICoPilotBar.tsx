@@ -625,6 +625,7 @@ export default function AICoPilotBar() {
             followUpPrompt: promptToSend,
             conversationHistory: historyForContinuity,
             lastGeneration: priorGeneration,
+            insertedRefs: userAttachedRefs,
           },
           { signal: controller.signal, cloudConsent: true },
         );

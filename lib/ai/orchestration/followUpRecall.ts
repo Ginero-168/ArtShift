@@ -6,9 +6,12 @@ import {
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
   parseFollowUpOrientation,
+  resolveFollowUpDimensions,
   resolvePriorRequestedSize,
   serializeConversationHistoryForDirector,
+  userInsertedPromptImageRefs,
 } from "@/lib/ai/orchestration/chatContinuity";
+import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import type { AiAssistantChatInput, AiExecution, AiRuntime } from "@/lib/ai-runtime/contracts";
 
 export const FOLLOW_UP_RECALL_STATUS_MESSAGE =
@@ -54,9 +57,9 @@ export const FOLLOW_UP_RECALL_SYSTEM = [
   "Return JSON only with this shape:",
   '{ "summary": string, "agreedConstraints": string[], "styleNotes": string, "campaignNotes": string, "followUpIntent": string, "keepCopy": boolean, "keepIngredients": boolean, "priorExactSize": string | null, "resolvedExactSize": string | null, "aspectOverride": string | null }',
   "summary: 2–6 sentences covering prior brief, agreed style/copy, ingredients, last output, prior exact size, resolved follow-up size, and how the new command should apply.",
-  "summary MUST name the prior exact size (e.g. 29x7cm) AND the resolved follow-up size. Orientation-only (แนวตั้ง / portrait / แนวนอน): SWAP custom WxH (29x7cm → 7x29cm) or FLIP a named aspect (16:9 → 9:16). Never write 9:16 when a custom WxH exists.",
+  "summary MUST name the prior exact size (e.g. 29x7cm) AND the resolved follow-up size. Size priority (highest first): (1) exact size named in the current user command (cm/px/A:B), (2) dimensions of image(s) the user inserted/tagged in THIS prompt, (3) last image package for short follow-ups, (4) defaults. A newly inserted @Photo / canvas / composer image beats last-package size. Orientation-only (แนวตั้ง / portrait / แนวนอน) with no new size and no new inserted image: SWAP custom WxH (29x7cm → 7x29cm) or FLIP a named aspect (16:9 → 9:16). Never write 9:16 when a custom WxH exists.",
   "followUpIntent: the new instruction interpreted in light of that memory, including the resolved exact size (not a blank new brief and not a default 9:16).",
-  "priorExactSize: last stored size label (29x7cm, 16:9, …). resolvedExactSize: size to generate now (7x29cm after a vertical follow-up on 29x7cm).",
+  "priorExactSize: last stored size label (29x7cm, 16:9, …). resolvedExactSize: size to generate now (1:1 when a new square @Photo is inserted; 7x29cm after a vertical follow-up on 29x7cm with no new image; 60x20cm when the user named that size).",
   "aspectOverride: same as resolvedExactSize when size changes; otherwise null.",
 ].join(" ");
 
@@ -79,6 +82,8 @@ export type FollowUpRecallInput = {
   followUpPrompt: string;
   conversationHistory?: readonly ContinuityHistoryMessage[];
   lastGeneration: PriorImageGenerationContext;
+  /** Tagged/attached refs the user inserted in this prompt (not auto-carried last output). */
+  insertedRefs?: readonly ComposerImageRef[];
 };
 
 function clip(value: string | undefined, max: number): string {
@@ -97,13 +102,36 @@ export function priorExactSizeLabel(prior: PriorImageGenerationContext): string 
 function resolvedOrientationAspectOverride(input: FollowUpRecallInput): string | undefined {
   const orientation = parseFollowUpOrientation(input.followUpPrompt);
   if (!orientation || hasNumericOrNamedSizeInText(input.followUpPrompt)) return undefined;
+  if (userInsertedPromptImageRefs(input.insertedRefs, input.lastGeneration).length > 0) {
+    return undefined;
+  }
   const inverted = applyOrientationToPriorSize(input.lastGeneration, orientation);
   return inverted.sizeLabel || inverted.aspectRatio;
 }
 
-/** Size the next generate must use: flipped custom/named size, or the prior size if orientation did not change. */
+function resolvedSizeFromPriority(input: FollowUpRecallInput): {
+  sizeLabel: string;
+  aspectOverride?: string;
+} {
+  const priorSize = priorExactSizeLabel(input.lastGeneration);
+  const resolved = resolveFollowUpDimensions({
+    prompt: input.followUpPrompt,
+    prior: input.lastGeneration,
+    conversationHistory: input.conversationHistory,
+    refs: input.insertedRefs,
+  });
+  const sizeLabel = resolved?.sizeLabel?.trim() || resolved?.aspectRatio || priorSize;
+  const orientationOverride = resolvedOrientationAspectOverride(input);
+  const changed = sizeLabel.toLowerCase() !== priorSize.toLowerCase();
+  return {
+    sizeLabel,
+    ...(orientationOverride || changed ? { aspectOverride: orientationOverride || sizeLabel } : {}),
+  };
+}
+
+/** Size the next generate must use after applying chat size priority. */
 export function resolvedFollowUpSizeLabel(input: FollowUpRecallInput): string {
-  return resolvedOrientationAspectOverride(input) || priorExactSizeLabel(input.lastGeneration);
+  return resolvedSizeFromPriority(input).sizeLabel;
 }
 
 function isPresetPortraitSize(value: string): boolean {
@@ -119,6 +147,13 @@ export function stampResolvedSizeIntoRecallText(
   if (!resolvedSize) return next;
   if (!isPresetPortraitSize(resolvedSize)) {
     next = next.replace(PRESET_PORTRAIT_SIZE_RE, resolvedSize);
+  }
+  if (priorSize && resolvedSize.toLowerCase() !== priorSize.toLowerCase()) {
+    const priorEscaped = priorSize.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    next = next.replace(
+      new RegExp(`resolved (?:follow-up |generation )?size[:\\s]+${priorEscaped}`, "giu"),
+      `resolved follow-up size ${resolvedSize}`,
+    );
   }
   if (!next.toLowerCase().includes(resolvedSize.toLowerCase())) {
     next =
@@ -145,15 +180,22 @@ export function buildFollowUpRecallUserPrompt(input: FollowUpRecallInput): strin
       : "(no earlier chat turns)";
 
   const priorSize = priorExactSizeLabel(input.lastGeneration);
-  const orientationSize = resolvedOrientationAspectOverride(input);
+  const resolved = resolvedSizeFromPriority(input);
+  const inserted = userInsertedPromptImageRefs(input.insertedRefs, input.lastGeneration);
+  const insertedHint = inserted[0]
+    ? `${inserted[0].sourceWidth || inserted[0].width}×${inserted[0].sourceHeight || inserted[0].height}`
+    : "";
 
   return [
     `User follow-up command: ${clip(input.followUpPrompt, 2_000)}`,
     "",
-    `Prior exact size (authoritative): ${priorSize}`,
-    orientationSize
-      ? `Orientation-only follow-up: resolved size MUST be ${orientationSize} — never default แนวตั้ง/portrait to 9:16 when a custom WxH exists.`
-      : `Keep the prior exact size ${priorSize} unless the user named a new size.`,
+    `Prior exact size: ${priorSize}`,
+    insertedHint
+      ? `User inserted a new prompt image this turn (${insertedHint}). Resolved size MUST be ${resolved.sizeLabel} — newly inserted @Photo / canvas / composer images beat last-package ${priorSize}.`
+      : resolved.aspectOverride
+        ? `Orientation-only follow-up: resolved size MUST be ${resolved.sizeLabel} — never default แนวตั้ง/portrait to 9:16 when a custom WxH exists.`
+        : `Keep the prior exact size ${priorSize} unless the user named a new size or inserted a new reference image.`,
+    `Resolved generation size (authoritative): ${resolved.sizeLabel}`,
     "",
     "=== RECENT CHAT ===",
     historyBlock.slice(0, 60_000),
@@ -172,8 +214,9 @@ export function buildLocalFollowUpRecall(input: FollowUpRecallInput): FollowUpRe
     .map((message) => message.content.replace(/\s+/g, " ").trim().slice(0, 240));
   const ingredientNames = prior.ingredients?.map((item) => item.displayName).filter(Boolean) ?? [];
   const priorSize = priorExactSizeLabel(prior);
-  const resolvedSize = resolvedFollowUpSizeLabel(input);
-  const aspectOverride = resolvedOrientationAspectOverride(input);
+  const resolved = resolvedSizeFromPriority(input);
+  const resolvedSize = resolved.sizeLabel;
+  const aspectOverride = resolved.aspectOverride;
   const constraintBits = [
     ...(prior.sharedAnchors?.map((anchor) => `${anchor.label}: ${anchor.detail}`) ?? []),
     `exact size ${resolvedSize}`,
@@ -257,7 +300,8 @@ export function parseFollowUpRecallPayload(
   if (!record) return fallback;
 
   const priorExactSize = priorExactSizeLabel(input.lastGeneration);
-  const resolvedExactSize = resolvedFollowUpSizeLabel(input);
+  const resolved = resolvedSizeFromPriority(input);
+  const resolvedExactSize = resolved.sizeLabel;
   const summary = stampResolvedSizeIntoRecallText(
     clip(typeof record.summary === "string" ? record.summary : fallback.summary, 4_000),
     resolvedExactSize,
@@ -280,7 +324,7 @@ export function parseFollowUpRecallPayload(
     800,
   );
   const aspectOverride =
-    resolvedOrientationAspectOverride(input) ||
+    resolved.aspectOverride ||
     clip(typeof record.aspectOverride === "string" ? record.aspectOverride : "", 32);
 
   return {

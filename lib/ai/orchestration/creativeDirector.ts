@@ -1,5 +1,4 @@
 import { attachRuntimeModel } from "@/lib/ai/chatModelAttribution";
-import { hasNumericOrNamedSizeInText } from "@/lib/ai/imageGeneration";
 import type {
   AiAssistantChatInput,
   AiExecution,
@@ -16,14 +15,12 @@ import {
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
 import {
-  applyOrientationToPriorSize,
   DIRECTOR_CONVERSATION_HISTORY_LIMIT,
   extractRequestedSizeSpecsFromUserAsk,
   followUpAskText,
-  followUpCommandText,
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
-  parseFollowUpOrientation,
+  resolveFollowUpDimensions,
 } from "./chatContinuity";
 import {
   CREATING_MODEL_CATALOG,
@@ -33,6 +30,7 @@ import {
 import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from "./executionGraph";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
 import { computeDetailScore, computeEditPrecisionScore } from "./imageQualityPolicy";
+import type { ComposerImageRef } from "./imageReferences";
 import { extractIntentFeatures } from "./imageWorkSpec";
 import {
   finalizeRefinedPromptWithNameTags,
@@ -522,28 +520,48 @@ export async function prepareCreativeDirection(
   const lastSizeHint = input.lastGeneration
     ? (() => {
         const prior = input.lastGeneration;
-        const command = followUpCommandText(input.prompt);
-        const orientation = parseFollowUpOrientation(command);
-        const inverted =
-          orientation && !hasNumericOrNamedSizeInText(command)
-            ? applyOrientationToPriorSize(prior, orientation)
-            : null;
-        const exactSize =
+        const analysisRefs: ComposerImageRef[] = (input.referenceAnalyses ?? []).flatMap(
+          (item, index) => {
+            const width = item.dimensions?.width ?? 0;
+            const height = item.dimensions?.height ?? 0;
+            if (!(width > 0) || !(height > 0)) return [];
+            const nestedId = (item as { ref?: { objectId?: string; displayName?: string } }).ref;
+            return [
+              {
+                objectId: item.objectId || nestedId?.objectId || `analysis-${index}`,
+                elementVersion: 0,
+                fileId: "",
+                displayName: item.displayName || nestedId?.displayName || "Photo",
+                sourceWidth: width,
+                sourceHeight: height,
+                width,
+                height,
+                angle: 0,
+              },
+            ];
+          },
+        );
+        const resolved = resolveFollowUpDimensions({
+          prompt: input.prompt,
+          prior,
+          refs: analysisRefs,
+        });
+        const priorExact =
           prior.sizeLabel ||
           (prior.sourceWidth && prior.sourceHeight
             ? `${prior.sourceWidth}x${prior.sourceHeight}${prior.sizeUnit ?? ""}`
             : undefined);
         return {
-          exactSize,
-          resolvedExactSize: inverted?.sizeLabel || inverted?.aspectRatio || exactSize,
-          aspectRatio: inverted?.aspectRatio || prior.aspectRatio,
-          width: inverted?.width ?? prior.width,
-          height: inverted?.height ?? prior.height,
-          printWidth: inverted?.printWidth ?? prior.printWidth,
-          printHeight: inverted?.printHeight ?? prior.printHeight,
-          sourceWidth: inverted?.sourceWidth ?? prior.sourceWidth,
-          sourceHeight: inverted?.sourceHeight ?? prior.sourceHeight,
-          sizeUnit: inverted?.sizeUnit ?? prior.sizeUnit,
+          exactSize: priorExact,
+          resolvedExactSize: resolved?.sizeLabel || resolved?.aspectRatio || priorExact,
+          aspectRatio: resolved?.aspectRatio || prior.aspectRatio,
+          width: resolved?.width ?? prior.width,
+          height: resolved?.height ?? prior.height,
+          printWidth: resolved?.printWidth ?? prior.printWidth,
+          printHeight: resolved?.printHeight ?? prior.printHeight,
+          sourceWidth: prior.sourceWidth,
+          sourceHeight: prior.sourceHeight,
+          sizeUnit: prior.sizeUnit,
         };
       })()
     : null;

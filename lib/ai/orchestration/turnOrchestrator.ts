@@ -16,7 +16,6 @@ import { createAtomicVectorizedFromResult } from "@/lib/vectorize/atomicVectoriz
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import {
-  applyOrientationToPriorSize,
   extractRequestedSizeSpecsFromUserAsk,
   followUpCommandText,
   isImageFollowUpPrompt,
@@ -24,6 +23,7 @@ import {
   type PriorImageGenerationContext,
   parseFollowUpOrientation,
   resolveFollowUpDimensions,
+  userInsertedPromptImageRefs,
 } from "./chatContinuity";
 import {
   applyCreativeDirectionToTask,
@@ -162,8 +162,17 @@ export function resolveTaskDimensionsWithContext(
     Boolean(orientation) &&
     (isOrientationOnlyFollowUpPrompt(command) || isImageFollowUpPrompt(command));
 
-  if (orientation && orientationFollowUp && input.priorGeneration) {
-    return toTaskDimensions(applyOrientationToPriorSize(input.priorGeneration, orientation));
+  const followUpDims = resolveFollowUpDimensions({
+    prompt: input.prompt,
+    prior: input.priorGeneration,
+    conversationHistory: input.conversationHistory,
+    clarificationOriginalPrompt: input.clarification?.originalPrompt,
+    directionRefinedPrompt: direction?.refinedPrompt,
+    directionSummary: direction?.summary,
+    refs: input.refs,
+  });
+  if (followUpDims) {
+    return toTaskDimensions(followUpDims);
   }
 
   // Package missing: invert the last output / attached ref instead of defaulting to 9:16.
@@ -177,18 +186,6 @@ export function resolveTaskDimensionsWithContext(
         (orientation === "portrait" && landscape) || (orientation === "landscape" && !landscape);
       return resolveDimensionsFromPixelSize(swap ? h : w, swap ? w : h);
     }
-  }
-
-  const followUpDims = resolveFollowUpDimensions({
-    prompt: input.prompt,
-    prior: input.priorGeneration,
-    conversationHistory: input.conversationHistory,
-    clarificationOriginalPrompt: input.clarification?.originalPrompt,
-    directionRefinedPrompt: direction?.refinedPrompt,
-    directionSummary: direction?.summary,
-  });
-  if (followUpDims) {
-    return toTaskDimensions(followUpDims);
   }
 
   // With a source/reference image and no explicit size, match the original aspect.
@@ -343,10 +340,13 @@ export function createDirectedImageRun(
   direction: Extract<CreativeDirection, { kind: "image-task" }>,
   options: { runId?: string } = {},
 ): DirectedImageRun {
-  // Orientation-only follow-ups (ปรับเป็นแนวตั้ง) must invert the remembered size
-  // in resolveTaskDimensionsWithContext. Do not let Director prose like "9:16"
-  // override a custom 29×7cm → 7×29cm swap.
+  // Authoritative sizes from the user ask / inserted prompt image / last package
+  // must win over Director prose ("9:16", leftover 29×7cm, etc.).
   const lockFollowUpSize = isOrientationOnlyFollowUpPrompt(input.prompt);
+  const lockDirectorInventedSize =
+    lockFollowUpSize ||
+    userInsertedPromptImageRefs(input.refs, input.priorGeneration).length > 0 ||
+    (isImageFollowUpPrompt(input.prompt) && Boolean(input.priorGeneration));
   // Count comes only from the user ask (explicit N or a multi-size list).
   // Director-invented requestedOutputCount and sizes in summary/refinedPrompt are ignored.
   const count = resolveRequestedOutputCountFromUserAsk(input.prompt, [
@@ -389,7 +389,7 @@ export function createDirectedImageRun(
       variationCues = " (focusing on bright clean minimalist illumination)";
     }
     const briefDims =
-      lockFollowUpSize || !hasExplicitDimensionsInText(brief)
+      lockDirectorInventedSize || !hasExplicitDimensionsInText(brief)
         ? null
         : resolveImageGenerationDimensions(brief);
     const listDims =
