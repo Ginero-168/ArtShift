@@ -6,6 +6,7 @@ import {
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
+import { preserveUserInstructionInPrompt } from "@/lib/ai/imageRewriteIntent";
 import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
@@ -253,7 +254,11 @@ export function createDirectedImageTask(
   const requiredText = extractRequiredText(input.prompt);
   const requestedDimensions = resolveTaskDimensionsWithContext(input, direction);
   const requiredSubjects = [
-    ...new Set(input.analyses.flatMap((analysis) => analysis.objects)),
+    ...new Set(
+      input.analyses
+        .map((analysis) => analysis.objects.find((object) => object.trim())?.trim())
+        .filter((object): object is string => Boolean(object)),
+    ),
   ].slice(0, 3);
   const plan: AiTaskPlan = {
     id: crypto.randomUUID(),
@@ -428,10 +433,11 @@ export function createDirectedImageRun(
         ? ` Target generation size ${dims.width}×${dims.height} (model max 3:1). The pipeline will then expand the overflowing edges (left/right or top/bottom) and stitch to the true print canvas ${dims.printWidth}×${dims.printHeight}.${exactSizeNote} Deliver a filled edge-to-edge ≤3:1 center panel — no empty bars and no extra crop into a narrower strip.`
         : ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}).${exactSizeNote} Fill the full frame edge-to-edge; no letterboxing.`
       : "";
-    const taskPrompt =
+    const compiledPrompt =
       count === 1
         ? `${direction.refinedPrompt}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
         : `${direction.refinedPrompt}\nDistinct output ${index + 1} of ${count}${variationCues}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+    const taskPrompt = preserveUserInstructionInPrompt(compiledPrompt, input.prompt);
     return {
       ...baseTask,
       id: `${runId}-task-${index + 1}`,

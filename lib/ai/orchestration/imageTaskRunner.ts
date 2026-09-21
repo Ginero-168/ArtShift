@@ -9,6 +9,7 @@ import {
   sanitizeAndPrepareImagePrompt,
   streamlinePromptForImageGen,
 } from "@/lib/ai/imageGeneration";
+import { isDirectedImageRewrite } from "@/lib/ai/imageRewriteIntent";
 import { runVisualQualityGate } from "@/lib/ai/visualQualityGate";
 import { getCanvasViewport } from "@/lib/engine/canvasViewport";
 import { createImage } from "@/lib/engine/factory";
@@ -403,6 +404,7 @@ export async function runContextAwareImageTask(
             referenceFacts: task.referenceFacts,
             outputAnalysis,
             technicalFallback,
+            directedRewrite: isDirectedImageRewrite(task.prompt),
           });
           if (!semanticGate.passed) {
             qualityRepairInstruction = buildQualityRepairInstruction(semanticGate.blockers);

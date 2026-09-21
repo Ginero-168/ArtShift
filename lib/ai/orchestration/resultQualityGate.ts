@@ -24,6 +24,12 @@ export type GeneratedImageQualityInput = {
   }[];
   outputAnalysis?: GeneratedOutputAnalysis;
   technicalFallback?: boolean;
+  /**
+   * User asked for a style / medium / aspect rewrite. Reference is a transform
+   * source, not a photorealistic fidelity lock — do not hard-fail the turn when
+   * local analysis cannot prove object-by-object overlap.
+   */
+  directedRewrite?: boolean;
 };
 
 export type GeneratedImageQualityCheck = {
@@ -104,7 +110,9 @@ export function runGeneratedImageQualityGate(
       id: "reference",
       passed: referenceMatches(input),
       detail: input.referenceRequired
-        ? "Reference fidelity needs a source comparison signal and limitation-free local output evidence."
+        ? input.directedRewrite
+          ? "Reference is a transform source for a directed rewrite; photorealistic fidelity is not required."
+          : "Reference fidelity needs a source comparison signal and limitation-free local output evidence."
         : "No reference fidelity claim is required for this task.",
     },
   ];
@@ -117,11 +125,23 @@ export function runGeneratedImageQualityGate(
   };
 }
 
+function isSevereVisualLimitation(limitations: readonly string[] | undefined): boolean {
+  return Boolean(
+    limitations?.some((item) =>
+      /(?:corrupt|blank|undecodable|black image|noise|empty frame|failed to decode)/iu.test(item),
+    ),
+  );
+}
+
 function referenceMatches(input: GeneratedImageQualityInput): boolean {
   if (!input.referenceRequired) return true;
   const output = input.outputAnalysis;
+  if (!output) return Boolean(input.directedRewrite);
+  if (isSevereVisualLimitation(output.limitations)) return false;
+  if (input.directedRewrite) return true;
   const facts = input.referenceFacts;
-  if (!output || !facts?.length || output.limitations.length > 0) return false;
+  if (!facts?.length) return false;
+  if (facts.some((fact) => isSevereVisualLimitation(fact.limitations))) return false;
   const outputEvidence = [output.caption, ...output.objects].join(" ").toLocaleLowerCase();
   const sourceObjects = facts
     .flatMap((fact) => fact.objects)
@@ -130,7 +150,6 @@ function referenceMatches(input: GeneratedImageQualityInput): boolean {
   const sourceCaptions = facts
     .map((fact) => fact.caption.trim().toLocaleLowerCase())
     .filter(Boolean);
-  if (facts.some((fact) => fact.limitations.length > 0)) return false;
   if (sourceObjects.length > 0) {
     return sourceObjects.some((object) => outputEvidence.includes(object));
   }
@@ -139,13 +158,22 @@ function referenceMatches(input: GeneratedImageQualityInput): boolean {
 
 function requiredSubjectsMatch(input: GeneratedImageQualityInput): boolean {
   if (!input.requiredSubjects?.length) return true;
-  if (!input.outputAnalysis) return false;
+  if (!input.outputAnalysis) return Boolean(input.directedRewrite);
+  if (isSevereVisualLimitation(input.outputAnalysis.limitations)) return false;
   const evidence = [input.outputAnalysis.caption, ...input.outputAnalysis.objects]
     .join(" ")
     .toLocaleLowerCase();
-  return input.requiredSubjects.every((subject) =>
+  const hits = input.requiredSubjects.filter((subject) =>
     evidence.includes(subject.trim().toLocaleLowerCase()),
   );
+  if (input.directedRewrite) {
+    return (
+      hits.length > 0 ||
+      input.outputAnalysis.objects.length > 0 ||
+      Boolean(input.outputAnalysis.caption.trim())
+    );
+  }
+  return hits.length === input.requiredSubjects.length;
 }
 
 function requiredTextMatches(input: GeneratedImageQualityInput): boolean {
