@@ -7,7 +7,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { listPromptHelperThumbEntries, promptHelperThumbPrompt } from "./promptHelperThumbPrompts";
 
@@ -26,8 +26,7 @@ const SAFE_FALLBACK_PROMPTS: Readonly<Record<string, string>> = {
     "Wholesome pop-art poster of a smiling coffee cup with thick black outlines and bright halftone dots, clean illustration, square crop, no text, no watermark",
   pixel:
     "Cute 8-bit pixel art gem icon on a bright blue background, wholesome game sprite, square crop, no text, no watermark",
-  clay:
-    "Soft clay sculpture of a round yellow smiling blob character, stop-motion clay look, wholesome, square crop, no text, no watermark",
+  clay: "Soft clay sculpture of a round yellow smiling blob character, stop-motion clay look, wholesome, square crop, no text, no watermark",
   ink: "Gentle Chinese ink wash of distant misty mountains on cream paper, traditional brush painting, square crop, no text, no watermark",
   child:
     "Wholesome illustration of a cheerful child silhouette playing with a kite at a park, soft daylight, square crop, no text, no watermark",

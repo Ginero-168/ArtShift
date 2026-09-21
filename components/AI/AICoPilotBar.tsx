@@ -418,9 +418,7 @@ export default function AICoPilotBar() {
       } | null;
       if (!res.ok) {
         setPromptHelperPlanSource("baseline");
-        setPromptHelperPlanError(
-          json?.error || json?.planError || `วางแผนไม่สำเร็จ (${res.status})`,
-        );
+        setPromptHelperPlanError(json?.error || json?.planError || `วางแผนไม่สำเร็จ (${res.status})`);
         return;
       }
       if (json?.card) {

@@ -423,7 +423,7 @@ export function applyPromptHelperVariantPlan(
   if (nextDimensions.length === 0) return data;
 
   const TARGET_AXES = 10;
-  let resolved =
+  const resolved =
     data.mode === "subject" && data.dimensions.length > 0
       ? mergeSubjectLockedAxes(
           data.dimensions,
@@ -448,16 +448,14 @@ export function applyPromptHelperVariantPlan(
         id: dim.id,
         title: dim.title,
         hint: dim.hint,
-        options: dim.options
-          .slice(0, TARGET_OPTIONS_PER_AXIS)
-          .map((opt) =>
-            withPreview({
-              id: opt.id,
-              label: opt.label,
-              character: opt.character,
-              modifier: opt.modifier,
-            }),
-          ),
+        options: dim.options.slice(0, TARGET_OPTIONS_PER_AXIS).map((opt) =>
+          withPreview({
+            id: opt.id,
+            label: opt.label,
+            character: opt.character,
+            modifier: opt.modifier,
+          }),
+        ),
       });
       used.add(dim.id);
     }
