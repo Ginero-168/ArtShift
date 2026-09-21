@@ -1,6 +1,17 @@
 /**
- * Systemic rewrite / instruction-preservation helpers.
- * Not tied to a single subject or style (cat, pixel art, …).
+ * Chat-turn policies that apply to every subject and style.
+ *
+ * 1. Size (highest first): current-ask text → this-turn inserted image →
+ *    last package (short follow-up only) → defaults.
+ *    Implemented in chatContinuity.resolveFollowUpDimensions.
+ * 2. Always keep the current user instruction in refinedPrompt / task prompt.
+ *    Never replace it with a generic stock English template.
+ * 3. Quality gate: a clear style / aspect / tone rewrite of a reference is a
+ *    transform, not a photoreal fidelity lock. Do not hard-fail when local
+ *    analysis cannot prove object-by-object overlap.
+ *
+ * Detection is structural (verbs, aspect, tone language, tagged source) —
+ * not a catalog of named styles or subjects.
  */
 
 const FOLLOW_UP_MARKERS = [
@@ -10,6 +21,11 @@ const FOLLOW_UP_MARKERS = [
   "=== SHARED ANCHORS",
   "=== UNTRUSTED LOCAL CONTEXT",
 ];
+
+export type DirectedRewriteOptions = {
+  /** Tagged / inserted reference on this turn (not last-package carry-forward). */
+  hasReference?: boolean;
+};
 
 /** The user's current command, ignoring injected package / recall blocks and @tags. */
 export function currentUserInstruction(prompt: string): string {
@@ -36,28 +52,72 @@ export function currentUserInstruction(prompt: string): string {
     .slice(0, 500);
 }
 
+function isCountOnlyVariation(text: string): boolean {
+  const trimmed = text.trim();
+  return (
+    /^(?:(?:ช่วย|ขอ)\s*)?(?:สร้าง|ทำ|เอา|วาด|เจน|ผลิต|ออกแบบ|generate|create|make)\s*(?:มา|ให้|เพิ่ม)?\s*อีก(?:\s*(?:\d+|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five))?\s*(?:แบบ|รูป|ภาพ|ตัวเลือก)?\s*$/iu.test(
+      trimmed,
+    ) ||
+    /^(?:another|more)\s+\d+\s*(?:images?|variations?|options?)?\s*$/iu.test(trimmed) ||
+    /^(?:ขอตัวเลือกเพิ่ม|ตัวเลือกเพิ่ม|สร้างเพิ่ม|ทำเพิ่ม|variation)\s*$/iu.test(trimmed)
+  );
+}
+
+function hasNamedSizeOrAspect(text: string): boolean {
+  return (
+    /\d+\s*:\s*\d+/.test(text) ||
+    /\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*(?:cm|mm|m|in|px)?/iu.test(text) ||
+    /(?:สัดส่วน|aspect(?:\s*ratio)?|\bratio\b)/iu.test(text)
+  );
+}
+
+function looksLikeFreshGeneration(text: string): boolean {
+  if (/(?:จาก(?:ภาพ|รูป)|from this|this (?:photo|image|picture|shot))/iu.test(text)) {
+    return false;
+  }
+  return /^(?:(?:ช่วย|ขอ)\s*)?(?:สร้าง|วาด|ทำ|ขอ|generate|create|draw|picture of|image of)\s*(?:รูป|ภาพ|image|a|an)?/iu.test(
+    text,
+  );
+}
+
 /**
- * True when the current ask is a directed style / medium / aspect rewrite —
- * a clear edit, not a blank new brief. Works for any subject.
+ * Structural “clear edit” signals — verbs, tone/style language, look-like,
+ * from-this-source. No named-style catalog (pixel art, watercolor, …).
  */
-export function isDirectedImageRewrite(prompt: string): boolean {
-  const text = currentUserInstruction(prompt);
-  if (!text) return false;
-  if (/\d+\s*:\s*\d+/.test(text)) return true;
-  if (/\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*(?:cm|mm|m|in|px)?/iu.test(text)) return true;
-  if (/(?:สัดส่วน|aspect(?:\s*ratio)?|\bratio\b)/iu.test(text)) return true;
-  if (/(?:สไตล์|แนว(?:ศิลป์)?|โทนสี|medium|style)\b/iu.test(text)) return true;
+function hasTransformOrTreatmentLanguage(text: string): boolean {
+  if (/(?:สไตล์|แนว(?:ศิลป์)?|โทน(?:สี|ภาพ)?|medium|style)\b/iu.test(text)) return true;
   if (/(?:ปรับ|ทำให้|เปลี่ยน|แปลง|ทำ)\s*(?:ให้)?\s*เป็น/iu.test(text)) return true;
+  if (/(?:ปรับ|เปลี่ยน|ทำ)\s*โทน/iu.test(text)) return true;
   if (
-    /\b(?:make|change|convert|turn|render|redraw|restyle)\b[\s\S]{0,48}\b(?:as|to|into|in)\b/iu.test(
+    /\b(?:make|change|convert|turn|render|redraw|restyle|stylize)\b[\s\S]{0,48}\b(?:as|to|into|in|like)\b/iu.test(
       text,
     )
   ) {
     return true;
   }
-  return /(?:pixel\s*art|watercolor|watercolour|cartoon|anime|manga|vector(?:ized)?|illustration|oil\s*paint|sketch|line\s*art|low[-\s]?poly|voxel|isometric|risograph|ukiyo|halftone|pop\s*art|flat\s+vector|chibi|ghibli)/iu.test(
-    text,
-  );
+  if (/\b(?:in the style of|look(?:s)? like|styled as|stylize(?:d)? as)\b/iu.test(text)) {
+    return true;
+  }
+  if (/(?:จาก(?:ภาพ|รูป)นี้|from this (?:photo|image|picture|shot))/iu.test(text)) return true;
+  return false;
+}
+
+/**
+ * True when the current ask is a directed style / medium / aspect rewrite —
+ * a clear edit, not a blank new brief. Works for any subject.
+ */
+export function isDirectedImageRewrite(prompt: string, options?: DirectedRewriteOptions): boolean {
+  const text = currentUserInstruction(prompt);
+  if (!text) return false;
+  if (isCountOnlyVariation(text)) return false;
+  if (hasNamedSizeOrAspect(text)) return true;
+  if (hasTransformOrTreatmentLanguage(text)) return true;
+  // Inserted source + a short remaining command is a treatment of that source,
+  // even when the user names a medium this file has never listed.
+  if (options?.hasReference && !looksLikeFreshGeneration(text) && text.length <= 48) {
+    return true;
+  }
+  return false;
 }
 
 /** Tokens from the user ask that a compiled prompt must not drop. */

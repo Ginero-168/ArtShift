@@ -258,6 +258,34 @@ describe("chat size priority: text > inserted prompt image > last package", () =
     expect(run.tasks[0]?.prompt).toContain("60x20cm");
   });
 
+  it("uses a newly inserted square motorcycle photo instead of last-package 16:9", () => {
+    const motorcycle = {
+      objectId: "moto-square",
+      elementVersion: 1,
+      fileId: "file-moto",
+      displayName: "Motorcycle",
+      sourceWidth: 1400,
+      sourceHeight: 1400,
+      width: 400,
+      height: 400,
+      angle: 0,
+    };
+    const dims = resolveTaskDimensionsWithContext({
+      prompt: "@Motorcycle ทำโปสเตอร์จากภาพนี้",
+      refs: [motorcycle],
+      analyses: [],
+      priorGeneration: {
+        userPrompt: "สร้างรูปวิวทะเล 16:9",
+        refinedPrompt: "Ocean 16:9",
+        width: 1280,
+        height: 720,
+        aspectRatio: "16:9",
+      },
+    });
+    expect(dims.aspectRatio).toBe("1:1");
+    expect(dims.width).toBe(dims.height);
+  });
+
   it("does not treat the last generated output as a newly inserted size source", () => {
     const dims = resolveTaskDimensionsWithContext({
       prompt: "ปรับเป็นแนวตั้ง",

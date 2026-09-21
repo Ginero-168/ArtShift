@@ -404,7 +404,9 @@ export async function runContextAwareImageTask(
             referenceFacts: task.referenceFacts,
             outputAnalysis,
             technicalFallback,
-            directedRewrite: isDirectedImageRewrite(task.prompt),
+            directedRewrite: isDirectedImageRewrite(task.prompt, {
+              hasReference: task.selectedImages.length > 0,
+            }),
           });
           if (!semanticGate.passed) {
             qualityRepairInstruction = buildQualityRepairInstruction(semanticGate.blockers);

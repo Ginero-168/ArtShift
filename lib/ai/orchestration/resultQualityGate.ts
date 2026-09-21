@@ -25,9 +25,9 @@ export type GeneratedImageQualityInput = {
   outputAnalysis?: GeneratedOutputAnalysis;
   technicalFallback?: boolean;
   /**
-   * User asked for a style / medium / aspect rewrite. Reference is a transform
-   * source, not a photorealistic fidelity lock — do not hard-fail the turn when
-   * local analysis cannot prove object-by-object overlap.
+   * User asked for a clear style / medium / aspect / tone rewrite (any subject).
+   * Reference is a transform source, not a photorealistic fidelity lock — do
+   * not hard-fail the turn when local analysis cannot prove object overlap.
    */
   directedRewrite?: boolean;
 };
