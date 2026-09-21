@@ -202,6 +202,29 @@ describe("follow-up recall", () => {
     expect(recall.resolvedExactSize).not.toBe("1:1");
   });
 
+  it("lets สัดส่วน 1:1 in the current Helper prompt beat last-package 29×7cm", () => {
+    const followUpPrompt =
+      "สร้างรูปแมว สีส้มสดใส สายพันธุ์มันช์กิน ขาสั้นน่ารัก ฉากคาเฟ่มินิมอล โทนอบอุ่น มุมกล้อง Action Shot ถ่ายทอดความร่าเริงขณะเคลื่อนไหว Rim light ขอบแสงตัดตัวแบบจากพื้นหลัง ดราม่า สัดส่วน 1:1";
+    const input = {
+      followUpPrompt,
+      lastGeneration: {
+        ...lastGeneration,
+        userPrompt: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%",
+        sizeLabel: "29x7cm" as const,
+        sizeUnit: "cm" as const,
+        sourceWidth: 29,
+        sourceHeight: 7,
+      },
+    };
+    const prompt = buildFollowUpRecallUserPrompt(input);
+    expect(prompt).toMatch(/Resolved size MUST be 1:1/i);
+    expect(prompt).toMatch(/beats last-package 29x7cm/i);
+    expect(prompt).toContain("Resolved generation size (authoritative): 1:1");
+    const recall = buildLocalFollowUpRecall(input);
+    expect(recall.resolvedExactSize).toBe("1:1");
+    expect(recall.resolvedExactSize).not.toMatch(/29x7/i);
+  });
+
   it("holds a fast Gemini step long enough to stay visible", async () => {
     const started = Date.now();
     await holdGeminiStepVisible(started, { minMs: 40 });

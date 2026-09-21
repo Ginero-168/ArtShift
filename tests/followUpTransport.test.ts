@@ -5,6 +5,7 @@ import {
   isOrientationOnlyFollowUpPrompt,
   resolveFollowUpDimensions,
 } from "@/lib/ai/orchestration/chatContinuity";
+import { resolveTaskExecutionDimensions } from "@/lib/ai/orchestration/imageTaskRunner";
 import { parsePriorImageGenerationPayload } from "@/lib/ai/orchestration/priorGenerationParse";
 import {
   type ContextAwareTurnInput,
@@ -258,6 +259,70 @@ describe("chat size priority: text > inserted prompt image > last package", () =
     expect(run.tasks[0]?.prompt).toContain("60x20cm");
   });
 
+  it("honors สัดส่วน 1:1 in the current Helper/chat prompt over last-package 29×7cm", () => {
+    const helperPrompt =
+      "สร้างรูปแมว สีส้มสดใส สายพันธุ์มันช์กิน ขาสั้นน่ารัก ฉากคาเฟ่มินิมอล โทนอบอุ่น มุมกล้อง Action Shot ถ่ายทอดความร่าเริงขณะเคลื่อนไหว Rim light ขอบแสงตัดตัวแบบจากพื้นหลัง ดราม่า สัดส่วน 1:1";
+    const dims = resolveTaskDimensionsWithContext({
+      prompt: helperPrompt,
+      refs: [],
+      analyses: [],
+      priorGeneration: last29x7,
+    });
+    expect(dims.aspectRatio).toBe("1:1");
+    expect(dims.width).toBe(dims.height);
+    expect(dims.sizeLabel ?? "").not.toMatch(/29x7/i);
+
+    const followUp = resolveFollowUpDimensions({
+      prompt: helperPrompt,
+      prior: last29x7,
+    });
+    expect(followUp?.aspectRatio).toBe("1:1");
+
+    const longHelper = `${"แมวน่ารัก ".repeat(40)}${helperPrompt}`;
+    expect(longHelper.length).toBeGreaterThan(500);
+    expect(resolveFollowUpDimensions({ prompt: longHelper, prior: last29x7 })?.aspectRatio).toBe(
+      "1:1",
+    );
+    expect(
+      resolveFollowUpDimensions({
+        prompt: composeFollowUpDirectorPrompt(helperPrompt, last29x7),
+        prior: last29x7,
+      })?.aspectRatio,
+    ).toBe("1:1");
+
+    const run = createDirectedImageRun(
+      {
+        prompt: helperPrompt,
+        refs: [],
+        analyses: [],
+        priorGeneration: last29x7,
+      },
+      imageTaskDirection("Keep the last 29x7cm shelftalk as a wide banner"),
+    );
+    expect(run.tasks[0]?.requestedDimensions?.aspectRatio).toBe("1:1");
+    expect(run.tasks[0]?.requestedDimensions?.sizeLabel ?? "").not.toMatch(/29x7/i);
+    expect(run.tasks[0]?.prompt).toContain("1:1");
+  });
+
+  it("honors aspect 16:9 and อัตราส่วน 9:16 over last-package 29×7cm", () => {
+    expect(
+      resolveTaskDimensionsWithContext({
+        prompt: "สร้างรูปวิวทะเล aspect 16:9",
+        refs: [],
+        analyses: [],
+        priorGeneration: last29x7,
+      }).aspectRatio,
+    ).toBe("16:9");
+    expect(
+      resolveTaskDimensionsWithContext({
+        prompt: "สร้างรูปโปสเตอร์ อัตราส่วน 9:16",
+        refs: [],
+        analyses: [],
+        priorGeneration: last29x7,
+      }).aspectRatio,
+    ).toBe("9:16");
+  });
+
   it("uses a newly inserted square motorcycle photo instead of last-package 16:9", () => {
     const motorcycle = {
       objectId: "moto-square",
@@ -307,5 +372,16 @@ describe("chat size priority: text > inserted prompt image > last package", () =
     });
     expect(dims.sizeLabel).toMatch(/7x29/i);
     expect(dims.aspectRatio).not.toBe("1:1");
+  });
+
+  it("does not let leftover 29×7cm in the compiled prompt clobber a locked 1:1", () => {
+    const locked = resolveTaskExecutionDimensions({
+      requestedDimensions: { width: 1024, height: 1024, aspectRatio: "1:1" },
+      prompt:
+        "Pink floral bookstore shelftalk, 35% off, 29x7cm. Target size 1024×1024 (aspect 1:1). User instruction (authoritative): สัดส่วน 1:1",
+    });
+    expect(locked.aspectRatio).toBe("1:1");
+    expect(locked.width).toBe(1024);
+    expect(locked.height).toBe(1024);
   });
 });

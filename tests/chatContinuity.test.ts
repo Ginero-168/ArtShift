@@ -20,6 +20,11 @@ describe("chatContinuity", () => {
     expect(isImageFollowUpPrompt("ขอตัวเลือกเพิ่ม 3 แบบ")).toBe(true);
     expect(isImageFollowUpPrompt("สร้างรูปแมวสัดส่วน 16:9")).toBe(false);
     expect(isImageFollowUpPrompt("สร้างมา 3 รูปแมวบนโซฟา")).toBe(false);
+    expect(
+      isImageFollowUpPrompt(
+        "สร้างรูปแมว สีส้มสดใส สายพันธุ์มันช์กิน ขาสั้นน่ารัก ฉากคาเฟ่มินิมอล โทนอบอุ่น มุมกล้อง Action Shot ถ่ายทอดความร่าเริงขณะเคลื่อนไหว Rim light ขอบแสงตัดตัวแบบจากพื้นหลัง ดราม่า สัดส่วน 1:1",
+      ),
+    ).toBe(false);
   });
 
   it("inherits 16:9 from prior generation on 'สร้างมาอีก 3 รูป'", () => {

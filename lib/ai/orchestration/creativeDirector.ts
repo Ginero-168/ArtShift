@@ -425,7 +425,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "      * Orientation-only or single-size revisions (แนวตั้ง / แนวนอน / cm resize) MUST use requestedOutputCount: 1 unless the user also says ขอ N แบบ / สร้าง N รูป or lists multiple distinct sizes.",
   "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio — unless this is a revision, in which case apply the new instruction and keep everything else.",
   "      * If the message includes === LAST IMAGE GENERATION PACKAGE or === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief, ingredients, copy, and ratio.",
-  "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package. If it lists Resolved generation size (authoritative), that size wins over แนวตั้ง→9:16.",
+  "      * If === SMART RECALL === is present, use it to interpret the short command in light of the discussed brief — then execute; do not ignore the package. If it lists Resolved generation size (authoritative), that size wins over แนวตั้ง→9:16 AND over last-package cm when the current user command named a new size (สัดส่วน 1:1 beats 29x7cm).",
   "      * Never invent ingredient photos, slogans, or brand marks that are not listed in the package.",
   "      * Attached images on a revision: first image is the last output to revise (image_editor / image-to-image); later images are original ingredients. Re-include them.",
   "      * If === SHARED ANCHORS (Layer 1 === is present: those locks (copy, logo, brand colors, ratio, hierarchy, reference set) MUST stay identical on every new output unless the user overrides them.",

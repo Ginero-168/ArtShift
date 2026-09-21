@@ -1026,7 +1026,7 @@ export function composeFollowUpDirectorPrompt(
   options?: { recall?: FollowUpRecallSummary | null; kind?: ImageFollowUpKind | null },
 ): string {
   const countHint = currentPrompt.trim();
-  const kind = options?.kind ?? classifyImageFollowUpPrompt(currentPrompt) ?? "variation";
+  const kind = options?.kind ?? classifyImageFollowUpPrompt(currentPrompt) ?? "revision";
   const packageBlock = formatGenerationPackageForPrompt(prior);
   const recallLines = formatRecallBlock(options?.recall ?? undefined);
 
@@ -1066,7 +1066,7 @@ export function composeFollowUpDirectorPrompt(
           "CONTINUATION RULES:",
           "- This is a REVISION of the last generated image, not a new brief from a blank slate.",
           "- Read the chat recall + structured package, then apply only the new instruction.",
-          "- Size priority: exact size in the user command > newly inserted/tagged prompt image > last package. A new @Photo / canvas / composer image beats last-package size.",
+          "- Size priority: exact size in the current user command (สัดส่วน 1:1 / อัตราส่วน 9:16 / aspect 16:9 / bare 1:1 / 1/1 / cm / px) > newly inserted/tagged prompt image > last package. A named size in this turn beats last-package size.",
           "- Re-use the same ingredients and campaign copy unless the user overrides them. Never invent extra reference photos.",
           "- Attached images (when present): the first image is the last output to revise (image-to-image); later images are the original ingredients.",
           "- Prefer specialist image_editor when the last output is attached.",
@@ -1080,7 +1080,7 @@ export function composeFollowUpDirectorPrompt(
           "- Keep Shared Anchors identical across all new outputs.",
           "- Produce distinct Layer-2 variations — do not clone the prior image.",
           "- Re-include the same ingredient references. Never invent extras.",
-          "- refinedPrompt must restate the full base brief in English, enriched for variation, and must explicitly include the prior aspect ratio unless the user changed it.",
+          "- Size priority: exact size in the current user command (สัดส่วน 1:1 / อัตราส่วน 9:16 / aspect 16:9 / bare 1:1 / 1/1 / cm / px) beats last-package size. refinedPrompt must restate the full base brief in English, enriched for variation, and must include the RESOLVED size (current-text size if named, else prior).",
           "- requestedOutputCount must match the follow-up quantity when the user asked for N more images.",
           "- If the user did not ask for N more images and did not list multiple sizes, requestedOutputCount must be 1.",
           "- If this was a brand/shelf-sign job, never invent new copy or move the logo to create variety.",
@@ -1252,11 +1252,14 @@ export function resolveFollowUpDimensions(options: {
   } = options;
 
   const command = followUpCommandText(prompt);
+  // Size must come from the full current-turn ask (Helper-composed prompts keep
+  // สัดส่วน 1:1 at the end). First-line 500-char command text is only for orientation.
+  const ask = followUpAskText(prompt) || command;
   const orientation = parseFollowUpOrientation(command);
   const priorFromHistory = prior ?? extractPriorImageGenerationContext(conversationHistory);
   const orientationFollowUp = Boolean(orientation) && isImageFollowUpPrompt(command);
 
-  const namedSize = concreteSizeFromAsk(command);
+  const namedSize = concreteSizeFromAsk(ask);
   if (namedSize) return namedSize;
   if (clarificationOriginalPrompt) {
     const clarificationSize = concreteSizeFromAsk(clarificationOriginalPrompt);

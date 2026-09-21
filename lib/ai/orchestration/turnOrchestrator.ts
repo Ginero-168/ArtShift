@@ -348,10 +348,6 @@ export function createDirectedImageRun(
   // Authoritative sizes from the user ask / inserted prompt image / last package
   // must win over Director prose ("9:16", leftover 29×7cm, etc.).
   const lockFollowUpSize = isOrientationOnlyFollowUpPrompt(input.prompt);
-  const lockDirectorInventedSize =
-    lockFollowUpSize ||
-    userInsertedPromptImageRefs(input.refs, input.priorGeneration).length > 0 ||
-    (isImageFollowUpPrompt(input.prompt) && Boolean(input.priorGeneration));
   // Count comes only from the user ask (explicit N or a multi-size list).
   // Director-invented requestedOutputCount and sizes in summary/refinedPrompt are ignored.
   const count = resolveRequestedOutputCountFromUserAsk(input.prompt, [
@@ -364,6 +360,11 @@ export function createDirectedImageRun(
   const sizeSpecs = lockFollowUpSize
     ? []
     : extractRequestedSizeSpecsFromUserAsk(input.prompt, [input.clarification?.originalPrompt]);
+  const lockDirectorInventedSize =
+    lockFollowUpSize ||
+    sizeSpecs.length > 0 ||
+    userInsertedPromptImageRefs(input.refs, input.priorGeneration).length > 0 ||
+    (isImageFollowUpPrompt(input.prompt) && Boolean(input.priorGeneration));
   const briefs =
     direction.outputBriefs && direction.outputBriefs.length === count
       ? direction.outputBriefs
