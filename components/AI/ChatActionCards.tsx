@@ -619,6 +619,12 @@ export interface ChatActionCardsProps {
   onDismissRefinement?: () => void;
   onRefinementLocksChange?: (locks: ReturnType<typeof buildRefinementOrchestratorLocks>) => void;
 
+  promptHelperPlanning?: boolean;
+  promptHelperPlanSource?: "gemini" | "baseline" | null;
+  promptHelperRationale?: string;
+  promptHelperPlanError?: string;
+  onRethinkPromptHelper?: () => void;
+
   pendingPlan?: PlanProposal | null;
   busy?: boolean;
   onApplyPendingPlan?: () => void;
@@ -643,6 +649,11 @@ export default function ChatActionCards({
   onApplyRefinementToComposer,
   onDismissRefinement,
   onRefinementLocksChange,
+  promptHelperPlanning = false,
+  promptHelperPlanSource = null,
+  promptHelperRationale = "",
+  promptHelperPlanError = "",
+  onRethinkPromptHelper,
 
   pendingPlan,
   busy = false,
@@ -673,6 +684,11 @@ export default function ChatActionCards({
             onApplyToComposer={onApplyRefinementToComposer}
             onDismiss={onDismissRefinement}
             onLocksChange={onRefinementLocksChange}
+            planning={promptHelperPlanning}
+            planSource={promptHelperPlanSource}
+            rationale={promptHelperRationale}
+            planError={promptHelperPlanError}
+            onRethink={onRethinkPromptHelper}
           />
         )}
 

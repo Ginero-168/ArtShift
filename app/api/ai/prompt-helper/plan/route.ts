@@ -65,6 +65,8 @@ export async function POST(req: NextRequest) {
   let card: PromptRefinementCardData = baseline;
   let planSource: "gemini" | "baseline" = "baseline";
   let rationale = "";
+  let planError: string | null = null;
+  let modelUsed: string | null = null;
 
   try {
     const ai = getServerAiRuntime({
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
             content: buildPromptHelperVariantUserMessage(prompt, catalog),
           },
         ],
-        maxTokens: 1200,
+        maxTokens: 3200,
       },
       {
         profile: "quality",
@@ -93,20 +95,48 @@ export async function POST(req: NextRequest) {
         reasoning: { mode: "off" },
       },
     );
-    const plan = parsePromptHelperVariantPlan(result.output.text);
-    if (plan) {
-      card = applyPromptHelperVariantPlan(baseline, plan);
-      planSource = "gemini";
-      rationale = plan.rationale;
+    modelUsed = result.metadata.model ?? null;
+    const rawText = result.output.text?.trim() ?? "";
+    if (!rawText) {
+      planError = "empty_model_output";
+      console.error("[prompt-helper-plan] empty model output", {
+        model: modelUsed,
+        prompt: prompt.slice(0, 80),
+      });
+    } else {
+      const plan = parsePromptHelperVariantPlan(rawText);
+      if (!plan) {
+        planError = "unparseable_plan";
+        console.error("[prompt-helper-plan] unparseable plan", {
+          model: modelUsed,
+          preview: rawText.slice(0, 280),
+        });
+      } else {
+        const applied = applyPromptHelperVariantPlan(baseline, plan);
+        if (applied === baseline) {
+          planError = "no_matching_options";
+          console.error("[prompt-helper-plan] plan had no matching catalog options", {
+            model: modelUsed,
+            axes: plan.axes.map((a) => ({ id: a.id, n: a.optionIds.length })),
+          });
+        } else {
+          card = applied;
+          planSource = "gemini";
+          rationale = plan.rationale;
+        }
+      }
     }
-  } catch {
-    // Keep heuristic card — helper must still open if Gemini is unavailable.
+  } catch (error) {
+    planError = error instanceof Error ? error.message.slice(0, 200) : "planner_failed";
+    console.error("[prompt-helper-plan] ✗", planError);
   }
 
   return NextResponse.json({
     card,
     planSource,
     rationale,
+    planError,
+    modelUsed,
   });
 }
 
