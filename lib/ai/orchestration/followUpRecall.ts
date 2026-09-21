@@ -1,8 +1,12 @@
 import { DEFAULT_DIRECTOR_MODEL_ID, normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
-import { hasNumericOrNamedSizeInText } from "@/lib/ai/imageGeneration";
+import {
+  extractRequestedSizeSpecsFromText,
+  hasNumericOrNamedSizeInText,
+} from "@/lib/ai/imageGeneration";
 import {
   applyOrientationToPriorSize,
   type ContinuityHistoryMessage,
+  followUpAskText,
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
   parseFollowUpOrientation,
@@ -57,7 +61,7 @@ export const FOLLOW_UP_RECALL_SYSTEM = [
   "Return JSON only with this shape:",
   '{ "summary": string, "agreedConstraints": string[], "styleNotes": string, "campaignNotes": string, "followUpIntent": string, "keepCopy": boolean, "keepIngredients": boolean, "priorExactSize": string | null, "resolvedExactSize": string | null, "aspectOverride": string | null }',
   "summary: 2–6 sentences covering prior brief, agreed style/copy, ingredients, last output, prior exact size, resolved follow-up size, and how the new command should apply.",
-  "summary MUST name the prior exact size (e.g. 29x7cm) AND the resolved follow-up size. Size priority (highest first): (1) exact size named in the current user command (cm/px/A:B), (2) dimensions of image(s) the user inserted/tagged in THIS prompt, (3) last image package for short follow-ups, (4) defaults. A newly inserted @Photo / canvas / composer image beats last-package size. Orientation-only (แนวตั้ง / portrait / แนวนอน) with no new size and no new inserted image: SWAP custom WxH (29x7cm → 7x29cm) or FLIP a named aspect (16:9 → 9:16). Never write 9:16 when a custom WxH exists.",
+  "summary MUST name the prior exact size (e.g. 29x7cm) AND the resolved follow-up size. Size priority (highest first): (1) exact size named in the current user command (cm/px/A:B including Thai สัดส่วน 1:1 / อัตราส่วน 9:16 / aspect 16:9 / 1/1), (2) dimensions of image(s) the user inserted/tagged in THIS prompt, (3) last image package for short follow-ups, (4) defaults. A named size in the current command beats last-package size. A newly inserted @Photo / canvas / composer image beats last-package size. Orientation-only (แนวตั้ง / portrait / แนวนอน) with no new size and no new inserted image: SWAP custom WxH (29x7cm → 7x29cm) or FLIP a named aspect (16:9 → 9:16). Never write 9:16 when a custom WxH exists.",
   "followUpIntent: the new instruction interpreted in light of that memory, including the resolved exact size (not a blank new brief and not a default 9:16).",
   "priorExactSize: last stored size label (29x7cm, 16:9, …). resolvedExactSize: size to generate now (1:1 when a new square @Photo is inserted; 7x29cm after a vertical follow-up on 29x7cm with no new image; 60x20cm when the user named that size).",
   "aspectOverride: same as resolvedExactSize when size changes; otherwise null.",
@@ -185,6 +189,9 @@ export function buildFollowUpRecallUserPrompt(input: FollowUpRecallInput): strin
   const insertedHint = inserted[0]
     ? `${inserted[0].sourceWidth || inserted[0].width}×${inserted[0].sourceHeight || inserted[0].height}`
     : "";
+  const ask = followUpAskText(input.followUpPrompt) || input.followUpPrompt;
+  const askHasNamedSize =
+    extractRequestedSizeSpecsFromText(ask).length > 0 || hasNumericOrNamedSizeInText(ask);
 
   return [
     `User follow-up command: ${clip(input.followUpPrompt, 2_000)}`,
@@ -192,9 +199,11 @@ export function buildFollowUpRecallUserPrompt(input: FollowUpRecallInput): strin
     `Prior exact size: ${priorSize}`,
     insertedHint
       ? `User inserted a new prompt image this turn (${insertedHint}). Resolved size MUST be ${resolved.sizeLabel} — newly inserted @Photo / canvas / composer images beat last-package ${priorSize}.`
-      : resolved.aspectOverride
-        ? `Orientation-only follow-up: resolved size MUST be ${resolved.sizeLabel} — never default แนวตั้ง/portrait to 9:16 when a custom WxH exists.`
-        : `Keep the prior exact size ${priorSize} unless the user named a new size or inserted a new reference image.`,
+      : askHasNamedSize
+        ? `Current user text named a size. Resolved size MUST be ${resolved.sizeLabel} — exact size in the current user command beats last-package ${priorSize}.`
+        : resolved.aspectOverride
+          ? `Orientation-only follow-up: resolved size MUST be ${resolved.sizeLabel} — never default แนวตั้ง/portrait to 9:16 when a custom WxH exists.`
+          : `Keep the prior exact size ${priorSize} unless the user named a new size or inserted a new reference image.`,
     `Resolved generation size (authoritative): ${resolved.sizeLabel}`,
     "",
     "=== RECENT CHAT ===",

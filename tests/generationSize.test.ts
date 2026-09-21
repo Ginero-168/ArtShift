@@ -121,6 +121,10 @@ describe("hasNumericOrNamedSizeInText", () => {
     expect(hasNumericOrNamedSizeInText("make it vertical")).toBe(false);
     expect(hasNumericOrNamedSizeInText("29x7 cm")).toBe(true);
     expect(hasNumericOrNamedSizeInText("16:9")).toBe(true);
+    expect(hasNumericOrNamedSizeInText("สัดส่วน 1:1")).toBe(true);
+    expect(hasNumericOrNamedSizeInText("อัตราส่วน 9:16")).toBe(true);
+    expect(hasNumericOrNamedSizeInText("aspect 16:9")).toBe(true);
+    expect(hasNumericOrNamedSizeInText("1/1")).toBe(true);
   });
 });
 
@@ -142,6 +146,24 @@ describe("extractRequestedSizeSpecsFromText", () => {
   it("extracts bare WxH pairs joined by และ", () => {
     const specs = extractRequestedSizeSpecsFromText("29x7 และ 29x10");
     expect(specs.map((s) => `${s.sourceWidth}x${s.sourceHeight}`)).toEqual(["29x7", "29x10"]);
+  });
+
+  it("extracts Thai and English aspect phrases including slash form", () => {
+    expect(extractRequestedSizeSpecsFromText("สัดส่วน 1:1").map((s) => s.aspectRatio)).toEqual([
+      "1:1",
+    ]);
+    expect(extractRequestedSizeSpecsFromText("อัตราส่วน 9:16").map((s) => s.aspectRatio)).toEqual([
+      "9:16",
+    ]);
+    expect(extractRequestedSizeSpecsFromText("aspect 16:9").map((s) => s.aspectRatio)).toEqual([
+      "16:9",
+    ]);
+    expect(extractRequestedSizeSpecsFromText("1/1").map((s) => s.aspectRatio)).toEqual(["1:1"]);
+    expect(
+      extractRequestedSizeSpecsFromText(
+        "สร้างรูปแมว สีส้มสดใส สายพันธุ์มันช์กิน ขาสั้นน่ารัก ฉากคาเฟ่มินิมอล โทนอบอุ่น มุมกล้อง Action Shot ถ่ายทอดความร่าเริงขณะเคลื่อนไหว Rim light ขอบแสงตัดตัวแบบจากพื้นหลัง ดราม่า สัดส่วน 1:1",
+      ).map((s) => s.aspectRatio),
+    ).toEqual(["1:1"]);
   });
 });
 

@@ -38,9 +38,12 @@ export const ASPECT_RATIOS: AspectRatioOption[] = [
 
 const DIMENSION_PAIR_RE =
   /(?:ขนาด\s*)?(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(cm|mm|m|in|นิ้ว|ซม\.?|px|pixels)?/giu;
-const COLON_RATIO_RE = /(\d+)\s*:\s*(\d+)/gu;
+/** Named A:B (or A/B) aspects, including Thai สัดส่วน / อัตราส่วน and English aspect. */
+const RATIO_PAIR_RE = /(\d+)\s*[:：/]\s*(\d+)/gu;
 const NAMED_OR_COLON_ASPECT_RE =
-  /\b(?:3\s*:\s*1|1\s*:\s*3|21\s*:\s*9|16\s*:\s*9|9\s*:\s*16|4\s*:\s*3|3\s*:\s*4|3\s*:\s*2|2\s*:\s*3|1\s*:\s*1)\b/u;
+  /(?:^|[^\d])(?:3\s*[:：/]\s*1|1\s*[:：/]\s*3|21\s*[:：/]\s*9|16\s*[:：/]\s*9|9\s*[:：/]\s*16|4\s*[:：/]\s*3|3\s*[:：/]\s*4|3\s*[:：/]\s*2|2\s*[:：/]\s*3|1\s*[:：/]\s*1)(?!\d)/u;
+const ASPECT_PHRASE_RE =
+  /(?:สัดส่วน|อัตราส่วน|aspect(?:\s*ratio)?|\bratio\b)\s*[:：]?\s*(\d+)\s*[:：/-]\s*(\d+)/giu;
 
 function normalizeCapturedSizeUnit(raw?: string): RequestedSizeUnit | undefined {
   if (!raw) return undefined;
@@ -91,21 +94,38 @@ export function hasExplicitDimensionsInText(text?: string): boolean {
  * Orientation words alone (แนวตั้ง / portrait) do NOT count — those must
  * invert a remembered size on follow-ups instead of mapping to 9:16.
  */
+function isRealisticAspectPair(width: number, height: number): boolean {
+  return width > 0 && height > 0 && width <= 64 && height <= 64;
+}
+
+function eachRatioPair(
+  text: string,
+  onMatch: (width: number, height: number, index: number) => boolean | void,
+): void {
+  for (const re of [ASPECT_PHRASE_RE, RATIO_PAIR_RE]) {
+    re.lastIndex = 0;
+    let match = re.exec(text);
+    while (match) {
+      const sourceWidth = Number(match[1]);
+      const sourceHeight = Number(match[2]);
+      if (isRealisticAspectPair(sourceWidth, sourceHeight)) {
+        if (onMatch(sourceWidth, sourceHeight, match.index) === true) return;
+      }
+      match = re.exec(text);
+    }
+  }
+}
+
 export function hasNumericOrNamedSizeInText(text?: string): boolean {
   if (!text || typeof text !== "string") return false;
   if (textHasDimensionPair(text)) return true;
   if (NAMED_OR_COLON_ASPECT_RE.test(text)) return true;
-  COLON_RATIO_RE.lastIndex = 0;
-  let match = COLON_RATIO_RE.exec(text);
-  while (match) {
-    const sourceWidth = Number(match[1]);
-    const sourceHeight = Number(match[2]);
-    if (sourceWidth > 0 && sourceHeight > 0 && sourceWidth <= 64 && sourceHeight <= 64) {
-      return true;
-    }
-    match = COLON_RATIO_RE.exec(text);
-  }
-  return false;
+  let found = false;
+  eachRatioPair(text, () => {
+    found = true;
+    return true;
+  });
+  return found;
 }
 
 function resolveColonRatioDimensions(
@@ -166,35 +186,30 @@ export function extractDimensionSpecsFromText(text?: string): RequestedSizeSpec[
  */
 export function extractAspectRatioSpecsFromText(text?: string): RequestedSizeSpec[] {
   if (!text || typeof text !== "string") return [];
-  const specs: RequestedSizeSpec[] = [];
+  const found: Array<{ index: number; spec: RequestedSizeSpec }> = [];
   const seen = new Set<string>();
-  COLON_RATIO_RE.lastIndex = 0;
-  let match = COLON_RATIO_RE.exec(text);
-  while (match) {
-    const current = match;
-    match = COLON_RATIO_RE.exec(text);
-    const sourceWidth = Number(current[1]);
-    const sourceHeight = Number(current[2]);
-    if (!(sourceWidth > 0) || !(sourceHeight > 0)) continue;
-    // Skip clock-like or version-like tokens (e.g. 2024:01) — keep realistic aspect nums.
-    if (sourceWidth > 64 || sourceHeight > 64) continue;
+  eachRatioPair(text, (sourceWidth, sourceHeight, index) => {
     const resolved = resolveColonRatioDimensions(sourceWidth, sourceHeight);
-    if (seen.has(resolved.aspectRatio)) continue;
+    if (seen.has(resolved.aspectRatio)) return;
     seen.add(resolved.aspectRatio);
-    specs.push({
-      width: resolved.width,
-      height: resolved.height,
-      aspectRatio: resolved.aspectRatio,
-      ratioClamped: resolved.ratioClamped,
-      printWidth: resolved.printWidth,
-      printHeight: resolved.printHeight,
-      label: `${sourceWidth}:${sourceHeight}`,
-      sourceWidth,
-      sourceHeight,
-      unit: "named",
+    found.push({
+      index,
+      spec: {
+        width: resolved.width,
+        height: resolved.height,
+        aspectRatio: resolved.aspectRatio,
+        ratioClamped: resolved.ratioClamped,
+        printWidth: resolved.printWidth,
+        printHeight: resolved.printHeight,
+        label: `${sourceWidth}:${sourceHeight}`,
+        sourceWidth,
+        sourceHeight,
+        unit: "named",
+      },
     });
-  }
-  return specs;
+  });
+  found.sort((a, b) => a.index - b.index);
+  return found.map((item) => item.spec);
 }
 
 /**
@@ -265,21 +280,21 @@ export function resolveImageGenerationDimensions(prompt: string): {
   }
 
   // Named / numeric ratios — standards stay named; any other A:B uses custom pixels.
-  if (/(?:1\s*:\s*1|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(value)) {
+  if (/(?:1\s*[:：/]\s*1|สี่เหลี่ยมจัตุรัส|จัตุรัส|square)/iu.test(value)) {
     return { width: 1024, height: 1024, aspectRatio: "1:1" };
   }
-  if (/(?:16\s*:\s*9)/u.test(value)) {
+  if (/(?:16\s*[:：/]\s*9)/u.test(value)) {
     return { width: 1280, height: 720, aspectRatio: "16:9" };
   }
-  if (/(?:9\s*:\s*16)/u.test(value)) {
+  if (/(?:9\s*[:：/]\s*16)/u.test(value)) {
     return { width: 720, height: 1280, aspectRatio: "9:16" };
   }
-  if (/(?:4\s*:\s*3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" };
-  if (/(?:3\s*:\s*4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" };
-  if (/(?:3\s*:\s*2)/u.test(value)) return { width: 1536, height: 1024, aspectRatio: "3:2" };
-  if (/(?:2\s*:\s*3)/u.test(value)) return { width: 1024, height: 1536, aspectRatio: "2:3" };
+  if (/(?:4\s*[:：/]\s*3)/u.test(value)) return { width: 1024, height: 768, aspectRatio: "4:3" };
+  if (/(?:3\s*[:：/]\s*4)/u.test(value)) return { width: 768, height: 1024, aspectRatio: "3:4" };
+  if (/(?:3\s*[:：/]\s*2)/u.test(value)) return { width: 1536, height: 1024, aspectRatio: "3:2" };
+  if (/(?:2\s*[:：/]\s*3)/u.test(value)) return { width: 1024, height: 1536, aspectRatio: "2:3" };
 
-  const colonRatio = /(\d+)\s*:\s*(\d+)/u.exec(value);
+  const colonRatio = /(\d+)\s*[:：/]\s*(\d+)/u.exec(value);
   if (colonRatio) {
     const rw = Number(colonRatio[1]);
     const rh = Number(colonRatio[2]);

@@ -192,6 +192,8 @@ describe("AICoPilotBar follow-up wiring", () => {
     expect(barSource).not.toMatch(/isExpandAspectPrompt\s*\(/);
     expect(barSource).not.toMatch(/await\s+expandImageToAspectRatio\s*\(/);
     expect(barSource).toContain("holdGeminiStepVisible");
+    expect(barSource).toContain("} else if (isFollowUpTurn && priorGeneration) {");
+    expect(barSource).not.toContain("(isFollowUpTurn || isImageFollowUp) && priorGeneration");
     const recallCall = barSource.indexOf("await recallFollowUpContext");
     const directorCall = barSource.indexOf("await prepareRemoteCreativeDirection");
     const imageRunCall = barSource.indexOf(

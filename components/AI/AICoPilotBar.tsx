@@ -645,7 +645,7 @@ export default function AICoPilotBar() {
         !pending &&
         !isBuiltInImageAction &&
         !isCanvasInventoryPrompt(promptToSend) &&
-        (isFollowUpTurn || isImageFollowUp);
+        isFollowUpTurn;
 
       if (shouldRunSmartRecall && priorGeneration) {
         const recallStartedAt = Date.now();
@@ -705,7 +705,7 @@ export default function AICoPilotBar() {
           recall: followUpRecall,
           kind: followUpKind,
         });
-      } else if ((isFollowUpTurn || isImageFollowUp) && priorGeneration) {
+      } else if (isFollowUpTurn && priorGeneration) {
         directorPrompt = composeFollowUpDirectorPrompt(promptToSend, priorGeneration, {
           kind: followUpKind,
         });

@@ -76,6 +76,21 @@ export type ContextAwareTaskResult = {
   visionModel?: string;
 };
 
+/**
+ * Generation size sent to the provider. Once the orchestrator locked
+ * requestedDimensions (current-text size / inserted ref / last package),
+ * leftover 29×7cm in Director prose must not clobber an explicit 1:1.
+ */
+export function resolveTaskExecutionDimensions(task: {
+  requestedDimensions?: AiTask["requestedDimensions"];
+  prompt: string;
+}):
+  | NonNullable<AiTask["requestedDimensions"]>
+  | ReturnType<typeof resolveImageGenerationDimensions> {
+  if (task.requestedDimensions) return task.requestedDimensions;
+  return resolveImageGenerationDimensions(task.prompt);
+}
+
 export type ContextAwareImageTaskOptions = {
   signal?: AbortSignal;
   cloudConsent?: boolean;
@@ -140,7 +155,7 @@ export async function runContextAwareImageTask(
     slideId: initialState.currentSlideId,
     revision: initialState.doc.updatedAt,
   };
-  let dimensions = task.requestedDimensions ?? resolveImageGenerationDimensions(task.prompt);
+  let dimensions = resolveTaskExecutionDimensions(task);
   if (
     !task.requestedDimensions &&
     effectiveRefs.length > 0 &&
@@ -156,14 +171,6 @@ export async function runContextAwareImageTask(
       const ph = ref0?.sourceHeight || source.height;
       dimensions = resolveDimensionsFromPixelSize(pw, ph);
     }
-  }
-  if (
-    dimensions.width === 1024 &&
-    dimensions.height === 1024 &&
-    dimensions.aspectRatio === "1:1" &&
-    hasExplicitDimensionsInText(task.prompt)
-  ) {
-    dimensions = resolveImageGenerationDimensions(task.prompt);
   }
   const viewport =
     getCanvasViewport() ??
