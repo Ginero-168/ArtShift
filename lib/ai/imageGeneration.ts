@@ -100,7 +100,7 @@ function isRealisticAspectPair(width: number, height: number): boolean {
 
 function eachRatioPair(
   text: string,
-  onMatch: (width: number, height: number, index: number) => boolean | undefined,
+  onMatch: (width: number, height: number, index: number) => boolean | void,
 ): void {
   for (const re of [ASPECT_PHRASE_RE, RATIO_PAIR_RE]) {
     re.lastIndex = 0;
