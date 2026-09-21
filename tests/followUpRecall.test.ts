@@ -123,10 +123,83 @@ describe("follow-up recall", () => {
       },
     });
     expect(prompt).toContain("User follow-up command: ปรับเป็นแนวตั้ง");
-    expect(prompt).toContain("Prior exact size (authoritative): 29x7cm");
+    expect(prompt).toContain("Prior exact size: 29x7cm");
     expect(prompt).toMatch(/resolved size MUST be 7x29/i);
+    expect(prompt).toContain("Resolved generation size (authoritative): 7x29cm");
     expect(prompt).toContain("LAST IMAGE GENERATION PACKAGE");
     expect(prompt).toContain("29x7cm");
+  });
+
+  it("lets a newly inserted 1:1 @Photo beat last-package 29×7cm", () => {
+    const input = {
+      followUpPrompt: "@Photo ทำป้ายใหม่จากภาพนี้",
+      lastGeneration: {
+        ...lastGeneration,
+        userPrompt: "สร้างป้าย shelftalk 29x7 cm โทนชมพู ลด 35%",
+        sizeLabel: "29x7cm",
+        sizeUnit: "cm" as const,
+        sourceWidth: 29,
+        sourceHeight: 7,
+      },
+      insertedRefs: [
+        {
+          objectId: "photo-square",
+          elementVersion: 1,
+          fileId: "file-photo",
+          displayName: "Photo",
+          sourceWidth: 1024,
+          sourceHeight: 1024,
+          width: 400,
+          height: 400,
+          angle: 0,
+        },
+      ],
+    };
+    const prompt = buildFollowUpRecallUserPrompt(input);
+    expect(prompt).toMatch(/Resolved size MUST be 1:1/i);
+    expect(prompt).toMatch(/beat last-package 29x7cm/i);
+    const parsed = parseFollowUpRecallPayload(
+      JSON.stringify({
+        summary: "Keep 29x7cm from last package",
+        followUpIntent: "Reuse 29x7cm",
+        keepCopy: true,
+        keepIngredients: true,
+      }),
+      input,
+    );
+    expect(parsed.resolvedExactSize).toBe("1:1");
+    expect(parsed.priorExactSize).toMatch(/29x7/i);
+    expect(parsed.summary).toContain("1:1");
+    expect(parsed.followUpIntent).toContain("1:1");
+  });
+
+  it("keeps an explicit 60x20cm ask above last package and inserted photos", () => {
+    const recall = buildLocalFollowUpRecall({
+      followUpPrompt: "60x20cm",
+      lastGeneration: {
+        ...lastGeneration,
+        sizeLabel: "29x7cm",
+        sizeUnit: "cm",
+        sourceWidth: 29,
+        sourceHeight: 7,
+      },
+      insertedRefs: [
+        {
+          objectId: "photo-square",
+          elementVersion: 1,
+          fileId: "file-photo",
+          displayName: "Photo",
+          sourceWidth: 1024,
+          sourceHeight: 1024,
+          width: 400,
+          height: 400,
+          angle: 0,
+        },
+      ],
+    });
+    expect(recall.resolvedExactSize).toMatch(/60x20/i);
+    expect(recall.resolvedExactSize).not.toMatch(/29x7/i);
+    expect(recall.resolvedExactSize).not.toBe("1:1");
   });
 
   it("holds a fast Gemini step long enough to stay visible", async () => {

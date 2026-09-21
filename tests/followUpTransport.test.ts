@@ -156,3 +156,156 @@ describe("follow-up transport: last package vs refs-only", () => {
     expect(task.requestedDimensions?.sizeLabel).toMatch(/7x29/i);
   });
 });
+
+describe("chat size priority: text > inserted prompt image > last package", () => {
+  const squarePhoto = {
+    objectId: "photo-square",
+    elementVersion: 1,
+    fileId: "file-photo",
+    displayName: "Photo",
+    sourceWidth: 1024,
+    sourceHeight: 1024,
+    width: 400,
+    height: 400,
+    angle: 0,
+  };
+
+  it("uses a newly inserted 1:1 @Photo instead of last-generation 29×7cm", () => {
+    const input: ContextAwareTurnInput = {
+      prompt: "@Photo ทำต่อจากภาพนี้",
+      refs: [squarePhoto],
+      analyses: [],
+      priorGeneration: last29x7,
+    };
+    const dims = resolveTaskDimensionsWithContext(input);
+    expect(dims.aspectRatio).toBe("1:1");
+    expect(dims.width).toBe(dims.height);
+    expect(dims.sizeLabel).toBeUndefined();
+
+    const followUp = resolveFollowUpDimensions({
+      prompt: "@Photo",
+      prior: last29x7,
+      refs: [squarePhoto],
+    });
+    expect(followUp?.aspectRatio).toBe("1:1");
+
+    const run = createDirectedImageRun(
+      {
+        ...input,
+        analyses: [
+          {
+            ref: squarePhoto,
+            caption: "",
+            objects: [],
+            visibleText: "",
+            dimensions: { width: 1024, height: 1024, aspectRatio: 1 },
+            transparency: "unknown",
+            appearanceNotes: [],
+            limitations: [],
+          },
+        ],
+      },
+      imageTaskDirection("Rebuild the last 29x7cm shelftalk as a wide banner"),
+    );
+    expect(run.tasks[0]?.requestedDimensions?.aspectRatio).toBe("1:1");
+    expect(run.tasks[0]?.requestedDimensions?.sizeLabel ?? "").not.toMatch(/29x7/i);
+  });
+
+  it("still flips last-package 29×7cm on 'ปรับเป็นแนวตั้ง' when no new image is inserted", () => {
+    const dims = resolveTaskDimensionsWithContext({
+      prompt: "ปรับเป็นแนวตั้ง",
+      refs: [],
+      analyses: [],
+      priorGeneration: last29x7,
+    });
+    expect(dims.sizeLabel).toMatch(/7x29/i);
+    expect((dims.printHeight ?? 0) / (dims.printWidth ?? 1)).toBeCloseTo(29 / 7, 2);
+    expect(dims.aspectRatio).not.toBe("1:1");
+  });
+
+  it("honors explicit 60x20cm over last package and an inserted 1:1 photo", () => {
+    const dims = resolveTaskDimensionsWithContext({
+      prompt: "60x20cm",
+      refs: [squarePhoto],
+      analyses: [],
+      priorGeneration: last29x7,
+    });
+    expect(dims.sizeLabel).toMatch(/60x20/i);
+    expect(dims.sourceWidth).toBe(60);
+    expect(dims.sourceHeight).toBe(20);
+
+    const run = createDirectedImageRun(
+      {
+        prompt: "ปรับไซส์เป็น 60x20cm",
+        refs: [squarePhoto],
+        analyses: [
+          {
+            ref: squarePhoto,
+            caption: "",
+            objects: [],
+            visibleText: "",
+            dimensions: { width: 1024, height: 1024, aspectRatio: 1 },
+            transparency: "unknown",
+            appearanceNotes: [],
+            limitations: [],
+          },
+        ],
+        priorGeneration: last29x7,
+      },
+      imageTaskDirection("Keep the last 29x7cm banner"),
+    );
+    expect(run.tasks[0]?.requestedDimensions?.sizeLabel).toBe("60x20cm");
+    expect(run.tasks[0]?.prompt).toContain("60x20cm");
+  });
+
+  it("uses a newly inserted square motorcycle photo instead of last-package 16:9", () => {
+    const motorcycle = {
+      objectId: "moto-square",
+      elementVersion: 1,
+      fileId: "file-moto",
+      displayName: "Motorcycle",
+      sourceWidth: 1400,
+      sourceHeight: 1400,
+      width: 400,
+      height: 400,
+      angle: 0,
+    };
+    const dims = resolveTaskDimensionsWithContext({
+      prompt: "@Motorcycle ทำโปสเตอร์จากภาพนี้",
+      refs: [motorcycle],
+      analyses: [],
+      priorGeneration: {
+        userPrompt: "สร้างรูปวิวทะเล 16:9",
+        refinedPrompt: "Ocean 16:9",
+        width: 1280,
+        height: 720,
+        aspectRatio: "16:9",
+      },
+    });
+    expect(dims.aspectRatio).toBe("1:1");
+    expect(dims.width).toBe(dims.height);
+  });
+
+  it("does not treat the last generated output as a newly inserted size source", () => {
+    const dims = resolveTaskDimensionsWithContext({
+      prompt: "ปรับเป็นแนวตั้ง",
+      refs: [
+        {
+          objectId: "last-output",
+          elementVersion: 1,
+          fileId: "file-1",
+          displayName: "Last banner",
+          sourceWidth: 1024,
+          sourceHeight: 1024,
+          width: 400,
+          height: 400,
+          angle: 0,
+        },
+      ],
+      analyses: [],
+      priorGeneration: { ...last29x7, outputElementId: "last-output", outputFileId: "file-1" },
+    });
+    expect(dims.sizeLabel).toMatch(/7x29/i);
+    expect(dims.aspectRatio).not.toBe("1:1");
+  });
+});

@@ -6,6 +6,7 @@ import {
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
 } from "@/lib/ai/imageGeneration";
+import { preserveUserInstructionInPrompt } from "@/lib/ai/imageRewriteIntent";
 import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
@@ -16,7 +17,6 @@ import { createAtomicVectorizedFromResult } from "@/lib/vectorize/atomicVectoriz
 import { vectorizeImage } from "@/lib/vectorize/vectorizer";
 import { type CanvasInspection, inspectCanvas } from "./canvasInspector";
 import {
-  applyOrientationToPriorSize,
   extractRequestedSizeSpecsFromUserAsk,
   followUpCommandText,
   isImageFollowUpPrompt,
@@ -24,6 +24,7 @@ import {
   type PriorImageGenerationContext,
   parseFollowUpOrientation,
   resolveFollowUpDimensions,
+  userInsertedPromptImageRefs,
 } from "./chatContinuity";
 import {
   applyCreativeDirectionToTask,
@@ -162,8 +163,17 @@ export function resolveTaskDimensionsWithContext(
     Boolean(orientation) &&
     (isOrientationOnlyFollowUpPrompt(command) || isImageFollowUpPrompt(command));
 
-  if (orientation && orientationFollowUp && input.priorGeneration) {
-    return toTaskDimensions(applyOrientationToPriorSize(input.priorGeneration, orientation));
+  const followUpDims = resolveFollowUpDimensions({
+    prompt: input.prompt,
+    prior: input.priorGeneration,
+    conversationHistory: input.conversationHistory,
+    clarificationOriginalPrompt: input.clarification?.originalPrompt,
+    directionRefinedPrompt: direction?.refinedPrompt,
+    directionSummary: direction?.summary,
+    refs: input.refs,
+  });
+  if (followUpDims) {
+    return toTaskDimensions(followUpDims);
   }
 
   // Package missing: invert the last output / attached ref instead of defaulting to 9:16.
@@ -177,18 +187,6 @@ export function resolveTaskDimensionsWithContext(
         (orientation === "portrait" && landscape) || (orientation === "landscape" && !landscape);
       return resolveDimensionsFromPixelSize(swap ? h : w, swap ? w : h);
     }
-  }
-
-  const followUpDims = resolveFollowUpDimensions({
-    prompt: input.prompt,
-    prior: input.priorGeneration,
-    conversationHistory: input.conversationHistory,
-    clarificationOriginalPrompt: input.clarification?.originalPrompt,
-    directionRefinedPrompt: direction?.refinedPrompt,
-    directionSummary: direction?.summary,
-  });
-  if (followUpDims) {
-    return toTaskDimensions(followUpDims);
   }
 
   // With a source/reference image and no explicit size, match the original aspect.
@@ -256,7 +254,11 @@ export function createDirectedImageTask(
   const requiredText = extractRequiredText(input.prompt);
   const requestedDimensions = resolveTaskDimensionsWithContext(input, direction);
   const requiredSubjects = [
-    ...new Set(input.analyses.flatMap((analysis) => analysis.objects)),
+    ...new Set(
+      input.analyses
+        .map((analysis) => analysis.objects.find((object) => object.trim())?.trim())
+        .filter((object): object is string => Boolean(object)),
+    ),
   ].slice(0, 3);
   const plan: AiTaskPlan = {
     id: crypto.randomUUID(),
@@ -343,10 +345,13 @@ export function createDirectedImageRun(
   direction: Extract<CreativeDirection, { kind: "image-task" }>,
   options: { runId?: string } = {},
 ): DirectedImageRun {
-  // Orientation-only follow-ups (ปรับเป็นแนวตั้ง) must invert the remembered size
-  // in resolveTaskDimensionsWithContext. Do not let Director prose like "9:16"
-  // override a custom 29×7cm → 7×29cm swap.
+  // Authoritative sizes from the user ask / inserted prompt image / last package
+  // must win over Director prose ("9:16", leftover 29×7cm, etc.).
   const lockFollowUpSize = isOrientationOnlyFollowUpPrompt(input.prompt);
+  const lockDirectorInventedSize =
+    lockFollowUpSize ||
+    userInsertedPromptImageRefs(input.refs, input.priorGeneration).length > 0 ||
+    (isImageFollowUpPrompt(input.prompt) && Boolean(input.priorGeneration));
   // Count comes only from the user ask (explicit N or a multi-size list).
   // Director-invented requestedOutputCount and sizes in summary/refinedPrompt are ignored.
   const count = resolveRequestedOutputCountFromUserAsk(input.prompt, [
@@ -389,7 +394,7 @@ export function createDirectedImageRun(
       variationCues = " (focusing on bright clean minimalist illumination)";
     }
     const briefDims =
-      lockFollowUpSize || !hasExplicitDimensionsInText(brief)
+      lockDirectorInventedSize || !hasExplicitDimensionsInText(brief)
         ? null
         : resolveImageGenerationDimensions(brief);
     const listDims =
@@ -428,10 +433,11 @@ export function createDirectedImageRun(
         ? ` Target generation size ${dims.width}×${dims.height} (model max 3:1). The pipeline will then expand the overflowing edges (left/right or top/bottom) and stitch to the true print canvas ${dims.printWidth}×${dims.printHeight}.${exactSizeNote} Deliver a filled edge-to-edge ≤3:1 center panel — no empty bars and no extra crop into a narrower strip.`
         : ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}).${exactSizeNote} Fill the full frame edge-to-edge; no letterboxing.`
       : "";
-    const taskPrompt =
+    const compiledPrompt =
       count === 1
         ? `${direction.refinedPrompt}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
         : `${direction.refinedPrompt}\nDistinct output ${index + 1} of ${count}${variationCues}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
+    const taskPrompt = preserveUserInstructionInPrompt(compiledPrompt, input.prompt);
     return {
       ...baseTask,
       id: `${runId}-task-${index + 1}`,

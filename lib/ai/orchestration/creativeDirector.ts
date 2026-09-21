@@ -1,5 +1,4 @@
 import { attachRuntimeModel } from "@/lib/ai/chatModelAttribution";
-import { hasNumericOrNamedSizeInText } from "@/lib/ai/imageGeneration";
 import type {
   AiAssistantChatInput,
   AiExecution,
@@ -16,14 +15,12 @@ import {
 import { getExecutionPolicy } from "@/lib/designAgent/policy";
 import { DESIGN_KNOWLEDGE_SKILLS, retrieveDesignKnowledge } from "../knowledge/designKnowledge";
 import {
-  applyOrientationToPriorSize,
   DIRECTOR_CONVERSATION_HISTORY_LIMIT,
   extractRequestedSizeSpecsFromUserAsk,
   followUpAskText,
-  followUpCommandText,
   formatGenerationPackageForPrompt,
   type PriorImageGenerationContext,
-  parseFollowUpOrientation,
+  resolveFollowUpDimensions,
 } from "./chatContinuity";
 import {
   CREATING_MODEL_CATALOG,
@@ -33,6 +30,7 @@ import {
 import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from "./executionGraph";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
 import { computeDetailScore, computeEditPrecisionScore } from "./imageQualityPolicy";
+import type { ComposerImageRef } from "./imageReferences";
 import { extractIntentFeatures } from "./imageWorkSpec";
 import {
   finalizeRefinedPromptWithNameTags,
@@ -412,8 +410,9 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - Environment & Setting (Sensible Defaults): Place the subject in a logical, tasteful, and cohesive environment. When the user prompt is broad or minimal (e.g. 'สร้างรูปแมว', 'วาดรูปรถ'), proactively think for the user by choosing standard, harmonious, aesthetic settings (e.g. for a cat: a cozy living room, warm sunlit hardwood floor, or comfortable sofa; never place subjects in bizarre, extreme, or conflicting settings like a warzone unless explicitly requested).",
   "  - Lighting & Ambiance: Natural soft window illumination, warm ambient light, gentle directional shadows, and depth.",
   "  - Camera & Composition: Eye-level perspective or medium close-up, shallow depth of field (clean bokeh background), rule-of-thirds composition, crisp framing without clutter.",
-  "  - Style & Fidelity: Photorealistic high-resolution photography, lifelike textures, sharp focus, rich color palette.",
-  "Strictly preserve any explicit user-specified requirements (subjects, quantities, colors, gestures, text, brand constraints) while enriching all missing dimensions with sensible, harmonious defaults.",
+  "  - Style & Fidelity: Honor the user's requested medium, style, and tone when they named any treatment. Photorealistic photography is the default only when they did not ask for a rewrite.",
+  "Strictly preserve any explicit user-specified requirements (subjects, quantities, colors, gestures, text, brand constraints, style/medium, and named aspect such as 1:1 / สัดส่วน) while enriching all missing dimensions with sensible, harmonious defaults.",
+  "SIZE AND INSTRUCTION PRIORITY (MANDATORY): (1) exact size in the current user command, (2) newly inserted/tagged prompt-image dimensions, (3) last generation package for short follow-ups, (4) defaults. Never replace the current user instruction with a generic stock English template regardless of subject or style. refinedPrompt MUST keep the current ask (style, medium, tone, aspect, language).",
   "Never echo back a minimal or 1-sentence prompt (such as just 'a cat') when given a broad request; always expand into a complete, well-crafted image prompt.",
   "If the user asks for a copyrighted character or trademark (e.g. 'สไปเดอร์แมน' / Spider-Man), describe the visual concept, color palette (red and blue suit), and superhero archetypal aesthetic without using infringing trademarked names.",
   "ASPECT RATIO PROTOCOL (MANDATORY 1:1 BASELINE):",
@@ -422,7 +421,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "  - MULTI-SIZE LISTS: When the user lists multiple distinct print/pixel sizes OR named aspect ratios (e.g. '53x20 cm, 29x7 cm, 1040x1040' or '16:9, 3:4 และ 9:16'), set requestedOutputCount to that count and put EACH size/ratio into the matching outputBrief. Never collapse every size into one output or one 1:1 square variation set.",
   "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') OR a short revision of the last image (e.g. 'ปรับเป็นแนวตั้ง', 'ทำให้เป็นแนวตั้ง', 'make it vertical', 'ปรับโทน') after a prior image generation in this conversation:",
   "      * Treat the prior refinedPrompt + chat recall as the BASE brief. Restate and enrich it; do not invent a new unrelated subject or a blank campaign.",
-  "      * KEEP the prior exact size (cm / px / named aspect) unless the follow-up names a new size. Orientation-only commands (แนวตั้ง / แนวนอน / vertical / portrait / landscape) SWAP custom WxH axes (29×7cm → 7×29cm) or FLIP a named aspect (16:9→9:16, 3:4→4:3, 3:1→1:3). Never substitute a default 9:16 when a custom size exists.",
+  "      * KEEP the prior exact size (cm / px / named aspect) unless the follow-up names a new size OR the user inserted a new prompt image whose aspect should win. Orientation-only commands (แนวตั้ง / แนวนอน / vertical / portrait / landscape) SWAP custom WxH axes (29×7cm → 7×29cm) or FLIP a named aspect (16:9→9:16, 3:4→4:3, 3:1→1:3). Never substitute a default 9:16 when a custom size exists. A named size in the current ask (สัดส่วน 1:1) beats last-package size.",
   "      * Orientation-only or single-size revisions (แนวตั้ง / แนวนอน / cm resize) MUST use requestedOutputCount: 1 unless the user also says ขอ N แบบ / สร้าง N รูป or lists multiple distinct sizes.",
   "      * Create distinct variations (pose, crop, lighting, secondary details) while preserving subject, style, typography rules, and ratio — unless this is a revision, in which case apply the new instruction and keep everything else.",
   "      * If the message includes === LAST IMAGE GENERATION PACKAGE or === PRIOR IMAGE GENERATION TO CONTINUE ===, that block is authoritative for base brief, ingredients, copy, and ratio.",
@@ -522,28 +521,48 @@ export async function prepareCreativeDirection(
   const lastSizeHint = input.lastGeneration
     ? (() => {
         const prior = input.lastGeneration;
-        const command = followUpCommandText(input.prompt);
-        const orientation = parseFollowUpOrientation(command);
-        const inverted =
-          orientation && !hasNumericOrNamedSizeInText(command)
-            ? applyOrientationToPriorSize(prior, orientation)
-            : null;
-        const exactSize =
+        const analysisRefs: ComposerImageRef[] = (input.referenceAnalyses ?? []).flatMap(
+          (item, index) => {
+            const width = item.dimensions?.width ?? 0;
+            const height = item.dimensions?.height ?? 0;
+            if (!(width > 0) || !(height > 0)) return [];
+            const nestedId = (item as { ref?: { objectId?: string; displayName?: string } }).ref;
+            return [
+              {
+                objectId: item.objectId || nestedId?.objectId || `analysis-${index}`,
+                elementVersion: 0,
+                fileId: "",
+                displayName: item.displayName || nestedId?.displayName || "Photo",
+                sourceWidth: width,
+                sourceHeight: height,
+                width,
+                height,
+                angle: 0,
+              },
+            ];
+          },
+        );
+        const resolved = resolveFollowUpDimensions({
+          prompt: input.prompt,
+          prior,
+          refs: analysisRefs,
+        });
+        const priorExact =
           prior.sizeLabel ||
           (prior.sourceWidth && prior.sourceHeight
             ? `${prior.sourceWidth}x${prior.sourceHeight}${prior.sizeUnit ?? ""}`
             : undefined);
         return {
-          exactSize,
-          resolvedExactSize: inverted?.sizeLabel || inverted?.aspectRatio || exactSize,
-          aspectRatio: inverted?.aspectRatio || prior.aspectRatio,
-          width: inverted?.width ?? prior.width,
-          height: inverted?.height ?? prior.height,
-          printWidth: inverted?.printWidth ?? prior.printWidth,
-          printHeight: inverted?.printHeight ?? prior.printHeight,
-          sourceWidth: inverted?.sourceWidth ?? prior.sourceWidth,
-          sourceHeight: inverted?.sourceHeight ?? prior.sourceHeight,
-          sizeUnit: inverted?.sizeUnit ?? prior.sizeUnit,
+          exactSize: priorExact,
+          resolvedExactSize: resolved?.sizeLabel || resolved?.aspectRatio || priorExact,
+          aspectRatio: resolved?.aspectRatio || prior.aspectRatio,
+          width: resolved?.width ?? prior.width,
+          height: resolved?.height ?? prior.height,
+          printWidth: resolved?.printWidth ?? prior.printWidth,
+          printHeight: resolved?.printHeight ?? prior.printHeight,
+          sourceWidth: prior.sourceWidth,
+          sourceHeight: prior.sourceHeight,
+          sizeUnit: prior.sizeUnit,
         };
       })()
     : null;

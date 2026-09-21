@@ -25,6 +25,20 @@ export async function recallFollowUpContext(
           currentPrompt: input.followUpPrompt,
         }),
         lastGeneration: input.lastGeneration,
+        insertedPromptImages: (input.insertedRefs ?? [])
+          .filter(
+            (ref) => (ref.sourceWidth || ref.width) > 0 && (ref.sourceHeight || ref.height) > 0,
+          )
+          .slice(0, 4)
+          .map((ref) => ({
+            objectId: ref.objectId,
+            fileId: ref.fileId,
+            displayName: ref.displayName,
+            sourceWidth: ref.sourceWidth || ref.width,
+            sourceHeight: ref.sourceHeight || ref.height,
+            width: ref.width,
+            height: ref.height,
+          })),
         cloudConsent: true,
       }),
       signal: options.signal,

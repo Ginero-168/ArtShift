@@ -77,10 +77,69 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function parseInsertedPromptImages(value: unknown):
+  | {
+      objectId: string;
+      fileId: string;
+      displayName: string;
+      sourceWidth: number;
+      sourceHeight: number;
+      width: number;
+      height: number;
+      elementVersion: number;
+      angle: number;
+    }[]
+  | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 4) return undefined;
+  const refs: {
+    objectId: string;
+    fileId: string;
+    displayName: string;
+    sourceWidth: number;
+    sourceHeight: number;
+    width: number;
+    height: number;
+    elementVersion: number;
+    angle: number;
+  }[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const sourceWidth =
+      typeof item.sourceWidth === "number" ? item.sourceWidth : Number(item.width);
+    const sourceHeight =
+      typeof item.sourceHeight === "number" ? item.sourceHeight : Number(item.height);
+    if (
+      !(sourceWidth > 0) ||
+      !(sourceHeight > 0) ||
+      sourceWidth > 20_000 ||
+      sourceHeight > 20_000
+    ) {
+      continue;
+    }
+    if (item.objectId !== undefined && !isSafeString(item.objectId, 120)) continue;
+    if (item.fileId !== undefined && !isSafeString(item.fileId, 120)) continue;
+    if (item.displayName !== undefined && !isSafeString(item.displayName, 120)) continue;
+    refs.push({
+      objectId: typeof item.objectId === "string" ? item.objectId : `inserted-${refs.length + 1}`,
+      fileId: typeof item.fileId === "string" ? item.fileId : "",
+      displayName: typeof item.displayName === "string" ? item.displayName : "Photo",
+      sourceWidth,
+      sourceHeight,
+      width: typeof item.width === "number" && item.width > 0 ? item.width : sourceWidth,
+      height: typeof item.height === "number" && item.height > 0 ? item.height : sourceHeight,
+      elementVersion: 1,
+      angle: 0,
+    });
+  }
+  return refs;
+}
+
 function parseRecallInput(value: Record<string, unknown>): {
   followUpPrompt: string;
   conversationHistory: { role: "user" | "assistant"; content: string }[];
   lastGeneration: PriorImageGenerationContext;
+  insertedRefs?: ReturnType<typeof parseInsertedPromptImages>;
 } | null {
   if (
     !isSafeString(value.followUpPrompt, 4_000, 1) ||
@@ -92,10 +151,12 @@ function parseRecallInput(value: Record<string, unknown>): {
   if (!lastGeneration) return null;
   const conversationHistory = parseConversationHistory(value.conversationHistory);
   if (value.conversationHistory !== undefined && !conversationHistory) return null;
+  const insertedRefs = parseInsertedPromptImages(value.insertedPromptImages);
   return {
     followUpPrompt: value.followUpPrompt,
     conversationHistory: conversationHistory ?? [],
     lastGeneration,
+    ...(insertedRefs?.length ? { insertedRefs } : {}),
   };
 }
 

@@ -5,6 +5,7 @@
 
 import { normalizeRuntimeModelId } from "@/lib/ai/chatModelAttribution";
 import { resolveGenerationSizeFromRatio } from "@/lib/ai/generationSize";
+import { isDirectedImageRewrite } from "@/lib/ai/imageRewriteIntent";
 import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { loadDataURL } from "@/lib/engine/imageCache";
 import { GPT_IMAGE_2_MAX_COST_USD } from "./pricing";
@@ -685,23 +686,17 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
     visualComponents.push(`promotional text badge reading "${bubbleText}"`);
   }
 
-  // If no specific thematic subject component was matched, retain cleaned user prompt to avoid generic outputs
-  const hasSubject = visualComponents.some(
-    (c) =>
-      !c.includes("commercial advertising") &&
-      !c.includes("8k resolution") &&
-      !c.includes("flat 2D graphic design"),
-  );
-  if (!hasSubject && cleaned) {
+  // Always keep the current user instruction. Keyword packs may enrich; they must not replace it.
+  if (cleaned && !visualComponents.some((item) => item.includes(cleaned))) {
     visualComponents.unshift(cleaned);
   }
 
-  // Add standard quality modifiers
+  // Add standard quality modifiers — skip the generic cinematic pack when the user named a style/aspect.
   if (isSignage) {
     visualComponents.push(
       "8k resolution, crisp vector graphics, high contrast, sharp focus, masterwork graphic artwork",
     );
-  } else {
+  } else if (!isDirectedImageRewrite(cleaned) && !isDirectedImageRewrite(rawPrompt)) {
     visualComponents.push(
       "8k resolution, cinematic lighting, sharp focus, masterwork commercial art",
     );
@@ -721,10 +716,12 @@ export function streamlinePromptForImageGen(rawPrompt: string): string {
 export function isAlreadyOrchestratedPrompt(prompt: string): boolean {
   const trimmed = prompt.trim();
   return (
-    /^(?:flat\s+2d\s+graphic\s+design|commercial\s+advertising|a\s+photorealistic|cinematic|modern\s+corporate|\[(?:TYPE|MAIN CONCEPT|COMPOSITION)\])/i.test(
+    /^(?:flat\s+2d\s+graphic\s+design|commercial\s+advertising|a\s+photorealistic|cinematic|modern\s+corporate|\[(?:TYPE|MAIN CONCEPT|COMPOSITION)\]|user\s+instruction)/i.test(
       trimmed,
     ) ||
     /output\s+constraints:\s*one\s+standalone\s+image\s+only/i.test(trimmed) ||
+    /user\s+instruction\s*\(authoritative\)/i.test(trimmed) ||
+    /target\s+size\s+\d+/i.test(trimmed) ||
     (/no\s+3d\s+mockup/i.test(trimmed) &&
       /no\s+(?:bookshelf|room\s+environment|wooden\s+shelf)/i.test(trimmed))
   );

@@ -362,6 +362,7 @@ export async function executeCoPilotInstruction(
                 followUpPrompt: prompt,
                 conversationHistory: history,
                 lastGeneration: priorGeneration,
+                insertedRefs: selection.refs,
               },
               { signal: options.signal, cloudConsent: true },
             )
@@ -1145,7 +1146,7 @@ export function diagnoseOrchestratorError(
         description:
           "เซิร์ฟเวอร์ AI Provider ขัดข้องชั่วคราว หรือคำขอมีความซับซ้อนเกินไป คุณสามารถปรับแต่งคำขอในช่องพิมพ์แล้วลองใหม่อีกครั้ง",
         actionText: "✏️ ปรับแต่งคำขอใหม่",
-        promptToEdit: streamlined || userPrompt,
+        promptToEdit: userPrompt,
       },
       alternativePrompt: streamlined,
     };
@@ -1163,7 +1164,7 @@ export function diagnoseOrchestratorError(
       title: "การสร้างภาพไม่สำเร็จ",
       description: `${rawError || "เกิดข้อผิดพลาดในการประมวลผลจากโมเดล AI"} คุณสามารถกดปุ่มด้านล่างเพื่อแก้ไขคำขอในช่องพิมพ์`,
       actionText: "✏️ ปรับแต่งคำขอใหม่",
-      promptToEdit: fallbackStreamlined || userPrompt,
+      promptToEdit: userPrompt,
     },
     alternativePrompt: fallbackStreamlined,
   };
