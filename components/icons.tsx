@@ -1452,6 +1452,21 @@ export const IconBot = (p: Props) =>
     p,
   );
 
+export const IconSkeleton = (p: Props) =>
+  svg(
+    p.size,
+    <>
+      <circle cx="12" cy="4.5" r="2" />
+      <path d="M12 6.5v5" />
+      <path d="M7.5 9.5h9" />
+      <path d="M7.5 9.5 5.5 14" />
+      <path d="M16.5 9.5 18.5 14" />
+      <path d="M12 11.5 8.5 20" />
+      <path d="M12 11.5 15.5 20" />
+    </>,
+    p,
+  );
+
 export const IconCamera = (p: Props) =>
   svg(
     p.size,

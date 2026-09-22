@@ -7,6 +7,7 @@ import {
   IconLayers,
   IconPenTool,
   IconScissors,
+  IconSkeleton,
   IconSparkles,
   IconWand,
   IconZap,
@@ -31,6 +32,7 @@ const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   vectorize: "#4f46e5",
   upscale: "#7c3aed",
   "multi-angle": "#4338ca",
+  skeleton: "#0e7490",
   generate: "#2563eb",
   brief: "#6366f1",
 };
@@ -49,6 +51,8 @@ function renderPreviewIcon(kind: ProcessingPreviewKind, size = 15) {
       return <IconZap size={size} color="currentColor" />;
     case "multi-angle":
       return <IconCamera size={size} color="currentColor" />;
+    case "skeleton":
+      return <IconSkeleton size={size} color="currentColor" />;
     case "generate":
       return <IconSparkles size={size} color="currentColor" />;
     case "brief":

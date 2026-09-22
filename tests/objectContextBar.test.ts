@@ -49,15 +49,18 @@ describe("ObjectContextBar Hook Rules and Brief Action", () => {
     expect(preloadHook).toBeLessThan(earlyReturnIndex);
   });
 
-  it("places Layer and Multi-Angle after Extract and before Vectorize", () => {
+  it("places Layer, Multi-Angle, and Skeleton after Extract and before Vectorize", () => {
     const extractIndex = fileContent.indexOf("EXTRACT_LABEL, toggleExtract");
     const layerIndex = fileContent.indexOf("LAYER_LABEL, toggleLayer");
     const multiAngleIndex = fileContent.indexOf("MULTI_ANGLE_LABEL, toggleMultiAngle");
+    const skeletonIndex = fileContent.indexOf("SKELETON_LABEL, toggleSkeleton");
     const vectorizeIndex = fileContent.indexOf("action(VECTORIZE_GROUP_LABEL");
     expect(extractIndex).toBeGreaterThan(0);
     expect(layerIndex).toBeGreaterThan(extractIndex);
     expect(multiAngleIndex).toBeGreaterThan(layerIndex);
-    expect(vectorizeIndex).toBeGreaterThan(multiAngleIndex);
+    expect(skeletonIndex).toBeGreaterThan(multiAngleIndex);
+    expect(vectorizeIndex).toBeGreaterThan(skeletonIndex);
+    expect(fileContent).toContain('first.status === "loaded"');
   });
 
   it("places Brief action after Vectorize on image selection toolbar", () => {
