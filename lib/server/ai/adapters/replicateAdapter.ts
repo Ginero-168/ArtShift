@@ -57,12 +57,21 @@ const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 // Flare retired: replaced with Sunburst across all routes.
 const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
 const GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
+/** Moodboard AI batch — cheap iteration (~$0.003/image). */
+const FLUX_SCHNELL_MODEL = "black-forest-labs/flux-schnell";
 
 /** Models that support xhigh and max quality tiers. */
 const EXTENDED_QUALITY_MODELS = new Set([GPT_IMAGE_25_FLARE_MODEL, GPT_IMAGE_25_SUNBURST_MODEL]);
 
 /** Allowlisted image generation model slugs. Client-side aliases must resolve server-side. */
 const ALLOWED_IMAGE_MODEL_SLUGS = new Set([
+  GPT_IMAGE_2_MODEL,
+  GPT_IMAGE_25_FLARE_MODEL,
+  GPT_IMAGE_25_SUNBURST_MODEL,
+  FLUX_SCHNELL_MODEL,
+]);
+
+const GPT_IMAGE_MODEL_SLUGS = new Set([
   GPT_IMAGE_2_MODEL,
   GPT_IMAGE_25_FLARE_MODEL,
   GPT_IMAGE_25_SUNBURST_MODEL,
@@ -183,6 +192,16 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           alias: "image-precision",
           profile: "quality",
           pricing: { currency: "USD", perRunUsd: 0.25, note: "Ceiling covers xhigh tier." },
+        },
+        {
+          id: FLUX_SCHNELL_MODEL,
+          alias: "image-moodboard",
+          profile: "economy",
+          pricing: {
+            currency: "USD",
+            perRunUsd: 0.003,
+            note: "Moodboard expand ideas batch (~$0.003/image).",
+          },
         },
       ],
       message: this.apiToken
@@ -437,7 +456,19 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (!ALLOWED_IMAGE_MODEL_SLUGS.has(model.slug)) {
       throw new AiRuntimeError(
         "INVALID_INPUT",
-        `Replicate image generation does not support model: ${model.slug}. Only allowlisted GPT Image models are permitted.`,
+        `Replicate image generation does not support model: ${model.slug}. Only allowlisted image models are permitted.`,
+        { provider: this.id },
+      );
+    }
+
+    if (model.slug === FLUX_SCHNELL_MODEL) {
+      return this.generateFluxSchnellImage(request, model, input);
+    }
+
+    if (!GPT_IMAGE_MODEL_SLUGS.has(model.slug)) {
+      throw new AiRuntimeError(
+        "INVALID_INPUT",
+        `Replicate image generation does not support model: ${model.slug}.`,
         { provider: this.id },
       );
     }
@@ -507,6 +538,68 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
               `${model.slug} does not expose deterministic seed control; the seed parameter was not sent upstream.`,
             ]
           : [],
+    };
+  }
+
+  private async generateFluxSchnellImage(
+    request: AiProviderRequest<"image.generate">,
+    model: { slug: string; version?: string },
+    input: AiImageGenerateInput,
+  ): Promise<AiProviderResult<AiTaskOutput<"image.generate">>> {
+    const aspectRatio = normalizeFluxSchnellAspectRatio(
+      input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
+    );
+    const prediction = await this.createPrediction(
+      model,
+      {
+        prompt: input.prompt,
+        go_fast: true,
+        megapixels: "1",
+        num_outputs: 1,
+        aspect_ratio: aspectRatio,
+        output_format: "webp",
+        output_quality: 80,
+        num_inference_steps: 4,
+      },
+      request.signal,
+      true,
+    );
+    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    const outputUrl = extractFileUrl(completed.output);
+    if (!outputUrl) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no generated image file.", {
+        provider: this.id,
+      });
+    }
+    const dataUrl = await fetchGeneratedImage(outputUrl, request.signal);
+    const metrics = completed.metrics ?? {};
+    const warnings: string[] = [];
+    if (input.inputImages?.length) {
+      warnings.push("flux-schnell does not accept reference images; inputImages were ignored.");
+    }
+    if (input.seed !== undefined) {
+      warnings.push(
+        "flux-schnell seed was not forwarded; Replicate Schnell runs are non-deterministic here.",
+      );
+    }
+    return {
+      output: {
+        dataUrl,
+        prompt: input.prompt,
+        width: input.width,
+        height: input.height,
+        seed: input.seed ?? 0,
+      },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings,
     };
   }
 
@@ -1149,6 +1242,27 @@ function parseReplicateModel(model: string): { slug: string; version?: string } 
     });
   }
   return { slug, ...(version ? { version } : {}) };
+}
+
+/** flux-schnell accepts a smaller named-ratio set than GPT Image. */
+function normalizeFluxSchnellAspectRatio(value: string | undefined): string {
+  const allowed = new Set([
+    "1:1",
+    "16:9",
+    "21:9",
+    "3:2",
+    "2:3",
+    "4:5",
+    "5:4",
+    "3:4",
+    "4:3",
+    "9:16",
+    "9:21",
+  ]);
+  if (value && allowed.has(value)) return value;
+  if (value === "auto" || !value) return "1:1";
+  // Snap GPT pixel tokens / unknown ratios to square for moodboard iteration.
+  return "1:1";
 }
 
 function assertSupportedChatModel(model: string): void {

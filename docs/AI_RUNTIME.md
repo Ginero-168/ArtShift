@@ -36,6 +36,7 @@ The unified chat preserves local-first precedence: a deterministic local plan wi
 | Recraft Vectorize (Cloud) | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | P-Image-Upscale | Cloud opt-in; the explicit Upscale settings panel sends the raster to Replicate with a selected 8/16/32 MP target |
 | Layer (Qwen Image Layered) | Cloud opt-in; the explicit Layer button sends the raster to Replicate `qwen/qwen-image-layered` and inserts RGBA layers at the Preload staging bounds |
+| Moodboard expand ideas (9×) | Cloud opt-in on Infinity Canvas; LLM expand then 9× Replicate `black-forest-labs/flux-schnell` (`image-moodboard`) into a 3×3 grid — see [MOODBOARD.md](./MOODBOARD.md) |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with orchestration-selected `quality: low|medium|high`; the product does not expose quality-tier modes |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
@@ -84,6 +85,17 @@ source image stays where it was. Processing uses the same FIFO
 source (`preloadLayerSource`) when the image Option Bar is shown, when Layer is
 hovered, and again when the Layer tool becomes active. Extract itself stays local
 and is not part of that warm-up.
+
+### Moodboard expand ideas (9× flux-schnell)
+
+On **Infinity Canvas**, **ขยายไอเดีย** expands one short keyword via
+`POST /api/moodboard/expand` (`assistant.chat` only), then generates exactly nine
+images through `POST /api/moodboard/generate` using Replicate
+`black-forest-labs/flux-schnell` (alias `image-moodboard`, ~$0.003/image). Both
+routes go through `requireEndUserCloudAi` (auth + consent + per-account BYOK).
+The browser places successful results as upright `EngineElement` images in a 3×3
+grid near a staging origin; partial failures still commit whatever succeeded.
+Stock Unsplash/Pexels paths are unchanged. See [MOODBOARD.md](./MOODBOARD.md).
 
 During Remove BG, Extract, Layer, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading

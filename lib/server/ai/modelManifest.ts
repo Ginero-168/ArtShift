@@ -16,6 +16,7 @@ const REPLICATE_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
   "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf";
 const REPLICATE_QWEN_IMAGE_LAYERED_MODEL = "qwen/qwen-image-layered";
+const REPLICATE_FLUX_SCHNELL_MODEL = "black-forest-labs/flux-schnell";
 
 /**
  * Pricing per image at the quality tiers available from the provider.
@@ -70,6 +71,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
   const replicateQwenImageLayered = withVersion(
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL || REPLICATE_QWEN_IMAGE_LAYERED_MODEL,
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL_VERSION,
+  );
+  const replicateFluxSchnell = withVersion(
+    environment.REPLICATE_FLUX_SCHNELL_MODEL || REPLICATE_FLUX_SCHNELL_MODEL,
+    environment.REPLICATE_FLUX_SCHNELL_MODEL_VERSION,
   );
 
   // GPT Image 2.5 Sunburst — primary baseline and precision route (replaces gpt-image-2).
@@ -161,6 +166,14 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
         ...(fastModelEnabled ? [{ ...replicateTarget, alias: "image-fast" as const }] : []),
       );
     }
+  }
+
+  // Moodboard AI batch — dedicated Schnell alias (not the chat default image path).
+  if (replicateFluxSchnell) {
+    imageGenerateRoutes.push(
+      imageModelRoute(replicateFluxSchnell, "image-moodboard", 0.003),
+      imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003),
+    );
   }
 
   return {
