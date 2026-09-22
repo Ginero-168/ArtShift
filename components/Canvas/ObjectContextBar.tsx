@@ -574,7 +574,7 @@ export default function ObjectContextBar({
               transform: "translateX(-50%)",
               width:
                 activeImageTool === "multi-angle"
-                  ? "min(420px, calc(100vw - 24px))"
+                  ? "min(340px, calc(100vw - 24px))"
                   : "min(380px, calc(100vw - 24px))",
               maxHeight: "min(640px, calc(100vh - 24px))",
               overflowY: "auto",
