@@ -8,6 +8,7 @@ export const AI_TASK_KINDS = [
   "image.generate",
   "image.upscale",
   "image.decomposeLayers",
+  "image.multiAngle",
 ] as const;
 
 export type AiTaskKind = (typeof AI_TASK_KINDS)[number];
@@ -218,6 +219,53 @@ export type AiImageDecomposeLayersOutput = {
   layers: Array<{ dataUrl: string }>;
 };
 
+/** Camera and output bounds for `qwen/qwen-edit-multiangle`. */
+export const MULTI_ANGLE_ASPECT_RATIOS = [
+  "match_input_image",
+  "1:1",
+  "16:9",
+  "9:16",
+  "4:3",
+  "3:4",
+] as const;
+export type MultiAngleAspectRatio = (typeof MULTI_ANGLE_ASPECT_RATIOS)[number];
+
+export const MULTI_ANGLE_OUTPUT_FORMATS = ["webp", "jpg", "png"] as const;
+export type MultiAngleOutputFormat = (typeof MULTI_ANGLE_OUTPUT_FORMATS)[number];
+
+export const DEFAULT_MULTI_ANGLE_GO_FAST = true;
+export const DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES = true;
+export const DEFAULT_MULTI_ANGLE_STRENGTH = 1;
+export const DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT: MultiAngleOutputFormat = "webp";
+export const DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY = 95;
+
+export type AiImageMultiAngleInput = {
+  image: AiImageInput;
+  width: number;
+  height: number;
+  /** ±180. Positive rotates the camera left. */
+  rotateDegrees: number;
+  /** 0–10. Higher values push the camera closer. */
+  moveForward: number;
+  /** -1 top-down, 0 eye level, +1 low angle. */
+  verticalTilt: number;
+  useWideAngle: boolean;
+  prompt?: string;
+  goFast?: boolean;
+  useMultipleAngles?: boolean;
+  /** 0–2. Default 1. */
+  multipleAnglesStrength?: number;
+  aspectRatio?: MultiAngleAspectRatio;
+  seed?: number;
+  outputFormat?: MultiAngleOutputFormat;
+  /** 0–100. Ignored by the model for PNG. */
+  outputQuality?: number;
+};
+
+export type AiImageMultiAngleOutput = {
+  dataUrl: string;
+};
+
 export type AiTaskInputMap = {
   "assistant.chat": AiAssistantChatInput;
   "vision.describe": AiVisionInput;
@@ -228,6 +276,7 @@ export type AiTaskInputMap = {
   "image.generate": AiImageGenerateInput;
   "image.upscale": AiImageUpscaleInput;
   "image.decomposeLayers": AiImageDecomposeLayersInput;
+  "image.multiAngle": AiImageMultiAngleInput;
 };
 
 export type AiTaskOutputMap = {
@@ -240,6 +289,7 @@ export type AiTaskOutputMap = {
   "image.generate": AiImageGenerateOutput;
   "image.upscale": AiImageUpscaleOutput;
   "image.decomposeLayers": AiImageDecomposeLayersOutput;
+  "image.multiAngle": AiImageMultiAngleOutput;
 };
 
 export type AiTaskInput<K extends AiTaskKind> = AiTaskInputMap[K];

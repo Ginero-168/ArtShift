@@ -12,6 +12,7 @@ const toolbarLabels = [
   "Image Intelligence",
   "Vectorize",
   "Extract",
+  "Multi-Angle",
   "RemoveBG",
   "Download",
   "Download as SVG",

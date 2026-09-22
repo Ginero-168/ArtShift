@@ -86,6 +86,26 @@ source (`preloadLayerSource`) when the image Option Bar is shown, when Layer is
 hovered, and again when the Layer tool becomes active. Extract itself stays local
 and is not part of that warm-up.
 
+### Multi-Angle (cloud camera edit)
+
+`Multi-Angle` is an Option Bar action beside Layer. It does not replace Extract,
+Layer, Upscale, or chat image generation. It is a paid cloud path with the same
+end-user gate as Layer: authentication, an explicit consent confirm, and the
+user's own Replicate BYOK credential through `requireEndUserCloudAi` — never a
+shared `REPLICATE_API_TOKEN`. The dedicated route `/api/multi-angle` runs the
+`image.multiAngle` task against Replicate `qwen/qwen-edit-multiangle` (alias
+`qwen-edit-multiangle`).
+
+The panel is a camera control, not a preview of the generated pixels. Dragging
+the subject-and-camera scene updates `rotate_degrees` (±180, positive rotates
+left), `move_forward` (0–10), and `vertical_tilt` (−1 top-down, 0 eye level,
++1 low angle). `use_wide_angle` widens the gizmo's lens. Prompt, Lightning
+(`go_fast`, default true), `use_multiple_angles` (default true),
+`multiple_angles_strength` (0–2, default 1), aspect ratio, optional seed, and
+output format/quality are editable in the same panel. Run places the returned
+image at the Preload card via `getProcessingPreviewPlacement` /
+`enqueueProcessingJob` (kind `multi-angle`) and leaves the source image in place.
+
 ### Moodboard AI (Flare medium, 9 / 16 / 25)
 
 On an **Infinity Canvas** slide, the Moodboard control accepts one short
@@ -111,7 +131,7 @@ prompt/keyword/vibe and a batch size of **9, 16, or 25** (default 9).
    wins). Partial failures are shown in the UI. The shared `/api/stock` route
    remains for other surfaces; Moodboard no longer starts a stock fill.
 
-During Remove BG, Extract, Layer, and Vectorize, the browser renders a transient duplicate
+During Remove BG, Extract, Layer, Multi-Angle, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading
 indicator and swipe animation but is not an editor element or undo entry. Processing
 requests use one FIFO queue, so moving/deselecting the source does not cancel or hide

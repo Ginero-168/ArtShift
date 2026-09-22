@@ -26,8 +26,10 @@ import {
   type ImageActionId,
   isVectorizeTool,
   LAYER_LABEL,
+  MULTI_ANGLE_LABEL,
   VECTORIZE_GROUP_LABEL,
 } from "./PropertiesPanel/imageToolTypes";
+import { MultiAnglePanel } from "./PropertiesPanel/MultiAnglePanel";
 
 const VisionObjectIsolator = dynamic(() => import("./PropertiesPanel/VisionObjectIsolator"), {
   ssr: false,
@@ -252,6 +254,8 @@ export default function ObjectContextBar({
   const toggleExtract = () =>
     setActiveImageTool((current) => (current === "extract" ? null : "extract"));
   const toggleLayer = () => setActiveImageTool((current) => (current === "layer" ? null : "layer"));
+  const toggleMultiAngle = () =>
+    setActiveImageTool((current) => (current === "multi-angle" ? null : "multi-angle"));
   const toggleVectorize = () =>
     setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
@@ -347,6 +351,11 @@ export default function ObjectContextBar({
     controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === "extract"));
     controls.push(
       action(LAYER_LABEL, toggleLayer, false, activeImageTool === "layer", () => {
+        void preloadLayerSource(first.fileId);
+      }),
+    );
+    controls.push(
+      action(MULTI_ANGLE_LABEL, toggleMultiAngle, false, activeImageTool === "multi-angle", () => {
         void preloadLayerSource(first.fileId);
       }),
     );
@@ -563,7 +572,10 @@ export default function ObjectContextBar({
               top: "calc(100% + 8px)",
               left: "50%",
               transform: "translateX(-50%)",
-              width: "min(380px, calc(100vw - 24px))",
+              width:
+                activeImageTool === "multi-angle"
+                  ? "min(420px, calc(100vw - 24px))"
+                  : "min(380px, calc(100vw - 24px))",
               maxHeight: "min(640px, calc(100vh - 24px))",
               overflowY: "auto",
               padding: 6,
@@ -573,11 +585,15 @@ export default function ObjectContextBar({
               boxShadow: "0 12px 32px rgba(15, 23, 42, 0.2)",
             }}
           >
-            <VisionObjectIsolator
-              element={first as ImageElement}
-              activeTool={activeImageTool}
-              onToolChange={(tool) => setActiveImageTool(tool)}
-            />
+            {activeImageTool === "multi-angle" ? (
+              <MultiAnglePanel element={first as ImageElement} />
+            ) : (
+              <VisionObjectIsolator
+                element={first as ImageElement}
+                activeTool={activeImageTool}
+                onToolChange={(tool) => setActiveImageTool(tool)}
+              />
+            )}
           </div>
         )
       ) : null}

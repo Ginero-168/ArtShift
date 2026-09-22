@@ -4,6 +4,7 @@ import type {
   AiAssistantChatOutput,
   AiImageDecomposeLayersInput,
   AiImageGenerateInput,
+  AiImageMultiAngleInput,
   AiImageUpscaleInput,
   AiPromptEnhanceInput,
   AiProviderStatus,
@@ -16,6 +17,11 @@ import {
   DECOMPOSE_LAYERS_MAX,
   DECOMPOSE_LAYERS_MIN,
   DEFAULT_DECOMPOSE_LAYERS,
+  DEFAULT_MULTI_ANGLE_GO_FAST,
+  DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
+  DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
+  DEFAULT_MULTI_ANGLE_STRENGTH,
+  DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES,
 } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import type {
@@ -45,6 +51,7 @@ const SUPPORTED_TASKS: AiTaskKind[] = [
   "image.generate",
   "image.upscale",
   "image.decomposeLayers",
+  "image.multiAngle",
 ];
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
@@ -53,6 +60,7 @@ const GEMINI_CHAT_MODEL = "google/gemini-2.5-flash";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const QWEN_IMAGE_LAYERED_MODEL = "qwen/qwen-image-layered";
+const QWEN_EDIT_MULTIANGLE_MODEL = "qwen/qwen-edit-multiangle";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 // Chat image-fast alias: Flare was retired and these routes resolve to Sunburst.
 const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
@@ -167,6 +175,16 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           },
         },
         {
+          id: QWEN_EDIT_MULTIANGLE_MODEL,
+          alias: "qwen-edit-multiangle",
+          profile: "quality",
+          pricing: {
+            currency: "USD",
+            perRunUsd: 0.04,
+            note: "Estimate for a Lightning multi-angle edit; confirm against the Replicate model page.",
+          },
+        },
+        {
           id: GPT_IMAGE_25_SUNBURST_MODEL,
           alias: "image-general",
           profile: "quality",
@@ -257,6 +275,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (request.task === "image.decomposeLayers") {
       return (await this.decomposeLayersWithQwen(
         request as AiProviderRequest<"image.decomposeLayers">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
+    }
+    if (request.task === "image.multiAngle") {
+      return (await this.editMultiAngleWithQwen(
+        request as AiProviderRequest<"image.multiAngle">,
       )) as AiProviderResult<AiTaskOutput<K>>;
     }
     const input = request.input as AiVisionInput;
@@ -781,6 +804,90 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     };
   }
 
+  private async editMultiAngleWithQwen(
+    request: AiProviderRequest<"image.multiAngle">,
+  ): Promise<AiProviderResult<AiTaskOutput<"image.multiAngle">>> {
+    const input = request.input as AiImageMultiAngleInput;
+    assertReplicateImageDataUrl(input.image.dataUrl);
+    assertDecomposeLayersInputDimensions(input.width, input.height);
+    const model = parseReplicateModel(request.model);
+    if (model.slug !== QWEN_EDIT_MULTIANGLE_MODEL) {
+      throw new AiRuntimeError("INVALID_INPUT", "Unsupported Replicate multi-angle model.", {
+        provider: this.id,
+      });
+    }
+
+    const providerInput: Record<string, unknown> = {
+      image: input.image.dataUrl,
+      rotate_degrees: assertMultiAngleInteger(
+        input.rotateDegrees,
+        -180,
+        180,
+        "rotateDegrees must be an integer from -180 to 180.",
+      ),
+      move_forward: assertMultiAngleInteger(
+        input.moveForward,
+        0,
+        10,
+        "moveForward must be an integer from 0 to 10.",
+      ),
+      vertical_tilt: assertMultiAngleInteger(
+        input.verticalTilt,
+        -1,
+        1,
+        "verticalTilt must be an integer from -1 to 1.",
+      ),
+      use_wide_angle: input.useWideAngle === true,
+      aspect_ratio: input.aspectRatio ?? "match_input_image",
+      go_fast: input.goFast ?? DEFAULT_MULTI_ANGLE_GO_FAST,
+      use_multiple_angles: input.useMultipleAngles ?? DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES,
+      multiple_angles_strength: normalizeMultiAngleStrength(input.multipleAnglesStrength),
+      output_format: input.outputFormat ?? DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
+      output_quality: assertMultiAngleInteger(
+        input.outputQuality ?? DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
+        0,
+        100,
+        "outputQuality must be an integer from 0 to 100.",
+      ),
+      disable_safety_checker: false,
+    };
+    if (typeof input.prompt === "string" && input.prompt.trim()) {
+      providerInput.prompt = input.prompt.trim();
+    }
+    if (typeof input.seed === "number") {
+      providerInput.seed = assertMultiAngleInteger(
+        input.seed,
+        0,
+        2_147_483_647,
+        "seed must be an integer from 0 to 2147483647.",
+      );
+    }
+
+    const prediction = await this.createPrediction(model, providerInput, request.signal, true);
+    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    const outputUrl = extractFileUrls(completed.output)[0];
+    if (!outputUrl) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no multi-angle image file.", {
+        provider: this.id,
+      });
+    }
+    const dataUrl = await fetchGeneratedImage(outputUrl, request.signal);
+    const metrics = completed.metrics ?? {};
+    return {
+      output: { dataUrl },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings: [],
+    };
+  }
+
   private async createPrediction(
     model: { slug: string; version?: string },
     input: Record<string, unknown>,
@@ -955,6 +1062,25 @@ function extractFileUrls(output: unknown): string[] {
     return [(output as { url: string }).url];
   }
   return [];
+}
+
+function assertMultiAngleInteger(value: number, min: number, max: number, message: string): number {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new AiRuntimeError("INVALID_INPUT", message, { provider: "replicate" });
+  }
+  return value;
+}
+
+function normalizeMultiAngleStrength(value: number | undefined): number {
+  const strength = value ?? DEFAULT_MULTI_ANGLE_STRENGTH;
+  if (!Number.isFinite(strength) || strength < 0 || strength > 2) {
+    throw new AiRuntimeError(
+      "INVALID_INPUT",
+      "multipleAnglesStrength must be a number from 0 to 2.",
+      { provider: "replicate" },
+    );
+  }
+  return Math.round(strength * 100) / 100;
 }
 
 function normalizeDecomposeLayerCount(value: number | undefined): number {

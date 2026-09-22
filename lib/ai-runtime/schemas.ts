@@ -3,12 +3,19 @@ import type {
   AiExecutionOptions,
   AiImageDecomposeLayersInput,
   AiImageGenerateInput,
+  AiImageMultiAngleInput,
   AiImageUpscaleInput,
   AiPromptEnhanceInput,
   AiVectorizeInput,
   AiVisionInput,
 } from "./contracts";
-import { DECOMPOSE_LAYERS_MAX, DECOMPOSE_LAYERS_MIN, isAllowedImageAspectRatio } from "./contracts";
+import {
+  DECOMPOSE_LAYERS_MAX,
+  DECOMPOSE_LAYERS_MIN,
+  isAllowedImageAspectRatio,
+  MULTI_ANGLE_ASPECT_RATIOS,
+  MULTI_ANGLE_OUTPUT_FORMATS,
+} from "./contracts";
 
 const DATA_URL_MAX_CHARS = 4 * 1024 * 1024;
 const PromptSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(32_000));
@@ -68,6 +75,27 @@ const DecomposeLayersInputSchema = v.strictObject({
     ),
   ),
   prompt: v.optional(v.pipe(v.string(), v.maxLength(2_000))),
+});
+
+const MultiAngleInputSchema = v.strictObject({
+  image: v.strictObject({
+    dataUrl: RecraftImageDataUrlSchema,
+    mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
+  }),
+  width: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  height: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  rotateDegrees: v.pipe(v.number(), v.integer(), v.minValue(-180), v.maxValue(180)),
+  moveForward: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(10)),
+  verticalTilt: v.pipe(v.number(), v.integer(), v.minValue(-1), v.maxValue(1)),
+  useWideAngle: v.boolean(),
+  prompt: v.optional(v.pipe(v.string(), v.maxLength(2_000))),
+  goFast: v.optional(v.boolean()),
+  useMultipleAngles: v.optional(v.boolean()),
+  multipleAnglesStrength: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(2))),
+  aspectRatio: v.optional(v.picklist(MULTI_ANGLE_ASPECT_RATIOS)),
+  seed: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(2_147_483_647))),
+  outputFormat: v.optional(v.picklist(MULTI_ANGLE_OUTPUT_FORMATS)),
+  outputQuality: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100))),
 });
 
 const PromptEnhanceInputSchema = v.strictObject({
@@ -135,6 +163,11 @@ export type PublicAiExecuteRequest =
       task: "image.decomposeLayers";
       input: AiImageDecomposeLayersInput;
       options: AiExecutionOptions;
+    }
+  | {
+      task: "image.multiAngle";
+      input: AiImageMultiAngleInput;
+      options: AiExecutionOptions;
     };
 
 export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequest | null {
@@ -178,6 +211,11 @@ export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequ
     const parsed = v.safeParse(DecomposeLayersInputSchema, record.input);
     if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
     return { task: "image.decomposeLayers", input: parsed.output, options: options.output };
+  }
+  if (record.task === "image.multiAngle") {
+    const parsed = v.safeParse(MultiAngleInputSchema, record.input);
+    if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
+    return { task: "image.multiAngle", input: parsed.output, options: options.output };
   }
   return null;
 }

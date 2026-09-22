@@ -8,6 +8,7 @@ export type ObjectContextIconName =
   | "upscale"
   | "extract"
   | "layer"
+  | "multi-angle"
   | "download"
   | "image"
   | "vector"
@@ -57,6 +58,7 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   Upscale: "upscale",
   Extract: "extract",
   Layer: "layer",
+  "Multi-Angle": "multi-angle",
   Download: "download",
   "Download as SVG": "download",
   Image: "image",

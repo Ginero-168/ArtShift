@@ -214,6 +214,45 @@ Official sources:
 - [Replicate model page](https://replicate.com/qwen/qwen-image-layered)
 - Sibling schema reference (fal): [fal-ai/qwen-image-layered](https://fal.ai/models/fal-ai/qwen-image-layered/api)
 
+## Qwen Edit Multi-Angle ผ่าน Replicate
+
+ArtShift ใช้ `qwen/qwen-edit-multiangle` สำหรับ task `image.multiAngle` ผ่าน
+endpoint `/api/multi-angle` และปุ่ม Option Bar ชื่อ `Multi-Angle`
+
+ผู้ใช้ต้องยืนยัน cloud consent และมี Replicate BYOK ต่อบัญชีผ่าน
+`requireEndUserCloudAi` ก่อนจึงจะเรียก provider ได้ — ไม่มี shared
+`REPLICATE_API_TOKEN`
+
+Adapter ส่ง allowlisted fields ตาม schema รุ่นที่ `go_fast` default เป็น true:
+
+```json
+{
+  "image": "data:image/...",
+  "rotate_degrees": 0,
+  "move_forward": 0,
+  "vertical_tilt": 0,
+  "use_wide_angle": false,
+  "aspect_ratio": "match_input_image",
+  "go_fast": true,
+  "use_multiple_angles": true,
+  "multiple_angles_strength": 1,
+  "output_format": "webp",
+  "output_quality": 95,
+  "disable_safety_checker": false
+}
+```
+
+ช่วงที่รับ: `rotate_degrees` −180..180, `move_forward` 0..10, `vertical_tilt` −1..1,
+`multiple_angles_strength` 0..2, `aspect_ratio` เป็น `match_input_image | 1:1 | 16:9 | 9:16 | 4:3 | 3:4`,
+`output_format` เป็น `webp | jpg | png`. `prompt` และ `seed` ส่งเมื่อผู้ใช้กรอกเท่านั้น
+Output เป็น URI ของภาพ (หรือรายการ URI); adapter ดาวน์โหลดเฉพาะ HTTPS
+`replicate.delivery` แล้วคืน `{ dataUrl }` ผลลัพธ์ถูกวางบนการ์ด Preload ไม่ทับภาพต้นฉบับ
+
+Official sources:
+
+- [Replicate model page](https://replicate.com/qwen/qwen-edit-multiangle)
+- [Schema version with go_fast default true](https://replicate.com/qwen/qwen-edit-multiangle/versions/e2fe22a5bb0744947b73e52209e54f0fd660a586088889ccf5ee9a29fe130e31/api)
+
 ## Anthropic Messages API
 
 ### Request/response แกนหลัก

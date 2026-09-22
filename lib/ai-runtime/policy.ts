@@ -24,6 +24,7 @@ export const AI_TASK_POLICIES: Record<AiTaskKind, AiTaskPolicy> = {
   "image.generate": { locality: "cloud-opt-in", cacheable: false, recordsContent: false },
   "image.upscale": { locality: "cloud-opt-in", cacheable: false, recordsContent: false },
   "image.decomposeLayers": { locality: "cloud-opt-in", cacheable: false, recordsContent: false },
+  "image.multiAngle": { locality: "cloud-opt-in", cacheable: false, recordsContent: false },
 };
 
 export function assertAiTaskPolicy(task: AiTaskKind, options: AiExecutionOptions): void {
