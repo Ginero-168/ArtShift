@@ -103,8 +103,9 @@ does not orbit a camera around a fixed box. Dragging sideways yaws the object
 into `rotate_degrees` (±90; positive turns the object to the right, which is
 the same view as orbiting the camera left). Dragging up or down tips the object
 and snaps `vertical_tilt` (−1 top toward the viewer, 0 level, +1 underside
-toward the viewer). The Angle slider repeats the yaw for keyboard access.
-`use_wide_angle` is the only other control. `move_forward` stays 0. Lightning
+toward the viewer). The Angle slider repeats the yaw. The Vertical tilt slider
+repeats the tip and is sent as `vertical_tilt` (integer −1..1, default 0).
+`use_wide_angle` stays a lens toggle. `move_forward` stays 0. Lightning
 stays on (`go_fast` true, inference steps omitted), the style prompt stays
 empty, LoRA weights stay `dx8152/Qwen-Edit-2509-Multiple-angles` with
 `lora_scale` 1.25, `true_guidance_scale` stays 1, aspect ratio stays

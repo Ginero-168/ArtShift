@@ -6,8 +6,9 @@
  * - Horizontal drag / Angle slider is object yaw. Dragging right spins the
  *   front face to the right and sends positive `rotate_degrees` (the same
  *   view as orbiting the camera left).
- * - Vertical drag tips the object with the pointer and snaps `vertical_tilt`
- *   to −1 (top toward the viewer), 0, or +1 (underside toward the viewer).
+ * - Vertical drag and the Vertical tilt slider tip the object and snap
+ *   `vertical_tilt` to −1 (top toward the viewer), 0, or +1 (underside
+ *   toward the viewer). The model default is 0.
  * - `move_forward` stays at the default. The simplified panel does not dolly.
  * `use_wide_angle` is a lens flag and does not move the object.
  */

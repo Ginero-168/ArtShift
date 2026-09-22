@@ -250,8 +250,9 @@ Adapter ปักเวอร์ชัน `cf245ffaa67a6d7d0edeb597d2fded5ab80cb
 }
 ```
 
-แผง Option Bar เหลือแค่การหมุนวัตถุ (แนวนอน → `rotate_degrees`, ลากขึ้นลง snap
-`vertical_tilt`) กับ `use_wide_angle` ค่าที่ซ่อนไว้คือ `move_forward` 0,
+แผง Option Bar หมุนวัตถุในแนวนอน (`rotate_degrees`) และเอียงบนล่างด้วยสไลเดอร์
+Vertical tilt (`vertical_tilt`, ค่าเริ่มต้น 0, จำนวนเต็ม −1..1) การลากขึ้นลงบนพรีวิว
+snap เป็นค่าเดียวกัน ตัวเลือกที่เหลือบนแผงคือ `use_wide_angle` ค่าที่ซ่อนไว้คือ `move_forward` 0,
 `go_fast` true, ไม่ส่ง `num_inference_steps` หรือ `prompt`, LoRA ตามด้านบน,
 `aspect_ratio` `match_input_image`, และ `output_format` `png`
 
