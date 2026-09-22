@@ -28,6 +28,13 @@ describe("Multi-Angle action surface", () => {
     expect(body).toContain(
       "onChange={(value) => updateCamera({ ...camera, rotateDegrees: value })}",
     );
+    expect(body).toContain('id="multi-angle-tilt"');
+    expect(body).toContain('label="Vertical tilt"');
+    expect(body).toContain("min={-1}");
+    expect(body).toContain("max={1}");
+    expect(body).toContain(
+      "onChange={(value) => updateCamera({ ...camera, verticalTilt: value })}",
+    );
     expect(body).toContain("moveForward: DEFAULT_MULTI_ANGLE_CAMERA.moveForward");
     expect(body).toContain("verticalTilt: settings.verticalTilt");
     expect(body).toContain("useWideAngle: settings.useWideAngle");
@@ -59,6 +66,8 @@ describe("Multi-Angle action surface", () => {
   it("documents Multi-Angle as its own cloud path", () => {
     const runtimeDocs = readFileSync(path.join(process.cwd(), "docs/AI_RUNTIME.md"), "utf8");
     expect(runtimeDocs).toContain("### Multi-Angle (cloud camera edit)");
+    expect(runtimeDocs).toContain("Vertical tilt slider");
+    expect(runtimeDocs).toContain("`vertical_tilt` (integer −1..1, default 0)");
     expect(runtimeDocs).toContain("qwen/qwen-edit-multiangle");
     expect(runtimeDocs).toContain("requireEndUserCloudAi");
     expect(runtimeDocs).toContain("### Layer (cloud decompose)");

@@ -132,8 +132,9 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
             },
             width: source.width,
             height: source.height,
-            // Object turn → camera inputs. Yaw is rotate_degrees, tip snaps
-            // vertical_tilt, and dolly stays at the hidden default.
+            // Object turn → camera inputs. Yaw is rotate_degrees, the
+            // Vertical tilt slider (and preview drag) sets vertical_tilt,
+            // and dolly stays at the hidden default.
             rotateDegrees: settings.rotateDegrees,
             moveForward: DEFAULT_MULTI_ANGLE_CAMERA.moveForward,
             verticalTilt: settings.verticalTilt,
@@ -253,6 +254,16 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
         value={camera.rotateDegrees}
         suffix="°"
         onChange={(value) => updateCamera({ ...camera, rotateDegrees: value })}
+      />
+      <Slider
+        id="multi-angle-tilt"
+        label="Vertical tilt"
+        hint="−1 to +1 · positive raises the front"
+        min={-1}
+        max={1}
+        step={1}
+        value={camera.verticalTilt}
+        onChange={(value) => updateCamera({ ...camera, verticalTilt: value })}
       />
       <label
         htmlFor="multi-angle-wide"
