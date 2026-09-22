@@ -37,6 +37,7 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "@/components/icons";
+import MoodboardControl from "@/components/Moodboard/MoodboardControl";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
 import {
@@ -935,6 +936,20 @@ export default function ProjectEditorPage() {
             <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
           )}
           <LayerPanel />
+          {currentSlideIsInfinity ? (
+            <div
+              style={{
+                position: "absolute",
+                top: 9,
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 12,
+                maxWidth: "min(420px, calc(100% - 24px))",
+              }}
+            >
+              <MoodboardControl />
+            </div>
+          ) : null}
 
           {/* ——— Left toolbar (top-left of workspace) ——— */}
           <div

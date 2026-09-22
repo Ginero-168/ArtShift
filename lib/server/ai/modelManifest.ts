@@ -71,6 +71,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL || REPLICATE_QWEN_IMAGE_LAYERED_MODEL,
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL_VERSION,
   );
+  const replicateFluxSchnell = withVersion(
+    environment.REPLICATE_FLUX_SCHNELL_MODEL || "black-forest-labs/flux-schnell",
+    environment.REPLICATE_FLUX_SCHNELL_MODEL_VERSION,
+  );
 
   // GPT Image 2.5 Sunburst — primary baseline and precision route (replaces gpt-image-2).
   // Version pinning via REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION (optional until stable API).
@@ -209,8 +213,20 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
 
     "image.generate":
       imageGenerateRoutes.length > 0
-        ? { economy: imageGenerateRoutes, quality: imageGenerateRoutes }
-        : { economy: [], quality: [] },
+        ? {
+            economy: [
+              ...imageGenerateRoutes,
+              imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003),
+            ],
+            quality: [
+              ...imageGenerateRoutes,
+              imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003),
+            ],
+          }
+        : {
+            economy: [imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003)],
+            quality: [imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003)],
+          },
   };
 }
 
