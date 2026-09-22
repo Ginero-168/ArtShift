@@ -72,6 +72,7 @@ import {
   isForegroundForSource,
 } from "@/lib/vision/foreground";
 import { claimImageActionRun, releaseImageActionRun } from "@/lib/vision/imageActionRunGuard";
+import { preloadLayerSource } from "@/lib/vision/layerPreload";
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, trimTransparentRegion } from "@/lib/vision/visionEngine";
 import {
@@ -368,13 +369,10 @@ export function VisionObjectIsolator({
     });
   }, [assetAnalysis, currentFileId]);
 
-  // Warm the decoded source image when Layer becomes active (same preloadDataURL
-  // prep Upscale uses before its cloud request).
+  // Decode the source as soon as Layer is the active tool, before confirm/run.
   useEffect(() => {
     if (activeTool !== "layer") return;
-    const cached = getCached(element.fileId);
-    if (!cached?.dataURL) return;
-    void preloadDataURL(cached.dataURL).catch(() => undefined);
+    void preloadLayerSource(element.fileId);
   }, [activeTool, element.fileId]);
 
   const applyPreset = (p: VectorizePreset) => {
@@ -1085,7 +1083,8 @@ export function VisionObjectIsolator({
     }
 
     if (!queuedContext) {
-      const preloaded = await preloadDataURL(cached.dataURL);
+      await preloadLayerSource(element.fileId);
+      const preloaded = getCached(element.fileId) ?? cached;
       if (
         !window.confirm(
           `Layer จะส่งภาพนี้ไปยัง Replicate (qwen/qwen-image-layered) เพื่อแยกเป็น ${DEFAULT_DECOMPOSE_LAYERS} เลเยอร์ RGBA และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?`,

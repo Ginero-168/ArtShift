@@ -38,16 +38,21 @@ describe("ObjectContextBar Hook Rules and Brief Action", () => {
     expect(iconsContent).toContain("export const IconBrief");
   });
 
+  it("preloads the Layer source when the image option bar is shown and on hover", () => {
+    expect(fileContent).toContain("preloadLayerSource");
+    expect(fileContent).toContain("selectedImageFileId");
+    expect(fileContent).toContain("void preloadLayerSource(selectedImageFileId)");
+    expect(fileContent).toContain("void preloadLayerSource(first.fileId)");
+    const preloadHook = fileContent.indexOf("void preloadLayerSource(selectedImageFileId)");
+    const earlyReturnIndex = fileContent.indexOf("if (isDragging || !first) return null;");
+    expect(preloadHook).toBeGreaterThan(0);
+    expect(preloadHook).toBeLessThan(earlyReturnIndex);
+  });
+
   it("places Layer action after Extract and before Vectorize on image selection toolbar", () => {
-    const extractIndex = fileContent.indexOf(
-      "controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === \"extract\"));",
-    );
-    const layerIndex = fileContent.indexOf(
-      "controls.push(action(LAYER_LABEL, toggleLayer, false, activeImageTool === \"layer\"));",
-    );
-    const vectorizeIndex = fileContent.indexOf(
-      "controls.push(\n      action(VECTORIZE_GROUP_LABEL",
-    );
+    const extractIndex = fileContent.indexOf("EXTRACT_LABEL, toggleExtract");
+    const layerIndex = fileContent.indexOf("LAYER_LABEL, toggleLayer");
+    const vectorizeIndex = fileContent.indexOf("action(VECTORIZE_GROUP_LABEL");
     expect(extractIndex).toBeGreaterThan(0);
     expect(layerIndex).toBeGreaterThan(extractIndex);
     expect(vectorizeIndex).toBeGreaterThan(layerIndex);

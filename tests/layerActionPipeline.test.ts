@@ -42,7 +42,7 @@ describe("Layer action surface", () => {
     expect(body).toContain("cloudConsent: true");
     expect(body).toContain("qwen-image-layered");
     expect(body).toContain("DEFAULT_DECOMPOSE_LAYERS");
-    expect(body).toContain("preloadDataURL");
+    expect(body).toContain("preloadLayerSource");
     expect(body).toContain('report("preload"');
     expect(body).toContain("addElements(newElements, \"decompose image layers\")");
     expect(body).toContain("x: element.x");
@@ -50,10 +50,10 @@ describe("Layer action surface", () => {
     expect(body).not.toContain("removeBackgroundWithRuntime");
   });
 
-  it("warms preloadDataURL when the Layer tool becomes active", () => {
+  it("warms the Layer source when the Layer tool becomes active", () => {
     const source = isolatorSource();
     expect(source).toContain('if (activeTool !== "layer") return;');
-    expect(source).toContain("void preloadDataURL(cached.dataURL)");
+    expect(source).toContain("void preloadLayerSource(element.fileId)");
   });
 
   it("documents Layer as the cloud decompose path while Extract stays local", () => {

@@ -77,7 +77,10 @@ PNG from `replicate.delivery`, converts them to data URLs, and the browser place
 each layer as an editable image at the source image's x/y/width/height (full-frame
 stack, background first). The source image stays on the canvas. Processing uses the
 same FIFO `enqueueProcessingJob` / `processingPreviewInput` pattern as Extract, with
-tool id `"layer"`.
+tool id `"layer"`. Before the user confirms the cloud run, ArtShift preloads the
+decoded source (`preloadLayerSource`) when the image Option Bar is shown, when
+Layer is hovered, and again when the Layer tool becomes active. Extract itself
+stays local and is not part of that warm-up.
 
 During Remove BG, Extract, Layer, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading

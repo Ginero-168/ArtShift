@@ -8,6 +8,7 @@ import { IMAGE_MIX_PROMPT, requestCoPilotExternalTurn } from "@/lib/ai/coPilotRe
 import { unionBBox } from "@/lib/engine/bounds";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
+import { preloadLayerSource } from "@/lib/vision/layerPreload";
 import { mergeSelectedElements } from "@/lib/engine/mergeElements";
 import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/objectContext";
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
@@ -61,7 +62,13 @@ const buttonStyle = {
   transition: "background-color 120ms ease, border-color 120ms ease, color 120ms ease",
 };
 
-function action(label: string, onClick: () => void, disabled = false, active = false) {
+function action(
+  label: string,
+  onClick: () => void,
+  disabled = false,
+  active = false,
+  onPointerEnter?: () => void,
+) {
   const isDownload = label.toLowerCase() === "download";
 
   return (
@@ -75,6 +82,7 @@ function action(label: string, onClick: () => void, disabled = false, active = f
       aria-pressed={active ? true : undefined}
       disabled={disabled}
       onClick={onClick}
+      onPointerEnter={onPointerEnter}
       style={{
         ...buttonStyle,
         width: isDownload ? 30 : "auto",
@@ -216,6 +224,12 @@ export default function ObjectContextBar({
     setMixBusy(false);
   }, [firstId]);
 
+  const selectedImageFileId = first?.type === "image" ? first.fileId : null;
+  useEffect(() => {
+    if (!selectedImageFileId) return;
+    void preloadLayerSource(selectedImageFileId);
+  }, [selectedImageFileId]);
+
   if (isDragging || !first) return null;
 
   const ids = selected.map((element) => element.id);
@@ -331,7 +345,11 @@ export default function ObjectContextBar({
       ),
     );
     controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === "extract"));
-    controls.push(action(LAYER_LABEL, toggleLayer, false, activeImageTool === "layer"));
+    controls.push(
+      action(LAYER_LABEL, toggleLayer, false, activeImageTool === "layer", () => {
+        void preloadLayerSource(first.fileId);
+      }),
+    );
     controls.push(
       action(VECTORIZE_GROUP_LABEL, toggleVectorize, false, isVectorizeTool(activeImageTool)),
     );
