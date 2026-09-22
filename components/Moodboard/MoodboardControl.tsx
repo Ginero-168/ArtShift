@@ -1,6 +1,7 @@
 "use client";
 
-import { type CSSProperties, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { IconChevronDown } from "@/components/icons";
 import { type MoodboardProgress, runMoodboardAiBatch } from "@/lib/moodboard/aiBatchClient";
 import {
   MOODBOARD_BATCH_COUNTS,
@@ -12,50 +13,31 @@ import {
   moodboardBatchUsd,
   moodboardGridSide,
 } from "@/lib/moodboard/constants";
+import styles from "./MoodboardControl.module.css";
 
-const barStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  minWidth: 280,
-  maxWidth: 420,
-  padding: 10,
-  border: "1px solid var(--stroke, #e5e7eb)",
-  borderRadius: 10,
-  background: "var(--surface-solid, #fff)",
-  boxShadow: "0 4px 16px rgba(15, 23, 42, 0.08)",
-  fontSize: 12,
-};
+const EXPANDED_STORAGE_KEY = "artshift:moodboard:controls-expanded";
 
-const inputStyle: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  height: 30,
-  padding: "0 10px",
-  borderRadius: 6,
-  border: "1px solid var(--stroke, #e5e7eb)",
-  background: "#fff",
-  fontSize: 12,
-  outline: "none",
-};
+function readExpandedPreference(): boolean {
+  try {
+    return window.localStorage.getItem(EXPANDED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
-const btnStyle = (tone: "neutral" | "ai"): CSSProperties => ({
-  height: 30,
-  padding: "0 10px",
-  borderRadius: 6,
-  border: tone === "neutral" ? "1px solid var(--stroke, #e5e7eb)" : "none",
-  background: tone === "ai" ? "#0f766e" : "transparent",
-  color: tone === "neutral" ? "var(--ink, #111827)" : "#fff",
-  fontSize: 11,
-  fontWeight: 650,
-  cursor: "pointer",
-  whiteSpace: "nowrap",
-});
+function writeExpandedPreference(expanded: boolean) {
+  try {
+    window.localStorage.setItem(EXPANDED_STORAGE_KEY, expanded ? "1" : "0");
+  } catch {
+    // Ignore private-mode storage failures; the in-memory toggle still works.
+  }
+}
 
 /**
  * Moodboard control for Infinity Canvas.
  * Gemini Flash expands a vibe into 9, 16, or 25 ideas, then Flare low
  * fills a square grid anchored on the shared Preload card.
+ * Collapsed by default into one toolbar row; expanded is a horizontal strip.
  */
 export default function MoodboardControl() {
   const [keyword, setKeyword] = useState("");
@@ -63,10 +45,41 @@ export default function MoodboardControl() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<MoodboardProgress | null>(null);
   const [status, setStatus] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const focusOnExpandRef = useRef(false);
   const side = moodboardGridSide(count);
   const batchUsd = moodboardBatchUsd(count);
   const modelLabel = MOODBOARD_REPLICATE_MODEL.split("/")[1] ?? MOODBOARD_REPLICATE_MODEL;
+  const priceLabel = `≈ $${batchUsd.toFixed(2)}`;
+  const costLabel = `${priceLabel} · ${modelLabel} ${MOODBOARD_IMAGE_QUALITY}`;
+  const trimmedKeyword = keyword.trim();
+  const summary = trimmedKeyword
+    ? `${trimmedKeyword} · ${side}×${side} · ${priceLabel}`
+    : `Prompt or keyword · ${side}×${side} · ${priceLabel}`;
+  const showProgress = busy && progress !== null && progress.stage !== "idle";
+  const showStatus = showProgress || (!busy && status.length > 0);
+
+  useEffect(() => {
+    setExpanded(readExpandedPreference());
+  }, []);
+
+  useEffect(() => {
+    if (!expanded || !focusOnExpandRef.current) return;
+    focusOnExpandRef.current = false;
+    inputRef.current?.focus();
+  }, [expanded]);
+
+  function setExpandedPersisted(next: boolean) {
+    setExpanded(next);
+    writeExpandedPreference(next);
+  }
+
+  function openPanel() {
+    focusOnExpandRef.current = true;
+    setExpandedPersisted(true);
+  }
 
   async function runAi() {
     if (busy) return;
@@ -96,144 +109,150 @@ export default function MoodboardControl() {
   }
 
   return (
-    <div data-moodboard-control="true" role="region" aria-label="Moodboard" style={barStyle}>
+    <div className={styles.slot} data-expanded={expanded ? "true" : "false"}>
       <div
-        style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}
+        data-moodboard-control="true"
+        data-expanded={expanded ? "true" : "false"}
+        data-busy={busy ? "true" : "false"}
+        role="region"
+        aria-label="Moodboard"
+        className={styles.bar}
       >
-        <strong style={{ fontSize: 12 }}>Moodboard</strong>
-        <span style={{ fontSize: 10, color: "#6b7280" }}>
-          ≈ ${batchUsd.toFixed(2)} · {side}×{side} · {modelLabel} {MOODBOARD_IMAGE_QUALITY}
-        </span>
-      </div>
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <input
-          id="moodboard-keyword"
-          value={keyword}
-          onChange={(event) => setKeyword(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void runAi();
-            }
-          }}
-          placeholder="Prompt, keyword, or vibe…"
-          disabled={busy}
-          aria-label="Moodboard prompt"
-          style={inputStyle}
-        />
-      </div>
-      <fieldset
-        style={{
-          border: "none",
-          margin: 0,
-          padding: 0,
-          display: "flex",
-          gap: 6,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <legend style={{ fontSize: 10, color: "#6b7280", padding: 0 }}>Image count</legend>
-        {MOODBOARD_BATCH_COUNTS.map((option) => {
-          const optionSide = moodboardGridSide(option);
-          const selected = count === option;
-          return (
-            <label
-              key={option}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                height: 28,
-                padding: "0 8px",
-                borderRadius: 6,
-                border: selected ? "1px solid #0f766e" : "1px solid var(--stroke, #e5e7eb)",
-                background: selected ? "#ccfbf1" : "#fff",
-                color: "#111827",
-                fontSize: 11,
-                fontWeight: 650,
-                cursor: busy ? "default" : "pointer",
+        <div className={styles.primary}>
+          <strong className={styles.title}>Moodboard</strong>
+          {expanded ? (
+            <input
+              ref={inputRef}
+              id="moodboard-keyword"
+              value={keyword}
+              onChange={(event) => setKeyword(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void runAi();
+                }
               }}
+              placeholder="Prompt, keyword, or vibe…"
+              disabled={busy}
+              aria-label="Moodboard prompt"
+              className={styles.keyword}
+            />
+          ) : (
+            <button
+              type="button"
+              className={styles.summary}
+              data-empty={trimmedKeyword ? "false" : "true"}
+              title={summary}
+              onClick={openPanel}
             >
-              <input
-                type="radio"
-                name="moodboard-batch-count"
-                value={option}
-                checked={selected}
-                disabled={busy}
-                onChange={() => setCount(option)}
-              />
-              {option}
-              <span style={{ fontWeight: 500, color: "#6b7280" }}>
-                {optionSide}×{optionSide}
+              {summary}
+            </button>
+          )}
+          {expanded ? (
+            <fieldset className={styles.counts}>
+              <legend className={styles.legend}>Image count</legend>
+              {MOODBOARD_BATCH_COUNTS.map((option) => {
+                const optionSide = moodboardGridSide(option);
+                const selected = count === option;
+                return (
+                  <label
+                    key={option}
+                    className={styles.pill}
+                    data-selected={selected ? "true" : "false"}
+                  >
+                    <input
+                      type="radio"
+                      name="moodboard-batch-count"
+                      value={option}
+                      checked={selected}
+                      disabled={busy}
+                      onChange={() => setCount(option)}
+                    />
+                    {option}
+                    <span className={styles.grid}>
+                      {optionSide}×{optionSide}
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          ) : null}
+          <div className={styles.trailing}>
+            {expanded ? (
+              <span className={styles.cost} title={costTitle(count, batchUsd)}>
+                {costLabel}
               </span>
-            </label>
-          );
-        })}
-      </fieldset>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={() => void runAi()}
-          disabled={busy || !keyword.trim()}
-          style={{
-            ...btnStyle("ai"),
-            opacity: busy || !keyword.trim() ? 0.55 : 1,
-          }}
-          title={`Expand ideas → ${count} ${MOODBOARD_REPLICATE_MODEL} images at quality ${MOODBOARD_IMAGE_QUALITY} (~$${MOODBOARD_PER_IMAGE_USD} each, ~$${batchUsd.toFixed(2)} total)`}
-        >
-          {busy ? `AI ×${count}…` : `AI ×${count}`}
-        </button>
-        {busy ? (
-          <button
-            type="button"
-            onClick={() => abortRef.current?.abort()}
-            style={btnStyle("neutral")}
-          >
-            Cancel
-          </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void runAi()}
+              disabled={busy || !trimmedKeyword}
+              className={`${styles.button} ${styles.ai}`}
+              title={`Expand ideas → ${count} ${MOODBOARD_REPLICATE_MODEL} images at quality ${MOODBOARD_IMAGE_QUALITY} (~$${MOODBOARD_PER_IMAGE_USD} each, ~$${batchUsd.toFixed(2)} total)`}
+            >
+              {busy ? `AI ×${count}…` : `AI ×${count}`}
+            </button>
+            {busy ? (
+              <button
+                type="button"
+                onClick={() => abortRef.current?.abort()}
+                className={`${styles.button} ${styles.cancel}`}
+              >
+                Cancel
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={styles.toggle}
+              aria-expanded={expanded}
+              onClick={() => (expanded ? setExpandedPersisted(false) : openPanel())}
+            >
+              <IconChevronDown size={14} className={styles.toggleIcon} aria-hidden="true" />
+              <span className={styles.legend}>
+                {expanded ? "Collapse Moodboard controls" : "Expand Moodboard controls"}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {showStatus ? (
+          <div className={styles.status} aria-live="polite">
+            {busy && progress && progress.stage !== "idle" ? (
+              <>
+                <div className={styles.statusText} title={progress.message}>
+                  {progress.message}
+                </div>
+                {progress.total > 0 && progress.stage === "generate" ? (
+                  <div className={styles.progressTrack}>
+                    <div
+                      className={styles.progressFill}
+                      data-failed={progress.failed > 0 ? "true" : "false"}
+                      style={{
+                        width: `${Math.min(100, ((progress.completed + progress.failed) / progress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                ) : null}
+                {progress.errors.length > 0 ? (
+                  <ul className={styles.errors}>
+                    {progress.errors.slice(0, 4).map((error) => (
+                      <li key={error}>{error}</li>
+                    ))}
+                    {progress.errors.length > 4 ? (
+                      <li>+{progress.errors.length - 4} more</li>
+                    ) : null}
+                  </ul>
+                ) : null}
+              </>
+            ) : null}
+            {!busy && status ? <div className={styles.statusText}>{status}</div> : null}
+          </div>
         ) : null}
       </div>
-
-      {progress && progress.stage !== "idle" ? (
-        <div aria-live="polite" style={{ color: "#374151", lineHeight: 1.4 }}>
-          <div>{progress.message}</div>
-          {progress.total > 0 && progress.stage === "generate" ? (
-            <div
-              style={{
-                marginTop: 6,
-                height: 4,
-                borderRadius: 999,
-                background: "#e5e7eb",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, ((progress.completed + progress.failed) / progress.total) * 100)}%`,
-                  height: "100%",
-                  background: progress.failed > 0 ? "#d97706" : "#0f766e",
-                  transition: "width 160ms ease",
-                }}
-              />
-            </div>
-          ) : null}
-          {progress.errors.length > 0 ? (
-            <ul style={{ margin: "6px 0 0", paddingLeft: 16, color: "#b45309", fontSize: 11 }}>
-              {progress.errors.slice(0, 4).map((error) => (
-                <li key={error}>{error}</li>
-              ))}
-              {progress.errors.length > 4 ? <li>+{progress.errors.length - 4} more</li> : null}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-
-      {status ? (
-        <div aria-live="polite" style={{ color: "#4b5563", lineHeight: 1.4 }}>
-          {status}
-        </div>
-      ) : null}
     </div>
   );
+}
+
+function costTitle(count: MoodboardBatchCount, batchUsd: number): string {
+  return `${count} images · ${MOODBOARD_REPLICATE_MODEL} · quality ${MOODBOARD_IMAGE_QUALITY} · $${MOODBOARD_PER_IMAGE_USD} each · ~$${batchUsd.toFixed(2)} total`;
 }
