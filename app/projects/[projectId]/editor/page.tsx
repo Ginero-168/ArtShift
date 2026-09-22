@@ -938,13 +938,12 @@ export default function ProjectEditorPage() {
           <LayerPanel />
           {currentSlideIsInfinity ? (
             <div
+              data-moodboard-anchor="true"
               style={{
                 position: "absolute",
-                top: 9,
-                left: "50%",
-                transform: "translateX(-50%)",
+                inset: 0,
                 zIndex: 12,
-                maxWidth: "min(420px, calc(100% - 24px))",
+                pointerEvents: "none",
               }}
             >
               <MoodboardControl />

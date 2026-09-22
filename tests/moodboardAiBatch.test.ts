@@ -11,7 +11,11 @@ describe("Moodboard AI surface", () => {
     expect(editor).toContain("currentSlideIsInfinity");
     expect(control).toContain("AI ×");
     expect(control).toContain("moodboard-batch-count");
+    expect(control).toContain("aria-expanded");
+    expect(control).toContain("artshift:moodboard:controls-expanded");
     expect(control).toContain("runMoodboardAiBatch");
+    expect(editor).toContain('data-moodboard-anchor="true"');
+    expect(editor).not.toContain('maxWidth: "min(420px, calc(100% - 24px))"');
     expect(control).not.toContain("runMoodboardStockFill");
     expect(control).not.toContain(">Stock<");
     expect(client).toContain("/api/moodboard/expand");
