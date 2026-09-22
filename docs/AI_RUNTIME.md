@@ -36,7 +36,7 @@ The unified chat preserves local-first precedence: a deterministic local plan wi
 | Recraft Vectorize (Cloud) | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | P-Image-Upscale | Cloud opt-in; the explicit Upscale settings panel sends the raster to Replicate with a selected 8/16/32 MP target |
 | Layer (Qwen Image Layered) | Cloud opt-in; the explicit Layer button sends the raster to Replicate `qwen/qwen-image-layered` and inserts RGBA layers at the Preload staging bounds |
-| Moodboard AI | Cloud opt-in on Infinity Canvas; Gemini Flash expands a vibe into exactly 9, 16, or 25 distinct prompts → Replicate `openai/gpt-image-2.5-flare` at `quality: medium` (~$0.047/image; 9 ≈ $0.42, 16 ≈ $0.75, 25 ≈ $1.18) into a square upright grid anchored on the shared Preload card. |
+| Moodboard AI | Cloud opt-in on Infinity Canvas; Gemini Flash expands a vibe into exactly 9, 16, or 25 distinct prompts → Replicate `openai/gpt-image-2.5-flare` at `quality: low` (~$0.012/image; 9 ≈ $0.11, 16 ≈ $0.19, 25 ≈ $0.30) into a square upright grid anchored on the shared Preload card. |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with orchestration-selected `quality: low|medium|high`; the product does not expose quality-tier modes |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
@@ -112,7 +112,7 @@ Run places the returned image at the Preload card via
 `getProcessingPreviewPlacement` / `enqueueProcessingJob` (kind `multi-angle`)
 and leaves the source image in place.
 
-### Moodboard AI (Flare medium, 9 / 16 / 25)
+### Moodboard AI (Flare low, 9 / 16 / 25)
 
 On an **Infinity Canvas** slide, the Moodboard control accepts one short
 prompt/keyword/vibe and a batch size of **9, 16, or 25** (default 9).
@@ -128,9 +128,9 @@ prompt/keyword/vibe and a batch size of **9, 16, or 25** (default 9).
    image prompts (e.g. Bangkok → tuk-tuk, street food, temples — not N copies)
 4. `POST /api/moodboard/generate` × N — each call runs `image.generate` with alias
    `gpt-image-2.5-flare` → Official Replicate `openai/gpt-image-2.5-flare`,
-   `quality: "medium"`, `aspect_ratio: "1:1"`, `number_of_images: 1`,
-   `output_format: "webp"`. ~**$0.047**/image (9 ≈ **$0.42**, 16 ≈ **$0.75**,
-   25 ≈ **$1.18**). The Replicate BYOK token is sent; `openai_api_key` is not.
+   `quality: "low"`, `aspect_ratio: "1:1"`, `number_of_images: 1`,
+   `output_format: "webp"`. ~**$0.012**/image (9 ≈ **$0.11**, 16 ≈ **$0.19**,
+   25 ≈ **$0.30**). The Replicate BYOK token is sent; `openai_api_key` is not.
    Gemini is not used for pixels. Chat image routes stay on Sunburst.
 5. Successful images are placed as upright EngineElements in an **N×N grid**
    whose origin is `getProcessingPreviewPlacement` (so a dragged Preload card

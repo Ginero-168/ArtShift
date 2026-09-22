@@ -31,6 +31,11 @@ import type {
   AiProviderResult,
 } from "@/lib/ai-runtime/runtime";
 import {
+  MOODBOARD_IMAGE_QUALITY,
+  MOODBOARD_PER_IMAGE_USD,
+  moodboardBatchUsd,
+} from "@/lib/moodboard/constants";
+import {
   aspectRatioFromDimensions,
   normalizeReplicateAspectRatio,
 } from "@/lib/server/ai/replicateAspectRatio";
@@ -68,7 +73,7 @@ const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
 const GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
 /**
  * Moodboard-only image model. Not the chat IMAGE_DEFAULT / image-fast route.
- * Quality is locked to medium in generateMoodboardFlareImage (~$0.047/image).
+ * Quality is locked to low in generateMoodboardFlareImage (~$0.012/image).
  */
 const MOODBOARD_FLARE_MODEL = "openai/gpt-image-2.5-flare";
 
@@ -220,8 +225,8 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           profile: "economy",
           pricing: {
             currency: "USD",
-            perRunUsd: 0.047,
-            note: "Moodboard batches at quality medium (~$0.047/image, ~$0.42 for 9).",
+            perRunUsd: MOODBOARD_PER_IMAGE_USD,
+            note: `Moodboard batches at quality ${MOODBOARD_IMAGE_QUALITY} (~$${MOODBOARD_PER_IMAGE_USD}/image, ~$${moodboardBatchUsd(9).toFixed(2)} for 9).`,
           },
         },
       ],
@@ -564,8 +569,8 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
    * One prediction per expand idea (`number_of_images: 1`).
    *
    * Locked inputs (schema verified 2026-09-22):
-   * - `quality: "medium"` — schema default is `auto`, which is not a stable price.
-   *   Medium is ~$0.047/image. xhigh/max are not used.
+   * - `quality: "low"` — schema default is `auto`, which is not a stable price.
+   *   Low is ~$0.012/image. medium and above are not used.
    * - `aspect_ratio: "1:1"` — square moodboard cells. Schema default is already 1:1.
    * - `output_format: "webp"` — schema default.
    * - `background: "opaque"` — schema default `auto` can return cutouts.
@@ -590,8 +595,8 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     }
 
     const warnings: string[] = [];
-    if (input.quality && input.quality !== "medium") {
-      warnings.push("Moodboard Flare locks quality to medium.");
+    if (input.quality && input.quality !== MOODBOARD_IMAGE_QUALITY) {
+      warnings.push(`Moodboard Flare locks quality to ${MOODBOARD_IMAGE_QUALITY}.`);
     }
     if (input.aspectRatio && input.aspectRatio !== "1:1") {
       warnings.push("Moodboard Flare locks aspect ratio to 1:1.");
@@ -607,7 +612,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       {
         prompt: input.prompt,
         aspect_ratio: "1:1",
-        quality: "medium",
+        quality: MOODBOARD_IMAGE_QUALITY,
         number_of_images: 1,
         output_format: "webp",
         output_compression: 90,

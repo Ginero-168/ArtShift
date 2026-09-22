@@ -626,7 +626,7 @@ describe("Replicate AI adapter", () => {
     );
   });
 
-  it("locks Moodboard batches to Flare medium, one square webp, and the Replicate token", async () => {
+  it("locks Moodboard batches to Flare low, one square webp, and the Replicate token", async () => {
     const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi
       .fn()
@@ -666,13 +666,13 @@ describe("Replicate AI adapter", () => {
       width: 1024,
       height: 1024,
     });
-    expect(result.warnings?.join(" ")).toContain("medium");
+    expect(result.warnings?.join(" ")).toContain("low");
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(request.body));
     expect(body.input).toEqual({
       prompt: "humid neon night market",
       aspect_ratio: "1:1",
-      quality: "medium",
+      quality: "low",
       number_of_images: 1,
       output_format: "webp",
       output_compression: 90,

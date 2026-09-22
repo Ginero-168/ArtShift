@@ -153,7 +153,7 @@ describe("Moodboard generate API", () => {
     runtimeMock.execute.mockReset();
   });
 
-  it("generates one Flare medium image per idea", async () => {
+  it("generates one Flare low image per idea", async () => {
     runtimeMock.execute.mockResolvedValue({
       output: {
         dataUrl: "data:image/webp;base64,AAAA",
@@ -176,14 +176,15 @@ describe("Moodboard generate API", () => {
     const body = await response.json();
     expect(body.success).toBe(true);
     expect(body.defaultModel).toBe("openai/gpt-image-2.5-flare");
-    expect(body.quality).toBe("medium");
+    expect(body.quality).toBe("low");
     expect(body.aspectRatio).toBe("1:1");
-    expect(body.estimatedUsd).toBe(0.047);
+    expect(body.estimatedUsd).toBe(0.012);
+    expect(body.batchEstimateUsd).toBe(0.108);
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "image.generate",
       expect.objectContaining({
         modelAlias: "gpt-image-2.5-flare",
-        quality: "medium",
+        quality: "low",
         aspectRatio: "1:1",
         enhance: false,
       }),
