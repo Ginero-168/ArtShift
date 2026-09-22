@@ -44,7 +44,7 @@ describe("Layer action surface", () => {
     expect(body).toContain("DEFAULT_DECOMPOSE_LAYERS");
     expect(body).toContain("preloadLayerSource");
     expect(body).toContain('report("preload"');
-    expect(body).toContain("addElements(newElements, \"decompose image layers\")");
+    expect(body).toContain('addElements(newElements, "decompose image layers")');
     expect(body).toContain("x: element.x");
     expect(body).toContain("y: element.y");
     expect(body).not.toContain("removeBackgroundWithRuntime");

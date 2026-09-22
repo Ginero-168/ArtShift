@@ -8,11 +8,7 @@ import type {
   AiVectorizeInput,
   AiVisionInput,
 } from "./contracts";
-import {
-  DECOMPOSE_LAYERS_MAX,
-  DECOMPOSE_LAYERS_MIN,
-  isAllowedImageAspectRatio,
-} from "./contracts";
+import { DECOMPOSE_LAYERS_MAX, DECOMPOSE_LAYERS_MIN, isAllowedImageAspectRatio } from "./contracts";
 
 const DATA_URL_MAX_CHARS = 4 * 1024 * 1024;
 const PromptSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(32_000));
@@ -64,7 +60,12 @@ const DecomposeLayersInputSchema = v.strictObject({
   width: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
   height: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
   numLayers: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(DECOMPOSE_LAYERS_MIN), v.maxValue(DECOMPOSE_LAYERS_MAX)),
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(DECOMPOSE_LAYERS_MIN),
+      v.maxValue(DECOMPOSE_LAYERS_MAX),
+    ),
   ),
   prompt: v.optional(v.pipe(v.string(), v.maxLength(2_000))),
 });
@@ -130,7 +131,11 @@ export type PublicAiExecuteRequest =
   | { task: "prompt.enhance"; input: AiPromptEnhanceInput; options: AiExecutionOptions }
   | { task: "image.generate"; input: AiImageGenerateInput; options: AiExecutionOptions }
   | { task: "image.upscale"; input: AiImageUpscaleInput; options: AiExecutionOptions }
-  | { task: "image.decomposeLayers"; input: AiImageDecomposeLayersInput; options: AiExecutionOptions };
+  | {
+      task: "image.decomposeLayers";
+      input: AiImageDecomposeLayersInput;
+      options: AiExecutionOptions;
+    };
 
 export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequest | null {
   if (!input || typeof input !== "object") return null;

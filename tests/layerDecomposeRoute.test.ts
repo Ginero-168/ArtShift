@@ -8,7 +8,10 @@ const requireEndUserCloudAiMock = vi.hoisted(() =>
       return {
         ok: false as const,
         response: Response.json(
-          { error: "Explicit cloud consent is required before this AI operation.", code: "POLICY_DENIED" },
+          {
+            error: "Explicit cloud consent is required before this AI operation.",
+            code: "POLICY_DENIED",
+          },
           { status: 403 },
         ),
       };

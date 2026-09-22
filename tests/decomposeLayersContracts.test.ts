@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   AI_TASK_KINDS,
-  DEFAULT_DECOMPOSE_LAYERS,
   DECOMPOSE_LAYERS_MAX,
   DECOMPOSE_LAYERS_MIN,
+  DEFAULT_DECOMPOSE_LAYERS,
 } from "@/lib/ai-runtime/contracts";
 import { parsePublicAiExecuteRequest } from "@/lib/ai-runtime/schemas";
 import { createAiRouteTable } from "@/lib/server/ai/modelManifest";

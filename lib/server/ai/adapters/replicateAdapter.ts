@@ -13,9 +13,9 @@ import type {
   AiVisionInput,
 } from "@/lib/ai-runtime/contracts";
 import {
-  DEFAULT_DECOMPOSE_LAYERS,
   DECOMPOSE_LAYERS_MAX,
   DECOMPOSE_LAYERS_MIN,
+  DEFAULT_DECOMPOSE_LAYERS,
 } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import type {

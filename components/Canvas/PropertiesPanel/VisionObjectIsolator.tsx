@@ -18,8 +18,8 @@ import {
 import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
 import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import {
-  getUpscaleTargetMegapixels,
   DEFAULT_DECOMPOSE_LAYERS,
+  getUpscaleTargetMegapixels,
   UPSCALE_RESOLUTION_PRESETS,
   type UpscaleResolutionPreset,
 } from "@/lib/ai-runtime/contracts";
@@ -1231,12 +1231,7 @@ export function VisionObjectIsolator({
       addElements(newElements, "decompose image layers");
       selectOnly(newElements.map((el) => el.id));
       setStatusMessage(`Created ${newElements.length} editable RGBA layers.`);
-      report(
-        "complete",
-        `แยก Layer สำเร็จ ${newElements.length} ชิ้น และคงต้นฉบับไว้`,
-        "success",
-        100,
-      );
+      report("complete", `แยก Layer สำเร็จ ${newElements.length} ชิ้น และคงต้นฉบับไว้`, "success", 100);
     } catch (error) {
       if (signal.aborted || (error as Error).name === "AbortError") {
         setStatusMessage("Layer decompose cancelled.");

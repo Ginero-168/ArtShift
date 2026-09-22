@@ -8,7 +8,6 @@ import { IMAGE_MIX_PROMPT, requestCoPilotExternalTurn } from "@/lib/ai/coPilotRe
 import { unionBBox } from "@/lib/engine/bounds";
 import { isConvertibleShape } from "@/lib/engine/frameMask";
 import { getCached } from "@/lib/engine/imageCache";
-import { preloadLayerSource } from "@/lib/vision/layerPreload";
 import { mergeSelectedElements } from "@/lib/engine/mergeElements";
 import { getObjectContextBarTop, getObjectContextCategory } from "@/lib/engine/objectContext";
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
@@ -19,6 +18,7 @@ import {
   downloadVectorizedSvg,
   getAtomicVectorizedOptionBarLabels,
 } from "@/lib/vectorize/atomicVectorize";
+import { preloadLayerSource } from "@/lib/vision/layerPreload";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
