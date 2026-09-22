@@ -95,6 +95,8 @@ function executePublicTask(
       return ai.execute(request.task, request.input, options);
     case "image.multiAngle":
       return ai.execute(request.task, request.input, options);
+    case "image.poseSkeleton":
+      return ai.execute(request.task, request.input, options);
   }
 }
 
@@ -109,7 +111,8 @@ function trustedExecutionOptions(
     task === "image.generate" ||
     task === "image.upscale" ||
     task === "image.decomposeLayers" ||
-    task === "image.multiAngle";
+    task === "image.multiAngle" ||
+    task === "image.poseSkeleton";
   return {
     profile: isPromptEnhancement ? "economy" : "quality",
     cloudConsent,

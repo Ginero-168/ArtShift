@@ -117,41 +117,35 @@ Run places the returned image at the Preload card via
 `getProcessingPreviewPlacement` / `enqueueProcessingJob` (kind `multi-angle`)
 and leaves the source image in place.
 
-### Skeleton (on-device pose)
+### Skeleton (cloud pose)
 
 `Skeleton` is an Option Bar action after Multi-Angle and before Vectorize. It is
-enabled only for a loaded image. It does not call Replicate, Gemini, or any
-other paid API.
+enabled only for a loaded image. One click sends the image. There is no settings
+panel and no on-device pose model.
 
-The browser loads MediaPipe Pose Landmarker (`@mediapipe/tasks-vision@1.0.1`)
-and the float16 full BlazePose model on the first click. The JS bundle, the
-SIMD and non-SIMD WASM runtimes, and `pose_landmarker_full.task` are served
-from this origin under `public/mediapipe/`. They are not an npm dependency,
-because importing the package would pull about 20MB of WASM into the Next
-bundle. `FilesetResolver.forVisionTasks` does not request the duplicate
-`vision_wasm_module_internal` binaries, so those files are not copied.
+It is a paid cloud path with the same end-user gate as Layer and Multi-Angle:
+authentication and the user's own Replicate BYOK credential through
+`requireEndUserCloudAi` — never a shared `REPLICATE_API_TOKEN`. The click sets
+`cloudConsent`. The dedicated route `/api/skeleton` runs the `image.poseSkeleton`
+task against Replicate `ultralytics/yolo26-pose` (alias `yolo26-pose`), pinned to
+version `0da88062`
+(`0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8`). The request
+uses `model_size=n`, `conf=0.25`, `iou=0.45`, `imgsz=640`, and `return_json=true`.
+The annotated photo is not downloaded.
 
-Import, WASM setup, model fetch, and detect share a 40 second deadline. A hung
-load used to leave the Preload card spinning, because nothing rejected and the
-processing queue clears that card only after the job settles. On timeout the
-call rejects with `PoseModelError`, the card clears, and the alert uses the
-existing Thai model or runtime copy. The job `AbortSignal` races the same work,
-so cancel clears the card too. After a timeout the next click skips the GPU
-delegate and uses CPU.
+`json_str` is Ultralytics `Results.to_json()`: COCO-17 keypoints in pixels. The
+adapter normalizes them. The browser paints bones and joints on a transparent
+PNG. Up to four people are drawn, most confident first, each in its own color. A
+pose is kept only when a torso pair is visible and at least four landmarks score
+0.5 or higher. If nobody qualifies, the action stops with a Thai message and
+does not add an image. A missing Replicate key and a failed API call use their
+own Thai alerts. The processing queue clears the Preload card when the job
+settles, including those failures, so the card does not spin forever.
 
-Inference runs on-device. Reading the still image requires WebGL. Inference uses
-the GPU delegate when that setup starts, and CPU if GPU setup throws. The result
-is 33 2D landmarks per person, not a language-model stick figure.
-
-Up to four people are drawn, most confident first, each in its own color. A
-pose is kept only when a torso pair is visible and at least four landmarks
-score 0.5 or higher. If nobody qualifies, the action stops with a clear message
-and does not add an image. Bones and joints are painted on a transparent PNG
-with a dark halo so the lines stay readable on light or dark canvases. Output
-matches the source pixel size up to 4 megapixels, then scales down. The PNG is
-placed at the Preload card via `getProcessingPreviewPlacement` /
-`enqueueProcessingJob` (kind `skeleton`). A source crop is copied onto that
-card so the skeleton lines up with the visible image. There is no webcam, joint
+Output matches the source pixel size up to 4 megapixels, then scales down. The
+PNG is placed at the Preload card via `getProcessingPreviewPlacement` /
+`enqueueProcessingJob` (kind `skeleton`). A source crop is copied onto that card
+so the skeleton lines up with the visible image. There is no webcam, joint
 dragging, or pose-to-image regenerate.
 
 ### Moodboard AI (Flare low, 9 / 16 / 25)

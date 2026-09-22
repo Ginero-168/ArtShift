@@ -5,23 +5,24 @@ import { PoseSkeletonRunner } from "@/components/Canvas/PropertiesPanel/PoseSkel
 import { getProcessingPreview } from "@/lib/engine/processingPreview";
 import type { ImageElement } from "@/lib/engine/types";
 import { releaseImageActionRun } from "@/lib/vision/imageActionRunGuard";
-import { detectHumanPoses } from "@/lib/vision/poseLandmarker";
-import { POSE_SKELETON_MODEL_MESSAGE } from "@/lib/vision/poseSkeleton";
+import {
+  POSE_SKELETON_API_MESSAGE,
+  POSE_SKELETON_MISSING_KEY_MESSAGE,
+  POSE_SKELETON_NO_PERSON_MESSAGE,
+} from "@/lib/vision/poseSkeleton";
 
-vi.mock("@/lib/vision/poseLandmarker", () => ({
-  detectHumanPoses: vi.fn(),
-}));
+const loadDataURL = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/engine/imageCache", () => ({
   getCached: vi.fn(() => ({
     fileId: "file-1",
-    dataURL: "data:image/png;base64,aaa",
+    dataURL: "data:image/png;base64,aaaa",
     img: { width: 100, height: 80 },
     width: 100,
     height: 80,
   })),
-  preloadDataURL: vi.fn(async () => ({ dataURL: "data:image/png;base64,aaa" })),
-  loadDataURL: vi.fn(),
+  preloadDataURL: vi.fn(async () => ({ dataURL: "data:image/png;base64,aaaa" })),
+  loadDataURL,
 }));
 
 function imageElement(id: string): ImageElement {
@@ -44,27 +45,61 @@ function imageElement(id: string): ImageElement {
   } as ImageElement;
 }
 
-function modelError(): Error {
-  const error = new Error("Pose detection timed out.");
-  error.name = "PoseModelError";
-  return error;
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function standingLandmarks() {
+  const landmarks = Array.from({ length: 17 }, () => ({ x: 0, y: 0, visibility: 0 }));
+  const points: Record<number, [number, number]> = {
+    0: [0.5, 0.12],
+    5: [0.35, 0.28],
+    6: [0.65, 0.28],
+    7: [0.28, 0.48],
+    8: [0.72, 0.48],
+    11: [0.4, 0.62],
+    12: [0.6, 0.62],
+  };
+  for (const [index, value] of Object.entries(points)) {
+    const [x, y] = value;
+    landmarks[Number(index)] = { x, y, visibility: 1 };
+  }
+  return landmarks;
 }
 
 afterEach(() => {
   cleanup();
   releaseImageActionRun("skeleton:img-model");
   releaseImageActionRun("skeleton:img-abort");
-  vi.mocked(detectHumanPoses).mockReset();
+  releaseImageActionRun("skeleton:img-key");
+  releaseImageActionRun("skeleton:img-empty");
+  releaseImageActionRun("skeleton:img-ok");
+  vi.unstubAllGlobals();
+  loadDataURL.mockReset();
 });
 
-describe("Pose skeleton runner failures", () => {
-  it("alerts the Thai model message and clears Preload when detection fails", async () => {
+describe("Pose skeleton runner", () => {
+  it("alerts the Thai API message and clears Preload when the pose call fails", async () => {
     window.alert = vi.fn();
-    vi.mocked(detectHumanPoses).mockImplementation(async (_image, options) => {
-      expect(options?.signal).toBeInstanceOf(AbortSignal);
-      expect(getProcessingPreview()?.kind).toBe("skeleton");
-      throw modelError();
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url, init) => {
+        expect(getProcessingPreview()?.kind).toBe("skeleton");
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        return jsonResponse(
+          {
+            error: {
+              code: "PROVIDER_UNAVAILABLE",
+              message: "AI provider is temporarily unavailable.",
+            },
+          },
+          502,
+        );
+      }),
+    );
     const onComplete = vi.fn();
     render(
       createElement(PoseSkeletonRunner, {
@@ -74,19 +109,118 @@ describe("Pose skeleton runner failures", () => {
     );
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
-    expect(window.alert).toHaveBeenCalledWith(`Skeleton ไม่สำเร็จ: ${POSE_SKELETON_MODEL_MESSAGE}`);
+    expect(window.alert).toHaveBeenCalledWith(`Skeleton ไม่สำเร็จ: ${POSE_SKELETON_API_MESSAGE}`);
+    expect(getProcessingPreview()).toBeNull();
+  });
+
+  it("alerts the Thai missing-key message when Replicate is not configured", async () => {
+    window.alert = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          {
+            error:
+              "AI provider is not configured for this session. Add your Replicate API key in AI Provider Settings.",
+            code: "PROVIDER_AUTH",
+          },
+          503,
+        ),
+      ),
+    );
+    const onComplete = vi.fn();
+    render(
+      createElement(PoseSkeletonRunner, {
+        element: imageElement("img-key"),
+        onComplete,
+      }),
+    );
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(window.alert).toHaveBeenCalledWith(
+      `Skeleton ไม่สำเร็จ: ${POSE_SKELETON_MISSING_KEY_MESSAGE}`,
+    );
+    expect(getProcessingPreview()).toBeNull();
+  });
+
+  it("alerts when nobody is found and does not place an image", async () => {
+    window.alert = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ execution: { output: { poses: [] } } })),
+    );
+    const onComplete = vi.fn();
+    render(
+      createElement(PoseSkeletonRunner, {
+        element: imageElement("img-empty"),
+        onComplete,
+      }),
+    );
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(window.alert).toHaveBeenCalledWith(
+      `Skeleton ไม่สำเร็จ: ${POSE_SKELETON_NO_PERSON_MESSAGE}`,
+    );
+    expect(loadDataURL).not.toHaveBeenCalled();
+    expect(getProcessingPreview()).toBeNull();
+  });
+
+  it("places a transparent skeleton PNG from YOLO keypoints at Preload", async () => {
+    window.alert = vi.fn();
+    loadDataURL.mockResolvedValue({
+      fileId: "skeleton-file",
+      dataURL: "data:image/png;base64,bbbb",
+      width: 100,
+      height: 80,
+    });
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as {
+        task: string;
+        input: { modelSize: string };
+        options: { cloudConsent: boolean; provider: string; modelAlias: string };
+      };
+      expect(body.task).toBe("image.poseSkeleton");
+      expect(body.input.modelSize).toBe("n");
+      expect(body.options).toMatchObject({
+        cloudConsent: true,
+        provider: "replicate",
+        modelAlias: "yolo26-pose",
+      });
+      return jsonResponse({
+        execution: { output: { poses: [{ landmarks: standingLandmarks(), confidence: 0.9 }] } },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onComplete = vi.fn();
+    render(
+      createElement(PoseSkeletonRunner, {
+        element: imageElement("img-ok"),
+        onComplete,
+      }),
+    );
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/skeleton",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(loadDataURL).toHaveBeenCalledWith(expect.stringMatching(/^data:image\/png;base64,/));
+    expect(window.alert).not.toHaveBeenCalled();
     expect(getProcessingPreview()).toBeNull();
   });
 
   it("clears Preload without an alert when the job is aborted", async () => {
     window.alert = vi.fn();
-    vi.mocked(detectHumanPoses).mockImplementation(async (_image, options) => {
-      expect(getProcessingPreview()?.kind).toBe("skeleton");
-      const error = new Error("Skeleton was cancelled.");
-      error.name = "AbortError";
-      options?.signal?.throwIfAborted?.();
-      throw error;
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url, init) => {
+        expect(getProcessingPreview()?.kind).toBe("skeleton");
+        const error = new Error("The operation was aborted.");
+        error.name = "AbortError";
+        init?.signal?.throwIfAborted?.();
+        throw error;
+      }),
+    );
     const onComplete = vi.fn();
     render(
       createElement(PoseSkeletonRunner, {
