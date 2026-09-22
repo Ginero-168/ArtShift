@@ -234,8 +234,10 @@ export const MULTI_ANGLE_OUTPUT_FORMATS = ["webp", "jpg", "png"] as const;
 export type MultiAngleOutputFormat = (typeof MULTI_ANGLE_OUTPUT_FORMATS)[number];
 
 export const DEFAULT_MULTI_ANGLE_GO_FAST = true;
-export const DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES = true;
-export const DEFAULT_MULTI_ANGLE_STRENGTH = 1;
+export const DEFAULT_MULTI_ANGLE_LORA_WEIGHTS = "dx8152/Qwen-Edit-2509-Multiple-angles";
+/** 0–4. Live schema default is 1.25, not the README strength of 1. */
+export const DEFAULT_MULTI_ANGLE_LORA_SCALE = 1.25;
+export const DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE = 1;
 export const DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT: MultiAngleOutputFormat = "webp";
 export const DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY = 95;
 
@@ -243,7 +245,7 @@ export type AiImageMultiAngleInput = {
   image: AiImageInput;
   width: number;
   height: number;
-  /** ±180. Positive rotates the camera left. */
+  /** ±90. Positive rotates the camera left. */
   rotateDegrees: number;
   /** 0–10. Higher values push the camera closer. */
   moveForward: number;
@@ -252,9 +254,16 @@ export type AiImageMultiAngleInput = {
   useWideAngle: boolean;
   prompt?: string;
   goFast?: boolean;
-  useMultipleAngles?: boolean;
-  /** 0–2. Default 1. */
-  multipleAnglesStrength?: number;
+  /**
+   * 1–40. Omit so `go_fast` picks the step count (about 4 when fast, about 40 when detailed).
+   */
+  numInferenceSteps?: number;
+  /** Hugging Face LoRA repo. Blank falls back to the official multiple-angles weights. */
+  loraWeights?: string;
+  /** 0–4. Default 1.25. */
+  loraScale?: number;
+  /** 0–10. Default 1. */
+  trueGuidanceScale?: number;
   aspectRatio?: MultiAngleAspectRatio;
   seed?: number;
   outputFormat?: MultiAngleOutputFormat;

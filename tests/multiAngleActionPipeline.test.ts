@@ -36,6 +36,11 @@ describe("Multi-Angle action surface", () => {
     expect(body).toContain("/api/multi-angle");
     expect(body).toContain("image.multiAngle");
     expect(body).toContain("cloudConsent: true");
+    expect(body).toContain("loraScale");
+    expect(body).toContain("loraWeights");
+    expect(body).toContain("trueGuidanceScale");
+    expect(body).not.toContain("useMultipleAngles");
+    expect(body).not.toContain("multipleAnglesStrength");
     expect(body).toContain("qwen-edit-multiangle");
     expect(body).toContain("enqueueProcessingJob");
     expect(body).toContain('kind: "multi-angle"');

@@ -2,8 +2,8 @@
  * Camera pose for the Multi-Angle control surface.
  * This is not a preview of the model output. It maps the same numbers the
  * Replicate `qwen/qwen-edit-multiangle` input uses:
- * positive rotate_degrees orbits the camera left, move_forward pushes in,
- * vertical_tilt -1 is top-down and +1 is a low angle.
+ * positive rotate_degrees orbits the camera left within ±90, move_forward
+ * pushes in, and vertical_tilt is only -1 (top-down), 0, or +1 (low angle).
  */
 
 export type MultiAngleCamera = {
@@ -34,7 +34,7 @@ export type MultiAnglePose = {
 
 export function clampMultiAngleCamera(camera: MultiAngleCamera): MultiAngleCamera {
   return {
-    rotateDegrees: clamp(Math.round(camera.rotateDegrees), -180, 180),
+    rotateDegrees: clamp(Math.round(camera.rotateDegrees), -90, 90),
     moveForward: clamp(Math.round(camera.moveForward), 0, 10),
     verticalTilt: clamp(Math.round(camera.verticalTilt), -1, 1),
     useWideAngle: camera.useWideAngle,

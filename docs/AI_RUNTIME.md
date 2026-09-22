@@ -97,14 +97,20 @@ shared `REPLICATE_API_TOKEN`. The dedicated route `/api/multi-angle` runs the
 `qwen-edit-multiangle`).
 
 The panel is a camera control, not a preview of the generated pixels. Dragging
-the subject-and-camera scene updates `rotate_degrees` (±180, positive rotates
+the subject-and-camera scene updates `rotate_degrees` (±90, positive rotates
 left), `move_forward` (0–10), and `vertical_tilt` (−1 top-down, 0 eye level,
 +1 low angle). `use_wide_angle` widens the gizmo's lens. Prompt, Lightning
-(`go_fast`, default true), `use_multiple_angles` (default true),
-`multiple_angles_strength` (0–2, default 1), aspect ratio, optional seed, and
-output format/quality are editable in the same panel. Run places the returned
-image at the Preload card via `getProcessingPreviewPlacement` /
-`enqueueProcessingJob` (kind `multi-angle`) and leaves the source image in place.
+(`go_fast`, default true; about 4 steps when inference steps are omitted, about
+40 when detailed), optional `num_inference_steps` (1–40), LoRA weights
+(default `dx8152/Qwen-Edit-2509-Multiple-angles`), `lora_scale` (0–4, default
+1.25), `true_guidance_scale` (0–10, default 1), aspect ratio, optional seed,
+and output format/quality are editable in the same panel. The route pins
+version `cf245ffa` (`cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79`).
+`disable_safety_checker` stays false. README fields `use_multiple_angles` and
+`multiple_angles_strength` are not sent. Public price is about $0.03 per image.
+Run places the returned image at the Preload card via
+`getProcessingPreviewPlacement` / `enqueueProcessingJob` (kind `multi-angle`)
+and leaves the source image in place.
 
 ### Moodboard AI (Flare medium, 9 / 16 / 25)
 

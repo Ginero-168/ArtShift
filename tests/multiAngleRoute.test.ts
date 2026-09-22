@@ -47,7 +47,7 @@ const imageInput = {
   verticalTilt: 1,
   useWideAngle: false,
   goFast: true,
-  multipleAnglesStrength: 1,
+  loraScale: 1.25,
 };
 
 describe("Multi-Angle API", () => {

@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
 import {
   DEFAULT_MULTI_ANGLE_GO_FAST,
+  DEFAULT_MULTI_ANGLE_LORA_SCALE,
+  DEFAULT_MULTI_ANGLE_LORA_WEIGHTS,
   DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
   DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
-  DEFAULT_MULTI_ANGLE_STRENGTH,
-  DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES,
+  DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
   MULTI_ANGLE_ASPECT_RATIOS,
   MULTI_ANGLE_OUTPUT_FORMATS,
   type MultiAngleAspectRatio,
@@ -51,10 +52,12 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
   const [camera, setCamera] = useState<MultiAngleCamera>(DEFAULT_MULTI_ANGLE_CAMERA);
   const [prompt, setPrompt] = useState("");
   const [goFast, setGoFast] = useState<boolean>(DEFAULT_MULTI_ANGLE_GO_FAST);
-  const [useMultipleAngles, setUseMultipleAngles] = useState<boolean>(
-    DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES,
+  const [loraWeights, setLoraWeights] = useState(DEFAULT_MULTI_ANGLE_LORA_WEIGHTS);
+  const [loraScale, setLoraScale] = useState(DEFAULT_MULTI_ANGLE_LORA_SCALE);
+  const [trueGuidanceScale, setTrueGuidanceScale] = useState(
+    DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
   );
-  const [strength, setStrength] = useState(DEFAULT_MULTI_ANGLE_STRENGTH);
+  const [inferenceSteps, setInferenceSteps] = useState("");
   const [aspectRatio, setAspectRatio] = useState<MultiAngleAspectRatio>("match_input_image");
   const [seed, setSeed] = useState("");
   const [outputFormat, setOutputFormat] = useState<MultiAngleOutputFormat>(
@@ -86,6 +89,11 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
       setStatusMessage("Seed must be an integer from 0 to 2147483647.");
       return;
     }
+    const parsedSteps = launch ? launch.numInferenceSteps : parseOptionalSteps(inferenceSteps);
+    if (parsedSteps === "invalid") {
+      setStatusMessage("Inference steps must be an integer from 1 to 40, or left blank.");
+      return;
+    }
 
     if (!queuedContext) {
       await preloadLayerSource(element.fileId);
@@ -101,8 +109,10 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
         camera: cameraRef.current,
         prompt: prompt.trim(),
         goFast,
-        useMultipleAngles,
-        strength,
+        loraWeights,
+        loraScale,
+        trueGuidanceScale,
+        numInferenceSteps: parsedSteps,
         aspectRatio,
         seed: parsedSeed,
         outputFormat,
@@ -134,8 +144,10 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
     const settings = launch?.camera ?? cameraRef.current;
     const requestPrompt = launch?.prompt ?? prompt.trim();
     const requestGoFast = launch?.goFast ?? goFast;
-    const requestMultipleAngles = launch?.useMultipleAngles ?? useMultipleAngles;
-    const requestStrength = launch?.strength ?? strength;
+    const requestLoraWeights = launch?.loraWeights ?? loraWeights;
+    const requestLoraScale = launch?.loraScale ?? loraScale;
+    const requestGuidance = launch?.trueGuidanceScale ?? trueGuidanceScale;
+    const requestSteps = launch ? launch.numInferenceSteps : parsedSteps;
     const requestAspect = launch?.aspectRatio ?? aspectRatio;
     const requestSeed = launch ? launch.seed : parsedSeed;
     const requestFormat = launch?.outputFormat ?? outputFormat;
@@ -176,8 +188,10 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
             useWideAngle: settings.useWideAngle,
             ...(requestPrompt ? { prompt: requestPrompt } : {}),
             goFast: requestGoFast,
-            useMultipleAngles: requestMultipleAngles,
-            multipleAnglesStrength: requestStrength,
+            ...(requestSteps === undefined ? {} : { numInferenceSteps: requestSteps }),
+            loraWeights: requestLoraWeights.trim() || DEFAULT_MULTI_ANGLE_LORA_WEIGHTS,
+            loraScale: requestLoraScale,
+            trueGuidanceScale: requestGuidance,
             aspectRatio: requestAspect,
             ...(requestSeed === undefined ? {} : { seed: requestSeed }),
             outputFormat: requestFormat,
@@ -280,9 +294,9 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
       <Slider
         id="multi-angle-rotate"
         label="Rotate"
-        hint="Positive turns the camera left"
-        min={-180}
-        max={180}
+        hint="±90 · positive turns the camera left"
+        min={-90}
+        max={90}
         step={1}
         value={camera.rotateDegrees}
         suffix="°"
@@ -301,7 +315,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
       <Slider
         id="multi-angle-tilt"
         label="Vertical tilt"
-        hint="−1 top-down · 0 eye level · +1 low angle"
+        hint="Three positions only: −1 top-down · 0 eye level · +1 low angle"
         min={-1}
         max={1}
         step={1}
@@ -347,26 +361,51 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
         />
         Lightning (go fast)
       </label>
-      <label
-        htmlFor="multi-angle-lora"
-        style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 10 }}
-      >
-        <input
-          id="multi-angle-lora"
-          type="checkbox"
-          checked={useMultipleAngles}
-          onChange={(event) => setUseMultipleAngles(event.target.checked)}
-        />
-        Multiple angles
+      <span style={{ display: "block", color: "#94a3b8", fontSize: 8 }}>
+        Leave steps blank and Lightning uses about 4 steps. Detailed uses about 40.
+      </span>
+      <label htmlFor="multi-angle-steps" style={FIELD_LABEL}>
+        Inference steps
       </label>
+      <input
+        id="multi-angle-steps"
+        aria-label="Inference steps"
+        inputMode="numeric"
+        placeholder="Optional. Blank lets Lightning choose."
+        value={inferenceSteps}
+        onChange={(event) => setInferenceSteps(event.target.value)}
+        style={controlStyle}
+      />
+      <label htmlFor="multi-angle-lora-weights" style={FIELD_LABEL}>
+        LoRA weights
+      </label>
+      <input
+        id="multi-angle-lora-weights"
+        aria-label="LoRA weights"
+        value={loraWeights}
+        maxLength={200}
+        onChange={(event) => setLoraWeights(event.target.value)}
+        style={controlStyle}
+      />
       <Slider
-        id="multi-angle-strength"
-        label="Multiple angles strength"
+        id="multi-angle-lora-scale"
+        label="LoRA scale"
+        hint="0–4 · default 1.25"
         min={0}
-        max={2}
+        max={4}
         step={0.05}
-        value={strength}
-        onChange={setStrength}
+        value={loraScale}
+        onChange={setLoraScale}
+      />
+      <Slider
+        id="multi-angle-guidance"
+        label="True guidance scale"
+        hint="0–10 · default 1"
+        min={0}
+        max={10}
+        step={0.1}
+        value={trueGuidanceScale}
+        onChange={setTrueGuidanceScale}
       />
 
       <label htmlFor="multi-angle-aspect" style={FIELD_LABEL}>
@@ -485,8 +524,10 @@ type MultiAngleLaunch = {
   camera: MultiAngleCamera;
   prompt: string;
   goFast: boolean;
-  useMultipleAngles: boolean;
-  strength: number;
+  loraWeights: string;
+  loraScale: number;
+  trueGuidanceScale: number;
+  numInferenceSteps: number | undefined;
   aspectRatio: MultiAngleAspectRatio;
   seed: number | undefined;
   outputFormat: MultiAngleOutputFormat;
@@ -557,6 +598,15 @@ const controlStyle = {
   fontFamily: "inherit",
   boxSizing: "border-box" as const,
 };
+
+function parseOptionalSteps(value: string): number | undefined | "invalid" {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (!/^\d+$/.test(trimmed)) return "invalid";
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 40) return "invalid";
+  return parsed;
+}
 
 function parseOptionalSeed(value: string): number | undefined | "invalid" {
   const trimmed = value.trim();

@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       cloudConsent: true,
       allowFallback: false,
       timeoutMs: 120_000,
-      maxCostUsd: 0.08,
+      maxCostUsd: 0.05,
       accountId: access.account.id,
       signal: req.signal,
     });

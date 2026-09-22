@@ -17,6 +17,9 @@ const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
   "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf";
 const REPLICATE_QWEN_IMAGE_LAYERED_MODEL = "qwen/qwen-image-layered";
 const REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL = "qwen/qwen-edit-multiangle";
+/** Live schema (cf245ffa): rotate ±90, lora_scale default 1.25. Not the README contract. */
+const DEFAULT_REPLICATE_QWEN_EDIT_MULTIANGLE_VERSION =
+  "cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79";
 
 /**
  * Pricing per image at the quality tiers available from the provider.
@@ -73,9 +76,14 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL || REPLICATE_QWEN_IMAGE_LAYERED_MODEL,
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL_VERSION,
   );
+  const replicateQwenEditMultiAngleSlug =
+    environment.REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL || REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL;
   const replicateQwenEditMultiAngle = withVersion(
-    environment.REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL || REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL,
-    environment.REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL_VERSION,
+    replicateQwenEditMultiAngleSlug,
+    environment.REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL_VERSION ||
+      (replicateQwenEditMultiAngleSlug === REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL
+        ? DEFAULT_REPLICATE_QWEN_EDIT_MULTIANGLE_VERSION
+        : undefined),
   );
   // Moodboard-only. Slug is fixed; only the version may be pinned.
   const replicateMoodboardFlare = withVersion(
@@ -223,11 +231,11 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
           provider: "replicate",
           model: replicateQwenEditMultiAngle,
           alias: "qwen-edit-multiangle",
-          expectedMaxUsd: 0.08,
+          expectedMaxUsd: 0.04,
           pricing: {
             currency: "USD",
-            perRunUsd: 0.04,
-            note: "Estimate for a Lightning multi-angle edit; confirm against the Replicate model page.",
+            perRunUsd: 0.03,
+            note: "Public H100 price is about $0.03 per image. The safety checker stays on.",
           },
         },
       ],

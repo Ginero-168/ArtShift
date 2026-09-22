@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   AI_TASK_KINDS,
   DEFAULT_MULTI_ANGLE_GO_FAST,
-  DEFAULT_MULTI_ANGLE_STRENGTH,
-  DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES,
+  DEFAULT_MULTI_ANGLE_LORA_SCALE,
+  DEFAULT_MULTI_ANGLE_LORA_WEIGHTS,
+  DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
 } from "@/lib/ai-runtime/contracts";
 import { parsePublicAiExecuteRequest } from "@/lib/ai-runtime/schemas";
 import { createAiRouteTable } from "@/lib/server/ai/modelManifest";
@@ -17,8 +18,9 @@ const input = {
   verticalTilt: -1,
   useWideAngle: true,
   goFast: true,
-  useMultipleAngles: true,
-  multipleAnglesStrength: 1,
+  loraWeights: "dx8152/Qwen-Edit-2509-Multiple-angles",
+  loraScale: 1.25,
+  trueGuidanceScale: 1,
   aspectRatio: "match_input_image" as const,
   outputFormat: "webp" as const,
   outputQuality: 95,
@@ -28,8 +30,9 @@ describe("Qwen Edit Multi-Angle contract", () => {
   it("registers image.multiAngle with Lightning defaults", () => {
     expect(AI_TASK_KINDS).toContain("image.multiAngle");
     expect(DEFAULT_MULTI_ANGLE_GO_FAST).toBe(true);
-    expect(DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES).toBe(true);
-    expect(DEFAULT_MULTI_ANGLE_STRENGTH).toBe(1);
+    expect(DEFAULT_MULTI_ANGLE_LORA_WEIGHTS).toBe("dx8152/Qwen-Edit-2509-Multiple-angles");
+    expect(DEFAULT_MULTI_ANGLE_LORA_SCALE).toBe(1.25);
+    expect(DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE).toBe(1);
   });
 
   it("accepts a bounded image.multiAngle request", () => {
@@ -46,7 +49,7 @@ describe("Qwen Edit Multi-Angle contract", () => {
     expect(
       parsePublicAiExecuteRequest({
         task: "image.multiAngle",
-        input: { ...input, rotateDegrees: 181 },
+        input: { ...input, rotateDegrees: 91 },
         options: { cloudConsent: true },
       }),
     ).toBeNull();
@@ -64,16 +67,38 @@ describe("Qwen Edit Multi-Angle contract", () => {
         options: { cloudConsent: true },
       }),
     ).toBeNull();
+    expect(
+      parsePublicAiExecuteRequest({
+        task: "image.multiAngle",
+        input: { ...input, loraScale: 4.5 },
+        options: { cloudConsent: true },
+      }),
+    ).toBeNull();
+    expect(
+      parsePublicAiExecuteRequest({
+        task: "image.multiAngle",
+        input: { ...input, numInferenceSteps: 41 },
+        options: { cloudConsent: true },
+      }),
+    ).toBeNull();
+    expect(
+      parsePublicAiExecuteRequest({
+        task: "image.multiAngle",
+        input: { ...input, useMultipleAngles: true, multipleAnglesStrength: 1 },
+        options: { cloudConsent: true },
+      }),
+    ).toBeNull();
   });
 
   it("routes only to qwen/qwen-edit-multiangle", () => {
     expect(createAiRouteTable({})["image.multiAngle"]?.quality).toEqual([
       {
         provider: "replicate",
-        model: "qwen/qwen-edit-multiangle",
+        model:
+          "qwen/qwen-edit-multiangle@cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
         alias: "qwen-edit-multiangle",
-        expectedMaxUsd: expect.any(Number),
-        pricing: expect.objectContaining({ currency: "USD" }),
+        expectedMaxUsd: 0.04,
+        pricing: expect.objectContaining({ currency: "USD", perRunUsd: 0.03 }),
       },
     ]);
   });

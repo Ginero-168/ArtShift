@@ -18,10 +18,11 @@ import {
   DECOMPOSE_LAYERS_MIN,
   DEFAULT_DECOMPOSE_LAYERS,
   DEFAULT_MULTI_ANGLE_GO_FAST,
+  DEFAULT_MULTI_ANGLE_LORA_SCALE,
+  DEFAULT_MULTI_ANGLE_LORA_WEIGHTS,
   DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
   DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
-  DEFAULT_MULTI_ANGLE_STRENGTH,
-  DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES,
+  DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
 } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import type {
@@ -180,8 +181,8 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           profile: "quality",
           pricing: {
             currency: "USD",
-            perRunUsd: 0.04,
-            note: "Estimate for a Lightning multi-angle edit; confirm against the Replicate model page.",
+            perRunUsd: 0.03,
+            note: "Public H100 price is about $0.03 per image. The safety checker stays on.",
           },
         },
         {
@@ -821,9 +822,9 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       image: input.image.dataUrl,
       rotate_degrees: assertMultiAngleInteger(
         input.rotateDegrees,
-        -180,
-        180,
-        "rotateDegrees must be an integer from -180 to 180.",
+        -90,
+        90,
+        "rotateDegrees must be an integer from -90 to 90.",
       ),
       move_forward: assertMultiAngleInteger(
         input.moveForward,
@@ -840,8 +841,19 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       use_wide_angle: input.useWideAngle === true,
       aspect_ratio: input.aspectRatio ?? "match_input_image",
       go_fast: input.goFast ?? DEFAULT_MULTI_ANGLE_GO_FAST,
-      use_multiple_angles: input.useMultipleAngles ?? DEFAULT_MULTI_ANGLE_USE_MULTIPLE_ANGLES,
-      multiple_angles_strength: normalizeMultiAngleStrength(input.multipleAnglesStrength),
+      lora_weights: normalizeMultiAngleLoraWeights(input.loraWeights),
+      lora_scale: normalizeMultiAngleUnit(
+        input.loraScale,
+        DEFAULT_MULTI_ANGLE_LORA_SCALE,
+        4,
+        "loraScale must be a number from 0 to 4.",
+      ),
+      true_guidance_scale: normalizeMultiAngleUnit(
+        input.trueGuidanceScale,
+        DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
+        10,
+        "trueGuidanceScale must be a number from 0 to 10.",
+      ),
       output_format: input.outputFormat ?? DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
       output_quality: assertMultiAngleInteger(
         input.outputQuality ?? DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
@@ -853,6 +865,14 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     };
     if (typeof input.prompt === "string" && input.prompt.trim()) {
       providerInput.prompt = input.prompt.trim();
+    }
+    if (typeof input.numInferenceSteps === "number") {
+      providerInput.num_inference_steps = assertMultiAngleInteger(
+        input.numInferenceSteps,
+        1,
+        40,
+        "numInferenceSteps must be an integer from 1 to 40.",
+      );
     }
     if (typeof input.seed === "number") {
       providerInput.seed = assertMultiAngleInteger(
@@ -1071,16 +1091,27 @@ function assertMultiAngleInteger(value: number, min: number, max: number, messag
   return value;
 }
 
-function normalizeMultiAngleStrength(value: number | undefined): number {
-  const strength = value ?? DEFAULT_MULTI_ANGLE_STRENGTH;
-  if (!Number.isFinite(strength) || strength < 0 || strength > 2) {
-    throw new AiRuntimeError(
-      "INVALID_INPUT",
-      "multipleAnglesStrength must be a number from 0 to 2.",
-      { provider: "replicate" },
-    );
+function normalizeMultiAngleLoraWeights(value: string | undefined): string {
+  const weights = value?.trim() || DEFAULT_MULTI_ANGLE_LORA_WEIGHTS;
+  if (weights.length > 200) {
+    throw new AiRuntimeError("INVALID_INPUT", "loraWeights must be 200 characters or fewer.", {
+      provider: "replicate",
+    });
   }
-  return Math.round(strength * 100) / 100;
+  return weights;
+}
+
+function normalizeMultiAngleUnit(
+  value: number | undefined,
+  fallback: number,
+  max: number,
+  message: string,
+): number {
+  const scale = value ?? fallback;
+  if (!Number.isFinite(scale) || scale < 0 || scale > max) {
+    throw new AiRuntimeError("INVALID_INPUT", message, { provider: "replicate" });
+  }
+  return Math.round(scale * 100) / 100;
 }
 
 function normalizeDecomposeLayerCount(value: number | undefined): number {

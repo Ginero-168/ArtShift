@@ -46,6 +46,15 @@ describe("Multi-Angle camera pose", () => {
     expect(next.verticalTilt).toBe(1);
   });
 
+  it("clamps orbit drag to ±90 and tilt to -1, 0, or 1", () => {
+    const spun = cameraFromPointerDelta(DEFAULT_MULTI_ANGLE_CAMERA, 400, -200);
+    expect(spun.rotateDegrees).toBe(90);
+    expect(spun.verticalTilt).toBe(-1);
+    const opposite = cameraFromPointerDelta(DEFAULT_MULTI_ANGLE_CAMERA, -400, 200);
+    expect(opposite.rotateDegrees).toBe(-90);
+    expect(opposite.verticalTilt).toBe(1);
+  });
+
   it("treats wheel-up as a push-in", () => {
     expect(cameraFromWheel(DEFAULT_MULTI_ANGLE_CAMERA, -120).moveForward).toBe(1);
     expect(

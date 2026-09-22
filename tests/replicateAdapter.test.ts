@@ -1114,6 +1114,7 @@ describe("Replicate AI adapter", () => {
           JSON.stringify({
             id: "prediction-angle-1",
             model: "qwen/qwen-edit-multiangle",
+            version: "cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
             status: "succeeded",
             output: ["https://replicate.delivery/angle.webp"],
             metrics: { predict_time: 3.2 },
@@ -1142,14 +1143,17 @@ describe("Replicate AI adapter", () => {
         useWideAngle: true,
         prompt: "warm rim light",
         goFast: true,
-        useMultipleAngles: true,
-        multipleAnglesStrength: 1,
+        numInferenceSteps: 8,
+        loraWeights: "dx8152/Qwen-Edit-2509-Multiple-angles",
+        loraScale: 1.25,
+        trueGuidanceScale: 1,
         aspectRatio: "16:9",
         seed: 7,
         outputFormat: "webp",
         outputQuality: 90,
       } as never,
-      model: "qwen/qwen-edit-multiangle",
+      model:
+        "qwen/qwen-edit-multiangle@cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
       signal: new AbortController().signal,
     });
 
@@ -1157,15 +1161,17 @@ describe("Replicate AI adapter", () => {
       dataUrl: `data:image/webp;base64,${Buffer.from(imageBytes).toString("base64")}`,
     });
     expect(result).toMatchObject({
-      model: "qwen/qwen-edit-multiangle",
+      model:
+        "qwen/qwen-edit-multiangle@cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
       requestId: "prediction-angle-1",
       usage: { providerSeconds: 3.2 },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "https://api.replicate.com/v1/models/qwen/qwen-edit-multiangle/predictions",
+      "https://api.replicate.com/v1/predictions",
       expect.objectContaining({
         body: JSON.stringify({
+          version: "cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
           input: {
             image: "data:image/png;base64,AAAA",
             rotate_degrees: -15,
@@ -1174,12 +1180,14 @@ describe("Replicate AI adapter", () => {
             use_wide_angle: true,
             aspect_ratio: "16:9",
             go_fast: true,
-            use_multiple_angles: true,
-            multiple_angles_strength: 1,
+            lora_weights: "dx8152/Qwen-Edit-2509-Multiple-angles",
+            lora_scale: 1.25,
+            true_guidance_scale: 1,
             output_format: "webp",
             output_quality: 90,
             disable_safety_checker: false,
             prompt: "warm rim light",
+            num_inference_steps: 8,
             seed: 7,
           },
         }),
