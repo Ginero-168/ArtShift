@@ -22,7 +22,7 @@ export const MOODBOARD_BATCH_USD =
   Math.round(MOODBOARD_PER_IMAGE_USD * MOODBOARD_AI_BATCH_COUNT * 1000) / 1000;
 
 export const MOODBOARD_AI_CONSENT_PROMPT = `Moodboard AI จะ:
-1) ส่งคำค้นไปขยายไอเดียด้วย LLM (Subject / Setting / Prop / Mood / Color style) เป็น 9 พรอมต์ที่ต่างกัน
+1) ขยายคำค้น/ไวบ์ด้วย Gemini Flash เป็น 9 ทิศทางภาพที่ต่างกัน (Subject / Setting / Prop / Mood / Color style) — ไม่ใช่คัดลอกคำค้น 9 ครั้ง
 2) สร้าง 9 ภาพผ่าน Replicate ${MOODBOARD_REPLICATE_MODEL} (~$${MOODBOARD_PER_IMAGE_USD}/ภาพ ≈ ~$${MOODBOARD_BATCH_USD} ต่อชุด)
 
-ใช้คีย์ Replicate ของบัญชีคุณ (BYOK) อนุญาตให้ส่งคำค้นออกนอกเครื่องในเซสชันนี้หรือไม่?`;
+ใช้คีย์ Replicate ของบัญชีคุณ (BYOK) สำหรับขั้นสร้างภาพ อนุญาตให้ส่งคำค้นออกนอกเครื่องในเซสชันนี้หรือไม่?`;

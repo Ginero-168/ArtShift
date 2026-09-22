@@ -78,7 +78,11 @@ describe("Moodboard expand API", () => {
       expect.objectContaining({
         system: expect.stringContaining("EXACTLY 9"),
       }),
-      expect.objectContaining({ cloudConsent: true, reasoning: { mode: "off" } }),
+      expect.objectContaining({
+        cloudConsent: true,
+        modelAlias: "creative-director",
+        reasoning: { mode: "off" },
+      }),
     );
   });
 });

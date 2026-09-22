@@ -20,8 +20,8 @@ const limiter = new RateLimiter(12, 60_000);
 const MAX_BODY_BYTES = 8_000;
 
 /**
- * Keyword / vibe → LLM associative expand → exactly 9 distinct image prompts.
- * Does not call image.generate.
+ * Keyword / vibe → Gemini Flash associative expand → exactly 9 distinct image prompts.
+ * Pixel generation is a separate Replicate flux-schnell step (not Gemini image).
  */
 export async function POST(req: NextRequest) {
   const account = getUserAccount(req);
@@ -131,6 +131,7 @@ function runExpandChat(
     },
     {
       profile: "quality",
+      modelAlias: "creative-director",
       cloudConsent: true,
       allowFallback: false,
       timeoutMs: 90_000,
