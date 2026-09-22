@@ -241,18 +241,23 @@ Adapter ปักเวอร์ชัน `cf245ffaa67a6d7d0edeb597d2fded5ab80cb
     "lora_weights": "dx8152/Qwen-Edit-2509-Multiple-angles",
     "lora_scale": 1.25,
     "true_guidance_scale": 1,
-    "output_format": "webp",
+    "output_format": "png",
     "output_quality": 95,
     "disable_safety_checker": false
   }
 }
 ```
 
+แผง Option Bar เหลือแค่การหมุนวัตถุ (แนวนอน → `rotate_degrees`, ลากขึ้นลง snap
+`vertical_tilt`) กับ `use_wide_angle` ค่าที่ซ่อนไว้คือ `move_forward` 0,
+`go_fast` true, ไม่ส่ง `num_inference_steps` หรือ `prompt`, LoRA ตามด้านบน,
+`aspect_ratio` `match_input_image`, และ `output_format` `png`
+
 ช่วงที่รับ: `rotate_degrees` −90..90, `move_forward` 0..10, `vertical_tilt` −1..1,
 `lora_scale` 0..4 (default 1.25), `true_guidance_scale` 0..10 (default 1),
 `num_inference_steps` 1..40 และจะไม่ถูกส่งเมื่อเว้นว่างเพื่อให้ `go_fast` เลือกจำนวนสเตป,
 `aspect_ratio` เป็น `match_input_image | 1:1 | 16:9 | 9:16 | 4:3 | 3:4`,
-`output_format` เป็น `webp | jpg | png`. `prompt` และ `seed` ส่งเมื่อผู้ใช้กรอกเท่านั้น
+`output_format` เป็น `webp | jpg | png` (ค่าเริ่มต้นของ ArtShift คือ `png`).
 `disable_safety_checker` เป็น false เสมอ ราคาสาธารณะประมาณ $0.03 ต่อภาพบน H100
 Output เป็น array ของ URI; adapter ใช้รายการแรก ดาวน์โหลดเฉพาะ HTTPS
 `replicate.delivery` แล้วคืน `{ dataUrl }` ผลลัพธ์ถูกวางบนการ์ด Preload ไม่ทับภาพต้นฉบับ

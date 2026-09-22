@@ -238,7 +238,8 @@ export const DEFAULT_MULTI_ANGLE_LORA_WEIGHTS = "dx8152/Qwen-Edit-2509-Multiple-
 /** 0–4. Live schema default is 1.25, not the README strength of 1. */
 export const DEFAULT_MULTI_ANGLE_LORA_SCALE = 1.25;
 export const DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE = 1;
-export const DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT: MultiAngleOutputFormat = "webp";
+/** PNG so a returned alpha channel survives. The model ignores quality for PNG. */
+export const DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT: MultiAngleOutputFormat = "png";
 export const DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY = 95;
 
 export type AiImageMultiAngleInput = {

@@ -1,11 +1,11 @@
-import { type MultiAngleCamera, multiAnglePose } from "@/lib/image/multiAngleCamera";
+import { type MultiAngleCamera, rotateObjectPoint } from "@/lib/image/multiAngleCamera";
 
 type Vec3 = { x: number; y: number; z: number };
 
 const SUBJECT_CENTER: Vec3 = { x: 0, y: 0.62, z: 0 };
-const VIEW_EYE: Vec3 = { x: 2.35, y: 1.85, z: 3.55 };
-const VIEW_TARGET: Vec3 = { x: 0, y: 0.48, z: 0 };
-const VIEW_FOV = 36;
+const VIEW_EYE: Vec3 = { x: 2.15, y: 1.72, z: 3.35 };
+const VIEW_TARGET: Vec3 = { x: 0, y: 0.42, z: 0 };
+const VIEW_FOV = 34;
 
 export function paintMultiAngleScene(
   ctx: CanvasRenderingContext2D,
@@ -27,8 +27,8 @@ export function paintMultiAngleScene(
 
   const project = createProjector(cssWidth, cssHeight);
   drawGrid(ctx, project);
-  drawSubject(ctx, project);
-  drawCamera(ctx, project, camera);
+  drawFrontMark(ctx, project);
+  drawSubject(ctx, project, camera);
 }
 
 function drawGrid(
@@ -43,72 +43,64 @@ function drawGrid(
   }
 }
 
-function drawSubject(
+/** Fixed floor tick so the object is what turns, not the stage. */
+function drawFrontMark(
   ctx: CanvasRenderingContext2D,
   project: (point: Vec3) => { x: number; y: number } | null,
 ): void {
+  ctx.strokeStyle = "#c7d2fe";
+  ctx.lineWidth = 1.5;
+  strokeLine(ctx, project, { x: 0, y: 0.02, z: 0.85 }, { x: 0, y: 0.02, z: 1.25 });
+  strokeLine(ctx, project, { x: -0.12, y: 0.02, z: 1.08 }, { x: 0, y: 0.02, z: 1.25 });
+  strokeLine(ctx, project, { x: 0.12, y: 0.02, z: 1.08 }, { x: 0, y: 0.02, z: 1.25 });
+}
+
+function drawSubject(
+  ctx: CanvasRenderingContext2D,
+  project: (point: Vec3) => { x: number; y: number } | null,
+  camera: MultiAngleCamera,
+): void {
   const faces: Array<{ points: Vec3[]; color: string; depth: number }> = [];
-  const hx = 0.34;
-  const hy = 0.56;
-  const hz = 0.22;
+  const hx = 0.46;
+  const hy = 0.34;
+  const hz = 0.28;
   const c = SUBJECT_CENTER;
+  const turn = (point: Vec3) => rotateObjectPoint(point, c, camera);
   const corners = {
-    lbf: { x: c.x - hx, y: c.y - hy, z: c.z + hz },
-    rbf: { x: c.x + hx, y: c.y - hy, z: c.z + hz },
-    rtf: { x: c.x + hx, y: c.y + hy, z: c.z + hz },
-    ltf: { x: c.x - hx, y: c.y + hy, z: c.z + hz },
-    lbb: { x: c.x - hx, y: c.y - hy, z: c.z - hz },
-    rbb: { x: c.x + hx, y: c.y - hy, z: c.z - hz },
-    rtb: { x: c.x + hx, y: c.y + hy, z: c.z - hz },
-    ltb: { x: c.x - hx, y: c.y + hy, z: c.z - hz },
+    lbf: turn({ x: c.x - hx, y: c.y - hy, z: c.z + hz }),
+    rbf: turn({ x: c.x + hx, y: c.y - hy, z: c.z + hz }),
+    rtf: turn({ x: c.x + hx, y: c.y + hy, z: c.z + hz }),
+    ltf: turn({ x: c.x - hx, y: c.y + hy, z: c.z + hz }),
+    lbb: turn({ x: c.x - hx, y: c.y - hy, z: c.z - hz }),
+    rbb: turn({ x: c.x + hx, y: c.y - hy, z: c.z - hz }),
+    rtb: turn({ x: c.x + hx, y: c.y + hy, z: c.z - hz }),
+    ltb: turn({ x: c.x - hx, y: c.y + hy, z: c.z - hz }),
   };
   const push = (points: Vec3[], color: string) => {
-    const depth = points.reduce((sum, point) => sum + point.z, 0) / points.length;
+    const depth =
+      points.reduce(
+        (sum, point) =>
+          sum + Math.hypot(point.x - VIEW_EYE.x, point.y - VIEW_EYE.y, point.z - VIEW_EYE.z),
+        0,
+      ) / points.length;
     faces.push({ points, color, depth });
   };
   push([corners.lbb, corners.rbb, corners.rtb, corners.ltb], "#cbd5e1");
   push([corners.lbf, corners.lbb, corners.ltb, corners.ltf], "#94a3b8");
   push([corners.rbf, corners.rbb, corners.rtb, corners.rtf], "#64748b");
   push([corners.ltf, corners.rtf, corners.rtb, corners.ltb], "#e0e7ff");
-  push([corners.lbf, corners.rbf, corners.rbb, corners.lbb], "#cbd5e1");
+  push([corners.lbf, corners.rbf, corners.rbb, corners.lbb], "#a5b4fc");
   push([corners.lbf, corners.rbf, corners.rtf, corners.ltf], "#4f46e5");
-  faces.sort((a, b) => a.depth - b.depth);
+  push(
+    [
+      turn({ x: c.x - 0.12, y: c.y - 0.02, z: c.z + hz + 0.012 }),
+      turn({ x: c.x + 0.12, y: c.y - 0.02, z: c.z + hz + 0.012 }),
+      turn({ x: c.x, y: c.y + 0.16, z: c.z + hz + 0.012 }),
+    ],
+    "#eef2ff",
+  );
+  faces.sort((a, b) => b.depth - a.depth);
   for (const face of faces) fillPolygon(ctx, project, face.points, face.color);
-}
-
-function drawCamera(
-  ctx: CanvasRenderingContext2D,
-  project: (point: Vec3) => { x: number; y: number } | null,
-  camera: MultiAngleCamera,
-): void {
-  const pose = multiAnglePose(camera);
-  const origin: Vec3 = { x: pose.x, y: pose.y, z: pose.z };
-  const aim: Vec3 = SUBJECT_CENTER;
-  const forward = normalize(sub(aim, origin));
-  const upHint = Math.abs(forward.y) > 0.92 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
-  const right = normalize(cross(forward, upHint));
-  const up = cross(right, forward);
-  const near = 0.42;
-  const half = Math.tan((pose.fov * Math.PI) / 360) * 0.72;
-  const center = add(origin, scale(forward, near));
-  const corners = [
-    add(add(center, scale(right, -half)), scale(up, -half * 0.72)),
-    add(add(center, scale(right, half)), scale(up, -half * 0.72)),
-    add(add(center, scale(right, half)), scale(up, half * 0.72)),
-    add(add(center, scale(right, -half)), scale(up, half * 0.72)),
-  ];
-  ctx.strokeStyle = "#4338ca";
-  ctx.lineWidth = 1.4;
-  for (const corner of corners) strokeLine(ctx, project, origin, corner);
-  strokeLoop(ctx, project, corners);
-  const body = add(origin, scale(forward, -0.16));
-  const bodyCorners = [
-    add(add(body, scale(right, -0.12)), scale(up, -0.09)),
-    add(add(body, scale(right, 0.12)), scale(up, -0.09)),
-    add(add(body, scale(right, 0.12)), scale(up, 0.09)),
-    add(add(body, scale(right, -0.12)), scale(up, 0.09)),
-  ];
-  fillPolygon(ctx, project, bodyCorners, "#0f172a");
 }
 
 function createProjector(
@@ -119,6 +111,7 @@ function createProjector(
   const right = normalize(cross(forward, { x: 0, y: 1, z: 0 }));
   const up = cross(right, forward);
   const focal = 1 / Math.tan((VIEW_FOV * Math.PI) / 360);
+  const scale = Math.min(width, height);
   return (point) => {
     const delta = sub(point, VIEW_EYE);
     const x = dot(delta, right);
@@ -126,8 +119,8 @@ function createProjector(
     const z = dot(delta, forward);
     if (z < 0.05) return null;
     return {
-      x: ((x / z) * focal * 0.5 + 0.5) * width,
-      y: ((-y / z) * focal * 0.5 + 0.5) * height,
+      x: width / 2 + (x / z) * focal * scale * 0.55,
+      y: height / 2 + (-y / z) * focal * scale * 0.55,
     };
   };
 }
@@ -154,23 +147,6 @@ function fillPolygon(
   ctx.stroke();
 }
 
-function strokeLoop(
-  ctx: CanvasRenderingContext2D,
-  project: (point: Vec3) => { x: number; y: number } | null,
-  points: Vec3[],
-): void {
-  const projected = points.map(project);
-  if (projected.some((point) => !point)) return;
-  ctx.beginPath();
-  projected.forEach((point, index) => {
-    if (!point) return;
-    if (index === 0) ctx.moveTo(point.x, point.y);
-    else ctx.lineTo(point.x, point.y);
-  });
-  ctx.closePath();
-  ctx.stroke();
-}
-
 function strokeLine(
   ctx: CanvasRenderingContext2D,
   project: (point: Vec3) => { x: number; y: number } | null,
@@ -186,16 +162,8 @@ function strokeLine(
   ctx.stroke();
 }
 
-function add(a: Vec3, b: Vec3): Vec3 {
-  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
-}
-
 function sub(a: Vec3, b: Vec3): Vec3 {
   return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
-}
-
-function scale(v: Vec3, factor: number): Vec3 {
-  return { x: v.x * factor, y: v.y * factor, z: v.z * factor };
 }
 
 function dot(a: Vec3, b: Vec3): number {
