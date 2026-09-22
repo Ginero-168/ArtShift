@@ -16,8 +16,9 @@ export type MoodboardGridCell = {
 };
 
 /**
- * Place a 3×3 upright grid that does not cover existing artwork.
- * Prefer a clear patch to the right of current content; else below; else origin.
+ * Find a clear top-left for an N×N upright grid (3, 4, or 5).
+ * Prefer a patch to the right of current content; else below.
+ * Moodboard commits this only as the Preload fallback — a dragged card wins.
  */
 export function findMoodboardGridOrigin(
   occupied: Rect[],

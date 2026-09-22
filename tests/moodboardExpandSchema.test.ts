@@ -71,4 +71,31 @@ describe("moodboard expand schema", () => {
     expect(parsed.pack.prompts).toHaveLength(9);
     expect(new Set(parsed.pack.prompts.map((p) => p.prompt.toLowerCase())).size).toBe(9);
   });
+
+  it("fills and slices to the requested 16 or 25", () => {
+    const sixteen = parseMoodboardExpandJson(
+      {
+        keyword: "ice",
+        prompts: [{ index: 1, prompt: "Crushed ice in a matcha glass" }],
+      },
+      16,
+    );
+    expect(sixteen.ok).toBe(true);
+    if (!sixteen.ok) return;
+    expect(sixteen.pack.prompts).toHaveLength(16);
+
+    const tooMany = Array.from({ length: 25 }, (_, i) => ({
+      index: i + 1,
+      prompt: `Frame ${i + 1} only`,
+    }));
+    const nine = parseMoodboardExpandJson({ keyword: "ice", prompts: tooMany }, 9);
+    expect(nine.ok).toBe(true);
+    if (!nine.ok) return;
+    expect(nine.pack.prompts).toHaveLength(9);
+
+    const twentyFive = parseMoodboardExpandJson({ keyword: "ice", prompts: tooMany }, 25);
+    expect(twentyFive.ok).toBe(true);
+    if (!twentyFive.ok) return;
+    expect(twentyFive.pack.prompts).toHaveLength(25);
+  });
 });

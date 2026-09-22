@@ -71,9 +71,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL || REPLICATE_QWEN_IMAGE_LAYERED_MODEL,
     environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL_VERSION,
   );
-  const replicateFluxSchnell = withVersion(
-    environment.REPLICATE_FLUX_SCHNELL_MODEL || "black-forest-labs/flux-schnell",
-    environment.REPLICATE_FLUX_SCHNELL_MODEL_VERSION,
+  // Moodboard-only. Slug is fixed; only the version may be pinned.
+  const replicateMoodboardFlare = withVersion(
+    "openai/gpt-image-2.5-flare",
+    environment.REPLICATE_MOODBOARD_FLARE_VERSION,
   );
 
   // GPT Image 2.5 Sunburst — primary baseline and precision route (replaces gpt-image-2).
@@ -216,16 +217,16 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
         ? {
             economy: [
               ...imageGenerateRoutes,
-              imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003),
+              imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047),
             ],
             quality: [
               ...imageGenerateRoutes,
-              imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003),
+              imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047),
             ],
           }
         : {
-            economy: [imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003)],
-            quality: [imageModelRoute(replicateFluxSchnell, "flux-schnell", 0.003)],
+            economy: [imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047)],
+            quality: [imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047)],
           },
   };
 }

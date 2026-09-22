@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import {
+  MOODBOARD_ASPECT_RATIO,
   MOODBOARD_BATCH_USD,
+  MOODBOARD_IMAGE_QUALITY,
   MOODBOARD_PER_IMAGE_USD,
   MOODBOARD_REPLICATE_MODEL,
   MOODBOARD_REPLICATE_MODEL_ALIAS,
@@ -15,13 +17,14 @@ import { getUserAccount } from "@/lib/server/ai/userCredentials";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const limiter = new RateLimiter(24, 60_000);
+const limiter = new RateLimiter(40, 60_000);
 const MAX_BODY_BYTES = 16_000;
 const MAX_PROMPT_CHARS = 2_000;
 
 /**
- * One Moodboard AI image via Replicate flux-schnell (BYOK).
- * Clients call this up to 9 times for a 3×3 batch (~$0.027 total).
+ * One Moodboard AI image via Replicate gpt-image-2.5-flare at quality medium (BYOK).
+ * Clients call this once per idea (9, 16, or 25). Each call asks for one image.
+ * ~$0.047 per image. A 9-pack is ~$0.42.
  */
 export async function POST(req: NextRequest) {
   const account = getUserAccount(req);
@@ -84,7 +87,8 @@ export async function POST(req: NextRequest) {
         prompt,
         width: 1024,
         height: 1024,
-        aspectRatio: "1:1",
+        aspectRatio: MOODBOARD_ASPECT_RATIO,
+        quality: MOODBOARD_IMAGE_QUALITY,
         enhance: false,
         modelAlias: MOODBOARD_REPLICATE_MODEL_ALIAS,
       },
@@ -112,6 +116,9 @@ export async function POST(req: NextRequest) {
       provider: execution.metadata.provider,
       model: execution.metadata.model,
       estimatedUsd: MOODBOARD_PER_IMAGE_USD,
+      quality: MOODBOARD_IMAGE_QUALITY,
+      aspectRatio: MOODBOARD_ASPECT_RATIO,
+      // Default 9-pack ceiling. The client scales this by the chosen count (9, 16, or 25).
       batchEstimateUsd: MOODBOARD_BATCH_USD,
       defaultModel: MOODBOARD_REPLICATE_MODEL,
       warnings: execution.metadata.warnings,

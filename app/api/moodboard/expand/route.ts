@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { isMoodboardBatchCount, type MoodboardBatchCount } from "@/lib/moodboard/constants";
 import {
-  MOODBOARD_EXPAND_MAX_TOKENS,
-  MOODBOARD_EXPAND_SYSTEM_PROMPT,
+  moodboardExpandMaxTokens,
   moodboardExpandRetryPrompt,
+  moodboardExpandSystemPrompt,
   moodboardExpandUserPrompt,
 } from "@/lib/moodboard/expandPrompt";
 import { parseMoodboardExpandJson } from "@/lib/moodboard/expandSchema";
@@ -20,8 +21,8 @@ const limiter = new RateLimiter(12, 60_000);
 const MAX_BODY_BYTES = 8_000;
 
 /**
- * Keyword / vibe → Gemini Flash associative expand → exactly 9 distinct image prompts.
- * Pixel generation is a separate Replicate flux-schnell step (not Gemini image).
+ * Keyword / vibe → Gemini Flash associative expand → exactly N distinct image prompts.
+ * N is 9, 16, or 25. Pixel generation is a separate Replicate gpt-image-2.5-flare step.
  */
 export async function POST(req: NextRequest) {
   const account = getUserAccount(req);
@@ -65,6 +66,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (!isMoodboardBatchCount(body.count)) {
+    return NextResponse.json(
+      { error: { code: "INVALID_INPUT", message: "Batch count must be 9, 16, or 25." } },
+      { status: 400 },
+    );
+  }
+  const count = body.count;
+
   const access = requireEndUserCloudAi(req, body.cloudConsent);
   if (!access.ok) return access.response;
 
@@ -74,11 +83,11 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    let execution = await runExpandChat(ai, access.account.id, req.signal, keyword, false);
-    let parsed = parseExpandExecution(execution);
+    let execution = await runExpandChat(ai, access.account.id, req.signal, keyword, count, false);
+    let parsed = parseExpandExecution(execution, count);
     if (!parsed.ok && looksTruncatedJson(collectChatOutputTexts(execution.output)[0] ?? "")) {
-      execution = await runExpandChat(ai, access.account.id, req.signal, keyword, true);
-      parsed = parseExpandExecution(execution);
+      execution = await runExpandChat(ai, access.account.id, req.signal, keyword, count, true);
+      parsed = parseExpandExecution(execution, count);
     }
     if (!parsed.ok) {
       const raw = collectChatOutputTexts(execution.output)[0] ?? "";
@@ -100,6 +109,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       pack: parsed.pack,
+      count,
       model: execution.metadata.model,
     });
   } catch {
@@ -115,19 +125,22 @@ function runExpandChat(
   accountId: string,
   signal: AbortSignal,
   keyword: string,
+  count: MoodboardBatchCount,
   retry: boolean,
 ) {
   return ai.execute(
     "assistant.chat",
     {
-      system: MOODBOARD_EXPAND_SYSTEM_PROMPT,
+      system: moodboardExpandSystemPrompt(count),
       messages: [
         {
           role: "user",
-          content: retry ? moodboardExpandRetryPrompt(keyword) : moodboardExpandUserPrompt(keyword),
+          content: retry
+            ? moodboardExpandRetryPrompt(keyword, count)
+            : moodboardExpandUserPrompt(keyword, count),
         },
       ],
-      maxTokens: MOODBOARD_EXPAND_MAX_TOKENS,
+      maxTokens: moodboardExpandMaxTokens(count),
     },
     {
       profile: "quality",
@@ -144,20 +157,23 @@ function runExpandChat(
   );
 }
 
-function parseExpandExecution(execution: {
-  output?: unknown;
-}): ReturnType<typeof parseMoodboardExpandJson> {
+function parseExpandExecution(
+  execution: {
+    output?: unknown;
+  },
+  count: MoodboardBatchCount,
+): ReturnType<typeof parseMoodboardExpandJson> {
   const texts = collectChatOutputTexts(execution.output);
-  let parsed = parseMoodboardExpandJson(texts[0] ?? "");
+  let parsed = parseMoodboardExpandJson(texts[0] ?? "", count);
   if (!parsed.ok) {
     for (const text of texts.slice(1)) {
-      parsed = parseMoodboardExpandJson(text);
+      parsed = parseMoodboardExpandJson(text, count);
       if (parsed.ok) break;
     }
   }
   const rawOutput: unknown = execution.output;
   if (!parsed.ok && looksLikeExpandPack(rawOutput)) {
-    parsed = parseMoodboardExpandJson(rawOutput);
+    parsed = parseMoodboardExpandJson(rawOutput, count);
   }
   return parsed;
 }

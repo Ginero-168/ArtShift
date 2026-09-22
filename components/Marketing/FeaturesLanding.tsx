@@ -16,8 +16,8 @@ const FEATURES = [
     id: "moodboard",
     index: "02",
     english: "Moodboard · Infinite board",
-    title: "Moodboard ไร้ขอบ — stock หรือ AI ×9 ถูก ๆ",
-    body: "Infinity Canvas คือบอร์ดไม่มีกรอบ สำหรับเก็บแรงบันดาลใจและจัดเรียงเรฟ พิมพ์คำค้นแล้วดึงภาพ stock จาก Unsplash/Pexels หรือขยายไอเดียแล้วสร้าง 9 ภาพผ่าน Replicate flux-schnell วางเป็นตาราง 3×3",
+    title: "Moodboard ไร้ขอบ — AI 9, 16 หรือ 25 ภาพ",
+    body: "Infinity Canvas คือบอร์ดไม่มีกรอบ สำหรับเก็บแรงบันดาลใจและจัดเรียงเรฟ พิมพ์ไวบ์แล้วให้ Gemini Flash ขยายเป็น 9, 16 หรือ 25 ทิศทาง แล้วสร้างภาพผ่าน Replicate gpt-image-2.5-flare (quality medium) วางเป็นตารางจัตุรัสบนตำแหน่ง Preload",
     visual: "moodboard",
   },
   {
@@ -86,8 +86,8 @@ function FeatureVisual({ kind }: { kind: (typeof FEATURES)[number]["visual"] }) 
             style={{ background: "linear-gradient(135deg, #fde68a, #ea580c)" }}
           />
         </div>
-        <span className={styles.searchChip}>keyword → stock</span>
-        <span className={styles.searchChip}>AI ×9 · schnell</span>
+        <span className={styles.searchChip}>9 · 16 · 25</span>
+        <span className={styles.searchChip}>Flare medium</span>
       </div>
     );
   }

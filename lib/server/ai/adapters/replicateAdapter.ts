@@ -54,11 +54,14 @@ const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const QWEN_IMAGE_LAYERED_MODEL = "qwen/qwen-image-layered";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
-// Flare retired: replaced with Sunburst across all routes.
+// Chat image-fast alias: Flare was retired and these routes resolve to Sunburst.
 const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
 const GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
-/** Cheap Moodboard batch default (~$0.003/image). Not the chat IMAGE_DEFAULT route. */
-const FLUX_SCHNELL_MODEL = "black-forest-labs/flux-schnell";
+/**
+ * Moodboard-only image model. Not the chat IMAGE_DEFAULT / image-fast route.
+ * Quality is locked to medium in generateMoodboardFlareImage (~$0.047/image).
+ */
+const MOODBOARD_FLARE_MODEL = "openai/gpt-image-2.5-flare";
 
 /** Models that support xhigh and max quality tiers. */
 const EXTENDED_QUALITY_MODELS = new Set([GPT_IMAGE_25_FLARE_MODEL, GPT_IMAGE_25_SUNBURST_MODEL]);
@@ -70,8 +73,11 @@ const ALLOWED_GPT_IMAGE_MODEL_SLUGS = new Set([
   GPT_IMAGE_25_SUNBURST_MODEL,
 ]);
 
-/** Allowlisted image generation model slugs (GPT Image + Moodboard Schnell). */
-const ALLOWED_IMAGE_MODEL_SLUGS = new Set([...ALLOWED_GPT_IMAGE_MODEL_SLUGS, FLUX_SCHNELL_MODEL]);
+/** Allowlisted image generation model slugs (GPT Image + Moodboard Flare). */
+const ALLOWED_IMAGE_MODEL_SLUGS = new Set([
+  ...ALLOWED_GPT_IMAGE_MODEL_SLUGS,
+  MOODBOARD_FLARE_MODEL,
+]);
 
 /** Quality values only valid on GPT Image 2.5 models. */
 const EXTENDED_QUALITY_VALUES = new Set(["xhigh", "max"]);
@@ -190,13 +196,13 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           pricing: { currency: "USD", perRunUsd: 0.25, note: "Ceiling covers xhigh tier." },
         },
         {
-          id: FLUX_SCHNELL_MODEL,
-          alias: "flux-schnell",
+          id: MOODBOARD_FLARE_MODEL,
+          alias: "gpt-image-2.5-flare",
           profile: "economy",
           pricing: {
             currency: "USD",
-            perRunUsd: 0.003,
-            note: "Moodboard 3×3 default (~$0.027 per batch of 9).",
+            perRunUsd: 0.047,
+            note: "Moodboard batches at quality medium (~$0.047/image, ~$0.42 for 9).",
           },
         },
       ],
@@ -457,8 +463,8 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       );
     }
 
-    if (model.slug === FLUX_SCHNELL_MODEL) {
-      return this.generateFluxSchnellImage(request, model);
+    if (model.slug === MOODBOARD_FLARE_MODEL) {
+      return this.generateMoodboardFlareImage(request, model);
     }
 
     const requestedQuality = input.quality ?? "medium";
@@ -530,10 +536,23 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
   }
 
   /**
-   * Moodboard cheap batch path: Official Replicate `black-forest-labs/flux-schnell`
-   * (~$0.003/image). Uses Schnell's native input schema, not GPT Image fields.
+   * Moodboard batch path: Official Replicate `openai/gpt-image-2.5-flare`.
+   * One prediction per expand idea (`number_of_images: 1`).
+   *
+   * Locked inputs (schema verified 2026-09-22):
+   * - `quality: "medium"` — schema default is `auto`, which is not a stable price.
+   *   Medium is ~$0.047/image. xhigh/max are not used.
+   * - `aspect_ratio: "1:1"` — square moodboard cells. Schema default is already 1:1.
+   * - `output_format: "webp"` — schema default.
+   * - `background: "opaque"` — schema default `auto` can return cutouts.
+   * - `moderation: "auto"`.
+   * - `openai_api_key` is omitted. The session Replicate BYOK token authenticates
+   *   the prediction; there is no separate OpenAI key path for this call.
+   *
+   * Chat image routes stay on Sunburst. The `image-fast` alias still resolves
+   * to Sunburst. This method runs only for the Moodboard flare slug.
    */
-  private async generateFluxSchnellImage(
+  private async generateMoodboardFlareImage(
     request: AiProviderRequest<"image.generate">,
     model: { slug: string; version?: string },
   ): Promise<AiProviderResult<AiTaskOutput<"image.generate">>> {
@@ -541,27 +560,35 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (input.inputImages?.length) {
       throw new AiRuntimeError(
         "INVALID_INPUT",
-        "flux-schnell does not accept reference input images for Moodboard batches.",
+        "Moodboard Flare batches do not accept reference input images.",
         { provider: this.id },
       );
     }
 
-    const aspectRatio = normalizeFluxSchnellAspectRatio(
-      input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
-    );
+    const warnings: string[] = [];
+    if (input.quality && input.quality !== "medium") {
+      warnings.push("Moodboard Flare locks quality to medium.");
+    }
+    if (input.aspectRatio && input.aspectRatio !== "1:1") {
+      warnings.push("Moodboard Flare locks aspect ratio to 1:1.");
+    }
+    if (input.seed !== undefined) {
+      warnings.push(
+        "gpt-image-2.5-flare does not expose deterministic seed control; the seed parameter was not sent upstream.",
+      );
+    }
 
     const prediction = await this.createPrediction(
       model,
       {
         prompt: input.prompt,
-        aspect_ratio: aspectRatio,
-        num_outputs: 1,
-        num_inference_steps: 4,
+        aspect_ratio: "1:1",
+        quality: "medium",
+        number_of_images: 1,
         output_format: "webp",
-        output_quality: 80,
-        go_fast: true,
-        megapixels: "1",
-        ...(typeof input.seed === "number" ? { seed: input.seed } : {}),
+        output_compression: 90,
+        background: "opaque",
+        moderation: "auto",
       },
       request.signal,
       true,
@@ -575,13 +602,12 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     }
     const dataUrl = await fetchGeneratedImage(outputUrl, request.signal);
     const metrics = completed.metrics ?? {};
-    const { width, height } = dimensionsForFluxAspect(aspectRatio, input.width, input.height);
     return {
       output: {
         dataUrl,
         prompt: input.prompt,
-        width,
-        height,
+        width: input.width,
+        height: input.height,
         seed: input.seed ?? 0,
       },
       model:
@@ -593,7 +619,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       usage: {
         providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
       },
-      warnings: [],
+      warnings,
     };
   }
 
@@ -1221,62 +1247,6 @@ async function fetchRecraftSvg(outputUrl: string, signal: AbortSignal): Promise<
 
 function isExecutionTimeout(reason: unknown): boolean {
   return reason instanceof AiRuntimeError && reason.code === "TIMEOUT";
-}
-
-const FLUX_SCHNELL_ASPECT_RATIOS = new Set([
-  "1:1",
-  "16:9",
-  "21:9",
-  "3:2",
-  "2:3",
-  "4:5",
-  "5:4",
-  "3:4",
-  "4:3",
-  "9:16",
-  "9:21",
-]);
-
-function normalizeFluxSchnellAspectRatio(value: string | undefined): string {
-  if (value && FLUX_SCHNELL_ASPECT_RATIOS.has(value)) return value;
-  if (!value) return "1:1";
-  const match = /^(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)$/i.exec(value.trim());
-  if (!match) return "1:1";
-  const w = Number(match[1]);
-  const h = Number(match[2]);
-  if (!(w > 0) || !(h > 0)) return "1:1";
-  const ratio = w / h;
-  let best = "1:1";
-  let bestDelta = Infinity;
-  for (const candidate of FLUX_SCHNELL_ASPECT_RATIOS) {
-    const [cw, ch] = candidate.split(":").map(Number);
-    if (!cw || !ch) continue;
-    const delta = Math.abs(cw / ch - ratio);
-    if (delta < bestDelta) {
-      bestDelta = delta;
-      best = candidate;
-    }
-  }
-  return best;
-}
-
-function dimensionsForFluxAspect(
-  aspectRatio: string,
-  fallbackWidth: number,
-  fallbackHeight: number,
-): { width: number; height: number } {
-  const [w, h] = aspectRatio.split(":").map(Number);
-  if (!(w > 0) || !(h > 0)) {
-    return {
-      width: Math.max(1, Math.round(fallbackWidth) || 1024),
-      height: Math.max(1, Math.round(fallbackHeight) || 1024),
-    };
-  }
-  const longEdge = 1024;
-  if (w >= h) {
-    return { width: longEdge, height: Math.max(1, Math.round((longEdge * h) / w)) };
-  }
-  return { width: Math.max(1, Math.round((longEdge * w) / h)), height: longEdge };
 }
 
 function parseReplicateModel(model: string): { slug: string; version?: string } {

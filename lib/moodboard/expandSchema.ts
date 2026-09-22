@@ -1,4 +1,4 @@
-import { MOODBOARD_AI_BATCH_COUNT } from "./constants";
+import { MOODBOARD_DEFAULT_BATCH_COUNT, type MoodboardBatchCount } from "./constants";
 import { parseJsonCandidate } from "./json";
 
 export type MoodboardIdeaPrompt = {
@@ -28,11 +28,12 @@ export type MoodboardExpandInvalid = {
 
 export function parseMoodboardExpandJson(
   raw: unknown,
+  count: MoodboardBatchCount = MOODBOARD_DEFAULT_BATCH_COUNT,
 ): MoodboardExpandValidation | MoodboardExpandInvalid {
   const candidates = collectExpandCandidates(raw);
   let lastReason = "Expand response is not a JSON object.";
   for (const candidate of candidates) {
-    const parsed = parseExpandObject(candidate);
+    const parsed = parseExpandObject(candidate, count);
     if (parsed.ok) return parsed;
     lastReason = parsed.reason;
   }
@@ -61,7 +62,10 @@ function collectExpandCandidates(raw: unknown): unknown[] {
   return values;
 }
 
-function parseExpandObject(candidate: unknown): MoodboardExpandValidation | MoodboardExpandInvalid {
+function parseExpandObject(
+  candidate: unknown,
+  count: MoodboardBatchCount,
+): MoodboardExpandValidation | MoodboardExpandInvalid {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
     return { ok: false, reason: "Expand response is not a JSON object." };
   }
@@ -71,8 +75,8 @@ function parseExpandObject(candidate: unknown): MoodboardExpandValidation | Mood
 
   const promptsRaw = Array.isArray(obj.prompts) ? obj.prompts : null;
   if (!promptsRaw) {
-    // Legacy role-bucket packs: synthesize 9 distinct prompts from associations / roles.
-    const synthesized = synthesizeFromLegacyPack(keyword, obj);
+    // Legacy role-bucket packs: synthesize N distinct prompts from associations / roles.
+    const synthesized = synthesizeFromLegacyPack(keyword, obj, count);
     if (synthesized) return { ok: true, pack: synthesized };
     return { ok: false, reason: "Expand JSON is missing prompts[]." };
   }
@@ -82,7 +86,7 @@ function parseExpandObject(candidate: unknown): MoodboardExpandValidation | Mood
   const seenPromptKeys = new Set<string>();
 
   for (const entry of promptsRaw) {
-    if (prompts.length >= MOODBOARD_AI_BATCH_COUNT) break;
+    if (prompts.length >= count) break;
     const item = parseIdeaPrompt(entry, prompts.length + 1);
     if (!item) continue;
     if (seenIndexes.has(item.index)) continue;
@@ -93,8 +97,8 @@ function parseExpandObject(candidate: unknown): MoodboardExpandValidation | Mood
     prompts.push(item);
   }
 
-  if (prompts.length < MOODBOARD_AI_BATCH_COUNT) {
-    const filled = fillMissingPrompts(keyword, prompts);
+  if (prompts.length < count) {
+    const filled = fillMissingPrompts(keyword, prompts, count);
     return { ok: true, pack: { keyword, prompts: filled } };
   }
 
@@ -103,7 +107,7 @@ function parseExpandObject(candidate: unknown): MoodboardExpandValidation | Mood
     ok: true,
     pack: {
       keyword,
-      prompts: prompts.slice(0, MOODBOARD_AI_BATCH_COUNT).map((item, i) => ({
+      prompts: prompts.slice(0, count).map((item, i) => ({
         ...item,
         index: i + 1,
       })),
@@ -145,10 +149,11 @@ function parseIdeaPrompt(raw: unknown, fallbackIndex: number): MoodboardIdeaProm
   };
 }
 
-/** Build 9 prompts when the model returned role buckets (older expand shape). */
+/** Build N prompts when the model returned role buckets (older expand shape). */
 function synthesizeFromLegacyPack(
   keyword: string,
   obj: Record<string, unknown>,
+  count: MoodboardBatchCount,
 ): MoodboardExpandPack | null {
   const associations = asStringList(obj.associations ?? obj.vibes ?? obj.ideas);
   const roles = isRecord(obj.roles) ? obj.roles : obj;
@@ -170,7 +175,7 @@ function synthesizeFromLegacyPack(
   if (seeds.length === 0) return null;
 
   const prompts: MoodboardIdeaPrompt[] = [];
-  for (let i = 0; i < MOODBOARD_AI_BATCH_COUNT; i += 1) {
+  for (let i = 0; i < count; i += 1) {
     const subject =
       subjects[i % Math.max(1, subjects.length)] ?? seeds[i % seeds.length] ?? keyword;
     const setting =
@@ -201,10 +206,11 @@ function synthesizeFromLegacyPack(
 function fillMissingPrompts(
   keyword: string,
   existing: MoodboardIdeaPrompt[],
+  count: MoodboardBatchCount,
 ): MoodboardIdeaPrompt[] {
   const prompts = [...existing];
   const seen = new Set(prompts.map((item) => item.prompt.toLowerCase()));
-  while (prompts.length < MOODBOARD_AI_BATCH_COUNT) {
+  while (prompts.length < count) {
     const facet = [
       "close-up texture study",
       "wide establishing atmosphere",
