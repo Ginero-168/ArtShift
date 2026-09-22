@@ -123,12 +123,24 @@ enabled only for a loaded image. It does not call Replicate, Gemini, or any
 other paid API.
 
 The browser loads MediaPipe Pose Landmarker (`@mediapipe/tasks-vision@1.0.1`)
-and the float16 full BlazePose model on the first click. The library and WASM
-come from jsDelivr and the model from `storage.googleapis.com`; neither is an
-npm dependency, because the package unpacks to about 20MB of WASM. Inference
-runs on-device. Reading the still image requires WebGL. Inference uses the GPU
-delegate when that setup starts, and CPU if GPU setup fails. The result is 33 2D landmarks per person, not a
-language-model stick figure.
+and the float16 full BlazePose model on the first click. The JS bundle, the
+SIMD and non-SIMD WASM runtimes, and `pose_landmarker_full.task` are served
+from this origin under `public/mediapipe/`. They are not an npm dependency,
+because importing the package would pull about 20MB of WASM into the Next
+bundle. `FilesetResolver.forVisionTasks` does not request the duplicate
+`vision_wasm_module_internal` binaries, so those files are not copied.
+
+Import, WASM setup, model fetch, and detect share a 40 second deadline. A hung
+load used to leave the Preload card spinning, because nothing rejected and the
+processing queue clears that card only after the job settles. On timeout the
+call rejects with `PoseModelError`, the card clears, and the alert uses the
+existing Thai model or runtime copy. The job `AbortSignal` races the same work,
+so cancel clears the card too. After a timeout the next click skips the GPU
+delegate and uses CPU.
+
+Inference runs on-device. Reading the still image requires WebGL. Inference uses
+the GPU delegate when that setup starts, and CPU if GPU setup throws. The result
+is 33 2D landmarks per person, not a language-model stick figure.
 
 Up to four people are drawn, most confident first, each in its own color. A
 pose is kept only when a torso pair is visible and at least four landmarks

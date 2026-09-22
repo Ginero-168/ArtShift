@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   choosePoseDelegates,
+  POSE_DETECT_TIMEOUT_MS,
   POSE_LANDMARKER_MODEL,
   POSE_TASKS_ESM,
   POSE_TASKS_VERSION,
@@ -34,7 +35,7 @@ describe("Skeleton action surface", () => {
 
   it("lands a transparent pose PNG on the Preload card", () => {
     const body = read("components/Canvas/PropertiesPanel/PoseSkeletonRunner.tsx");
-    expect(body).toContain("detectHumanPoses");
+    expect(body).toContain("detectHumanPoses(image, { signal })");
     expect(body).toContain("renderPoseSkeletonPng");
     expect(body).toContain("enqueueProcessingJob");
     expect(body).toContain('kind: "skeleton"');
@@ -50,13 +51,21 @@ describe("Skeleton action surface", () => {
   it("loads pinned on-device landmarks instead of a cloud vision guess", () => {
     const loader = read("lib/vision/poseLandmarker.ts");
     expect(POSE_TASKS_VERSION).toBe("1.0.1");
-    expect(POSE_TASKS_ESM).toContain(`@mediapipe/tasks-vision@${POSE_TASKS_VERSION}`);
-    expect(POSE_TASKS_WASM).toContain("/wasm");
-    expect(POSE_LANDMARKER_MODEL).toContain("pose_landmarker_full");
+    expect(POSE_DETECT_TIMEOUT_MS).toBeGreaterThanOrEqual(20_000);
+    expect(POSE_DETECT_TIMEOUT_MS).toBeLessThanOrEqual(45_000);
+    expect(POSE_TASKS_ESM).toBe(`/mediapipe/tasks-vision/${POSE_TASKS_VERSION}/vision_bundle.mjs`);
+    expect(POSE_TASKS_WASM).toBe(`/mediapipe/tasks-vision/${POSE_TASKS_VERSION}/wasm`);
+    expect(POSE_LANDMARKER_MODEL).toBe("/mediapipe/models/pose_landmarker_full_float16.task");
+    expect(POSE_TASKS_ESM.startsWith("/")).toBe(true);
+    expect(POSE_TASKS_WASM.startsWith("/")).toBe(true);
+    expect(POSE_LANDMARKER_MODEL.startsWith("/")).toBe(true);
     expect(choosePoseDelegates(true)).toEqual(["GPU", "CPU"]);
     expect(choosePoseDelegates(false)).toEqual(["CPU"]);
     expect(loader).toContain("forceCpu");
     expect(loader).toContain("numPoses: MAX_SKELETON_POSES");
+    expect(loader).toContain("withPoseDeadline");
+    expect(loader).not.toContain("cdn.jsdelivr.net");
+    expect(loader).not.toContain("storage.googleapis.com");
     expect(loader).not.toContain('@mediapipe/tasks-vision"');
     const runtimeDocs = read("docs/AI_RUNTIME.md");
     expect(runtimeDocs).toContain("### Skeleton (on-device pose)");

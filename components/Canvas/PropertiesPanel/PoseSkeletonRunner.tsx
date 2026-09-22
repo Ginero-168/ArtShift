@@ -84,7 +84,7 @@ async function placeSkeleton(
       message: "กำลังโหลดโมเดลท่าทางในเบราว์เซอร์…",
     });
     report("model", "กำลังโหลด Pose Landmarker บนเครื่อง", "started", 12);
-    const poses = await detectHumanPoses(image);
+    const poses = await detectHumanPoses(image, { signal });
     if (signal.aborted) return;
     updateProcessingPreview(previewId, {
       progress: 0.62,

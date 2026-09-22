@@ -14,7 +14,8 @@
       "!**/out",
       "!**/next-env.d.ts",
       "!**/tsconfig.tsbuildinfo",
-      "!**/package-lock.json"
+      "!**/package-lock.json",
+      "!**/public/mediapipe"
     ]
   },
   "formatter": {
