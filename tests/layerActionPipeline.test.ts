@@ -45,9 +45,20 @@ describe("Layer action surface", () => {
     expect(body).toContain("preloadLayerSource");
     expect(body).toContain('report("preload"');
     expect(body).toContain('addElements(newElements, "decompose image layers")');
-    expect(body).toContain("x: element.x");
-    expect(body).toContain("y: element.y");
+    expect(body).toContain("getProcessingPreviewPlacement");
+    expect(body).toContain("getProcessingPreviewBounds(element)");
+    expect(body).not.toContain("x: element.x");
+    expect(body).not.toContain("y: element.y");
     expect(body).not.toContain("removeBackgroundWithRuntime");
+  });
+
+  it("places Layer outputs at the Preload card instead of covering the source", () => {
+    const body = layerBody(isolatorSource());
+    const placementIndex = body.indexOf("getProcessingPreviewPlacement");
+    const addIndex = body.indexOf('addElements(newElements, "decompose image layers")');
+    expect(placementIndex).toBeGreaterThan(-1);
+    expect(addIndex).toBeGreaterThan(placementIndex);
+    expect(body).toContain("...layerBounds");
   });
 
   it("warms the Layer source when the Layer tool becomes active", () => {

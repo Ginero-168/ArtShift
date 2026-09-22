@@ -1191,19 +1191,19 @@ export function VisionObjectIsolator({
         message: `กำลังโหลด ${layerDataUrls.length} Layer…`,
       });
 
-      const sourceBounds = {
-        x: element.x,
-        y: element.y,
-        width: element.width,
-        height: element.height,
-      };
+      // Place the layer stack at the Preload card (right of source, or wherever the
+      // user dragged it) — same insert point Upscale / Remove BG / Extract use.
+      const layerBounds = getProcessingPreviewPlacement(
+        previewId,
+        getProcessingPreviewBounds(element),
+      );
       const newElements = [];
       for (const [index, dataUrl] of layerDataUrls.entries()) {
         if (signal.aborted) return;
         const layerCached = await loadDataURL(dataUrl);
         const layerImage = {
           ...createImage({
-            ...sourceBounds,
+            ...layerBounds,
             ...createCachedImageAsset(layerCached),
           }),
           angle: element.angle,
