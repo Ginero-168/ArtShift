@@ -37,6 +37,7 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from "@/components/icons";
+import MoodboardExpandControl from "@/components/Moodboard/MoodboardExpandControl";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
 import {
@@ -717,8 +718,12 @@ export default function ProjectEditorPage() {
           )}
         </div>
 
-        <div className="topbar-center">
+        <div
+          className="topbar-center"
+          style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}
+        >
           <EditorOptionBar />
+          {currentSlideIsInfinity ? <MoodboardExpandControl /> : null}
         </div>
 
         <div className="topbar-right">

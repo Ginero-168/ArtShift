@@ -181,6 +181,17 @@ describe("AI model manifest", () => {
     });
   });
 
+  it("routes Moodboard AI batch to flux-schnell via image-moodboard alias", () => {
+    const routes = createAiRouteTable({});
+    const moodboard = routes["image.generate"]?.economy?.find((r) => r.alias === "image-moodboard");
+    expect(moodboard).toMatchObject({
+      provider: "replicate",
+      model: "black-forest-labs/flux-schnell",
+      alias: "image-moodboard",
+      expectedMaxUsd: 0.003,
+    });
+  });
+
   it("pins Sunburst when REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION is provided", () => {
     const version = "f".repeat(64);
     const routes = createAiRouteTable({ REPLICATE_GPT_IMAGE_25_SUNBURST_VERSION: version });

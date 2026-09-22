@@ -25,6 +25,7 @@ Recommended local runtime: **Node.js 22.23.2 LTS** (see `.nvmrc`). Production su
 | **Object Context Bar** | Selection-aware canvas actions for text, image, vector, shape, frame, and multi-object workflows |
 | **Export** | PNG/PDF/PPTX plus editable SVG for the current artwork or every size variant |
 | **AI Chat** | One unified AI Assistant: local-first actions and automatic Design Agent routing; remote plans stay reviewable and built-in tool commands commit atomically |
+| **Moodboard expand** | On Infinity Canvas: one keyword → design-direction expand → 9 Replicate `flux-schnell` images in a 3×3 grid (per-account BYOK) |
 | **Vision AI** | Local Florence-2: caption, OCR, object detect (100% client-side) |
 | **Raster execution** | One shared bounded Worker/Canvas contract; the browser uses the local processor by default and the optional server adapter remains available for explicit platform injection |
 | **Background Removal** | Local RMBG Worker; images stay on the device |
