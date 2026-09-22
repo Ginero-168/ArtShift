@@ -13,6 +13,7 @@ const toolbarLabels = [
   "Vectorize",
   "Extract",
   "Multi-Angle",
+  "Skeleton",
   "RemoveBG",
   "Download",
   "Download as SVG",

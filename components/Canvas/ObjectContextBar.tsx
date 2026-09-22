@@ -27,9 +27,11 @@ import {
   isVectorizeTool,
   LAYER_LABEL,
   MULTI_ANGLE_LABEL,
+  SKELETON_LABEL,
   VECTORIZE_GROUP_LABEL,
 } from "./PropertiesPanel/imageToolTypes";
 import { MultiAnglePanel } from "./PropertiesPanel/MultiAnglePanel";
+import { PoseSkeletonRunner } from "./PropertiesPanel/PoseSkeletonRunner";
 
 const VisionObjectIsolator = dynamic(() => import("./PropertiesPanel/VisionObjectIsolator"), {
   ssr: false,
@@ -256,6 +258,8 @@ export default function ObjectContextBar({
   const toggleLayer = () => setActiveImageTool((current) => (current === "layer" ? null : "layer"));
   const toggleMultiAngle = () =>
     setActiveImageTool((current) => (current === "multi-angle" ? null : "multi-angle"));
+  const toggleSkeleton = () =>
+    setActiveImageTool((current) => (current === "skeleton" ? null : "skeleton"));
   const toggleVectorize = () =>
     setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
@@ -358,6 +362,11 @@ export default function ObjectContextBar({
       action(MULTI_ANGLE_LABEL, toggleMultiAngle, false, activeImageTool === "multi-angle", () => {
         void preloadLayerSource(first.fileId);
       }),
+    );
+    const skeletonReady =
+      first.status === "loaded" && first.naturalWidth >= 2 && first.naturalHeight >= 2;
+    controls.push(
+      action(SKELETON_LABEL, toggleSkeleton, !skeletonReady, activeImageTool === "skeleton"),
     );
     controls.push(
       action(VECTORIZE_GROUP_LABEL, toggleVectorize, false, isVectorizeTool(activeImageTool)),
@@ -534,7 +543,14 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
+        activeImageTool === "skeleton" ? (
+          <PoseSkeletonRunner
+            element={first}
+            onComplete={() =>
+              setActiveImageTool((current) => (current === "skeleton" ? null : current))
+            }
+          />
+        ) : activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
           <div
             data-testid={activeImageTool === "remove-bg" ? "remove-bg-runner" : "extract-runner"}
             style={{ display: "none" }}

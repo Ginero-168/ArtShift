@@ -116,6 +116,30 @@ Run places the returned image at the Preload card via
 `getProcessingPreviewPlacement` / `enqueueProcessingJob` (kind `multi-angle`)
 and leaves the source image in place.
 
+### Skeleton (on-device pose)
+
+`Skeleton` is an Option Bar action after Multi-Angle and before Vectorize. It is
+enabled only for a loaded image. It does not call Replicate, Gemini, or any
+other paid API.
+
+The browser loads MediaPipe Pose Landmarker (`@mediapipe/tasks-vision@1.0.1`)
+and the float16 full BlazePose model on the first click. The library and WASM
+come from jsDelivr and the model from `storage.googleapis.com`; neither is an
+npm dependency, because the package unpacks to about 20MB of WASM. Inference
+runs on-device (GPU, then CPU). The result is 33 2D landmarks per person, not a
+language-model stick figure.
+
+Up to four people are drawn, most confident first, each in its own color. A
+pose is kept only when a torso pair is visible and at least four landmarks
+score 0.5 or higher. If nobody qualifies, the action stops with a clear message
+and does not add an image. Bones and joints are painted on a transparent PNG
+with a dark halo so the lines stay readable on light or dark canvases. Output
+matches the source pixel size up to 4 megapixels, then scales down. The PNG is
+placed at the Preload card via `getProcessingPreviewPlacement` /
+`enqueueProcessingJob` (kind `skeleton`). A source crop is copied onto that
+card so the skeleton lines up with the visible image. There is no webcam, joint
+dragging, or pose-to-image regenerate.
+
 ### Moodboard AI (Flare low, 9 / 16 / 25)
 
 On an **Infinity Canvas** slide, the Moodboard control accepts one short
@@ -141,7 +165,7 @@ prompt/keyword/vibe and a batch size of **9, 16, or 25** (default 9).
    wins). Partial failures are shown in the UI. The shared `/api/stock` route
    remains for other surfaces; Moodboard no longer starts a stock fill.
 
-During Remove BG, Extract, Layer, Multi-Angle, and Vectorize, the browser renders a transient duplicate
+During Remove BG, Extract, Layer, Multi-Angle, Skeleton, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading
 indicator and swipe animation but is not an editor element or undo entry. Processing
 requests use one FIFO queue, so moving/deselecting the source does not cancel or hide
