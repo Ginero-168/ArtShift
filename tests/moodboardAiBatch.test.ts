@@ -26,7 +26,7 @@ describe("Moodboard AI surface", () => {
     expect(expandRoute).not.toContain("image.generate");
   });
 
-  it("defaults Moodboard generation to Flare medium, not Schnell or Recraft", () => {
+  it("defaults Moodboard generation to Flare low, not Schnell or Recraft", () => {
     const constants = readFileSync("lib/moodboard/constants.ts", "utf8");
     const generate = readFileSync("app/api/moodboard/generate/route.ts", "utf8");
     const adapter = readFileSync("lib/server/ai/adapters/replicateAdapter.ts", "utf8");
@@ -35,7 +35,9 @@ describe("Moodboard AI surface", () => {
     const expandPrompt = readFileSync("lib/moodboard/expandPrompt.ts", "utf8");
 
     expect(constants).toContain("openai/gpt-image-2.5-flare");
-    expect(constants).toContain("0.047");
+    expect(constants).toContain('export const MOODBOARD_IMAGE_QUALITY = "low"');
+    expect(constants).toContain("0.012");
+    expect(constants).not.toContain("0.047");
     expect(constants).not.toContain("flux-schnell");
     expect(constants).not.toContain("recraft-v3");
     expect(constants).toContain("Gemini Flash");
@@ -46,7 +48,8 @@ describe("Moodboard AI surface", () => {
     expect(generate).toContain("requireEndUserCloudAi");
     expect(adapter).toContain("openai/gpt-image-2.5-flare");
     expect(adapter).toContain("generateMoodboardFlareImage");
-    expect(adapter).toContain('quality: "medium"');
+    expect(adapter).toContain("quality: MOODBOARD_IMAGE_QUALITY");
+    expect(adapter).not.toContain('quality: "medium"');
     expect(adapter).toContain('aspect_ratio: "1:1"');
     expect(adapter).toContain("number_of_images: 1");
     expect(adapter).not.toContain("flux-schnell");

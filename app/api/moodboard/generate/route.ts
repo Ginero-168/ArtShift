@@ -22,9 +22,9 @@ const MAX_BODY_BYTES = 16_000;
 const MAX_PROMPT_CHARS = 2_000;
 
 /**
- * One Moodboard AI image via Replicate gpt-image-2.5-flare at quality medium (BYOK).
+ * One Moodboard AI image via Replicate gpt-image-2.5-flare at quality low (BYOK).
  * Clients call this once per idea (9, 16, or 25). Each call asks for one image.
- * ~$0.047 per image. A 9-pack is ~$0.42.
+ * ~$0.012 per image. A 9-pack is ~$0.11.
  */
 export async function POST(req: NextRequest) {
   const account = getUserAccount(req);

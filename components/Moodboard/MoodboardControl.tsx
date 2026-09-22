@@ -5,6 +5,7 @@ import { type MoodboardProgress, runMoodboardAiBatch } from "@/lib/moodboard/aiB
 import {
   MOODBOARD_BATCH_COUNTS,
   MOODBOARD_DEFAULT_BATCH_COUNT,
+  MOODBOARD_IMAGE_QUALITY,
   MOODBOARD_PER_IMAGE_USD,
   MOODBOARD_REPLICATE_MODEL,
   type MoodboardBatchCount,
@@ -53,7 +54,7 @@ const btnStyle = (tone: "neutral" | "ai"): CSSProperties => ({
 
 /**
  * Moodboard control for Infinity Canvas.
- * Gemini Flash expands a vibe into 9, 16, or 25 ideas, then Flare medium
+ * Gemini Flash expands a vibe into 9, 16, or 25 ideas, then Flare low
  * fills a square grid anchored on the shared Preload card.
  */
 export default function MoodboardControl() {
@@ -101,7 +102,7 @@ export default function MoodboardControl() {
       >
         <strong style={{ fontSize: 12 }}>Moodboard</strong>
         <span style={{ fontSize: 10, color: "#6b7280" }}>
-          ≈ ${batchUsd.toFixed(2)} · {side}×{side} · {modelLabel} medium
+          ≈ ${batchUsd.toFixed(2)} · {side}×{side} · {modelLabel} {MOODBOARD_IMAGE_QUALITY}
         </span>
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -179,7 +180,7 @@ export default function MoodboardControl() {
             ...btnStyle("ai"),
             opacity: busy || !keyword.trim() ? 0.55 : 1,
           }}
-          title={`Expand ideas → ${count} ${MOODBOARD_REPLICATE_MODEL} images at quality medium (~$${MOODBOARD_PER_IMAGE_USD} each, ~$${batchUsd.toFixed(2)} total)`}
+          title={`Expand ideas → ${count} ${MOODBOARD_REPLICATE_MODEL} images at quality ${MOODBOARD_IMAGE_QUALITY} (~$${MOODBOARD_PER_IMAGE_USD} each, ~$${batchUsd.toFixed(2)} total)`}
         >
           {busy ? `AI ×${count}…` : `AI ×${count}`}
         </button>

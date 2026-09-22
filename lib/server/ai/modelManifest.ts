@@ -1,5 +1,6 @@
 import type { AiExecutionProfile, AiTaskKind } from "@/lib/ai-runtime/contracts";
 import type { AiRouteTable, AiRouteTarget } from "@/lib/ai-runtime/runtime";
+import { MOODBOARD_PER_IMAGE_USD } from "@/lib/moodboard/constants";
 import { resolveImageGenerationBackend } from "@/lib/server/ai/imageGenerationProvider";
 import { OPENAI_GPT_IMAGE_25_SUNBURST_MODEL } from "@/lib/server/ai/openaiImageSize";
 
@@ -246,16 +247,36 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
         ? {
             economy: [
               ...imageGenerateRoutes,
-              imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047),
+              imageModelRoute(
+                replicateMoodboardFlare,
+                "gpt-image-2.5-flare",
+                MOODBOARD_PER_IMAGE_USD,
+              ),
             ],
             quality: [
               ...imageGenerateRoutes,
-              imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047),
+              imageModelRoute(
+                replicateMoodboardFlare,
+                "gpt-image-2.5-flare",
+                MOODBOARD_PER_IMAGE_USD,
+              ),
             ],
           }
         : {
-            economy: [imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047)],
-            quality: [imageModelRoute(replicateMoodboardFlare, "gpt-image-2.5-flare", 0.047)],
+            economy: [
+              imageModelRoute(
+                replicateMoodboardFlare,
+                "gpt-image-2.5-flare",
+                MOODBOARD_PER_IMAGE_USD,
+              ),
+            ],
+            quality: [
+              imageModelRoute(
+                replicateMoodboardFlare,
+                "gpt-image-2.5-flare",
+                MOODBOARD_PER_IMAGE_USD,
+              ),
+            ],
           },
   };
 }
