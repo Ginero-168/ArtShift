@@ -534,19 +534,9 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        activeImageTool === "remove-bg" ||
-        activeImageTool === "extract" ||
-        activeImageTool === "layer" ? (
+        activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
           <div
-            data-testid={
-              activeImageTool === "remove-bg"
-                ? "remove-bg-runner"
-                : activeImageTool === "extract"
-                  ? "extract-runner"
-                  : activeImageTool === "layer"
-                    ? "layer-runner"
-                    : "upscale-runner"
-            }
+            data-testid={activeImageTool === "remove-bg" ? "remove-bg-runner" : "extract-runner"}
             style={{ display: "none" }}
           >
             <VisionObjectIsolator
@@ -561,6 +551,7 @@ export default function ObjectContextBar({
         ) : (
           <div
             role="dialog"
+            data-testid={activeImageTool === "layer" ? "layer-panel" : undefined}
             aria-label={
               isVectorizeTool(activeImageTool)
                 ? "Vectorize settings"
@@ -575,7 +566,9 @@ export default function ObjectContextBar({
               width:
                 activeImageTool === "multi-angle"
                   ? "min(340px, calc(100vw - 24px))"
-                  : "min(380px, calc(100vw - 24px))",
+                  : activeImageTool === "layer"
+                    ? "min(300px, calc(100vw - 24px))"
+                    : "min(380px, calc(100vw - 24px))",
               maxHeight: "min(640px, calc(100vh - 24px))",
               overflowY: "auto",
               padding: 6,

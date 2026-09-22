@@ -72,8 +72,10 @@ Layer is a paid cloud path: the browser requires authentication, an explicit
 consent confirm, and the end-user's own Replicate BYOK credential through
 `requireEndUserCloudAi` — never a shared `REPLICATE_API_TOKEN`. The dedicated
 route `/api/layer/decompose` runs the `image.decomposeLayers` task against
-Replicate `qwen/qwen-image-layered` (alias `qwen-image-layered`) with default
-`num_layers = 4` (allowed range 2–8). The adapter downloads each returned RGBA
+Replicate `qwen/qwen-image-layered` (alias `qwen-image-layered`). The Layer
+panel asks how many layers to split into and sends that count as `num_layers`
+(live schema: integer, minimum 2, maximum 8, default 4). Leaving the control at
+4 keeps the previous result. The adapter downloads each returned RGBA
 PNG from `replicate.delivery`, converts them to data URLs, and the browser places
 each layer as an editable image at the Preload card bounds via
 `getProcessingPreviewPlacement` (to the right of the source by default, or wherever

@@ -205,7 +205,9 @@ Adapter ส่ง allowlisted fields ตาม Replicate API:
 }
 ```
 
-`num_layers` รับค่า 2–8 (default 4). Output เป็นรายการ URI ของภาพ RGBA
+`num_layers` รับค่า 2–8 (default 4) ตาม schema จริงของ Replicate. ปุ่ม Layer
+เปิดแผงสั้น ๆ ให้กรอกหรือกดเพิ่มลดจำนวนเลเยอร์ ค่าเริ่มต้น 4 ถ้าไม่แก้
+จำนวนที่เลือกถูกส่งเป็น `num_layers`. Output เป็นรายการ URI ของภาพ RGBA
 (พื้นหลังก่อน / index 0 เป็น bottom layer); adapter ดาวน์โหลดเฉพาะ HTTPS
 `replicate.delivery`, แปลงเป็น data URL แล้วคืน `{ layers: [{ dataUrl }] }`
 
