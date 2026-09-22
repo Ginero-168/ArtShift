@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import {
-  cameraFromPointerDelta,
-  cameraFromWheel,
-  type MultiAngleCamera,
-} from "@/lib/image/multiAngleCamera";
+import { cameraFromPointerDelta, type MultiAngleCamera } from "@/lib/image/multiAngleCamera";
 import { paintMultiAngleScene } from "@/lib/image/multiAngleScene";
+
+const PREVIEW_HEIGHT = 148;
 
 export function MultiAnglePreview({
   camera,
@@ -34,8 +32,8 @@ export function MultiAnglePreview({
       const bounds = canvas.getBoundingClientRect();
       paintMultiAngleScene(
         context,
-        bounds.width || canvas.clientWidth || 360,
-        bounds.height || canvas.clientHeight || 210,
+        bounds.width || canvas.clientWidth || 320,
+        bounds.height || canvas.clientHeight || PREVIEW_HEIGHT,
         camera,
       );
     };
@@ -45,17 +43,6 @@ export function MultiAnglePreview({
     return () => observer.disconnect();
   }, [camera]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const onWheel = (event: WheelEvent) => {
-      if (event.cancelable) event.preventDefault();
-      onCameraChange(cameraFromWheel(cameraRef.current, event.deltaY));
-    };
-    canvas.addEventListener("wheel", onWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", onWheel);
-  }, [onCameraChange]);
-
   return (
     <canvas
       ref={canvasRef}
@@ -64,7 +51,8 @@ export function MultiAnglePreview({
       data-move-forward={camera.moveForward}
       data-vertical-tilt={camera.verticalTilt}
       data-wide-angle={camera.useWideAngle ? "true" : "false"}
-      aria-label="Camera orbit. Drag sideways to rotate, drag vertically to tilt, scroll to move closer."
+      aria-label="Object turn. Drag sideways to rotate the object. Drag up or down to tip it."
+      aria-describedby="multi-angle-gesture-hint"
       tabIndex={0}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -75,7 +63,11 @@ export function MultiAnglePreview({
           y: event.clientY,
           camera,
         };
-        event.currentTarget.setPointerCapture?.(event.pointerId);
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // A pointer that is already gone cannot be captured. Drag still tracks.
+        }
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
@@ -94,27 +86,21 @@ export function MultiAnglePreview({
         const current = cameraRef.current;
         if (event.key === "ArrowLeft") {
           event.preventDefault();
-          onCameraChange({ ...current, rotateDegrees: current.rotateDegrees + 5 });
+          onCameraChange({ ...current, rotateDegrees: current.rotateDegrees - 5 });
         } else if (event.key === "ArrowRight") {
           event.preventDefault();
-          onCameraChange({ ...current, rotateDegrees: current.rotateDegrees - 5 });
+          onCameraChange({ ...current, rotateDegrees: current.rotateDegrees + 5 });
         } else if (event.key === "ArrowUp") {
           event.preventDefault();
-          onCameraChange({ ...current, verticalTilt: current.verticalTilt - 1 });
+          onCameraChange({ ...current, verticalTilt: current.verticalTilt + 1 });
         } else if (event.key === "ArrowDown") {
           event.preventDefault();
-          onCameraChange({ ...current, verticalTilt: current.verticalTilt + 1 });
-        } else if (event.key === "+" || event.key === "=") {
-          event.preventDefault();
-          onCameraChange(cameraFromWheel(current, -1));
-        } else if (event.key === "-" || event.key === "_") {
-          event.preventDefault();
-          onCameraChange(cameraFromWheel(current, 1));
+          onCameraChange({ ...current, verticalTilt: current.verticalTilt - 1 });
         }
       }}
       style={{
         width: "100%",
-        height: 210,
+        height: PREVIEW_HEIGHT,
         display: "block",
         borderRadius: 8,
         border: "1px solid #e2e8f0",

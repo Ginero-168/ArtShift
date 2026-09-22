@@ -4,6 +4,7 @@ import {
   DEFAULT_MULTI_ANGLE_GO_FAST,
   DEFAULT_MULTI_ANGLE_LORA_SCALE,
   DEFAULT_MULTI_ANGLE_LORA_WEIGHTS,
+  DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
   DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
 } from "@/lib/ai-runtime/contracts";
 import { parsePublicAiExecuteRequest } from "@/lib/ai-runtime/schemas";
@@ -33,6 +34,7 @@ describe("Qwen Edit Multi-Angle contract", () => {
     expect(DEFAULT_MULTI_ANGLE_LORA_WEIGHTS).toBe("dx8152/Qwen-Edit-2509-Multiple-angles");
     expect(DEFAULT_MULTI_ANGLE_LORA_SCALE).toBe(1.25);
     expect(DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE).toBe(1);
+    expect(DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT).toBe("png");
   });
 
   it("accepts a bounded image.multiAngle request", () => {

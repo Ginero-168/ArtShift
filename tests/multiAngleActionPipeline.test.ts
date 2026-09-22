@@ -28,10 +28,15 @@ describe("Multi-Angle action surface", () => {
     expect(body).toContain(
       "onChange={(value) => updateCamera({ ...camera, rotateDegrees: value })}",
     );
-    expect(body).toContain(
-      "onChange={(value) => updateCamera({ ...camera, verticalTilt: value })}",
-    );
-    expect(body).toContain("onChange={(value) => updateCamera({ ...camera, moveForward: value })}");
+    expect(body).toContain("moveForward: DEFAULT_MULTI_ANGLE_CAMERA.moveForward");
+    expect(body).toContain("verticalTilt: settings.verticalTilt");
+    expect(body).toContain("useWideAngle: settings.useWideAngle");
+    expect(body).toContain("goFast: DEFAULT_MULTI_ANGLE_GO_FAST");
+    expect(body).toContain("outputFormat: DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT");
+    expect(body).not.toContain("Move forward");
+    expect(body).not.toContain("Inference steps");
+    expect(body).not.toContain("Lightning");
+    expect(body).not.toContain('aria-label="Prompt"');
     expect(body).toContain("onCameraChange={updateCamera}");
     expect(body).toContain("/api/multi-angle");
     expect(body).toContain("image.multiAngle");

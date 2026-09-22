@@ -9,10 +9,6 @@ import {
   DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
   DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
   DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
-  MULTI_ANGLE_ASPECT_RATIOS,
-  MULTI_ANGLE_OUTPUT_FORMATS,
-  type MultiAngleAspectRatio,
-  type MultiAngleOutputFormat,
 } from "@/lib/ai-runtime/contracts";
 import { createImage } from "@/lib/engine/factory";
 import { getCached, loadDataURL, preloadDataURL } from "@/lib/engine/imageCache";
@@ -40,7 +36,7 @@ import { MultiAnglePreview } from "./MultiAnglePreview";
 
 const FIELD_LABEL = {
   display: "block",
-  marginTop: 8,
+  marginTop: 6,
   color: "#334155",
   fontSize: 9,
   fontWeight: 700,
@@ -50,20 +46,6 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
   const addElement = useEngine((state) => state.addElement);
   const selectOnly = useEngine((state) => state.selectOnly);
   const [camera, setCamera] = useState<MultiAngleCamera>(DEFAULT_MULTI_ANGLE_CAMERA);
-  const [prompt, setPrompt] = useState("");
-  const [goFast, setGoFast] = useState<boolean>(DEFAULT_MULTI_ANGLE_GO_FAST);
-  const [loraWeights, setLoraWeights] = useState(DEFAULT_MULTI_ANGLE_LORA_WEIGHTS);
-  const [loraScale, setLoraScale] = useState(DEFAULT_MULTI_ANGLE_LORA_SCALE);
-  const [trueGuidanceScale, setTrueGuidanceScale] = useState(
-    DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
-  );
-  const [inferenceSteps, setInferenceSteps] = useState("");
-  const [aspectRatio, setAspectRatio] = useState<MultiAngleAspectRatio>("match_input_image");
-  const [seed, setSeed] = useState("");
-  const [outputFormat, setOutputFormat] = useState<MultiAngleOutputFormat>(
-    DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
-  );
-  const [outputQuality, setOutputQuality] = useState(DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY);
   const [busy, setBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const processingJobIdRef = useRef<string | null>(null);
@@ -84,40 +66,18 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
       setStatusMessage("Image data not found in cache");
       return;
     }
-    const parsedSeed = launch ? launch.seed : parseOptionalSeed(seed);
-    if (parsedSeed === "invalid") {
-      setStatusMessage("Seed must be an integer from 0 to 2147483647.");
-      return;
-    }
-    const parsedSteps = launch ? launch.numInferenceSteps : parseOptionalSteps(inferenceSteps);
-    if (parsedSteps === "invalid") {
-      setStatusMessage("Inference steps must be an integer from 1 to 40, or left blank.");
-      return;
-    }
 
     if (!queuedContext) {
       await preloadLayerSource(element.fileId);
       const preloaded = await preloadDataURL(cached.dataURL);
       if (
         !window.confirm(
-          "Multi-Angle จะส่งภาพนี้ไปยัง Replicate (qwen/qwen-edit-multiangle) เพื่อแก้มุมกล้อง และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?",
+          "Multi-Angle จะส่งภาพนี้ไปยัง Replicate (qwen/qwen-edit-multiangle) เพื่อเปลี่ยนมุมของวัตถุ และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?",
         )
       ) {
         return;
       }
-      const launch = {
-        camera: cameraRef.current,
-        prompt: prompt.trim(),
-        goFast,
-        loraWeights,
-        loraScale,
-        trueGuidanceScale,
-        numInferenceSteps: parsedSteps,
-        aspectRatio,
-        seed: parsedSeed,
-        outputFormat,
-        outputQuality,
-      };
+      const nextLaunch = { camera: cameraRef.current };
       const job = enqueueProcessingJob({
         preview: {
           ...getProcessingPreviewBounds(element),
@@ -127,7 +87,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
           message: "กำลังเตรียมผลลัพธ์…",
           sourceDataUrl: preloaded.dataURL,
         },
-        run: (context) => handleRun(context, launch),
+        run: (context) => handleRun(context, nextLaunch),
       });
       processingJobIdRef.current = job.id;
       setBusy(true);
@@ -142,16 +102,6 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
 
     const { id: previewId, signal } = queuedContext;
     const settings = launch?.camera ?? cameraRef.current;
-    const requestPrompt = launch?.prompt ?? prompt.trim();
-    const requestGoFast = launch?.goFast ?? goFast;
-    const requestLoraWeights = launch?.loraWeights ?? loraWeights;
-    const requestLoraScale = launch?.loraScale ?? loraScale;
-    const requestGuidance = launch?.trueGuidanceScale ?? trueGuidanceScale;
-    const requestSteps = launch ? launch.numInferenceSteps : parsedSteps;
-    const requestAspect = launch?.aspectRatio ?? aspectRatio;
-    const requestSeed = launch ? launch.seed : parsedSeed;
-    const requestFormat = launch?.outputFormat ?? outputFormat;
-    const requestQuality = launch?.outputQuality ?? outputQuality;
     setBusy(true);
     updateProcessingPreview(previewId, {
       progress: 0.05,
@@ -167,7 +117,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
         progress: 0.12,
         message: "กำลังส่งภาพไปยัง Qwen Edit Multi-Angle…",
       });
-      report("consent", "ผู้ใช้ยืนยันการส่งภาพไป Replicate เพื่อแก้มุมกล้อง", "step", 0.12);
+      report("consent", "ผู้ใช้ยืนยันการส่งภาพไป Replicate เพื่อเปลี่ยนมุม", "step", 0.12);
       const response = await fetch("/api/multi-angle", {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json" },
@@ -182,20 +132,19 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
             },
             width: source.width,
             height: source.height,
+            // Object turn → camera inputs. Yaw is rotate_degrees, tip snaps
+            // vertical_tilt, and dolly stays at the hidden default.
             rotateDegrees: settings.rotateDegrees,
-            moveForward: settings.moveForward,
+            moveForward: DEFAULT_MULTI_ANGLE_CAMERA.moveForward,
             verticalTilt: settings.verticalTilt,
             useWideAngle: settings.useWideAngle,
-            ...(requestPrompt ? { prompt: requestPrompt } : {}),
-            goFast: requestGoFast,
-            ...(requestSteps === undefined ? {} : { numInferenceSteps: requestSteps }),
-            loraWeights: requestLoraWeights.trim() || DEFAULT_MULTI_ANGLE_LORA_WEIGHTS,
-            loraScale: requestLoraScale,
-            trueGuidanceScale: requestGuidance,
-            aspectRatio: requestAspect,
-            ...(requestSeed === undefined ? {} : { seed: requestSeed }),
-            outputFormat: requestFormat,
-            outputQuality: requestQuality,
+            goFast: DEFAULT_MULTI_ANGLE_GO_FAST,
+            loraWeights: DEFAULT_MULTI_ANGLE_LORA_WEIGHTS,
+            loraScale: DEFAULT_MULTI_ANGLE_LORA_SCALE,
+            trueGuidanceScale: DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
+            aspectRatio: "match_input_image",
+            outputFormat: DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
+            outputQuality: DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
           },
           options: {
             profile: "quality",
@@ -231,7 +180,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
       }
       if (signal.aborted) return;
 
-      setStatusMessage("Loading the new camera angle...");
+      setStatusMessage("Loading the new angle...");
       updateProcessingPreview(previewId, {
         progress: 0.82,
         message: "กำลังโหลดผลลัพธ์และเตรียมวางบน Preload…",
@@ -282,19 +231,22 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
     <div data-testid="multi-angle-panel" data-tool="multi-angle">
       <strong style={{ display: "block", color: "#1e1b4b", fontSize: 11 }}>Multi-Angle</strong>
       <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
-        Camera control for Qwen Edit. Drag the scene to set the camera. This is not the AI result.
+        Turn the object to set the angle. This is not the AI result.
       </span>
-      <div style={{ marginTop: 8 }}>
+      <div style={{ marginTop: 6 }}>
         <MultiAnglePreview camera={camera} onCameraChange={updateCamera} />
       </div>
-      <span style={{ display: "block", marginTop: 4, color: "#94a3b8", fontSize: 8 }}>
-        Drag to orbit · scroll to move closer · arrow keys nudge
+      <span
+        id="multi-angle-gesture-hint"
+        style={{ display: "block", marginTop: 4, color: "#94a3b8", fontSize: 8 }}
+      >
+        Drag sideways to turn the object. Drag up or down to tip it.
       </span>
 
       <Slider
         id="multi-angle-rotate"
-        label="Rotate"
-        hint="±90 · positive turns the camera left"
+        label="Angle"
+        hint="±90 · positive turns the object to the right"
         min={-90}
         max={90}
         step={1}
@@ -302,175 +254,43 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
         suffix="°"
         onChange={(value) => updateCamera({ ...camera, rotateDegrees: value })}
       />
-      <Slider
-        id="multi-angle-forward"
-        label="Move forward"
-        hint="0 stays back · 10 is a close-up"
-        min={0}
-        max={10}
-        step={1}
-        value={camera.moveForward}
-        onChange={(value) => updateCamera({ ...camera, moveForward: value })}
-      />
-      <Slider
-        id="multi-angle-tilt"
-        label="Vertical tilt"
-        hint="Three positions only: −1 top-down · 0 eye level · +1 low angle"
-        min={-1}
-        max={1}
-        step={1}
-        value={camera.verticalTilt}
-        onChange={(value) => updateCamera({ ...camera, verticalTilt: value })}
-      />
       <label
         htmlFor="multi-angle-wide"
-        style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 10 }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginTop: 8,
+          color: "#0f172a",
+          fontSize: 10,
+        }}
       >
         <input
           id="multi-angle-wide"
           type="checkbox"
           checked={camera.useWideAngle}
           onChange={(event) => updateCamera({ ...camera, useWideAngle: event.target.checked })}
+          style={{ accentColor: "#4f46e5" }}
         />
         Wide angle
       </label>
 
-      <label htmlFor="multi-angle-prompt" style={FIELD_LABEL}>
-        Prompt
-      </label>
-      <textarea
-        id="multi-angle-prompt"
-        aria-label="Prompt"
-        value={prompt}
-        maxLength={2000}
-        rows={2}
-        placeholder="Optional. Lighting or style only — the camera sliders drive the angle."
-        onChange={(event) => setPrompt(event.target.value)}
-        style={controlStyle}
-      />
-
-      <label
-        htmlFor="multi-angle-fast"
-        style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 10 }}
+      <div
+        style={{
+          position: "sticky",
+          bottom: 0,
+          zIndex: 1,
+          display: "flex",
+          gap: 6,
+          marginTop: 8,
+          paddingTop: 6,
+          background: "var(--surface-solid, #fff)",
+        }}
       >
-        <input
-          id="multi-angle-fast"
-          type="checkbox"
-          checked={goFast}
-          onChange={(event) => setGoFast(event.target.checked)}
-        />
-        Lightning (go fast)
-      </label>
-      <span style={{ display: "block", color: "#94a3b8", fontSize: 8 }}>
-        Leave steps blank and Lightning uses about 4 steps. Detailed uses about 40.
-      </span>
-      <label htmlFor="multi-angle-steps" style={FIELD_LABEL}>
-        Inference steps
-      </label>
-      <input
-        id="multi-angle-steps"
-        aria-label="Inference steps"
-        inputMode="numeric"
-        placeholder="Optional. Blank lets Lightning choose."
-        value={inferenceSteps}
-        onChange={(event) => setInferenceSteps(event.target.value)}
-        style={controlStyle}
-      />
-      <label htmlFor="multi-angle-lora-weights" style={FIELD_LABEL}>
-        LoRA weights
-      </label>
-      <input
-        id="multi-angle-lora-weights"
-        aria-label="LoRA weights"
-        value={loraWeights}
-        maxLength={200}
-        onChange={(event) => setLoraWeights(event.target.value)}
-        style={controlStyle}
-      />
-      <Slider
-        id="multi-angle-lora-scale"
-        label="LoRA scale"
-        hint="0–4 · default 1.25"
-        min={0}
-        max={4}
-        step={0.05}
-        value={loraScale}
-        onChange={setLoraScale}
-      />
-      <Slider
-        id="multi-angle-guidance"
-        label="True guidance scale"
-        hint="0–10 · default 1"
-        min={0}
-        max={10}
-        step={0.1}
-        value={trueGuidanceScale}
-        onChange={setTrueGuidanceScale}
-      />
-
-      <label htmlFor="multi-angle-aspect" style={FIELD_LABEL}>
-        Aspect ratio
-      </label>
-      <select
-        id="multi-angle-aspect"
-        aria-label="Aspect ratio"
-        value={aspectRatio}
-        onChange={(event) => setAspectRatio(event.target.value as MultiAngleAspectRatio)}
-        style={controlStyle}
-      >
-        {MULTI_ANGLE_ASPECT_RATIOS.map((ratio) => (
-          <option key={ratio} value={ratio}>
-            {ratio === "match_input_image" ? "Match input image" : ratio}
-          </option>
-        ))}
-      </select>
-
-      <label htmlFor="multi-angle-seed" style={FIELD_LABEL}>
-        Seed
-      </label>
-      <input
-        id="multi-angle-seed"
-        aria-label="Seed"
-        inputMode="numeric"
-        placeholder="Optional"
-        value={seed}
-        onChange={(event) => setSeed(event.target.value)}
-        style={controlStyle}
-      />
-
-      <label htmlFor="multi-angle-format" style={FIELD_LABEL}>
-        Output format
-      </label>
-      <select
-        id="multi-angle-format"
-        aria-label="Output format"
-        value={outputFormat}
-        onChange={(event) => setOutputFormat(event.target.value as MultiAngleOutputFormat)}
-        style={controlStyle}
-      >
-        {MULTI_ANGLE_OUTPUT_FORMATS.map((format) => (
-          <option key={format} value={format}>
-            {format}
-          </option>
-        ))}
-      </select>
-      <Slider
-        id="multi-angle-quality"
-        label="Output quality"
-        hint={outputFormat === "png" ? "Ignored for PNG" : "0–100, used for WebP and JPEG"}
-        min={0}
-        max={100}
-        step={1}
-        value={outputQuality}
-        disabled={outputFormat === "png"}
-        onChange={setOutputQuality}
-      />
-
-      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
         <button
           type="button"
           disabled={busy}
-          aria-label="Run Multi-Angle"
+          aria-label="Generate Multi-Angle"
           onClick={() => void handleRun()}
           style={{
             flex: 1,
@@ -484,7 +304,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
             cursor: busy ? "wait" : "pointer",
           }}
         >
-          {busy ? "Processing..." : "Run Multi-Angle"}
+          {busy ? "Processing..." : "Generate"}
         </button>
         {processingJobIdRef.current ? (
           <button
@@ -522,16 +342,6 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
 
 type MultiAngleLaunch = {
   camera: MultiAngleCamera;
-  prompt: string;
-  goFast: boolean;
-  loraWeights: string;
-  loraScale: number;
-  trueGuidanceScale: number;
-  numInferenceSteps: number | undefined;
-  aspectRatio: MultiAngleAspectRatio;
-  seed: number | undefined;
-  outputFormat: MultiAngleOutputFormat;
-  outputQuality: number;
 };
 
 function Slider({
@@ -543,7 +353,6 @@ function Slider({
   step,
   value,
   suffix,
-  disabled,
   onChange,
 }: {
   id: string;
@@ -554,7 +363,6 @@ function Slider({
   step: number;
   value: number;
   suffix?: string;
-  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   const shown = Number.isInteger(step) ? String(value) : value.toFixed(2);
@@ -575,7 +383,6 @@ function Slider({
         max={max}
         step={step}
         value={value}
-        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
         style={{ width: "100%", marginTop: 2, accentColor: "#4f46e5" }}
       />
@@ -584,37 +391,6 @@ function Slider({
       ) : null}
     </div>
   );
-}
-
-const controlStyle = {
-  width: "100%",
-  marginTop: 4,
-  padding: "6px 7px",
-  border: "1px solid #cbd5e1",
-  borderRadius: 5,
-  background: "#fff",
-  color: "#0f172a",
-  fontSize: 10,
-  fontFamily: "inherit",
-  boxSizing: "border-box" as const,
-};
-
-function parseOptionalSteps(value: string): number | undefined | "invalid" {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (!/^\d+$/.test(trimmed)) return "invalid";
-  const parsed = Number(trimmed);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 40) return "invalid";
-  return parsed;
-}
-
-function parseOptionalSeed(value: string): number | undefined | "invalid" {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (!/^\d+$/.test(trimmed)) return "invalid";
-  const parsed = Number(trimmed);
-  if (!Number.isInteger(parsed) || parsed > 2_147_483_647) return "invalid";
-  return parsed;
 }
 
 function createProgressReporter(operation: string) {

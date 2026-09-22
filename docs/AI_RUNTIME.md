@@ -96,15 +96,17 @@ shared `REPLICATE_API_TOKEN`. The dedicated route `/api/multi-angle` runs the
 `image.multiAngle` task against Replicate `qwen/qwen-edit-multiangle` (alias
 `qwen-edit-multiangle`).
 
-The panel is a camera control, not a preview of the generated pixels. Dragging
-the subject-and-camera scene updates `rotate_degrees` (±90, positive rotates
-left), `move_forward` (0–10), and `vertical_tilt` (−1 top-down, 0 eye level,
-+1 low angle). `use_wide_angle` widens the gizmo's lens. Prompt, Lightning
-(`go_fast`, default true; about 4 steps when inference steps are omitted, about
-40 when detailed), optional `num_inference_steps` (1–40), LoRA weights
-(default `dx8152/Qwen-Edit-2509-Multiple-angles`), `lora_scale` (0–4, default
-1.25), `true_guidance_scale` (0–10, default 1), aspect ratio, optional seed,
-and output format/quality are editable in the same panel. The route pins
+The panel turns the object. It is not a preview of the generated pixels and it
+does not orbit a camera around a fixed box. Dragging sideways yaws the object
+into `rotate_degrees` (±90; positive turns the object to the right, which is
+the same view as orbiting the camera left). Dragging up or down tips the object
+and snaps `vertical_tilt` (−1 top toward the viewer, 0 level, +1 underside
+toward the viewer). The Angle slider repeats the yaw for keyboard access.
+`use_wide_angle` is the only other control. `move_forward` stays 0. Lightning
+stays on (`go_fast` true, inference steps omitted), the style prompt stays
+empty, LoRA weights stay `dx8152/Qwen-Edit-2509-Multiple-angles` with
+`lora_scale` 1.25, `true_guidance_scale` stays 1, aspect ratio stays
+`match_input_image`, and `output_format` is `png`. The route pins
 version `cf245ffa` (`cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79`).
 `disable_safety_checker` stays false. README fields `use_multiple_angles` and
 `multiple_angles_strength` are not sent. Public price is about $0.03 per image.
