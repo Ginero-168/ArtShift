@@ -8,6 +8,7 @@ import {
   POSE_SKELETON_INVALID_IMAGE_MESSAGE,
   POSE_SKELETON_MODEL_MESSAGE,
   POSE_SKELETON_NO_PERSON_MESSAGE,
+  POSE_SKELETON_RUNTIME_MESSAGE,
   PoseSkeletonError,
   poseSkeletonFailureMessage,
   renderPoseSkeletonPng,
@@ -150,5 +151,8 @@ describe("pose skeleton raster", () => {
     const modelError = new Error("network");
     modelError.name = "PoseModelError";
     expect(poseSkeletonFailureMessage(modelError)).toBe(POSE_SKELETON_MODEL_MESSAGE);
+    const runtimeError = new Error("emscripten_webgl_create_context() returned error 0");
+    runtimeError.name = "PoseModelError";
+    expect(poseSkeletonFailureMessage(runtimeError)).toBe(POSE_SKELETON_RUNTIME_MESSAGE);
   });
 });

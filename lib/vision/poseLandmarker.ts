@@ -53,24 +53,44 @@ type PoseLandmarkerSession = {
 };
 
 let sessionPromise: Promise<PoseLandmarkerSession> | null = null;
+let forceCpu = false;
+
+/** GPU when WebGL exists, otherwise CPU. CPU is always the fallback. */
+export function choosePoseDelegates(webglAvailable: boolean): Array<"GPU" | "CPU"> {
+  return webglAvailable ? ["GPU", "CPU"] : ["CPU"];
+}
 
 export async function detectHumanPoses(image: CanvasImageSource): Promise<NormalizedPose[]> {
   if (typeof window === "undefined") {
     throw new PoseModelError(new Error("Pose landmarks run in the browser only."));
   }
-  let session: PoseLandmarkerSession;
-  try {
-    session = await getPoseSession();
-  } catch (error) {
-    if (error instanceof PoseModelError) throw error;
-    throw new PoseModelError(error);
+  // MediaPipe uploads the still image through WebGL even when inference is CPU.
+  if (!browserHasWebGL()) {
+    throw new PoseModelError(new Error("WebGL is unavailable (activeTexture)."));
   }
-  let result: ReturnType<PoseLandmarkerSession["detect"]>;
   try {
-    result = session.detect(image);
+    return readPoses(await detectWithSession(image));
   } catch (error) {
-    throw new PoseModelError(error);
+    if (forceCpu || !browserHasWebGL()) {
+      throw error instanceof PoseModelError ? error : new PoseModelError(error);
+    }
+    forceCpu = true;
+    sessionPromise = null;
+    try {
+      return readPoses(await detectWithSession(image));
+    } catch (cpuError) {
+      sessionPromise = null;
+      throw cpuError instanceof PoseModelError ? cpuError : new PoseModelError(cpuError);
+    }
   }
+}
+
+async function detectWithSession(image: CanvasImageSource) {
+  const session = await getPoseSession();
+  return session.detect(image);
+}
+
+function readPoses(result: ReturnType<PoseLandmarkerSession["detect"]>): NormalizedPose[] {
   return (result.landmarks ?? []).map((landmarks) => ({ landmarks }));
 }
 
@@ -99,17 +119,29 @@ async function openPoseSession(): Promise<PoseLandmarkerSession> {
     minPosePresenceConfidence: MIN_LANDMARK_SCORE,
     minTrackingConfidence: MIN_LANDMARK_SCORE,
   };
+  const delegates = forceCpu ? (["CPU"] as const) : choosePoseDelegates(browserHasWebGL());
+  let lastError: unknown;
+  for (const delegate of delegates) {
+    try {
+      return await vision.PoseLandmarker.createFromOptions(fileset, {
+        ...shared,
+        baseOptions: { modelAssetPath: POSE_LANDMARKER_MODEL, delegate },
+        ...(delegate === "GPU" ? { canvas: createPoseCanvas() } : {}),
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new PoseModelError(lastError);
+}
+
+function browserHasWebGL(): boolean {
+  if (typeof document === "undefined") return false;
   try {
-    return await vision.PoseLandmarker.createFromOptions(fileset, {
-      ...shared,
-      baseOptions: { modelAssetPath: POSE_LANDMARKER_MODEL, delegate: "GPU" },
-      canvas: createPoseCanvas(),
-    });
+    const canvas = document.createElement("canvas");
+    return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
   } catch {
-    return vision.PoseLandmarker.createFromOptions(fileset, {
-      ...shared,
-      baseOptions: { modelAssetPath: POSE_LANDMARKER_MODEL, delegate: "CPU" },
-    });
+    return false;
   }
 }
 

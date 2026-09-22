@@ -126,7 +126,8 @@ The browser loads MediaPipe Pose Landmarker (`@mediapipe/tasks-vision@1.0.1`)
 and the float16 full BlazePose model on the first click. The library and WASM
 come from jsDelivr and the model from `storage.googleapis.com`; neither is an
 npm dependency, because the package unpacks to about 20MB of WASM. Inference
-runs on-device (GPU, then CPU). The result is 33 2D landmarks per person, not a
+runs on-device. Reading the still image requires WebGL. Inference uses the GPU
+delegate when that setup starts, and CPU if GPU setup fails. The result is 33 2D landmarks per person, not a
 language-model stick figure.
 
 Up to four people are drawn, most confident first, each in its own color. A

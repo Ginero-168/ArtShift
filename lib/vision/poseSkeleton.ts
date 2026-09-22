@@ -20,6 +20,8 @@ export const MAX_SKELETON_PIXELS = 4_000_000;
 export const POSE_SKELETON_NO_PERSON_MESSAGE =
   "ไม่พบท่าทางคนในภาพนี้ หรือความมั่นใจต่ำเกินไป ลองใช้ภาพคนที่เห็นชัด";
 export const POSE_SKELETON_MODEL_MESSAGE = "โหลดโมเดล Skeleton ไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง";
+export const POSE_SKELETON_RUNTIME_MESSAGE =
+  "เบราว์เซอร์นี้เริ่มตัวประมาณท่าทางไม่ได้ ลองเบราว์เซอร์ที่รองรับกราฟิก";
 export const POSE_SKELETON_INVALID_IMAGE_MESSAGE = "ภาพนี้เล็กหรือเสียจนวาดโครงร่างไม่ได้";
 
 /** Pairs from MediaPipe `pose_landmarks_connections.ts`. */
@@ -201,7 +203,11 @@ export function poseSkeletonFailureMessage(error: unknown): string {
       ? POSE_SKELETON_NO_PERSON_MESSAGE
       : POSE_SKELETON_INVALID_IMAGE_MESSAGE;
   }
-  if (error instanceof Error && error.name === "PoseModelError") return POSE_SKELETON_MODEL_MESSAGE;
+  if (error instanceof Error && error.name === "PoseModelError") {
+    return /webgl|emscripten|gpu service|activetexture/i.test(error.message)
+      ? POSE_SKELETON_RUNTIME_MESSAGE
+      : POSE_SKELETON_MODEL_MESSAGE;
+  }
   if (error instanceof Error && error.message) return error.message;
   return "Skeleton ไม่สำเร็จ";
 }

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  choosePoseDelegates,
   POSE_LANDMARKER_MODEL,
   POSE_TASKS_ESM,
   POSE_TASKS_VERSION,
@@ -52,8 +53,9 @@ describe("Skeleton action surface", () => {
     expect(POSE_TASKS_ESM).toContain(`@mediapipe/tasks-vision@${POSE_TASKS_VERSION}`);
     expect(POSE_TASKS_WASM).toContain("/wasm");
     expect(POSE_LANDMARKER_MODEL).toContain("pose_landmarker_full");
-    expect(loader).toContain('delegate: "GPU"');
-    expect(loader).toContain('delegate: "CPU"');
+    expect(choosePoseDelegates(true)).toEqual(["GPU", "CPU"]);
+    expect(choosePoseDelegates(false)).toEqual(["CPU"]);
+    expect(loader).toContain("forceCpu");
     expect(loader).toContain("numPoses: MAX_SKELETON_POSES");
     expect(loader).not.toContain('@mediapipe/tasks-vision"');
     const runtimeDocs = read("docs/AI_RUNTIME.md");
