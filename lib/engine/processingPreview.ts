@@ -4,6 +4,7 @@ export type ProcessingPreviewKind =
   | "remove-bg"
   | "vectorize"
   | "upscale"
+  | "multi-angle"
   | "generate"
   | "brief";
 export type ProcessingPreviewPhase =

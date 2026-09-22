@@ -214,6 +214,54 @@ Official sources:
 - [Replicate model page](https://replicate.com/qwen/qwen-image-layered)
 - Sibling schema reference (fal): [fal-ai/qwen-image-layered](https://fal.ai/models/fal-ai/qwen-image-layered/api)
 
+## Qwen Edit Multi-Angle ผ่าน Replicate
+
+ArtShift ใช้ `qwen/qwen-edit-multiangle` สำหรับ task `image.multiAngle` ผ่าน
+endpoint `/api/multi-angle` และปุ่ม Option Bar ชื่อ `Multi-Angle`
+
+ผู้ใช้ต้องยืนยัน cloud consent และมี Replicate BYOK ต่อบัญชีผ่าน
+`requireEndUserCloudAi` ก่อนจึงจะเรียก provider ได้ — ไม่มี shared
+`REPLICATE_API_TOKEN`
+
+Adapter ปักเวอร์ชัน `cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79`
+(สั้น `cf245ffa`) และส่ง allowlisted fields ตาม schema ปัจจุบัน ไม่ใช้ฟิลด์ใน README
+(`use_multiple_angles`, `multiple_angles_strength`):
+
+```json
+{
+  "version": "cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
+  "input": {
+    "image": "data:image/...",
+    "rotate_degrees": 0,
+    "move_forward": 0,
+    "vertical_tilt": 0,
+    "use_wide_angle": false,
+    "aspect_ratio": "match_input_image",
+    "go_fast": true,
+    "lora_weights": "dx8152/Qwen-Edit-2509-Multiple-angles",
+    "lora_scale": 1.25,
+    "true_guidance_scale": 1,
+    "output_format": "webp",
+    "output_quality": 95,
+    "disable_safety_checker": false
+  }
+}
+```
+
+ช่วงที่รับ: `rotate_degrees` −90..90, `move_forward` 0..10, `vertical_tilt` −1..1,
+`lora_scale` 0..4 (default 1.25), `true_guidance_scale` 0..10 (default 1),
+`num_inference_steps` 1..40 และจะไม่ถูกส่งเมื่อเว้นว่างเพื่อให้ `go_fast` เลือกจำนวนสเตป,
+`aspect_ratio` เป็น `match_input_image | 1:1 | 16:9 | 9:16 | 4:3 | 3:4`,
+`output_format` เป็น `webp | jpg | png`. `prompt` และ `seed` ส่งเมื่อผู้ใช้กรอกเท่านั้น
+`disable_safety_checker` เป็น false เสมอ ราคาสาธารณะประมาณ $0.03 ต่อภาพบน H100
+Output เป็น array ของ URI; adapter ใช้รายการแรก ดาวน์โหลดเฉพาะ HTTPS
+`replicate.delivery` แล้วคืน `{ dataUrl }` ผลลัพธ์ถูกวางบนการ์ด Preload ไม่ทับภาพต้นฉบับ
+
+Official sources:
+
+- [Replicate model page](https://replicate.com/qwen/qwen-edit-multiangle)
+- [Pinned schema cf245ffa](https://replicate.com/qwen/qwen-edit-multiangle/versions/cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79/api)
+
 ## Anthropic Messages API
 
 ### Request/response แกนหลัก

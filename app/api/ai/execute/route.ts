@@ -93,6 +93,8 @@ function executePublicTask(
       return ai.execute(request.task, request.input, options);
     case "image.decomposeLayers":
       return ai.execute(request.task, request.input, options);
+    case "image.multiAngle":
+      return ai.execute(request.task, request.input, options);
   }
 }
 
@@ -104,7 +106,10 @@ function trustedExecutionOptions(
 ): AiExecutionOptions {
   const isPromptEnhancement = task === "prompt.enhance";
   const isImageMutation =
-    task === "image.generate" || task === "image.upscale" || task === "image.decomposeLayers";
+    task === "image.generate" ||
+    task === "image.upscale" ||
+    task === "image.decomposeLayers" ||
+    task === "image.multiAngle";
   return {
     profile: isPromptEnhancement ? "economy" : "quality",
     cloudConsent,

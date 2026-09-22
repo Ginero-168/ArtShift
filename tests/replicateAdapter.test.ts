@@ -1105,6 +1105,96 @@ describe("Replicate AI adapter", () => {
     );
   });
 
+  it("edits a camera angle with Qwen Edit Multi-Angle", async () => {
+    const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-angle-1",
+            model: "qwen/qwen-edit-multiangle",
+            version: "cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
+            status: "succeeded",
+            output: ["https://replicate.delivery/angle.webp"],
+            metrics: { predict_time: 3.2 },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(imageBytes, {
+          status: 200,
+          headers: { "Content-Type": "image/webp" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "image.multiAngle" as never,
+      input: {
+        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        width: 1024,
+        height: 768,
+        rotateDegrees: -15,
+        moveForward: 3,
+        verticalTilt: 1,
+        useWideAngle: true,
+        prompt: "warm rim light",
+        goFast: true,
+        numInferenceSteps: 8,
+        loraWeights: "dx8152/Qwen-Edit-2509-Multiple-angles",
+        loraScale: 1.25,
+        trueGuidanceScale: 1,
+        aspectRatio: "16:9",
+        seed: 7,
+        outputFormat: "webp",
+        outputQuality: 90,
+      } as never,
+      model:
+        "qwen/qwen-edit-multiangle@cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toEqual({
+      dataUrl: `data:image/webp;base64,${Buffer.from(imageBytes).toString("base64")}`,
+    });
+    expect(result).toMatchObject({
+      model:
+        "qwen/qwen-edit-multiangle@cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
+      requestId: "prediction-angle-1",
+      usage: { providerSeconds: 3.2 },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.replicate.com/v1/predictions",
+      expect.objectContaining({
+        body: JSON.stringify({
+          version: "cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79",
+          input: {
+            image: "data:image/png;base64,AAAA",
+            rotate_degrees: -15,
+            move_forward: 3,
+            vertical_tilt: 1,
+            use_wide_angle: true,
+            aspect_ratio: "16:9",
+            go_fast: true,
+            lora_weights: "dx8152/Qwen-Edit-2509-Multiple-angles",
+            lora_scale: 1.25,
+            true_guidance_scale: 1,
+            output_format: "webp",
+            output_quality: 90,
+            disable_safety_checker: false,
+            prompt: "warm rim light",
+            num_inference_steps: 8,
+            seed: 7,
+          },
+        }),
+      }),
+    );
+  });
+
   it("marks a created prediction as outcome-unknown when polling loses transport", async () => {
     const fetchMock = vi
       .fn()

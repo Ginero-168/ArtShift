@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import {
   IconBrief,
+  IconCamera,
   IconLayers,
   IconPenTool,
   IconScissors,
@@ -29,6 +30,7 @@ const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   "remove-bg": "#0f766e",
   vectorize: "#4f46e5",
   upscale: "#7c3aed",
+  "multi-angle": "#4338ca",
   generate: "#2563eb",
   brief: "#6366f1",
 };
@@ -45,6 +47,8 @@ function renderPreviewIcon(kind: ProcessingPreviewKind, size = 15) {
       return <IconPenTool size={size} color="currentColor" />;
     case "upscale":
       return <IconZap size={size} color="currentColor" />;
+    case "multi-angle":
+      return <IconCamera size={size} color="currentColor" />;
     case "generate":
       return <IconSparkles size={size} color="currentColor" />;
     case "brief":
