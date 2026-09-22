@@ -35,6 +35,7 @@ The unified chat preserves local-first precedence: a deterministic local plan wi
 | Vision describe/propose/OCR | Cloud opt-in; `cloudConsent: true` is required |
 | Recraft Vectorize (Cloud) | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | P-Image-Upscale | Cloud opt-in; the explicit Upscale settings panel sends the raster to Replicate with a selected 8/16/32 MP target |
+| Layer (Qwen Image Layered) | Cloud opt-in; the explicit Layer button sends the raster to Replicate `qwen/qwen-image-layered` and inserts RGBA layers at the source bounds |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with orchestration-selected `quality: low|medium|high`; the product does not expose quality-tier modes |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
@@ -63,7 +64,25 @@ The fallback is stage-aware rather than a generic cloud AI route: it does not up
 images for background analysis or silently route paid provider work. The source
 document remains unchanged until the browser receives and validates the result.
 
-During Remove BG, Extract, and Vectorize, the browser renders a transient duplicate
+### Layer (cloud decompose)
+
+`Layer` is a separate Option Bar action next to Extract. It does not replace Extract.
+Layer is a paid cloud path: the browser requires authentication, an explicit
+consent confirm, and the end-user's own Replicate BYOK credential through
+`requireEndUserCloudAi` — never a shared `REPLICATE_API_TOKEN`. The dedicated
+route `/api/layer/decompose` runs the `image.decomposeLayers` task against
+Replicate `qwen/qwen-image-layered` (alias `qwen-image-layered`) with default
+`num_layers = 4` (allowed range 2–8). The adapter downloads each returned RGBA
+PNG from `replicate.delivery`, converts them to data URLs, and the browser places
+each layer as an editable image at the source image's x/y/width/height (full-frame
+stack, background first). The source image stays on the canvas. Processing uses the
+same FIFO `enqueueProcessingJob` / `processingPreviewInput` pattern as Extract, with
+tool id `"layer"`. Before the user confirms the cloud run, ArtShift preloads the
+decoded source (`preloadLayerSource`) when the image Option Bar is shown, when
+Layer is hovered, and again when the Layer tool becomes active. Extract itself
+stays local and is not part of that warm-up.
+
+During Remove BG, Extract, Layer, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading
 indicator and swipe animation but is not an editor element or undo entry. Processing
 requests use one FIFO queue, so moving/deselecting the source does not cancel or hide

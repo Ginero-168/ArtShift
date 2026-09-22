@@ -1,13 +1,14 @@
 import * as v from "valibot";
 import type {
   AiExecutionOptions,
+  AiImageDecomposeLayersInput,
   AiImageGenerateInput,
   AiImageUpscaleInput,
   AiPromptEnhanceInput,
   AiVectorizeInput,
   AiVisionInput,
 } from "./contracts";
-import { isAllowedImageAspectRatio } from "./contracts";
+import { DECOMPOSE_LAYERS_MAX, DECOMPOSE_LAYERS_MIN, isAllowedImageAspectRatio } from "./contracts";
 
 const DATA_URL_MAX_CHARS = 4 * 1024 * 1024;
 const PromptSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(32_000));
@@ -49,6 +50,24 @@ const PImageUpscaleInputSchema = v.strictObject({
   width: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
   height: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
   targetMegapixels: v.picklist([8, 16, 32]),
+});
+
+const DecomposeLayersInputSchema = v.strictObject({
+  image: v.strictObject({
+    dataUrl: RecraftImageDataUrlSchema,
+    mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
+  }),
+  width: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  height: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  numLayers: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(DECOMPOSE_LAYERS_MIN),
+      v.maxValue(DECOMPOSE_LAYERS_MAX),
+    ),
+  ),
+  prompt: v.optional(v.pipe(v.string(), v.maxLength(2_000))),
 });
 
 const PromptEnhanceInputSchema = v.strictObject({
@@ -111,7 +130,12 @@ export type PublicAiExecuteRequest =
   | { task: "vectorize.recraft"; input: AiVectorizeInput; options: AiExecutionOptions }
   | { task: "prompt.enhance"; input: AiPromptEnhanceInput; options: AiExecutionOptions }
   | { task: "image.generate"; input: AiImageGenerateInput; options: AiExecutionOptions }
-  | { task: "image.upscale"; input: AiImageUpscaleInput; options: AiExecutionOptions };
+  | { task: "image.upscale"; input: AiImageUpscaleInput; options: AiExecutionOptions }
+  | {
+      task: "image.decomposeLayers";
+      input: AiImageDecomposeLayersInput;
+      options: AiExecutionOptions;
+    };
 
 export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequest | null {
   if (!input || typeof input !== "object") return null;
@@ -149,6 +173,11 @@ export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequ
     const parsed = v.safeParse(PImageUpscaleInputSchema, record.input);
     if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
     return { task: "image.upscale", input: parsed.output, options: options.output };
+  }
+  if (record.task === "image.decomposeLayers") {
+    const parsed = v.safeParse(DecomposeLayersInputSchema, record.input);
+    if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
+    return { task: "image.decomposeLayers", input: parsed.output, options: options.output };
   }
   return null;
 }

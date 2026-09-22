@@ -2,6 +2,7 @@ import { REPLICATE_PREDICTION_CANCEL_AFTER } from "@/lib/ai/runtimeLimits";
 import type {
   AiAssistantChatInput,
   AiAssistantChatOutput,
+  AiImageDecomposeLayersInput,
   AiImageGenerateInput,
   AiImageUpscaleInput,
   AiPromptEnhanceInput,
@@ -10,6 +11,11 @@ import type {
   AiTaskOutput,
   AiVectorizeInput,
   AiVisionInput,
+} from "@/lib/ai-runtime/contracts";
+import {
+  DECOMPOSE_LAYERS_MAX,
+  DECOMPOSE_LAYERS_MIN,
+  DEFAULT_DECOMPOSE_LAYERS,
 } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import type {
@@ -38,6 +44,7 @@ const SUPPORTED_TASKS: AiTaskKind[] = [
   "prompt.enhance",
   "image.generate",
   "image.upscale",
+  "image.decomposeLayers",
 ];
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
@@ -45,6 +52,7 @@ const CHAT_MODEL = "openai/gpt-oss-120b";
 const GEMINI_CHAT_MODEL = "google/gemini-2.5-flash";
 const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
+const QWEN_IMAGE_LAYERED_MODEL = "qwen/qwen-image-layered";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 // Flare retired: replaced with Sunburst across all routes.
 const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
@@ -138,6 +146,16 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           profile: "quality",
         },
         {
+          id: QWEN_IMAGE_LAYERED_MODEL,
+          alias: "qwen-image-layered",
+          profile: "quality",
+          pricing: {
+            currency: "USD",
+            perRunUsd: 0.05,
+            note: "Estimate for default 4-layer PNG decomposition; confirm against the Replicate model page.",
+          },
+        },
+        {
           id: GPT_IMAGE_25_SUNBURST_MODEL,
           alias: "image-general",
           profile: "quality",
@@ -213,6 +231,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (request.task === "image.upscale") {
       return (await this.upscaleWithPruna(
         request as AiProviderRequest<"image.upscale">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
+    }
+    if (request.task === "image.decomposeLayers") {
+      return (await this.decomposeLayersWithQwen(
+        request as AiProviderRequest<"image.decomposeLayers">,
       )) as AiProviderResult<AiTaskOutput<K>>;
     }
     const input = request.input as AiVisionInput;
@@ -583,6 +606,68 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     };
   }
 
+  private async decomposeLayersWithQwen(
+    request: AiProviderRequest<"image.decomposeLayers">,
+  ): Promise<AiProviderResult<AiTaskOutput<"image.decomposeLayers">>> {
+    const input = request.input as AiImageDecomposeLayersInput;
+    assertReplicateImageDataUrl(input.image.dataUrl);
+    assertDecomposeLayersInputDimensions(input.width, input.height);
+    const numLayers = normalizeDecomposeLayerCount(input.numLayers);
+    const model = parseReplicateModel(request.model);
+    if (model.slug !== QWEN_IMAGE_LAYERED_MODEL) {
+      throw new AiRuntimeError("INVALID_INPUT", "Unsupported Replicate layer decompose model.", {
+        provider: this.id,
+      });
+    }
+
+    const providerInput: Record<string, unknown> = {
+      image: input.image.dataUrl,
+      num_layers: numLayers,
+      output_format: "png",
+      go_fast: true,
+    };
+    if (typeof input.prompt === "string" && input.prompt.trim()) {
+      providerInput.prompt = input.prompt.trim();
+    }
+
+    const prediction = await this.createPrediction(model, providerInput, request.signal, true);
+    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    const outputUrls = extractFileUrls(completed.output);
+    if (outputUrls.length < DECOMPOSE_LAYERS_MIN) {
+      throw new AiRuntimeError(
+        "PROVIDER_SCHEMA",
+        "Replicate returned no layered RGBA image files.",
+        { provider: this.id },
+      );
+    }
+    if (outputUrls.length > DECOMPOSE_LAYERS_MAX) {
+      throw new AiRuntimeError(
+        "PROVIDER_SCHEMA",
+        "Replicate returned more layers than ArtShift accepts.",
+        { provider: this.id },
+      );
+    }
+
+    const layers: Array<{ dataUrl: string }> = [];
+    for (const outputUrl of outputUrls) {
+      layers.push({ dataUrl: await fetchGeneratedImage(outputUrl, request.signal) });
+    }
+    const metrics = completed.metrics ?? {};
+    return {
+      output: { layers },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings: [],
+    };
+  }
+
   private async createPrediction(
     model: { slug: string; version?: string },
     input: Record<string, unknown>,
@@ -732,6 +817,43 @@ function extractFileUrl(output: unknown): string | undefined {
     return (output as { url: string }).url;
   }
   return undefined;
+}
+
+function extractFileUrls(output: unknown): string[] {
+  if (typeof output === "string") return [output];
+  if (Array.isArray(output)) {
+    const urls: string[] = [];
+    for (const item of output) {
+      if (typeof item === "string") {
+        urls.push(item);
+        continue;
+      }
+      if (item && typeof item === "object" && typeof (item as { url?: unknown }).url === "string") {
+        urls.push((item as { url: string }).url);
+      }
+    }
+    return urls;
+  }
+  if (
+    output &&
+    typeof output === "object" &&
+    typeof (output as { url?: unknown }).url === "string"
+  ) {
+    return [(output as { url: string }).url];
+  }
+  return [];
+}
+
+function normalizeDecomposeLayerCount(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) return DEFAULT_DECOMPOSE_LAYERS;
+  if (value < DECOMPOSE_LAYERS_MIN || value > DECOMPOSE_LAYERS_MAX) {
+    throw new AiRuntimeError(
+      "INVALID_INPUT",
+      `numLayers must be an integer from ${DECOMPOSE_LAYERS_MIN} to ${DECOMPOSE_LAYERS_MAX}.`,
+      { provider: "replicate" },
+    );
+  }
+  return value;
 }
 
 async function fetchGeneratedImage(outputUrl: string, signal: AbortSignal): Promise<string> {
@@ -885,6 +1007,24 @@ function assertPImageUpscaleInputDimensions(width: number, height: number): void
     throw new AiRuntimeError(
       "INVALID_INPUT",
       "P-Image-Upscale accepts input images up to 4096px and 16 megapixels.",
+      { provider: "replicate" },
+    );
+  }
+}
+
+function assertDecomposeLayersInputDimensions(width: number, height: number): void {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width < 1 ||
+    height < 1 ||
+    width > 4_096 ||
+    height > 4_096 ||
+    width * height > MAX_RECRAFT_PIXELS
+  ) {
+    throw new AiRuntimeError(
+      "INVALID_INPUT",
+      "Layer decompose accepts input images up to 4096px and 16 megapixels.",
       { provider: "replicate" },
     );
   }

@@ -15,6 +15,7 @@ const REPLICATE_GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
 const REPLICATE_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION =
   "391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf";
+const REPLICATE_QWEN_IMAGE_LAYERED_MODEL = "qwen/qwen-image-layered";
 
 /**
  * Pricing per image at the quality tiers available from the provider.
@@ -35,6 +36,7 @@ export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>
   "prompt.enhance": "quality",
   "image.generate": "quality",
   "image.upscale": "quality",
+  "image.decomposeLayers": "quality",
 };
 
 export function createAiRouteTable(environment: Environment = process.env): AiRouteTable {
@@ -64,6 +66,10 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     REPLICATE_P_IMAGE_UPSCALE_MODEL,
     environment.REPLICATE_P_IMAGE_UPSCALE_MODEL_VERSION ||
       DEFAULT_REPLICATE_P_IMAGE_UPSCALE_VERSION,
+  );
+  const replicateQwenImageLayered = withVersion(
+    environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL || REPLICATE_QWEN_IMAGE_LAYERED_MODEL,
+    environment.REPLICATE_QWEN_IMAGE_LAYERED_MODEL_VERSION,
   );
 
   // GPT Image 2.5 Sunburst — primary baseline and precision route (replaces gpt-image-2).
@@ -186,6 +192,17 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
           alias: "p-image-upscale",
           expectedMaxUsd: 0.04,
           pricing: { currency: "USD", perRunUsd: 0.04 },
+        },
+      ],
+    },
+    "image.decomposeLayers": {
+      quality: [
+        {
+          provider: "replicate",
+          model: replicateQwenImageLayered,
+          alias: "qwen-image-layered",
+          expectedMaxUsd: 0.08,
+          pricing: { currency: "USD", perRunUsd: 0.05 },
         },
       ],
     },

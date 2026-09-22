@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import {
   IconBrief,
+  IconLayers,
   IconPenTool,
   IconScissors,
   IconSparkles,
@@ -24,6 +25,7 @@ type Props = {
 
 const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   extract: "#d97706",
+  layer: "#c026d3",
   "remove-bg": "#0f766e",
   vectorize: "#4f46e5",
   upscale: "#7c3aed",
@@ -35,6 +37,8 @@ function renderPreviewIcon(kind: ProcessingPreviewKind, size = 15) {
   switch (kind) {
     case "extract":
       return <IconScissors size={size} color="currentColor" />;
+    case "layer":
+      return <IconLayers size={size} color="currentColor" />;
     case "remove-bg":
       return <IconWand size={size} color="currentColor" />;
     case "vectorize":

@@ -18,12 +18,14 @@ import {
   downloadVectorizedSvg,
   getAtomicVectorizedOptionBarLabels,
 } from "@/lib/vectorize/atomicVectorize";
+import { preloadLayerSource } from "@/lib/vision/layerPreload";
 import { getObjectContextIcon } from "./objectContextIcons";
 import {
   EXTRACT_LABEL,
   IMAGE_ACTION_LABELS,
   type ImageActionId,
   isVectorizeTool,
+  LAYER_LABEL,
   VECTORIZE_GROUP_LABEL,
 } from "./PropertiesPanel/imageToolTypes";
 
@@ -60,7 +62,13 @@ const buttonStyle = {
   transition: "background-color 120ms ease, border-color 120ms ease, color 120ms ease",
 };
 
-function action(label: string, onClick: () => void, disabled = false, active = false) {
+function action(
+  label: string,
+  onClick: () => void,
+  disabled = false,
+  active = false,
+  onPointerEnter?: () => void,
+) {
   const isDownload = label.toLowerCase() === "download";
 
   return (
@@ -74,6 +82,7 @@ function action(label: string, onClick: () => void, disabled = false, active = f
       aria-pressed={active ? true : undefined}
       disabled={disabled}
       onClick={onClick}
+      onPointerEnter={onPointerEnter}
       style={{
         ...buttonStyle,
         width: isDownload ? 30 : "auto",
@@ -215,6 +224,12 @@ export default function ObjectContextBar({
     setMixBusy(false);
   }, [firstId]);
 
+  const selectedImageFileId = first?.type === "image" ? first.fileId : null;
+  useEffect(() => {
+    if (!selectedImageFileId) return;
+    void preloadLayerSource(selectedImageFileId);
+  }, [selectedImageFileId]);
+
   if (isDragging || !first) return null;
 
   const ids = selected.map((element) => element.id);
@@ -236,6 +251,7 @@ export default function ObjectContextBar({
     setActiveImageTool((current) => (current === "upscale" ? null : "upscale"));
   const toggleExtract = () =>
     setActiveImageTool((current) => (current === "extract" ? null : "extract"));
+  const toggleLayer = () => setActiveImageTool((current) => (current === "layer" ? null : "layer"));
   const toggleVectorize = () =>
     setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
@@ -329,6 +345,11 @@ export default function ObjectContextBar({
       ),
     );
     controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === "extract"));
+    controls.push(
+      action(LAYER_LABEL, toggleLayer, false, activeImageTool === "layer", () => {
+        void preloadLayerSource(first.fileId);
+      }),
+    );
     controls.push(
       action(VECTORIZE_GROUP_LABEL, toggleVectorize, false, isVectorizeTool(activeImageTool)),
     );
@@ -504,14 +525,18 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
+        activeImageTool === "remove-bg" ||
+        activeImageTool === "extract" ||
+        activeImageTool === "layer" ? (
           <div
             data-testid={
               activeImageTool === "remove-bg"
                 ? "remove-bg-runner"
                 : activeImageTool === "extract"
                   ? "extract-runner"
-                  : "upscale-runner"
+                  : activeImageTool === "layer"
+                    ? "layer-runner"
+                    : "upscale-runner"
             }
             style={{ display: "none" }}
           >

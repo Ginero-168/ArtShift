@@ -6,15 +6,17 @@ export const IMAGE_TOOL_LABELS = {
 } as const;
 
 export const EXTRACT_LABEL = "Extract" as const;
+export const LAYER_LABEL = "Layer" as const;
 export const VECTORIZE_GROUP_LABEL = "Vectorize" as const;
 
 export type ImageToolId = keyof typeof IMAGE_TOOL_LABELS;
 export type VectorizeToolId = Exclude<ImageToolId, "remove-bg" | "upscale">;
-export type ImageActionId = ImageToolId | "extract";
+export type ImageActionId = ImageToolId | "extract" | "layer";
 
 export const IMAGE_ACTION_LABELS = {
   ...IMAGE_TOOL_LABELS,
   extract: EXTRACT_LABEL,
+  layer: LAYER_LABEL,
 } as const;
 
 export const VECTORIZE_TOOL_IDS: readonly VectorizeToolId[] = ["vectorize2", "vectorize3"];
