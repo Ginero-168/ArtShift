@@ -5,10 +5,11 @@ import {
   MAX_SKELETON_PIXELS,
   type NormalizedPose,
   POSE_BONES,
+  POSE_SKELETON_API_MESSAGE,
+  POSE_SKELETON_AUTH_MESSAGE,
   POSE_SKELETON_INVALID_IMAGE_MESSAGE,
-  POSE_SKELETON_MODEL_MESSAGE,
+  POSE_SKELETON_MISSING_KEY_MESSAGE,
   POSE_SKELETON_NO_PERSON_MESSAGE,
-  POSE_SKELETON_RUNTIME_MESSAGE,
   PoseSkeletonError,
   poseSkeletonFailureMessage,
   renderPoseSkeletonPng,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/vision/poseSkeleton";
 
 function pose(points: Record<number, [number, number, number?]>): NormalizedPose {
-  const landmarks = Array.from({ length: 33 }, () => ({ x: 0, y: 0, visibility: 0 }));
+  const landmarks = Array.from({ length: 17 }, () => ({ x: 0, y: 0, visibility: 0 }));
   for (const [index, value] of Object.entries(points)) {
     const [x, y, visibility = 1] = value;
     landmarks[Number(index)] = { x, y, visibility };
@@ -30,12 +31,12 @@ function standingPose(
 ): NormalizedPose {
   return pose({
     0: [0.5, 0.12 + yShift],
-    11: [0.35, 0.28 + yShift],
-    12: [0.65, 0.28 + yShift],
-    13: [0.28, 0.48 + yShift],
-    14: [0.72, 0.48 + yShift],
-    23: [0.4, 0.62 + yShift],
-    24: [0.6, 0.62 + yShift],
+    5: [0.35, 0.28 + yShift],
+    6: [0.65, 0.28 + yShift],
+    7: [0.28, 0.48 + yShift],
+    8: [0.72, 0.48 + yShift],
+    11: [0.4, 0.62 + yShift],
+    12: [0.6, 0.62 + yShift],
     ...overrides,
   });
 }
@@ -81,11 +82,12 @@ function pixelAt(
 }
 
 describe("pose skeleton raster", () => {
-  it("uses the MediaPipe pose connection list", () => {
-    expect(POSE_BONES).toContainEqual([11, 12]);
-    expect(POSE_BONES).toContainEqual([13, 15]);
-    expect(POSE_BONES).toContainEqual([23, 25]);
-    expect(POSE_BONES.length).toBe(35);
+  it("uses the COCO-17 skeleton", () => {
+    expect(POSE_BONES).toContainEqual([5, 6]);
+    expect(POSE_BONES).toContainEqual([5, 7]);
+    expect(POSE_BONES).toContainEqual([11, 13]);
+    expect(POSE_BONES).not.toContainEqual([15, 17]);
+    expect(POSE_BONES.length).toBe(16);
   });
 
   it("draws a transparent PNG with a readable shoulder bone", async () => {
@@ -113,7 +115,7 @@ describe("pose skeleton raster", () => {
   });
 
   it("skips a low-confidence limb without rejecting the torso", async () => {
-    const faintArm = standingPose(0, { 13: [0.02, 0.9, 0.1] });
+    const faintArm = standingPose(0, { 7: [0.02, 0.9, 0.1] });
     const rendered = await renderPoseSkeletonPng(80, 80, [faintArm]);
     const image = readPng(rendered.dataUrl);
     expect(pixelAt(image, 2, 72)[3]).toBe(0);
@@ -121,10 +123,10 @@ describe("pose skeleton raster", () => {
 
   it("refuses an image with no confident person", async () => {
     const hidden = pose({
-      11: [0.3, 0.3, 0.2],
-      12: [0.7, 0.3, 0.2],
-      23: [0.4, 0.7, 0.2],
-      24: [0.6, 0.7, 0.2],
+      5: [0.3, 0.3, 0.2],
+      6: [0.7, 0.3, 0.2],
+      11: [0.4, 0.7, 0.2],
+      12: [0.6, 0.7, 0.2],
     });
     await expect(renderPoseSkeletonPng(64, 64, [hidden])).rejects.toMatchObject({
       name: "PoseSkeletonError",
@@ -141,18 +143,19 @@ describe("pose skeleton raster", () => {
     expect(() => skeletonOutputSize(1, 40)).toThrow(PoseSkeletonError);
   });
 
-  it("maps model and pose failures to clear messages", () => {
+  it("maps pose, key, and API failures to clear Thai messages", () => {
     expect(poseSkeletonFailureMessage(new PoseSkeletonError("no-pose", "ignored"))).toBe(
       POSE_SKELETON_NO_PERSON_MESSAGE,
     );
     expect(poseSkeletonFailureMessage(new PoseSkeletonError("invalid-image", "ignored"))).toBe(
       POSE_SKELETON_INVALID_IMAGE_MESSAGE,
     );
-    const modelError = new Error("network");
-    modelError.name = "PoseModelError";
-    expect(poseSkeletonFailureMessage(modelError)).toBe(POSE_SKELETON_MODEL_MESSAGE);
-    const runtimeError = new Error("emscripten_webgl_create_context() returned error 0");
-    runtimeError.name = "PoseModelError";
-    expect(poseSkeletonFailureMessage(runtimeError)).toBe(POSE_SKELETON_RUNTIME_MESSAGE);
+    const missingKey = new Error("AI provider is not configured for this session.");
+    Object.assign(missingKey, { code: "PROVIDER_AUTH" });
+    expect(poseSkeletonFailureMessage(missingKey)).toBe(POSE_SKELETON_MISSING_KEY_MESSAGE);
+    const signedOut = new Error("Authentication is required.");
+    Object.assign(signedOut, { code: "AUTH_REQUIRED" });
+    expect(poseSkeletonFailureMessage(signedOut)).toBe(POSE_SKELETON_AUTH_MESSAGE);
+    expect(poseSkeletonFailureMessage(new Error("network"))).toBe(POSE_SKELETON_API_MESSAGE);
   });
 });

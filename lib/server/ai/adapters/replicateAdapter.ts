@@ -5,6 +5,7 @@ import type {
   AiImageDecomposeLayersInput,
   AiImageGenerateInput,
   AiImageMultiAngleInput,
+  AiImagePoseSkeletonInput,
   AiImageUpscaleInput,
   AiPromptEnhanceInput,
   AiProviderStatus,
@@ -23,6 +24,11 @@ import {
   DEFAULT_MULTI_ANGLE_OUTPUT_FORMAT,
   DEFAULT_MULTI_ANGLE_OUTPUT_QUALITY,
   DEFAULT_MULTI_ANGLE_TRUE_GUIDANCE_SCALE,
+  DEFAULT_YOLO_POSE_CONF,
+  DEFAULT_YOLO_POSE_IMGSZ,
+  DEFAULT_YOLO_POSE_IOU,
+  DEFAULT_YOLO_POSE_MODEL_SIZE,
+  YOLO_POSE_MODEL_SIZES,
 } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import type {
@@ -39,6 +45,7 @@ import {
   aspectRatioFromDimensions,
   normalizeReplicateAspectRatio,
 } from "@/lib/server/ai/replicateAspectRatio";
+import { mapYoloPoseJson, YoloPoseJsonError } from "@/lib/vision/yoloPose";
 import {
   parseReplicateAssistantOutput,
   renderConversationPrompt,
@@ -58,6 +65,7 @@ const SUPPORTED_TASKS: AiTaskKind[] = [
   "image.upscale",
   "image.decomposeLayers",
   "image.multiAngle",
+  "image.poseSkeleton",
 ];
 const GPT_MODEL = "openai/gpt-4o-mini";
 const GEMINI_MODEL = "google/gemini-3-flash";
@@ -67,6 +75,7 @@ const RECRAFT_VECTORIZE_MODEL = "recraft-ai/recraft-vectorize";
 const PRUNA_P_IMAGE_UPSCALE_MODEL = "prunaai/p-image-upscale";
 const QWEN_IMAGE_LAYERED_MODEL = "qwen/qwen-image-layered";
 const QWEN_EDIT_MULTIANGLE_MODEL = "qwen/qwen-edit-multiangle";
+const YOLO26_POSE_MODEL = "ultralytics/yolo26-pose";
 const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 // Chat image-fast alias: Flare was retired and these routes resolve to Sunburst.
 const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
@@ -191,6 +200,16 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           },
         },
         {
+          id: YOLO26_POSE_MODEL,
+          alias: "yolo26-pose",
+          profile: "quality",
+          pricing: {
+            currency: "USD",
+            perRunUsd: 0.01,
+            note: "CPU nano pose. Confirm against the Replicate model page before raising the ceiling.",
+          },
+        },
+        {
           id: GPT_IMAGE_25_SUNBURST_MODEL,
           alias: "image-general",
           profile: "quality",
@@ -286,6 +305,11 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (request.task === "image.multiAngle") {
       return (await this.editMultiAngleWithQwen(
         request as AiProviderRequest<"image.multiAngle">,
+      )) as AiProviderResult<AiTaskOutput<K>>;
+    }
+    if (request.task === "image.poseSkeleton") {
+      return (await this.estimatePoseWithYolo(
+        request as AiProviderRequest<"image.poseSkeleton">,
       )) as AiProviderResult<AiTaskOutput<K>>;
     }
     const input = request.input as AiVisionInput;
@@ -913,6 +937,77 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     };
   }
 
+  private async estimatePoseWithYolo(
+    request: AiProviderRequest<"image.poseSkeleton">,
+  ): Promise<AiProviderResult<AiTaskOutput<"image.poseSkeleton">>> {
+    const input = request.input as AiImagePoseSkeletonInput;
+    assertReplicateImageDataUrl(input.image.dataUrl);
+    assertPoseImageDimensions(input.width, input.height);
+    const model = parseReplicateModel(request.model);
+    if (model.slug !== YOLO26_POSE_MODEL) {
+      throw new AiRuntimeError("INVALID_INPUT", "Unsupported Replicate pose model.", {
+        provider: this.id,
+      });
+    }
+    const modelSize = input.modelSize ?? DEFAULT_YOLO_POSE_MODEL_SIZE;
+    if (!YOLO_POSE_MODEL_SIZES.includes(modelSize)) {
+      throw new AiRuntimeError("INVALID_INPUT", "modelSize must be n, s, m, l, or x.", {
+        provider: this.id,
+      });
+    }
+
+    const prediction = await this.createPrediction(
+      model,
+      {
+        image: input.image.dataUrl,
+        model_size: modelSize,
+        conf: DEFAULT_YOLO_POSE_CONF,
+        iou: DEFAULT_YOLO_POSE_IOU,
+        imgsz: DEFAULT_YOLO_POSE_IMGSZ,
+        return_json: true,
+      },
+      request.signal,
+      true,
+    );
+    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    const payload = readYoloPosePayload(completed.output);
+    if (payload === undefined || payload === "") {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no pose JSON.", {
+        provider: this.id,
+      });
+    }
+    let poses: ReturnType<typeof mapYoloPoseJson>;
+    try {
+      poses = mapYoloPoseJson(payload, input.width, input.height);
+    } catch (error) {
+      if (error instanceof YoloPoseJsonError) {
+        throw new AiRuntimeError(
+          "PROVIDER_SCHEMA",
+          "Replicate returned pose JSON that could not be read.",
+          {
+            provider: this.id,
+            cause: error,
+          },
+        );
+      }
+      throw error;
+    }
+    const metrics = completed.metrics ?? {};
+    return {
+      output: { poses },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings: poses.length === 0 ? ["The pose model returned no people."] : [],
+    };
+  }
+
   private async createPrediction(
     model: { slug: string; version?: string },
     input: Record<string, unknown>,
@@ -1061,6 +1156,15 @@ function extractFileUrl(output: unknown): string | undefined {
   ) {
     return (output as { url: string }).url;
   }
+  return undefined;
+}
+
+function readYoloPosePayload(output: unknown): unknown {
+  if (typeof output === "string" || Array.isArray(output)) return output;
+  if (!output || typeof output !== "object") return undefined;
+  const record = output as Record<string, unknown>;
+  if ("json_str" in record) return record.json_str ?? "";
+  if ("json" in record) return record.json;
   return undefined;
 }
 
@@ -1282,6 +1386,24 @@ function assertPImageUpscaleInputDimensions(width: number, height: number): void
     throw new AiRuntimeError(
       "INVALID_INPUT",
       "P-Image-Upscale accepts input images up to 4096px and 16 megapixels.",
+      { provider: "replicate" },
+    );
+  }
+}
+
+function assertPoseImageDimensions(width: number, height: number): void {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width < 1 ||
+    height < 1 ||
+    width > 4_096 ||
+    height > 4_096 ||
+    width * height > MAX_RECRAFT_PIXELS
+  ) {
+    throw new AiRuntimeError(
+      "INVALID_INPUT",
+      "Skeleton accepts input images up to 4096px and 16 megapixels.",
       { provider: "replicate" },
     );
   }

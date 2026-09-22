@@ -9,6 +9,7 @@ export const AI_TASK_KINDS = [
   "image.upscale",
   "image.decomposeLayers",
   "image.multiAngle",
+  "image.poseSkeleton",
 ] as const;
 
 export type AiTaskKind = (typeof AI_TASK_KINDS)[number];
@@ -311,6 +312,43 @@ export type AiImageMultiAngleOutput = {
   dataUrl: string;
 };
 
+/**
+ * Bounds for Replicate `ultralytics/yolo26-pose`.
+ * Live schema: model_size n/s/m/l/x (default n), conf 0–1 (default 0.25),
+ * iou 0–1 (default 0.45), imgsz one of 320/416/512/640/832/1024/1280 (default 640).
+ * COCO-17 keypoints come back in `json_str` when `return_json` is true.
+ */
+export const YOLO_POSE_MODEL_SIZES = ["n", "s", "m", "l", "x"] as const;
+export type YoloPoseModelSize = (typeof YOLO_POSE_MODEL_SIZES)[number];
+export const DEFAULT_YOLO_POSE_MODEL_SIZE: YoloPoseModelSize = "n";
+export const DEFAULT_YOLO_POSE_CONF = 0.25;
+export const DEFAULT_YOLO_POSE_IOU = 0.45;
+export const DEFAULT_YOLO_POSE_IMGSZ = 640;
+
+export type AiPoseLandmark = {
+  /** Normalized 0..1 in the source image, origin at the top left. */
+  x: number;
+  y: number;
+  /** Keypoint confidence. Values below the skeleton threshold are not drawn. */
+  visibility: number;
+};
+
+export type AiImagePoseSkeletonInput = {
+  image: AiImageInput;
+  width: number;
+  height: number;
+  /** YOLO26 pose size. Defaults to nano. */
+  modelSize?: YoloPoseModelSize;
+};
+
+export type AiImagePoseSkeletonOutput = {
+  /** Highest-confidence people first. Empty when the model finds nobody. */
+  poses: Array<{
+    landmarks: AiPoseLandmark[];
+    confidence: number;
+  }>;
+};
+
 export type AiTaskInputMap = {
   "assistant.chat": AiAssistantChatInput;
   "vision.describe": AiVisionInput;
@@ -322,6 +360,7 @@ export type AiTaskInputMap = {
   "image.upscale": AiImageUpscaleInput;
   "image.decomposeLayers": AiImageDecomposeLayersInput;
   "image.multiAngle": AiImageMultiAngleInput;
+  "image.poseSkeleton": AiImagePoseSkeletonInput;
 };
 
 export type AiTaskOutputMap = {
@@ -335,6 +374,7 @@ export type AiTaskOutputMap = {
   "image.upscale": AiImageUpscaleOutput;
   "image.decomposeLayers": AiImageDecomposeLayersOutput;
   "image.multiAngle": AiImageMultiAngleOutput;
+  "image.poseSkeleton": AiImagePoseSkeletonOutput;
 };
 
 export type AiTaskInput<K extends AiTaskKind> = AiTaskInputMap[K];

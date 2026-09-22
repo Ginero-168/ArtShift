@@ -1,14 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  choosePoseDelegates,
-  POSE_DETECT_TIMEOUT_MS,
-  POSE_LANDMARKER_MODEL,
-  POSE_TASKS_ESM,
-  POSE_TASKS_VERSION,
-  POSE_TASKS_WASM,
-} from "@/lib/vision/poseLandmarker";
 
 function read(relativePath: string): string {
   return readFileSync(path.join(process.cwd(), relativePath), "utf8");
@@ -33,9 +25,10 @@ describe("Skeleton action surface", () => {
     expect(skeletonBranch).not.toContain("VisionObjectIsolator");
   });
 
-  it("lands a transparent pose PNG on the Preload card", () => {
+  it("lands a transparent pose PNG on the Preload card from the cloud job", () => {
     const body = read("components/Canvas/PropertiesPanel/PoseSkeletonRunner.tsx");
-    expect(body).toContain("detectHumanPoses(image, { signal })");
+    expect(body).toContain('fetch("/api/skeleton"');
+    expect(body).toContain('task: "image.poseSkeleton"');
     expect(body).toContain("renderPoseSkeletonPng");
     expect(body).toContain("enqueueProcessingJob");
     expect(body).toContain('kind: "skeleton"');
@@ -43,34 +36,30 @@ describe("Skeleton action surface", () => {
     expect(body).toContain("getProcessingPreviewBounds(element)");
     expect(body).toContain('addElement(resultImage, "pose skeleton")');
     expect(body).toContain("crop: element.crop");
-    expect(body).not.toContain("/api/");
-    expect(body).not.toContain("replicate");
+    expect(body).toContain("cloudConsent: true");
+    expect(body).not.toContain("detectHumanPoses");
+    expect(body).not.toContain("poseLandmarker");
+    expect(body).not.toContain("mediapipe");
     expect(body).not.toContain("gemini");
   });
 
-  it("loads pinned on-device landmarks instead of a cloud vision guess", () => {
-    const loader = read("lib/vision/poseLandmarker.ts");
-    expect(POSE_TASKS_VERSION).toBe("1.0.1");
-    expect(POSE_DETECT_TIMEOUT_MS).toBeGreaterThanOrEqual(20_000);
-    expect(POSE_DETECT_TIMEOUT_MS).toBeLessThanOrEqual(45_000);
-    expect(POSE_TASKS_ESM).toBe(`/mediapipe/tasks-vision/${POSE_TASKS_VERSION}/vision_bundle.mjs`);
-    expect(POSE_TASKS_WASM).toBe(`/mediapipe/tasks-vision/${POSE_TASKS_VERSION}/wasm`);
-    expect(POSE_LANDMARKER_MODEL).toBe("/mediapipe/models/pose_landmarker_full_float16.task");
-    expect(POSE_TASKS_ESM.startsWith("/")).toBe(true);
-    expect(POSE_TASKS_WASM.startsWith("/")).toBe(true);
-    expect(POSE_LANDMARKER_MODEL.startsWith("/")).toBe(true);
-    expect(choosePoseDelegates(true)).toEqual(["GPU", "CPU"]);
-    expect(choosePoseDelegates(false)).toEqual(["CPU"]);
-    expect(loader).toContain("forceCpu");
-    expect(loader).toContain("numPoses: MAX_SKELETON_POSES");
-    expect(loader).toContain("withPoseDeadline");
-    expect(loader).not.toContain("cdn.jsdelivr.net");
-    expect(loader).not.toContain("storage.googleapis.com");
-    expect(loader).not.toContain('@mediapipe/tasks-vision"');
+  it("uses pinned Replicate YOLO26 pose instead of an on-device landmarker", () => {
+    const route = read("app/api/skeleton/route.ts");
+    const adapter = read("lib/server/ai/adapters/replicateAdapter.ts");
+    const manifest = read("lib/server/ai/modelManifest.ts");
+    expect(route).toContain("requireEndUserCloudAi");
+    expect(route).toContain('modelAlias: "yolo26-pose"');
+    expect(route).toContain("allowFallback: false");
+    expect(adapter).toContain("ultralytics/yolo26-pose");
+    expect(adapter).toContain("return_json: true");
+    expect(adapter).toContain("model_size: modelSize");
+    expect(manifest).toContain("0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8");
+    expect(read("lib/vision/poseSkeleton.ts")).toContain("COCO-17");
     const runtimeDocs = read("docs/AI_RUNTIME.md");
-    expect(runtimeDocs).toContain("### Skeleton (on-device pose)");
+    expect(runtimeDocs).toContain("### Skeleton (cloud pose)");
     expect(runtimeDocs).toContain("### Multi-Angle (cloud camera edit)");
     expect(runtimeDocs).toContain("### Layer (cloud decompose)");
     expect(runtimeDocs).toContain("### Moodboard AI (Flare low, 9 / 16 / 25)");
+    expect(runtimeDocs).not.toContain("public/mediapipe");
   });
 });

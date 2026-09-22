@@ -4,6 +4,7 @@ import type {
   AiImageDecomposeLayersInput,
   AiImageGenerateInput,
   AiImageMultiAngleInput,
+  AiImagePoseSkeletonInput,
   AiImageUpscaleInput,
   AiPromptEnhanceInput,
   AiVectorizeInput,
@@ -15,6 +16,7 @@ import {
   isAllowedImageAspectRatio,
   MULTI_ANGLE_ASPECT_RATIOS,
   MULTI_ANGLE_OUTPUT_FORMATS,
+  YOLO_POSE_MODEL_SIZES,
 } from "./contracts";
 
 const DATA_URL_MAX_CHARS = 4 * 1024 * 1024;
@@ -100,6 +102,16 @@ const MultiAngleInputSchema = v.strictObject({
   outputQuality: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100))),
 });
 
+const PoseSkeletonInputSchema = v.strictObject({
+  image: v.strictObject({
+    dataUrl: RecraftImageDataUrlSchema,
+    mimeType: v.optional(v.picklist(["image/jpeg", "image/png", "image/webp"])),
+  }),
+  width: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  height: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(4_096)),
+  modelSize: v.optional(v.picklist(YOLO_POSE_MODEL_SIZES)),
+});
+
 const PromptEnhanceInputSchema = v.strictObject({
   prompt: PromptSchema,
   purpose: v.optional(v.picklist(["image", "design", "general"])),
@@ -170,6 +182,11 @@ export type PublicAiExecuteRequest =
       task: "image.multiAngle";
       input: AiImageMultiAngleInput;
       options: AiExecutionOptions;
+    }
+  | {
+      task: "image.poseSkeleton";
+      input: AiImagePoseSkeletonInput;
+      options: AiExecutionOptions;
     };
 
 export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequest | null {
@@ -218,6 +235,11 @@ export function parsePublicAiExecuteRequest(input: unknown): PublicAiExecuteRequ
     const parsed = v.safeParse(MultiAngleInputSchema, record.input);
     if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
     return { task: "image.multiAngle", input: parsed.output, options: options.output };
+  }
+  if (record.task === "image.poseSkeleton") {
+    const parsed = v.safeParse(PoseSkeletonInputSchema, record.input);
+    if (!parsed.success || parsed.output.width * parsed.output.height > 16_000_000) return null;
+    return { task: "image.poseSkeleton", input: parsed.output, options: options.output };
   }
   return null;
 }

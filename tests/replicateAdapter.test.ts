@@ -1283,4 +1283,117 @@ describe("Replicate AI adapter", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("maps YOLO26 pose JSON into normalized COCO-17 landmarks and skips the annotated photo", async () => {
+    const keypoints = {
+      x: Array.from({ length: 17 }, (_, index) => 100 + index),
+      y: Array.from({ length: 17 }, (_, index) => 40 + index * 2),
+      visible: Array.from({ length: 17 }, () => 0.9),
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "prediction-pose-1",
+          model: "ultralytics/yolo26-pose",
+          version: "0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
+          status: "succeeded",
+          output: {
+            image: "https://replicate.delivery/annotated-pose.png",
+            json_str: JSON.stringify([
+              {
+                name: "person",
+                class: 0,
+                confidence: 0.91,
+                box: { x1: 80, y1: 20, x2: 180, y2: 220 },
+                keypoints,
+              },
+            ]),
+          },
+          metrics: { predict_time: 0.4 },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "image.poseSkeleton" as never,
+      input: {
+        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        width: 200,
+        height: 100,
+        modelSize: "n",
+      } as never,
+      model:
+        "ultralytics/yolo26-pose@0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toEqual({
+      poses: [
+        {
+          confidence: 0.91,
+          landmarks: keypoints.x.map((x, index) => ({
+            x: x / 200,
+            y: keypoints.y[index]! / 100,
+            visibility: 0.9,
+          })),
+        },
+      ],
+    });
+    expect(result).toMatchObject({
+      model:
+        "ultralytics/yolo26-pose@0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
+      requestId: "prediction-pose-1",
+      usage: { providerSeconds: 0.4 },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.replicate.com/v1/predictions",
+      expect.objectContaining({
+        body: JSON.stringify({
+          version: "0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
+          input: {
+            image: "data:image/png;base64,AAAA",
+            model_size: "n",
+            conf: 0.25,
+            iou: 0.45,
+            imgsz: 640,
+            return_json: true,
+          },
+        }),
+      }),
+    );
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("annotated-pose.png");
+  });
+
+  it("rejects a pose prediction that omits JSON", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "prediction-pose-empty",
+          status: "succeeded",
+          output: { image: "https://replicate.delivery/annotated-pose.png" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.execute({
+        task: "image.poseSkeleton" as never,
+        input: {
+          image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+          width: 200,
+          height: 100,
+        } as never,
+        model: "ultralytics/yolo26-pose",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "PROVIDER_SCHEMA" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

@@ -21,6 +21,10 @@ const REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL = "qwen/qwen-edit-multiangle";
 /** Live schema (cf245ffa): rotate ±90, lora_scale default 1.25. Not the README contract. */
 const DEFAULT_REPLICATE_QWEN_EDIT_MULTIANGLE_VERSION =
   "cf245ffaa67a6d7d0edeb597d2fded5ab80cbf72b0dceec185d709ea99667f79";
+const REPLICATE_YOLO26_POSE_MODEL = "ultralytics/yolo26-pose";
+/** Latest published version as of 2026-09-22 (`0da88062`). */
+const DEFAULT_REPLICATE_YOLO26_POSE_VERSION =
+  "0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8";
 
 /**
  * Pricing per image at the quality tiers available from the provider.
@@ -43,6 +47,7 @@ export const AI_DEFAULT_PROFILES: Partial<Record<AiTaskKind, AiExecutionProfile>
   "image.upscale": "quality",
   "image.decomposeLayers": "quality",
   "image.multiAngle": "quality",
+  "image.poseSkeleton": "quality",
 };
 
 export function createAiRouteTable(environment: Environment = process.env): AiRouteTable {
@@ -84,6 +89,15 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
     environment.REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL_VERSION ||
       (replicateQwenEditMultiAngleSlug === REPLICATE_QWEN_EDIT_MULTIANGLE_MODEL
         ? DEFAULT_REPLICATE_QWEN_EDIT_MULTIANGLE_VERSION
+        : undefined),
+  );
+  const replicateYolo26PoseSlug =
+    environment.REPLICATE_YOLO26_POSE_MODEL || REPLICATE_YOLO26_POSE_MODEL;
+  const replicateYolo26Pose = withVersion(
+    replicateYolo26PoseSlug,
+    environment.REPLICATE_YOLO26_POSE_MODEL_VERSION ||
+      (replicateYolo26PoseSlug === REPLICATE_YOLO26_POSE_MODEL
+        ? DEFAULT_REPLICATE_YOLO26_POSE_VERSION
         : undefined),
   );
   // Moodboard-only. Slug is fixed; only the version may be pinned.
@@ -237,6 +251,21 @@ export function createAiRouteTable(environment: Environment = process.env): AiRo
             currency: "USD",
             perRunUsd: 0.03,
             note: "Public H100 price is about $0.03 per image. The safety checker stays on.",
+          },
+        },
+      ],
+    },
+    "image.poseSkeleton": {
+      quality: [
+        {
+          provider: "replicate",
+          model: replicateYolo26Pose,
+          alias: "yolo26-pose",
+          expectedMaxUsd: 0.02,
+          pricing: {
+            currency: "USD",
+            perRunUsd: 0.01,
+            note: "CPU nano pose. Confirm against the Replicate model page before raising the ceiling.",
           },
         },
       ],

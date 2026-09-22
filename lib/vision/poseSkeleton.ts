@@ -1,66 +1,53 @@
 /**
  * Draw a 2D human pose skeleton into a transparent PNG.
  *
- * Landmarks are MediaPipe Pose (33 points). Bones match
- * `PoseLandmarker.POSE_CONNECTIONS`. This module does not load the model;
+ * Landmarks are COCO-17 (YOLO pose). This module does not call the model;
  * callers pass landmarks in, including tests.
  */
 
 import { arrayBufferToPngDataUrl } from "@/lib/raster/studio/encodeRevision";
 
-export const POSE_LANDMARK_COUNT = 33;
+export const POSE_LANDMARK_COUNT = 17;
 export const MIN_LANDMARK_SCORE = 0.5;
 /** Both shoulders, or both hips, plus enough other visible joints to reach this. */
 export const MIN_ACCEPTED_LANDMARKS = 4;
-/** MediaPipe returns the most confident poses first; we draw each of these. */
+/** The cloud model returns the most confident poses first; we draw each of these. */
 export const MAX_SKELETON_POSES = 4;
 /** Keep the one-shot raster responsive on very large photos. */
 export const MAX_SKELETON_PIXELS = 4_000_000;
 
 export const POSE_SKELETON_NO_PERSON_MESSAGE =
   "ไม่พบท่าทางคนในภาพนี้ หรือความมั่นใจต่ำเกินไป ลองใช้ภาพคนที่เห็นชัด";
-export const POSE_SKELETON_MODEL_MESSAGE = "โหลดโมเดล Skeleton ไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง";
-export const POSE_SKELETON_RUNTIME_MESSAGE =
-  "เบราว์เซอร์นี้เริ่มตัวประมาณท่าทางไม่ได้ ลองเบราว์เซอร์ที่รองรับกราฟิก";
+export const POSE_SKELETON_API_MESSAGE = "เรียกโมเดล Skeleton ไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง";
+export const POSE_SKELETON_MISSING_KEY_MESSAGE =
+  "ยังไม่ได้ตั้งค่า Replicate API key สำหรับบัญชีนี้ เพิ่มคีย์ใน AI Provider Settings แล้วลองอีกครั้ง";
+export const POSE_SKELETON_AUTH_MESSAGE = "กรุณาเข้าสู่ระบบก่อนใช้ Skeleton";
 export const POSE_SKELETON_INVALID_IMAGE_MESSAGE = "ภาพนี้เล็กหรือเสียจนวาดโครงร่างไม่ได้";
 
-/** Pairs from MediaPipe `pose_landmarks_connections.ts`. */
+/**
+ * COCO-17 skeleton, 0-indexed.
+ * 0 nose, 1 left eye, 2 right eye, 3 left ear, 4 right ear,
+ * 5 left shoulder, 6 right shoulder, 7 left elbow, 8 right elbow,
+ * 9 left wrist, 10 right wrist, 11 left hip, 12 right hip,
+ * 13 left knee, 14 right knee, 15 left ankle, 16 right ankle.
+ */
 export const POSE_BONES: readonly (readonly [number, number])[] = [
   [0, 1],
-  [1, 2],
-  [2, 3],
-  [3, 7],
-  [0, 4],
-  [4, 5],
+  [0, 2],
+  [1, 3],
+  [2, 4],
   [5, 6],
+  [5, 7],
+  [7, 9],
   [6, 8],
-  [9, 10],
+  [8, 10],
+  [5, 11],
+  [6, 12],
   [11, 12],
   [11, 13],
   [13, 15],
-  [15, 17],
-  [15, 19],
-  [15, 21],
-  [17, 19],
   [12, 14],
   [14, 16],
-  [16, 18],
-  [16, 20],
-  [16, 22],
-  [18, 20],
-  [11, 23],
-  [12, 24],
-  [23, 24],
-  [23, 25],
-  [24, 26],
-  [25, 27],
-  [26, 28],
-  [27, 29],
-  [28, 30],
-  [29, 31],
-  [30, 32],
-  [27, 31],
-  [28, 32],
 ];
 
 const PERSON_COLORS: readonly Rgba[] = [
@@ -112,10 +99,10 @@ export function isUsableLandmark(
 
 function hasTorso(landmarks: readonly NormalizedLandmark[]): boolean {
   const pairs: readonly (readonly [number, number])[] = [
+    [5, 6],
     [11, 12],
-    [23, 24],
-    [11, 23],
-    [12, 24],
+    [5, 11],
+    [6, 12],
   ];
   return pairs.some(
     ([start, end]) => isUsableLandmark(landmarks[start]) && isUsableLandmark(landmarks[end]),
@@ -203,13 +190,24 @@ export function poseSkeletonFailureMessage(error: unknown): string {
       ? POSE_SKELETON_NO_PERSON_MESSAGE
       : POSE_SKELETON_INVALID_IMAGE_MESSAGE;
   }
-  if (error instanceof Error && error.name === "PoseModelError") {
-    return /webgl|emscripten|gpu service|activetexture/i.test(error.message)
-      ? POSE_SKELETON_RUNTIME_MESSAGE
-      : POSE_SKELETON_MODEL_MESSAGE;
+  const code = errorCode(error);
+  if (code === "PROVIDER_AUTH" || code === "NO_PROVIDER") return POSE_SKELETON_MISSING_KEY_MESSAGE;
+  if (code === "AUTH_REQUIRED") return POSE_SKELETON_AUTH_MESSAGE;
+  if (code) return POSE_SKELETON_API_MESSAGE;
+  if (
+    error instanceof Error &&
+    /not configured|api key|replicate credential/i.test(error.message)
+  ) {
+    return POSE_SKELETON_MISSING_KEY_MESSAGE;
   }
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error) return POSE_SKELETON_API_MESSAGE;
   return "Skeleton ไม่สำเร็จ";
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && code.trim() ? code : undefined;
 }
 
 function drawPose(
