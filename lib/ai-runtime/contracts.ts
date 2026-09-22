@@ -199,10 +199,45 @@ export type AiImageUpscaleOutput = {
   dataUrl: string;
 };
 
-/** Default / bounds for Qwen Image Layered (`qwen/qwen-image-layered`). */
+/**
+ * Bounds for Replicate `qwen/qwen-image-layered` input `num_layers`.
+ * Live schema: integer, minimum 2, maximum 8, default 4.
+ */
 export const DEFAULT_DECOMPOSE_LAYERS = 4;
 export const DECOMPOSE_LAYERS_MIN = 2;
 export const DECOMPOSE_LAYERS_MAX = 8;
+
+export type DecomposeLayerCountResolution =
+  | { status: "valid"; value: number }
+  | { status: "clamped"; value: number; entered: number }
+  | { status: "invalid" };
+
+/** Interpret a Layer-count draft against `num_layers` (integer 2–8). */
+export function resolveDecomposeLayerCount(raw: string): DecomposeLayerCountResolution {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return { status: "invalid" };
+  const entered = Number(trimmed);
+  if (!Number.isSafeInteger(entered)) return { status: "invalid" };
+  if (entered < DECOMPOSE_LAYERS_MIN || entered > DECOMPOSE_LAYERS_MAX) {
+    return {
+      status: "clamped",
+      entered,
+      value: Math.min(DECOMPOSE_LAYERS_MAX, Math.max(DECOMPOSE_LAYERS_MIN, entered)),
+    };
+  }
+  return { status: "valid", value: entered };
+}
+
+export function describeDecomposeLayerCountIssue(
+  resolution: Exclude<DecomposeLayerCountResolution, { status: "valid" }>,
+  committed = false,
+): string {
+  if (resolution.status === "clamped") {
+    const range = `Qwen Image Layered accepts ${DECOMPOSE_LAYERS_MIN}–${DECOMPOSE_LAYERS_MAX} layers.`;
+    return committed ? `Adjusted to ${resolution.value}. ${range}` : range;
+  }
+  return `Enter a whole number from ${DECOMPOSE_LAYERS_MIN} to ${DECOMPOSE_LAYERS_MAX}.`;
+}
 
 export type AiImageDecomposeLayersInput = {
   image: AiImageInput;

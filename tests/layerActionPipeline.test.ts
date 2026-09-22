@@ -11,7 +11,7 @@ function isolatorSource(): string {
 
 function layerBody(source: string): string {
   const start = source.indexOf("const handleLayer = async");
-  const end = source.indexOf("layerHandlerRef.current = handleLayer");
+  const end = source.indexOf("const analysisMessage");
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   return source.slice(start, end);
@@ -31,7 +31,37 @@ describe("Layer action surface", () => {
     expect(source).toContain('processingPreviewInput(element, "extract", "Extract", url)');
     expect(bar).toContain("LAYER_LABEL");
     expect(bar).toContain("EXTRACT_LABEL");
-    expect(bar).toContain('"layer-runner"');
+    expect(bar).toContain('"layer-panel"');
+    expect(bar).not.toContain('"layer-runner"');
+  });
+
+  it("opens a compact layer-count control instead of auto-running Layer", () => {
+    const source = isolatorSource();
+    const settings = readFileSync(
+      path.join(process.cwd(), "components/Canvas/PropertiesPanel/LayerCountSettings.tsx"),
+      "utf8",
+    );
+    const bar = readFileSync(
+      path.join(process.cwd(), "components/Canvas/ObjectContextBar.tsx"),
+      "utf8",
+    );
+    const autoRunBranch = bar.slice(
+      bar.indexOf('activeImageTool === "remove-bg" || activeImageTool === "extract"'),
+      bar.indexOf('role="dialog"'),
+    );
+
+    expect(autoRunBranch).not.toContain('"layer"');
+    expect(bar).toContain('data-testid={activeImageTool === "layer" ? "layer-panel"');
+    expect(source).toContain("<LayerCountSettings");
+    expect(source).toContain("onRun={(count) => void handleLayer(undefined, count)}");
+    expect(settings).toContain('aria-label="Number of layers"');
+    expect(settings).toContain('aria-label="Decrease layer count"');
+    expect(settings).toContain('aria-label="Increase layer count"');
+    expect(settings).toContain('aria-label="Run Layer"');
+    expect(settings).toContain("resolveDecomposeLayerCount");
+    expect(settings).toContain("DEFAULT_DECOMPOSE_LAYERS");
+    expect(settings).toContain("DECOMPOSE_LAYERS_MIN");
+    expect(settings).toContain("DECOMPOSE_LAYERS_MAX");
   });
 
   it("keeps Layer as a consented Replicate cloud path", () => {
@@ -41,7 +71,12 @@ describe("Layer action surface", () => {
     expect(body).toContain("image.decomposeLayers");
     expect(body).toContain("cloudConsent: true");
     expect(body).toContain("qwen-image-layered");
-    expect(body).toContain("DEFAULT_DECOMPOSE_LAYERS");
+    expect(body).toContain("requestedLayers");
+    expect(body).toContain("DECOMPOSE_LAYERS_MIN");
+    expect(body).toContain("DECOMPOSE_LAYERS_MAX");
+    expect(body).toContain("numLayers,");
+    expect(body).toMatch(/แยกเป็น \$\{numLayers\} เลเยอร์/);
+    expect(body).not.toContain("numLayers: DEFAULT_DECOMPOSE_LAYERS");
     expect(body).toContain("preloadLayerSource");
     expect(body).toContain('report("preload"');
     expect(body).toContain('addElements(newElements, "decompose image layers")');

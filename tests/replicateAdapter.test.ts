@@ -1105,6 +1105,63 @@ describe("Replicate AI adapter", () => {
     );
   });
 
+  it("sends the chosen num_layers and rejects counts outside 2–8", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/predictions")) {
+        return new Response(
+          JSON.stringify({
+            id: "prediction-layer-6",
+            model: "qwen/qwen-image-layered",
+            status: "succeeded",
+            output: [
+              "https://replicate.delivery/layer-0.png",
+              "https://replicate.delivery/layer-1.png",
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]), {
+        status: 200,
+        headers: { "Content-Type": "image/png" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+    const input = {
+      image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+      width: 640,
+      height: 480,
+      numLayers: 6,
+    };
+
+    const result = await adapter.execute({
+      task: "image.decomposeLayers" as never,
+      input: input as never,
+      model: "qwen/qwen-image-layered",
+      signal: new AbortController().signal,
+    });
+
+    expect((result.output as { layers: unknown[] }).layers).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.replicate.com/v1/models/qwen/qwen-image-layered/predictions",
+      expect.objectContaining({
+        body: expect.stringContaining('"num_layers":6'),
+      }),
+    );
+
+    fetchMock.mockClear();
+    await expect(
+      adapter.execute({
+        task: "image.decomposeLayers" as never,
+        input: { ...input, numLayers: 9 } as never,
+        model: "qwen/qwen-image-layered",
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("edits a camera angle with Qwen Edit Multi-Angle", async () => {
     const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetchMock = vi

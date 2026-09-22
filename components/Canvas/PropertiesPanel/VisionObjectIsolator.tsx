@@ -18,6 +18,8 @@ import {
 import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/ai/progressReporter";
 import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import {
+  DECOMPOSE_LAYERS_MAX,
+  DECOMPOSE_LAYERS_MIN,
   DEFAULT_DECOMPOSE_LAYERS,
   getUpscaleTargetMegapixels,
   UPSCALE_RESOLUTION_PRESETS,
@@ -85,6 +87,7 @@ import {
   VECTORIZE_TOOL_IDS,
   type VectorizeToolId,
 } from "./imageToolTypes";
+import { LayerCountSettings } from "./LayerCountSettings";
 
 interface DetectedObject {
   label: string;
@@ -264,7 +267,6 @@ export function VisionObjectIsolator({
   const autoRunKeyRef = useRef<string | null>(null);
   const removeBgHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const extractHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
-  const layerHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const upscaleHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   // VTracer settings are the single local vectorization configuration.
   const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
@@ -1075,7 +1077,18 @@ export function VisionObjectIsolator({
 
   extractHandlerRef.current = handleExtract;
 
-  const handleLayer = async (queuedContext?: ProcessingJobContext) => {
+  const handleLayer = async (
+    queuedContext?: ProcessingJobContext,
+    requestedLayers: number = DEFAULT_DECOMPOSE_LAYERS,
+  ) => {
+    if (
+      !Number.isInteger(requestedLayers) ||
+      requestedLayers < DECOMPOSE_LAYERS_MIN ||
+      requestedLayers > DECOMPOSE_LAYERS_MAX
+    ) {
+      return;
+    }
+    const numLayers = requestedLayers;
     const cached = getCached(element.fileId);
     if (!cached?.dataURL) {
       setStatusMessage("Image data not found in cache");
@@ -1087,14 +1100,14 @@ export function VisionObjectIsolator({
       const preloaded = getCached(element.fileId) ?? cached;
       if (
         !window.confirm(
-          `Layer จะส่งภาพนี้ไปยัง Replicate (qwen/qwen-image-layered) เพื่อแยกเป็น ${DEFAULT_DECOMPOSE_LAYERS} เลเยอร์ RGBA และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?`,
+          `Layer จะส่งภาพนี้ไปยัง Replicate (qwen/qwen-image-layered) เพื่อแยกเป็น ${numLayers} เลเยอร์ RGBA และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?`,
         )
       ) {
         return;
       }
       const job = enqueueProcessingJob({
         preview: processingPreviewInput(element, "layer", LAYER_LABEL, preloaded.dataURL),
-        run: (context) => handleLayer(context),
+        run: (context) => handleLayer(context, numLayers),
       });
       processingJobIdRef.current = job.id;
       setBusy(true);
@@ -1140,7 +1153,7 @@ export function VisionObjectIsolator({
             },
             width: source.width,
             height: source.height,
-            numLayers: DEFAULT_DECOMPOSE_LAYERS,
+            numLayers,
           },
           options: {
             profile: "quality",
@@ -1247,8 +1260,6 @@ export function VisionObjectIsolator({
     }
   };
 
-  layerHandlerRef.current = handleLayer;
-
   const analysisMessage =
     assetAnalysis?.status === "analyzing"
       ? `Preparing image intelligence… ${Math.round(assetAnalysis.progress * 100)}%`
@@ -1268,10 +1279,7 @@ export function VisionObjectIsolator({
   useEffect(() => {
     if (
       !autoRun ||
-      (activeTool !== "remove-bg" &&
-        activeTool !== "extract" &&
-        activeTool !== "layer" &&
-        activeTool !== "upscale")
+      (activeTool !== "remove-bg" && activeTool !== "extract" && activeTool !== "upscale")
     ) {
       return;
     }
@@ -1283,9 +1291,7 @@ export function VisionObjectIsolator({
         ? removeBgHandlerRef.current
         : activeTool === "extract"
           ? extractHandlerRef.current
-          : activeTool === "layer"
-            ? layerHandlerRef.current
-            : upscaleHandlerRef.current;
+          : upscaleHandlerRef.current;
     void handler().finally(() => {
       releaseImageActionRun(runKey);
       onToolComplete?.();
@@ -1294,10 +1300,7 @@ export function VisionObjectIsolator({
 
   if (
     autoRun &&
-    (activeTool === "remove-bg" ||
-      activeTool === "extract" ||
-      activeTool === "layer" ||
-      activeTool === "upscale")
+    (activeTool === "remove-bg" || activeTool === "extract" || activeTool === "upscale")
   )
     return null;
 
@@ -1615,6 +1618,10 @@ export function VisionObjectIsolator({
             {busy ? "Processing..." : "Run Vectorize(Cloud)"}
           </button>
         </div>
+      )}
+
+      {controlledToolMode && activeTool === "layer" && (
+        <LayerCountSettings busy={busy} onRun={(count) => void handleLayer(undefined, count)} />
       )}
 
       {controlledToolMode && activeTool === "upscale" && (
