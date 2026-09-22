@@ -36,7 +36,7 @@ The unified chat preserves local-first precedence: a deterministic local plan wi
 | Recraft Vectorize (Cloud) | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | P-Image-Upscale | Cloud opt-in; the explicit Upscale settings panel sends the raster to Replicate with a selected 8/16/32 MP target |
 | Layer (Qwen Image Layered) | Cloud opt-in; the explicit Layer button sends the raster to Replicate `qwen/qwen-image-layered` and inserts RGBA layers at the Preload staging bounds |
-| Moodboard AI ×9 | Cloud opt-in on Infinity Canvas; Gemini Flash expands vibe → 9 distinct prompts → Replicate `black-forest-labs/flux-schnell` (~$0.003/image ≈ $0.027/batch) into a 3×3 upright grid. Stock keyword→Unsplash/Pexels stays a separate action. |
+| Moodboard AI | Cloud opt-in on Infinity Canvas; Gemini Flash expands a vibe into exactly 9, 16, or 25 distinct prompts → Replicate `openai/gpt-image-2.5-flare` at `quality: medium` (~$0.047/image; 9 ≈ $0.42, 16 ≈ $0.75, 25 ≈ $1.18) into a square upright grid anchored on the shared Preload card. |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with orchestration-selected `quality: low|medium|high`; the product does not expose quality-tier modes |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
@@ -86,22 +86,30 @@ source (`preloadLayerSource`) when the image Option Bar is shown, when Layer is
 hovered, and again when the Layer tool becomes active. Extract itself stays local
 and is not part of that warm-up.
 
-### Moodboard AI ×9 (cheap Replicate batch)
+### Moodboard AI (Flare medium, 9 / 16 / 25)
 
 On an **Infinity Canvas** slide, the Moodboard control accepts one short
-prompt/keyword/vibe. **Stock** keeps the existing Unsplash/Pexels keyword fill.
-**AI ×9** is an additional action:
+prompt/keyword/vibe and a batch size of **9, 16, or 25** (default 9).
 
 1. Auth + explicit consent + per-account Replicate BYOK (`requireEndUserCloudAi`)
-2. `POST /api/moodboard/expand` — Gemini Flash via the existing `creative-director`
+2. A draggable Preload card (`enqueueProcessingJob`, kind `generate`) appears at
+   the same kind of anchor as Upscale / Remove BG / Extract / Layer: to the right
+   of the selection when that footprint is clear, otherwise a clear patch, or the
+   visible viewport when the board is empty. The card is the size of the whole grid.
+3. `POST /api/moodboard/expand` — Gemini Flash via the existing `creative-director`
    alias (`assistant.chat`) expands associative design directions
-   (Subject / Setting / Prop / Mood / Color style) into **exactly 9 distinct**
-   image prompts (e.g. Bangkok → tuk-tuk, street food, temples — not nine copies)
-3. `POST /api/moodboard/generate` × up to 9 — each call runs `image.generate`
-   with alias `flux-schnell` → Official Replicate `black-forest-labs/flux-schnell`
-   (~**$0.003**/image ≈ **$0.027**/batch). Gemini is not used for pixels in v1.
-4. Successful images are placed as upright EngineElements in a **3×3 grid** that
-   does not overwrite unrelated artwork. Partial failures are shown in the UI.
+   (Subject / Setting / Prop / Mood / Color style) into **exactly N distinct**
+   image prompts (e.g. Bangkok → tuk-tuk, street food, temples — not N copies)
+4. `POST /api/moodboard/generate` × N — each call runs `image.generate` with alias
+   `gpt-image-2.5-flare` → Official Replicate `openai/gpt-image-2.5-flare`,
+   `quality: "medium"`, `aspect_ratio: "1:1"`, `number_of_images: 1`,
+   `output_format: "webp"`. ~**$0.047**/image (9 ≈ **$0.42**, 16 ≈ **$0.75**,
+   25 ≈ **$1.18**). The Replicate BYOK token is sent; `openai_api_key` is not.
+   Gemini is not used for pixels. Chat image routes stay on Sunburst.
+5. Successful images are placed as upright EngineElements in an **N×N grid**
+   whose origin is `getProcessingPreviewPlacement` (so a dragged Preload card
+   wins). Partial failures are shown in the UI. The shared `/api/stock` route
+   remains for other surfaces; Moodboard no longer starts a stock fill.
 
 During Remove BG, Extract, Layer, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading

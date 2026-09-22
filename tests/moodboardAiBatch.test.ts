@@ -1,29 +1,32 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-describe("Moodboard AI ×9 surface", () => {
-  it("exposes Moodboard control on Infinity Canvas with stock + AI actions", () => {
+describe("Moodboard AI surface", () => {
+  it("exposes Moodboard control on Infinity Canvas with AI batch sizes and no stock action", () => {
     const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
     const control = readFileSync("components/Moodboard/MoodboardControl.tsx", "utf8");
     const client = readFileSync("lib/moodboard/aiBatchClient.ts", "utf8");
 
     expect(editor).toContain("MoodboardControl");
     expect(editor).toContain("currentSlideIsInfinity");
-    expect(control).toContain("AI ×9");
-    expect(control).toContain("Stock");
+    expect(control).toContain("AI ×");
+    expect(control).toContain("moodboard-batch-count");
     expect(control).toContain("runMoodboardAiBatch");
-    expect(control).toContain("runMoodboardStockFill");
+    expect(control).not.toContain("runMoodboardStockFill");
+    expect(control).not.toContain(">Stock<");
     expect(client).toContain("/api/moodboard/expand");
     expect(client).toContain("/api/moodboard/generate");
-    expect(client).toContain("flux-schnell");
-    expect(client).toContain("addElements(placedElements");
-    expect(client).toContain("3×3");
+    expect(client).toContain("gpt-image-2.5-flare");
+    expect(client).toContain("getProcessingPreviewPlacement");
+    expect(client).toContain("enqueueProcessingJob");
+    expect(client).not.toContain("searchStockPhotos");
+    expect(client).not.toContain("flux-schnell");
     const expandRoute = readFileSync("app/api/moodboard/expand/route.ts", "utf8");
     expect(expandRoute).toContain('modelAlias: "creative-director"');
     expect(expandRoute).not.toContain("image.generate");
   });
 
-  it("defaults Moodboard generation to cheap Official Schnell, not premium models", () => {
+  it("defaults Moodboard generation to Flare medium, not Schnell or Recraft", () => {
     const constants = readFileSync("lib/moodboard/constants.ts", "utf8");
     const generate = readFileSync("app/api/moodboard/generate/route.ts", "utf8");
     const adapter = readFileSync("lib/server/ai/adapters/replicateAdapter.ts", "utf8");
@@ -31,33 +34,40 @@ describe("Moodboard AI ×9 surface", () => {
     const docs = readFileSync("docs/AI_RUNTIME.md", "utf8");
     const expandPrompt = readFileSync("lib/moodboard/expandPrompt.ts", "utf8");
 
-    expect(constants).toContain("black-forest-labs/flux-schnell");
-    expect(constants).toContain("0.003");
-    expect(constants).toContain("0.027");
+    expect(constants).toContain("openai/gpt-image-2.5-flare");
+    expect(constants).toContain("0.047");
+    expect(constants).not.toContain("flux-schnell");
+    expect(constants).not.toContain("recraft-v3");
     expect(constants).toContain("Gemini Flash");
     expect(expandPrompt).toContain("Gemini Flash");
     expect(expandPrompt).toContain("กรุงเทพฯ");
     expect(generate).toContain("modelAlias: MOODBOARD_REPLICATE_MODEL_ALIAS");
+    expect(generate).toContain("quality: MOODBOARD_IMAGE_QUALITY");
     expect(generate).toContain("requireEndUserCloudAi");
-    expect(adapter).toContain("black-forest-labs/flux-schnell");
-    expect(adapter).toContain("generateFluxSchnellImage");
-    expect(manifest).toContain('"flux-schnell"');
-    expect(docs).toContain("Moodboard AI ×9");
+    expect(adapter).toContain("openai/gpt-image-2.5-flare");
+    expect(adapter).toContain("generateMoodboardFlareImage");
+    expect(adapter).toContain('quality: "medium"');
+    expect(adapter).toContain('aspect_ratio: "1:1"');
+    expect(adapter).toContain("number_of_images: 1");
+    expect(adapter).not.toContain("flux-schnell");
+    expect(manifest).toContain('"gpt-image-2.5-flare"');
+    expect(manifest).not.toContain("flux-schnell");
+    expect(docs).toContain("Moodboard AI");
     expect(docs).toContain("Gemini Flash");
+    expect(docs).toContain("getProcessingPreviewPlacement");
     expect(generate).not.toContain("ideogram");
-    expect(generate).not.toContain("gpt-image");
     expect(generate).not.toContain("flux-pro");
+    expect(generate).not.toContain("recraft");
   });
 
-  it("keeps the stock keyword path wired separately from Replicate AI", () => {
+  it("leaves shared stock search available outside Moodboard", () => {
     const stockApi = readFileSync("app/api/stock/route.ts", "utf8");
-    const stockHelper = readFileSync("lib/moodboard/stock.ts", "utf8");
+    const imagePanel = readFileSync("components/AIImagePanel.tsx", "utf8");
     const client = readFileSync("lib/moodboard/aiBatchClient.ts", "utf8");
 
     expect(stockApi).toContain('source === "unsplash"');
     expect(stockApi).toContain('source === "pexels"');
-    expect(stockHelper).toContain("/api/stock");
-    expect(client).toContain("runMoodboardStockFill");
-    expect(client).toContain("searchStockPhotos");
+    expect(imagePanel).toContain("/api/stock");
+    expect(client).not.toContain("/api/stock");
   });
 });

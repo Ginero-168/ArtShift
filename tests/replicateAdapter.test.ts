@@ -626,6 +626,66 @@ describe("Replicate AI adapter", () => {
     );
   });
 
+  it("locks Moodboard batches to Flare medium, one square webp, and the Replicate token", async () => {
+    const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-flare-1",
+            model: "openai/gpt-image-2.5-flare",
+            status: "succeeded",
+            output: "https://replicate.delivery/moodboard.webp",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(imageBytes, { status: 200, headers: { "Content-Type": "image/webp" } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    const result = await adapter.execute({
+      task: "image.generate",
+      input: {
+        prompt: "humid neon night market",
+        width: 1024,
+        height: 1024,
+        aspectRatio: "16:9",
+        quality: "high",
+        seed: 7,
+      },
+      model: "openai/gpt-image-2.5-flare",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.output).toMatchObject({
+      prompt: "humid neon night market",
+      width: 1024,
+      height: 1024,
+    });
+    expect(result.warnings?.join(" ")).toContain("medium");
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.input).toEqual({
+      prompt: "humid neon night market",
+      aspect_ratio: "1:1",
+      quality: "medium",
+      number_of_images: 1,
+      output_format: "webp",
+      output_compression: 90,
+      background: "opaque",
+      moderation: "auto",
+    });
+    expect(body.input).not.toHaveProperty("openai_api_key");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.replicate.com/v1/models/openai/gpt-image-2.5-flare/predictions",
+    );
+    expect(JSON.stringify(request.headers)).toContain("Bearer test-token");
+  });
+
   it("rejects an image output URL outside Replicate delivery storage", async () => {
     vi.stubGlobal(
       "fetch",
