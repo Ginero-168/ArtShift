@@ -6,6 +6,7 @@ import {
   IconChevronDown,
   IconCloud,
   IconContrast,
+  IconLayers,
   IconPalette,
   IconPenTool,
   IconPolaroid,
@@ -18,6 +19,7 @@ import { type AIProgressStatus, reportAIProgress, reportAIResult } from "@/lib/a
 import { removeBackgroundWithRuntime } from "@/lib/ai/removeBg";
 import {
   getUpscaleTargetMegapixels,
+  DEFAULT_DECOMPOSE_LAYERS,
   UPSCALE_RESOLUTION_PRESETS,
   type UpscaleResolutionPreset,
 } from "@/lib/ai-runtime/contracts";
@@ -73,10 +75,12 @@ import { claimImageActionRun, releaseImageActionRun } from "@/lib/vision/imageAc
 import { resetAICache } from "@/lib/vision/resetCache";
 import { cropImageRegion, trimTransparentRegion } from "@/lib/vision/visionEngine";
 import {
+  EXTRACT_LABEL,
   IMAGE_ACTION_LABELS,
   IMAGE_TOOL_LABELS,
   type ImageActionId,
   isVectorizeTool,
+  LAYER_LABEL,
   VECTORIZE_TOOL_IDS,
   type VectorizeToolId,
 } from "./imageToolTypes";
@@ -214,7 +218,7 @@ function createProgressReporter(operation: string) {
 
 function processingPreviewInput(
   element: ImageElement,
-  kind: "extract" | "remove-bg" | "vectorize" | "upscale",
+  kind: "extract" | "layer" | "remove-bg" | "vectorize" | "upscale",
   label: string,
   sourceDataUrl?: string,
 ) {
@@ -259,6 +263,7 @@ export function VisionObjectIsolator({
   const autoRunKeyRef = useRef<string | null>(null);
   const removeBgHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const extractHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const layerHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const upscaleHandlerRef = useRef<() => Promise<void>>(() => Promise.resolve());
   // VTracer settings are the single local vectorization configuration.
   const [backend, setBackend] = useState<VectorizeBackend>(DEFAULT_VECTORIZE_BACKEND);
@@ -362,6 +367,15 @@ export function VisionObjectIsolator({
       height: cached.height,
     });
   }, [assetAnalysis, currentFileId]);
+
+  // Warm the decoded source image when Layer becomes active (same preloadDataURL
+  // prep Upscale uses before its cloud request).
+  useEffect(() => {
+    if (activeTool !== "layer") return;
+    const cached = getCached(element.fileId);
+    if (!cached?.dataURL) return;
+    void preloadDataURL(cached.dataURL).catch(() => undefined);
+  }, [activeTool, element.fileId]);
 
   const applyPreset = (p: VectorizePreset) => {
     setPreset(p);
@@ -1063,6 +1077,184 @@ export function VisionObjectIsolator({
 
   extractHandlerRef.current = handleExtract;
 
+  const handleLayer = async (queuedContext?: ProcessingJobContext) => {
+    const cached = getCached(element.fileId);
+    if (!cached?.dataURL) {
+      setStatusMessage("Image data not found in cache");
+      return;
+    }
+
+    if (!queuedContext) {
+      const preloaded = await preloadDataURL(cached.dataURL);
+      if (
+        !window.confirm(
+          `Layer จะส่งภาพนี้ไปยัง Replicate (qwen/qwen-image-layered) เพื่อแยกเป็น ${DEFAULT_DECOMPOSE_LAYERS} เลเยอร์ RGBA และอาจมีค่าใช้จ่ายตามบัญชี Replicate ดำเนินการต่อหรือไม่?`,
+        )
+      ) {
+        return;
+      }
+      const job = enqueueProcessingJob({
+        preview: processingPreviewInput(element, "layer", LAYER_LABEL, preloaded.dataURL),
+        run: (context) => handleLayer(context),
+      });
+      processingJobIdRef.current = job.id;
+      setBusy(true);
+      try {
+        await job.promise;
+      } finally {
+        if (processingJobIdRef.current === job.id) processingJobIdRef.current = null;
+        setBusy(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    const { id: previewId, signal } = queuedContext;
+    setBusy(true);
+    setProgress(5);
+    updateCanvasProcessingPreview(previewId, {
+      progress: 0.05,
+      message: "กำลังเตรียมภาพต้นฉบับสำหรับแยก Layer…",
+    });
+    const report = createProgressReporter("Layer");
+    report("preload", "เตรียมภาพต้นฉบับแล้ว", "started", 0.05);
+
+    try {
+      const source = getCached(element.fileId) ?? cached;
+      setStatusMessage("Sending image to Qwen Image Layered...");
+      updateCanvasProcessingPreview(previewId, {
+        progress: 0.12,
+        message: "กำลังส่งภาพไปยัง Qwen Image Layered…",
+      });
+      report("consent", "ผู้ใช้ยืนยันการส่งภาพไป Replicate เพื่อแยก Layer", "step", 0.12);
+      const response = await fetch("/api/layer/decompose", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          task: "image.decomposeLayers",
+          input: {
+            image: {
+              dataUrl: source.dataURL,
+              mimeType: source.dataURL
+                .match(/^data:(image\/(?:jpeg|png|webp));/i)?.[1]
+                ?.toLowerCase(),
+            },
+            width: source.width,
+            height: source.height,
+            numLayers: DEFAULT_DECOMPOSE_LAYERS,
+          },
+          options: {
+            profile: "quality",
+            provider: "replicate",
+            modelAlias: "qwen-image-layered",
+            cloudConsent: true,
+            allowFallback: false,
+            timeoutMs: 120_000,
+            cache: false,
+          },
+        }),
+        signal,
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        execution?: { output?: { layers?: unknown } };
+        error?: { message?: unknown; code?: unknown } | string;
+      } | null;
+      if (!response.ok) {
+        const providerError =
+          typeof payload?.error === "string"
+            ? payload.error
+            : typeof payload?.error?.message === "string"
+              ? payload.error.message
+              : "Layer decompose request failed.";
+        throw new Error(providerError);
+      }
+      const layerPayloads = payload?.execution?.output?.layers;
+      if (!Array.isArray(layerPayloads) || layerPayloads.length === 0) {
+        throw new Error("Layer decompose returned no layer images.");
+      }
+      const layerDataUrls = layerPayloads.map((item, index) => {
+        const dataUrl =
+          item && typeof item === "object" ? (item as { dataUrl?: unknown }).dataUrl : undefined;
+        if (
+          typeof dataUrl !== "string" ||
+          !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(dataUrl)
+        ) {
+          throw new Error(`Layer ${index + 1} returned no valid image output.`);
+        }
+        return dataUrl;
+      });
+      if (signal.aborted) return;
+
+      setProgress(78);
+      setStatusMessage(`Loading ${layerDataUrls.length} RGBA layers...`);
+      updateCanvasProcessingPreview(previewId, {
+        progress: 0.78,
+        message: `กำลังโหลด ${layerDataUrls.length} Layer…`,
+      });
+
+      const sourceBounds = {
+        x: element.x,
+        y: element.y,
+        width: element.width,
+        height: element.height,
+      };
+      const newElements = [];
+      for (const [index, dataUrl] of layerDataUrls.entries()) {
+        if (signal.aborted) return;
+        const layerCached = await loadDataURL(dataUrl);
+        const layerImage = {
+          ...createImage({
+            ...sourceBounds,
+            ...createCachedImageAsset(layerCached),
+          }),
+          angle: element.angle,
+          flipX: element.flipX,
+          flipY: element.flipY,
+          sourceName: element.sourceName
+            ? `${element.sourceName} · Layer ${index + 1}`
+            : `Layer ${index + 1}`,
+        };
+        newElements.push(layerImage);
+        updateCanvasProcessingPreview(previewId, {
+          progress: 0.78 + ((index + 1) / layerDataUrls.length) * 0.16,
+          message: `กำลังวาง Layer ${index + 1}/${layerDataUrls.length}…`,
+        });
+      }
+      if (newElements.length === 0) {
+        throw new Error("No usable layers were produced.");
+      }
+
+      updateProcessingPreview(previewId, {
+        progress: 0.96,
+        message: "กำลังวาง Layer ลงบน Canvas…",
+      });
+      // Background-first order: first inserted sits at the bottom of the stack.
+      addElements(newElements, "decompose image layers");
+      selectOnly(newElements.map((el) => el.id));
+      setStatusMessage(`Created ${newElements.length} editable RGBA layers.`);
+      report(
+        "complete",
+        `แยก Layer สำเร็จ ${newElements.length} ชิ้น และคงต้นฉบับไว้`,
+        "success",
+        100,
+      );
+    } catch (error) {
+      if (signal.aborted || (error as Error).name === "AbortError") {
+        setStatusMessage("Layer decompose cancelled.");
+      } else {
+        const message = error instanceof Error ? error.message : "Unknown Layer error.";
+        setStatusMessage(`Layer error: ${message}`);
+        report("error", `แยก Layer ไม่สำเร็จ: ${message}`, "error");
+        window.alert(`แยก Layer ไม่สำเร็จ: ${message}`);
+      }
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  layerHandlerRef.current = handleLayer;
+
   const analysisMessage =
     assetAnalysis?.status === "analyzing"
       ? `Preparing image intelligence… ${Math.round(assetAnalysis.progress * 100)}%`
@@ -1082,7 +1274,10 @@ export function VisionObjectIsolator({
   useEffect(() => {
     if (
       !autoRun ||
-      (activeTool !== "remove-bg" && activeTool !== "extract" && activeTool !== "upscale")
+      (activeTool !== "remove-bg" &&
+        activeTool !== "extract" &&
+        activeTool !== "layer" &&
+        activeTool !== "upscale")
     ) {
       return;
     }
@@ -1094,7 +1289,9 @@ export function VisionObjectIsolator({
         ? removeBgHandlerRef.current
         : activeTool === "extract"
           ? extractHandlerRef.current
-          : upscaleHandlerRef.current;
+          : activeTool === "layer"
+            ? layerHandlerRef.current
+            : upscaleHandlerRef.current;
     void handler().finally(() => {
       releaseImageActionRun(runKey);
       onToolComplete?.();
@@ -1103,7 +1300,10 @@ export function VisionObjectIsolator({
 
   if (
     autoRun &&
-    (activeTool === "remove-bg" || activeTool === "extract" || activeTool === "upscale")
+    (activeTool === "remove-bg" ||
+      activeTool === "extract" ||
+      activeTool === "layer" ||
+      activeTool === "upscale")
   )
     return null;
 
@@ -1262,7 +1462,33 @@ export function VisionObjectIsolator({
             whiteSpace: "nowrap",
           }}
         >
-          {busy ? "Processing..." : "Extract"}
+          {busy ? "Processing..." : EXTRACT_LABEL}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void handleLayer()}
+          title="Decompose into RGBA layers via Replicate Qwen Image Layered"
+          aria-label={LAYER_LABEL}
+          style={{
+            flex: 1,
+            padding: "5px 6px",
+            background: "#fff",
+            color: "#a21caf",
+            border: "1px solid rgba(192, 38, 211, 0.35)",
+            borderRadius: 5,
+            fontWeight: 700,
+            fontSize: 9.5,
+            cursor: busy ? "wait" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 3,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <IconLayers size={11} color="currentColor" />
+          <span>{busy ? "Processing..." : LAYER_LABEL}</span>
         </button>
       </div>
 

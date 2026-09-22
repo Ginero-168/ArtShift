@@ -38,6 +38,21 @@ describe("ObjectContextBar Hook Rules and Brief Action", () => {
     expect(iconsContent).toContain("export const IconBrief");
   });
 
+  it("places Layer action after Extract and before Vectorize on image selection toolbar", () => {
+    const extractIndex = fileContent.indexOf(
+      "controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === \"extract\"));",
+    );
+    const layerIndex = fileContent.indexOf(
+      "controls.push(action(LAYER_LABEL, toggleLayer, false, activeImageTool === \"layer\"));",
+    );
+    const vectorizeIndex = fileContent.indexOf(
+      "controls.push(\n      action(VECTORIZE_GROUP_LABEL",
+    );
+    expect(extractIndex).toBeGreaterThan(0);
+    expect(layerIndex).toBeGreaterThan(extractIndex);
+    expect(vectorizeIndex).toBeGreaterThan(layerIndex);
+  });
+
   it("places Brief action after Vectorize on image selection toolbar", () => {
     const vectorizeIndex = fileContent.indexOf(
       "controls.push(\n      action(VECTORIZE_GROUP_LABEL",

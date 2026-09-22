@@ -184,6 +184,36 @@ Official sources:
 - [Replicate version schema](https://replicate.com/prunaai/p-image-upscale/versions/391b1558e068ac45d7df06b75e3e34e485b78769c6e9c634cacf21e1dfa239bf/api)
 - [Pruna model documentation](https://docs.pruna.ai/en/stable/docs_pruna_endpoints/performance_models/p-image-upscale.html)
 
+## Qwen Image Layered ผ่าน Replicate
+
+ArtShift ใช้ `qwen/qwen-image-layered` สำหรับ task `image.decomposeLayers` ผ่าน
+endpoint `/api/layer/decompose` และปุ่ม Option Bar ชื่อ `Layer` (แยกจาก Extract
+ซึ่งยังเป็น local RMBG + alpha components)
+
+ผู้ใช้ต้องยืนยัน cloud consent และมี Replicate BYOK ต่อบัญชีผ่าน
+`requireEndUserCloudAi` ก่อนจึงจะเรียก provider ได้ — ไม่มี shared
+`REPLICATE_API_TOKEN`
+
+Adapter ส่ง allowlisted fields ตาม Replicate API:
+
+```json
+{
+  "image": "data:image/...",
+  "num_layers": 4,
+  "output_format": "png",
+  "go_fast": true
+}
+```
+
+`num_layers` รับค่า 2–8 (default 4). Output เป็นรายการ URI ของภาพ RGBA
+(พื้นหลังก่อน / index 0 เป็น bottom layer); adapter ดาวน์โหลดเฉพาะ HTTPS
+`replicate.delivery`, แปลงเป็น data URL แล้วคืน `{ layers: [{ dataUrl }] }`
+
+Official sources:
+
+- [Replicate model page](https://replicate.com/qwen/qwen-image-layered)
+- Sibling schema reference (fal): [fal-ai/qwen-image-layered](https://fal.ai/models/fal-ai/qwen-image-layered/api)
+
 ## Anthropic Messages API
 
 ### Request/response แกนหลัก

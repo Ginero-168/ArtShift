@@ -7,6 +7,7 @@ export type ObjectContextIconName =
   | "remove-bg"
   | "upscale"
   | "extract"
+  | "layer"
   | "download"
   | "image"
   | "vector"
@@ -55,6 +56,7 @@ const ICON_NAME_BY_LABEL: Readonly<Record<string, ObjectContextIconName>> = Obje
   RemoveBG: "remove-bg",
   Upscale: "upscale",
   Extract: "extract",
+  Layer: "layer",
   Download: "download",
   "Download as SVG": "download",
   Image: "image",

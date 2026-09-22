@@ -7,6 +7,7 @@ export const AI_TASK_KINDS = [
   "prompt.enhance",
   "image.generate",
   "image.upscale",
+  "image.decomposeLayers",
 ] as const;
 
 export type AiTaskKind = (typeof AI_TASK_KINDS)[number];
@@ -197,6 +198,26 @@ export type AiImageUpscaleOutput = {
   dataUrl: string;
 };
 
+/** Default / bounds for Qwen Image Layered (`qwen/qwen-image-layered`). */
+export const DEFAULT_DECOMPOSE_LAYERS = 4;
+export const DECOMPOSE_LAYERS_MIN = 2;
+export const DECOMPOSE_LAYERS_MAX = 8;
+
+export type AiImageDecomposeLayersInput = {
+  image: AiImageInput;
+  width: number;
+  height: number;
+  /** Number of RGBA layers to request (2–8). Defaults to 4. */
+  numLayers?: number;
+  /** Optional caption that describes overall image content for the model. */
+  prompt?: string;
+};
+
+export type AiImageDecomposeLayersOutput = {
+  /** Background-first RGBA PNG data URLs (index 0 = bottom layer). */
+  layers: Array<{ dataUrl: string }>;
+};
+
 export type AiTaskInputMap = {
   "assistant.chat": AiAssistantChatInput;
   "vision.describe": AiVisionInput;
@@ -206,6 +227,7 @@ export type AiTaskInputMap = {
   "prompt.enhance": AiPromptEnhanceInput;
   "image.generate": AiImageGenerateInput;
   "image.upscale": AiImageUpscaleInput;
+  "image.decomposeLayers": AiImageDecomposeLayersInput;
 };
 
 export type AiTaskOutputMap = {
@@ -217,6 +239,7 @@ export type AiTaskOutputMap = {
   "prompt.enhance": AiPromptEnhanceOutput;
   "image.generate": AiImageGenerateOutput;
   "image.upscale": AiImageUpscaleOutput;
+  "image.decomposeLayers": AiImageDecomposeLayersOutput;
 };
 
 export type AiTaskInput<K extends AiTaskKind> = AiTaskInputMap[K];

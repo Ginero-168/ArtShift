@@ -91,6 +91,8 @@ function executePublicTask(
       return ai.execute(request.task, request.input, options);
     case "image.upscale":
       return ai.execute(request.task, request.input, options);
+    case "image.decomposeLayers":
+      return ai.execute(request.task, request.input, options);
   }
 }
 
@@ -101,7 +103,8 @@ function trustedExecutionOptions(
   accountId: string,
 ): AiExecutionOptions {
   const isPromptEnhancement = task === "prompt.enhance";
-  const isImageMutation = task === "image.generate" || task === "image.upscale";
+  const isImageMutation =
+    task === "image.generate" || task === "image.upscale" || task === "image.decomposeLayers";
   return {
     profile: isPromptEnhancement ? "economy" : "quality",
     cloudConsent,

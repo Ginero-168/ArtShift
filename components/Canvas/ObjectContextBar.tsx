@@ -24,6 +24,7 @@ import {
   IMAGE_ACTION_LABELS,
   type ImageActionId,
   isVectorizeTool,
+  LAYER_LABEL,
   VECTORIZE_GROUP_LABEL,
 } from "./PropertiesPanel/imageToolTypes";
 
@@ -236,6 +237,7 @@ export default function ObjectContextBar({
     setActiveImageTool((current) => (current === "upscale" ? null : "upscale"));
   const toggleExtract = () =>
     setActiveImageTool((current) => (current === "extract" ? null : "extract"));
+  const toggleLayer = () => setActiveImageTool((current) => (current === "layer" ? null : "layer"));
   const toggleVectorize = () =>
     setActiveImageTool((current) => (isVectorizeTool(current) ? null : "vectorize2"));
 
@@ -329,6 +331,7 @@ export default function ObjectContextBar({
       ),
     );
     controls.push(action(EXTRACT_LABEL, toggleExtract, false, activeImageTool === "extract"));
+    controls.push(action(LAYER_LABEL, toggleLayer, false, activeImageTool === "layer"));
     controls.push(
       action(VECTORIZE_GROUP_LABEL, toggleVectorize, false, isVectorizeTool(activeImageTool)),
     );
@@ -504,14 +507,18 @@ export default function ObjectContextBar({
       {divider("category")}
       {controls}
       {activeImageTool && first.type === "image" ? (
-        activeImageTool === "remove-bg" || activeImageTool === "extract" ? (
+        activeImageTool === "remove-bg" ||
+        activeImageTool === "extract" ||
+        activeImageTool === "layer" ? (
           <div
             data-testid={
               activeImageTool === "remove-bg"
                 ? "remove-bg-runner"
                 : activeImageTool === "extract"
                   ? "extract-runner"
-                  : "upscale-runner"
+                  : activeImageTool === "layer"
+                    ? "layer-runner"
+                    : "upscale-runner"
             }
             style={{ display: "none" }}
           >

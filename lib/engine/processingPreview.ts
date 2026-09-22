@@ -1,5 +1,6 @@
 export type ProcessingPreviewKind =
   | "extract"
+  | "layer"
   | "remove-bg"
   | "vectorize"
   | "upscale"
