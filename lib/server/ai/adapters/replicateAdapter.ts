@@ -57,16 +57,21 @@ const GPT_IMAGE_2_MODEL = "openai/gpt-image-2";
 // Flare retired: replaced with Sunburst across all routes.
 const GPT_IMAGE_25_FLARE_MODEL = "openai/gpt-image-2.5-sunburst";
 const GPT_IMAGE_25_SUNBURST_MODEL = "openai/gpt-image-2.5-sunburst";
+/** Cheap Moodboard batch default (~$0.003/image). Not the chat IMAGE_DEFAULT route. */
+const FLUX_SCHNELL_MODEL = "black-forest-labs/flux-schnell";
 
 /** Models that support xhigh and max quality tiers. */
 const EXTENDED_QUALITY_MODELS = new Set([GPT_IMAGE_25_FLARE_MODEL, GPT_IMAGE_25_SUNBURST_MODEL]);
 
-/** Allowlisted image generation model slugs. Client-side aliases must resolve server-side. */
-const ALLOWED_IMAGE_MODEL_SLUGS = new Set([
+/** Allowlisted GPT Image generation model slugs. */
+const ALLOWED_GPT_IMAGE_MODEL_SLUGS = new Set([
   GPT_IMAGE_2_MODEL,
   GPT_IMAGE_25_FLARE_MODEL,
   GPT_IMAGE_25_SUNBURST_MODEL,
 ]);
+
+/** Allowlisted image generation model slugs (GPT Image + Moodboard Schnell). */
+const ALLOWED_IMAGE_MODEL_SLUGS = new Set([...ALLOWED_GPT_IMAGE_MODEL_SLUGS, FLUX_SCHNELL_MODEL]);
 
 /** Quality values only valid on GPT Image 2.5 models. */
 const EXTENDED_QUALITY_VALUES = new Set(["xhigh", "max"]);
@@ -183,6 +188,16 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           alias: "image-precision",
           profile: "quality",
           pricing: { currency: "USD", perRunUsd: 0.25, note: "Ceiling covers xhigh tier." },
+        },
+        {
+          id: FLUX_SCHNELL_MODEL,
+          alias: "flux-schnell",
+          profile: "economy",
+          pricing: {
+            currency: "USD",
+            perRunUsd: 0.003,
+            note: "Moodboard 3×3 default (~$0.027 per batch of 9).",
+          },
         },
       ],
       message: this.apiToken
@@ -437,9 +452,13 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     if (!ALLOWED_IMAGE_MODEL_SLUGS.has(model.slug)) {
       throw new AiRuntimeError(
         "INVALID_INPUT",
-        `Replicate image generation does not support model: ${model.slug}. Only allowlisted GPT Image models are permitted.`,
+        `Replicate image generation does not support model: ${model.slug}. Only allowlisted image models are permitted.`,
         { provider: this.id },
       );
+    }
+
+    if (model.slug === FLUX_SCHNELL_MODEL) {
+      return this.generateFluxSchnellImage(request, model);
     }
 
     const requestedQuality = input.quality ?? "medium";
@@ -507,6 +526,74 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
               `${model.slug} does not expose deterministic seed control; the seed parameter was not sent upstream.`,
             ]
           : [],
+    };
+  }
+
+  /**
+   * Moodboard cheap batch path: Official Replicate `black-forest-labs/flux-schnell`
+   * (~$0.003/image). Uses Schnell's native input schema, not GPT Image fields.
+   */
+  private async generateFluxSchnellImage(
+    request: AiProviderRequest<"image.generate">,
+    model: { slug: string; version?: string },
+  ): Promise<AiProviderResult<AiTaskOutput<"image.generate">>> {
+    const input = request.input as AiImageGenerateInput;
+    if (input.inputImages?.length) {
+      throw new AiRuntimeError(
+        "INVALID_INPUT",
+        "flux-schnell does not accept reference input images for Moodboard batches.",
+        { provider: this.id },
+      );
+    }
+
+    const aspectRatio = normalizeFluxSchnellAspectRatio(
+      input.aspectRatio ?? aspectRatioFromDimensions(input.width, input.height),
+    );
+
+    const prediction = await this.createPrediction(
+      model,
+      {
+        prompt: input.prompt,
+        aspect_ratio: aspectRatio,
+        num_outputs: 1,
+        num_inference_steps: 4,
+        output_format: "webp",
+        output_quality: 80,
+        go_fast: true,
+        megapixels: "1",
+        ...(typeof input.seed === "number" ? { seed: input.seed } : {}),
+      },
+      request.signal,
+      true,
+    );
+    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    const outputUrl = extractFileUrl(completed.output);
+    if (!outputUrl) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no generated image file.", {
+        provider: this.id,
+      });
+    }
+    const dataUrl = await fetchGeneratedImage(outputUrl, request.signal);
+    const metrics = completed.metrics ?? {};
+    const { width, height } = dimensionsForFluxAspect(aspectRatio, input.width, input.height);
+    return {
+      output: {
+        dataUrl,
+        prompt: input.prompt,
+        width,
+        height,
+        seed: input.seed ?? 0,
+      },
+      model:
+        completed.model && completed.version
+          ? `${completed.model}@${completed.version}`
+          : request.model,
+      requestId: completed.id,
+      finishReason: completed.status,
+      usage: {
+        providerSeconds: numberFromMetrics(metrics, ["predict_time", "total_time"]),
+      },
+      warnings: [],
     };
   }
 
@@ -1134,6 +1221,62 @@ async function fetchRecraftSvg(outputUrl: string, signal: AbortSignal): Promise<
 
 function isExecutionTimeout(reason: unknown): boolean {
   return reason instanceof AiRuntimeError && reason.code === "TIMEOUT";
+}
+
+const FLUX_SCHNELL_ASPECT_RATIOS = new Set([
+  "1:1",
+  "16:9",
+  "21:9",
+  "3:2",
+  "2:3",
+  "4:5",
+  "5:4",
+  "3:4",
+  "4:3",
+  "9:16",
+  "9:21",
+]);
+
+function normalizeFluxSchnellAspectRatio(value: string | undefined): string {
+  if (value && FLUX_SCHNELL_ASPECT_RATIOS.has(value)) return value;
+  if (!value) return "1:1";
+  const match = /^(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)$/i.exec(value.trim());
+  if (!match) return "1:1";
+  const w = Number(match[1]);
+  const h = Number(match[2]);
+  if (!(w > 0) || !(h > 0)) return "1:1";
+  const ratio = w / h;
+  let best = "1:1";
+  let bestDelta = Infinity;
+  for (const candidate of FLUX_SCHNELL_ASPECT_RATIOS) {
+    const [cw, ch] = candidate.split(":").map(Number);
+    if (!cw || !ch) continue;
+    const delta = Math.abs(cw / ch - ratio);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+function dimensionsForFluxAspect(
+  aspectRatio: string,
+  fallbackWidth: number,
+  fallbackHeight: number,
+): { width: number; height: number } {
+  const [w, h] = aspectRatio.split(":").map(Number);
+  if (!(w > 0) || !(h > 0)) {
+    return {
+      width: Math.max(1, Math.round(fallbackWidth) || 1024),
+      height: Math.max(1, Math.round(fallbackHeight) || 1024),
+    };
+  }
+  const longEdge = 1024;
+  if (w >= h) {
+    return { width: longEdge, height: Math.max(1, Math.round((longEdge * h) / w)) };
+  }
+  return { width: Math.max(1, Math.round((longEdge * w) / h)), height: longEdge };
 }
 
 function parseReplicateModel(model: string): { slug: string; version?: string } {

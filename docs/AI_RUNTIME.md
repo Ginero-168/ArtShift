@@ -36,6 +36,7 @@ The unified chat preserves local-first precedence: a deterministic local plan wi
 | Recraft Vectorize (Cloud) | Cloud opt-in; the explicit Vectorize button sends the raster to Replicate and imports only validated SVG paths |
 | P-Image-Upscale | Cloud opt-in; the explicit Upscale settings panel sends the raster to Replicate with a selected 8/16/32 MP target |
 | Layer (Qwen Image Layered) | Cloud opt-in; the explicit Layer button sends the raster to Replicate `qwen/qwen-image-layered` and inserts RGBA layers at the Preload staging bounds |
+| Moodboard AI ×9 | Cloud opt-in on Infinity Canvas; expand vibe → 9 distinct prompts → Replicate `black-forest-labs/flux-schnell` (~$0.003/image ≈ $0.027/batch) into a 3×3 upright grid. Stock keyword→Unsplash/Pexels stays a separate action. |
 | Prompt enhancement | Cloud opt-in with a deterministic local enrichment fallback in AI Image Studio |
 | Image generation | Cloud opt-in; the explicit Generate action sends the prompt to Replicate `openai/gpt-image-2` with orchestration-selected `quality: low|medium|high`; the product does not expose quality-tier modes |
 | Remove BG / Extract | Local-first; explicit VPS-local RMBG fallback only when the browser RMBG model is not ready. Extract runs no vision-language detector and has no detector fallback |
@@ -84,6 +85,23 @@ source image stays where it was. Processing uses the same FIFO
 source (`preloadLayerSource`) when the image Option Bar is shown, when Layer is
 hovered, and again when the Layer tool becomes active. Extract itself stays local
 and is not part of that warm-up.
+
+### Moodboard AI ×9 (cheap Replicate batch)
+
+On an **Infinity Canvas** slide, the Moodboard control accepts one short
+prompt/keyword/vibe. **Stock** keeps the existing Unsplash/Pexels keyword fill.
+**AI ×9** is an additional action:
+
+1. Auth + explicit consent + per-account Replicate BYOK (`requireEndUserCloudAi`)
+2. `POST /api/moodboard/expand` — `assistant.chat` expands associative design
+   directions (Subject / Setting / Prop / Mood / Color style) into **exactly 9
+   distinct** image prompts
+3. `POST /api/moodboard/generate` × up to 9 — each call runs `image.generate`
+   with alias `flux-schnell` → Official Replicate `black-forest-labs/flux-schnell`
+   (~**$0.003**/image ≈ **$0.027**/batch). No Ideogram / FLUX Pro / Imagen /
+   GPT Image default for this path.
+4. Successful images are placed as upright EngineElements in a **3×3 grid** that
+   does not overwrite unrelated artwork. Partial failures are shown in the UI.
 
 During Remove BG, Extract, Layer, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading
