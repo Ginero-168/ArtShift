@@ -71,6 +71,25 @@ describe("transient processing preview", () => {
     });
   });
 
+  it("exposes dragged Layer preload bounds for the final layer stack insert", () => {
+    const source = { x: 100, y: 80, width: 320, height: 220 };
+    const id = beginProcessingPreview({
+      kind: "layer",
+      label: "Layer",
+      ...getProcessingPreviewBounds(source),
+      progress: 0.5,
+      sourceDataUrl: "data:image/png;base64,preview",
+    });
+    updateProcessingPreview(id, { x: 1400, y: 350, userDragged: true });
+
+    expect(getProcessingPreviewPlacement(id, getProcessingPreviewBounds(source))).toEqual({
+      x: 1400,
+      y: 350,
+      width: 320,
+      height: 220,
+    });
+  });
+
   it("keeps queued previews visible alongside the active preview", () => {
     const firstId = beginProcessingPreview({
       kind: "vectorize",
