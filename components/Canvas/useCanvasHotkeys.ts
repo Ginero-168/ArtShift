@@ -65,7 +65,8 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
     }
     if (event.code === "KeyV" && !event.shiftKey) {
       // In-app Copy/Cut clipboard wins so paste works after switching slides.
-      // When empty, do not preventDefault — usePasteDrop handles OS files/text.
+      // When empty, do not preventDefault — usePasteDrop reads the system
+      // clipboard (another ArtShift tab, or Docs/Figma/OS images and text).
       if (st.clipboard?.length) {
         event.preventDefault();
         st.pasteElements();
@@ -75,7 +76,7 @@ export function handleCanvasHotkey(event: KeyboardEvent) {
     if (event.code === "KeyD" && !event.shiftKey) {
       event.preventDefault();
       if (selectedIds.size > 0) {
-        st.copyElements(Array.from(selectedIds));
+        st.copyElements(Array.from(selectedIds), { systemClipboard: false });
         st.pasteElements();
       }
       return;

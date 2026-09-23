@@ -179,8 +179,16 @@ export function usePasteDrop(
         return;
       }
 
-      // 3) HTML payload: embedded <img>, or inline SVG rendered as an image
+      // 3) Another ArtShift tab wrote mighty-slide HTML to the system clipboard.
+      // In-memory state is empty here. Handle that before Docs/Figma/plain text
+      // so the fallback text representation is not inserted as a text box.
       const html = cd.getData("text/html");
+      if (html && useEngine.getState().pasteClipboardHtml(html)) {
+        e.preventDefault();
+        return;
+      }
+
+      // 4) HTML payload: embedded <img>, or inline SVG rendered as an image
       if (html) {
         const imgSrc = htmlToFirstImgSrc(html);
         if (imgSrc && /^(https?:|data:|blob:)/i.test(imgSrc)) {
@@ -201,7 +209,7 @@ export function usePasteDrop(
         }
       }
 
-      // 4) Direct image/svg+xml clipboard type
+      // 5) Direct image/svg+xml clipboard type
       const svgDirect = cd.getData("image/svg+xml");
       if (svgDirect?.trim()) {
         e.preventDefault();
@@ -212,7 +220,7 @@ export function usePasteDrop(
         return;
       }
 
-      // 5) Plain text → text element on the slide
+      // 6) Plain text → text element on the slide
       const text = cd.getData("text/plain");
       if (text?.trim()) {
         const trimmed = text.trim();

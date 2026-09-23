@@ -341,7 +341,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
         <div style={{ display: "flex", gap: 3 }}>
           <IconBtn
             onClick={() => {
-              copyElements(ids);
+              copyElements(ids, { systemClipboard: false });
               pasteElements();
             }}
             title="Duplicate"
