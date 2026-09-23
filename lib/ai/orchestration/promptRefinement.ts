@@ -14,7 +14,7 @@ import {
   createLandscapeDimensions,
   createPortraitDimensions,
 } from "./promptHelperOptionSets";
-import type { PromptHelperVariantPlan } from "./promptHelperVariantPlan";
+import type { PlannedVariantAxis, PromptHelperVariantPlan } from "./promptHelperVariantPlan";
 import {
   createBrandVariantDimensions,
   inferSharedAnchors,
@@ -326,9 +326,159 @@ function collectCatalogOptionPool(): Map<string, RefinementOption> {
   return pool;
 }
 
+const CATALOG_AXIS_META: Record<string, { title: string; hint?: string }> = {
+  mood: { title: "คาแรคเตอร์", hint: "เลือกทิศทางความรู้สึก — แต่ละขั้วคนละบุคลิก" },
+  structure: { title: "โครงสร้างพื้น", hint: "การจัดวางสีพื้นหลัง" },
+  signature: { title: "ลายเซ็นกราฟิก", hint: "บทบาทขององค์ประกอบซิกเนเจอร์" },
+  density: { title: "ความหนาแน่น", hint: "จัดวางแน่นหรือโล่ง" },
+  color: { title: "โทนสี", hint: "ขั้วสีของภาพ" },
+  background: { title: "พื้นหลัง", hint: "ฉากที่รองรับตัวแบบ" },
+  camera: { title: "มุมกล้อง", hint: "มุมมองและการจัดเฟรม" },
+  style: { title: "สไตล์ภาพ", hint: "ภาษาภาพหลัก" },
+  scenery: { title: "บรรยากาศฉาก", hint: "ฉากทิวทัศน์" },
+  atmosphere: { title: "อารมณ์ภาพ", hint: "ความรู้สึกหลักของภาพ" },
+  creative: { title: "ทวิสต์สร้างสรรค์", hint: "แนวคิดเสริมที่ทำให้ prompt มีชีวิต" },
+  lighting: { title: "แสง", hint: "ทิศทางและคุณภาพแสง" },
+  detail: { title: "รายละเอียดผิว", hint: "ความละเอียดและวัสดุผิว" },
+  weather: { title: "เวลา/อากาศ", hint: "ช่วงวันและสภาพอากาศ" },
+  composition: { title: "องค์ประกอบ", hint: "การจัดวางในเฟรม" },
+  breed: { title: "สายพันธุ์", hint: "สายพันธุ์ของตัวแบบ" },
+  look: { title: "ลักษณะ", hint: "บุคลิกและลักษณะของบุคคล" },
+};
+
+const MAX_PLANNED_AXES = 10;
+const MAX_PLANNED_OPTIONS = 15;
+
+function sanitizePlanId(value: string, fallback: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .slice(0, 48);
+  return slug || fallback;
+}
+
+function uniqueAxisId(raw: string, seen: Set<string>, index: number): string {
+  const base = sanitizePlanId(raw, `axis${index + 1}`);
+  if (!seen.has(base)) return base;
+  let n = 2;
+  while (seen.has(`${base}-${n}`)) n += 1;
+  return `${base}-${n}`.slice(0, 48);
+}
+
+function resolvePlannedOptions(
+  axis: PlannedVariantAxis,
+  axisId: string,
+  pool: Map<string, RefinementOption>,
+): RefinementOption[] {
+  const custom = axis.options ?? [];
+  if (custom.length > 0) {
+    const resolved: RefinementOption[] = [];
+    const seen = new Set<string>();
+    custom.forEach((opt, index) => {
+      const label = opt.label.trim().slice(0, 40);
+      const modifier = (opt.modifier || label).trim().slice(0, 180);
+      if (!label || !modifier) return;
+      const known = pool.get(opt.id);
+      const useKnown = Boolean(known && known.label === label);
+      const id = useKnown
+        ? opt.id
+        : `${axisId}__${sanitizePlanId(opt.id || label, `opt${index + 1}`)}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      resolved.push(
+        withPreview(
+          useKnown && known
+            ? known
+            : {
+                id,
+                label,
+                modifier,
+                character: opt.character?.trim().slice(0, 16) || undefined,
+              },
+        ),
+      );
+    });
+    if (resolved.length > 0) return resolved.slice(0, MAX_PLANNED_OPTIONS);
+  }
+
+  const fromIds: RefinementOption[] = [];
+  const seen = new Set<string>();
+  for (const id of axis.optionIds) {
+    const known = pool.get(id);
+    if (!known || seen.has(known.id)) continue;
+    seen.add(known.id);
+    fromIds.push(withPreview(known));
+  }
+  return fromIds.slice(0, MAX_PLANNED_OPTIONS);
+}
+
+function catalogDimension(dim: RefinementDimension): RefinementDimension {
+  return mapDimension({
+    id: dim.id,
+    title: dim.title,
+    hint: dim.hint,
+    options: dim.options.map((opt) => ({
+      id: opt.id,
+      label: opt.label,
+      character: opt.character,
+      modifier: opt.modifier,
+    })),
+  });
+}
+
+/**
+ * Cats and dogs keep coat color + breed when the plan uses palette tones
+ * or omits those axes. Other subjects are not forced onto a preset pack.
+ */
+function ensurePetCoatAndBreed(
+  data: PromptRefinementCardData,
+  planned: RefinementDimension[],
+): RefinementDimension[] {
+  if (data.subjectType !== "cat" && data.subjectType !== "dog") return planned;
+  const source = data.subjectType === "cat" ? createCatDimensions() : createDogDimensions();
+  const colorCat = source.find((dim) => dim.id === "color");
+  const breedCat = source.find((dim) => dim.id === "breed");
+  if (!colorCat || !breedCat) return planned;
+
+  const align = (
+    axis: RefinementDimension | undefined,
+    catalog: RefinementDimension,
+  ): RefinementDimension => {
+    const mapped = catalogDimension(catalog);
+    if (!axis) return { ...mapped, options: mapped.options.slice(0, MAX_PLANNED_OPTIONS) };
+    const allowed = new Set(mapped.options.map((opt) => opt.id));
+    const preferred = axis.options.filter((opt) => allowed.has(opt.id));
+    if (preferred.length === 0) {
+      return { ...mapped, options: mapped.options.slice(0, MAX_PLANNED_OPTIONS) };
+    }
+    return {
+      id: mapped.id,
+      title: mapped.title,
+      hint: axis.hint || mapped.hint,
+      options: preferred.slice(0, MAX_PLANNED_OPTIONS),
+    };
+  };
+
+  const color = align(
+    planned.find((dim) => dim.id === "color"),
+    colorCat,
+  );
+  const breed = align(
+    planned.find((dim) => dim.id === "breed"),
+    breedCat,
+  );
+  const rest = planned.filter((dim) => dim.id !== "color" && dim.id !== "breed");
+  return [color, breed, ...rest].slice(0, MAX_PLANNED_AXES);
+}
+
 /**
  * Apply a Gemini Level-2 plan onto a baseline refinement card.
- * Unknown axes/options are ignored; empty plans leave the card unchanged.
+ * The plan's axes replace the baseline. Unknown catalog ids are dropped.
+ * Invented option cards (label + modifier) are kept even when they are not
+ * in the fallback catalog. An empty or unusable plan leaves the card unchanged.
  */
 export function applyPromptHelperVariantPlan(
   data: PromptRefinementCardData,
@@ -341,126 +491,30 @@ export function applyPromptHelperVariantPlan(
     for (const opt of dim.options) optionPool.set(opt.id, opt);
   }
 
-  const titleByAxis: Record<string, { title: string; hint?: string }> = {
-    mood: { title: "คาแรคเตอร์", hint: "เลือกทิศทางความรู้สึก — แต่ละขั้วคนละบุคลิก" },
-    structure: { title: "โครงสร้างพื้น", hint: "การจัดวางสีพื้นหลัง" },
-    signature: { title: "ลายเซ็นกราฟิก", hint: "บทบาทขององค์ประกอบซิกเนเจอร์" },
-    density: { title: "ความหนาแน่น", hint: "จัดวางแน่นหรือโล่ง" },
-    color: { title: "โทนสี", hint: "ขั้วสีของภาพ" },
-    background: { title: "พื้นหลัง", hint: "ฉากที่รองรับตัวแบบ" },
-    camera: { title: "มุมกล้อง", hint: "มุมมองและการจัดเฟรม" },
-    style: { title: "สไตล์ภาพ", hint: "ภาษาภาพหลัก" },
-    scenery: { title: "บรรยากาศฉาก", hint: "ฉากทิวทัศน์" },
-    atmosphere: { title: "อารมณ์ภาพ", hint: "ความรู้สึกหลักของภาพ" },
-    creative: { title: "ทวิสต์สร้างสรรค์", hint: "แนวคิดเสริมที่ทำให้ prompt มีชีวิต" },
-    lighting: { title: "แสง", hint: "ทิศทางและคุณภาพแสง" },
-    detail: { title: "รายละเอียดผิว", hint: "ความละเอียดและวัสดุผิว" },
-    weather: { title: "เวลา/อากาศ", hint: "ช่วงวันและสภาพอากาศ" },
-    composition: { title: "องค์ประกอบ", hint: "การจัดวางในเฟรม" },
-    breed: { title: "สายพันธุ์", hint: "สายพันธุ์ของตัวแบบ" },
-    look: { title: "ลักษณะ", hint: "บุคลิกและลักษณะของบุคคล" },
-  };
-
   const existingMeta = new Map(
     data.dimensions.map((dim) => [dim.id, { title: dim.title, hint: dim.hint }]),
   );
 
-  const fullAxisOptions = new Map<string, RefinementOption[]>();
-  for (const dim of [
-    ...createGenericOptionSetDimensions(),
-    ...createLandscapeDimensions(),
-    ...createBrandVariantDimensions(),
-    ...createCatDimensions(),
-    ...createDogDimensions(),
-    ...createPortraitDimensions(),
-  ]) {
-    if (!fullAxisOptions.has(dim.id)) {
-      fullAxisOptions.set(
-        dim.id,
-        dim.options.map((opt) =>
-          withPreview({
-            id: opt.id,
-            label: opt.label,
-            character: opt.character,
-            modifier: opt.modifier,
-          }),
-        ),
-      );
-    }
-  }
-
-  const TARGET_OPTIONS_PER_AXIS = 15;
   const nextDimensions: RefinementDimension[] = [];
-  for (const axis of plan.axes) {
-    const preferred = axis.optionIds
-      .map((id) => optionPool.get(id))
-      .filter((opt): opt is RefinementOption => Boolean(opt))
-      .map(withPreview);
-    if (preferred.length === 0) continue;
-
-    const seen = new Set(preferred.map((o) => o.id));
-    const padded = [...preferred];
-    for (const opt of fullAxisOptions.get(axis.id) ?? []) {
-      if (padded.length >= TARGET_OPTIONS_PER_AXIS) break;
-      if (seen.has(opt.id)) continue;
-      padded.push(opt);
-      seen.add(opt.id);
-    }
-
-    const meta = existingMeta.get(axis.id) ??
-      titleByAxis[axis.id] ?? {
-        title: axis.id,
-        hint: undefined,
-      };
+  const seenAxisIds = new Set<string>();
+  plan.axes.forEach((axis, index) => {
+    const axisId = uniqueAxisId(axis.id, seenAxisIds, index);
+    seenAxisIds.add(axisId);
+    const options = resolvePlannedOptions(axis, axisId, optionPool);
+    if (options.length === 0) return;
+    const meta = CATALOG_AXIS_META[axisId];
+    const existing = existingMeta.get(axisId);
     nextDimensions.push({
-      id: axis.id,
-      title: meta.title,
-      hint: meta.hint,
-      options: padded.slice(0, TARGET_OPTIONS_PER_AXIS),
+      id: axisId,
+      title: axis.title?.trim() || existing?.title || meta?.title || axisId,
+      hint: axis.hint?.trim() || existing?.hint || meta?.hint,
+      options,
     });
-  }
+  });
 
   if (nextDimensions.length === 0) return data;
 
-  const TARGET_AXES = 10;
-  const resolved =
-    data.mode === "subject" && data.dimensions.length > 0
-      ? mergeSubjectLockedAxes(
-          data.dimensions,
-          nextDimensions,
-          TARGET_AXES,
-          TARGET_OPTIONS_PER_AXIS,
-        )
-      : nextDimensions;
-
-  if (
-    !plan.preferBrandAxes &&
-    data.mode !== "brand-variant" &&
-    plan.situation !== "style_locked" &&
-    plan.situation !== "strict_ci" &&
-    resolved.length < TARGET_AXES
-  ) {
-    const used = new Set(resolved.map((d) => d.id));
-    for (const dim of createGenericOptionSetDimensions()) {
-      if (resolved.length >= TARGET_AXES) break;
-      if (used.has(dim.id)) continue;
-      resolved.push({
-        id: dim.id,
-        title: dim.title,
-        hint: dim.hint,
-        options: dim.options.slice(0, TARGET_OPTIONS_PER_AXIS).map((opt) =>
-          withPreview({
-            id: opt.id,
-            label: opt.label,
-            character: opt.character,
-            modifier: opt.modifier,
-          }),
-        ),
-      });
-      used.add(dim.id);
-    }
-  }
-
+  const resolved = ensurePetCoatAndBreed(data, nextDimensions).slice(0, MAX_PLANNED_AXES);
   const mode: RefinementMode =
     plan.preferBrandAxes || data.mode === "brand-variant" ? "brand-variant" : data.mode;
 
@@ -472,42 +526,6 @@ export function applyPromptHelperVariantPlan(
     categories: resolved,
     selectedOptions: {},
   };
-}
-
-function mergeSubjectLockedAxes(
-  locked: RefinementDimension[],
-  planned: RefinementDimension[],
-  maxAxes: number,
-  maxOptions: number,
-): RefinementDimension[] {
-  const lockedClone = locked.map((dim) => ({
-    id: dim.id,
-    title: dim.title,
-    hint: dim.hint,
-    options: dim.options.slice(0, maxOptions).map(withPreview),
-  }));
-  const lockedById = new Map(lockedClone.map((dim) => [dim.id, dim]));
-
-  for (const dim of planned) {
-    const subjectAxis = lockedById.get(dim.id);
-    if (!subjectAxis) continue;
-    const allowed = new Set(subjectAxis.options.map((opt) => opt.id));
-    const preferred = dim.options.filter((opt) => allowed.has(opt.id));
-    if (preferred.length === 0) continue;
-    const seen = new Set(preferred.map((opt) => opt.id));
-    const merged = [...preferred];
-    for (const opt of subjectAxis.options) {
-      if (merged.length >= maxOptions) break;
-      if (seen.has(opt.id)) continue;
-      merged.push(opt);
-      seen.add(opt.id);
-    }
-    subjectAxis.options = merged.slice(0, maxOptions);
-  }
-
-  const used = new Set(lockedClone.map((dim) => dim.id));
-  const extras = planned.filter((dim) => !used.has(dim.id));
-  return [...lockedClone, ...extras].slice(0, maxAxes);
 }
 
 /** Flattened catalog snapshot for Gemini planning prompts. */
@@ -542,4 +560,41 @@ export function listPromptHelperCatalogAxes(): {
     }
   }
   return [...byId.values()];
+}
+
+/**
+ * Catalog chips worth showing the planner. Pets get coat color + breed.
+ * Brand briefs get brand axes. Every other subject gets an empty catalog
+ * so the model invents axes instead of copying the generic photography pack.
+ */
+export function listPromptHelperPlanningCatalog(prompt: string): {
+  axisId: string;
+  options: { id: string; label: string }[];
+}[] {
+  const toAxis = (dim: RefinementDimension) => ({
+    axisId: dim.id,
+    options: dim.options.map((option) => ({ id: option.id, label: option.label })),
+  });
+
+  if (isBrandVariantBrief(prompt)) {
+    return createBrandVariantDimensions().map((dim) =>
+      toAxis({
+        id: dim.id,
+        title: dim.title,
+        hint: dim.hint,
+        options: dim.options.map((opt) => ({
+          id: opt.id,
+          label: opt.label,
+          modifier: opt.modifier,
+          character: opt.character,
+        })),
+      }),
+    );
+  }
+
+  const preset = PRESETS.find((item) => item.matcher(prompt));
+  if (preset?.subjectType === "cat" || preset?.subjectType === "dog") {
+    return preset.dimensions.filter((dim) => dim.id === "color" || dim.id === "breed").map(toAxis);
+  }
+  return [];
 }

@@ -1,13 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   buildPromptHelperVariantUserMessage,
+  groundPromptHelperRationale,
   PROMPT_HELPER_VARIANT_SYSTEM,
   parsePromptHelperVariantPlan,
 } from "@/lib/ai/orchestration/promptHelperVariantPlan";
 import {
   applyPromptHelperVariantPlan,
   createPromptRefinement,
-  listPromptHelperCatalogAxes,
+  listPromptHelperPlanningCatalog,
   type PromptRefinementCardData,
 } from "@/lib/ai/orchestration/promptRefinement";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
       replicateToken: getSessionReplicateToken(req),
       accountId: account.id,
     });
-    const catalog = listPromptHelperCatalogAxes();
+    const catalog = listPromptHelperPlanningCatalog(prompt);
     const result = await ai.execute(
       "assistant.chat",
       {
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
             content: buildPromptHelperVariantUserMessage(prompt, catalog),
           },
         ],
-        maxTokens: 3200,
+        maxTokens: 6000,
       },
       {
         profile: "quality",
@@ -115,14 +116,17 @@ export async function POST(req: NextRequest) {
         const applied = applyPromptHelperVariantPlan(baseline, plan);
         if (applied === baseline) {
           planError = "no_matching_options";
-          console.error("[prompt-helper-plan] plan had no matching catalog options", {
+          console.error("[prompt-helper-plan] plan had no usable axes", {
             model: modelUsed,
-            axes: plan.axes.map((a) => ({ id: a.id, n: a.optionIds.length })),
+            axes: plan.axes.map((a) => ({
+              id: a.id,
+              n: a.options?.length || a.optionIds.length,
+            })),
           });
         } else {
           card = applied;
           planSource = "gemini";
-          rationale = plan.rationale;
+          rationale = groundPromptHelperRationale(plan.rationale, applied.dimensions, prompt);
         }
       }
     }
