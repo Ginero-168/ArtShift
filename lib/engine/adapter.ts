@@ -124,6 +124,19 @@ async function legacyToEngineSlide(legacy: Slide, k: number): Promise<EngineSlid
   };
 }
 
+export async function legacyObjectsToEngineElements(
+  objects: SlideObject[],
+  scale?: number,
+): Promise<EngineElement[]> {
+  const k = scale ?? SLIDE_W / LEGACY_W;
+  const elements: EngineElement[] = [];
+  for (const obj of objects) {
+    const element = await legacyObjectToElement(obj, k);
+    if (element) elements.push(element);
+  }
+  return elements;
+}
+
 async function legacyObjectToElement(obj: SlideObject, k: number): Promise<EngineElement | null> {
   const baseGeom = {
     x: obj.x * k,

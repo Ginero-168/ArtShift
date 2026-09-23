@@ -2,6 +2,12 @@
 
 import { nanoid } from "nanoid";
 import { create } from "zustand";
+import {
+  htmlToInternalObjects,
+  htmlToInternalSlide,
+  readSystemClipboardHtml,
+  writeObjectsToClipboard,
+} from "./clipboard";
 import { DEFAULT_THAI_FONT_FAMILY } from "./fonts";
 import { migrateDoc } from "./migrate";
 import {
@@ -655,7 +661,9 @@ export const useStore = create<Store>((set, get) => ({
     const slide = get().currentSlide();
     const ids = get().selectedIds;
     const objs = slide.objects.filter((o) => ids.includes(o.id));
-    set({ clipboard: structuredClone(objs) });
+    const copies = structuredClone(objs);
+    set({ clipboard: copies });
+    if (copies.length) void writeObjectsToClipboard(copies);
   },
   cutSelection: () => {
     get().copySelection();
@@ -663,8 +671,21 @@ export const useStore = create<Store>((set, get) => ({
   },
   paste: () => {
     const clip = get().clipboard;
-    if (!clip?.length) return;
-    get().pasteObjects(clip);
+    if (clip?.length) {
+      get().pasteObjects(clip);
+      return;
+    }
+    void (async () => {
+      const html = await readSystemClipboardHtml();
+      if (!html || get().clipboard?.length) return;
+      const slide = htmlToInternalSlide(html);
+      if (slide) {
+        get().pasteSlide(slide);
+        return;
+      }
+      const objects = htmlToInternalObjects(html);
+      if (objects?.length) get().pasteObjects(objects);
+    })();
   },
   pasteObjects: (objects) => {
     get().pushHistory();

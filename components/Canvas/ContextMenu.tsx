@@ -76,7 +76,7 @@ export default function ContextMenu({ position, onClose }: Props) {
         kind: "item",
         label: "Duplicate",
         onClick: () => {
-          copyElements(ids);
+          copyElements(ids, { systemClipboard: false });
           pasteElements();
         },
       },

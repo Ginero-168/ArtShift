@@ -23,12 +23,17 @@ import {
   syncElementAppearance,
 } from "../appearance";
 import {
+  htmlToArtShiftElements,
+  htmlToInternalObjects,
+  htmlToInternalSlide,
+  readSystemClipboardHtml,
+} from "../clipboard";
+import {
   type ActiveRasterSelection,
   appendActiveRasterSelection,
   clearActiveRasterSelection,
   setActiveRasterSelection,
 } from "../raster/activeSelection";
-
 import {
   featherRasterSelection,
   invertRasterSelection,
@@ -38,6 +43,8 @@ import {
 } from "../raster/selection";
 import type { GhostVariationOverlay } from "../renderer/ghostOverlay";
 import type { TemplateResult } from "../templates";
+import type { Slide } from "../types";
+import { legacyObjectsToEngineElements, legacyToEngineDoc } from "./adapter";
 import { type AlignMode, alignElements, type DistributeAxis, distributeElements } from "./align";
 import { recomputeArrowBindings } from "./binding";
 import { createImage } from "./factory";
@@ -49,7 +56,7 @@ import {
   undoWithMetadata as historyUndoWithMetadata,
   pushHistory,
 } from "./history";
-import { getCached } from "./imageCache";
+import { getCached, loadDataURL } from "./imageCache";
 import { createInteractionController, type PreviewPatch } from "./interactionController";
 import {
   addObjectToLayer,
@@ -68,6 +75,7 @@ import { isMediaElement, normalizeMediaPatch } from "./mediaLayout";
 import { resizeArtworkSlide } from "./resizeArtwork";
 import { INFINITY_CANVAS_LABEL, SLIDE_KIND_ARTWORK, SLIDE_KIND_INFINITY_CANVAS } from "./slideKind";
 import { type SmartArrangeOptions, type SmartArrangePatch, solveSmartArrange } from "./smartLayout";
+import { publishEngineClipboard } from "./systemClipboard";
 import { applyTemplateToSlide, type TemplateApplyMode } from "./templateApplication";
 import { normalizeTextPatch } from "./textObject";
 import {
@@ -245,9 +253,22 @@ export type EngineState = {
 
   /** In-memory clipboard of elements with source ids for relationship remapping. */
   clipboard: EngineElement[] | null;
-  copyElements: (ids: string[]) => void;
+  /**
+   * Copy into the tab-local clipboard and, by default, the system clipboard.
+   * Pass `{ systemClipboard: false }` for in-tab duplicate so Cmd/Ctrl+D does
+   * not replace what the user copied from another app.
+   */
+  copyElements: (ids: string[], options?: { systemClipboard?: boolean }) => void;
   cutElements: (ids: string[]) => void;
   pasteElements: () => void;
+  /** Insert elements that arrived from another tab (or a mighty-slide HTML payload). */
+  pasteExternalElements: (elements: EngineElement[], assets?: Record<string, string>) => void;
+  /**
+   * Parse ArtShift / mighty-slide HTML and insert it.
+   * Returns false for external HTML (Docs, Figma, OS images) so the caller
+   * can keep its own paste path.
+   */
+  pasteClipboardHtml: (html: string) => boolean;
 
   undo: () => void;
   redo: () => void;
@@ -378,6 +399,63 @@ export const useEngine = create<EngineState>((set, get) => {
   const interactionController = createInteractionController((patches: PreviewPatch[]) => {
     set((cur) => mapDoc(cur, (sl) => applyElementPatches(sl, patches), false));
   });
+
+  const commitPastedElements = (elements: EngineElement[]) => {
+    if (!elements.length) return;
+    const s = get();
+    const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
+    if (!slide) return;
+    pushHistory(s.history, s.doc, "paste");
+    const pasted = clampElementsToSlide(cloneElementsForPaste(elements), slide.width, slide.height);
+    set((cur) =>
+      mapCurrentSlide(cur, (sl) => {
+        let next = sl;
+        const layerId = sl.layers.some((layer) => layer.id === cur.activeLayerId)
+          ? cur.activeLayerId
+          : sl.layers[0]?.id;
+        if (!layerId) return sl;
+        for (const el of pasted) {
+          el.z = nextZ(next);
+          next = addObjectToLayer(next, el, layerId);
+        }
+        return recomputeArrowBindings(next);
+      }),
+    );
+    if (pasted.length) set({ selectedIds: new Set(pasted.map((e) => e.id)) });
+  };
+
+  const pasteLegacySlide = async (legacySlide: Slide) => {
+    const converted = await legacyToEngineDoc({
+      id: crypto.randomUUID(),
+      title: legacySlide.name || "Pasted slide",
+      width: 1280,
+      height: 720,
+      slides: [legacySlide],
+      updatedAt: Date.now(),
+    });
+    const incoming = converted.slides[0];
+    if (!incoming) return;
+    const copy: EngineSlide = {
+      ...incoming,
+      id: crypto.randomUUID(),
+      name: `${incoming.name || "Slide"} copy`,
+      elements: cloneElementsForDuplicate(incoming.elements, 0, 0),
+    };
+    const s = get();
+    pushHistory(s.history, s.doc, "paste slide");
+    const anchor = s.currentSlideId;
+    set((cur) => {
+      const idx = cur.doc.slides.findIndex((item) => item.id === anchor);
+      const slides = [...cur.doc.slides];
+      slides.splice(idx < 0 ? slides.length : idx + 1, 0, copy);
+      return {
+        doc: { ...cur.doc, slides, updatedAt: Date.now() },
+        currentSlideId: copy.id,
+        activeLayerId: copy.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
+        selectedIds: new Set<string>(),
+      };
+    });
+  };
 
   return {
     doc: initial,
@@ -1449,7 +1527,7 @@ export const useEngine = create<EngineState>((set, get) => {
       });
     },
 
-    copyElements: (ids) => {
+    copyElements: (ids, options) => {
       const s = get();
       const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
       if (!slide) return;
@@ -1457,6 +1535,9 @@ export const useEngine = create<EngineState>((set, get) => {
         .filter((el) => ids.includes(el.id) && !el.isDeleted)
         .map((el) => structuredClone(el));
       set({ clipboard: copies });
+      if (options?.systemClipboard !== false && copies.length) {
+        void publishEngineClipboard(copies);
+      }
     },
 
     cutElements: (ids) => {
@@ -1466,28 +1547,61 @@ export const useEngine = create<EngineState>((set, get) => {
     },
 
     pasteElements: () => {
-      const s = get();
-      const clip = s.clipboard;
-      if (!clip?.length) return;
-      const slide = s.doc.slides.find((sl) => sl.id === s.currentSlideId);
-      if (!slide) return;
-      pushHistory(s.history, s.doc, "paste");
-      const pasted = clampElementsToSlide(cloneElementsForPaste(clip), slide.width, slide.height);
-      set((cur) =>
-        mapCurrentSlide(cur, (sl) => {
-          let next = sl;
-          const layerId = sl.layers.some((layer) => layer.id === cur.activeLayerId)
-            ? cur.activeLayerId
-            : sl.layers[0]?.id;
-          if (!layerId) return sl;
-          for (const el of pasted) {
-            el.z = nextZ(next);
-            next = addObjectToLayer(next, el, layerId);
-          }
-          return recomputeArrowBindings(next);
-        }),
+      const clip = get().clipboard;
+      if (clip?.length) {
+        commitPastedElements(clip);
+        return;
+      }
+      void (async () => {
+        const html = await readSystemClipboardHtml();
+        if (!html || get().clipboard?.length) return;
+        get().pasteClipboardHtml(html);
+      })();
+    },
+
+    pasteExternalElements: (elements, assets = {}) => {
+      if (!elements.length) return;
+      const entries = Object.entries(assets).filter((entry): entry is [string, string] =>
+        Boolean(entry[1]),
       );
-      if (pasted.length) set({ selectedIds: new Set(pasted.map((e) => e.id)) });
+      if (!entries.length) {
+        commitPastedElements(elements);
+        return;
+      }
+      void (async () => {
+        await Promise.all(
+          entries.map(async ([fileId, src]) => {
+            try {
+              await loadDataURL(src, fileId);
+            } catch {
+              // fileId-only or unloadable source: the object still pastes.
+            }
+          }),
+        );
+        commitPastedElements(elements);
+      })();
+    },
+
+    pasteClipboardHtml: (html) => {
+      const slide = htmlToInternalSlide(html);
+      if (slide) {
+        void pasteLegacySlide(slide);
+        return true;
+      }
+      const artshift = htmlToArtShiftElements(html);
+      if (artshift?.elements.length) {
+        get().pasteExternalElements(artshift.elements, artshift.assets);
+        return true;
+      }
+      const objects = htmlToInternalObjects(html);
+      if (objects?.length) {
+        void (async () => {
+          const elements = await legacyObjectsToEngineElements(objects);
+          if (elements.length) commitPastedElements(elements);
+        })();
+        return true;
+      }
+      return false;
     },
 
     setSlideBackground: (id, color) => {
