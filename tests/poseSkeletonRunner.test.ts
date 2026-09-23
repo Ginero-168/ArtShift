@@ -9,6 +9,7 @@ import {
   POSE_SKELETON_API_MESSAGE,
   POSE_SKELETON_MISSING_KEY_MESSAGE,
   POSE_SKELETON_NO_PERSON_MESSAGE,
+  POSE_SKELETON_REJECTED_MESSAGE,
 } from "@/lib/vision/poseSkeleton";
 
 const loadDataURL = vi.hoisted(() => vi.fn());
@@ -73,6 +74,7 @@ function standingLandmarks() {
 afterEach(() => {
   cleanup();
   releaseImageActionRun("skeleton:img-model");
+  releaseImageActionRun("skeleton:img-format");
   releaseImageActionRun("skeleton:img-abort");
   releaseImageActionRun("skeleton:img-key");
   releaseImageActionRun("skeleton:img-empty");
@@ -111,6 +113,36 @@ describe("Pose skeleton runner", () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
     expect(window.alert).toHaveBeenCalledWith(`Skeleton ไม่สำเร็จ: ${POSE_SKELETON_API_MESSAGE}`);
     expect(getProcessingPreview()).toBeNull();
+  });
+
+  it("alerts the Thai image message when the model cannot read the file", async () => {
+    window.alert = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          {
+            error: {
+              code: "INVALID_INPUT",
+              message: "No images or videos found in /tmp/tmprke_wtyzfile. Supported formats are:",
+            },
+          },
+          400,
+        ),
+      ),
+    );
+    const onComplete = vi.fn();
+    render(
+      createElement(PoseSkeletonRunner, {
+        element: imageElement("img-format"),
+        onComplete,
+      }),
+    );
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+    expect(window.alert).toHaveBeenCalledWith(
+      `Skeleton ไม่สำเร็จ: ${POSE_SKELETON_REJECTED_MESSAGE}`,
+    );
   });
 
   it("alerts the Thai missing-key message when Replicate is not configured", async () => {

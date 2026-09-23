@@ -10,8 +10,14 @@ import {
 } from "@/lib/server/ai/poseSkeletonDeployment";
 import { startPoseSkeletonJob } from "@/lib/server/ai/poseSkeletonJob";
 
+const POSE_FILE_URL = "https://api.replicate.com/v1/files/pose-upload-1";
 const poseInput = {
-  image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" as const },
+  image: {
+    dataUrl: `data:image/png;base64,${Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]).toString("base64")}`,
+    mimeType: "image/png" as const,
+  },
   width: 64,
   height: 64,
   modelSize: "n" as const,
@@ -52,12 +58,20 @@ describe("Skeleton deployment routing", () => {
 
   it("starts against the deployment from REPLICATE_SKELETON_DEPLOYMENT", async () => {
     vi.stubEnv(REPLICATE_SKELETON_DEPLOYMENT_ENV, "marcomnaiin/artshift-yolo26-pose");
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ id: "preddeployjob1", status: "starting" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ urls: { get: POSE_FILE_URL } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "preddeployjob1", status: "starting" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const ticket = await startPoseSkeletonJob(
@@ -67,12 +81,20 @@ describe("Skeleton deployment routing", () => {
     );
 
     expect(ticket).toEqual({ predictionId: "preddeployjob1", status: "starting" });
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.replicate.com/v1/files");
+    const upload = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((upload.body as FormData).get("content")).toMatchObject({
+      name: "pose.png",
+      type: "image/png",
+    });
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toBe(
       "https://api.replicate.com/v1/deployments/marcomnaiin/artshift-yolo26-pose/predictions",
     );
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer account-byok-token");
+    expect(String(init.body)).toContain(POSE_FILE_URL);
     expect(String(init.body)).not.toContain("version");
+    expect(String(init.body)).not.toContain("data:image");
   });
 
   it("documents the deployment env for local and VPS setup", () => {

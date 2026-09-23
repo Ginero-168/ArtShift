@@ -1,4 +1,5 @@
 import { DEFAULT_YOLO_POSE_MODEL_SIZE, type YoloPoseModelSize } from "@/lib/ai-runtime/contracts";
+import { isPoseSkeletonImageFailureMessage } from "@/lib/vision/poseImageFailure";
 import {
   POSE_SKELETON_PROCESSING_MESSAGE,
   POSE_SKELETON_STARTING_MESSAGE,
@@ -209,6 +210,7 @@ function skeletonRequestError(payload: unknown, status: number): PoseSkeletonReq
 
 function isTransientPollError(error: unknown): boolean {
   if (!(error instanceof PoseSkeletonRequestError)) return true;
+  if (isPoseSkeletonImageFailureMessage(error.message)) return false;
   return error.code === "PROVIDER_UNAVAILABLE" || error.code === "PROVIDER_RATE_LIMIT";
 }
 

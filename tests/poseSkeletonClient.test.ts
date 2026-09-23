@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  POSE_SKELETON_API_MESSAGE,
+  POSE_SKELETON_REJECTED_MESSAGE,
   POSE_SKELETON_TIMEOUT_MESSAGE,
   poseSkeletonFailureMessage,
 } from "@/lib/vision/poseSkeleton";
@@ -107,5 +109,38 @@ describe("Skeleton pose client", () => {
     expect(error).toBeInstanceOf(PoseSkeletonRequestError);
     expect(poseSkeletonFailureMessage(error)).toBe(POSE_SKELETON_TIMEOUT_MESSAGE);
     expect(cancelled).toEqual(["pred12345678"]);
+  });
+
+  it("shows an image-format failure instead of the connection alert and does not retry it", async () => {
+    let statusCalls = 0;
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { action?: string };
+      if (body.action === "start") {
+        return jsonResponse({ predictionId: "pred12345678", status: "starting" });
+      }
+      statusCalls += 1;
+      return jsonResponse(
+        {
+          error: {
+            code: "INVALID_INPUT",
+            message: "The pose model could not read this image. Use a JPEG, PNG, or WebP file.",
+          },
+        },
+        400,
+      );
+    });
+
+    const error = await requestPoseSkeleton(input, {
+      signal: new AbortController().signal,
+      fetchImpl: fetchImpl as typeof fetch,
+      now: () => 0,
+      sleep: async () => undefined,
+      maxWaitMs: 10_000,
+    }).catch((caught: unknown) => caught);
+
+    expect(statusCalls).toBe(1);
+    expect(poseSkeletonFailureMessage(error)).toBe(POSE_SKELETON_REJECTED_MESSAGE);
+    expect(poseSkeletonFailureMessage(error)).not.toBe(POSE_SKELETON_API_MESSAGE);
+    expect(poseSkeletonFailureMessage(error)).not.toBe(POSE_SKELETON_TIMEOUT_MESSAGE);
   });
 });

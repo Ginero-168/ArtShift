@@ -12,6 +12,7 @@ import {
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
 import { jsonNoStore } from "@/lib/server/http";
+import { isPoseSkeletonImageFailureMessage } from "@/lib/vision/poseImageFailure";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,16 +169,26 @@ function poseError(error: unknown) {
     error instanceof AiRuntimeError
       ? error
       : new AiRuntimeError("PROVIDER_UNAVAILABLE", "Skeleton pose failed.", { cause: error });
+  const imageFailure = isPoseSkeletonImageFailureMessage(normalized.message);
+  const reported = imageFailure
+    ? new AiRuntimeError("INVALID_INPUT", normalized.message, {
+        cause: normalized,
+        provider: normalized.provider,
+        predictionId: normalized.predictionId,
+      })
+    : normalized;
   return jsonNoStore(
     {
       error: {
-        code: normalized.outcomeUnknown ? "OUTCOME_UNKNOWN" : normalized.code,
-        message: normalized.outcomeUnknown
+        code: reported.outcomeUnknown ? "OUTCOME_UNKNOWN" : reported.code,
+        message: reported.outcomeUnknown
           ? "AI provider result is uncertain; no duplicate request was created."
-          : publicErrorMessage(normalized.code),
+          : imageFailure
+            ? "The pose model could not read this image. Use a JPEG, PNG, or WebP file."
+            : publicErrorMessage(reported.code),
       },
     },
-    { status: errorStatus(normalized) },
+    { status: errorStatus(reported) },
   );
 }
 
