@@ -133,14 +133,28 @@ version `0da88062`
 uses `model_size=n`, `conf=0.25`, `iou=0.45`, `imgsz=640`, and `return_json=true`.
 The annotated photo is not downloaded.
 
-`json_str` is Ultralytics `Results.to_json()`: COCO-17 keypoints in pixels. The
-adapter normalizes them. The browser paints bones and joints on a transparent
-PNG. Up to four people are drawn, most confident first, each in its own color. A
-pose is kept only when a torso pair is visible and at least four landmarks score
-0.5 or higher. If nobody qualifies, the action stops with a Thai message and
-does not add an image. A missing Replicate key and a failed API call use their
-own Thai alerts. The processing queue clears the Preload card when the job
-settles, including those failures, so the card does not spin forever.
+Set `REPLICATE_SKELETON_DEPLOYMENT` to `owner/name` to send those predictions to
+a warm deployment instead of the public model. Production uses
+`marcomnaiin/artshift-yolo26-pose` (`gpu-t4`, the same pinned version). The
+request is `POST /v1/deployments/{owner}/{name}/predictions` with the user's
+Replicate token. When the variable is unset, start uses the public model
+predictions API. The browser still does not hold one request open until the
+model finishes. `POST` with `action: "start"` creates the prediction using
+`Prefer: respond-async` and returns the prediction id. The client then polls
+`action: "status"` until the pose JSON is ready or four minutes pass. Polling
+still covers a cold public model and a deployment that is scaling or briefly
+busy. Preload shows that the model is starting, and a timeout says the model
+may be cold-starting instead of a generic connection error. Cancelling the card
+cancels the prediction.
+
+`json_str` is Ultralytics `Results.to_json()`: COCO-17 keypoints, normalized or
+in pixels. The adapter normalizes them. The browser paints bones and joints on a
+transparent PNG. Up to four people are drawn, most confident first, each in its
+own color. A pose is kept only when a torso pair is visible and at least four
+landmarks score 0.5 or higher. If nobody qualifies, the action stops with a Thai
+message and does not add an image. A missing Replicate key and a failed API call
+use their own Thai alerts. The processing queue clears the Preload card when the
+job settles, including those failures, so the card does not spin forever.
 
 Output matches the source pixel size up to 4 megapixels, then scales down. The
 PNG is placed at the Preload card via `getProcessingPreviewPlacement` /

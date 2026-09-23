@@ -27,8 +27,11 @@ describe("Skeleton action surface", () => {
 
   it("lands a transparent pose PNG on the Preload card from the cloud job", () => {
     const body = read("components/Canvas/PropertiesPanel/PoseSkeletonRunner.tsx");
-    expect(body).toContain('fetch("/api/skeleton"');
-    expect(body).toContain('task: "image.poseSkeleton"');
+    const client = read("lib/vision/poseSkeletonClient.ts");
+    expect(body).toContain("requestPoseSkeleton");
+    expect(client).toContain('"/api/skeleton"');
+    expect(client).toContain('task: "image.poseSkeleton"');
+    expect(client).toContain('action: "status"');
     expect(body).toContain("renderPoseSkeletonPng");
     expect(body).toContain("enqueueProcessingJob");
     expect(body).toContain('kind: "skeleton"');
@@ -36,7 +39,7 @@ describe("Skeleton action surface", () => {
     expect(body).toContain("getProcessingPreviewBounds(element)");
     expect(body).toContain('addElement(resultImage, "pose skeleton")');
     expect(body).toContain("crop: element.crop");
-    expect(body).toContain("cloudConsent: true");
+    expect(client).toContain("cloudConsent: true");
     expect(body).not.toContain("detectHumanPoses");
     expect(body).not.toContain("poseLandmarker");
     expect(body).not.toContain("mediapipe");

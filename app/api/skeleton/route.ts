@@ -4,8 +4,12 @@ import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { parsePublicAiExecuteRequest } from "@/lib/ai-runtime/schemas";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
+import {
+  cancelPoseSkeletonJob,
+  pollPoseSkeletonJob,
+  startPoseSkeletonJob,
+} from "@/lib/server/ai/poseSkeletonJob";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
-import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
 import { jsonNoStore } from "@/lib/server/http";
 
@@ -13,18 +17,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 7_500_000;
-const skeletonLimiter = new RateLimiter(8, 60_000);
+/** One image upload. Polling has its own budget so a cold start can keep checking. */
+const skeletonStartLimiter = new RateLimiter(8, 60_000);
+const skeletonPollLimiter = new RateLimiter(90, 60_000);
+/** Return before the nginx proxy in front of the app drops a silent upload. */
+const START_DEADLINE_MS = 20_000;
+
+const skeletonExecution = {
+  profile: "quality" as const,
+  provider: "replicate" as const,
+  modelAlias: "yolo26-pose" as const,
+  allowFallback: false as const,
+};
 
 export async function POST(req: NextRequest) {
   const account = getUserAccount(req);
   const limitKey = account ? `account:${account.id}` : `ip:${getClientIp(req)}`;
-  const limit = skeletonLimiter.check(limitKey);
-  if (!limit.ok) {
-    return jsonNoStore(
-      { error: "Rate limit exceeded. Please wait a moment." },
-      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
-    );
-  }
 
   let body: unknown;
   try {
@@ -35,65 +43,142 @@ export async function POST(req: NextRequest) {
     }
     return invalidRequest("Invalid JSON body.");
   }
+  if (!isRecord(body)) return invalidRequest("Invalid Skeleton payload.");
 
-  if (!isRecord(body) || body.task !== "image.poseSkeleton") {
+  const action = body.action === undefined ? "start" : body.action;
+  const limit = (action === "status" ? skeletonPollLimiter : skeletonStartLimiter).check(limitKey);
+  if (!limit.ok) {
+    return jsonNoStore(
+      {
+        error: {
+          code: "PROVIDER_RATE_LIMIT",
+          message: "Rate limit exceeded. Please wait a moment.",
+        },
+      },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
+  }
+
+  if (action === "status") return statusPose(req, body);
+  if (action === "cancel") return cancelPose(req, body);
+  if (action !== "start") return invalidRequest("Invalid Skeleton payload.");
+  return startPose(req, body);
+}
+
+async function startPose(req: NextRequest, body: Record<string, unknown>) {
+  if (body.task !== "image.poseSkeleton") {
     return invalidRequest("This endpoint only supports YOLO26 pose.");
   }
   const request = parsePublicAiExecuteRequest(body);
   if (request?.task !== "image.poseSkeleton") {
     return invalidRequest("Invalid Skeleton payload.");
   }
+  if (
+    (request.options.modelAlias && request.options.modelAlias !== skeletonExecution.modelAlias) ||
+    (request.options.provider && request.options.provider !== skeletonExecution.provider) ||
+    (request.options.profile && request.options.profile !== skeletonExecution.profile) ||
+    (request.options.allowFallback !== undefined &&
+      request.options.allowFallback !== skeletonExecution.allowFallback)
+  ) {
+    return invalidRequest("Invalid Skeleton payload.");
+  }
 
   const access = requireEndUserCloudAi(req, request.options.cloudConsent);
   if (!access.ok) return access.response;
 
+  const deadline = AbortSignal.timeout(START_DEADLINE_MS);
+  const signal = AbortSignal.any([req.signal, deadline]);
   try {
-    const ai = getServerAiRuntime({
-      replicateToken: access.replicateToken,
-      accountId: access.account.id,
-    });
-    const execution = await ai.execute(
-      "image.poseSkeleton",
+    const ticket = await startPoseSkeletonJob(
+      access.replicateToken,
       {
         ...request.input,
         modelSize: request.input.modelSize ?? DEFAULT_YOLO_POSE_MODEL_SIZE,
       },
-      {
-        profile: "quality",
-        provider: "replicate",
-        modelAlias: "yolo26-pose",
-        cloudConsent: true,
-        allowFallback: false,
-        timeoutMs: 120_000,
-        maxCostUsd: 0.02,
-        accountId: access.account.id,
-        signal: req.signal,
-      },
+      signal,
     );
-    return jsonNoStore({ execution });
+    return jsonNoStore({
+      predictionId: ticket.predictionId,
+      status: ticket.status,
+      ...(ticket.status === "succeeded" ? { poses: ticket.poses ?? [] } : {}),
+    });
   } catch (error) {
-    const normalized =
-      error instanceof AiRuntimeError
-        ? error
-        : new AiRuntimeError("PROVIDER_UNAVAILABLE", "Skeleton pose failed.", {
-            cause: error,
-          });
-    return jsonNoStore(
-      {
-        error: {
-          code: normalized.outcomeUnknown ? "OUTCOME_UNKNOWN" : normalized.code,
-          message: normalized.outcomeUnknown
-            ? "AI provider result is uncertain; no duplicate request was created."
-            : publicErrorMessage(normalized.code),
-        },
-      },
-      { status: errorStatus(normalized) },
-    );
+    if (deadline.aborted && !req.signal.aborted) {
+      return poseError(
+        new AiRuntimeError("TIMEOUT", "Skeleton pose failed to start before the proxy deadline."),
+      );
+    }
+    return poseError(error);
   }
+}
+
+async function statusPose(req: NextRequest, body: Record<string, unknown>) {
+  const predictionId = typeof body.predictionId === "string" ? body.predictionId : "";
+  const width = body.width;
+  const height = body.height;
+  if (!/^[a-z0-9]{8,80}$/i.test(predictionId)) {
+    return invalidRequest("Invalid Skeleton prediction.");
+  }
+  if (!isPoseDimension(width) || !isPoseDimension(height) || width * height > 16_000_000) {
+    return invalidRequest("Invalid Skeleton prediction.");
+  }
+
+  const access = requireEndUserCloudAi(req, true);
+  if (!access.ok) return access.response;
+
+  try {
+    const ticket = await pollPoseSkeletonJob(
+      access.replicateToken,
+      predictionId,
+      width,
+      height,
+      req.signal,
+    );
+    return jsonNoStore({
+      predictionId: ticket.predictionId,
+      status: ticket.status,
+      ...(ticket.status === "succeeded" ? { poses: ticket.poses ?? [] } : {}),
+    });
+  } catch (error) {
+    return poseError(error);
+  }
+}
+
+async function cancelPose(req: NextRequest, body: Record<string, unknown>) {
+  const predictionId = typeof body.predictionId === "string" ? body.predictionId : "";
+  if (!/^[a-z0-9]{8,80}$/i.test(predictionId)) {
+    return invalidRequest("Invalid Skeleton prediction.");
+  }
+  const access = requireEndUserCloudAi(req, true);
+  if (!access.ok) return access.response;
+  await cancelPoseSkeletonJob(access.replicateToken, predictionId);
+  return jsonNoStore({ ok: true });
+}
+
+function isPoseDimension(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 4_096;
 }
 
 function invalidRequest(message: string, status = 400) {
   return jsonNoStore({ error: { code: "INVALID_INPUT", message } }, { status });
+}
+
+function poseError(error: unknown) {
+  const normalized =
+    error instanceof AiRuntimeError
+      ? error
+      : new AiRuntimeError("PROVIDER_UNAVAILABLE", "Skeleton pose failed.", { cause: error });
+  return jsonNoStore(
+    {
+      error: {
+        code: normalized.outcomeUnknown ? "OUTCOME_UNKNOWN" : normalized.code,
+        message: normalized.outcomeUnknown
+          ? "AI provider result is uncertain; no duplicate request was created."
+          : publicErrorMessage(normalized.code),
+      },
+    },
+    { status: errorStatus(normalized) },
+  );
 }
 
 function publicErrorMessage(code: AiRuntimeError["code"]): string {
@@ -111,7 +196,7 @@ function publicErrorMessage(code: AiRuntimeError["code"]): string {
     case "ABORTED":
       return "AI operation was cancelled.";
     case "TIMEOUT":
-      return "AI operation timed out.";
+      return "Skeleton timed out. The pose model may still be starting; try again.";
     case "NO_PROVIDER":
       return "The requested AI capability is unavailable.";
     case "PROVIDER_SCHEMA":

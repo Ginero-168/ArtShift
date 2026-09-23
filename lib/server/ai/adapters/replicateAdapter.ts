@@ -42,6 +42,11 @@ import {
   moodboardBatchUsd,
 } from "@/lib/moodboard/constants";
 import {
+  parsePoseSkeletonDeployment,
+  poseSkeletonDeploymentFromEnv,
+  poseSkeletonDeploymentPredictionsUrl,
+} from "@/lib/server/ai/poseSkeletonDeployment";
+import {
   aspectRatioFromDimensions,
   normalizeReplicateAspectRatio,
 } from "@/lib/server/ai/replicateAspectRatio";
@@ -110,6 +115,22 @@ const MAX_RECRAFT_PIXELS = 16_000_000;
 const MAX_RECRAFT_SVG_CHARS = 4_000_000;
 const MAX_GENERATED_IMAGE_BYTES = 20 * 1024 * 1024;
 const GENERATED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+/**
+ * Pose runs on a cold CPU model. Accept the prediction immediately and let the
+ * browser poll; do not hold `Prefer: wait` open across the proxy timeout.
+ * Cancel-After stays above the client poll budget so a cold boot is not killed
+ * while the user is still waiting.
+ */
+const POSE_SKELETON_PREFER = "respond-async";
+const POSE_SKELETON_CANCEL_AFTER = "300s";
+const PREDICTION_ID_PATTERN = /^[a-z0-9]{8,80}$/i;
+
+export type PoseSkeletonTicket = {
+  predictionId: string;
+  status: "starting" | "processing" | "succeeded";
+  poses?: ReturnType<typeof mapYoloPoseJson>;
+  model?: string;
+};
 
 type ReplicatePrediction = {
   id?: string;
@@ -958,40 +979,13 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
 
     const prediction = await this.createPrediction(
       model,
-      {
-        image: input.image.dataUrl,
-        model_size: modelSize,
-        conf: DEFAULT_YOLO_POSE_CONF,
-        iou: DEFAULT_YOLO_POSE_IOU,
-        imgsz: DEFAULT_YOLO_POSE_IMGSZ,
-        return_json: true,
-      },
+      yoloPoseProviderInput(input),
       request.signal,
       true,
+      posePredictionTransport(),
     );
     const completed = await this.waitForPrediction(prediction, request.signal, true);
-    const payload = readYoloPosePayload(completed.output);
-    if (payload === undefined || payload === "") {
-      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no pose JSON.", {
-        provider: this.id,
-      });
-    }
-    let poses: ReturnType<typeof mapYoloPoseJson>;
-    try {
-      poses = mapYoloPoseJson(payload, input.width, input.height);
-    } catch (error) {
-      if (error instanceof YoloPoseJsonError) {
-        throw new AiRuntimeError(
-          "PROVIDER_SCHEMA",
-          "Replicate returned pose JSON that could not be read.",
-          {
-            provider: this.id,
-            cause: error,
-          },
-        );
-      }
-      throw error;
-    }
+    const poses = posesFromYoloOutput(completed.output, input.width, input.height);
     const metrics = completed.metrics ?? {};
     return {
       output: { poses },
@@ -1008,24 +1002,160 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     };
   }
 
+  /**
+   * Create a YOLO26 pose prediction and return as soon as Replicate accepts it.
+   * A cold CPU boot can take longer than the nginx proxy in front of artshift.io
+   * will hold one browser request, so the caller polls `pollPoseSkeleton`.
+   */
+  async beginPoseSkeleton(
+    modelName: string,
+    input: AiImagePoseSkeletonInput,
+    signal: AbortSignal,
+    deployment?: string,
+  ): Promise<PoseSkeletonTicket> {
+    this.assertPoseReady(modelName, input);
+    const model = parseReplicateModel(modelName);
+    const prediction = await this.createPrediction(
+      model,
+      yoloPoseProviderInput(input),
+      signal,
+      true,
+      posePredictionTransport(deployment),
+    );
+    return this.ticketFromPrediction(prediction, input.width, input.height);
+  }
+
+  async pollPoseSkeleton(
+    predictionId: string,
+    width: number,
+    height: number,
+    signal: AbortSignal,
+  ): Promise<PoseSkeletonTicket> {
+    this.assertToken();
+    const id = assertPredictionId(predictionId);
+    assertPoseImageDimensions(width, height);
+    let response: Response;
+    try {
+      response = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+        headers: { Authorization: `Bearer ${this.apiToken}` },
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) throw signal.reason ?? error;
+      throw new AiRuntimeError(
+        "PROVIDER_UNAVAILABLE",
+        "Replicate prediction status is unavailable.",
+        {
+          provider: this.id,
+          cause: error,
+        },
+      );
+    }
+    await assertRecraftProviderResponse(response);
+    const prediction = (await response.json()) as ReplicatePrediction;
+    return this.ticketFromPrediction(prediction, width, height);
+  }
+
+  async cancelPoseSkeleton(predictionId: string): Promise<void> {
+    this.assertToken();
+    const id = assertPredictionId(predictionId);
+    await fetch(`https://api.replicate.com/v1/predictions/${id}/cancel`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiToken}` },
+    }).catch(() => undefined);
+  }
+
+  private assertToken(): void {
+    if (!this.apiToken) {
+      throw new AiRuntimeError("PROVIDER_AUTH", "Replicate rejected this request.", {
+        provider: this.id,
+      });
+    }
+  }
+
+  private assertPoseReady(modelName: string, input: AiImagePoseSkeletonInput): void {
+    this.assertToken();
+    assertReplicateImageDataUrl(input.image.dataUrl);
+    assertPoseImageDimensions(input.width, input.height);
+    const model = parseReplicateModel(modelName);
+    if (model.slug !== YOLO26_POSE_MODEL) {
+      throw new AiRuntimeError("INVALID_INPUT", "Unsupported Replicate pose model.", {
+        provider: this.id,
+      });
+    }
+    const modelSize = input.modelSize ?? DEFAULT_YOLO_POSE_MODEL_SIZE;
+    if (!YOLO_POSE_MODEL_SIZES.includes(modelSize)) {
+      throw new AiRuntimeError("INVALID_INPUT", "modelSize must be n, s, m, l, or x.", {
+        provider: this.id,
+      });
+    }
+  }
+
+  private ticketFromPrediction(
+    prediction: ReplicatePrediction,
+    width: number,
+    height: number,
+  ): PoseSkeletonTicket {
+    const predictionId = prediction.id?.trim() ?? "";
+    if (!PREDICTION_ID_PATTERN.test(predictionId)) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate omitted the pose prediction id.", {
+        provider: this.id,
+      });
+    }
+    if (prediction.status === "starting" || prediction.status === "processing") {
+      return { predictionId, status: prediction.status };
+    }
+    if (prediction.status === "canceled" || prediction.status === "aborted") {
+      throw new AiRuntimeError(
+        "TIMEOUT",
+        "Replicate canceled the pose prediction before it finished.",
+        { provider: this.id, predictionId },
+      );
+    }
+    if (prediction.status !== "succeeded") {
+      const errorMsg =
+        typeof prediction.error === "string" ? prediction.error : "Replicate prediction failed.";
+      console.error("[skeleton] pose prediction failed", predictionId, errorMsg);
+      throw new AiRuntimeError("PROVIDER_UNAVAILABLE", errorMsg, {
+        provider: this.id,
+        predictionId,
+      });
+    }
+    return {
+      predictionId,
+      status: "succeeded",
+      poses: posesFromYoloOutput(prediction.output, width, height),
+      model:
+        prediction.model && prediction.version
+          ? `${prediction.model}@${prediction.version}`
+          : prediction.model,
+    };
+  }
+
   private async createPrediction(
     model: { slug: string; version?: string },
     input: Record<string, unknown>,
     signal: AbortSignal,
     safeErrors = false,
+    transport?: { prefer?: string; cancelAfter?: string; deployment?: string },
   ): Promise<ReplicatePrediction> {
-    const endpoint = model.version
-      ? "https://api.replicate.com/v1/predictions"
-      : `https://api.replicate.com/v1/models/${model.slug}/predictions`;
+    const deployment = transport?.deployment;
+    const endpoint = deployment
+      ? poseSkeletonDeploymentPredictionsUrl(deployment)
+      : model.version
+        ? "https://api.replicate.com/v1/predictions"
+        : `https://api.replicate.com/v1/models/${model.slug}/predictions`;
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiToken}`,
         "Content-Type": "application/json",
-        Prefer: "wait=60",
-        "Cancel-After": REPLICATE_PREDICTION_CANCEL_AFTER,
+        Prefer: transport?.prefer ?? "wait=60",
+        "Cancel-After": transport?.cancelAfter ?? REPLICATE_PREDICTION_CANCEL_AFTER,
       },
-      body: JSON.stringify(model.version ? { version: model.version, input } : { input }),
+      body: JSON.stringify(
+        deployment || !model.version ? { input } : { version: model.version, input },
+      ),
       signal,
     });
     if (safeErrors) await assertRecraftProviderResponse(response);
@@ -1157,6 +1287,74 @@ function extractFileUrl(output: unknown): string | undefined {
     return (output as { url: string }).url;
   }
   return undefined;
+}
+
+function posePredictionTransport(deployment?: string): {
+  prefer: string;
+  cancelAfter: string;
+  deployment?: string;
+} {
+  const selected =
+    deployment !== undefined
+      ? parsePoseSkeletonDeployment(deployment)
+      : poseSkeletonDeploymentFromEnv();
+  return {
+    prefer: POSE_SKELETON_PREFER,
+    cancelAfter: POSE_SKELETON_CANCEL_AFTER,
+    ...(selected ? { deployment: selected } : {}),
+  };
+}
+
+function yoloPoseProviderInput(input: AiImagePoseSkeletonInput): Record<string, unknown> {
+  const modelSize = input.modelSize ?? DEFAULT_YOLO_POSE_MODEL_SIZE;
+  if (!YOLO_POSE_MODEL_SIZES.includes(modelSize)) {
+    throw new AiRuntimeError("INVALID_INPUT", "modelSize must be n, s, m, l, or x.", {
+      provider: "replicate",
+    });
+  }
+  return {
+    image: input.image.dataUrl,
+    model_size: modelSize,
+    conf: DEFAULT_YOLO_POSE_CONF,
+    iou: DEFAULT_YOLO_POSE_IOU,
+    imgsz: DEFAULT_YOLO_POSE_IMGSZ,
+    return_json: true,
+  };
+}
+
+function posesFromYoloOutput(
+  output: unknown,
+  width: number,
+  height: number,
+): ReturnType<typeof mapYoloPoseJson> {
+  const payload = readYoloPosePayload(output);
+  if (payload === undefined || payload === "") {
+    throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned no pose JSON.", {
+      provider: "replicate",
+    });
+  }
+  try {
+    return mapYoloPoseJson(payload, width, height);
+  } catch (error) {
+    if (error instanceof YoloPoseJsonError) {
+      throw new AiRuntimeError(
+        "PROVIDER_SCHEMA",
+        "Replicate returned pose JSON that could not be read.",
+        { provider: "replicate", cause: error },
+      );
+    }
+    throw error;
+  }
+}
+
+function assertPredictionId(predictionId: string): string {
+  const id = predictionId.trim();
+  if (!PREDICTION_ID_PATTERN.test(id)) {
+    throw new AiRuntimeError("INVALID_INPUT", "Invalid pose prediction id.", {
+      provider: "replicate",
+    });
+  }
+  return id;
 }
 
 function readYoloPosePayload(output: unknown): unknown {

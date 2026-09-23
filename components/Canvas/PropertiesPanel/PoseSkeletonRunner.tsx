@@ -21,6 +21,7 @@ import {
   poseSkeletonFailureMessage,
   renderPoseSkeletonPng,
 } from "@/lib/vision/poseSkeleton";
+import { requestPoseSkeleton } from "@/lib/vision/poseSkeletonClient";
 import { SKELETON_LABEL } from "./imageToolTypes";
 
 export function PoseSkeletonRunner({
@@ -84,7 +85,7 @@ async function placeSkeleton(
   try {
     const cached = getCached(element.fileId);
     if (!cached?.dataURL) {
-      throw codedError("INVALID_INPUT", "ไม่พบข้อมูลภาพในแคช");
+      throw new Error("ไม่พบข้อมูลภาพในแคช");
     }
     if (signal.aborted) return;
     updateProcessingPreview(previewId, {
@@ -92,42 +93,24 @@ async function placeSkeleton(
       message: "กำลังส่งภาพไปยัง YOLO26 Pose…",
     });
     report("consent", "ผู้ใช้กด Skeleton เพื่อส่งภาพไป Replicate", "started", 12);
-    const response = await fetch("/api/skeleton", {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        task: "image.poseSkeleton",
-        input: {
-          image: {
-            dataUrl: cached.dataURL,
-            mimeType: cached.dataURL
-              .match(/^data:(image\/(?:jpeg|png|webp));/i)?.[1]
-              ?.toLowerCase(),
-          },
-          width: cached.width,
-          height: cached.height,
-          modelSize: DEFAULT_YOLO_POSE_MODEL_SIZE,
+    const mimeType = cached.dataURL.match(/^data:(image\/(?:jpeg|png|webp));/i)?.[1]?.toLowerCase();
+    const posePayload = await requestPoseSkeleton(
+      {
+        dataUrl: cached.dataURL,
+        ...(mimeType ? { mimeType } : {}),
+        width: cached.width,
+        height: cached.height,
+        modelSize: DEFAULT_YOLO_POSE_MODEL_SIZE,
+      },
+      {
+        signal,
+        onProgress: (message) => {
+          updateProcessingPreview(previewId, { progress: 0.4, message });
         },
-        options: {
-          profile: "quality",
-          provider: "replicate",
-          modelAlias: "yolo26-pose",
-          cloudConsent: true,
-          allowFallback: false,
-          timeoutMs: 120_000,
-          cache: false,
-        },
-      }),
-      signal,
-    });
-    const payload = (await response.json().catch(() => null)) as {
-      execution?: { output?: { poses?: unknown } };
-      error?: { message?: unknown; code?: unknown } | string;
-      code?: unknown;
-    } | null;
+      },
+    );
     if (signal.aborted) return;
-    if (!response.ok) throw skeletonRequestError(payload, response.status);
-    const poses = readPoses(payload?.execution?.output?.poses);
+    const poses = readPoses(posePayload);
     updateProcessingPreview(previewId, {
       progress: 0.62,
       message: "กำลังวาดโครงร่างเป็น PNG…",
@@ -193,24 +176,6 @@ function readPoses(value: unknown): NormalizedPose[] {
     poses.push({ landmarks: parsed });
   }
   return poses;
-}
-
-function skeletonRequestError(payload: unknown, status: number): Error {
-  const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-  if (typeof record.code === "string") {
-    const message = typeof record.error === "string" ? record.error : "Skeleton request failed.";
-    return codedError(record.code, message);
-  }
-  const nested = record.error;
-  if (typeof nested === "string") return codedError("PROVIDER_UNAVAILABLE", nested);
-  if (nested && typeof nested === "object") {
-    const error = nested as { code?: unknown; message?: unknown };
-    return codedError(
-      typeof error.code === "string" ? error.code : "PROVIDER_UNAVAILABLE",
-      typeof error.message === "string" ? error.message : "Skeleton request failed.",
-    );
-  }
-  return codedError("PROVIDER_UNAVAILABLE", `Skeleton request failed (${status}).`);
 }
 
 function codedError(code: string, message: string): Error {

@@ -67,6 +67,7 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 | `REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION` | Optional pinned version for the Recraft Vectorize alias |
 | `REPLICATE_P_IMAGE_UPSCALE_MODEL_VERSION` | Optional pinned version for `prunaai/p-image-upscale`; defaults to the tested official version |
+| `REPLICATE_SKELETON_DEPLOYMENT` | Optional `owner/name` of the warm Skeleton deployment. Production: `marcomnaiin/artshift-yolo26-pose` (`ultralytics/yolo26-pose` @ `0da88062`, `gpu-t4`). When set, Skeleton posts to that deployment. When unset, it uses the public model. Still the user's Replicate key, not a server token |
 
 Register this exact Pinterest OAuth redirect URI on the Pinterest app. It is
 `{ARTSHIFT_PUBLIC_URL}/api/pinterest/oauth/callback`. When the canonical site is
