@@ -58,12 +58,27 @@ Go to **Advanced → Node.js → Environment Variables** and add:
 | `OPENAI_API_KEY` | Optional direct OpenAI provider adapter |
 | `REPLICATE_GPT_IMAGE_2_VERSION` | Optional pinned version for the fixed GPT Image 2 model |
 | `AI_MONTHLY_BUDGET_USD` | Optional monthly AI budget guard |
+| `PINTEREST_CLIENT_ID` | Optional Pinterest OAuth client id for the Block Library tab |
+| `PINTEREST_CLIENT_SECRET` | Optional Pinterest OAuth client secret |
+| `PINTEREST_APP_NAME` | Optional display name. Defaults to ArtShift |
 | `UNSPLASH_ACCESS_KEY` | Stock photos |
 | `PEXELS_API_KEY` | Stock photos |
 | `RASTER_API_URL` | Optional server raster provider endpoint |
 | `RASTER_API_KEY` | Optional bearer token for the raster provider |
 | `REPLICATE_RECRAFT_VECTORIZE_MODEL_VERSION` | Optional pinned version for the Recraft Vectorize alias |
 | `REPLICATE_P_IMAGE_UPSCALE_MODEL_VERSION` | Optional pinned version for `prunaai/p-image-upscale`; defaults to the tested official version |
+
+Register this exact Pinterest OAuth redirect URI on the Pinterest app. It is
+`{ARTSHIFT_PUBLIC_URL}/api/pinterest/oauth/callback`. When the canonical site is
+artshift.io, register:
+
+```text
+https://artshift.io/api/pinterest/oauth/callback
+```
+
+Pinterest tokens are stored in a separate encrypted httpOnly cookie from the
+Google session. If the client id or secret is missing, the library stays on the
+Connect empty state.
 
 Register this exact Google OAuth redirect URI in Google Cloud Console:
 

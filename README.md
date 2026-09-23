@@ -66,6 +66,8 @@ Open [http://localhost:3000](http://localhost:3000) — the slide editor.
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | no | Optional direct Google adapter |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | no | Optional direct OpenAI adapter |
 | `AI_MONTHLY_BUDGET_USD` | no | Server-side estimated monthly budget guard |
+| `PINTEREST_CLIENT_ID` / `PINTEREST_CLIENT_SECRET` | no | Pinterest OAuth in the Block Library tab. Redirect `{ARTSHIFT_PUBLIC_URL}/api/pinterest/oauth/callback` (production: `https://artshift.io/api/pinterest/oauth/callback`) |
+| `PINTEREST_APP_NAME` | no | Optional Pinterest app display name. Defaults to ArtShift |
 | `UNSPLASH_ACCESS_KEY` | no | Stock photos |
 | `PEXELS_API_KEY` | no | Stock photos |
 | `RASTER_API_URL` | no | Optional server raster provider endpoint |

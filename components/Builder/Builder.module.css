@@ -26,12 +26,16 @@
   width: 476px;
 }
 
+.libraryPinterestActive {
+  width: 360px;
+}
+
 .libraryTabs {
   flex: 0 0 auto;
   padding: 8px 9px 7px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.8fr) minmax(0, 1fr);
+  gap: 4px;
   border-bottom: 1px solid #dfe3ea;
   background: #ffffff;
 }
@@ -39,11 +43,11 @@
 .libraryTab {
   min-width: 0;
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -63,6 +67,17 @@
   background: #f5f3ff;
 }
 
+.libraryTab > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryTabPinterest:hover {
+  color: #be123c;
+  background: #fff1f2;
+}
+
 .libraryTab:focus-visible {
   outline: 2px solid rgba(24, 89, 255, 0.45);
   outline-offset: 1px;
@@ -79,6 +94,12 @@
   border-color: rgba(99, 102, 241, 0.25);
   background: #f4f2ff;
   color: #4f46e5;
+}
+
+.libraryTabPinterest.libraryTabActive {
+  border-color: rgba(230, 0, 35, 0.22);
+  background: #fff1f2;
+  color: #be123c;
 }
 
 .libraryTabPanel {
@@ -1838,6 +1859,10 @@
 
   .libraryAssistantActive {
     width: 408px;
+  }
+
+  .libraryPinterestActive {
+    width: 300px;
   }
 
   .inspector {
