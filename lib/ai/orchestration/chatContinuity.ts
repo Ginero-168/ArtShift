@@ -4,6 +4,7 @@ import {
   extractRequestedSizeSpecsFromText,
   hasExplicitDimensionsInText,
   hasNumericOrNamedSizeInText,
+  isSizeListDocument,
   type RequestedSizeSpec,
   type RequestedSizeUnit,
   resolveImageGenerationDimensions,
@@ -14,6 +15,7 @@ import {
   type ComposerImageRef,
 } from "@/lib/ai/orchestration/imageReferences";
 import type { EngineElement } from "@/lib/engine/types";
+import { inferInlineTagRoles } from "./inlineTagSynthesis";
 
 /**
  * Chat continuity helpers for image follow-ups
@@ -91,6 +93,107 @@ export function extractRequestedSizeSpecsFromUserAsk(
     specs.push(...extractRequestedSizeSpecsFromText(stripFollowUpMentions(ask)));
   }
   return uniqueRequestedSizeSpecs(specs);
+}
+
+/** OCR / caption of an attached reference. Accepts nested or flat analysis shapes. */
+export type SizeListImageAnalysis = {
+  ref?: { objectId?: string; displayName?: string };
+  objectId?: string;
+  displayName?: string;
+  caption?: string;
+  visibleText?: string;
+};
+
+function sizeListAnalysisId(analysis: SizeListImageAnalysis): string {
+  return analysis.ref?.objectId || analysis.objectId || "";
+}
+
+function sizeListAnalysisText(analysis: SizeListImageAnalysis): string {
+  return [analysis.visibleText, analysis.caption].filter(Boolean).join("\n");
+}
+
+const SIZE_LIST_POINT_RE =
+  /ตามไซส์|ตามไซซ์|ตามขนาด|ตามสัดส่วน|size\s*list|these\s+sizes|listed\s+sizes|according\s+to\s+(?:the\s+|these\s+)?sizes?/iu;
+
+/**
+ * Sizes named by a size-list photo. Explicit sizes in the user text are not
+ * included here — callers apply text first. Returns the card's object ids so
+ * generation does not copy the card into a collage.
+ */
+export function resolveSizeListImageSpecs(
+  prompt: string | undefined,
+  analyses: readonly SizeListImageAnalysis[] = [],
+): { specs: RequestedSizeSpec[]; objectIds: string[] } {
+  if (!analyses.length) return { specs: [], objectIds: [] };
+  const roles = inferInlineTagRoles(prompt || "");
+  const tagged = analyses.filter((analysis) => {
+    const id = sizeListAnalysisId(analysis);
+    return Boolean(id) && roles.get(id) === "size";
+  });
+  const taggedSpecs = uniqueRequestedSizeSpecs(
+    tagged.flatMap((analysis) => extractRequestedSizeSpecsFromText(sizeListAnalysisText(analysis))),
+  );
+  if (tagged.length > 0 && taggedSpecs.length >= 2) {
+    return {
+      specs: taggedSpecs.slice(0, 5),
+      objectIds: tagged.map(sizeListAnalysisId).filter(Boolean),
+    };
+  }
+
+  const documents = analyses.filter((analysis) =>
+    isSizeListDocument(sizeListAnalysisText(analysis)),
+  );
+  if (documents.length > 0) {
+    const best = [...documents].sort(
+      (a, b) =>
+        extractRequestedSizeSpecsFromText(sizeListAnalysisText(b)).length -
+        extractRequestedSizeSpecsFromText(sizeListAnalysisText(a)).length,
+    )[0];
+    const bestSpecs = best
+      ? uniqueRequestedSizeSpecs(extractRequestedSizeSpecsFromText(sizeListAnalysisText(best)))
+      : [];
+    if (best && bestSpecs.length >= 2) {
+      const id = sizeListAnalysisId(best);
+      return { specs: bestSpecs.slice(0, 5), objectIds: id ? [id] : [] };
+    }
+  }
+
+  if (SIZE_LIST_POINT_RE.test(followUpAskText(prompt) || prompt || "")) {
+    let best: SizeListImageAnalysis | undefined;
+    let bestSpecs: RequestedSizeSpec[] = [];
+    for (const analysis of analyses) {
+      const specs = uniqueRequestedSizeSpecs(
+        extractRequestedSizeSpecsFromText(sizeListAnalysisText(analysis)),
+      );
+      if (specs.length > bestSpecs.length) {
+        best = analysis;
+        bestSpecs = specs;
+      }
+    }
+    if (best && bestSpecs.length >= 2) {
+      const id = sizeListAnalysisId(best);
+      return { specs: bestSpecs.slice(0, 5), objectIds: id ? [id] : [] };
+    }
+  }
+
+  return { specs: [], objectIds: [] };
+}
+
+/** Object ids of attached size cards, whether or not their OCR supplied the sizes. */
+export function sizeListObjectIds(
+  prompt: string | undefined,
+  analyses: readonly SizeListImageAnalysis[] = [],
+): string[] {
+  const roles = inferInlineTagRoles(prompt || "");
+  const ids: string[] = [];
+  for (const analysis of analyses) {
+    const id = sizeListAnalysisId(analysis);
+    if (!id) continue;
+    if (roles.get(id) === "size" || isSizeListDocument(sizeListAnalysisText(analysis))) {
+      ids.push(id);
+    }
+  }
+  return ids;
 }
 
 function stripFollowUpMentions(prompt: string): string {

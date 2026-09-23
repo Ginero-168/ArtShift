@@ -229,6 +229,54 @@ export function extractRequestedSizeSpecsFromText(text?: string): RequestedSizeS
   return extractAspectRatioSpecsFromText(text);
 }
 
+/**
+ * A size card (short bullet list of WxH / ratios), not a finished poster whose
+ * copy happens to mention one measurement.
+ */
+export function isSizeListDocument(text?: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const specs = extractRequestedSizeSpecsFromText(text);
+  if (specs.length < 2) return false;
+  const trimmed = text.trim();
+  if (trimmed.length <= 800) return true;
+  const lines = trimmed
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return false;
+  const sizeLines = lines.filter((line) => extractRequestedSizeSpecsFromText(line).length > 0);
+  return sizeLines.length >= 2 && sizeLines.length / lines.length >= 0.5;
+}
+
+/** Remove every listed size except the one this job is rendering. */
+export function stripOtherSizeMentions(
+  text: string,
+  keep: RequestedSizeSpec,
+  all: readonly RequestedSizeSpec[],
+): string {
+  const keepKey = requestedSizeSpecKey(keep);
+  let out = text;
+  for (const spec of all) {
+    if (requestedSizeSpecKey(spec) === keepKey) continue;
+    out = stripOneSizeMention(out, spec);
+  }
+  return out
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripOneSizeMention(text: string, spec: RequestedSizeSpec): string {
+  const width = String(spec.sourceWidth).replace(/\.0$/, "");
+  const height = String(spec.sourceHeight).replace(/\.0$/, "");
+  const pair = new RegExp(
+    `(?<![\\d.])${width}\\s*(?:x|×|by|[:：/])\\s*${height}(?![\\d.])(?:\\s*(?:cm|mm|m|in|px|pixels|นิ้ว|ซม\\.?))?`,
+    "giu",
+  );
+  return text.replace(pair, " ");
+}
+
 /** Identity for a listed size: source WxH+unit, or named aspect. Not the clamped generation ratio. */
 export function requestedSizeSpecKey(spec: RequestedSizeSpec): string {
   if (spec.unit === "named") return `named:${spec.aspectRatio}`;

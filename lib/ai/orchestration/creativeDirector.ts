@@ -19,8 +19,11 @@ import {
   extractRequestedSizeSpecsFromUserAsk,
   followUpAskText,
   formatGenerationPackageForPrompt,
+  isOrientationOnlyFollowUpPrompt,
   type PriorImageGenerationContext,
   resolveFollowUpDimensions,
+  resolveSizeListImageSpecs,
+  type SizeListImageAnalysis,
 } from "./chatContinuity";
 import {
   CREATING_MODEL_CATALOG,
@@ -396,10 +399,11 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "For an executable image request, set requestedOutputCount to the total number of separate image files the user requested to CREATE (1 to 5).",
   "CRITICAL INPUT REFERENCES VS OUTPUT QUANTITY RULE:",
   "  - Phrases like 'จาก 2 ปกนี้', 'จาก 3 รูปนี้', 'อิงจาก 2 ภาพ', 'from these 2 covers/photos' specify INPUT REFERENCE SOURCES, NOT the number of images to generate! Do NOT count input references as requested output count.",
-  "  - Unless the user explicitly requests multiple created outputs (e.g. 'ขอ 2 แบบ', 'สร้าง 3 รูป', '2 images', '3 variations'), always default to requestedOutputCount: 1.",
+  "  - Unless the user explicitly requests multiple created outputs (e.g. 'ขอ 2 แบบ', 'สร้าง 3 รูป', '5 สไตล์ต่างกัน', '5 Layout ต่างกัน', '2 images', '3 variations'), always default to requestedOutputCount: 1.",
   "  - When multiple references are attached for a single requested item (e.g. 'ออกแบบป้าย... จาก 2 ปกนี้'), synthesize both references into ONE unified design artwork (requestedOutputCount: 1).",
   "  - NEVER INVENT A VARIATION COUNT: Do not set requestedOutputCount > 1 for size/orientation edits ('ปรับเป็นแนวตั้ง', 'ทำให้เป็นแนวตั้ง', 'make it vertical', cm/px resize) or other short revisions. Those are ONE output.",
-  "  - Only set requestedOutputCount > 1 when the user explicitly asks for multiple created files (e.g. 'ขอ 2 แบบ', 'สร้าง 3 รูป', '3 variations') OR lists multiple distinct sizes/ratios in the same ask.",
+  "  - Only set requestedOutputCount > 1 when the user explicitly asks for N separate files (e.g. 'ขอ 2 แบบ', 'สร้าง 3 รูป', '5 สไตล์ต่างกัน', '5 Layout ต่างกัน', '3 variations', 'N versions') OR lists multiple distinct sizes/ratios in the same ask OR points at a size-list image (ตามไซส์) whose text lists multiple sizes.",
+  "  - VARIANT SPLIT: N styles, N layouts, N versions, or N sizes means N separate image files. Write one outputBrief per variant (one style OR one layout OR one size). Never collapse to a single file and never draw every variant into one collage, montage, storyboard, contact sheet, or stacked frame.",
   "  - If the user does not state N and does not list multiple sizes, requestedOutputCount MUST be 1 — never infer 2–5 from campaign types, 'options', or creative preference.",
   "For image creation, return exactly one concise outputBrief in outputBriefs per requested output, written in the user's language (e.g. Thai if user asked in Thai). Each outputBrief must be a short, natural descriptive title (2-6 words) characterizing that standalone image (e.g. 'หมูน่ารัก', 'หมูตัวน้อยสีชมพู', 'หมูในฟาร์มสีเขียว', 'แมวยกสองนิ้วร่าเริง') so the user clearly sees what was created in each picture. Never output full English diffusion prompts in outputBriefs, never use generic labels like 'แบบที่ 1', and never merge separate outputs into a collage, contact sheet, split panel, grid, or one Canvas composition.",
   "For summary, write a concise, elegant, and professional Thai summary (1-2 sentences) of your creative direction and thought process. If editing an image, describe what is being modified or added in natural Thai without technical prefixes (e.g. 'ปรับแต่งภาพโดยเพิ่มมังกรบินเหนือเทือกเขา พร้อมคุมโทนแสงยามเย็นให้กลมกลืน'). If generating new images, describe the theme, composition, and mood in natural Thai. Never output raw command strings like 'Edit ภาพ... ด้วย Prompt :...' or unparsed JSON.",
@@ -418,7 +422,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "ASPECT RATIO PROTOCOL (MANDATORY 1:1 BASELINE):",
   "  - DEFAULT BASELINE: All image generation tasks MUST use a baseline aspect ratio of 1:1 (square, 1024x1024) unless the user explicitly specifies an aspect ratio or physical dimensions in their instruction, OR this is a follow-up continuation of a prior image generation that already locked a ratio.",
   "  - EXPLICIT USER OVERRIDES ONLY: Only non-1:1 aspect ratios explicitly specified by the user (such as '16:9', 'แนวนอน', 'landscape', '9:16', 'แนวตั้ง', 'portrait', '3:1', '60x20cm', 'พาโนรามา', 'wide panoramic') may be used for a fresh request.",
-  "  - MULTI-SIZE LISTS: When the user lists multiple distinct print/pixel sizes OR named aspect ratios (e.g. '53x20 cm, 29x7 cm, 1040x1040' or '16:9, 3:4 และ 9:16'), set requestedOutputCount to that count and put EACH size/ratio into the matching outputBrief. Never collapse every size into one output or one 1:1 square variation set.",
+  "  - MULTI-SIZE LISTS: When the user lists multiple distinct print/pixel sizes OR named aspect ratios (e.g. '53x20 cm, 29x7 cm, 1040x1040' or '16:9, 3:4 และ 9:16'), OR a tagged size-list image's OCR lists them, set requestedOutputCount to that count and put EACH size/ratio into the matching outputBrief. Never collapse every size into one output or one 1:1 square variation set. Each generation is one size only — do not ask the image model to draw all sizes in one frame, and do not copy the size card itself.",
   "  - CHAT CONTINUITY (FOLLOW-UPS): When the user asks for more of the same (e.g. 'สร้างมาอีก 3 รูป', 'ขอตัวเลือกเพิ่ม', 'ทำอีก 2 แบบ', 'another 3 images') OR a short revision of the last image (e.g. 'ปรับเป็นแนวตั้ง', 'ทำให้เป็นแนวตั้ง', 'make it vertical', 'ปรับโทน') after a prior image generation in this conversation:",
   "      * Treat the prior refinedPrompt + chat recall as the BASE brief. Restate and enrich it; do not invent a new unrelated subject or a blank campaign.",
   "      * KEEP the prior exact size (cm / px / named aspect) unless the follow-up names a new size OR the user inserted a new prompt image whose aspect should win. Orientation-only commands (แนวตั้ง / แนวนอน / vertical / portrait / landscape) SWAP custom WxH axes (29×7cm → 7×29cm) or FLIP a named aspect (16:9→9:16, 3:4→4:3, 3:1→1:3). Never substitute a default 9:16 when a custom size exists. A named size in the current ask (สัดส่วน 1:1) beats last-package size.",
@@ -1130,6 +1134,62 @@ function parseNumberWord(val: string): number | undefined {
   return map[v];
 }
 
+const EXPLICIT_COUNT_NUMBER = "(\\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)";
+
+export type ExplicitVariantAxis = "style" | "layout" | "size" | "version";
+
+function precedingIsInputReference(text: string, index: number): boolean {
+  const before = text.slice(Math.max(0, index - 16), index);
+  return /(?:จาก|อิง|ตาม)\s*$/u.test(before);
+}
+
+/** "5 สไตล์ต่างกัน" / "5 Layout" / "3 เวอร์ชัน" — N glued to a variant noun. */
+function matchCountedClassifier(text: string, classifier: string): number | undefined {
+  const re = new RegExp(
+    `(?:^|[^\\u0E00-\\u0E7Fa-zA-Z0-9])${EXPLICIT_COUNT_NUMBER}\\s*(?:${classifier})(?![a-zA-Z])`,
+    "giu",
+  );
+  let match: RegExpExecArray | null = re.exec(text);
+  while (match) {
+    if (!precedingIsInputReference(text, match.index)) {
+      const parsed = parseNumberWord(match[1] ?? "");
+      if (parsed && parsed >= 1 && parsed <= 5) return parsed;
+    }
+    match = re.exec(text);
+  }
+  return undefined;
+}
+
+/**
+ * Which kind of explicit N the user asked for, when they named the axis
+ * (style / layout / size / version). Size lists without a leading number
+ * are reported by the size-spec extractor instead.
+ */
+export function explicitVariantAxis(prompt: string | undefined): ExplicitVariantAxis | undefined {
+  const text = (followUpAskText(prompt) || prompt || "").trim();
+  if (!text) return undefined;
+  if (matchCountedClassifier(text, "สไตล์(?:ภาพ)?|styles?") !== undefined) return "style";
+  if (matchCountedClassifier(text, "layouts?|เลย์เอาต์|เลย์เอาท์") !== undefined) return "layout";
+  if (matchCountedClassifier(text, "เวอร์ชั่น|เวอร์ชัน|versions?") !== undefined) return "version";
+  if (matchCountedClassifier(text, "ไซส์|ขนาด|sizes?") !== undefined) return "size";
+  if (extractRequestedSizeSpecsFromUserAsk(text).length >= 2) return "size";
+  return undefined;
+}
+
+/** Parenthetical or comma list of exactly `expected` short variant labels. */
+export function extractListedVariantLabels(text: string, expected: number): string[] {
+  if (!text || expected < 2 || expected > 5) return [];
+  const groups = text.matchAll(/[([（]([^)\]）]{2,400})[)\]）]/gu);
+  for (const group of groups) {
+    const parts = (group[1] ?? "")
+      .split(/\s*(?:,|，|、|และ|and|&)\s*/iu)
+      .map((part) => part.replace(/^[\s\-–•*]+|[\s.]+$/gu, "").trim())
+      .filter((part) => part.length >= 2 && part.length <= 40);
+    if (parts.length === expected && new Set(parts).size === expected) return parts;
+  }
+  return [];
+}
+
 /**
  * Deterministically extracts explicit user intent to generate multiple outputs
  * (e.g. "ขอตัวเลือก 3 แบบ", "สร้างมา 3 รูป", "ขอ 3 แบบ", "เอา 3 ตัวเลือก", "3 variations")
@@ -1174,13 +1234,21 @@ export function extractExplicitRequestedOutputCount(
 
   // 4. "อีก N รูป/แบบ" without a create-verb prefix
   const moreMatch =
-    /อีก\s*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ไซส์|ขนาด|variations?|options?|images?|sizes?)/iu.exec(
+    /อีก\s*(\d+|[๑-๕]|หนึ่ง|สอง|สาม|สี่|ห้า|one|two|three|four|five)\s*(?:แบบ|รูป|ภาพ|ตัวเลือก|ไซส์|ขนาด|สไตล์|styles?|layouts?|variations?|options?|images?|sizes?)/iu.exec(
       text,
     );
   if (moreMatch?.[1]) {
     const parsed = parseNumberWord(moreMatch[1]);
     if (parsed && parsed >= 1 && parsed <= 5) return parsed;
   }
+
+  // 4b. "5 สไตล์ต่างกัน" / "5 Layout ต่างกัน" / "3 เวอร์ชัน" — noun is not รูป/แบบ
+  const styleCount = matchCountedClassifier(text, "สไตล์(?:ภาพ)?|styles?");
+  if (styleCount !== undefined) return styleCount;
+  const layoutCount = matchCountedClassifier(text, "layouts?|เลย์เอาต์|เลย์เอาท์");
+  if (layoutCount !== undefined) return layoutCount;
+  const versionCount = matchCountedClassifier(text, "เวอร์ชั่น|เวอร์ชัน|versions?");
+  if (versionCount !== undefined) return versionCount;
 
   // 5. Multiple distinct sizes / aspect ratios listed in one ask
   // e.g. "เป็น 16:9, 3:4 และ 9:16" or "53x20 cm, 29x7 cm, 1040x1040"
@@ -1203,14 +1271,44 @@ function clampRequestedOutputCount(count: number): number {
 export function resolveRequestedOutputCountFromUserAsk(
   prompt: string | undefined,
   extraAsks: readonly (string | undefined)[] = [],
+  analyses: readonly SizeListImageAnalysis[] = [],
 ): number {
-  const fromPrompt = extractExplicitRequestedOutputCount(followUpAskText(prompt) || prompt);
+  const ask = followUpAskText(prompt) || prompt;
+  const fromPrompt = extractExplicitRequestedOutputCount(ask);
   if (fromPrompt !== undefined) return clampRequestedOutputCount(fromPrompt);
   for (const extra of extraAsks) {
     const fromExtra = extractExplicitRequestedOutputCount(followUpAskText(extra) || extra);
     if (fromExtra !== undefined) return clampRequestedOutputCount(fromExtra);
   }
+  // A single size written in the ask wins over a size-list photo.
+  if (isOrientationOnlyFollowUpPrompt(ask || "")) return 1;
+  const textSpecs = extractRequestedSizeSpecsFromUserAsk(prompt, extraAsks);
+  if (textSpecs.length === 1) return 1;
+  const fromImage = resolveSizeListImageSpecs(prompt, analyses).specs.length;
+  if (fromImage >= 2) return clampRequestedOutputCount(fromImage);
   return 1;
+}
+
+function resolveOutputBriefs(
+  rawBriefs: readonly string[],
+  requestedOutputCount: number,
+  fallbackBrief: string,
+  summary: string,
+  refinedPrompt: string,
+): string[] {
+  const cleaned = rawBriefs.map((brief) => brief.trim()).filter(Boolean);
+  const head = cleaned.slice(0, requestedOutputCount);
+  const distinct =
+    head.length >= requestedOutputCount && new Set(head).size === requestedOutputCount;
+  if (distinct) return head;
+  const listed = extractListedVariantLabels(`${summary}\n${refinedPrompt}`, requestedOutputCount);
+  if (listed.length === requestedOutputCount) return listed;
+  const base = cleaned[0] || fallbackBrief;
+  const briefs = [base];
+  while (briefs.length < requestedOutputCount) {
+    briefs.push(`${base} (variation ${briefs.length + 1})`);
+  }
+  return briefs.slice(0, requestedOutputCount);
 }
 
 export function parseCreativeDirection(
@@ -1272,8 +1370,12 @@ export function parseCreativeDirection(
   }
 
   // Deterministic guard: Director-invented counts are ignored.
-  // Honor explicit N (e.g. "ขอ 3 แบบ", "สร้าง 3 รูป") or a multi-size list; otherwise 1.
-  const requestedOutputCount = resolveRequestedOutputCountFromUserAsk(input.prompt);
+  // Honor explicit N (styles, layouts, versions, sizes) or a multi-size list; otherwise 1.
+  const requestedOutputCount = resolveRequestedOutputCountFromUserAsk(
+    input.prompt,
+    [],
+    input.referenceAnalyses,
+  );
   if (!isBoundedString(value.summary, 2_000)) {
     return invalidDirection("summary is missing or exceeds 2000 chars");
   }
@@ -1325,17 +1427,16 @@ export function parseCreativeDirection(
       : typeof value.refinedPrompt === "string" && value.refinedPrompt.trim().length > 0
         ? value.refinedPrompt.trim()
         : "ภาพ";
-  const rawBriefs =
-    Array.isArray(value.outputBriefs) && value.outputBriefs.length > 0
-      ? value.outputBriefs
-      : Array.from({ length: requestedOutputCount }, (_, idx) =>
-          idx === 0 ? fallbackBrief : `${fallbackBrief} (variation ${idx + 1})`,
-        );
-  const normalizedBriefs: string[] = [...rawBriefs];
-  while (normalizedBriefs.length < requestedOutputCount) {
-    normalizedBriefs.push(`${fallbackBrief} (variation ${normalizedBriefs.length + 1})`);
-  }
-  const finalBriefs = normalizedBriefs.slice(0, requestedOutputCount);
+  const rawBriefs = Array.isArray(value.outputBriefs) ? value.outputBriefs : [];
+  const summaryText = typeof value.summary === "string" ? value.summary : "";
+  const refinedText = typeof value.refinedPrompt === "string" ? value.refinedPrompt : "";
+  const finalBriefs = resolveOutputBriefs(
+    rawBriefs.filter((brief): brief is string => typeof brief === "string"),
+    requestedOutputCount,
+    fallbackBrief,
+    summaryText,
+    refinedText,
+  );
   if (!isStringArray(finalBriefs, 100, 20_000, 1)) {
     return invalidDirection("outputBriefs contain invalid strings");
   }
