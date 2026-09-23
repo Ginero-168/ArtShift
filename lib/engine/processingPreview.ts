@@ -5,7 +5,6 @@ export type ProcessingPreviewKind =
   | "vectorize"
   | "upscale"
   | "multi-angle"
-  | "skeleton"
   | "generate"
   | "brief";
 export type ProcessingPreviewPhase =

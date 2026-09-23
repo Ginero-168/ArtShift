@@ -7,46 +7,33 @@ function read(relativePath: string): string {
 }
 
 describe("Skeleton action surface", () => {
-  it("adds a Skeleton button after Multi-Angle without removing Extract or Layer", () => {
+  it("keeps Extract, Layer, and Multi-Angle without a Skeleton button", () => {
     const bar = read("components/Canvas/ObjectContextBar.tsx");
-    expect(bar).toContain("SKELETON_LABEL");
+    expect(bar).not.toContain("SKELETON_LABEL");
+    expect(bar).not.toContain("toggleSkeleton");
+    expect(bar).not.toContain("PoseSkeletonRunner");
+    expect(bar).not.toContain('activeImageTool === "skeleton"');
     expect(bar).toContain("LAYER_LABEL");
     expect(bar).toContain("EXTRACT_LABEL");
-    expect(bar).toContain("<PoseSkeletonRunner");
+    expect(bar).toContain("MULTI_ANGLE_LABEL");
     expect(bar.indexOf("MULTI_ANGLE_LABEL, toggleMultiAngle")).toBeLessThan(
-      bar.indexOf("SKELETON_LABEL, toggleSkeleton"),
+      bar.indexOf("action(VECTORIZE_GROUP_LABEL"),
     );
-    const skeletonRunner = bar.indexOf('activeImageTool === "skeleton" ?');
-    const removeBgRunner = bar.indexOf('activeImageTool === "remove-bg" ||');
-    expect(skeletonRunner).toBeGreaterThan(0);
-    expect(skeletonRunner).toBeLessThan(removeBgRunner);
-    const skeletonBranch = bar.slice(skeletonRunner, removeBgRunner);
-    expect(skeletonBranch).toContain("<PoseSkeletonRunner");
-    expect(skeletonBranch).not.toContain("VisionObjectIsolator");
+    expect(bar).toContain("VisionObjectIsolator");
   });
 
-  it("lands a transparent pose PNG on the Preload card from the cloud job", () => {
-    const body = read("components/Canvas/PropertiesPanel/PoseSkeletonRunner.tsx");
-    const client = read("lib/vision/poseSkeletonClient.ts");
-    expect(body).toContain("requestPoseSkeleton");
-    expect(client).toContain('"/api/skeleton"');
-    expect(client).toContain('task: "image.poseSkeleton"');
-    expect(client).toContain('action: "status"');
-    expect(body).toContain("renderPoseSkeletonPng");
-    expect(body).toContain("enqueueProcessingJob");
-    expect(body).toContain('kind: "skeleton"');
-    expect(body).toContain("getProcessingPreviewPlacement");
-    expect(body).toContain("getProcessingPreviewBounds(element)");
-    expect(body).toContain('addElement(resultImage, "pose skeleton")');
-    expect(body).toContain("crop: element.crop");
-    expect(client).toContain("cloudConsent: true");
-    expect(body).not.toContain("detectHumanPoses");
-    expect(body).not.toContain("poseLandmarker");
-    expect(body).not.toContain("mediapipe");
-    expect(body).not.toContain("gemini");
+  it("does not mount a pose runner or advertise Skeleton in the product docs", () => {
+    expect(() => read("components/Canvas/PropertiesPanel/PoseSkeletonRunner.tsx")).toThrow();
+    const runtimeDocs = read("docs/AI_RUNTIME.md");
+    expect(runtimeDocs).not.toContain("### Skeleton (cloud pose)");
+    expect(runtimeDocs).not.toContain("Skeleton");
+    expect(runtimeDocs).toContain("### Multi-Angle (cloud camera edit)");
+    expect(runtimeDocs).toContain("### Layer (cloud decompose)");
+    expect(runtimeDocs).toContain("### Moodboard AI (Flare low, 9 / 16 / 25)");
+    expect(runtimeDocs).not.toContain("public/mediapipe");
   });
 
-  it("uses pinned Replicate YOLO26 pose instead of an on-device landmarker", () => {
+  it("leaves the unused cloud pose route on Replicate YOLO26 instead of MediaPipe", () => {
     const route = read("app/api/skeleton/route.ts");
     const adapter = read("lib/server/ai/adapters/replicateAdapter.ts");
     const manifest = read("lib/server/ai/modelManifest.ts");
@@ -58,11 +45,7 @@ describe("Skeleton action surface", () => {
     expect(adapter).toContain("model_size: modelSize");
     expect(manifest).toContain("0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8");
     expect(read("lib/vision/poseSkeleton.ts")).toContain("COCO-17");
-    const runtimeDocs = read("docs/AI_RUNTIME.md");
-    expect(runtimeDocs).toContain("### Skeleton (cloud pose)");
-    expect(runtimeDocs).toContain("### Multi-Angle (cloud camera edit)");
-    expect(runtimeDocs).toContain("### Layer (cloud decompose)");
-    expect(runtimeDocs).toContain("### Moodboard AI (Flare low, 9 / 16 / 25)");
-    expect(runtimeDocs).not.toContain("public/mediapipe");
+    expect(route).not.toContain("mediapipe");
+    expect(adapter).not.toContain("mediapipe");
   });
 });
