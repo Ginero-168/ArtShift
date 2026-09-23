@@ -1290,37 +1290,40 @@ describe("Replicate AI adapter", () => {
       y: Array.from({ length: 17 }, (_, index) => 40 + index * 2),
       visible: Array.from({ length: 17 }, () => 0.9),
     };
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          id: "prediction-pose-1",
-          model: "ultralytics/yolo26-pose",
-          version: "0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
-          status: "succeeded",
-          output: {
-            image: "https://replicate.delivery/annotated-pose.png",
-            json_str: JSON.stringify([
-              {
-                name: "person",
-                class: 0,
-                confidence: 0.91,
-                box: { x1: 80, y1: 20, x2: 180, y2: 220 },
-                keypoints,
-              },
-            ]),
-          },
-          metrics: { predict_time: 0.4 },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(poseFileResponse())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-pose-1",
+            model: "ultralytics/yolo26-pose",
+            version: "0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
+            status: "succeeded",
+            output: {
+              image: "https://replicate.delivery/annotated-pose.png",
+              json_str: JSON.stringify([
+                {
+                  name: "person",
+                  class: 0,
+                  confidence: 0.91,
+                  box: { x1: 80, y1: 20, x2: 180, y2: 220 },
+                  keypoints,
+                },
+              ]),
+            },
+            metrics: { predict_time: 0.4 },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
     vi.stubGlobal("fetch", fetchMock);
     const adapter = new ReplicateAiAdapter("test-token");
 
     const result = await adapter.execute({
       task: "image.poseSkeleton" as never,
       input: {
-        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        image: { dataUrl: PNG_DATA_URL, mimeType: "image/png" },
         width: 200,
         height: 100,
         modelSize: "n",
@@ -1348,8 +1351,10 @@ describe("Replicate AI adapter", () => {
       requestId: "prediction-pose-1",
       usage: { providerSeconds: 0.4 },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expectPoseFileUpload(fetchMock.mock.calls[0], "pose.png", "image/png");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
       "https://api.replicate.com/v1/predictions",
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -1359,7 +1364,7 @@ describe("Replicate AI adapter", () => {
         body: JSON.stringify({
           version: "0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
           input: {
-            image: "data:image/png;base64,AAAA",
+            image: POSE_FILE_URL,
             model_size: "n",
             conf: 0.25,
             iou: 0.45,
@@ -1369,20 +1374,24 @@ describe("Replicate AI adapter", () => {
         }),
       }),
     );
-    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("annotated-pose.png");
+    expect(JSON.stringify(fetchMock.mock.calls[1])).not.toContain("annotated-pose.png");
+    expect(JSON.stringify(fetchMock.mock.calls[1])).not.toContain("data:image");
   });
 
   it("rejects a pose prediction that omits JSON", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          id: "prediction-pose-empty",
-          status: "succeeded",
-          output: { image: "https://replicate.delivery/annotated-pose.png" },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(poseFileResponse())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "prediction-pose-empty",
+            status: "succeeded",
+            output: { image: "https://replicate.delivery/annotated-pose.png" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
     vi.stubGlobal("fetch", fetchMock);
     const adapter = new ReplicateAiAdapter("test-token");
 
@@ -1390,7 +1399,7 @@ describe("Replicate AI adapter", () => {
       adapter.execute({
         task: "image.poseSkeleton" as never,
         input: {
-          image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+          image: { dataUrl: PNG_DATA_URL, mimeType: "image/png" },
           width: 200,
           height: 100,
         } as never,
@@ -1398,7 +1407,7 @@ describe("Replicate AI adapter", () => {
         signal: new AbortController().signal,
       }),
     ).rejects.toMatchObject({ code: "PROVIDER_SCHEMA" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("returns a pose ticket immediately so a cold start can be polled", async () => {
@@ -1409,6 +1418,7 @@ describe("Replicate AI adapter", () => {
     };
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(poseFileResponse())
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: "predcoldstart1", status: "starting" }), {
           status: 200,
@@ -1432,7 +1442,7 @@ describe("Replicate AI adapter", () => {
     const started = await adapter.beginPoseSkeleton(
       "ultralytics/yolo26-pose",
       {
-        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        image: { dataUrl: PNG_DATA_URL, mimeType: "image/png" },
         width: 200,
         height: 100,
         modelSize: "n",
@@ -1440,8 +1450,9 @@ describe("Replicate AI adapter", () => {
       signal,
     );
     expect(started).toEqual({ predictionId: "predcoldstart1", status: "starting" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expectPoseFileUpload(fetchMock.mock.calls[0], "pose.png", "image/png");
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
       expect.objectContaining({
         headers: expect.objectContaining({ Prefer: "respond-async", "Cancel-After": "300s" }),
       }),
@@ -1450,28 +1461,31 @@ describe("Replicate AI adapter", () => {
     const polled = await adapter.pollPoseSkeleton("predcoldstart1", 200, 100, signal);
     expect(polled.status).toBe("succeeded");
     expect(polled.poses?.[0]?.landmarks[0]).toEqual({ x: 0.25, y: 0.5, visibility: 0.9 });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
       "https://api.replicate.com/v1/models/ultralytics/yolo26-pose/predictions",
     );
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
       "https://api.replicate.com/v1/predictions/predcoldstart1",
     );
   });
 
   it("creates a Skeleton prediction on the warm deployment with the user token", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify({ id: "preddeploy001", status: "starting" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(poseFileResponse())
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "preddeploy001", status: "starting" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     const adapter = new ReplicateAiAdapter("user-replicate-token");
 
     const started = await adapter.beginPoseSkeleton(
       "ultralytics/yolo26-pose@0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
       {
-        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        image: { dataUrl: JPEG_LABELED_PNG_DATA_URL, mimeType: "image/png" },
         width: 200,
         height: 100,
         modelSize: "n",
@@ -1481,8 +1495,14 @@ describe("Replicate AI adapter", () => {
     );
 
     expect(started).toEqual({ predictionId: "preddeploy001", status: "starting" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expectPoseFileUpload(
+      fetchMock.mock.calls[0],
+      "pose.jpg",
+      "image/jpeg",
+      "user-replicate-token",
+    );
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toBe(
       "https://api.replicate.com/v1/deployments/marcomnaiin/artshift-yolo26-pose/predictions",
     );
@@ -1495,7 +1515,7 @@ describe("Replicate AI adapter", () => {
     );
     expect(JSON.parse(String(init.body))).toEqual({
       input: {
-        image: "data:image/png;base64,AAAA",
+        image: POSE_FILE_URL,
         model_size: "n",
         conf: 0.25,
         iou: 0.45,
@@ -1504,5 +1524,83 @@ describe("Replicate AI adapter", () => {
       },
     });
     expect(String(init.body)).not.toContain("0da88062");
+    expect(String(init.body)).not.toContain("data:image");
+  });
+
+  it("maps a YOLO temp-file read failure away from a provider outage", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "pjv7912m2nrgc0d0sfjvx1j2yg",
+          status: "failed",
+          error: "No images or videos found in /tmp/tmprke_wtyzfile. Supported formats are:",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.pollPoseSkeleton(
+        "pjv7912m2nrgc0d0sfjvx1j2yg",
+        200,
+        100,
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
+  it("keeps a real pose timeout distinct from an image-read failure", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "predtimeout01",
+          status: "canceled",
+          error: "Prediction canceled.",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+
+    await expect(
+      adapter.pollPoseSkeleton("predtimeout01", 200, 100, new AbortController().signal),
+    ).rejects.toMatchObject({ code: "TIMEOUT" });
   });
 });
+
+const POSE_FILE_URL = "https://api.replicate.com/v1/files/pose-upload-1";
+const PNG_DATA_URL = `data:image/png;base64,${Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]).toString("base64")}`;
+const JPEG_LABELED_PNG_DATA_URL = `data:image/png;base64,${Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0,
+]).toString("base64")}`;
+
+function poseFileResponse(): Response {
+  return new Response(JSON.stringify({ id: "pose-upload-1", urls: { get: POSE_FILE_URL } }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function expectPoseFileUpload(
+  call: unknown,
+  filename: string,
+  contentType: string,
+  token = "test-token",
+): Promise<void> {
+  const [url, init] = call as [string, RequestInit];
+  expect(url).toBe("https://api.replicate.com/v1/files");
+  expect(init.method).toBe("POST");
+  const headers = new Headers(init.headers);
+  expect(headers.get("authorization")).toBe(`Bearer ${token}`);
+  expect(headers.get("content-type")).toBeNull();
+  const form = init.body as FormData;
+  const file = form.get("content");
+  expect(file).toBeInstanceOf(File);
+  expect((file as File).name).toBe(filename);
+  expect((file as File).type).toBe(contentType);
+}

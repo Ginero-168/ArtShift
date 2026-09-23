@@ -131,7 +131,11 @@ task against Replicate `ultralytics/yolo26-pose` (alias `yolo26-pose`), pinned t
 version `0da88062`
 (`0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8`). The request
 uses `model_size=n`, `conf=0.25`, `iou=0.45`, `imgsz=640`, and `return_json=true`.
-The annotated photo is not downloaded.
+The image is uploaded with the user's token to Replicate's Files API as `pose.jpg`,
+`pose.png`, or `pose.webp` (content type taken from the file bytes, not the data-URL
+label) and the prediction `image` input is that file URL. A raw data URL is not sent:
+Cog stores it as `file` with no extension, and YOLO26 then fails with
+`No images or videos found in /tmp/…file`. The annotated photo is not downloaded.
 
 Set `REPLICATE_SKELETON_DEPLOYMENT` to `owner/name` to send those predictions to
 a warm deployment instead of the public model. Production uses

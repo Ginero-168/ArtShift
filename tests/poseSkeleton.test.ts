@@ -164,6 +164,15 @@ describe("pose skeleton raster", () => {
     const rejected = new Error("bad image");
     Object.assign(rejected, { code: "INVALID_INPUT" });
     expect(poseSkeletonFailureMessage(rejected)).toBe(POSE_SKELETON_REJECTED_MESSAGE);
+    const unreadable = new Error(
+      "No images or videos found in /tmp/tmprke_wtyzfile. Supported formats are:",
+    );
+    Object.assign(unreadable, { code: "PROVIDER_UNAVAILABLE" });
+    expect(poseSkeletonFailureMessage(unreadable)).toBe(POSE_SKELETON_REJECTED_MESSAGE);
+    expect(poseSkeletonFailureMessage(unreadable)).not.toBe(POSE_SKELETON_API_MESSAGE);
+    const outage = new Error("AI provider is temporarily unavailable.");
+    Object.assign(outage, { code: "PROVIDER_UNAVAILABLE" });
+    expect(poseSkeletonFailureMessage(outage)).toBe(POSE_SKELETON_API_MESSAGE);
     expect(poseSkeletonFailureMessage(new Error("network"))).toBe(POSE_SKELETON_API_MESSAGE);
   });
 });

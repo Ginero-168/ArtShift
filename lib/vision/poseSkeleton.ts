@@ -6,6 +6,7 @@
  */
 
 import { arrayBufferToPngDataUrl } from "@/lib/raster/studio/encodeRevision";
+import { isPoseSkeletonImageFailureMessage } from "@/lib/vision/poseImageFailure";
 
 export const POSE_LANDMARK_COUNT = 17;
 export const MIN_LANDMARK_SCORE = 0.5;
@@ -25,7 +26,7 @@ export const POSE_SKELETON_STARTING_MESSAGE =
   "โมเดลกำลังเริ่มทำงาน (cold start) ครั้งแรกอาจใช้เวลาหนึ่งถึงสองนาที…";
 export const POSE_SKELETON_PROCESSING_MESSAGE = "กำลังตรวจจับท่าทาง…";
 export const POSE_SKELETON_REJECTED_MESSAGE =
-  "ส่งภาพให้โมเดล Skeleton ไม่ได้ ลองใช้ไฟล์ JPEG, PNG หรือ WebP ที่ไม่เกิน 5 MB";
+  "โมเดล Skeleton อ่านไฟล์ภาพนี้ไม่ได้ ลองใช้ภาพ JPEG, PNG หรือ WebP ที่ไม่เสียและไม่เกิน 5 MB";
 export const POSE_SKELETON_MISSING_KEY_MESSAGE =
   "ยังไม่ได้ตั้งค่า Replicate API key สำหรับบัญชีนี้ เพิ่มคีย์ใน AI Provider Settings แล้วลองอีกครั้ง";
 export const POSE_SKELETON_AUTH_MESSAGE = "กรุณาเข้าสู่ระบบก่อนใช้ Skeleton";
@@ -201,7 +202,9 @@ export function poseSkeletonFailureMessage(error: unknown): string {
   if (code === "PROVIDER_AUTH" || code === "NO_PROVIDER") return POSE_SKELETON_MISSING_KEY_MESSAGE;
   if (code === "AUTH_REQUIRED") return POSE_SKELETON_AUTH_MESSAGE;
   if (code === "TIMEOUT") return POSE_SKELETON_TIMEOUT_MESSAGE;
-  if (code === "INVALID_INPUT") return POSE_SKELETON_REJECTED_MESSAGE;
+  if (code === "INVALID_INPUT" || isPoseSkeletonImageFailureMessage(errorText(error))) {
+    return POSE_SKELETON_REJECTED_MESSAGE;
+  }
   if (code) return POSE_SKELETON_API_MESSAGE;
   if (
     error instanceof Error &&
@@ -217,6 +220,10 @@ function errorCode(error: unknown): string | undefined {
   if (!error || typeof error !== "object") return undefined;
   const code = (error as { code?: unknown }).code;
   return typeof code === "string" && code.trim() ? code : undefined;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : "";
 }
 
 function drawPose(

@@ -47,9 +47,14 @@ import {
   poseSkeletonDeploymentPredictionsUrl,
 } from "@/lib/server/ai/poseSkeletonDeployment";
 import {
+  poseImageUploadFromDataUrl,
+  replicatePoseFileUrl,
+} from "@/lib/server/ai/poseSkeletonImage";
+import {
   aspectRatioFromDimensions,
   normalizeReplicateAspectRatio,
 } from "@/lib/server/ai/replicateAspectRatio";
+import { isPoseSkeletonImageFailureMessage } from "@/lib/vision/poseImageFailure";
 import { mapYoloPoseJson, YoloPoseJsonError } from "@/lib/vision/yoloPose";
 import {
   parseReplicateAssistantOutput,
@@ -979,12 +984,17 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
 
     const prediction = await this.createPrediction(
       model,
-      yoloPoseProviderInput(input),
+      yoloPoseProviderInput(input, await this.uploadPoseImage(input.image.dataUrl, request.signal)),
       request.signal,
       true,
       posePredictionTransport(),
     );
-    const completed = await this.waitForPrediction(prediction, request.signal, true);
+    let completed: ReplicatePrediction;
+    try {
+      completed = await this.waitForPrediction(prediction, request.signal, true);
+    } catch (error) {
+      throw reclassifyPoseImageFailure(error);
+    }
     const poses = posesFromYoloOutput(completed.output, input.width, input.height);
     const metrics = completed.metrics ?? {};
     return {
@@ -1017,7 +1027,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const model = parseReplicateModel(modelName);
     const prediction = await this.createPrediction(
       model,
-      yoloPoseProviderInput(input),
+      yoloPoseProviderInput(input, await this.uploadPoseImage(input.image.dataUrl, signal)),
       signal,
       true,
       posePredictionTransport(deployment),
@@ -1073,6 +1083,41 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     }
   }
 
+  /**
+   * Upload a named image so Cog's temp file keeps `.jpg` / `.png` / `.webp`.
+   * The same upload is used for the public model and a warm deployment.
+   */
+  private async uploadPoseImage(dataUrl: string, signal: AbortSignal): Promise<string> {
+    const image = poseImageUploadFromDataUrl(dataUrl);
+    const form = new FormData();
+    form.append(
+      "content",
+      new File([new Uint8Array(image.bytes)], image.filename, { type: image.contentType }),
+    );
+    form.append(
+      "metadata",
+      new File([JSON.stringify({})], "metadata.json", { type: "application/json" }),
+    );
+    let response: Response;
+    try {
+      response = await fetch("https://api.replicate.com/v1/files", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.apiToken}` },
+        body: form,
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) throw signal.reason ?? error;
+      throw new AiRuntimeError("PROVIDER_UNAVAILABLE", "Replicate pose image upload failed.", {
+        provider: this.id,
+        cause: error,
+      });
+    }
+    await assertRecraftProviderResponse(response);
+    const payload = (await response.json()) as { urls?: { get?: unknown } };
+    return replicatePoseFileUrl(payload.urls?.get);
+  }
+
   private assertPoseReady(modelName: string, input: AiImagePoseSkeletonInput): void {
     this.assertToken();
     assertReplicateImageDataUrl(input.image.dataUrl);
@@ -1116,10 +1161,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       const errorMsg =
         typeof prediction.error === "string" ? prediction.error : "Replicate prediction failed.";
       console.error("[skeleton] pose prediction failed", predictionId, errorMsg);
-      throw new AiRuntimeError("PROVIDER_UNAVAILABLE", errorMsg, {
-        provider: this.id,
-        predictionId,
-      });
+      throw posePredictionFailure(prediction.status, errorMsg, predictionId);
     }
     return {
       predictionId,
@@ -1305,7 +1347,10 @@ function posePredictionTransport(deployment?: string): {
   };
 }
 
-function yoloPoseProviderInput(input: AiImagePoseSkeletonInput): Record<string, unknown> {
+function yoloPoseProviderInput(
+  input: AiImagePoseSkeletonInput,
+  imageUrl: string,
+): Record<string, unknown> {
   const modelSize = input.modelSize ?? DEFAULT_YOLO_POSE_MODEL_SIZE;
   if (!YOLO_POSE_MODEL_SIZES.includes(modelSize)) {
     throw new AiRuntimeError("INVALID_INPUT", "modelSize must be n, s, m, l, or x.", {
@@ -1313,13 +1358,52 @@ function yoloPoseProviderInput(input: AiImagePoseSkeletonInput): Record<string, 
     });
   }
   return {
-    image: input.image.dataUrl,
+    image: imageUrl,
     model_size: modelSize,
     conf: DEFAULT_YOLO_POSE_CONF,
     iou: DEFAULT_YOLO_POSE_IOU,
     imgsz: DEFAULT_YOLO_POSE_IMGSZ,
     return_json: true,
   };
+}
+
+function posePredictionFailure(
+  status: ReplicatePrediction["status"],
+  errorMsg: string,
+  predictionId: string,
+): AiRuntimeError {
+  if (status === "canceled" || status === "aborted") {
+    return new AiRuntimeError(
+      "TIMEOUT",
+      "Replicate canceled the pose prediction before it finished.",
+      { provider: "replicate", predictionId },
+    );
+  }
+  if (isPoseSkeletonImageFailureMessage(errorMsg)) {
+    return new AiRuntimeError("INVALID_INPUT", errorMsg, {
+      provider: "replicate",
+      predictionId,
+    });
+  }
+  return new AiRuntimeError("PROVIDER_UNAVAILABLE", errorMsg, {
+    provider: "replicate",
+    predictionId,
+  });
+}
+
+function reclassifyPoseImageFailure(error: unknown): unknown {
+  if (
+    error instanceof AiRuntimeError &&
+    error.code === "PROVIDER_UNAVAILABLE" &&
+    isPoseSkeletonImageFailureMessage(error.message)
+  ) {
+    return new AiRuntimeError("INVALID_INPUT", error.message, {
+      provider: error.provider,
+      cause: error,
+      predictionId: error.predictionId,
+    });
+  }
+  return error;
 }
 
 function posesFromYoloOutput(

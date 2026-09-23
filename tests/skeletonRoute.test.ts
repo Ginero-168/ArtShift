@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 
 const jobMock = vi.hoisted(() => ({
   startPoseSkeletonJob: vi.fn(),
@@ -121,6 +122,28 @@ describe("Skeleton API", () => {
 
     expect(response.status).toBe(403);
     expect(jobMock.startPoseSkeletonJob).not.toHaveBeenCalled();
+  });
+
+  it("maps a YOLO unreadable-file failure to an image error, not a 502 outage", async () => {
+    jobMock.pollPoseSkeletonJob.mockRejectedValue(
+      new AiRuntimeError(
+        "PROVIDER_UNAVAILABLE",
+        "No images or videos found in /tmp/tmprke_wtyzfile. Supported formats are:",
+        { provider: "replicate" },
+      ),
+    );
+
+    const response = await POST(
+      request({ action: "status", predictionId: "pred12345678", width: 1024, height: 768 }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "INVALID_INPUT",
+        message: "The pose model could not read this image. Use a JPEG, PNG, or WebP file.",
+      },
+    });
   });
 
   it("rejects other tasks on the dedicated endpoint", async () => {
