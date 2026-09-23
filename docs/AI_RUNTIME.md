@@ -117,6 +117,10 @@ Run places the returned image at the Preload card via
 `getProcessingPreviewPlacement` / `enqueueProcessingJob` (kind `multi-angle`)
 and leaves the source image in place.
 
+### Pose deployment
+
+Server pose predictions honor `REPLICATE_SKELETON_DEPLOYMENT`. Production uses `marcomnaiin/artshift-yolo26-pose`.
+
 ### Moodboard AI (Flare low, 9 / 16 / 25)
 
 On an **Infinity Canvas** slide, the Moodboard control accepts one short
