@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { isPromptHelperThumbId } from "@/lib/ai/orchestration/promptHelperThumbManifest";
+import type { PromptHelperThumbOptionHint } from "@/lib/ai/orchestration/promptHelperThumbPrompts";
 import {
   ensurePromptHelperThumbs,
   listExistingPromptHelperThumbIds,
@@ -16,9 +18,34 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const limiter = new RateLimiter(40, 60_000);
-const MAX_BODY_BYTES = 80_000;
+const MAX_BODY_BYTES = 160_000;
 const MAX_OPTION_IDS = 200;
 const MAX_QUEUE = 48;
+
+function parseBaseSubject(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  return trimmed ? trimmed.slice(0, 120) : undefined;
+}
+
+function parseOptionHints(value: unknown): PromptHelperThumbOptionHint[] {
+  if (!Array.isArray(value)) return [];
+  const hints: PromptHelperThumbOptionHint[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.id !== "string" || !isPromptHelperThumbId(raw.id)) continue;
+    const label = typeof raw.label === "string" ? raw.label.trim().slice(0, 40) : "";
+    const modifier = typeof raw.modifier === "string" ? raw.modifier.trim().slice(0, 180) : "";
+    hints.push({
+      id: raw.id,
+      label: label || undefined,
+      modifier: modifier || undefined,
+    });
+    if (hints.length >= MAX_OPTION_IDS) break;
+  }
+  return hints;
+}
 
 /**
  * GET — list thumb ids already on disk.
@@ -84,7 +111,7 @@ export async function POST(req: NextRequest) {
     raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const optionIds = Array.isArray(body.optionIds)
     ? body.optionIds.filter(
-        (id): id is string => typeof id === "string" && id.length > 0 && id.length < 80,
+        (id): id is string => typeof id === "string" && isPromptHelperThumbId(id),
       )
     : [];
 
@@ -97,6 +124,8 @@ export async function POST(req: NextRequest) {
 
   const result = await ensurePromptHelperThumbs({
     optionIds: optionIds.slice(0, MAX_OPTION_IDS),
+    options: parseOptionHints(body.options),
+    baseSubject: parseBaseSubject(body.baseSubject),
     token: access.replicateToken,
     maxQueue: MAX_QUEUE,
   });

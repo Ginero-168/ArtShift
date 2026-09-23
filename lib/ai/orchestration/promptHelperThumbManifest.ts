@@ -44,6 +44,13 @@ export const PROMPT_HELPER_THUMB_SRCS: Readonly<Record<string, string>> = {
   vibrant: "/api/ai/prompt-helper/thumbs/vibrant",
 };
 
+/** Cache filename and URL segment. Rejects path separators and dots. */
+export const PROMPT_HELPER_THUMB_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/;
+
+export function isPromptHelperThumbId(optionId: string): boolean {
+  return PROMPT_HELPER_THUMB_ID_PATTERN.test(optionId);
+}
+
 /** Canonical browser URL for an option thumb (API-backed, works for post-build files). */
 export function promptHelperThumbPath(optionId: string): string {
   return `/api/ai/prompt-helper/thumbs/${encodeURIComponent(optionId)}`;

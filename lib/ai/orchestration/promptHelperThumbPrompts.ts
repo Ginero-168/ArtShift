@@ -325,6 +325,45 @@ export function promptHelperThumbPrompt(optionId: string): string | undefined {
   return PROMPT_HELPER_THUMB_PROMPTS[optionId];
 }
 
+export type PromptHelperThumbOptionHint = {
+  id: string;
+  label?: string;
+  modifier?: string;
+};
+
+function clipThumbText(value: string | undefined, max: number): string {
+  if (!value) return "";
+  return value.replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+/**
+ * Prompt for a chip Gemini invented (not in the photography catalog).
+ * The option modifier is the visual phrase; label is the fallback.
+ * `baseSubject` is the card subject, e.g. "ภาพมังกร".
+ */
+export function buildInventedPromptHelperThumbPrompt(input: {
+  label?: string;
+  modifier?: string;
+  baseSubject?: string;
+}): string | undefined {
+  const detail = clipThumbText(input.modifier, 180) || clipThumbText(input.label, 40);
+  if (!detail) return undefined;
+  const subject = clipThumbText(input.baseSubject, 120);
+  const lead = subject ? `${subject}, ${detail}` : detail;
+  return `${lead}, simple centered thumbnail, soft studio light, ${SQUARE}`;
+}
+
+/** Catalog prompt wins so existing chip files stay on their original wording. */
+export function resolvePromptHelperThumbPrompt(
+  optionId: string,
+  hint?: { label?: string; modifier?: string; baseSubject?: string },
+): string | undefined {
+  return (
+    promptHelperThumbPrompt(optionId) ??
+    (hint ? buildInventedPromptHelperThumbPrompt(hint) : undefined)
+  );
+}
+
 export function promptHelperThumbPath(optionId: string): string {
   return `/prompt-helper/thumbs/${optionId}.jpg`;
 }

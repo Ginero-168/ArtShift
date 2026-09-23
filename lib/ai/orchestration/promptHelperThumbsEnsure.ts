@@ -1,6 +1,8 @@
 /**
  * Ensure Prompt Helper thumbnails exist on disk (VPS public folder).
  * Missing ids are generated via Replicate and persisted for later opens.
+ * Catalog ids use their stored prompt. Invented ids (wings__bat, species__western)
+ * use the option modifier/label plus the card subject.
  *
  * Sensitive / hard failures are recorded so reopen does not burn the same
  * Replicate call forever — a safer fallback prompt is tried once first.
@@ -9,17 +11,32 @@
 import { createHash } from "node:crypto";
 import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { listPromptHelperThumbEntries, promptHelperThumbPrompt } from "./promptHelperThumbPrompts";
+import { isPromptHelperThumbId } from "./promptHelperThumbManifest";
+import {
+  listPromptHelperThumbEntries,
+  type PromptHelperThumbOptionHint,
+  resolvePromptHelperThumbPrompt,
+} from "./promptHelperThumbPrompts";
 
-const OUT_DIR = path.join(process.cwd(), "public/prompt-helper/thumbs");
-const MANIFEST_JSON = path.join(process.cwd(), "public/prompt-helper/manifest.json");
-const FAILED_JSON = path.join(OUT_DIR, "_failed.json");
+const DEFAULT_OUT_DIR = path.join(process.cwd(), "public/prompt-helper/thumbs");
 const MODEL = process.env.PROMPT_HELPER_THUMB_MODEL || "openai/gpt-image-2.5-sunburst";
 const CONCURRENCY = Math.max(1, Number(process.env.PROMPT_HELPER_THUMB_CONCURRENCY || 2));
 const FAILED_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 const inFlight = new Set<string>();
 let queueTail: Promise<void> = Promise.resolve();
+
+function thumbLocations(): { outDir: string; manifestJson: string; failedJson: string } {
+  const outDir =
+    process.env.VITEST && process.env.PROMPT_HELPER_THUMB_DIR
+      ? path.resolve(process.env.PROMPT_HELPER_THUMB_DIR)
+      : DEFAULT_OUT_DIR;
+  return {
+    outDir,
+    manifestJson: path.join(path.dirname(outDir), "manifest.json"),
+    failedJson: path.join(outDir, "_failed.json"),
+  };
+}
 
 const SAFE_FALLBACK_PROMPTS: Readonly<Record<string, string>> = {
   comic:
@@ -62,7 +79,7 @@ function isSensitiveError(message: string): boolean {
 
 async function loadFailedMap(): Promise<Record<string, FailedEntry>> {
   try {
-    const raw = await readFile(FAILED_JSON, "utf8");
+    const raw = await readFile(thumbLocations().failedJson, "utf8");
     const parsed = JSON.parse(raw) as Record<string, FailedEntry>;
     if (!parsed || typeof parsed !== "object") return {};
     return parsed;
@@ -72,8 +89,9 @@ async function loadFailedMap(): Promise<Record<string, FailedEntry>> {
 }
 
 async function saveFailedMap(map: Record<string, FailedEntry>): Promise<void> {
-  await mkdir(OUT_DIR, { recursive: true });
-  await writeFile(FAILED_JSON, `${JSON.stringify(map, null, 2)}\n`);
+  const { outDir, failedJson } = thumbLocations();
+  await mkdir(outDir, { recursive: true });
+  await writeFile(failedJson, `${JSON.stringify(map, null, 2)}\n`);
 }
 
 function shouldSkipFailed(
@@ -162,8 +180,9 @@ async function downloadToFile(url: string, dest: string) {
 }
 
 async function writeJsonManifest() {
-  await mkdir(OUT_DIR, { recursive: true });
-  const files = await readdir(OUT_DIR);
+  const { outDir, manifestJson } = thumbLocations();
+  await mkdir(outDir, { recursive: true });
+  const files = await readdir(outDir);
   const ids = files
     .filter((f) => f.endsWith(".jpg"))
     .map((f) => f.replace(/\.jpg$/, ""))
@@ -173,7 +192,7 @@ async function writeJsonManifest() {
     generatedAt: new Date().toISOString(),
     thumbs: Object.fromEntries(ids.map((id) => [id, { src: `/prompt-helper/thumbs/${id}.jpg` }])),
   };
-  await writeFile(MANIFEST_JSON, `${JSON.stringify(jsonManifest, null, 2)}\n`);
+  await writeFile(manifestJson, `${JSON.stringify(jsonManifest, null, 2)}\n`);
   return ids;
 }
 
@@ -184,14 +203,13 @@ async function runPredictionToFile(token: string, prompt: string, dest: string) 
   }
   const url = firstOutputUrl(prediction.output);
   if (!url) throw new Error("no output url");
-  await mkdir(OUT_DIR, { recursive: true });
+  await mkdir(thumbLocations().outDir, { recursive: true });
   await downloadToFile(url, dest);
 }
 
-async function generateOne(token: string, optionId: string) {
-  const primary = promptHelperThumbPrompt(optionId);
-  if (!primary) return false;
-  const dest = path.join(OUT_DIR, `${optionId}.jpg`);
+async function generateOne(token: string, optionId: string, primary: string) {
+  if (!primary || !isPromptHelperThumbId(optionId)) return false;
+  const dest = path.join(thumbLocations().outDir, `${optionId}.jpg`);
   if (await exists(dest)) {
     const failed = await loadFailedMap();
     if (failed[optionId]) {
@@ -247,8 +265,9 @@ async function recordFailure(optionId: string, promptHash: string, reason: strin
 
 export async function listExistingPromptHelperThumbIds(): Promise<string[]> {
   try {
-    await mkdir(OUT_DIR, { recursive: true });
-    const files = await readdir(OUT_DIR);
+    const { outDir } = thumbLocations();
+    await mkdir(outDir, { recursive: true });
+    const files = await readdir(outDir);
     return files
       .filter((f) => f.endsWith(".jpg"))
       .map((f) => f.replace(/\.jpg$/, ""))
@@ -279,23 +298,46 @@ export async function ensurePromptHelperThumbs(params: {
   optionIds: string[];
   token: string | null | undefined;
   maxQueue?: number;
+  /** Label and modifier for ids that are not in the photography catalog. */
+  options?: PromptHelperThumbOptionHint[];
+  /** Card subject, e.g. "ภาพมังกร", folded into invented thumb prompts. */
+  baseSubject?: string;
+  /** When true, resolve after queued generations finish. */
+  wait?: boolean;
 }): Promise<EnsureThumbsResult> {
   const maxQueue = params.maxQueue ?? 48;
-  await mkdir(OUT_DIR, { recursive: true });
+  const { outDir } = thumbLocations();
+  await mkdir(outDir, { recursive: true });
   const known = new Set(await listExistingPromptHelperThumbIds());
   const failedMap = await loadFailedMap();
+  const hints = new Map<string, PromptHelperThumbOptionHint>();
+  for (const hint of params.options ?? []) {
+    if (!hint || typeof hint.id !== "string" || hints.has(hint.id)) continue;
+    hints.set(hint.id, hint);
+  }
+  const baseSubject = params.baseSubject?.trim() || undefined;
   const unique = [...new Set(params.optionIds.map((id) => id.trim()).filter(Boolean))];
   const existing: string[] = [];
   const missing: string[] = [];
   const skippedNoPrompt: string[] = [];
   const skippedFailed: string[] = [];
+  const prompts = new Map<string, string>();
 
   for (const id of unique) {
+    if (!isPromptHelperThumbId(id)) {
+      skippedNoPrompt.push(id);
+      continue;
+    }
     if (known.has(id)) {
       existing.push(id);
       continue;
     }
-    const prompt = promptHelperThumbPrompt(id);
+    const hint = hints.get(id);
+    const prompt = resolvePromptHelperThumbPrompt(id, {
+      label: hint?.label,
+      modifier: hint?.modifier,
+      baseSubject,
+    });
     if (!prompt) {
       skippedNoPrompt.push(id);
       continue;
@@ -304,6 +346,7 @@ export async function ensurePromptHelperThumbs(params: {
       skippedFailed.push(id);
       continue;
     }
+    prompts.set(id, prompt);
     missing.push(id);
   }
 
@@ -321,37 +364,35 @@ export async function ensurePromptHelperThumbs(params: {
 
   for (const id of queued) inFlight.add(id);
   const token = params.token;
-  queueTail = queueTail
-    .then(async () => {
-      let index = 0;
-      async function worker() {
-        while (index < queued.length) {
-          const id = queued[index++]!;
-          try {
-            await generateOne(token, id);
-          } catch (error) {
-            console.error(
-              `[prompt-helper-thumbs] ✗ ${id}:`,
-              error instanceof Error ? error.message : error,
-            );
-          } finally {
-            inFlight.delete(id);
-          }
+  const job = queueTail.then(async () => {
+    let index = 0;
+    async function worker() {
+      while (index < queued.length) {
+        const id = queued[index++]!;
+        try {
+          await generateOne(token, id, prompts.get(id) || "");
+        } catch (error) {
+          console.error(
+            `[prompt-helper-thumbs] ✗ ${id}:`,
+            error instanceof Error ? error.message : error,
+          );
+        } finally {
+          inFlight.delete(id);
         }
       }
-      await Promise.all(
-        Array.from({ length: Math.min(CONCURRENCY, queued.length) }, () => worker()),
-      );
-      try {
-        await writeJsonManifest();
-      } catch (error) {
-        console.error("[prompt-helper-thumbs] manifest:", error);
-      }
-    })
-    .catch((error) => {
-      console.error("[prompt-helper-thumbs] queue:", error);
-    });
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queued.length) }, () => worker()));
+    try {
+      await writeJsonManifest();
+    } catch (error) {
+      console.error("[prompt-helper-thumbs] manifest:", error);
+    }
+  });
+  queueTail = job.catch((error) => {
+    console.error("[prompt-helper-thumbs] queue:", error);
+  });
 
+  if (params.wait) await queueTail;
   return { existing, queued, skippedNoPrompt, skippedFailed, skippedNoToken: false };
 }
 
