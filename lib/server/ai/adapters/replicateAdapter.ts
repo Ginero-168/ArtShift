@@ -42,6 +42,11 @@ import {
   moodboardBatchUsd,
 } from "@/lib/moodboard/constants";
 import {
+  parsePoseSkeletonDeployment,
+  poseSkeletonDeploymentFromEnv,
+  poseSkeletonDeploymentPredictionsUrl,
+} from "@/lib/server/ai/poseSkeletonDeployment";
+import {
   aspectRatioFromDimensions,
   normalizeReplicateAspectRatio,
 } from "@/lib/server/ai/replicateAspectRatio";
@@ -977,7 +982,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       yoloPoseProviderInput(input),
       request.signal,
       true,
-      { prefer: POSE_SKELETON_PREFER, cancelAfter: POSE_SKELETON_CANCEL_AFTER },
+      posePredictionTransport(),
     );
     const completed = await this.waitForPrediction(prediction, request.signal, true);
     const poses = posesFromYoloOutput(completed.output, input.width, input.height);
@@ -1006,6 +1011,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     modelName: string,
     input: AiImagePoseSkeletonInput,
     signal: AbortSignal,
+    deployment?: string,
   ): Promise<PoseSkeletonTicket> {
     this.assertPoseReady(modelName, input);
     const model = parseReplicateModel(modelName);
@@ -1014,7 +1020,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       yoloPoseProviderInput(input),
       signal,
       true,
-      { prefer: POSE_SKELETON_PREFER, cancelAfter: POSE_SKELETON_CANCEL_AFTER },
+      posePredictionTransport(deployment),
     );
     return this.ticketFromPrediction(prediction, input.width, input.height);
   }
@@ -1131,11 +1137,14 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     input: Record<string, unknown>,
     signal: AbortSignal,
     safeErrors = false,
-    transport?: { prefer?: string; cancelAfter?: string },
+    transport?: { prefer?: string; cancelAfter?: string; deployment?: string },
   ): Promise<ReplicatePrediction> {
-    const endpoint = model.version
-      ? "https://api.replicate.com/v1/predictions"
-      : `https://api.replicate.com/v1/models/${model.slug}/predictions`;
+    const deployment = transport?.deployment;
+    const endpoint = deployment
+      ? poseSkeletonDeploymentPredictionsUrl(deployment)
+      : model.version
+        ? "https://api.replicate.com/v1/predictions"
+        : `https://api.replicate.com/v1/models/${model.slug}/predictions`;
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -1144,7 +1153,9 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         Prefer: transport?.prefer ?? "wait=60",
         "Cancel-After": transport?.cancelAfter ?? REPLICATE_PREDICTION_CANCEL_AFTER,
       },
-      body: JSON.stringify(model.version ? { version: model.version, input } : { input }),
+      body: JSON.stringify(
+        deployment || !model.version ? { input } : { version: model.version, input },
+      ),
       signal,
     });
     if (safeErrors) await assertRecraftProviderResponse(response);
@@ -1276,6 +1287,22 @@ function extractFileUrl(output: unknown): string | undefined {
     return (output as { url: string }).url;
   }
   return undefined;
+}
+
+function posePredictionTransport(deployment?: string): {
+  prefer: string;
+  cancelAfter: string;
+  deployment?: string;
+} {
+  const selected =
+    deployment !== undefined
+      ? parsePoseSkeletonDeployment(deployment)
+      : poseSkeletonDeploymentFromEnv();
+  return {
+    prefer: POSE_SKELETON_PREFER,
+    cancelAfter: POSE_SKELETON_CANCEL_AFTER,
+    ...(selected ? { deployment: selected } : {}),
+  };
 }
 
 function yoloPoseProviderInput(input: AiImagePoseSkeletonInput): Record<string, unknown> {

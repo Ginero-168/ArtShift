@@ -5,6 +5,7 @@ import {
   ReplicateAiAdapter,
 } from "@/lib/server/ai/adapters/replicateAdapter";
 import { createAiRouteTable } from "@/lib/server/ai/modelManifest";
+import { poseSkeletonDeploymentFromEnv } from "@/lib/server/ai/poseSkeletonDeployment";
 
 export type { PoseSkeletonTicket };
 
@@ -21,7 +22,12 @@ export function startPoseSkeletonJob(
   input: AiImagePoseSkeletonInput,
   signal: AbortSignal,
 ): Promise<PoseSkeletonTicket> {
-  return new ReplicateAiAdapter(token).beginPoseSkeleton(poseSkeletonModel(), input, signal);
+  return new ReplicateAiAdapter(token).beginPoseSkeleton(
+    poseSkeletonModel(),
+    input,
+    signal,
+    poseSkeletonDeploymentFromEnv(),
+  );
 }
 
 export function pollPoseSkeletonJob(

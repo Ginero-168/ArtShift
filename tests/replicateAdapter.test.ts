@@ -1450,8 +1450,59 @@ describe("Replicate AI adapter", () => {
     const polled = await adapter.pollPoseSkeleton("predcoldstart1", 200, 100, signal);
     expect(polled.status).toBe("succeeded");
     expect(polled.poses?.[0]?.landmarks[0]).toEqual({ x: 0.25, y: 0.5, visibility: 0.9 });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.replicate.com/v1/models/ultralytics/yolo26-pose/predictions",
+    );
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       "https://api.replicate.com/v1/predictions/predcoldstart1",
     );
+  });
+
+  it("creates a Skeleton prediction on the warm deployment with the user token", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: "preddeploy001", status: "starting" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("user-replicate-token");
+
+    const started = await adapter.beginPoseSkeleton(
+      "ultralytics/yolo26-pose@0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
+      {
+        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        width: 200,
+        height: 100,
+        modelSize: "n",
+      },
+      new AbortController().signal,
+      "marcomnaiin/artshift-yolo26-pose",
+    );
+
+    expect(started).toEqual({ predictionId: "preddeploy001", status: "starting" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://api.replicate.com/v1/deployments/marcomnaiin/artshift-yolo26-pose/predictions",
+    );
+    expect(init.headers).toEqual(
+      expect.objectContaining({
+        Authorization: "Bearer user-replicate-token",
+        Prefer: "respond-async",
+        "Cancel-After": "300s",
+      }),
+    );
+    expect(JSON.parse(String(init.body))).toEqual({
+      input: {
+        image: "data:image/png;base64,AAAA",
+        model_size: "n",
+        conf: 0.25,
+        iou: 0.45,
+        imgsz: 640,
+        return_json: true,
+      },
+    });
+    expect(String(init.body)).not.toContain("0da88062");
   });
 });
