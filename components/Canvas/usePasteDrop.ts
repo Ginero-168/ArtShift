@@ -21,6 +21,7 @@ import {
   loadDataURL,
 } from "@/lib/engine/imageCache";
 import { useEngine } from "@/lib/engine/store";
+import { loadDroppedImageSource } from "@/lib/pinterest/importPin";
 import { enqueueAssetAnalysis } from "@/lib/vision/assetAnalysisBrowser";
 
 export function usePasteDrop(
@@ -312,7 +313,8 @@ export function usePasteDrop(
         let entry = fileId ? getCached(fileId) : null;
         if (!entry && (imageUrl || fileId)) {
           try {
-            entry = await loadDataURL(imageUrl || fileId);
+            const source = imageUrl ? await loadDroppedImageSource(imageUrl) : imageUrl;
+            entry = await loadDataURL(source || imageUrl || fileId);
           } catch (err) {
             console.error("Failed to load dropped chat image:", err);
           }

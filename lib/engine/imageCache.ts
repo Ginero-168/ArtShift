@@ -74,10 +74,25 @@ export async function loadDataURL(dataURL: string, explicitFileId?: string): Pro
   return entry;
 }
 
+/**
+ * Anonymous CORS drops cookies. Same-origin URLs (including the Pinterest image
+ * proxy) must load with the session cookie, so only cross-origin http(s) opts in.
+ */
+export function imageNeedsAnonymousCors(src: string, pageOrigin?: string): boolean {
+  if (!/^https?:/i.test(src)) return false;
+  const origin = pageOrigin ?? (typeof location === "undefined" ? "" : location.origin);
+  if (!origin) return true;
+  try {
+    return new URL(src).origin !== origin;
+  } catch {
+    return true;
+  }
+}
+
 function decode(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    if (/^https?:/i.test(src)) img.crossOrigin = "anonymous";
+    if (imageNeedsAnonymousCors(src)) img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = (err) => reject(err);
     img.src = src;

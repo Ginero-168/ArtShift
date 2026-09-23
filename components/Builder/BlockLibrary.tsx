@@ -2,7 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { IconChevronDown, IconLayoutGrid, IconSearch, IconSparkles } from "@/components/icons";
+import {
+  IconChevronDown,
+  IconLayoutGrid,
+  IconPinterest,
+  IconSearch,
+  IconSparkles,
+} from "@/components/icons";
 import { subscribeCoPilotExternalTurn } from "@/lib/ai/coPilotRequestBus";
 import {
   BUILDER_BLOCK_MIME,
@@ -27,10 +33,11 @@ import {
 import { BlockIcon } from "./BlockIcon";
 import styles from "./Builder.module.css";
 import IconLibraryModal from "./IconLibraryModal";
+import PinterestLibrary from "./PinterestLibrary";
 
 const AIAssistancePanel = dynamic(() => import("@/components/AI/AICoPilotBar"), { ssr: false });
 
-type LibraryTab = "blocks" | "assistant";
+type LibraryTab = "assistant" | "blocks" | "pinterest";
 
 const CATEGORIES: BuilderBlockDefinition["category"][] = [
   "Content",
@@ -228,8 +235,8 @@ export default function BlockLibrary() {
 
   return (
     <aside
-      className={`${styles.library} ${activeTab === "assistant" ? styles.libraryAssistantActive : ""}`}
-      aria-label="Blocks and AI Assistance"
+      className={`${styles.library} ${activeTab === "assistant" ? styles.libraryAssistantActive : ""} ${activeTab === "pinterest" ? styles.libraryPinterestActive : ""}`}
+      aria-label="Blocks, AI Assistance, and Pinterest"
       data-resizing={isResizing ? "true" : undefined}
       style={activeTab === "assistant" ? { width: assistantWidth } : undefined}
     >
@@ -257,6 +264,18 @@ export default function BlockLibrary() {
             <IconLayoutGrid size={14} color="currentColor" />
           </span>
           <span>Block</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "pinterest"}
+          className={`${styles.libraryTab} ${styles.libraryTabPinterest} ${activeTab === "pinterest" ? styles.libraryTabActive : ""}`}
+          onClick={() => setActiveTab("pinterest")}
+        >
+          <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center" }}>
+            <IconPinterest size={14} color="#E60023" />
+          </span>
+          <span>Pinterest</span>
         </button>
       </div>
 
@@ -338,6 +357,10 @@ export default function BlockLibrary() {
         hidden={activeTab !== "assistant"}
       >
         <AIAssistancePanel />
+      </div>
+
+      <div className={styles.libraryTabPanel} hidden={activeTab !== "pinterest"}>
+        <PinterestLibrary />
       </div>
 
       {activeTab === "assistant" ? (

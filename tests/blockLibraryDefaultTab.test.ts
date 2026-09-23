@@ -14,13 +14,18 @@ describe("BlockLibrary Default Tab & Tab Order", () => {
     );
   });
 
-  it("places AI Assistance tab before Block tab in the DOM tablist", () => {
+  it("places AI Assistance, then Block, then Pinterest in the DOM tablist", () => {
     const assistantIndex = librarySource.indexOf("<span>AI Assistance</span>");
     const blockIndex = librarySource.indexOf("<span>Block</span>");
+    const pinterestIndex = librarySource.indexOf("<span>Pinterest</span>");
 
     expect(assistantIndex).toBeGreaterThan(-1);
     expect(blockIndex).toBeGreaterThan(-1);
+    expect(pinterestIndex).toBeGreaterThan(-1);
     expect(assistantIndex).toBeLessThan(blockIndex);
+    expect(blockIndex).toBeLessThan(pinterestIndex);
+    expect(librarySource).toContain('useState<LibraryTab>("assistant")');
+    expect(librarySource).toContain("<PinterestLibrary />");
   });
 
   it("assigns styles.libraryTabAssistant to the AI Assistance tab button", () => {

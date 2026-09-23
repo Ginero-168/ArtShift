@@ -1,0 +1,250 @@
+.panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fb;
+  color: #172033;
+}
+
+.emptyState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px 18px 40px;
+  text-align: center;
+}
+
+.logo {
+  display: block;
+}
+
+.emptyCopy {
+  margin: 0;
+  max-width: 18rem;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.connectButton {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #e60023;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #e60023;
+  font: 700 13px/1 "Sarabun", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.connectButton:hover {
+  background: #fff1f2;
+}
+
+.connectButton:focus-visible,
+.textButton:focus-visible,
+.subTab:focus-visible,
+.pinCard:focus-visible,
+.boardRow:focus-visible,
+.backButton:focus-visible {
+  outline: 2px solid rgba(24, 89, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.hint {
+  margin: 8px 12px 0;
+  color: #9f1239;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.emptyState .hint {
+  margin: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 4px;
+}
+
+.account {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbarActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.textButton,
+.backButton {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #344054;
+  font: 600 11px/1 "Sarabun", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.textButton:hover,
+.backButton:hover {
+  background: #f2f5fa;
+}
+
+.textButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.subTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px 10px 8px;
+}
+
+.subTab {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #7b8495;
+  font: 600 12px/1 "Sarabun", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.subTab:hover {
+  background: #f5f7fa;
+  color: #344054;
+}
+
+.subTabActive {
+  border-color: rgba(230, 0, 35, 0.22);
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 0 10px 12px;
+  overscroll-behavior: contain;
+}
+
+.pinGrid {
+  columns: 2 120px;
+  column-gap: 8px;
+}
+
+.pinCard {
+  display: block;
+  width: 100%;
+  margin-block-end: 8px;
+  padding: 0;
+  break-inside: avoid;
+  border: 1px solid #dfe3ea;
+  border-radius: 8px;
+  overflow: clip;
+  background: #ffffff;
+  cursor: grab;
+}
+
+.pinCard:hover {
+  border-color: #e60023;
+}
+
+.pinCard img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.boardList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.boardRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px;
+  border: 1px solid #dfe3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.boardRow:hover {
+  border-color: #e60023;
+}
+
+.boardCover {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #f2f5fa;
+}
+
+.boardCopy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.boardName {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boardMeta,
+.statusLine,
+.emptyLine {
+  color: #8a93a3;
+  font-size: 11px;
+}
+
+.statusLine,
+.emptyLine {
+  margin: 12px 4px;
+  text-align: center;
+}
+
+.backButton {
+  margin-block-end: 8px;
+  padding-inline: 0;
+  color: #667085;
+}

@@ -265,6 +265,19 @@ function LandingPageContent() {
         >
           ดูฟีเจอร์
         </Link>
+        <Link
+          href="/privacy"
+          style={{
+            color: "#64748b",
+            fontSize: 12,
+            fontWeight: 500,
+            textDecoration: "underline",
+            textUnderlineOffset: 3,
+            marginInlineStart: 16,
+          }}
+        >
+          Privacy
+        </Link>
       </footer>
     </div>
   );
