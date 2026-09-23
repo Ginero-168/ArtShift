@@ -10,6 +10,8 @@ import {
   POSE_SKELETON_INVALID_IMAGE_MESSAGE,
   POSE_SKELETON_MISSING_KEY_MESSAGE,
   POSE_SKELETON_NO_PERSON_MESSAGE,
+  POSE_SKELETON_REJECTED_MESSAGE,
+  POSE_SKELETON_TIMEOUT_MESSAGE,
   PoseSkeletonError,
   poseSkeletonFailureMessage,
   renderPoseSkeletonPng,
@@ -156,6 +158,12 @@ describe("pose skeleton raster", () => {
     const signedOut = new Error("Authentication is required.");
     Object.assign(signedOut, { code: "AUTH_REQUIRED" });
     expect(poseSkeletonFailureMessage(signedOut)).toBe(POSE_SKELETON_AUTH_MESSAGE);
+    const timedOut = new Error("timed out");
+    Object.assign(timedOut, { code: "TIMEOUT" });
+    expect(poseSkeletonFailureMessage(timedOut)).toBe(POSE_SKELETON_TIMEOUT_MESSAGE);
+    const rejected = new Error("bad image");
+    Object.assign(rejected, { code: "INVALID_INPUT" });
+    expect(poseSkeletonFailureMessage(rejected)).toBe(POSE_SKELETON_REJECTED_MESSAGE);
     expect(poseSkeletonFailureMessage(new Error("network"))).toBe(POSE_SKELETON_API_MESSAGE);
   });
 });

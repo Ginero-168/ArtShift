@@ -1352,6 +1352,10 @@ describe("Replicate AI adapter", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.replicate.com/v1/predictions",
       expect.objectContaining({
+        headers: expect.objectContaining({
+          Prefer: "respond-async",
+          "Cancel-After": "300s",
+        }),
         body: JSON.stringify({
           version: "0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8",
           input: {
@@ -1395,5 +1399,59 @@ describe("Replicate AI adapter", () => {
       }),
     ).rejects.toMatchObject({ code: "PROVIDER_SCHEMA" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a pose ticket immediately so a cold start can be polled", async () => {
+    const keypoints = {
+      x: Array.from({ length: 17 }, () => 0.25),
+      y: Array.from({ length: 17 }, () => 0.5),
+      visible: Array.from({ length: 17 }, () => 0.9),
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "predcoldstart1", status: "starting" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "predcoldstart1",
+            status: "succeeded",
+            output: { json_str: JSON.stringify([{ name: "person", confidence: 0.8, keypoints }]) },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+    const signal = new AbortController().signal;
+
+    const started = await adapter.beginPoseSkeleton(
+      "ultralytics/yolo26-pose",
+      {
+        image: { dataUrl: "data:image/png;base64,AAAA", mimeType: "image/png" },
+        width: 200,
+        height: 100,
+        modelSize: "n",
+      },
+      signal,
+    );
+    expect(started).toEqual({ predictionId: "predcoldstart1", status: "starting" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Prefer: "respond-async", "Cancel-After": "300s" }),
+      }),
+    );
+
+    const polled = await adapter.pollPoseSkeleton("predcoldstart1", 200, 100, signal);
+    expect(polled.status).toBe("succeeded");
+    expect(polled.poses?.[0]?.landmarks[0]).toEqual({ x: 0.25, y: 0.5, visibility: 0.9 });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.replicate.com/v1/predictions/predcoldstart1",
+    );
   });
 });

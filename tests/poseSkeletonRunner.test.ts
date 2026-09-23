@@ -147,7 +147,7 @@ describe("Pose skeleton runner", () => {
     window.alert = vi.fn();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => jsonResponse({ execution: { output: { poses: [] } } })),
+      vi.fn(async () => jsonResponse({ status: "succeeded", poses: [] })),
     );
     const onComplete = vi.fn();
     render(
@@ -187,7 +187,9 @@ describe("Pose skeleton runner", () => {
         modelAlias: "yolo26-pose",
       });
       return jsonResponse({
-        execution: { output: { poses: [{ landmarks: standingLandmarks(), confidence: 0.9 }] } },
+        predictionId: "pred12345678",
+        status: "succeeded",
+        poses: [{ landmarks: standingLandmarks(), confidence: 0.9 }],
       });
     });
     vi.stubGlobal("fetch", fetchMock);

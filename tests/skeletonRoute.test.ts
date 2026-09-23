@@ -1,7 +1,11 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const runtimeMock = vi.hoisted(() => ({ execute: vi.fn() }));
+const jobMock = vi.hoisted(() => ({
+  startPoseSkeletonJob: vi.fn(),
+  pollPoseSkeletonJob: vi.fn(),
+  cancelPoseSkeletonJob: vi.fn(),
+}));
 const requireEndUserCloudAiMock = vi.hoisted(() =>
   vi.fn((_req: NextRequest, cloudConsent: unknown) => {
     if (cloudConsent !== true) {
@@ -24,9 +28,7 @@ const requireEndUserCloudAiMock = vi.hoisted(() =>
   }),
 );
 
-vi.mock("@/lib/server/ai/runtime", () => ({
-  getServerAiRuntime: () => runtimeMock,
-}));
+vi.mock("@/lib/server/ai/poseSkeletonJob", () => jobMock);
 vi.mock("@/lib/server/ai/userCredentials", () => ({
   getUserAccount: () => ({ id: "account-test" }),
   getSessionReplicateToken: () => "account-replicate-token",
@@ -47,46 +49,65 @@ const imageInput = {
 
 describe("Skeleton API", () => {
   beforeEach(() => {
-    runtimeMock.execute.mockReset();
+    jobMock.startPoseSkeletonJob.mockReset();
+    jobMock.pollPoseSkeletonJob.mockReset();
+    jobMock.cancelPoseSkeletonJob.mockReset();
     requireEndUserCloudAiMock.mockClear();
-    runtimeMock.execute.mockResolvedValue({
-      output: { poses: [] },
-      metadata: {
-        provider: "replicate",
-        model: "ultralytics/yolo26-pose",
-        usage: {},
-        warnings: [],
-      },
+    jobMock.startPoseSkeletonJob.mockResolvedValue({
+      predictionId: "pred12345678",
+      status: "starting",
+    });
+    jobMock.pollPoseSkeletonJob.mockResolvedValue({
+      predictionId: "pred12345678",
+      status: "succeeded",
+      poses: [],
     });
   });
 
-  it("executes image.poseSkeleton with the BYOK token and returns poses", async () => {
+  it("starts image.poseSkeleton with the BYOK token and returns the prediction id", async () => {
     const response = await POST(
       request({
+        action: "start",
         task: "image.poseSkeleton",
         input: imageInput,
-        options: { cloudConsent: true, provider: "openai", allowFallback: true },
+        options: { cloudConsent: true, provider: "replicate", allowFallback: false },
       }),
     );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(await response.json()).toMatchObject({
-      execution: { output: { poses: [] } },
+    expect(await response.json()).toEqual({
+      predictionId: "pred12345678",
+      status: "starting",
     });
     expect(requireEndUserCloudAiMock).toHaveBeenCalledWith(expect.anything(), true);
-    expect(runtimeMock.execute).toHaveBeenCalledWith(
-      "image.poseSkeleton",
+    expect(jobMock.startPoseSkeletonJob).toHaveBeenCalledWith(
+      "account-replicate-token",
       expect.objectContaining({ width: 1024, height: 768, modelSize: "n" }),
-      expect.objectContaining({
-        provider: "replicate",
-        modelAlias: "yolo26-pose",
-        profile: "quality",
-        allowFallback: false,
-        cloudConsent: true,
-        maxCostUsd: 0.02,
-      }),
+      expect.any(AbortSignal),
     );
+    expect(jobMock.pollPoseSkeletonJob).not.toHaveBeenCalled();
+  });
+
+  it("returns poses from one status poll without uploading the image again", async () => {
+    const response = await POST(
+      request({ action: "status", predictionId: "pred12345678", width: 1024, height: 768 }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      predictionId: "pred12345678",
+      status: "succeeded",
+      poses: [],
+    });
+    expect(jobMock.pollPoseSkeletonJob).toHaveBeenCalledWith(
+      "account-replicate-token",
+      "pred12345678",
+      1024,
+      768,
+      expect.any(AbortSignal),
+    );
+    expect(jobMock.startPoseSkeletonJob).not.toHaveBeenCalled();
   });
 
   it("rejects a Skeleton request without explicit cloud consent", async () => {
@@ -99,14 +120,14 @@ describe("Skeleton API", () => {
     );
 
     expect(response.status).toBe(403);
-    expect(runtimeMock.execute).not.toHaveBeenCalled();
+    expect(jobMock.startPoseSkeletonJob).not.toHaveBeenCalled();
   });
 
   it("rejects other tasks on the dedicated endpoint", async () => {
     const response = await POST(request({ task: "image.upscale", input: {}, options: {} }));
 
     expect(response.status).toBe(400);
-    expect(runtimeMock.execute).not.toHaveBeenCalled();
+    expect(jobMock.startPoseSkeletonJob).not.toHaveBeenCalled();
   });
 });
 
