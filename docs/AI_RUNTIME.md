@@ -117,55 +117,6 @@ Run places the returned image at the Preload card via
 `getProcessingPreviewPlacement` / `enqueueProcessingJob` (kind `multi-angle`)
 and leaves the source image in place.
 
-### Skeleton (cloud pose)
-
-`Skeleton` is an Option Bar action after Multi-Angle and before Vectorize. It is
-enabled only for a loaded image. One click sends the image. There is no settings
-panel and no on-device pose model.
-
-It is a paid cloud path with the same end-user gate as Layer and Multi-Angle:
-authentication and the user's own Replicate BYOK credential through
-`requireEndUserCloudAi` — never a shared `REPLICATE_API_TOKEN`. The click sets
-`cloudConsent`. The dedicated route `/api/skeleton` runs the `image.poseSkeleton`
-task against Replicate `ultralytics/yolo26-pose` (alias `yolo26-pose`), pinned to
-version `0da88062`
-(`0da88062bf83caea8e8d2456ae5290a8efab06420bc58cd1ebb9ec2324353aa8`). The request
-uses `model_size=n`, `conf=0.25`, `iou=0.45`, `imgsz=640`, and `return_json=true`.
-The image is uploaded with the user's token to Replicate's Files API as `pose.jpg`,
-`pose.png`, or `pose.webp` (content type taken from the file bytes, not the data-URL
-label) and the prediction `image` input is that file URL. A raw data URL is not sent:
-Cog stores it as `file` with no extension, and YOLO26 then fails with
-`No images or videos found in /tmp/…file`. The annotated photo is not downloaded.
-
-Set `REPLICATE_SKELETON_DEPLOYMENT` to `owner/name` to send those predictions to
-a warm deployment instead of the public model. Production uses
-`marcomnaiin/artshift-yolo26-pose` (`gpu-t4`, the same pinned version). The
-request is `POST /v1/deployments/{owner}/{name}/predictions` with the user's
-Replicate token. When the variable is unset, start uses the public model
-predictions API. The browser still does not hold one request open until the
-model finishes. `POST` with `action: "start"` creates the prediction using
-`Prefer: respond-async` and returns the prediction id. The client then polls
-`action: "status"` until the pose JSON is ready or four minutes pass. Polling
-still covers a cold public model and a deployment that is scaling or briefly
-busy. Preload shows that the model is starting, and a timeout says the model
-may be cold-starting instead of a generic connection error. Cancelling the card
-cancels the prediction.
-
-`json_str` is Ultralytics `Results.to_json()`: COCO-17 keypoints, normalized or
-in pixels. The adapter normalizes them. The browser paints bones and joints on a
-transparent PNG. Up to four people are drawn, most confident first, each in its
-own color. A pose is kept only when a torso pair is visible and at least four
-landmarks score 0.5 or higher. If nobody qualifies, the action stops with a Thai
-message and does not add an image. A missing Replicate key and a failed API call
-use their own Thai alerts. The processing queue clears the Preload card when the
-job settles, including those failures, so the card does not spin forever.
-
-Output matches the source pixel size up to 4 megapixels, then scales down. The
-PNG is placed at the Preload card via `getProcessingPreviewPlacement` /
-`enqueueProcessingJob` (kind `skeleton`). A source crop is copied onto that card
-so the skeleton lines up with the visible image. There is no webcam, joint
-dragging, or pose-to-image regenerate.
-
 ### Moodboard AI (Flare low, 9 / 16 / 25)
 
 On an **Infinity Canvas** slide, the Moodboard control accepts one short
@@ -191,7 +142,7 @@ prompt/keyword/vibe and a batch size of **9, 16, or 25** (default 9).
    wins). Partial failures are shown in the UI. The shared `/api/stock` route
    remains for other surfaces; Moodboard no longer starts a stock fill.
 
-During Remove BG, Extract, Layer, Multi-Angle, Skeleton, and Vectorize, the browser renders a transient duplicate
+During Remove BG, Extract, Layer, Multi-Angle, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading
 indicator and swipe animation but is not an editor element or undo entry. Processing
 requests use one FIFO queue, so moving/deselecting the source does not cancel or hide

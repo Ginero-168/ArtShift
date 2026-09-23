@@ -11,7 +11,6 @@ const tools = [
   { label: "Extract", key: "extract" },
   { label: "Layer", key: "layer" },
   { label: "Multi-Angle", key: "multi-angle" },
-  { label: "Skeleton", key: "skeleton" },
   { label: "Vectorize", key: "vectorize" },
 ] as const;
 
@@ -51,8 +50,8 @@ test("keeps each image tool as its own Option Bar settings entry", async ({ page
   expect(optionBarLabels.indexOf("RemoveBG")).toBeLessThan(optionBarLabels.indexOf("Extract"));
   expect(optionBarLabels.indexOf("Extract")).toBeLessThan(optionBarLabels.indexOf("Layer"));
   expect(optionBarLabels.indexOf("Layer")).toBeLessThan(optionBarLabels.indexOf("Multi-Angle"));
-  expect(optionBarLabels.indexOf("Multi-Angle")).toBeLessThan(optionBarLabels.indexOf("Skeleton"));
-  expect(optionBarLabels.indexOf("Skeleton")).toBeLessThan(optionBarLabels.indexOf("Vectorize"));
+  expect(optionBarLabels.indexOf("Multi-Angle")).toBeLessThan(optionBarLabels.indexOf("Vectorize"));
+  expect(optionBarLabels).not.toContain("Skeleton");
   await expect(optionBar.getByRole("button", { name: "Vectorize1", exact: true })).toHaveCount(0);
   await expect(
     optionBar.getByRole("button", { name: "Vectorize(Cloud)", exact: true }),
