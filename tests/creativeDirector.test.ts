@@ -1450,6 +1450,75 @@ describe("extractExplicitRequestedOutputCount / resolveRequestedOutputCountFromU
     expect(resolveRequestedOutputCountFromUserAsk("ปรับไซส์เป็น 29x7cm และ 60x20cm")).toBe(2);
     expect(resolveRequestedOutputCountFromUserAsk("29x7 และ 29x10")).toBe(2);
     expect(resolveRequestedOutputCountFromUserAsk("สองไซส์ ปรับให้")).toBe(2);
+    expect(extractExplicitRequestedOutputCount("@Photo สร้างรูปนี้ออกมา 5 สไตล์ต่างกัน")).toBe(5);
+    expect(extractExplicitRequestedOutputCount("สร้างรูปนี้ @[Photo:id] ออกมา 5 Layout ต่างกัน")).toBe(5);
+    expect(extractExplicitRequestedOutputCount("จาก 5 สไตล์นี้")).toBeUndefined();
+    expect(resolveRequestedOutputCountFromUserAsk("สร้างรูป")).toBe(1);
+    expect(resolveRequestedOutputCountFromUserAsk("@Photo สร้างรูปนี้ออกมา 5 สไตล์ต่างกัน")).toBe(5);
+    expect(resolveRequestedOutputCountFromUserAsk("สร้างรูปนี้ ออกมา 5 Layout ต่างกัน")).toBe(5);
+  });
+
+  it("expands 5 สไตล์ต่างกัน into five briefs even if Director JSON says 1", () => {
+    const direction = parseCreativeDirection(
+      {
+        kind: "image-task",
+        summary: "สร้างป้ายโปรโมชัน 5 รูปแบบ (มินิมอล, จีนร่วมสมัย, ป็อปอาร์ต, หรูหรา, และลักชูรี)",
+        refinedPrompt:
+          "One sheet of the bookstore poster in five styles: มินิมอล, จีนร่วมสมัย, ป็อปอาร์ต, หรูหรา, ลักชูรี",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["Each style is its own file"],
+        search: { required: false, queries: [], sources: [] },
+        requestedOutputCount: 1,
+        outputBriefs: ["สไตล์มินิมอลสะอาดตา"],
+      },
+      {
+        prompt: "@Photo สร้างรูปนี้ออกมา 5 สไตล์ต่างกัน",
+        canvasSummary: { objectCount: 1, selectedCount: 1, width: 1080, height: 1080 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+      },
+      [],
+    );
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(5);
+      expect(direction.outputBriefs).toEqual(["มินิมอล", "จีนร่วมสมัย", "ป็อปอาร์ต", "หรูหรา", "ลักชูรี"]);
+    }
+  });
+
+  it("expands 5 Layout ต่างกัน into five briefs even if Director JSON says 1", () => {
+    const direction = parseCreativeDirection(
+      {
+        kind: "image-task",
+        summary: "จัด 5 เลย์เอาต์ (เต็มกรอบ, แยกคอลัมน์, ตัวหนังสือใหญ่, ภาพเต็ม, และโลโก้มุม)",
+        refinedPrompt: "Show every layout together",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["One layout per file"],
+        search: { required: false, queries: [], sources: [] },
+        requestedOutputCount: 1,
+        outputBriefs: ["เลย์เอาต์แรก"],
+      },
+      {
+        prompt: "สร้างรูปนี้ @[Photo:poster] ออกมา 5 Layout ต่างกัน",
+        canvasSummary: { objectCount: 1, selectedCount: 1, width: 1080, height: 1080 },
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        referenceAnalyses: [],
+      },
+      [],
+    );
+    expect(direction.kind).toBe("image-task");
+    if (direction.kind === "image-task") {
+      expect(direction.requestedOutputCount).toBe(5);
+      expect(direction.outputBriefs).toHaveLength(5);
+      expect(direction.outputBriefs?.[0]).toBe("เต็มกรอบ");
+      expect(direction.outputBriefs?.[4]).toBe("โลโก้มุม");
+    }
   });
 
   it("ignores last-package sizes on a composed orientation follow-up", () => {

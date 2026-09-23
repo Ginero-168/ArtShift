@@ -1,3 +1,5 @@
+import { isSizeListDocument } from "@/lib/ai/imageGeneration";
+
 export type InlineTagToken = {
   type: "tag";
   raw: string;
@@ -114,7 +116,7 @@ export function extractInlineTagRefs(
   return refs;
 }
 
-export type InlineTagReferenceRole = "style" | "layout" | "subject" | "reference";
+export type InlineTagReferenceRole = "style" | "layout" | "subject" | "size" | "reference";
 
 /**
  * Infers how each Name Tag should be used from surrounding clause language
@@ -133,6 +135,12 @@ export function inferInlineTagRoles(text: string): Map<string, InlineTagReferenc
     const window = preceding.slice(-120).toLowerCase();
     let role: InlineTagReferenceRole = "reference";
     if (
+      /(?:ตามไซส์|ตามไซซ์|ตามขนาด|ตามสัดส่วน|size\s*list|these\s+sizes|listed\s+sizes|according\s+to\s+(?:the\s+|these\s+)?sizes?)/iu.test(
+        window,
+      )
+    ) {
+      role = "size";
+    } else if (
       /(?:สไตล์|style|aesthetic|mood|tone|look\s+and\s+feel|visual\s+style|อิงสไตล์|ตามสไตล์)/iu.test(
         window,
       )
@@ -177,6 +185,8 @@ function roleInstruction(role: InlineTagReferenceRole): string {
       return "ROLE: LAYOUT / BRIEF reference — follow composition, typography zones, graphic structure, and messaging hierarchy from this image/brief. Gray blocks, outlines, and wireframe boxes are layout GUIDES only — do NOT reproduce them as borders, frames, cards, or design chrome in the final artwork. Render finished photography, typography, and graphic treatments instead.";
     case "subject":
       return "ROLE: SUBJECT reference — preserve identity, appearance, and key features of the referenced subject.";
+    case "size":
+      return "ROLE: SIZE SPECIFICATION — read the listed print and pixel sizes only. Do not copy this card, its bullets, or a gallery of formats into the artwork.";
     default:
       return "ROLE: GENERAL visual reference — incorporate relevant visual cues without treating this as anonymous filler.";
   }
@@ -220,9 +230,13 @@ export function buildReferenceRoleAppendix(
     displayName: string,
     role: InlineTagReferenceRole,
     caption?: string,
+    visibleText?: string,
   ) => {
     const title = displayName || `Reference ${index}`;
+    const specOnly =
+      role === "size" || isSizeListDocument(`${caption ?? ""}\n${visibleText ?? ""}`);
     const captionBit = (() => {
+      if (specOnly) return "";
       const t = caption?.trim();
       if (!t) return "";
       if (t.length <= 420) return ` Visual summary: ${t}.`;
@@ -230,7 +244,7 @@ export function buildReferenceRoleAppendix(
       const cut = sliced.lastIndexOf(" ");
       return ` Visual summary: ${(cut > 80 ? sliced.slice(0, cut) : sliced).trim()}….`;
     })();
-    lines.push(`${index}. "${title}" — ${roleInstruction(role)}${captionBit}`);
+    lines.push(`${index}. "${title}" — ${roleInstruction(specOnly ? "size" : role)}${captionBit}`);
   };
 
   if (tagRefs.length > 0) {
@@ -243,7 +257,13 @@ export function buildReferenceRoleAppendix(
             analysisIdentity(item).displayName.toLowerCase() === tag.displayName.toLowerCase(),
         ) ||
         analyses[idx];
-      pushLine(idx + 1, tag.displayName, roles.get(tag.objectId) || "reference", analysis?.caption);
+      pushLine(
+        idx + 1,
+        tag.displayName,
+        roles.get(tag.objectId) || "reference",
+        analysis?.caption,
+        analysis?.visibleText,
+      );
     });
   } else {
     analyses.forEach((item, idx) => {
@@ -255,6 +275,7 @@ export function buildReferenceRoleAppendix(
         identity.displayName || `Reference ${idx + 1}`,
         (identity.objectId && roles.get(identity.objectId)) || "reference",
         item.caption,
+        item.visibleText,
       );
     });
   }

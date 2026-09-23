@@ -88,6 +88,8 @@ export type AiTaskPlan = {
     totalBatches: number;
     maxBatchSize: 5;
   };
+  /** Size-card attachments. Generation must not copy them into the artwork. */
+  sizeSpecObjectIds?: readonly string[];
 };
 
 export type AiTask = AiTaskPlan & {

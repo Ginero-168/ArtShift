@@ -714,4 +714,215 @@ describe("context-aware turn orchestrator", () => {
     expect((dims?.printHeight ?? 0) / (dims?.printWidth ?? 1)).toBeCloseTo(29 / 7, 2);
     expect(dims?.height ?? 0).toBeGreaterThan(dims?.width ?? 0);
   });
+
+  it("schedules 5 separate style jobs for '5 สไตล์ต่างกัน' and keeps each prompt to one style", () => {
+    const run = createDirectedImageRun(
+      {
+        prompt: "@Photo สร้างรูปนี้ออกมา 5 สไตล์ต่างกัน",
+        refs: [],
+        analyses: [],
+      },
+      {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 1,
+        summary: "สร้างป้ายโปรโมชัน 5 รูปแบบ (มินิมอล, จีนร่วมสมัย, ป็อปอาร์ต, หรูหรา, และลักชูรี)",
+        refinedPrompt: "Draw all five styles in one collage: มินิมอล, จีนร่วมสมัย, ป็อปอาร์ต, หรูหรา, ลักชูรี",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["One style per file"],
+        search: { required: false, queries: [], sources: [] },
+        outputBriefs: ["สไตล์มินิมอลสะอาดตา"],
+      },
+    );
+
+    expect(run.requestedOutputCount).toBe(5);
+    expect(run.tasks).toHaveLength(5);
+    expect(run.tasks.map((task) => task.summary)).toEqual([
+      "มินิมอล",
+      "จีนร่วมสมัย",
+      "ป็อปอาร์ต",
+      "หรูหรา",
+      "ลักชูรี",
+    ]);
+    const first = run.tasks[0]?.prompt ?? "";
+    expect(first).toContain("มินิมอล");
+    expect(first).not.toContain("ป็อปอาร์ต");
+    expect(first).not.toContain("ลักชูรี");
+    expect(first.toLowerCase()).toContain("collage");
+    expect(run.tasks[4]?.prompt).toContain("ลักชูรี");
+    expect(run.tasks[4]?.prompt).not.toContain("มินิมอล");
+  });
+
+  it("schedules 5 separate layout jobs for '5 Layout ต่างกัน'", () => {
+    const run = createDirectedImageRun(
+      {
+        prompt: "สร้างรูปนี้ @[Photo:poster] ออกมา 5 Layout ต่างกัน",
+        refs: [],
+        analyses: [],
+      },
+      {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 1,
+        summary: "จัด 5 เลย์เอาต์ (เต็มกรอบ, แยกคอลัมน์, ตัวหนังสือใหญ่, ภาพเต็ม, และโลโก้มุม)",
+        refinedPrompt: "Stack every layout in one storyboard",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["One layout per file"],
+        search: { required: false, queries: [], sources: [] },
+        outputBriefs: ["เลย์เอาต์แรก"],
+      },
+    );
+
+    expect(run.requestedOutputCount).toBe(5);
+    expect(run.tasks).toHaveLength(5);
+    expect(run.tasks[0]?.summary).toBe("เต็มกรอบ");
+    expect(run.tasks[0]?.prompt).toContain("เต็มกรอบ");
+    expect(run.tasks[0]?.prompt).not.toContain("โลโก้มุม");
+    expect(run.tasks[0]?.prompt.toLowerCase()).toContain("collage");
+    expect(run.tasks[4]?.summary).toBe("โลโก้มุม");
+  });
+
+  it("plans one job per size read from a size-list photo and does not collage them", () => {
+    const design = {
+      objectId: "design-1",
+      elementVersion: 1,
+      fileId: "file-design",
+      displayName: "Poster",
+      sourceWidth: 800,
+      sourceHeight: 1000,
+      width: 400,
+      height: 500,
+      angle: 0,
+    };
+    const sizeCard = {
+      objectId: "size-1",
+      elementVersion: 1,
+      fileId: "file-sizes",
+      displayName: "Sizes",
+      sourceWidth: 600,
+      sourceHeight: 800,
+      width: 300,
+      height: 400,
+      angle: 0,
+    };
+    const run = createDirectedImageRun(
+      {
+        prompt: "สร้างรูปนี้ @[Poster:design-1] ตามไซส์ @[Sizes:size-1] นี้",
+        refs: [design, sizeCard],
+        analyses: [
+          {
+            ref: { objectId: "design-1", elementVersion: 1, displayName: "Poster" },
+            caption: "bookstore promo poster",
+            objects: ["poster"],
+            visibleText: "ลดโค้งสุดท้าย 35%",
+            dimensions: { width: 800, height: 1000, aspectRatio: 0.8 },
+            transparency: "none",
+            appearanceNotes: [],
+            limitations: [],
+          },
+          {
+            ref: { objectId: "size-1", elementVersion: 1, displayName: "Sizes" },
+            caption: "white card listing print sizes",
+            objects: ["text"],
+            visibleText:
+              "- Endcap 53x20 cm\n- Shelftalk 29x7 cm\n- 1040x1040px\n- 1240x348px\n- 1844x880px",
+            dimensions: { width: 600, height: 800, aspectRatio: 0.75 },
+            transparency: "none",
+            appearanceNotes: [],
+            limitations: [],
+          },
+        ],
+      },
+      {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 1,
+        summary: "สร้างป้ายทุกไซส์ในรูปเดียว",
+        refinedPrompt:
+          "Draw every size in one vertical collage: 53x20 cm, 29x7 cm, 1040x1040px, 1240x348px, and 1844x880px",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["One size per file"],
+        search: { required: false, queries: [], sources: [] },
+        outputBriefs: ["ป้ายเดียว"],
+      },
+    );
+
+    expect(run.requestedOutputCount).toBe(5);
+    expect(run.tasks).toHaveLength(5);
+    expect(run.tasks.map((task) => task.requestedDimensions?.sizeLabel)).toEqual([
+      "53x20cm",
+      "29x7cm",
+      "1040x1040px",
+      "1240x348px",
+      "1844x880px",
+    ]);
+    const first = run.tasks[0]?.prompt ?? "";
+    expect(first).toContain("53x20");
+    expect(first).not.toContain("29x7");
+    expect(first).not.toContain("1040x1040");
+    expect(first).not.toContain("1844x880");
+    expect(first.toLowerCase()).toContain("collage");
+    expect(run.tasks[0]?.sizeSpecObjectIds).toEqual(["size-1"]);
+    expect(run.tasks[0]?.selectedImages.map((img) => img.objectId)).toEqual(["design-1"]);
+  });
+
+  it("keeps a plain สร้างรูป with one reference at exactly 1 image", () => {
+    const run = createDirectedImageRun(
+      {
+        prompt: "สร้างรูป @[Poster:design-1]",
+        refs: [
+          {
+            objectId: "design-1",
+            elementVersion: 1,
+            fileId: "file-design",
+            displayName: "Poster",
+            sourceWidth: 800,
+            sourceHeight: 1000,
+            width: 400,
+            height: 500,
+            angle: 0,
+          },
+        ],
+        analyses: [
+          {
+            ref: { objectId: "design-1", elementVersion: 1, displayName: "Poster" },
+            caption: "bookstore promo poster",
+            objects: ["poster"],
+            visibleText: "ลดโค้งสุดท้าย 35%",
+            dimensions: { width: 800, height: 1000, aspectRatio: 0.8 },
+            transparency: "none",
+            appearanceNotes: [],
+            limitations: [],
+          },
+        ],
+      },
+      {
+        kind: "image-task",
+        outputCount: 1,
+        requestedOutputCount: 5,
+        summary: "จะแยก 5 สไตล์ให้เอง",
+        refinedPrompt: "Five invented style variations of the poster",
+        specialist: "image_editor",
+        capability: "IMAGE_EDIT",
+        modelAlias: "image-gpt-2",
+        knowledgeSkillIds: [],
+        reviewCriteria: ["One poster"],
+        search: { required: false, queries: [], sources: [] },
+        outputBriefs: ["1", "2", "3", "4", "5"],
+      },
+    );
+
+    expect(run.requestedOutputCount).toBe(1);
+    expect(run.tasks).toHaveLength(1);
+    expect(run.tasks[0]?.imageRun?.requestedOutputCount).toBe(1);
+  });
 });

@@ -2,9 +2,11 @@ import {
   GPT_IMAGE_2_ESTIMATED_COST_USD,
   generateAIImage,
   hasExplicitDimensionsInText,
+  type RequestedSizeSpec,
   type RequestedSizeUnit,
   resolveDimensionsFromPixelSize,
   resolveImageGenerationDimensions,
+  stripOtherSizeMentions,
 } from "@/lib/ai/imageGeneration";
 import { preserveUserInstructionInPrompt } from "@/lib/ai/imageRewriteIntent";
 import type { AiImageAspectRatio, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
@@ -24,11 +26,16 @@ import {
   type PriorImageGenerationContext,
   parseFollowUpOrientation,
   resolveFollowUpDimensions,
+  resolveSizeListImageSpecs,
+  sizeListObjectIds,
   userInsertedPromptImageRefs,
 } from "./chatContinuity";
 import {
   applyCreativeDirectionToTask,
   type CreativeDirection,
+  type ExplicitVariantAxis,
+  explicitVariantAxis,
+  extractListedVariantLabels,
   parseCreativeDirection,
   resolveRequestedOutputCountFromUserAsk,
 } from "./creativeDirector";
@@ -340,6 +347,83 @@ function extractRequiredText(prompt: string): string | undefined {
   return unquoted?.[1]?.trim() || undefined;
 }
 
+const STANDALONE_OUTPUT_CONSTRAINT =
+  "Output constraints: one standalone image only, do not create a collage, montage, storyboard, contact sheet, stacked variants, split-screen, or multi-panel composition.";
+
+function variantJobLine(
+  axis: ExplicitVariantAxis | "generic",
+  brief: string,
+  index: number,
+  count: number,
+): string {
+  const label = brief.trim() || `variant ${index + 1}`;
+  const head = `Distinct output ${index + 1} of ${count}.`;
+  if (axis === "style") {
+    return `${head} Apply only this style: ${label}. Do not show any other style in this frame.`;
+  }
+  if (axis === "layout") {
+    return `${head} Use only this layout: ${label}. Do not show any other layout in this frame.`;
+  }
+  if (axis === "size") {
+    return `${head} Render only this size: ${label}. Do not show any other size in this frame.`;
+  }
+  return `${head} This variant only: ${label}. Do not show the other variants in this frame.`;
+}
+
+function neutralizeCollageIntent(text: string): string {
+  return text
+    .replace(
+      /\b(?:all|every|each of the)\s+(?:five|four|three|the\s+)?(?:styles?|layouts?|sizes?|variants?|formats?)\b/giu,
+      "this one variant",
+    )
+    .replace(
+      /\b(?:collage|montage|storyboard|contact\s+sheet|multi-panel|split-screen|stacked?\s+(?:banners?|sizes?|formats?|layouts?|styles?))\b/giu,
+      " ",
+    )
+    .replace(/คอลลาจ|มอนตาจ|สตอรี่บอร์ด|ทุกไซส์ในรูปเดียว|หลายไซส์ในรูปเดียว/gu, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function stripSiblingLabels(text: string, current: string, siblings: readonly string[]): string {
+  const keep = current.trim();
+  let out = text;
+  const ordered = [...siblings].sort((a, b) => b.trim().length - a.trim().length);
+  for (const sibling of ordered) {
+    const label = sibling.trim();
+    if (label.length < 2 || label === keep) continue;
+    if (keep.includes(label) || label.includes(keep)) continue;
+    out = out.split(label).join(" ");
+  }
+  return out
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function briefsForRun(
+  count: number,
+  axis: ExplicitVariantAxis | "generic",
+  sizeSpecs: readonly RequestedSizeSpec[],
+  direction: Extract<CreativeDirection, { kind: "image-task" }>,
+): string[] {
+  if (axis === "size" && sizeSpecs.length >= count && sizeSpecs.length >= 2) {
+    return sizeSpecs.slice(0, count).map((spec) => `ขนาด ${spec.label}`);
+  }
+  const provided = (direction.outputBriefs ?? []).map((brief) => brief.trim()).filter(Boolean);
+  const head = provided.slice(0, count);
+  if (head.length === count && new Set(head).size === count) return head;
+  const listed = extractListedVariantLabels(
+    `${direction.summary}\n${direction.refinedPrompt}`,
+    count,
+  );
+  if (listed.length === count) return listed;
+  const base = head[0] || direction.summary || direction.refinedPrompt;
+  const briefs = [base];
+  while (briefs.length < count) briefs.push(`${base} (variation ${briefs.length + 1})`);
+  return briefs.slice(0, count);
+}
+
 export function createDirectedImageRun(
   input: ContextAwareTurnInput,
   direction: Extract<CreativeDirection, { kind: "image-task" }>,
@@ -348,35 +432,47 @@ export function createDirectedImageRun(
   // Authoritative sizes from the user ask / inserted prompt image / last package
   // must win over Director prose ("9:16", leftover 29×7cm, etc.).
   const lockFollowUpSize = isOrientationOnlyFollowUpPrompt(input.prompt);
-  // Count comes only from the user ask (explicit N or a multi-size list).
-  // Director-invented requestedOutputCount and sizes in summary/refinedPrompt are ignored.
-  const count = resolveRequestedOutputCountFromUserAsk(input.prompt, [
-    input.clarification?.originalPrompt,
-  ]);
+  // Count comes only from the user ask (explicit N or a multi-size list / size-list photo).
+  // Director-invented requestedOutputCount is ignored.
+  const count = resolveRequestedOutputCountFromUserAsk(
+    input.prompt,
+    [input.clarification?.originalPrompt],
+    lockFollowUpSize ? [] : input.analyses,
+  );
   // Multi-size campaigns list several WxH / cm sizes or named A:B ratios.
   // Assign each task its own target so we do not stamp every output as 1:1 / first ratio only.
   // Dedup by source WxH (or named aspect), not the clamped generation ratio — 29x7cm
   // and 60x20cm both generate at 2048x688 but are distinct print sizes.
-  const sizeSpecs = lockFollowUpSize
+  // Explicit text sizes beat a size-list photo. The photo still supplies sizes when the ask has none.
+  const textSpecs = lockFollowUpSize
     ? []
     : extractRequestedSizeSpecsFromUserAsk(input.prompt, [input.clarification?.originalPrompt]);
+  const imageSizePlan = lockFollowUpSize
+    ? { specs: [] as RequestedSizeSpec[], objectIds: [] as string[] }
+    : resolveSizeListImageSpecs(input.prompt, input.analyses);
+  const sizeSpecs = textSpecs.length > 0 ? textSpecs : imageSizePlan.specs;
+  const sizeSpecObjectIds = lockFollowUpSize
+    ? []
+    : textSpecs.length > 0
+      ? sizeListObjectIds(input.prompt, input.analyses)
+      : imageSizePlan.objectIds;
+  const axis: ExplicitVariantAxis | "generic" =
+    explicitVariantAxis(input.prompt) ?? (sizeSpecs.length >= 2 ? "size" : "generic");
   const lockDirectorInventedSize =
     lockFollowUpSize ||
     sizeSpecs.length > 0 ||
     userInsertedPromptImageRefs(input.refs, input.priorGeneration).length > 0 ||
     (isImageFollowUpPrompt(input.prompt) && Boolean(input.priorGeneration));
-  const briefs =
-    direction.outputBriefs && direction.outputBriefs.length === count
-      ? direction.outputBriefs
-      : sizeSpecs.length >= count
-        ? sizeSpecs
-            .slice(0, count)
-            .map((spec, idx) => direction.outputBriefs?.[idx] ?? `ขนาด ${spec.label}`)
-        : Array.from({ length: count }, (_, idx) =>
-            idx === 0
-              ? direction.refinedPrompt
-              : `${direction.refinedPrompt} (variation ${idx + 1})`,
-          );
+  const briefs = briefsForRun(count, axis, sizeSpecs, direction);
+  const omitSizeSpecs = new Set(sizeSpecObjectIds);
+  const designSubjects = [
+    ...new Set(
+      input.analyses
+        .filter((analysis) => !omitSizeSpecs.has(analysis.ref.objectId))
+        .map((analysis) => analysis.objects.find((object) => object.trim())?.trim())
+        .filter((object): object is string => Boolean(object)),
+    ),
+  ].slice(0, 3);
   const batches = planImageBatches(count);
   const runId = options.runId ?? crypto.randomUUID();
   const tasks: AiTask[] = briefs.map((brief, index) => {
@@ -434,17 +530,40 @@ export function createDirectedImageRun(
         ? ` Target generation size ${dims.width}×${dims.height} (model max 3:1). The pipeline will then expand the overflowing edges (left/right or top/bottom) and stitch to the true print canvas ${dims.printWidth}×${dims.printHeight}.${exactSizeNote} Deliver a filled edge-to-edge ≤3:1 center panel — no empty bars and no extra crop into a narrower strip.`
         : ` Target size ${dims.width}×${dims.height} (aspect ${dims.aspectRatio}).${exactSizeNote} Fill the full frame edge-to-edge; no letterboxing.`
       : "";
+    const colorCue = variationCues.startsWith(" (focusing") ? variationCues : "";
+    const siblings = briefs.filter((_, briefIndex) => briefIndex !== index);
     const compiledPrompt =
       count === 1
         ? `${direction.refinedPrompt}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`
-        : `${direction.refinedPrompt}\nDistinct output ${index + 1} of ${count}${variationCues}.${ratioClause} Output constraints: one standalone image only, do not create a collage or multi-panel composition.`;
-    const taskPrompt = preserveUserInstructionInPrompt(compiledPrompt, input.prompt);
+        : `${neutralizeCollageIntent(stripSiblingLabels(direction.refinedPrompt, brief, siblings))}\n${variantJobLine(axis, brief, index, count)}${colorCue}.${ratioClause} ${STANDALONE_OUTPUT_CONSTRAINT}`;
+    let taskPrompt = preserveUserInstructionInPrompt(compiledPrompt, input.prompt);
+    if (count > 1) {
+      taskPrompt = stripSiblingLabels(taskPrompt, brief, siblings);
+      if (listDims && sizeSpecs.length >= 2) {
+        taskPrompt = stripOtherSizeMentions(taskPrompt, listDims, sizeSpecs);
+      }
+      if (!/one standalone image only/iu.test(taskPrompt)) {
+        taskPrompt = `${taskPrompt}\n${STANDALONE_OUTPUT_CONSTRAINT}`;
+      }
+    }
+    const selectedImages = baseTask.selectedImages.filter(
+      (img) => !omitSizeSpecs.has(img.objectId),
+    );
+    const referenceFacts = baseTask.referenceFacts?.filter(
+      (fact) => !omitSizeSpecs.has(fact.objectId),
+    );
     return {
       ...baseTask,
       id: `${runId}-task-${index + 1}`,
       summary: brief,
       prompt: taskPrompt,
       requestedDimensions: dims,
+      selectedImages,
+      ...(referenceFacts ? { referenceFacts } : {}),
+      ...(designSubjects.length > 0
+        ? { requiredSubjects: designSubjects }
+        : { requiredSubjects: undefined }),
+      ...(sizeSpecObjectIds.length > 0 ? { sizeSpecObjectIds } : {}),
       imageRun: {
         runId,
         outputIndex: index + 1,

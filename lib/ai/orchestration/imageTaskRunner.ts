@@ -132,7 +132,12 @@ export async function runContextAwareImageTask(
     dataUrl: string;
     mimeType?: "image/png" | "image/jpeg" | "image/webp";
   }>;
-  const effectiveRefs = refs && refs.length > 0 ? refs : (task.selectedImages ?? []);
+  const suppliedRefs = refs && refs.length > 0 ? refs : (task.selectedImages ?? []);
+  const omitSizeSpecs = new Set(task.sizeSpecObjectIds ?? []);
+  const effectiveRefs =
+    omitSizeSpecs.size > 0
+      ? suppliedRefs.filter((ref) => !omitSizeSpecs.has(ref.objectId))
+      : suppliedRefs;
   try {
     inputImages = resolveReferenceImages(effectiveRefs);
   } catch (error) {
