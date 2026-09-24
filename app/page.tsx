@@ -13,6 +13,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
 import styles from "@/components/Marketing/HomeLanding.module.css";
+import HomeShowcase, { AiStage } from "@/components/Marketing/HomeShowcase";
 import { useAuth } from "@/lib/auth/useAuth";
 
 const AUTH_MESSAGES: Record<string, string> = {
@@ -74,48 +75,38 @@ function LandingPageContent() {
           <ArtShiftLogo as="h1" size="hero" id="landing-title" className={styles.wordmark} />
 
           <p className={styles.lead}>
-            ออกแบบงานแคมเปญหนังสือบนแคนวาสเดียว ตั้งแต่ปก ป้ายชั้นวาง ไปจนถึงโพสต์โซเชียล
-            <em> ดีไซน์ครั้งเดียว ได้ครบทุกไซส์</em>
+            AI Assistance ที่อ่านงานของคุณก่อนสร้าง ตั้งแต่ลบพื้นหลัง แตกทุกไซส์ ไปจนถึงมู้ดบอร์ด 25 ภาพ —
+            ทั้งหมดบนแคนวาสเดียว
+            <em>ดีไซน์ครั้งเดียว ได้ครบทุกไซส์</em>
           </p>
 
-          <div className={styles.access}>
-            {loading ? (
-              <p className={styles.status}>กำลังตรวจสอบบัญชี…</p>
-            ) : authenticated ? (
-              <>
-                <p className={styles.welcome}>
-                  ยินดีต้อนรับกลับ, <strong>{user?.name || user?.email}</strong>
-                </p>
-                <Link href="/projects" className={styles.primary}>
-                  <span>เปิดโปรเจกต์ของคุณ</span>
-                  <span aria-hidden="true" className={styles.arrow}>
-                    →
-                  </span>
-                </Link>
-                <button type="button" onClick={signOut} className={styles.textButton}>
-                  ออกจากระบบ
-                </button>
-              </>
-            ) : (
-              <>
-                <button type="button" onClick={signInWithGoogle} className={styles.primary}>
-                  <GoogleGIcon size={20} />
-                  <span>เข้าสู่ระบบด้วย Google</span>
-                </button>
-                <p className={styles.note}>
-                  ใช้บัญชี Google เพื่อยืนยันตัวตนเท่านั้น — ไฟล์งานทั้งหมดเก็บอยู่ในเครื่องของคุณ
-                </p>
-              </>
-            )}
-          </div>
+          <AccessActions
+            loading={loading}
+            authenticated={authenticated}
+            userLabel={user?.name || user?.email}
+            onSignIn={signInWithGoogle}
+            onSignOut={signOut}
+          />
 
           <Link href="/features" className={styles.featuresLink}>
             ดูฟีเจอร์ <span aria-hidden="true">↗</span>
           </Link>
         </section>
 
-        <CampaignSpecimen />
+        <AiStage />
       </main>
+
+      <HomeShowcase
+        cta={
+          <AccessActions
+            loading={loading}
+            authenticated={authenticated}
+            userLabel={user?.name || user?.email}
+            onSignIn={signInWithGoogle}
+            onSignOut={signOut}
+          />
+        }
+      />
 
       <footer className={styles.footer}>
         <span>© {new Date().getFullYear()} ArtShift</span>
@@ -125,42 +116,49 @@ function LandingPageContent() {
   );
 }
 
-/** One campaign set in three formats — shows the product idea without a screenshot. */
-function CampaignSpecimen() {
+function AccessActions({
+  loading,
+  authenticated,
+  userLabel,
+  onSignIn,
+  onSignOut,
+}: {
+  loading: boolean;
+  authenticated: boolean;
+  userLabel?: string | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
+}) {
   return (
-    <div className={styles.specimen} aria-hidden="true">
-      <figure className={`${styles.sheet} ${styles.poster}`}>
-        <div className={styles.art}>
-          <span className={styles.posterEyebrow}>Rainy Season Reads</span>
-          <span className={styles.posterTitle}>
-            อ่าน
-            <br />
-            จนหมด
-            <br />
-            ฝน
-          </span>
-          <span className={styles.posterBadge}>
-            ลดสูงสุด<strong>35%</strong>
-          </span>
-        </div>
-        <figcaption>Poster · 60 × 90 cm</figcaption>
-      </figure>
-
-      <figure className={`${styles.sheet} ${styles.square}`}>
-        <div className={styles.art}>
-          <span className={styles.squareTitle}>ใหม่</span>
-          <span className={styles.squareSub}>อ่านจนหมดฝน</span>
-        </div>
-        <figcaption>Social · 1040 × 1040 px</figcaption>
-      </figure>
-
-      <figure className={`${styles.sheet} ${styles.strip}`}>
-        <div className={styles.art}>
-          <span className={styles.stripTitle}>อ่านจนหมดฝน</span>
-          <span className={styles.stripBadge}>−35%</span>
-        </div>
-        <figcaption>Shelf talk · 29 × 7 cm</figcaption>
-      </figure>
+    <div className={styles.access}>
+      {loading ? (
+        <p className={styles.status}>กำลังตรวจสอบบัญชี…</p>
+      ) : authenticated ? (
+        <>
+          <p className={styles.welcome}>
+            ยินดีต้อนรับกลับ, <strong>{userLabel}</strong>
+          </p>
+          <Link href="/projects" className={styles.primary}>
+            <span>เปิดโปรเจกต์ของคุณ</span>
+            <span aria-hidden="true" className={styles.arrow}>
+              →
+            </span>
+          </Link>
+          <button type="button" onClick={onSignOut} className={styles.textButton}>
+            ออกจากระบบ
+          </button>
+        </>
+      ) : (
+        <>
+          <button type="button" onClick={onSignIn} className={styles.primary}>
+            <GoogleGIcon size={20} />
+            <span>เข้าสู่ระบบด้วย Google</span>
+          </button>
+          <p className={styles.note}>
+            ใช้บัญชี Google เพื่อยืนยันตัวตนเท่านั้น — ไฟล์งานทั้งหมดเก็บอยู่ในเครื่องของคุณ
+          </p>
+        </>
+      )}
     </div>
   );
 }

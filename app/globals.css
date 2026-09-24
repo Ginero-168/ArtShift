@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Noto+Serif+Thai:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Sarabun:wght@400;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Noto+Serif+Thai:wght@400;500;600&family=Archivo+Black&family=JetBrains+Mono:wght@400;500;600&family=Sarabun:wght@400;600&display=swap");
 @import "tailwindcss";
 
 /*
@@ -89,8 +89,8 @@
   --ink: #f4f0e8;
   --ink-muted: #a7a198;
   --ink-faint: #6a655e;
-  --accent: #f4f0e8;
-  --accent-soft: rgba(244, 240, 232, 0.12);
+  --accent: var(--brand-signal-bright);
+  --accent-soft: rgba(241, 109, 74, 0.16);
   --accent-ink: #1a1714;
   --canvas: #221f1b;
   --slide: #ffffff;

@@ -243,9 +243,9 @@
 }
 
 .placementTabs button.gridModeActive {
-  border-color: #1859ff;
+  border-color: #c53a0a;
   background: #f7f2ed;
-  color: #1859ff;
+  color: #c53a0a;
 }
 
 .placementTabs button.freeModeActive {
@@ -256,8 +256,8 @@
 
 .kicker,
 .sectionLabel {
-  color: #1859ff;
-  font: 700 8px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #78726a;
+  font: 600 8px/1.2 var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -288,7 +288,7 @@
 }
 
 .search:focus-within {
-  border-color: #1859ff;
+  border-color: #c53a0a;
   box-shadow: 0 0 0 2px rgba(26, 23, 20, 0.1);
 }
 
@@ -398,7 +398,7 @@
 }
 
 .blockCard:hover {
-  border-color: #1859ff;
+  border-color: #c53a0a;
   box-shadow: 0 4px 14px rgba(26, 23, 20, 0.12);
   transform: translateY(-2px);
 }
@@ -415,13 +415,13 @@
 }
 
 .blockCardActive {
-  border-color: #1859ff !important;
+  border-color: #c53a0a !important;
   background: #f8f4ef !important;
   box-shadow: 0 0 0 2px rgba(26, 23, 20, 0.3) !important;
 }
 
 .blockCardActive .glyph {
-  background: #1859ff !important;
+  background: #c53a0a !important;
   color: #ffffff !important;
 }
 
@@ -433,7 +433,7 @@
   justify-content: center;
   border-radius: 8px;
   background: #f6f2ed;
-  color: #1859ff;
+  color: #c53a0a;
   font-size: 19px;
   line-height: 1;
   margin-bottom: 4px;
@@ -527,7 +527,7 @@
 }
 
 .gridDot {
-  background: #1859ff;
+  background: #c53a0a;
   box-shadow: 0 0 0 2px rgba(26, 23, 20, 0.12);
 }
 
@@ -589,7 +589,7 @@
 }
 
 .selectedLayer {
-  border-color: #1859ff;
+  border-color: #c53a0a;
   box-shadow: 0 0 0 1px rgba(26, 23, 20, 0.08);
 }
 
@@ -663,7 +663,7 @@
 
 .layerIconButton:hover {
   background: #f9f6f3;
-  color: #1859ff;
+  color: #c53a0a;
 }
 
 .layerOrder {
@@ -879,7 +879,7 @@
 
 .rangeField input[type="range"] {
   width: 100%;
-  accent-color: #1859ff;
+  accent-color: #c53a0a;
 }
 
 .rangeField output {
@@ -900,7 +900,7 @@
 .checkField input[type="checkbox"] {
   width: 14px;
   height: 14px;
-  accent-color: #1859ff;
+  accent-color: #c53a0a;
 }
 
 .numberGrid {
@@ -1096,7 +1096,7 @@
 .presetField select {
   border-color: #b9c9ec;
   background: #faf6f2;
-  color: #1859ff;
+  color: #c53a0a;
   font-weight: 650;
 }
 
@@ -1280,7 +1280,7 @@
   padding: 2px 0;
   border: 0;
   background: transparent;
-  color: #1859ff;
+  color: #c53a0a;
   font-size: 8px;
   font-weight: 700;
   cursor: pointer;
@@ -1313,8 +1313,8 @@
 
 .secondaryButton:hover,
 .uploadButton:hover {
-  border-color: #1859ff;
-  color: #1859ff;
+  border-color: #c53a0a;
+  color: #c53a0a;
 }
 
 .dangerButton {
@@ -1409,7 +1409,7 @@
 
 .layerDockButton:hover,
 .layerDockButtonOpen {
-  border-color: #1859ff;
+  border-color: #c53a0a;
   box-shadow: 0 10px 30px rgba(26, 23, 20, 0.16);
   transform: translateY(-1px);
 }
@@ -1426,7 +1426,7 @@
   place-items: center;
   border-radius: 4px;
   background: #f7f2ed;
-  color: #1859ff;
+  color: #c53a0a;
   font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -1441,7 +1441,7 @@
   left: 2px;
   width: 18px;
   height: 10px;
-  border: 1px solid #1859ff;
+  border: 1px solid #c53a0a;
   background: #ffffff;
   clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
 }
@@ -1622,9 +1622,9 @@
 }
 
 .strictnessTabs button.strictnessActive {
-  border-color: #1859ff;
+  border-color: #c53a0a;
   background: #f7f2ed;
-  color: #1859ff;
+  color: #c53a0a;
   box-shadow: 0 0 0 1px rgba(26, 23, 20, 0.08);
 }
 
@@ -1657,12 +1657,12 @@
 }
 
 .addLayerRow button:hover {
-  border-color: #1859ff;
-  color: #1859ff;
+  border-color: #c53a0a;
+  color: #c53a0a;
 }
 
 .blockLayerMark {
-  color: #1859ff;
+  color: #c53a0a;
 }
 
 .freeLayerMark {

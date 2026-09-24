@@ -79,7 +79,8 @@
   gap: clamp(2rem, 5vw, 5rem);
   inline-size: min(1240px, 100% - 2.5rem);
   margin-inline: auto;
-  padding-block: clamp(2.5rem, 7vw, 5.5rem);
+  min-block-size: min(calc(100dvh - 8rem), 58rem);
+  padding-block: clamp(2.5rem, 6vw, 4.5rem);
 }
 
 .intro {
@@ -230,171 +231,6 @@
   border-color: var(--signal);
 }
 
-/* ---------- Specimen: one campaign, three formats ---------- */
-
-.specimen {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: auto auto;
-  gap: 1.25rem;
-  min-inline-size: 0;
-}
-
-.sheet {
-  --shift: 6px;
-  position: relative;
-  margin: 0;
-  animation: sheet-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-.sheet figcaption {
-  margin-block-start: 0.6rem;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.art {
-  position: relative;
-  overflow: hidden;
-  box-shadow: var(--shift) var(--shift) 0 var(--ink);
-  transition: box-shadow 0.25s ease;
-}
-
-.sheet:hover .art {
-  box-shadow: calc(var(--shift) * 2) calc(var(--shift) * 2) 0 var(--ink);
-}
-
-/* Crop marks at the four corners of every sheet. */
-.art::before {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  pointer-events: none;
-  background:
-    linear-gradient(currentColor, currentColor) top left / 10px 1px,
-    linear-gradient(currentColor, currentColor) top left / 1px 10px,
-    linear-gradient(currentColor, currentColor) top right / 10px 1px,
-    linear-gradient(currentColor, currentColor) top right / 1px 10px,
-    linear-gradient(currentColor, currentColor) bottom left / 10px 1px,
-    linear-gradient(currentColor, currentColor) bottom left / 1px 10px,
-    linear-gradient(currentColor, currentColor) bottom right / 10px 1px,
-    linear-gradient(currentColor, currentColor) bottom right / 1px 10px;
-  background-repeat: no-repeat;
-  opacity: 0.55;
-}
-
-.poster {
-  grid-column: 1 / span 7;
-  grid-row: 1 / span 2;
-}
-
-.poster .art {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  aspect-ratio: 2 / 3;
-  padding: clamp(1.1rem, 2.4vw, 1.75rem);
-  background: var(--signal);
-  color: var(--paper);
-}
-
-.posterEyebrow {
-  font-family: var(--font-display);
-  font-size: clamp(1rem, 1.8vw, 1.35rem);
-  font-style: italic;
-}
-
-.posterTitle {
-  font-size: clamp(2.6rem, 6.4vw, 5rem);
-  font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-}
-
-.posterBadge {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  align-self: flex-start;
-  padding: 0.35rem 0.75rem;
-  background: var(--lemon);
-  color: var(--ink);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.posterBadge strong {
-  font-size: 1.35rem;
-  font-weight: 700;
-}
-
-.square {
-  --shift: 5px;
-  grid-column: 8 / span 5;
-  grid-row: 1;
-  align-self: end;
-  animation-delay: 0.12s;
-}
-
-.square .art {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  aspect-ratio: 1;
-  padding: 1rem;
-  background: var(--cobalt);
-  color: var(--paper);
-}
-
-.squareTitle {
-  font-family: var(--font-serif);
-  font-size: clamp(2rem, 4.2vw, 3.25rem);
-  font-weight: 600;
-  line-height: 1;
-}
-
-.squareSub {
-  margin-block-start: 0.4rem;
-  font-size: 0.8rem;
-  opacity: 0.85;
-}
-
-.strip {
-  --shift: 4px;
-  grid-column: 8 / span 5;
-  grid-row: 2;
-  align-self: start;
-  animation-delay: 0.24s;
-}
-
-.strip .art {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  aspect-ratio: 29 / 7;
-  padding-inline: clamp(0.9rem, 2vw, 1.25rem);
-  background: var(--ink);
-  color: var(--lemon);
-}
-
-.stripTitle {
-  font-size: clamp(0.8rem, 1.3vw, 1rem);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.stripBadge {
-  font-family: var(--font-mono);
-  font-size: clamp(0.8rem, 1.3vw, 1rem);
-  font-weight: 600;
-  color: var(--paper);
-}
-
 .footer {
   display: flex;
   flex-wrap: wrap;
@@ -409,24 +245,13 @@
   text-transform: uppercase;
 }
 
-@keyframes sheet-in {
-  from {
-    opacity: 0;
-    translate: 0 14px;
-  }
-  to {
-    opacity: 1;
-    translate: 0 0;
-  }
-}
-
 @media (max-width: 880px) {
   .main {
     grid-template-columns: 1fr;
   }
 
-  .specimen {
-    max-inline-size: 34rem;
+  .main {
+    min-block-size: auto;
   }
 }
 
@@ -438,20 +263,10 @@
   .edition {
     display: none;
   }
-
-  .stripTitle,
-  .stripBadge {
-    font-size: 0.7rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sheet {
-    animation: none;
-  }
-
   .primary,
-  .art,
   .arrow {
     transition: none;
   }
@@ -460,11 +275,6 @@
 @media (forced-colors: active) {
   .primary {
     border-color: ButtonText;
-    box-shadow: none;
-  }
-
-  .art {
-    border: 1px solid CanvasText;
     box-shadow: none;
   }
 }

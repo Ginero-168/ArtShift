@@ -13,12 +13,12 @@
 }
 
 .action:hover {
-  border-color: #1859ff;
-  color: #1859ff;
+  border-color: #c53a0a;
+  color: #c53a0a;
 }
 
 .action > span {
-  color: #1859ff;
+  color: #c53a0a;
   font-size: 14px;
 }
 
@@ -66,7 +66,7 @@
 }
 
 .dialog header span {
-  color: #1859ff;
+  color: #c53a0a;
   font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.15em;
 }
@@ -115,10 +115,10 @@
 }
 
 .operationTabs button[aria-pressed="true"] {
-  border-color: #1859ff;
+  border-color: #c53a0a;
   background: #f8f4f0;
-  color: #1859ff;
-  box-shadow: inset 0 0 0 1px #1859ff;
+  color: #c53a0a;
+  box-shadow: inset 0 0 0 1px #c53a0a;
 }
 
 .operationTabs small {
@@ -171,8 +171,8 @@
 }
 
 .customSize > button.locked {
-  border-color: #1859ff;
-  color: #1859ff;
+  border-color: #c53a0a;
+  color: #c53a0a;
 }
 
 .referenceHeader {
@@ -214,18 +214,18 @@
 
 .references button:hover,
 .references button.activeReference {
-  border-color: #1859ff;
+  border-color: #c53a0a;
 }
 
 .activeReference {
-  box-shadow: inset 0 0 0 1px #1859ff;
+  box-shadow: inset 0 0 0 1px #c53a0a;
 }
 
 .ratioPreview {
   width: 25px;
   max-height: 40px;
   justify-self: center;
-  border: 1px solid #1859ff;
+  border: 1px solid #c53a0a;
   background: #f4efe9;
 }
 
@@ -263,7 +263,7 @@
 
 .reflowOption input {
   margin-top: 2px;
-  accent-color: #1859ff;
+  accent-color: #c53a0a;
 }
 
 .reflowOption > span {
@@ -301,8 +301,8 @@
 }
 
 .dialog footer button.apply {
-  border-color: #1859ff;
-  background: #1859ff;
+  border-color: #c53a0a;
+  background: #c53a0a;
   color: #ffffff;
 }
 
