@@ -62,7 +62,7 @@ export function moodboardAiConsentPrompt(count: MoodboardBatchCount): string {
 1) ขยายคำค้น/ไวบ์ด้วย Gemini Flash เป็น ${count} ทิศทางภาพที่ต่างกัน (Subject / Setting / Prop / Mood / Color style) — ไม่ใช่คัดลอกคำค้น ${count} ครั้ง
 2) สร้าง ${count} ภาพผ่าน Replicate ${MOODBOARD_REPLICATE_MODEL} ที่ quality ${MOODBOARD_IMAGE_QUALITY} (~$${MOODBOARD_PER_IMAGE_USD}/ภาพ ≈ ~$${batch} ต่อชุด ${side}×${side})
 
-ใช้คีย์ Replicate ของบัญชีคุณ (BYOK) สำหรับขั้นสร้างภาพ อนุญาตให้ส่งคำค้นออกนอกเครื่องในเซสชันนี้หรือไม่?`;
+แพลตฟอร์มจ่ายค่า AI ให้ และหักเครดิตจากบัญชีคุณ อนุญาตให้ส่งคำค้นออกนอกเครื่องในเซสชันนี้หรือไม่?`;
 }
 
 export const MOODBOARD_AI_CONSENT_PROMPT = moodboardAiConsentPrompt(MOODBOARD_DEFAULT_BATCH_COUNT);

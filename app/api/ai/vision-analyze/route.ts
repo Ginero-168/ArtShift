@@ -6,6 +6,7 @@ import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
+import { refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Valid image data URL is required." }, { status: 400 });
   }
 
-  const access = requireEndUserCloudAi(req, body.cloudConsent);
+  const access = requireEndUserCloudAi(req, body.cloudConsent, "vision.describe");
   if (!access.ok) return access.response;
 
   const ai = getServerAiRuntime({
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
       durationMs: execution.metadata.durationMs,
     });
   } catch (error) {
+    refundCharge(access.charge?.entryId, "vision analyze failed");
     return NextResponse.json(
       {
         success: false,

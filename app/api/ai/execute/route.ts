@@ -2,10 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import type { AiExecutionOptions } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
 import { type PublicAiExecuteRequest, parsePublicAiExecuteRequest } from "@/lib/ai-runtime/schemas";
+import { spendCredits } from "@/lib/credits/ledger";
+import { type CreditAction, imageGenerateAction } from "@/lib/credits/pricing";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { insufficientCreditsNestedResponse, refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +46,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const priced = actionForPublicTask(request);
+  const charge = spendCredits(account.id, priced.action, priced.units);
+  if (!charge.ok) return insufficientCreditsNestedResponse(charge);
+
   try {
     const execution = await executePublicTask(
       request,
@@ -56,10 +63,44 @@ export async function POST(req: NextRequest) {
       error instanceof AiRuntimeError
         ? error
         : new AiRuntimeError("PROVIDER_UNAVAILABLE", "AI execution failed.", { cause: error });
+    if (!normalized.outcomeUnknown) refundCharge(charge.entryId, "ai execute failed");
     return NextResponse.json(
       { error: { code: normalized.code, message: publicErrorMessage(normalized.code) } },
       { status: errorStatus(normalized) },
     );
+  }
+}
+
+function actionForPublicTask(request: PublicAiExecuteRequest): {
+  action: CreditAction;
+  units: number;
+} {
+  switch (request.task) {
+    case "vision.describe":
+    case "vision.propose":
+    case "vision.ocr":
+      return { action: "vision.describe", units: 1 };
+    case "vectorize.recraft":
+      return { action: "vectorize.recraft", units: 1 };
+    case "prompt.enhance":
+      return { action: "prompt.enhance", units: 1 };
+    case "image.generate":
+      return {
+        action: imageGenerateAction(
+          "quality" in request.input && typeof request.input.quality === "string"
+            ? request.input.quality
+            : undefined,
+        ),
+        units: 1,
+      };
+    case "image.upscale":
+      return { action: "image.upscale", units: 1 };
+    case "image.decomposeLayers":
+      return { action: "image.decomposeLayers", units: 1 };
+    case "image.multiAngle":
+      return { action: "image.multiAngle", units: 1 };
+    case "image.poseSkeleton":
+      return { action: "image.poseSkeleton", units: 1 };
   }
 }
 

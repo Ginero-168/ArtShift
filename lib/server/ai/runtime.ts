@@ -22,9 +22,11 @@ export function createServerAiRuntime(credentials: ServerAiCredentials = {}): Ro
   const openAiApiKey = isEndUser
     ? credentials.openAiApiKey || ""
     : (credentials.openAiApiKey ?? process.env.OPENAI_API_KEY);
+  const platformReplicate =
+    process.env.REPLICATE_API_KEY?.trim() || process.env.REPLICATE_API_TOKEN?.trim();
   const replicateToken = isEndUser
     ? credentials.replicateToken
-    : (credentials.replicateToken ?? process.env.REPLICATE_API_TOKEN);
+    : (credentials.replicateToken ?? platformReplicate);
   const routeEnv = {
     ...process.env,
     ...(isEndUser
@@ -34,8 +36,8 @@ export function createServerAiRuntime(credentials: ServerAiCredentials = {}): Ro
         }
       : {
           ...(credentials.openAiApiKey ? { OPENAI_API_KEY: credentials.openAiApiKey } : {}),
-          ...(credentials.replicateToken
-            ? { REPLICATE_API_TOKEN: credentials.replicateToken }
+          ...(credentials.replicateToken || platformReplicate
+            ? { REPLICATE_API_TOKEN: credentials.replicateToken || platformReplicate }
             : {}),
         }),
   };

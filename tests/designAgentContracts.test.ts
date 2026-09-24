@@ -108,7 +108,7 @@ describe("Design Agent policy", () => {
       },
     );
     expect(result).toMatchObject({ type: "text" });
-    expect(result.type === "text" ? result.text : "").toContain("AI Provider Settings");
+    expect(result.type === "text" ? result.text : "").toContain("ติดต่อผู้ดูแลระบบ");
   });
 
   it("keeps exact deterministic edits local and does not require analysis", () => {

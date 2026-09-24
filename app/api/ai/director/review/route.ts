@@ -7,6 +7,7 @@ import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { chargeCredits, refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +54,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid Creative Director review." }, { status: 400 });
   }
 
+  const charge = chargeCredits(account.id, "llm.turn");
+  if (!charge.ok) return charge.response;
+
   try {
     const ai = getServerAiRuntime({
       replicateToken: getSessionReplicateToken(req),
@@ -65,6 +69,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ review });
   } catch (error) {
     console.error("[api/ai/director/review] Error:", error);
+    refundCharge(charge.entryId, "creative director review failed");
     return NextResponse.json(
       { error: "Creative Director review is temporarily unavailable." },
       { status: 502 },

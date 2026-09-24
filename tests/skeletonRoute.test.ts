@@ -81,7 +81,11 @@ describe("Skeleton API", () => {
       predictionId: "pred12345678",
       status: "starting",
     });
-    expect(requireEndUserCloudAiMock).toHaveBeenCalledWith(expect.anything(), true);
+    expect(requireEndUserCloudAiMock).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      "image.poseSkeleton",
+    );
     expect(jobMock.startPoseSkeletonJob).toHaveBeenCalledWith(
       "account-replicate-token",
       expect.objectContaining({ width: 1024, height: 768, modelSize: "n" }),

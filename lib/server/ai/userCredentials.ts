@@ -6,8 +6,6 @@ import {
   deleteReplicateApiKey,
   getOpenAiCredentialStatus,
   getReplicateCredentialStatus,
-  readOpenAiApiKey,
-  readReplicateApiKey,
   type StoredCredentialStatus,
   saveOpenAiApiKey,
   saveReplicateApiKey,
@@ -54,36 +52,43 @@ export function getUserAccount(request: NextRequest): AccountPublic | null {
   return getAuthenticatedAccount(request);
 }
 
-export function getAccountReplicateToken(request: NextRequest): string | undefined {
-  const account = getAuthenticatedAccount(request);
-  if (!account) return undefined;
-  try {
-    return readReplicateApiKey(account.id) || undefined;
-  } catch {
-    return undefined;
-  }
+/**
+ * Platform Replicate key. Core AI is billed to ArtShift, not to a user-pasted key.
+ * `REPLICATE_API_KEY` is canonical. `REPLICATE_API_TOKEN` remains a legacy alias.
+ */
+export function getPlatformReplicateKey(): string | undefined {
+  const primary = process.env.REPLICATE_API_KEY?.trim();
+  if (primary) return primary;
+  const legacy = process.env.REPLICATE_API_TOKEN?.trim();
+  return legacy || undefined;
+}
+
+export function getPlatformOpenAiKey(): string | undefined {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  return key || undefined;
 }
 
 /**
- * End-user Replicate credential for the signed-in account.
- * Never falls back to `process.env.REPLICATE_API_TOKEN`.
+ * Replicate token for a signed-in session. Returns the platform key only.
+ * Stored BYOK credentials are ignored for core generation.
  */
+export function getAccountReplicateToken(request: NextRequest): string | undefined {
+  if (!getAuthenticatedAccount(request)) return undefined;
+  return getPlatformReplicateKey();
+}
+
+/** @see getAccountReplicateToken */
 export function getSessionReplicateToken(request: NextRequest): string | undefined {
   return getAccountReplicateToken(request);
 }
 
 /**
- * End-user OpenAI credential for the signed-in account.
- * Never falls back to `process.env.OPENAI_API_KEY`.
+ * OpenAI key for a signed-in session. Platform `OPENAI_API_KEY` only.
+ * User-pasted OpenAI keys are not used for core generation.
  */
 export function getSessionOpenAiToken(request: NextRequest): string | undefined {
-  const account = getAuthenticatedAccount(request);
-  if (!account) return undefined;
-  try {
-    return readOpenAiApiKey(account.id) || undefined;
-  } catch {
-    return undefined;
-  }
+  if (!getAuthenticatedAccount(request)) return undefined;
+  return getPlatformOpenAiKey();
 }
 
 /**
@@ -91,8 +96,7 @@ export function getSessionOpenAiToken(request: NextRequest): string | undefined 
  * Used by the unscoped server runtime (`getServerAiRuntime()` with no account).
  */
 export function getOpsEnvReplicateToken(): string | undefined {
-  const token = process.env.REPLICATE_API_TOKEN?.trim();
-  return token || undefined;
+  return getPlatformReplicateKey();
 }
 
 /**

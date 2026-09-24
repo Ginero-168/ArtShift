@@ -913,6 +913,24 @@ export function diagnoseOrchestratorError(
   const errorLower = (rawError || "").toLowerCase();
   const promptLower = (userPrompt || "").toLowerCase();
 
+  if (
+    errorLower.includes("insufficient_credits") ||
+    errorLower.includes("เครดิตไม่พอ") ||
+    errorLower.includes("not enough credit")
+  ) {
+    return {
+      shortReason: "เครดิตไม่พอ",
+      reply: rawError || "เครดิตไม่พอสำหรับงานนี้ ติดต่อผู้ดูแลเพื่อเติมเครดิต",
+      suggestions: ["เปิดหน้าเครดิต", "ลองงานที่ถูกกว่า"],
+      errorCard: {
+        title: "เครดิตไม่พอ",
+        description: rawError || "ยอดเครดิตไม่พอสำหรับงาน AI นี้",
+        actionText: "ดูเครดิต",
+        promptToEdit: userPrompt,
+      },
+    };
+  }
+
   // 1. Safety / Content Policy / Sensitive / Copyright / Trademark
   const isPolicyViolation =
     /safety|nsfw|sensitive|policy|flagged|copyright|trademark|content filter|violated|violation|policy_denied/i.test(

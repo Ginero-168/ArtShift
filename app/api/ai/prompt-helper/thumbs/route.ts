@@ -13,6 +13,7 @@ import {
 } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
+import { refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -119,16 +120,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "optionIds required" }, { status: 400 });
   }
 
-  const access = requireEndUserCloudAi(req, body.cloudConsent);
+  const access = requireEndUserCloudAi(
+    req,
+    body.cloudConsent,
+    "prompt.thumbs",
+    Math.min(optionIds.length, MAX_QUEUE),
+  );
   if (!access.ok) return access.response;
 
-  const result = await ensurePromptHelperThumbs({
-    optionIds: optionIds.slice(0, MAX_OPTION_IDS),
-    options: parseOptionHints(body.options),
-    baseSubject: parseBaseSubject(body.baseSubject),
-    token: access.replicateToken,
-    maxQueue: MAX_QUEUE,
-  });
-
-  return NextResponse.json(result);
+  try {
+    const result = await ensurePromptHelperThumbs({
+      optionIds: optionIds.slice(0, MAX_OPTION_IDS),
+      options: parseOptionHints(body.options),
+      baseSubject: parseBaseSubject(body.baseSubject),
+      token: access.replicateToken,
+      maxQueue: MAX_QUEUE,
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    refundCharge(access.charge?.entryId, "prompt helper thumbs failed");
+    throw error;
+  }
 }

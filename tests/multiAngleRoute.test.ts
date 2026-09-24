@@ -79,7 +79,11 @@ describe("Multi-Angle API", () => {
     expect(await response.json()).toMatchObject({
       execution: { output: { dataUrl: "data:image/webp;base64,BBBB" } },
     });
-    expect(requireEndUserCloudAiMock).toHaveBeenCalledWith(expect.anything(), true);
+    expect(requireEndUserCloudAiMock).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      "image.multiAngle",
+    );
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "image.multiAngle",
       expect.objectContaining({ rotateDegrees: 24, moveForward: 3, verticalTilt: 1 }),
