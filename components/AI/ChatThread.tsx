@@ -15,7 +15,7 @@ import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
 import { IconCamera } from "@/components/icons";
 import {
   type ChatModelStep,
-  formatModelDisclosure,
+  formatImageModelDisclosure,
   formatModelDisplayLabel,
   formatModelTechnicalTitle,
 } from "@/lib/ai/chatModelAttribution";
@@ -93,7 +93,7 @@ export function ChatModelDisclosure({
         lineHeight: 1.2,
       }}
     >
-      <ThoughtBrainIcon style={{ color: "#8a837a", width: 13, height: 13 }} />
+      <ImageSparkleIcon style={{ color: "#8a837a", width: 13, height: 13 }} />
       {live ? <SpinnerIcon style={{ color: "#8a837a", width: 11, height: 11 }} /> : null}
       <span>{display}</span>
     </div>
@@ -819,8 +819,12 @@ export default function ChatThread({
                 </div>
               ) : null}
 
-              {/* Same model row as image generation (sparkle + id) */}
-              <ChatModelDisclosure label={formatModelDisclosure(msg.usedModels, msg.toolLabel)} />
+              {/* Image results only — Creative Director Thought does not name a model. */}
+              {msg.images && msg.images.length > 0 ? (
+                <ChatModelDisclosure
+                  label={formatImageModelDisclosure(msg.usedModels, msg.toolLabel)}
+                />
+              ) : null}
 
               {/* Content Policy / Error Card */}
               {msg.errorCard && (
@@ -1038,13 +1042,15 @@ export default function ChatThread({
               toolLabel={liveAssistantState.toolLabel}
             />
 
-            <ChatModelDisclosure
-              live
-              label={formatModelDisclosure(
-                liveAssistantState.activeModels,
-                liveAssistantState.toolLabel,
-              )}
-            />
+            {liveAssistantState.stage === "generating" ? (
+              <ChatModelDisclosure
+                live
+                label={formatImageModelDisclosure(
+                  liveAssistantState.activeModels,
+                  liveAssistantState.toolLabel,
+                )}
+              />
+            ) : null}
 
             {/* Image-gen skeleton thumbs */}
             {liveAssistantState.stage === "generating" && (

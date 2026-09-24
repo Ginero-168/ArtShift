@@ -199,6 +199,33 @@ export function formatModelDisclosure(
   return extra;
 }
 
+/**
+ * Image-generation label only. Creative Director and vision steps stay off
+ * the Thought panel; the chip and image-status line use this instead.
+ */
+export function formatImageModelDisclosure(
+  steps?: readonly ChatModelStep[] | null,
+  fallback?: string | null,
+): string {
+  const imageSteps = uniqueModelSteps(steps ?? []).filter(
+    (step) => step.role === "image" && !isFlorenceModelId(step.id),
+  );
+  const chain = formatModelChain(imageSteps);
+  if (chain) return chain;
+  const extra = typeof fallback === "string" ? fallback.trim() : "";
+  if (!extra) return "";
+  const parts = extra
+    .split(/\s→\s/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const candidate = (parts.length > 1 ? parts[parts.length - 1] : extra) ?? "";
+  const withoutFlorence = candidate.replace(/\s+then\s+.*$/i, "").trim();
+  const normalized = normalizeRuntimeModelId(withoutFlorence);
+  if (!normalized || isFlorenceModelId(normalized)) return "";
+  if (/gemini|gpt-4o|gpt-oss/i.test(normalized) && !/image/i.test(normalized)) return "";
+  return withoutFlorence;
+}
+
 const MODEL_CHAIN_SEPARATOR = /(\s→\s|\sthen\s)/;
 
 /**

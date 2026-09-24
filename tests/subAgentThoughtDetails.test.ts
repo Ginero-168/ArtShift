@@ -6,7 +6,7 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
     const threadSource = readFileSync("components/AI/ChatThread.tsx", "utf8");
 
     expect(threadSource).toContain("ChatModelDisclosure");
-    expect(threadSource).toContain("formatModelDisclosure");
+    expect(threadSource).toContain("formatImageModelDisclosure");
     expect(threadSource).not.toContain("DEFAULT_CLOUD_VISION_LABEL");
     expect(threadSource).not.toContain("DEFAULT_CREATING_MODEL_LABEL");
     expect(threadSource).toContain(">Thought</span>");

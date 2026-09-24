@@ -1083,7 +1083,7 @@ export default function AICoPilotBar() {
                   thought: streamedThought || thoughtText,
                   toolLabel: chainLabel,
                   requestedCount: count,
-                  statusMessage: `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(chainLabel)}...`,
+                  statusMessage: `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(modelName)}...`,
                   prompt: rawPrompt,
                   isEdit: isEditTurn,
                   actions: [...actions],
@@ -1709,8 +1709,8 @@ export default function AICoPilotBar() {
               thought: streamedThought || undefined,
               prompt: promptToSend,
               toolLabel: directedChain,
-              statusMessage: directedChain
-                ? `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(directedChain)}...`
+              statusMessage: directedImageModel?.id
+                ? `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(directedImageModel.id)}...`
                 : "กำลังสร้างรูปภาพ...",
               activeModels: turnModels.snapshot(),
             });
