@@ -7,8 +7,8 @@ describe("Editor chrome: logo, selection, Appearance image group", () => {
     const favicon = readFileSync("public/icon.svg", "utf8");
     const css = readFileSync("app/globals.css", "utf8");
 
-    expect(icons).toContain('<rect x="3.5" y="3.5" width="11" height="11"');
-    expect(icons).toContain('<rect x="9.5" y="9.5" width="11" height="11"');
+    expect(icons).toMatch(/<rect\s+x="3\.5"\s+y="3\.5"\s+width="11"\s+height="11"/);
+    expect(icons).toMatch(/<rect\s+x="9\.5"\s+y="9\.5"\s+width="11"\s+height="11"/);
     expect(icons).not.toContain("M7 17.5V6.5L12 14L17 6.5V17.5");
     expect(favicon).toContain('fill="#d64418"');
     expect(favicon).toContain('fill="#1a1714"');
