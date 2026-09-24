@@ -186,7 +186,7 @@ export default function BlockLibrary() {
       x: Math.round((slide.width - size) / 2),
       y: Math.round((slide.height - size) / 2),
       size,
-      color: "#111827",
+      color: "#1a1815",
     });
     addElement(element, `add ${icon.name} icon`);
     useEngine.getState().selectOnly([element.id]);

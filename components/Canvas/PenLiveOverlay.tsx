@@ -46,7 +46,7 @@ export default function PenLiveOverlay({ nodes, cursor, worldToScreen, isClosing
                   y1={anchor.y}
                   x2={hIn.x}
                   y2={hIn.y}
-                  stroke="#2563eb"
+                  stroke="#ca3701"
                   strokeWidth="1.5"
                 />
                 <circle
@@ -54,7 +54,7 @@ export default function PenLiveOverlay({ nodes, cursor, worldToScreen, isClosing
                   cy={hIn.y}
                   r="3.5"
                   fill="#ffffff"
-                  stroke="#2563eb"
+                  stroke="#ca3701"
                   strokeWidth="1.5"
                 />
               </g>
@@ -67,7 +67,7 @@ export default function PenLiveOverlay({ nodes, cursor, worldToScreen, isClosing
                   y1={anchor.y}
                   x2={hOut.x}
                   y2={hOut.y}
-                  stroke="#2563eb"
+                  stroke="#ca3701"
                   strokeWidth="1.5"
                 />
                 <circle
@@ -75,7 +75,7 @@ export default function PenLiveOverlay({ nodes, cursor, worldToScreen, isClosing
                   cy={hOut.y}
                   r="3.5"
                   fill="#ffffff"
-                  stroke="#2563eb"
+                  stroke="#ca3701"
                   strokeWidth="1.5"
                 />
               </g>
@@ -96,8 +96,8 @@ export default function PenLiveOverlay({ nodes, cursor, worldToScreen, isClosing
                 cx={anchor.x}
                 cy={anchor.y}
                 r="9"
-                fill="rgba(59, 130, 246, 0.15)"
-                stroke="#2563eb"
+                fill="rgba(231, 84, 43, 0.15)"
+                stroke="#ca3701"
                 strokeWidth="1.8"
                 strokeDasharray="3 2"
               />
@@ -107,8 +107,8 @@ export default function PenLiveOverlay({ nodes, cursor, worldToScreen, isClosing
               y={anchor.y - 4}
               width="8"
               height="8"
-              fill={isFirst && isClosingHover ? "#2563eb" : "#ffffff"}
-              stroke="#2563eb"
+              fill={isFirst && isClosingHover ? "#ca3701" : "#ffffff"}
+              stroke="#ca3701"
               strokeWidth="1.8"
               rx="1"
             />

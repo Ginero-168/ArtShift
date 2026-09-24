@@ -37,7 +37,7 @@ import { MultiAnglePreview } from "./MultiAnglePreview";
 const FIELD_LABEL = {
   display: "block",
   marginTop: 6,
-  color: "#334155",
+  color: "#443f39",
   fontSize: 9,
   fontWeight: 700,
 } as const;
@@ -231,7 +231,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
   return (
     <div data-testid="multi-angle-panel" data-tool="multi-angle">
       <strong style={{ display: "block", color: "#1e1b4b", fontSize: 11 }}>Multi-Angle</strong>
-      <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+      <span style={{ display: "block", marginTop: 2, color: "#78726a", fontSize: 8.5 }}>
         Turn the object to set the angle. This is not the AI result.
       </span>
       <div style={{ marginTop: 6 }}>
@@ -239,7 +239,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
       </div>
       <span
         id="multi-angle-gesture-hint"
-        style={{ display: "block", marginTop: 4, color: "#94a3b8", fontSize: 8 }}
+        style={{ display: "block", marginTop: 4, color: "#a7a198", fontSize: 8 }}
       >
         Drag sideways to turn the object. Drag up or down to tip it.
       </span>
@@ -272,7 +272,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
           alignItems: "center",
           gap: 6,
           marginTop: 8,
-          color: "#0f172a",
+          color: "#1a1714",
           fontSize: 10,
         }}
       >
@@ -281,7 +281,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
           type="checkbox"
           checked={camera.useWideAngle}
           onChange={(event) => updateCamera({ ...camera, useWideAngle: event.target.checked })}
-          style={{ accentColor: "#4f46e5" }}
+          style={{ accentColor: "#b52c00" }}
         />
         Wide angle
       </label>
@@ -308,7 +308,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
             padding: "7px 8px",
             border: "none",
             borderRadius: 6,
-            background: "#4f46e5",
+            background: "#b52c00",
             color: "#fff",
             fontSize: 10,
             fontWeight: 700,
@@ -342,7 +342,7 @@ export function MultiAnglePanel({ element }: { element: ImageElement }) {
       {statusMessage ? (
         <span
           role="status"
-          style={{ display: "block", marginTop: 6, color: "#64748b", fontSize: 8.5 }}
+          style={{ display: "block", marginTop: 6, color: "#78726a", fontSize: 8.5 }}
         >
           {statusMessage}
         </span>
@@ -381,7 +381,7 @@ function Slider({
     <div>
       <label htmlFor={id} style={FIELD_LABEL}>
         {label}
-        <span style={{ float: "right", fontWeight: 600, color: "#0f172a" }}>
+        <span style={{ float: "right", fontWeight: 600, color: "#1a1714" }}>
           {shown}
           {suffix ?? ""}
         </span>
@@ -395,10 +395,10 @@ function Slider({
         step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        style={{ width: "100%", marginTop: 2, accentColor: "#4f46e5" }}
+        style={{ width: "100%", marginTop: 2, accentColor: "#b52c00" }}
       />
       {hint ? (
-        <span style={{ display: "block", color: "#94a3b8", fontSize: 8 }}>{hint}</span>
+        <span style={{ display: "block", color: "#a7a198", fontSize: 8 }}>{hint}</span>
       ) : null}
     </div>
   );

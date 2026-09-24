@@ -89,15 +89,15 @@ export function ChatModelDisclosure({
         alignSelf: "flex-start",
         padding: "2px 0",
         marginLeft: 6,
-        color: "#64748b",
+        color: "#78726a",
         fontSize: 11.5,
         fontWeight: 600,
       }}
     >
       {live ? (
-        <SpinnerIcon style={{ color: "#64748b", width: 12, height: 12 }} />
+        <SpinnerIcon style={{ color: "#78726a", width: 12, height: 12 }} />
       ) : (
-        <ImageSparkleIcon style={{ color: "#64748b", width: 13, height: 13 }} />
+        <ImageSparkleIcon style={{ color: "#78726a", width: 13, height: 13 }} />
       )}
       <span>{label}</span>
     </div>
@@ -170,20 +170,20 @@ export function UserMessageImagePreviews({
               minWidth: 110,
               borderRadius: 12,
               overflow: "hidden",
-              background: "#f8fafc",
-              border: "1.5px solid #e2e8f0",
+              background: "#fcf9f5",
+              border: "1.5px solid #ece7e0",
               boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
               cursor: "grab",
               transition: "transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "scale(1.02)";
-              e.currentTarget.style.borderColor = "#6366f1";
-              e.currentTarget.style.boxShadow = "0 4px 14px rgba(99, 102, 241, 0.2)";
+              e.currentTarget.style.borderColor = "#d64418";
+              e.currentTarget.style.boxShadow = "0 4px 14px rgba(214, 68, 24, 0.2)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "scale(1)";
-              e.currentTarget.style.borderColor = "#e2e8f0";
+              e.currentTarget.style.borderColor = "#ece7e0";
               e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.08)";
             }}
           >
@@ -209,8 +209,8 @@ export function UserMessageImagePreviews({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "#e2e8f0",
-                  color: "#64748b",
+                  background: "#ece7e0",
+                  color: "#78726a",
                   fontSize: 11,
                 }}
               >
@@ -224,7 +224,7 @@ export function UserMessageImagePreviews({
                 left: 0,
                 right: 0,
                 padding: "4px 8px",
-                background: "linear-gradient(to top, rgba(15, 23, 42, 0.8) 0%, transparent 100%)",
+                background: "linear-gradient(to top, rgba(26, 23, 20, 0.8) 0%, transparent 100%)",
                 color: "#ffffff",
                 fontSize: 11,
                 fontWeight: 600,
@@ -236,7 +236,7 @@ export function UserMessageImagePreviews({
                 gap: 4,
               }}
             >
-              <IconCamera size={11} color="#64748b" />
+              <IconCamera size={11} color="#78726a" />
               <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                 @{ref.displayName}
               </span>
@@ -253,7 +253,7 @@ function renderSuggestionLabel(sug: string) {
   let text = sug;
 
   if (sug.startsWith("✨")) {
-    icon = <IconSparkles size={12} color="#6366f1" />;
+    icon = <IconSparkles size={12} color="#d64418" />;
     text = sug.replace(/^✨\s*/, "");
   } else if (sug.startsWith("🔄")) {
     icon = <IconRotate size={12} color="#0284c7" />;
@@ -270,13 +270,13 @@ function renderSuggestionLabel(sug: string) {
     icon = <IconLayoutGrid size={12} color="#059669" />;
     text = sug.replace(/^📐\s*/, "");
   } else if (sug.startsWith("↶")) {
-    icon = <IconUndo size={12} color="#64748b" />;
+    icon = <IconUndo size={12} color="#78726a" />;
     text = sug.replace(/^↶\s*/, "");
   } else if (sug.startsWith("🧩")) {
-    icon = <IconWand size={12} color="#8b5cf6" />;
+    icon = <IconWand size={12} color="#d64418" />;
     text = sug.replace(/^🧩\s*/, "");
   } else if (sug.startsWith("⚙️") || sug.startsWith("⚙")) {
-    icon = <IconSettings size={12} color="#64748b" />;
+    icon = <IconSettings size={12} color="#78726a" />;
     text = sug.replace(/^(?:⚙️|⚙)\s*/, "");
   }
 
@@ -400,26 +400,26 @@ export function CollapsibleThought({
           padding: "2px 0",
           cursor: "pointer",
           textAlign: "left",
-          color: "#64748b",
+          color: "#78726a",
           width: "fit-content",
           maxWidth: "100%",
         }}
       >
         <ThoughtBrainIcon
           style={{
-            color: "#64748b",
+            color: "#78726a",
             width: 14,
             height: 14,
             animation: isLive ? "artshiftBrainPulse 2s ease-in-out infinite" : undefined,
           }}
         />
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Thought</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "#78726a" }}>Thought</span>
         {isLive && liveLine ? (
           <span
             key={liveLine}
             style={{
               fontSize: 11.5,
-              color: "#94a3b8",
+              color: "#a7a198",
               maxWidth: 220,
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -439,7 +439,7 @@ export function CollapsibleThought({
                   width: 3.5,
                   height: 3.5,
                   borderRadius: "50%",
-                  background: "#94a3b8",
+                  background: "#a7a198",
                   animation: `artshiftWaveDot 1.2s ease-in-out infinite ${delay}s`,
                 }}
               />
@@ -451,7 +451,7 @@ export function CollapsibleThought({
             transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
             width: 11,
             height: 11,
-            color: "#94a3b8",
+            color: "#a7a198",
             transition: "transform 0.2s ease",
           }}
         />
@@ -463,8 +463,8 @@ export function CollapsibleThought({
             marginTop: 4,
             marginLeft: 6,
             paddingLeft: 12,
-            borderLeft: "1.5px solid #cbd5e1",
-            color: "#64748b",
+            borderLeft: "1.5px solid #d9d3cc",
+            color: "#78726a",
             fontSize: 12,
             lineHeight: 1.55,
             whiteSpace: "pre-wrap",
@@ -548,7 +548,7 @@ export default function ChatThread({
       <div
         style={{
           padding: "8px 14px",
-          borderBottom: "1px solid #f1f5f9",
+          borderBottom: "1px solid #f8f4ef",
           background: "#ffffff",
           display: "flex",
           alignItems: "center",
@@ -563,11 +563,11 @@ export default function ChatThread({
             gap: 6,
           }}
         >
-          <ThoughtBrainIcon style={{ color: "#6366f1", width: 15, height: 15 }} />
+          <ThoughtBrainIcon style={{ color: "#d64418", width: 15, height: 15 }} />
           <strong
             style={{
               fontSize: 12.5,
-              color: "#334155",
+              color: "#443f39",
               fontWeight: 600,
               letterSpacing: "-0.01em",
             }}
@@ -589,18 +589,18 @@ export default function ChatThread({
                 border: "none",
                 background: "transparent",
                 fontSize: 11,
-                color: "#94a3b8",
+                color: "#a7a198",
                 cursor: "pointer",
                 padding: "3px 6px",
                 borderRadius: 4,
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#475569";
-                e.currentTarget.style.background = "#f8fafc";
+                e.currentTarget.style.color = "#58534c";
+                e.currentTarget.style.background = "#fcf9f5";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = "#94a3b8";
+                e.currentTarget.style.color = "#a7a198";
                 e.currentTarget.style.background = "transparent";
               }}
             >
@@ -679,9 +679,9 @@ export default function ChatThread({
                       width: 26,
                       height: 26,
                       borderRadius: 8,
-                      border: isCopied ? "1px solid #10b981" : "1px solid #e2e8f0",
+                      border: isCopied ? "1px solid #10b981" : "1px solid #ece7e0",
                       background: isCopied ? "#ecfdf5" : "#ffffff",
-                      color: isCopied ? "#059669" : "#475569",
+                      color: isCopied ? "#059669" : "#58534c",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -693,17 +693,17 @@ export default function ChatThread({
                     }}
                     onMouseEnter={(e) => {
                       if (!isCopied) {
-                        e.currentTarget.style.background = "#f8fafc";
-                        e.currentTarget.style.color = "#0f172a";
-                        e.currentTarget.style.borderColor = "#cbd5e1";
+                        e.currentTarget.style.background = "#fcf9f5";
+                        e.currentTarget.style.color = "#1a1714";
+                        e.currentTarget.style.borderColor = "#d9d3cc";
                         e.currentTarget.style.transform = "scale(1.04)";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isCopied) {
                         e.currentTarget.style.background = "#ffffff";
-                        e.currentTarget.style.color = "#475569";
-                        e.currentTarget.style.borderColor = "#e2e8f0";
+                        e.currentTarget.style.color = "#58534c";
+                        e.currentTarget.style.borderColor = "#ece7e0";
                         e.currentTarget.style.transform = "scale(1)";
                       }
                     }}
@@ -719,13 +719,12 @@ export default function ChatThread({
                     style={{
                       padding: "7px 12px",
                       borderRadius: "14px 14px 3px 14px",
-                      background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
-                      color: "#ffffff",
+                      background: "#1a1714",
+                      color: "#f4f0e8",
                       fontSize: 12.5,
                       fontWeight: 500,
                       lineHeight: 1.45,
                       wordBreak: "break-word",
-                      boxShadow: "0 1px 3px rgba(79, 70, 229, 0.12)",
                     }}
                   >
                     <InlineTagRenderer
@@ -749,7 +748,7 @@ export default function ChatThread({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 6,
-                  color: "#475569",
+                  color: "#58534c",
                   fontSize: 11,
                   lineHeight: 1.4,
                   padding: "2px 0",
@@ -761,7 +760,7 @@ export default function ChatThread({
                     width: 4,
                     height: 4,
                     borderRadius: "50%",
-                    backgroundColor: "#94a3b8",
+                    backgroundColor: "#a7a198",
                     display: "inline-block",
                     flexShrink: 0,
                   }}
@@ -801,7 +800,7 @@ export default function ChatThread({
                 <div
                   style={{
                     fontSize: 11,
-                    color: "#64748b",
+                    color: "#78726a",
                     lineHeight: 1.45,
                     marginTop: msg.thought ? 0 : 2,
                   }}
@@ -858,12 +857,12 @@ export default function ChatThread({
                     maxWidth: "92%",
                     padding: "8px 12px",
                     borderRadius: "3px 14px 14px 14px",
-                    background: msg.isError ? "#fff1f2" : "#f8fafc",
-                    color: msg.isError ? "#991b1b" : "#1e293b",
+                    background: msg.isError ? "#fff1f2" : "#fcf9f5",
+                    color: msg.isError ? "#991b1b" : "#2c2824",
                     fontSize: 12.5,
                     lineHeight: 1.55,
                     wordBreak: "break-word",
-                    border: msg.isError ? "1px solid #fecdd3" : "1px solid #f1f5f9",
+                    border: msg.isError ? "1px solid #fecdd3" : "1px solid #f8f4ef",
                     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
                   }}
                 >
@@ -909,12 +908,12 @@ export default function ChatThread({
                       onClick={() => onSelectSuggestion(sug, msg.errorCard)}
                       disabled={busy}
                       style={{
-                        background: sug.startsWith("✨") ? "#eef2ff" : "#f8fafc",
-                        border: `1px solid ${sug.startsWith("✨") ? "#c7d2fe" : "#e2e8f0"}`,
+                        background: sug.startsWith("✨") ? "#fff0ea" : "#fcf9f5",
+                        border: `1px solid ${sug.startsWith("✨") ? "#ffc7b3" : "#ece7e0"}`,
                         borderRadius: 20,
                         padding: "5px 12px",
                         fontSize: 11.5,
-                        color: sug.startsWith("✨") ? "#4338ca" : "#475569",
+                        color: sug.startsWith("✨") ? "#9b2500" : "#58534c",
                         cursor: busy ? "default" : "pointer",
                         display: "inline-flex",
                         alignItems: "center",
@@ -925,21 +924,21 @@ export default function ChatThread({
                       onMouseEnter={(e) => {
                         if (!busy) {
                           e.currentTarget.style.background = sug.startsWith("✨")
-                            ? "#e0e7ff"
-                            : "#f1f5f9";
+                            ? "#ffe2d6"
+                            : "#f8f4ef";
                           e.currentTarget.style.borderColor = sug.startsWith("✨")
-                            ? "#a5b4fc"
-                            : "#cbd5e1";
+                            ? "#ff9f83"
+                            : "#d9d3cc";
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (!busy) {
                           e.currentTarget.style.background = sug.startsWith("✨")
-                            ? "#eef2ff"
-                            : "#f8fafc";
+                            ? "#fff0ea"
+                            : "#fcf9f5";
                           e.currentTarget.style.borderColor = sug.startsWith("✨")
-                            ? "#c7d2fe"
-                            : "#e2e8f0";
+                            ? "#ffc7b3"
+                            : "#ece7e0";
                         }
                       }}
                     >
@@ -964,19 +963,19 @@ export default function ChatThread({
                             ? "#ecfdf5"
                             : act.status === "error"
                               ? "#fef2f2"
-                              : "#eef2ff",
+                              : "#fff0ea",
                         color:
                           act.status === "success"
                             ? "#065f46"
                             : act.status === "error"
                               ? "#991b1b"
-                              : "#3730a3",
+                              : "#7f1f00",
                         border: `1px solid ${
                           act.status === "success"
                             ? "#a7f3d0"
                             : act.status === "error"
                               ? "#fecaca"
-                              : "#c7d2fe"
+                              : "#ffc7b3"
                         }`,
                         display: "flex",
                         flexWrap: "wrap",
@@ -989,7 +988,7 @@ export default function ChatThread({
                       ) : act.status === "error" ? (
                         <CloseIcon style={{ color: "#dc2626" }} />
                       ) : (
-                        <SpinnerIcon style={{ color: "#4f46e5" }} />
+                        <SpinnerIcon style={{ color: "#b52c00" }} />
                       )}
                       <strong>{act.title}</strong>
                       <span>— {act.description}</span>
@@ -1016,7 +1015,7 @@ export default function ChatThread({
                     style={{
                       background: "transparent",
                       border: "none",
-                      color: feedbackState[msg.id] === "up" ? "#4f46e5" : "#94a3b8",
+                      color: feedbackState[msg.id] === "up" ? "#b52c00" : "#a7a198",
                       cursor: "pointer",
                       padding: 2,
                       display: "flex",
@@ -1024,10 +1023,10 @@ export default function ChatThread({
                       transition: "color 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
-                      if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#475569";
+                      if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#58534c";
                     }}
                     onMouseLeave={(e) => {
-                      if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#94a3b8";
+                      if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#a7a198";
                     }}
                   >
                     <ThumbsUpIcon />
@@ -1039,7 +1038,7 @@ export default function ChatThread({
                     style={{
                       background: "transparent",
                       border: "none",
-                      color: feedbackState[msg.id] === "down" ? "#dc2626" : "#94a3b8",
+                      color: feedbackState[msg.id] === "down" ? "#dc2626" : "#a7a198",
                       cursor: "pointer",
                       padding: 2,
                       display: "flex",
@@ -1047,10 +1046,10 @@ export default function ChatThread({
                       transition: "color 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
-                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#475569";
+                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#58534c";
                     }}
                     onMouseLeave={(e) => {
-                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#94a3b8";
+                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#a7a198";
                     }}
                   >
                     <ThumbsDownIcon />
@@ -1064,7 +1063,7 @@ export default function ChatThread({
                     style={{
                       background: "transparent",
                       border: "none",
-                      color: copiedMessageId === msg.id ? "#10b981" : "#94a3b8",
+                      color: copiedMessageId === msg.id ? "#10b981" : "#a7a198",
                       cursor: "pointer",
                       padding: 2,
                       display: "flex",
@@ -1072,10 +1071,10 @@ export default function ChatThread({
                       transition: "color 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
-                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#475569";
+                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#58534c";
                     }}
                     onMouseLeave={(e) => {
-                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#94a3b8";
+                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#a7a198";
                     }}
                   >
                     {copiedMessageId === msg.id ? (
@@ -1101,11 +1100,11 @@ export default function ChatThread({
               maxWidth: "85%",
               padding: "8px 12px",
               borderRadius: "12px 12px 12px 2px",
-              background: "#f1f5f9",
-              color: "#1e293b",
+              background: "#f8f4ef",
+              color: "#2c2824",
               fontSize: 12.5,
               lineHeight: 1.45,
-              border: "1px solid #e2e8f0",
+              border: "1px solid #ece7e0",
             }}
           >
             {streamingText}
@@ -1169,10 +1168,10 @@ export default function ChatThread({
                       maxWidth: "100%",
                       aspectRatio: "1 / 1",
                       borderRadius: 12,
-                      background: "linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%)",
+                      background: "linear-gradient(90deg, #f8f4ef 0%, #ece7e0 50%, #f8f4ef 100%)",
                       backgroundSize: "200% 100%",
                       animation: "artshiftPulse 1.5s ease-in-out infinite",
-                      border: "1px dashed #cbd5e1",
+                      border: "1px dashed #d9d3cc",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1183,7 +1182,7 @@ export default function ChatThread({
                       style={{
                         width: 20,
                         height: 20,
-                        color: "#94a3b8",
+                        color: "#a7a198",
                         opacity: 0.5,
                       }}
                     />
@@ -1204,15 +1203,15 @@ export default function ChatThread({
                   fontSize: 10.5,
                   padding: "4px 8px",
                   borderRadius: 6,
-                  background: "#eef2ff",
-                  color: "#3730a3",
-                  border: "1px solid #c7d2fe",
+                  background: "#fff0ea",
+                  color: "#7f1f00",
+                  border: "1px solid #ffc7b3",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                 }}
               >
-                <SpinnerIcon style={{ color: "#4f46e5" }} />
+                <SpinnerIcon style={{ color: "#b52c00" }} />
                 <strong>{act.title}</strong>
                 <span>— {act.description}</span>
               </div>

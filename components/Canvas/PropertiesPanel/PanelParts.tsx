@@ -36,7 +36,7 @@ import type {
   StrokeStyle,
 } from "@/lib/engine/types";
 
-export const STROKE_PALETTE = ["#1b1b1f", "#e03131", "#2f9e44", "#1971c2", "#f08c00"];
+export const STROKE_PALETTE = ["#1d1b19", "#e03131", "#2f9e44", "#1971c2", "#f08c00"];
 export const BG_PALETTE = ["transparent", "#ffc9c9", "#b2f2bb", "#a5d8ff", "#ffec99"];
 
 export const STROKE_WIDTHS: { value: number; icon: typeof IconStrokeThin; label: string }[] = [
@@ -102,16 +102,16 @@ export function IconBtn({
         borderRadius: 5,
         border: "1px solid",
         borderColor: active
-          ? "var(--accent, #6366f1)"
+          ? "var(--accent, #d64418)"
           : danger
             ? "#fca5a5"
-            : "var(--stroke, #e5e7eb)",
+            : "var(--stroke, #eae6e1)",
         background: active
-          ? "var(--accent-light, #eef2ff)"
+          ? "var(--accent-light, #fff0ea)"
           : danger
             ? "#fef2f2"
             : "var(--surface-solid, #fff)",
-        color: active ? "var(--accent, #6366f1)" : danger ? "#dc2626" : "var(--ink, #111827)",
+        color: active ? "var(--accent, #d64418)" : danger ? "#dc2626" : "var(--ink, #1a1815)",
         cursor: "pointer",
         padding: 0,
         transition: "all 0.15s ease",
@@ -145,7 +145,7 @@ export function CompactDropdown<T extends string>({
           gap: 4,
           padding: "2px 6px",
           borderRadius: 5,
-          border: "1px solid var(--stroke, #e5e7eb)",
+          border: "1px solid var(--stroke, #eae6e1)",
           background: "var(--surface-solid, #fff)",
           cursor: "pointer",
           fontSize: 10,
@@ -154,7 +154,7 @@ export function CompactDropdown<T extends string>({
       >
         {Icon && <Icon />}
         <span style={{ fontSize: 9 }}>{active?.label}</span>
-        <span style={{ fontSize: 8, color: "#9ca3af" }}>▼</span>
+        <span style={{ fontSize: 8, color: "#a6a29c" }}>▼</span>
       </button>
       {open && (
         <div
@@ -164,7 +164,7 @@ export function CompactDropdown<T extends string>({
             left: 0,
             zIndex: 20,
             background: "var(--surface-solid, #fff)",
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             borderRadius: 6,
             boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
             padding: "3px 0",
@@ -187,7 +187,7 @@ export function CompactDropdown<T extends string>({
                   width: "100%",
                   padding: "5px 8px",
                   border: "none",
-                  background: activeKey === o.key ? "#eef2ff" : "transparent",
+                  background: activeKey === o.key ? "#fff0ea" : "transparent",
                   cursor: "pointer",
                   fontSize: 11,
                   textAlign: "left",
@@ -299,7 +299,7 @@ export function CompactColorSwatch({
           left: pos.left,
           zIndex: 99999,
           background: "var(--surface-solid, #fff)",
-          border: "1px solid var(--stroke, #e5e7eb)",
+          border: "1px solid var(--stroke, #eae6e1)",
           borderRadius: 8,
           boxShadow: "0 8px 30px rgba(0,0,0,0.18)",
           padding: "8px",
@@ -307,7 +307,7 @@ export function CompactColorSwatch({
         }}
       >
         {/* Main Swatches */}
-        <div style={{ fontSize: 9, color: "#9ca3af", marginBottom: 4, fontWeight: 600 }}>
+        <div style={{ fontSize: 9, color: "#a6a29c", marginBottom: 4, fontWeight: 600 }}>
           PALETTE
         </div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
@@ -323,11 +323,11 @@ export function CompactColorSwatch({
                 borderRadius: 3,
                 border:
                   current === v
-                    ? "2px solid var(--accent, #6366f1)"
-                    : "1px solid var(--stroke, #d1d5db)",
+                    ? "2px solid var(--accent, #d64418)"
+                    : "1px solid var(--stroke, #d9d4cf)",
                 background:
                   v === "transparent"
-                    ? "repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 50% / 4px 4px"
+                    ? "repeating-conic-gradient(#eae6e1 0% 25%, #fff 0% 50%) 50% / 4px 4px"
                     : v,
                 cursor: "pointer",
                 padding: 0,
@@ -340,7 +340,7 @@ export function CompactColorSwatch({
         {/* History */}
         {history.length > 0 && (
           <>
-            <div style={{ fontSize: 9, color: "#9ca3af", marginBottom: 4, fontWeight: 600 }}>
+            <div style={{ fontSize: 9, color: "#a6a29c", marginBottom: 4, fontWeight: 600 }}>
               RECENT
             </div>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
@@ -356,8 +356,8 @@ export function CompactColorSwatch({
                     borderRadius: 3,
                     border:
                       current === v
-                        ? "2px solid var(--accent, #6366f1)"
-                        : "1px solid var(--stroke, #d1d5db)",
+                        ? "2px solid var(--accent, #d64418)"
+                        : "1px solid var(--stroke, #d9d4cf)",
                     background: v,
                     cursor: "pointer",
                     padding: 0,
@@ -375,7 +375,7 @@ export function CompactColorSwatch({
             display: "flex",
             alignItems: "center",
             gap: 4,
-            borderTop: "1px solid var(--stroke, #f3f4f6)",
+            borderTop: "1px solid var(--stroke, #f6f4f0)",
             paddingTop: 6,
           }}
         >
@@ -392,11 +392,11 @@ export function CompactColorSwatch({
                 padding: "3px 4px",
                 fontSize: 10,
                 fontWeight: 600,
-                border: "1px solid var(--stroke, #e5e7eb)",
+                border: "1px solid var(--stroke, #eae6e1)",
                 borderRadius: 4,
-                background: "#f9fafb",
+                background: "#fcfaf6",
                 cursor: "pointer",
-                color: "var(--ink, #1f2937)",
+                color: "var(--ink, #2b2824)",
               }}
               title="Pick color from screen (Eyedropper)"
             >
@@ -435,7 +435,7 @@ export function CompactColorSwatch({
           gap: 2,
           padding: "2px 4px",
           borderRadius: 5,
-          border: "1px solid var(--stroke, #e5e7eb)",
+          border: "1px solid var(--stroke, #eae6e1)",
           background: "var(--surface-solid, #fff)",
           cursor: "pointer",
         }}
@@ -445,14 +445,14 @@ export function CompactColorSwatch({
             width: 14,
             height: 14,
             borderRadius: 3,
-            border: "1px solid var(--stroke, #d1d5db)",
+            border: "1px solid var(--stroke, #d9d4cf)",
             background:
               current === "transparent"
-                ? "repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 50% / 4px 4px"
+                ? "repeating-conic-gradient(#eae6e1 0% 25%, #fff 0% 50%) 50% / 4px 4px"
                 : current,
           }}
         />
-        <span style={{ fontSize: 8, color: "#9ca3af" }}>▼</span>
+        <span style={{ fontSize: 8, color: "#a6a29c" }}>▼</span>
       </button>
       {mounted && typeof document !== "undefined" && createPortal(popover, document.body)}
     </div>
@@ -486,7 +486,7 @@ export function ArrowheadSelect({
         style={{
           padding: "3px 6px",
           borderRadius: 5,
-          border: "1px solid var(--stroke, #e5e7eb)",
+          border: "1px solid var(--stroke, #eae6e1)",
           background: "var(--surface-solid, #fff)",
           cursor: "pointer",
           fontSize: 10,
@@ -503,7 +503,7 @@ export function ArrowheadSelect({
             left: 0,
             zIndex: 20,
             background: "var(--surface-solid, #fff)",
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             borderRadius: 6,
             boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
             padding: "3px 0",
@@ -522,7 +522,7 @@ export function ArrowheadSelect({
                 width: "100%",
                 padding: "5px 8px",
                 border: "none",
-                background: k === value ? "#eef2ff" : "transparent",
+                background: k === value ? "#fff0ea" : "transparent",
                 cursor: "pointer",
                 fontSize: 11,
                 textAlign: "left",
@@ -548,7 +548,7 @@ export function ArrowheadSizeControl({
   const cur = arrow.arrowheadScale ?? 1;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-      <span style={{ fontSize: 9, color: "#9ca3af" }}>Scale</span>
+      <span style={{ fontSize: 9, color: "#a6a29c" }}>Scale</span>
       <input
         type="range"
         min={0.5}
@@ -588,7 +588,7 @@ export function AlignBtn({
         width: 20,
         height: 20,
         borderRadius: 4,
-        border: "1px solid var(--stroke, #e5e7eb)",
+        border: "1px solid var(--stroke, #eae6e1)",
         background: "var(--surface-solid, #fff)",
         cursor: "pointer",
         fontSize: 9,

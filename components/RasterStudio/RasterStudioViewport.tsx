@@ -1029,7 +1029,7 @@ export default function RasterStudioViewport({ elementId }: { elementId: string 
               <polyline
                 points={draftPath}
                 fill="none"
-                stroke="#d8e6ff"
+                stroke="#ebe4dc"
                 strokeWidth={Math.max(1, brushSize * 0.15)}
                 strokeLinecap="round"
                 strokeLinejoin="round"

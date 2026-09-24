@@ -127,7 +127,7 @@ export default function PresentPage() {
         <ArtShiftLogo size="header" />
         <p style={{ maxWidth: 480, lineHeight: 1.5 }}>{loadError ?? "Loading…"}</p>
         {loadError ? (
-          <a href="/projects" style={{ color: "#93c5fd", fontSize: 14 }}>
+          <a href="/projects" style={{ color: "#ffad92", fontSize: 14 }}>
             Back to Projects
           </a>
         ) : null}
@@ -156,7 +156,7 @@ export default function PresentPage() {
           This project has no exportable slides. {INFINITY_CANVAS_LABEL} slides are skipped in
           Present. {INFINITY_CANVAS_EXPORT_NOTE}
         </p>
-        <a href="/projects" style={{ color: "#93c5fd", fontSize: 14 }}>
+        <a href="/projects" style={{ color: "#ffad92", fontSize: 14 }}>
           Back to Projects
         </a>
       </div>

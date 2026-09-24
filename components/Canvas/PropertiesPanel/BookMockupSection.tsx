@@ -197,7 +197,7 @@ export function BookMockupSection({
               width: 15,
               height: 15,
               cursor: "pointer",
-              accentColor: "#3b82f6",
+              accentColor: "#e7542b",
             }}
           />
           <span>Ground shadow</span>

@@ -184,7 +184,7 @@ export default function ContextMenu({ position, onClose }: Props) {
         top: position.y,
         minWidth: 200,
         background: "#fff",
-        border: "1px solid #e5e7eb",
+        border: "1px solid #eae6e1",
         borderRadius: 6,
         boxShadow: "0 8px 28px rgba(0,0,0,0.12)",
         padding: 4,
@@ -195,7 +195,7 @@ export default function ContextMenu({ position, onClose }: Props) {
     >
       {items.map((item, i) =>
         item.kind === "sep" ? (
-          <div key={`sep-${i}`} style={{ height: 1, background: "#f3f4f6", margin: "4px 0" }} />
+          <div key={`sep-${i}`} style={{ height: 1, background: "#f6f4f0", margin: "4px 0" }} />
         ) : (
           <button
             key={item.label}
@@ -212,20 +212,20 @@ export default function ContextMenu({ position, onClose }: Props) {
               padding: "6px 10px",
               border: "none",
               background: "transparent",
-              color: item.disabled ? "#9ca3af" : "#111827",
+              color: item.disabled ? "#a6a29c" : "#1a1815",
               cursor: item.disabled ? "default" : "pointer",
               borderRadius: 4,
               textAlign: "left",
             }}
             onMouseEnter={(e) => {
-              if (!item.disabled) e.currentTarget.style.background = "#f3f4f6";
+              if (!item.disabled) e.currentTarget.style.background = "#f6f4f0";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "transparent";
             }}
           >
             <span>{item.label}</span>
-            {item.hint && <span style={{ color: "#9ca3af", fontSize: 11 }}>{item.hint}</span>}
+            {item.hint && <span style={{ color: "#a6a29c", fontSize: 11 }}>{item.hint}</span>}
           </button>
         ),
       )}

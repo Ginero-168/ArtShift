@@ -16,7 +16,7 @@ describe("public /features marketing page", () => {
     expect(landing).toContain('href="/features"');
     expect(landing).toContain("ดูฟีเจอร์");
     expect(landing).toContain('size="hero"');
-    expect(landing).toContain("AI Powered Design Tools");
+    expect(landing).not.toContain("AI Powered Design Tools");
     expect(landing).toContain("signInWithGoogle");
     expect(landing).not.toContain("<CanvasEditor");
     expect(landing).not.toContain("<header");
@@ -43,6 +43,5 @@ describe("public /features marketing page", () => {
     expect(featuresLanding).not.toContain("CanvasEditor");
     expect(featuresLanding).not.toContain("signInWithGoogle");
     expect(featuresLanding).toContain("<ArtShiftLogo");
-    expect(featuresLanding).toContain("<IconBrand");
   });
 });

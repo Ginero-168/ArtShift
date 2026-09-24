@@ -19,9 +19,9 @@ export function OpacitySection({
           max={100}
           value={Math.round(first.opacity * 100)}
           onChange={(e) => apply({ opacity: Number(e.currentTarget.value) / 100 }, "opacity")}
-          style={{ width: 60, accentColor: "var(--accent, #6366f1)" }}
+          style={{ width: 60, accentColor: "var(--accent, #d64418)" }}
         />
-        <span style={{ color: "#9ca3af", fontSize: 9, minWidth: 16, textAlign: "right" }}>
+        <span style={{ color: "#a6a29c", fontSize: 9, minWidth: 16, textAlign: "right" }}>
           {Math.round(first.opacity * 100)}
         </span>
       </div>

@@ -11,16 +11,17 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
   it("verifies root page (/) is an Index Landing Page with Google Sign-in and no editor canvas", () => {
     const rootPageSource = readFileSync("app/page.tsx", "utf8");
 
-    // Has ArtShift Heatmap wordmark in the hero (not a top header)
+    // Has the ArtShift wordmark in the hero (not a top header)
     expect(rootPageSource).toContain("ArtShift");
     expect(rootPageSource).toContain("ArtShiftLogo");
     expect(rootPageSource).toContain('size="hero"');
-    expect(rootPageSource).toContain("AI Powered Design Tools");
+    expect(rootPageSource).toContain("สำหรับนักออกแบบงานหนังสือ");
+    expect(rootPageSource).not.toContain("AI Powered Design Tools");
 
     // Has Google sign-in trigger
     expect(rootPageSource).toContain("signInWithGoogle");
     expect(rootPageSource).toContain("GoogleGIcon");
-    expect(rootPageSource).toContain("เข้าสู่ระบบด้วย Google (Log in with Google)");
+    expect(rootPageSource).toContain("เข้าสู่ระบบด้วย Google");
 
     // Has link to /projects when authenticated
     expect(rootPageSource).toContain('href="/projects"');

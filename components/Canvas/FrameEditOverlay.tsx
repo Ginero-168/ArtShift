@@ -275,7 +275,7 @@ export default function FrameEditOverlay({
             style={{
               position: "absolute",
               inset: 0,
-              border: "1.5px solid #2563eb",
+              border: "1.5px solid #ca3701",
               borderRadius: 2,
               pointerEvents: "none",
             }}
@@ -297,7 +297,7 @@ export default function FrameEditOverlay({
                   width: 10,
                   height: 10,
                   background: "#ffffff",
-                  border: "2px solid #2563eb",
+                  border: "2px solid #ca3701",
                   borderRadius: "50%",
                   cursor: isTop === isLeft ? "nwse-resize" : "nesw-resize",
                   pointerEvents: "auto",
@@ -334,11 +334,11 @@ export default function FrameEditOverlay({
                 height: 12,
                 borderRadius: "50%",
                 background: "#ffffff",
-                border: "2px solid #2563eb",
+                border: "2px solid #ca3701",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
               }}
             />
-            <div style={{ width: 1, height: 12, background: "#2563eb" }} />
+            <div style={{ width: 1, height: 12, background: "#ca3701" }} />
           </div>
         </div>
       </div>
@@ -353,7 +353,7 @@ export default function FrameEditOverlay({
           background: "#ffffff",
           borderRadius: 8,
           boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
-          border: "1px solid #e2e8f0",
+          border: "1px solid #ece7e0",
           padding: "6px 14px",
           display: "flex",
           alignItems: "center",
@@ -361,13 +361,13 @@ export default function FrameEditOverlay({
           zIndex: 60,
           pointerEvents: "auto",
           fontSize: 12,
-          color: "#334155",
+          color: "#443f39",
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {/* Zoom Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontWeight: 600, color: "#64748b" }}>Zoom</span>
+          <span style={{ fontWeight: 600, color: "#78726a" }}>Zoom</span>
           <input
             type="range"
             min={100}
@@ -379,18 +379,18 @@ export default function FrameEditOverlay({
                 "frame zoom",
               )
             }
-            style={{ width: 90, accentColor: "#2563eb", cursor: "pointer" }}
+            style={{ width: 90, accentColor: "#ca3701", cursor: "pointer" }}
           />
           <span style={{ minWidth: 36, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
             {Math.round(zoom * 100)}%
           </span>
         </div>
 
-        <div style={{ width: 1, height: 18, background: "#e2e8f0" }} />
+        <div style={{ width: 1, height: 18, background: "#ece7e0" }} />
 
         {/* Rotate Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontWeight: 600, color: "#64748b" }}>Rotate</span>
+          <span style={{ fontWeight: 600, color: "#78726a" }}>Rotate</span>
           <input
             type="range"
             min={-180}
@@ -402,7 +402,7 @@ export default function FrameEditOverlay({
                 "frame rotate",
               )
             }
-            style={{ width: 80, accentColor: "#2563eb", cursor: "pointer" }}
+            style={{ width: 80, accentColor: "#ca3701", cursor: "pointer" }}
           />
           <span style={{ minWidth: 32, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
             {rotation}°
@@ -415,12 +415,12 @@ export default function FrameEditOverlay({
               }
               style={{
                 border: "none",
-                background: "#f1f5f9",
+                background: "#f8f4ef",
                 borderRadius: 4,
                 padding: "2px 6px",
                 fontSize: 11,
                 cursor: "pointer",
-                color: "#475569",
+                color: "#58534c",
               }}
             >
               Reset
@@ -428,7 +428,7 @@ export default function FrameEditOverlay({
           )}
         </div>
 
-        <div style={{ width: 1, height: 18, background: "#e2e8f0" }} />
+        <div style={{ width: 1, height: 18, background: "#ece7e0" }} />
 
         {/* Center Button */}
         <button
@@ -445,14 +445,14 @@ export default function FrameEditOverlay({
             )
           }
           style={{
-            border: "1px solid #cbd5e1",
-            background: "#f8fafc",
+            border: "1px solid #d9d3cc",
+            background: "#fcf9f5",
             borderRadius: 6,
             padding: "4px 8px",
             fontSize: 12,
             fontWeight: 500,
             cursor: "pointer",
-            color: "#334155",
+            color: "#443f39",
           }}
         >
           Center
@@ -464,14 +464,14 @@ export default function FrameEditOverlay({
           onClick={onClose}
           style={{
             border: "none",
-            background: "#2563eb",
+            background: "#ca3701",
             color: "#ffffff",
             borderRadius: 6,
             padding: "5px 14px",
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
-            boxShadow: "0 1px 2px rgba(37, 99, 235, 0.3)",
+            boxShadow: "0 1px 2px rgba(202, 55, 1, 0.3)",
             display: "inline-flex",
             alignItems: "center",
             gap: 5,

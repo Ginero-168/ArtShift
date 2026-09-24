@@ -23,7 +23,7 @@
 }
 
 .modal {
-  background: var(--bg-surface, #1e1e24);
+  background: var(--bg-surface, #201e1c);
   color: var(--text-primary, #f4f4f5);
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
   border-radius: 20px;
@@ -63,14 +63,14 @@
   font-weight: 600;
   padding: 0.2rem 0.55rem;
   border-radius: 9999px;
-  background: #3b82f6;
+  background: #e7542b;
   color: #ffffff;
 }
 
 .closeBtn {
   background: transparent;
   border: none;
-  color: #a1a1aa;
+  color: #a4a19e;
   cursor: pointer;
   padding: 0.5rem;
   border-radius: 8px;
@@ -97,7 +97,7 @@
   padding: 0.85rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #71717a;
+  color: #74716e;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -114,7 +114,7 @@
 }
 
 .stepTabCompleted {
-  color: #a1a1aa;
+  color: #a4a19e;
 }
 
 .stepNumber {
@@ -130,7 +130,7 @@
 
 .stepTabActive .stepNumber {
   background: #38bdf8;
-  color: #0f172a;
+  color: #1a1714;
 }
 
 /* Content Area */
@@ -149,7 +149,7 @@
 
 .sectionDesc {
   font-size: 0.85rem;
-  color: #a1a1aa;
+  color: #a4a19e;
   margin: 0 0 1.25rem 0;
 }
 
@@ -185,7 +185,7 @@
 
 .sampleBtn:hover {
   background: #38bdf8;
-  color: #0f172a;
+  color: #1a1714;
   border-color: #38bdf8;
 }
 
@@ -196,7 +196,7 @@
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 10px;
-  color: #e4e4e7;
+  color: #e6e4e1;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.8rem;
   padding: 0.75rem;
@@ -230,11 +230,11 @@
 .mappingLabel {
   font-size: 0.75rem;
   font-weight: 500;
-  color: #a1a1aa;
+  color: #a4a19e;
 }
 
 .mappingSelect {
-  background: #27272a;
+  background: #292725;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   color: #f4f4f5;
@@ -262,7 +262,7 @@
 
 .previewTable th {
   background: rgba(255, 255, 255, 0.06);
-  color: #a1a1aa;
+  color: #a4a19e;
   padding: 0.5rem 0.75rem;
   font-weight: 600;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -271,7 +271,7 @@
 .previewTable td {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  color: #d4d4d8;
+  color: #d6d4d1;
   white-space: nowrap;
 }
 
@@ -314,7 +314,7 @@
 
 .templateDesc {
   font-size: 0.75rem;
-  color: #a1a1aa;
+  color: #a4a19e;
   margin: 0;
   line-height: 1.35;
 }
@@ -353,7 +353,7 @@
 
 .channelSub {
   font-size: 0.7rem;
-  color: #a1a1aa;
+  color: #a4a19e;
   margin: 0;
 }
 
@@ -428,7 +428,7 @@
 }
 
 .pillInfo {
-  background: #2563eb;
+  background: #ca3701;
   color: #fff;
 }
 
@@ -441,7 +441,7 @@
 }
 
 .contactCard {
-  background: #18181b;
+  background: #1a1816;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   overflow: hidden;
@@ -475,7 +475,7 @@
 
 .contactMeta {
   font-size: 0.7rem;
-  color: #71717a;
+  color: #74716e;
   margin: 0;
 }
 

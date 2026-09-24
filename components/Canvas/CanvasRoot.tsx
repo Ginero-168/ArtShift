@@ -229,7 +229,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
     // Background of the page surrounding the slide.
     ctx.clearRect(0, 0, size.w, size.h);
-    ctx.fillStyle = infinite ? slide.background || "#f4f5f7" : "#e9ecf1";
+    ctx.fillStyle = infinite ? slide.background || "#f7f5f2" : "#eeebe7";
     ctx.fillRect(0, 0, size.w, size.h);
 
     // Viewport transform.
@@ -297,7 +297,7 @@ const CanvasRoot = forwardRef<CanvasRootHandle, Props>(function CanvasRoot(
 
       if (activeElements.length > 0) {
         ctx.save();
-        ctx.strokeStyle = "#6366f1";
+        ctx.strokeStyle = "#d64418";
         ctx.lineWidth = 1.5 / view.scale;
         ctx.setLineDash([]);
 
@@ -728,7 +728,7 @@ function drawInfinityBoard(
   const bottom = (height - view.ty) / view.scale;
 
   ctx.save();
-  ctx.strokeStyle = "rgba(15, 23, 42, 0.06)";
+  ctx.strokeStyle = "rgba(26, 23, 20, 0.06)";
   ctx.lineWidth = 1 / view.scale;
   ctx.beginPath();
   for (let x = left; x <= right; x += step) {
@@ -741,7 +741,7 @@ function drawInfinityBoard(
   }
   ctx.stroke();
 
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.35)";
+  ctx.strokeStyle = "rgba(214, 68, 24, 0.35)";
   ctx.lineWidth = 1.25 / view.scale;
   ctx.beginPath();
   ctx.moveTo(left, 0);

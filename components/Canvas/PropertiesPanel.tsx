@@ -74,7 +74,7 @@ export default function PropertiesPanel({
         left: screenPos.x,
         transform: "translate(-50%, -100%)",
         background: "var(--surface-solid, #fff)",
-        border: "1px solid var(--stroke, #e5e7eb)",
+        border: "1px solid var(--stroke, #eae6e1)",
         borderRadius: 9,
         padding: "6px 10px",
         boxShadow: "0 4px 12px rgba(0,0,0,0.1)",

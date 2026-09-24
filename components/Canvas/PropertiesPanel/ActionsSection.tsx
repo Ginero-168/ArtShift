@@ -119,11 +119,11 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span
-                style={{ fontSize: 9.5, color: "#9ca3af", fontWeight: 700, letterSpacing: 0.4 }}
+                style={{ fontSize: 9.5, color: "#a6a29c", fontWeight: 700, letterSpacing: 0.4 }}
               >
                 PATHFINDER
               </span>
-              <span style={{ fontSize: 9, color: "var(--accent, #6366f1)", fontWeight: 600 }}>
+              <span style={{ fontSize: 9, color: "var(--accent, #d64418)", fontWeight: 600 }}>
                 {selected.length} shapes
               </span>
             </div>
@@ -145,7 +145,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
                   fontSize: 8.5,
                   fontWeight: 600,
                   borderRadius: 5,
-                  border: "1px solid var(--stroke, #e5e7eb)",
+                  border: "1px solid var(--stroke, #eae6e1)",
                   background: "var(--surface-solid, #fff)",
                   color: "var(--ink, #111)",
                   cursor: "pointer",
@@ -171,7 +171,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
                   fontSize: 8.5,
                   fontWeight: 600,
                   borderRadius: 5,
-                  border: "1px solid var(--stroke, #e5e7eb)",
+                  border: "1px solid var(--stroke, #eae6e1)",
                   background: "var(--surface-solid, #fff)",
                   color: "var(--ink, #111)",
                   cursor: "pointer",
@@ -197,7 +197,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
                   fontSize: 8.5,
                   fontWeight: 600,
                   borderRadius: 5,
-                  border: "1px solid var(--stroke, #e5e7eb)",
+                  border: "1px solid var(--stroke, #eae6e1)",
                   background: "var(--surface-solid, #fff)",
                   color: "var(--ink, #111)",
                   cursor: "pointer",
@@ -223,7 +223,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
                   fontSize: 8.5,
                   fontWeight: 600,
                   borderRadius: 5,
-                  border: "1px solid var(--stroke, #e5e7eb)",
+                  border: "1px solid var(--stroke, #eae6e1)",
                   background: "var(--surface-solid, #fff)",
                   color: "var(--ink, #111)",
                   cursor: "pointer",
@@ -251,7 +251,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
                   fontSize: 9,
                   fontWeight: 600,
                   borderRadius: 5,
-                  border: "1px solid var(--stroke, #e5e7eb)",
+                  border: "1px solid var(--stroke, #eae6e1)",
                   background: "var(--surface-solid, #fff)",
                   color: "var(--ink, #111)",
                   cursor: "pointer",
@@ -275,7 +275,7 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
                   fontSize: 9,
                   fontWeight: 600,
                   borderRadius: 5,
-                  border: "1px solid var(--stroke, #e5e7eb)",
+                  border: "1px solid var(--stroke, #eae6e1)",
                   background: "var(--surface-solid, #fff)",
                   color: "var(--ink, #111)",
                   cursor: "pointer",
@@ -306,9 +306,9 @@ export function ActionsSection({ selected }: { selected: EngineElement[] }) {
               fontSize: 11,
               fontWeight: 600,
               borderRadius: 6,
-              border: "1px solid rgba(99, 102, 241, 0.3)",
-              background: "rgba(99, 102, 241, 0.08)",
-              color: "var(--accent, #6366f1)",
+              border: "1px solid rgba(214, 68, 24, 0.3)",
+              background: "rgba(214, 68, 24, 0.08)",
+              color: "var(--accent, #d64418)",
               cursor: "pointer",
             }}
           >

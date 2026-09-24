@@ -86,7 +86,7 @@ export default function TextOverlay({ element, screen, scale, onCommit }: Props)
         overflow: point ? "visible" : "hidden",
         padding: `${paddingTop}px ${renderPadding}px ${renderPadding}px`,
         margin: 0,
-        outline: "2px solid #6366f1",
+        outline: "2px solid #d64418",
         outlineOffset: 2,
         background:
           element.backgroundColor === "transparent" ? "transparent" : element.backgroundColor,

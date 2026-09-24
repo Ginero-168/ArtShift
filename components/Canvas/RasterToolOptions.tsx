@@ -27,13 +27,13 @@ const controlLabelStyle = {
   flexShrink: 0,
   fontSize: 9,
   lineHeight: "12px",
-  color: "var(--ink-muted, #64748b)",
+  color: "var(--ink-muted, #78726a)",
 } as const;
 
 const rangeStyle = {
   width: 72,
   height: 14,
-  accentColor: "var(--accent, #2563eb)",
+  accentColor: "var(--accent, #ca3701)",
 } as const;
 
 export default function RasterToolOptions({ tool, variant = "default" }: Props) {
@@ -293,7 +293,7 @@ export default function RasterToolOptions({ tool, variant = "default" }: Props) 
             padding: 1,
             border: studio
               ? `1px solid ${studioChrome.buttonBorder}`
-              : "1px solid var(--stroke, #e5e7eb)",
+              : "1px solid var(--stroke, #eae6e1)",
             borderRadius: 4,
             background: "transparent",
             cursor:
@@ -315,10 +315,10 @@ const optionsStyle = {
 const advancedButtonStyle = {
   height: 24,
   padding: "0 7px",
-  border: "1px solid var(--stroke, #dbe2ea)",
+  border: "1px solid var(--stroke, #e4e1dc)",
   borderRadius: 5,
-  background: "var(--surface-subtle, #f8fafc)",
-  color: "var(--ink, #334155)",
+  background: "var(--surface-subtle, #fcf9f5)",
+  color: "var(--ink, #443f39)",
   fontSize: 9,
   fontWeight: 700,
   whiteSpace: "nowrap" as const,

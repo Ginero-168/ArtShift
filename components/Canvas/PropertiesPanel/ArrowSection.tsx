@@ -29,7 +29,7 @@ export function ArrowSection({
             }
             label="Start"
           />
-          <span style={{ color: "#9ca3af", fontSize: 10 }}>→</span>
+          <span style={{ color: "#a6a29c", fontSize: 10 }}>→</span>
           <ArrowheadSelect
             value={firstArrow.endArrowhead}
             onChange={(v) =>

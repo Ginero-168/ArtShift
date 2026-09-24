@@ -103,8 +103,8 @@ export function MultiAnglePreview({
         height: PREVIEW_HEIGHT,
         display: "block",
         borderRadius: 8,
-        border: "1px solid #e2e8f0",
-        background: "#f8fafc",
+        border: "1px solid #ece7e0",
+        background: "#fcf9f5",
         touchAction: "none",
         cursor: "grab",
       }}

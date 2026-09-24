@@ -9,17 +9,17 @@
   z-index: 20;
   width: 250px;
   padding: 12px;
-  border: 1px solid #d8ddea;
+  border: 1px solid #e0dcd7;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 8px 24px rgba(31, 41, 55, 0.16);
-  color: #253047;
-  font: 12px/1.35 "Sarabun", system-ui, sans-serif;
+  color: #342f29;
+  font: 12px/1.35 var(--font-sans);
 }
 
 .popover p {
   margin: 6px 0 10px;
-  color: #697386;
+  color: #76726b;
 }
 
 .popover label {
@@ -32,11 +32,11 @@
 .popover select {
   min-width: 0;
   flex: 1;
-  border: 1px solid #cfd6e3;
+  border: 1px solid #d9d5cf;
   border-radius: 5px;
   padding: 4px 5px;
   background: #fff;
-  color: #253047;
+  color: #342f29;
   font: inherit;
 }
 
@@ -48,7 +48,7 @@
 }
 
 .popoverActions button {
-  border: 1px solid #cfd6e3;
+  border: 1px solid #d9d5cf;
   border-radius: 5px;
   background: #fff;
   padding: 5px 8px;
@@ -56,8 +56,8 @@
 }
 
 .popoverActions button:nth-child(2) {
-  border-color: #7c3aed;
-  background: #7c3aed;
+  border-color: #b52c00;
+  background: #b52c00;
   color: #fff;
 }
 
@@ -72,31 +72,31 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid #cfd6e3;
+  border: 1px solid #d9d5cf;
   border-radius: 5px;
   background: #ffffff;
-  color: #253047;
-  font: 650 10px/1 "Sarabun", system-ui, sans-serif;
+  color: #342f29;
+  font: 650 10px/1 var(--font-sans);
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
 }
 
 .action:hover {
-  border-color: #7c3aed;
-  color: #7c3aed;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.12);
+  border-color: #b52c00;
+  color: #b52c00;
+  box-shadow: 0 2px 8px rgba(181, 44, 0, 0.12);
 }
 
 .actionActive {
-  border-color: #7c3aed;
-  background: #f5f3ff;
-  color: #7c3aed;
+  border-color: #b52c00;
+  background: #fff0ea;
+  color: #b52c00;
   transform: scale(0.97);
 }
 
 .icon {
-  color: #8b5cf6;
+  color: #d64418;
   font-size: 13px;
   display: inline-block;
   line-height: 1;
@@ -109,7 +109,7 @@
 
 .action small {
   padding-left: 6px;
-  border-left: 1px solid #e2e6ed;
-  color: #8a93a3;
+  border-left: 1px solid #e9e5e1;
+  color: #96928c;
   font: 600 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
 }

@@ -126,7 +126,7 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
             style={{
               display: "flex",
               gap: 8,
-              borderBottom: "1px solid var(--stroke, #27272a)",
+              borderBottom: "1px solid var(--stroke, #292725)",
               paddingBottom: 8,
             }}
           >
@@ -134,8 +134,8 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
               type="button"
               onClick={() => setActiveTab("identity")}
               style={{
-                background: activeTab === "identity" ? "rgba(99, 102, 241, 0.15)" : "transparent",
-                color: activeTab === "identity" ? "#818cf8" : "#a1a1aa",
+                background: activeTab === "identity" ? "rgba(214, 68, 24, 0.15)" : "transparent",
+                color: activeTab === "identity" ? "#f16d4a" : "#a4a19e",
                 border: "none",
                 padding: "6px 12px",
                 borderRadius: 6,
@@ -147,15 +147,15 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
                 gap: 6,
               }}
             >
-              <IconBuilding size={14} color={activeTab === "identity" ? "#818cf8" : "#a1a1aa"} />
+              <IconBuilding size={14} color={activeTab === "identity" ? "#f16d4a" : "#a4a19e"} />
               <span>สำนักพิมพ์ & โลโก้</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("colors")}
               style={{
-                background: activeTab === "colors" ? "rgba(99, 102, 241, 0.15)" : "transparent",
-                color: activeTab === "colors" ? "#818cf8" : "#a1a1aa",
+                background: activeTab === "colors" ? "rgba(214, 68, 24, 0.15)" : "transparent",
+                color: activeTab === "colors" ? "#f16d4a" : "#a4a19e",
                 border: "none",
                 padding: "6px 12px",
                 borderRadius: 6,
@@ -167,15 +167,15 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
                 gap: 6,
               }}
             >
-              <IconPalette size={14} color={activeTab === "colors" ? "#818cf8" : "#a1a1aa"} />
+              <IconPalette size={14} color={activeTab === "colors" ? "#f16d4a" : "#a4a19e"} />
               <span>ชุดสี & Typography</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("rules")}
               style={{
-                background: activeTab === "rules" ? "rgba(99, 102, 241, 0.15)" : "transparent",
-                color: activeTab === "rules" ? "#818cf8" : "#a1a1aa",
+                background: activeTab === "rules" ? "rgba(214, 68, 24, 0.15)" : "transparent",
+                color: activeTab === "rules" ? "#f16d4a" : "#a4a19e",
                 border: "none",
                 padding: "6px 12px",
                 borderRadius: 6,
@@ -187,7 +187,7 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
                 gap: 6,
               }}
             >
-              <IconScale size={14} color={activeTab === "rules" ? "#818cf8" : "#a1a1aa"} />
+              <IconScale size={14} color={activeTab === "rules" ? "#f16d4a" : "#a4a19e"} />
               <span>กฎเกณฑ์ Brand Rules</span>
             </button>
           </div>
@@ -431,7 +431,7 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
                   style={{
                     marginTop: 16,
                     paddingTop: 12,
-                    borderTop: "1px solid var(--stroke, #27272a)",
+                    borderTop: "1px solid var(--stroke, #292725)",
                   }}
                 >
                   <div
@@ -487,7 +487,7 @@ export default function BrandKitModal({ isOpen, onClose }: Props) {
           <button
             type="button"
             className={styles.applyBtn}
-            style={{ background: "#3f3f46" }}
+            style={{ background: "#423f3c" }}
             onClick={handleApplyToCurrentSlide}
           >
             ปรับใช้กับสไลด์ปัจจุบัน (Apply to Current)

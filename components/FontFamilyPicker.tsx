@@ -82,10 +82,10 @@ export default function FontFamilyPicker({ value, onChange, compact = false }: P
           minWidth: 0,
           height: compact ? 28 : 34,
           padding: compact ? "0 8px" : "0 9px",
-          border: "1px solid #d8dde7",
+          border: "1px solid #e0dcd7",
           borderRadius: 6,
           background: "#fbfcfd",
-          color: "#172033",
+          color: "#23201a",
           cursor: "pointer",
           textAlign: "left",
         }}
@@ -104,7 +104,7 @@ export default function FontFamilyPicker({ value, onChange, compact = false }: P
         >
           {selected.family}
         </span>
-        <span style={{ color: "#94a3b8", fontSize: 10, flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+        <span style={{ color: "#a7a198", fontSize: 10, flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
       </button>
 
       {open && (
@@ -120,10 +120,10 @@ export default function FontFamilyPicker({ value, onChange, compact = false }: P
             zIndex: 40,
             maxHeight: 320,
             overflowY: "auto",
-            border: "1px solid #d8dde7",
+            border: "1px solid #e0dcd7",
             borderRadius: 8,
             background: "#ffffff",
-            boxShadow: "0 10px 28px rgba(15, 23, 42, 0.14)",
+            boxShadow: "0 10px 28px rgba(26, 23, 20, 0.14)",
             padding: "4px 0 6px",
           }}
         >
@@ -136,7 +136,7 @@ export default function FontFamilyPicker({ value, onChange, compact = false }: P
                   fontWeight: 700,
                   letterSpacing: 0.4,
                   textTransform: "uppercase",
-                  color: "#94a3b8",
+                  color: "#a7a198",
                 }}
               >
                 {group.label}
@@ -162,16 +162,16 @@ export default function FontFamilyPicker({ value, onChange, compact = false }: P
                       width: "100%",
                       padding: "8px 12px",
                       border: "none",
-                      background: active ? "#eef2ff" : "transparent",
-                      color: "#0f172a",
+                      background: active ? "#fff0ea" : "transparent",
+                      color: "#1a1714",
                       cursor: "pointer",
                       textAlign: "left",
                     }}
                     onMouseEnter={(event) => {
-                      if (!active) event.currentTarget.style.background = "#f8fafc";
+                      if (!active) event.currentTarget.style.background = "#fcf9f5";
                     }}
                     onMouseLeave={(event) => {
-                      event.currentTarget.style.background = active ? "#eef2ff" : "transparent";
+                      event.currentTarget.style.background = active ? "#fff0ea" : "transparent";
                     }}
                   >
                     <span
@@ -183,12 +183,12 @@ export default function FontFamilyPicker({ value, onChange, compact = false }: P
                       }}
                     >
                       {font.family}
-                      <span style={{ marginLeft: 8, color: "#64748b", fontWeight: 400 }}>
+                      <span style={{ marginLeft: 8, color: "#78726a", fontWeight: 400 }}>
                         กขคงจ
                       </span>
                     </span>
                     {active ? (
-                      <span style={{ color: "#4f46e5", fontSize: 12, fontWeight: 700 }}>✓</span>
+                      <span style={{ color: "#b52c00", fontSize: 12, fontWeight: 700 }}>✓</span>
                     ) : null}
                   </button>
                 );

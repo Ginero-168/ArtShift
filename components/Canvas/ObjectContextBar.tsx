@@ -57,7 +57,7 @@ const buttonStyle = {
   border: "1px solid transparent",
   borderRadius: 7,
   background: "transparent",
-  color: "var(--ink-muted, #475569)",
+  color: "var(--ink-muted, #58534c)",
   fontFamily: "var(--font-sans)",
   cursor: "pointer",
   whiteSpace: "nowrap" as const,
@@ -92,10 +92,10 @@ function action(
         height: 30,
         padding: isDownload ? 0 : "0 7px",
         gap: isDownload ? 0 : 5,
-        background: active ? "var(--accent-soft, rgba(79, 70, 229, 0.12))" : buttonStyle.background,
-        color: active ? "var(--accent, #4f46e5)" : buttonStyle.color,
+        background: active ? "var(--accent-soft, rgba(181, 44, 0, 0.12))" : buttonStyle.background,
+        color: active ? "var(--accent, #b52c00)" : buttonStyle.color,
         borderColor: active
-          ? "color-mix(in srgb, var(--accent, #4f46e5) 28%, transparent)"
+          ? "color-mix(in srgb, var(--accent, #b52c00) 28%, transparent)"
           : undefined,
         opacity: disabled ? 0.42 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -378,7 +378,7 @@ export default function ObjectContextBar({
     controls.push(
       action("Color", () =>
         apply(
-          { strokeColor: first.strokeColor === "#111827" ? "#4f46e5" : "#111827" },
+          { strokeColor: first.strokeColor === "#1a1815" ? "#b52c00" : "#1a1815" },
           "vector color",
         ),
       ),
@@ -408,7 +408,7 @@ export default function ObjectContextBar({
     controls.push(
       action("Color", () =>
         apply(
-          { strokeColor: first.strokeColor === "#ffffff" ? "#111827" : "#ffffff" },
+          { strokeColor: first.strokeColor === "#ffffff" ? "#1a1815" : "#ffffff" },
           "text color",
         ),
       ),
@@ -442,7 +442,7 @@ export default function ObjectContextBar({
     controls.push(
       action("Fill", () =>
         apply(
-          { backgroundColor: first.backgroundColor === "transparent" ? "#6366f1" : "transparent" },
+          { backgroundColor: first.backgroundColor === "transparent" ? "#d64418" : "transparent" },
           "shape fill",
         ),
       ),
@@ -450,7 +450,7 @@ export default function ObjectContextBar({
     controls.push(
       action("Stroke", () =>
         apply(
-          { strokeColor: first.strokeColor === "transparent" ? "#111827" : "transparent" },
+          { strokeColor: first.strokeColor === "transparent" ? "#1a1815" : "transparent" },
           "shape stroke",
         ),
       ),
@@ -503,10 +503,10 @@ export default function ObjectContextBar({
         maxWidth: "calc(100% - 12px)",
         padding: "4px 6px",
         overflow: "visible",
-        border: "1px solid color-mix(in srgb, var(--stroke-strong, #cbd5e1) 72%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--stroke-strong, #d9d3cc) 72%, transparent)",
         borderRadius: 10,
         background: "var(--surface-solid, #fff)",
-        boxShadow: "0 8px 24px -12px rgba(15, 23, 42, 0.42), 0 2px 6px rgba(15, 23, 42, 0.08)",
+        boxShadow: "0 8px 24px -12px rgba(26, 23, 20, 0.42), 0 2px 6px rgba(26, 23, 20, 0.08)",
         boxSizing: "border-box",
       }}
     >
@@ -523,7 +523,7 @@ export default function ObjectContextBar({
           justifyContent: "center",
           fontSize: 15,
           lineHeight: 1,
-          color: "var(--accent, #4f46e5)",
+          color: "var(--accent, #b52c00)",
         }}
       >
         {getObjectContextIcon(displayCategory, {
@@ -572,10 +572,10 @@ export default function ObjectContextBar({
               maxHeight: "min(640px, calc(100vh - 24px))",
               overflowY: "auto",
               padding: 6,
-              border: "1px solid var(--stroke, #e5e7eb)",
+              border: "1px solid var(--stroke, #eae6e1)",
               borderRadius: 9,
               background: "var(--surface-solid, #fff)",
-              boxShadow: "0 12px 32px rgba(15, 23, 42, 0.2)",
+              boxShadow: "0 12px 32px rgba(26, 23, 20, 0.2)",
             }}
           >
             {activeImageTool === "multi-angle" ? (
@@ -619,15 +619,15 @@ export default function ObjectContextBar({
           -webkit-tap-highlight-color: transparent;
         }
         .object-context-button:hover:not(:disabled) {
-          background: var(--accent-soft, rgba(79, 70, 229, 0.1)) !important;
+          background: var(--accent-soft, rgba(181, 44, 0, 0.1)) !important;
           border-color: var(--stroke-strong, rgba(15, 20, 35, 0.18)) !important;
-          color: var(--accent, #4f46e5) !important;
+          color: var(--accent, #b52c00) !important;
         }
         .object-context-button:active:not(:disabled) {
           transform: scale(0.96);
         }
         .object-context-button:focus-visible {
-          outline: 2px solid color-mix(in srgb, var(--accent, #4f46e5) 52%, transparent);
+          outline: 2px solid color-mix(in srgb, var(--accent, #b52c00) 52%, transparent);
           outline-offset: 2px;
         }
         .object-context-divider {

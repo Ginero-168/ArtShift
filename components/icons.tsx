@@ -42,8 +42,17 @@ export const IconBrand = (p: Props) => {
       shapeRendering="geometricPrecision"
       {...rest}
     >
-      {/* Symmetric two-peak M, centered on 12,12 so the mark stays upright at 16–22px. */}
-      <path d="M7 17.5V6.5L12 14L17 6.5V17.5" />
+      {/* Registration mark: a filled square with its outline printed off-register. */}
+      <rect
+        x="3.5"
+        y="3.5"
+        width="11"
+        height="11"
+        fill="currentColor"
+        stroke="none"
+        opacity="0.9"
+      />
+      <rect x="9.5" y="9.5" width="11" height="11" strokeLinejoin="miter" />
     </svg>
   );
 };

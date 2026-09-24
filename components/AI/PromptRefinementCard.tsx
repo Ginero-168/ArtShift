@@ -229,11 +229,11 @@ export default function PromptRefinementCard({
       style={{
         width: "min(780px, 94vw)",
         maxHeight: "88vh",
-        border: "1px solid #e2e8f0",
+        border: "1px solid #ece7e0",
         borderRadius: 16,
         background: "#ffffff",
         padding: "14px 16px 12px",
-        boxShadow: "0 24px 64px rgba(15, 23, 42, 0.22)",
+        boxShadow: "0 24px 64px rgba(26, 23, 20, 0.22)",
         display: "flex",
         flexDirection: "column",
         gap: 12,
@@ -254,21 +254,21 @@ export default function PromptRefinementCard({
             style={{
               fontSize: 14,
               fontWeight: 700,
-              color: "#0f172a",
+              color: "#1a1714",
               display: "flex",
               alignItems: "center",
               gap: 7,
             }}
           >
-            <IconWand size={16} color="#6366f1" />
+            <IconWand size={16} color="#d64418" />
             <span>Prompt ของผู้ใช้ ...</span>
             {isBrand && (
               <span
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: "#4338ca",
-                  background: "#eef2ff",
+                  color: "#9b2500",
+                  background: "#fff0ea",
                   borderRadius: 5,
                   padding: "2px 8px",
                 }}
@@ -283,9 +283,9 @@ export default function PromptRefinementCard({
             title="ปิดหน้าต่าง"
             aria-label="ปิด Prompt Helper"
             style={{
-              background: "#f1f5f9",
+              background: "#f8f4ef",
               border: "none",
-              color: "#64748b",
+              color: "#78726a",
               cursor: "pointer",
               lineHeight: 1,
               padding: 0,
@@ -304,12 +304,12 @@ export default function PromptRefinementCard({
         <div
           style={{
             padding: "8px 10px",
-            background: "#f8fafc",
+            background: "#fcf9f5",
             borderRadius: 8,
-            border: "1px dashed #cbd5e1",
+            border: "1px dashed #d9d3cc",
             fontSize: 12.5,
             lineHeight: 1.45,
-            color: "#1e293b",
+            color: "#2c2824",
             fontWeight: 500,
             minHeight: 34,
             maxHeight: 72,
@@ -329,9 +329,9 @@ export default function PromptRefinementCard({
             gap: 10,
             padding: "8px 10px",
             borderRadius: 8,
-            background: planning ? "#eef2ff" : planSource === "gemini" ? "#f0fdf4" : "#fff7ed",
+            background: planning ? "#fff0ea" : planSource === "gemini" ? "#f0fdf4" : "#fff7ed",
             border: planning
-              ? "1px solid #c7d2fe"
+              ? "1px solid #ffc7b3"
               : planSource === "gemini"
                 ? "1px solid #bbf7d0"
                 : "1px solid #fed7aa",
@@ -342,7 +342,7 @@ export default function PromptRefinementCard({
               style={{
                 fontSize: 12,
                 fontWeight: 650,
-                color: planning ? "#4338ca" : planSource === "gemini" ? "#166534" : "#9a3412",
+                color: planning ? "#9b2500" : planSource === "gemini" ? "#166534" : "#9a3412",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
@@ -356,7 +356,7 @@ export default function PromptRefinementCard({
                       width: 8,
                       height: 8,
                       borderRadius: "50%",
-                      background: "#6366f1",
+                      background: "#d64418",
                       animation: "promptHelperPulse 1s ease-in-out infinite",
                       flexShrink: 0,
                     }}
@@ -376,7 +376,7 @@ export default function PromptRefinementCard({
               )}
             </div>
             {!planning && rationale ? (
-              <div style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.4 }}>{rationale}</div>
+              <div style={{ fontSize: 11.5, color: "#58534c", lineHeight: 1.4 }}>{rationale}</div>
             ) : !planning && planError ? (
               <div style={{ fontSize: 11.5, color: "#78716c", lineHeight: 1.4 }}>{planError}</div>
             ) : !planning && planSource !== "gemini" ? (
@@ -399,16 +399,16 @@ export default function PromptRefinementCard({
                 gap: 5,
                 padding: "6px 10px",
                 borderRadius: 8,
-                border: "1px solid #c7d2fe",
-                background: planning ? "#e0e7ff" : "#ffffff",
-                color: "#4338ca",
+                border: "1px solid #ffc7b3",
+                background: planning ? "#ffe2d6" : "#ffffff",
+                color: "#9b2500",
                 fontSize: 12,
                 fontWeight: 650,
                 cursor: planning ? "wait" : "pointer",
                 opacity: planning ? 0.7 : 1,
               }}
             >
-              <IconRotate size={13} color="#4338ca" />
+              <IconRotate size={13} color="#9b2500" />
               ทบทวนตัวเลือก
             </button>
           )}
@@ -423,13 +423,13 @@ export default function PromptRefinementCard({
             flexDirection: "column",
             gap: 5,
             padding: "8px 10px",
-            background: isBrand ? "#f8fafc" : "#fafafa",
+            background: isBrand ? "#fcf9f5" : "#fafafa",
             borderRadius: 10,
-            border: "1px solid #e2e8f0",
+            border: "1px solid #ece7e0",
             flexShrink: 0,
           }}
         >
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: 0.2 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#58534c", letterSpacing: 0.2 }}>
             {isBrand ? "ล็อกทุกแบบ (Shared Anchor)" : "บริบทที่คงไว้"}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
@@ -440,21 +440,21 @@ export default function PromptRefinementCard({
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: "#0f172a",
+                  color: "#1a1714",
                   background: "#ffffff",
-                  border: "1px solid #cbd5e1",
+                  border: "1px solid #d9d3cc",
                   borderRadius: 999,
                   padding: "3px 10px",
                   maxWidth: "100%",
                 }}
               >
                 {anchor.label}
-                <span style={{ color: "#64748b", fontWeight: 500 }}> · {anchor.detail}</span>
+                <span style={{ color: "#78726a", fontWeight: 500 }}> · {anchor.detail}</span>
               </span>
             ))}
           </div>
           {isBrand && (
-            <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>
+            <div style={{ fontSize: 11, color: "#78726a", lineHeight: 1.4 }}>
               เลือกคาแรคเตอร์ด้านล่างเพื่อสร้างความต่าง — ข้อความ/โลโก้/สัดส่วนจะไม่ขยับเมื่อ Orchestrator
               สร้างแบบต่อเนื่อง
             </div>
@@ -501,7 +501,7 @@ export default function PromptRefinementCard({
           gap: 8,
           marginTop: 2,
           paddingTop: 10,
-          borderTop: "1px solid #f1f5f9",
+          borderTop: "1px solid #f8f4ef",
           flexShrink: 0,
         }}
       >
@@ -519,14 +519,14 @@ export default function PromptRefinementCard({
             justifyContent: "center",
             gap: 6,
             padding: "10px 14px",
-            background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
-            color: "#ffffff",
+            background: "#1a1714",
+            color: "#f4f0e8",
             border: "none",
-            borderRadius: 9,
+            borderRadius: 999,
             fontSize: 13,
-            fontWeight: 700,
+            fontWeight: 600,
             cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(79, 70, 229, 0.28)",
+            boxShadow: "3px 3px 0 #d64418",
           }}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
@@ -535,7 +535,7 @@ export default function PromptRefinementCard({
                 ? `สร้างตามทิศทางที่เลือก (${selectedCount})`
                 : "สร้างรูปภาพตามตัวเลือกนี้"}
             </span>
-            <IconWand size={15} color="#ffffff" />
+            <IconWand size={15} color="#f4f0e8" />
           </span>
         </button>
 
@@ -548,9 +548,9 @@ export default function PromptRefinementCard({
           title="คัดลอกลงในช่องพิมพ์เพื่อแก้ไขต่อ"
           style={{
             padding: "10px 12px",
-            background: "#f1f5f9",
-            color: "#334155",
-            border: "1px solid #e2e8f0",
+            background: "#f8f4ef",
+            color: "#443f39",
+            border: "1px solid #ece7e0",
             borderRadius: 9,
             fontSize: 12.5,
             fontWeight: 600,
@@ -559,7 +559,7 @@ export default function PromptRefinementCard({
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <span>คัดลอกลงช่องพิมพ์</span>
-            <IconPenEdit size={13} color="#334155" />
+            <IconPenEdit size={13} color="#443f39" />
           </span>
         </button>
 
@@ -569,7 +569,7 @@ export default function PromptRefinementCard({
           style={{
             padding: "8px 10px",
             background: "transparent",
-            color: "#64748b",
+            color: "#78726a",
             border: "none",
             borderRadius: 8,
             fontSize: 12.5,
@@ -644,8 +644,8 @@ function DimensionRow({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155" }}>{title}</div>
-        {hint && <div style={{ fontSize: 11, color: "#94a3b8" }}>{hint}</div>}
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#443f39" }}>{title}</div>
+        {hint && <div style={{ fontSize: 11, color: "#a7a198" }}>{hint}</div>}
       </div>
 
       <div style={{ display: "flex", alignItems: "stretch", gap: 6, width: "100%" }}>
@@ -719,9 +719,9 @@ function DimensionRow({
                   height: 28,
                   padding: "0 12px",
                   borderRadius: 7,
-                  border: isSelected ? "1px solid #0284c7" : "1px solid #e2e8f0",
-                  background: isSelected ? "#0284c7" : "#f8fafc",
-                  color: isSelected ? "#ffffff" : "#334155",
+                  border: isSelected ? "1px solid #0284c7" : "1px solid #ece7e0",
+                  background: isSelected ? "#0284c7" : "#fcf9f5",
+                  color: isSelected ? "#ffffff" : "#443f39",
                   fontWeight: isSelected ? 700 : 500,
                   fontSize: 12.5,
                   cursor: "pointer",
@@ -769,9 +769,9 @@ const navBtnStyle: {
   height: 26,
   alignSelf: "center",
   borderRadius: "50%",
-  border: "1px solid #cbd5e1",
+  border: "1px solid #d9d3cc",
   background: "#ffffff",
-  color: "#475569",
+  color: "#58534c",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -802,15 +802,15 @@ function ThumbnailOption({
         flexShrink: 0,
         width: THUMB_CARD_WIDTH,
         borderRadius: 10,
-        border: selected ? "2px solid #0284c7" : "1px solid #e2e8f0",
-        background: selected ? "#f0f9ff" : "#ffffff",
+        border: selected ? "2px solid #0284c7" : "1px solid #ece7e0",
+        background: selected ? "#fbf7f2" : "#ffffff",
         padding: 4,
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
         gap: 4,
         textAlign: "left",
-        boxShadow: selected ? "0 0 0 1px rgba(2,132,199,0.25)" : "0 1px 3px rgba(15,23,42,0.06)",
+        boxShadow: selected ? "0 0 0 1px rgba(2,132,199,0.25)" : "0 1px 3px rgba(26, 23, 20, 0.06)",
       }}
     >
       <OptionPreviewSurface
@@ -823,7 +823,7 @@ function ThumbnailOption({
         style={{
           fontSize: 11,
           fontWeight: selected ? 700 : 600,
-          color: selected ? "#0369a1" : "#334155",
+          color: selected ? "#0369a1" : "#443f39",
           lineHeight: 1.2,
           padding: "0 2px",
           overflow: "hidden",
@@ -837,7 +837,7 @@ function ThumbnailOption({
         <div
           style={{
             fontSize: 10,
-            color: "#94a3b8",
+            color: "#a7a198",
             padding: "0 2px 2px",
             lineHeight: 1.15,
             overflow: "hidden",
@@ -873,9 +873,9 @@ function OptionPreviewSurface({
     height: THUMB_IMAGE_HEIGHT,
     borderRadius: 7,
     overflow: "hidden" as const,
-    border: selected ? "1px solid #7dd3fc" : "1px solid rgba(15,23,42,0.06)",
+    border: selected ? "1px solid #7dd3fc" : "1px solid rgba(26, 23, 20, 0.06)",
     lineHeight: 0,
-    background: "#f8fafc",
+    background: "#fcf9f5",
   };
 
   const fallback = resolveOptionFallbackPreview(optionId);

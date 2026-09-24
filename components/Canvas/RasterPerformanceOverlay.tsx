@@ -38,12 +38,12 @@ export default function RasterPerformanceOverlay() {
         bottom: 12,
         zIndex: 80,
         padding: "6px 8px",
-        border: "1px solid rgba(15, 23, 42, 0.16)",
+        border: "1px solid rgba(26, 23, 20, 0.16)",
         borderRadius: 6,
         background: "rgba(255,255,255,0.92)",
-        color: "#334155",
+        color: "#443f39",
         font: "10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace",
-        boxShadow: "0 2px 8px rgba(15,23,42,0.12)",
+        boxShadow: "0 2px 8px rgba(26, 23, 20, 0.12)",
         pointerEvents: "none",
       }}
     >

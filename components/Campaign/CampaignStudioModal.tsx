@@ -396,7 +396,7 @@ export default function CampaignStudioModal({ isOpen, onClose, onLoadIntoCanvas 
                             <td style={{ color: "#ef4444", fontWeight: 600 }}>
                               {rec.salePrice ? `฿${rec.salePrice}` : "-"}
                             </td>
-                            <td style={{ color: "#a1a1aa" }}>
+                            <td style={{ color: "#a4a19e" }}>
                               {rec.listPrice ? `฿${rec.listPrice}` : "-"}
                             </td>
                           </tr>

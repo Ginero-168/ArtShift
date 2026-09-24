@@ -28,11 +28,11 @@ const PREVIEW_ACCENT: Record<ProcessingPreviewKind, string> = {
   extract: "#d97706",
   layer: "#c026d3",
   "remove-bg": "#0f766e",
-  vectorize: "#4f46e5",
-  upscale: "#7c3aed",
-  "multi-angle": "#4338ca",
-  generate: "#2563eb",
-  brief: "#6366f1",
+  vectorize: "#1a1714",
+  upscale: "#2743d6",
+  "multi-angle": "#8a5a00",
+  generate: "#d64418",
+  brief: "#4d7c0f",
 };
 
 function renderPreviewIcon(kind: ProcessingPreviewKind, size = 15) {
@@ -167,9 +167,9 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         boxShadow: isDragging
-          ? `0 18px 36px rgba(15, 23, 42, 0.28), 0 0 0 2px ${accent}44`
-          : "0 10px 28px rgba(15, 23, 42, 0.18)",
-        color: "#111827",
+          ? `0 18px 36px rgba(26, 23, 20, 0.28), 0 0 0 2px ${accent}44`
+          : "0 10px 28px rgba(26, 23, 20, 0.18)",
+        color: "#1a1815",
         padding: 14,
         display: "flex",
         flexDirection: "column",
@@ -205,7 +205,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
           inset: 0,
           opacity: 0.72,
           background:
-            "linear-gradient(110deg, transparent 20%, rgba(255,255,255,0.8) 45%, transparent 70%), repeating-linear-gradient(0deg, rgba(99,102,241,0.06) 0 12px, transparent 12px 24px)",
+            "linear-gradient(110deg, transparent 20%, rgba(255,255,255,0.8) 45%, transparent 70%), repeating-linear-gradient(0deg, rgba(214, 68, 24, 0.06) 0 12px, transparent 12px 24px)",
           backgroundSize: "220% 100%, 100% 100%",
           animation: "model-manager-shimmer 1.5s linear infinite",
           pointerEvents: "none",
@@ -243,7 +243,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
             <strong style={{ display: "block", fontSize: 13, lineHeight: 1.2 }}>
               {preview.label}
             </strong>
-            <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "#6b7280" }}>
+            <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "#76716c" }}>
               {phaseMessage}
             </span>
           </div>
@@ -259,7 +259,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
             padding: "2px 6px",
             borderRadius: 6,
             background: isDragging ? `${accent}22` : "rgba(0, 0, 0, 0.05)",
-            color: isDragging ? accent : "#6b7280",
+            color: isDragging ? accent : "#76716c",
             fontSize: 10,
             fontWeight: 500,
             pointerEvents: "none",
@@ -305,7 +305,7 @@ export default function ProcessingPreviewOverlay({ preview, scale, worldToScreen
             alignItems: "center",
             marginTop: 6,
             fontSize: 10,
-            color: "#6b7280",
+            color: "#76716c",
           }}
         >
           <span>Preview</span>

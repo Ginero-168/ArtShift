@@ -52,7 +52,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
     price: "Auto",
     tier: "Tier 1-3",
     description: "คำนวณอัตโนมัติ: Tier 1 (Low) / Tier 2 (Med) / Tier 3 (High)",
-    accentColor: "#6366f1",
+    accentColor: "#1a1714",
   },
   {
     id: "low",
@@ -70,7 +70,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
     price: "$0.047",
     tier: "Tier 2 (4–7)",
     description: "คุณภาพมาตรฐาน คมชัดสมดุล สำหรับงานทั่วไป",
-    accentColor: "#3b82f6",
+    accentColor: "#2743d6",
   },
   {
     id: "high",
@@ -79,7 +79,7 @@ export const QUALITY_OPTIONS: readonly QualityOption[] = [
     price: "$0.128",
     tier: "Tier 3 (8–10)",
     description: "ความละเอียดสูง สำหรับงานจริง/สื่อพิมพ์/ตัวหนังสือ",
-    accentColor: "#8b5cf6",
+    accentColor: "#d64418",
   },
   {
     id: "xhigh",
@@ -177,7 +177,7 @@ export default function ChatComposer({
         width: "100%",
         flex: "0 0 auto",
         background: "#ffffff",
-        borderTop: "1px solid #e2e8f0",
+        borderTop: "1px solid #ece7e0",
         padding: "10px 14px 14px",
         display: "flex",
         flexDirection: "column",
@@ -196,8 +196,8 @@ export default function ChatComposer({
             minWidth: 0,
             minHeight: 90,
             borderRadius: 14,
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
+            background: "#fcf9f5",
+            border: "1px solid #ece7e0",
             display: "flex",
             flexDirection: "column",
             gap: 4,
@@ -207,11 +207,11 @@ export default function ChatComposer({
             transition: "border-color 0.15s ease, box-shadow 0.15s ease",
           }}
           onFocusCapture={(e) => {
-            e.currentTarget.style.borderColor = "#4f46e5";
-            e.currentTarget.style.boxShadow = "0 0 0 2px rgba(79, 70, 229, 0.1)";
+            e.currentTarget.style.borderColor = "#b52c00";
+            e.currentTarget.style.boxShadow = "0 0 0 2px rgba(181, 44, 0, 0.1)";
           }}
           onBlurCapture={(e) => {
-            e.currentTarget.style.borderColor = "#e2e8f0";
+            e.currentTarget.style.borderColor = "#ece7e0";
             e.currentTarget.style.boxShadow = "none";
           }}
         >
@@ -233,7 +233,7 @@ export default function ChatComposer({
                 border: "none",
                 borderRadius: 6,
                 background: "transparent",
-                color: "#94a3b8",
+                color: "#a7a198",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -242,10 +242,10 @@ export default function ChatComposer({
                 transition: "color 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = "#64748b";
+                e.currentTarget.style.color = "#78726a";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = "#94a3b8";
+                e.currentTarget.style.color = "#a7a198";
               }}
             >
               <CloseIcon style={{ width: 12, height: 12, color: "currentColor" }} />
@@ -292,32 +292,30 @@ export default function ChatComposer({
                 width: 36,
                 height: 36,
                 borderRadius: "50%",
-                border: isPromptHelperOpen ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
-                background: isPromptHelperOpen
-                  ? "linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%)"
-                  : "#f8fafc",
-                color: isPromptHelperOpen ? "#4f46e5" : "#6366f1",
+                border: isPromptHelperOpen ? "1.5px solid #d64418" : "1px solid #ece7e0",
+                background: isPromptHelperOpen ? "#fff0ea" : "#fcf9f5",
+                color: isPromptHelperOpen ? "#b52c00" : "#d64418",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: busy ? "not-allowed" : "pointer",
                 transition: "all 0.15s ease",
-                boxShadow: isPromptHelperOpen ? "0 0 0 2px rgba(99, 102, 241, 0.2)" : "none",
+                boxShadow: isPromptHelperOpen ? "0 0 0 2px rgba(214, 68, 24, 0.2)" : "none",
               }}
               title={
                 isPromptHelperOpen ? "ปิดตัวช่วยแต่ง Prompt" : "เปิดตัวช่วยแต่ง Prompt (Prompt Helper)"
               }
               onMouseEnter={(e) => {
                 if (!busy && !isPromptHelperOpen) {
-                  e.currentTarget.style.background = "#f1f5f9";
-                  e.currentTarget.style.borderColor = "#c7d2fe";
+                  e.currentTarget.style.background = "#f8f4ef";
+                  e.currentTarget.style.borderColor = "#ffc7b3";
                   e.currentTarget.style.transform = "scale(1.05)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!busy && !isPromptHelperOpen) {
-                  e.currentTarget.style.background = "#f8fafc";
-                  e.currentTarget.style.borderColor = "#e2e8f0";
+                  e.currentTarget.style.background = "#fcf9f5";
+                  e.currentTarget.style.borderColor = "#ece7e0";
                   e.currentTarget.style.transform = "scale(1)";
                 }
               }}
@@ -336,8 +334,8 @@ export default function ChatComposer({
               height: 36,
               borderRadius: "50%",
               border: "none",
-              background: busy ? "#ef4444" : input.trim() ? "#4f46e5" : "#f1f5f9",
-              color: busy || input.trim() ? "#ffffff" : "#94a3b8",
+              background: busy ? "#ef4444" : input.trim() ? "#b52c00" : "#f8f4ef",
+              color: busy || input.trim() ? "#ffffff" : "#a7a198",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -353,7 +351,7 @@ export default function ChatComposer({
                 style={{
                   width: 14,
                   height: 14,
-                  stroke: input.trim() ? "#ffffff" : "#94a3b8",
+                  stroke: input.trim() ? "#ffffff" : "#a7a198",
                 }}
               />
             )}
@@ -383,18 +381,18 @@ export default function ChatComposer({
               padding: "4px 10px",
               borderRadius: 20,
               border: isQualityMenuOpen
-                ? "1.5px solid #6366f1"
+                ? "1.5px solid #d64418"
                 : selectedQuality !== "auto"
                   ? `1.5px solid ${activeOption.accentColor}`
-                  : "1px solid #e2e8f0",
+                  : "1px solid #ece7e0",
               background:
-                selectedQuality !== "auto" ? "#f8fafc" : isQualityMenuOpen ? "#f1f5f9" : "#ffffff",
-              color: "#1e293b",
+                selectedQuality !== "auto" ? "#fcf9f5" : isQualityMenuOpen ? "#f8f4ef" : "#ffffff",
+              color: "#2c2824",
               fontSize: 11.5,
               fontWeight: 600,
               cursor: busy ? "not-allowed" : "pointer",
               transition: "all 0.15s ease",
-              boxShadow: isQualityMenuOpen ? "0 2px 8px rgba(99, 102, 241, 0.15)" : "none",
+              boxShadow: isQualityMenuOpen ? "0 2px 8px rgba(214, 68, 24, 0.15)" : "none",
             }}
             title="คลิกเพื่อเลือกระดับคุณภาพของภาพ (openai/gpt-image-2.5-sunburst)"
           >
@@ -409,8 +407,8 @@ export default function ChatComposer({
               <span
                 style={{
                   fontSize: 10,
-                  color: "#64748b",
-                  background: "#f1f5f9",
+                  color: "#78726a",
+                  background: "#f8f4ef",
                   padding: "1px 5px",
                   borderRadius: 6,
                 }}
@@ -422,7 +420,7 @@ export default function ChatComposer({
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                color: "#94a3b8",
+                color: "#a7a198",
                 marginLeft: 2,
                 transform: isQualityMenuOpen ? "rotate(180deg)" : "none",
                 transition: "transform 0.15s ease",
@@ -441,7 +439,7 @@ export default function ChatComposer({
                 left: 0,
                 width: 310,
                 background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                border: "1px solid #ece7e0",
                 borderRadius: 12,
                 boxShadow:
                   "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
@@ -457,20 +455,20 @@ export default function ChatComposer({
               <div
                 style={{
                   padding: "6px 8px 4px",
-                  borderBottom: "1px solid #f1f5f9",
+                  borderBottom: "1px solid #f8f4ef",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#475569" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#58534c" }}>
                   เลือกความละเอียดภาพ (Quality)
                 </span>
                 <span
                   style={{
                     fontSize: 9.5,
-                    color: "#6366f1",
-                    background: "#e0e7ff",
+                    color: "#d64418",
+                    background: "#ffe2d6",
                     padding: "2px 6px",
                     borderRadius: 4,
                     fontWeight: 600,
@@ -509,13 +507,13 @@ export default function ChatComposer({
                         border: isSelected
                           ? `1.5px solid ${opt.accentColor}`
                           : "1px solid transparent",
-                        background: isSelected ? "#f8fafc" : "transparent",
+                        background: isSelected ? "#fcf9f5" : "transparent",
                         cursor: "pointer",
                         textAlign: "left",
                         transition: "background 0.12s ease",
                       }}
                       onMouseEnter={(e) => {
-                        if (!isSelected) e.currentTarget.style.background = "#f1f5f9";
+                        if (!isSelected) e.currentTarget.style.background = "#f8f4ef";
                       }}
                       onMouseLeave={(e) => {
                         if (!isSelected) e.currentTarget.style.background = "transparent";
@@ -536,7 +534,7 @@ export default function ChatComposer({
                           <strong
                             style={{
                               fontSize: 12,
-                              color: isSelected ? opt.accentColor : "#1e293b",
+                              color: isSelected ? opt.accentColor : "#2c2824",
                               fontWeight: isSelected ? 700 : 600,
                             }}
                           >
@@ -546,8 +544,8 @@ export default function ChatComposer({
                             style={{
                               fontSize: 10,
                               fontWeight: 600,
-                              color: "#64748b",
-                              background: isSelected ? "#e2e8f0" : "#f1f5f9",
+                              color: "#78726a",
+                              background: isSelected ? "#ece7e0" : "#f8f4ef",
                               padding: "1px 5px",
                               borderRadius: 4,
                             }}
@@ -558,7 +556,7 @@ export default function ChatComposer({
                         <div
                           style={{
                             fontSize: 10,
-                            color: "#64748b",
+                            color: "#78726a",
                             marginTop: 2,
                             lineHeight: 1.3,
                           }}
@@ -586,9 +584,9 @@ export default function ChatComposer({
               <div
                 style={{
                   padding: "4px 8px 2px",
-                  borderTop: "1px solid #f1f5f9",
+                  borderTop: "1px solid #f8f4ef",
                   fontSize: 9.5,
-                  color: "#94a3b8",
+                  color: "#a7a198",
                   textAlign: "center",
                 }}
               >
@@ -600,7 +598,7 @@ export default function ChatComposer({
 
         {/* Selected Quality Hint */}
         {selectedQuality !== "auto" && (
-          <div style={{ fontSize: 10.5, color: "#94a3b8" }}>{`${activeOption.price} / run`}</div>
+          <div style={{ fontSize: 10.5, color: "#a7a198" }}>{`${activeOption.price} / run`}</div>
         )}
       </div>
     </div>

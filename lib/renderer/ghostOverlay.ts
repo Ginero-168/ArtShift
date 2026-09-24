@@ -80,14 +80,14 @@ export function drawGhostVariationOverlay(overlay: GhostVariationOverlay, render
 
   // 2. Draw Accent Outline (Ghost bounding box)
   ctx.globalAlpha = 1.0;
-  ctx.strokeStyle = "#8b5cf6"; // Violet brand accent
+  ctx.strokeStyle = "#d64418"; // Violet brand accent
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 4]);
   ctx.strokeRect(x, y, width, height);
 
   // 3. Draw Corner Anchors
   ctx.setLineDash([]);
-  ctx.fillStyle = "#8b5cf6";
+  ctx.fillStyle = "#d64418";
   const anchorSize = 8;
   const halfAnchor = anchorSize / 2;
 
@@ -108,13 +108,13 @@ export function drawGhostVariationOverlay(overlay: GhostVariationOverlay, render
   const badgeY = Math.max(6, y - badgeHeight - 4);
 
   // Pill background
-  ctx.fillStyle = "rgba(15, 23, 42, 0.85)"; // Slate-900 with alpha
+  ctx.fillStyle = "rgba(26, 23, 20, 0.85)"; // Slate-900 with alpha
   ctx.beginPath();
   ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 4);
   ctx.fill();
 
   // Pill border
-  ctx.strokeStyle = "rgba(139, 92, 246, 0.6)";
+  ctx.strokeStyle = "rgba(214, 68, 24, 0.6)";
   ctx.lineWidth = 1;
   ctx.stroke();
 

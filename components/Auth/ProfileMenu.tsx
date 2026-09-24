@@ -103,9 +103,9 @@ export default function ProfileMenu() {
           height: 31,
           padding: 0,
           borderRadius: "50%",
-          border: user ? "2px solid #c7d2fe" : "1px solid #cbd5e1",
-          background: user ? "#eef2ff" : "#f8fafc",
-          color: "#4338ca",
+          border: user ? "2px solid #ffc7b3" : "1px solid #d9d3cc",
+          background: user ? "#fff0ea" : "#fcf9f5",
+          color: "#9b2500",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -139,22 +139,22 @@ export default function ProfileMenu() {
             padding: providerOpen ? 0 : 12,
             borderRadius: 10,
             background: "#ffffff",
-            border: "1px solid #dbe2ea",
-            boxShadow: "0 14px 32px rgba(15, 23, 42, 0.16)",
+            border: "1px solid #e4e1dc",
+            boxShadow: "0 14px 32px rgba(26, 23, 20, 0.16)",
           }}
         >
           {providerOpen && user ? (
             <AIProviderSettings onClose={() => setProviderOpen(false)} />
           ) : user ? (
             <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#1a1714" }}>
                 {user.name || "Google account"}
               </div>
               <div
                 style={{
                   marginTop: 3,
                   fontSize: 9.5,
-                  color: "#64748b",
+                  color: "#78726a",
                   overflowWrap: "anywhere",
                 }}
               >
@@ -183,7 +183,7 @@ export default function ProfileMenu() {
               <strong style={{ display: "block", fontSize: 12, color: "#172554" }}>
                 Your Profile
               </strong>
-              <p style={{ margin: "6px 0 10px", fontSize: 10, lineHeight: 1.45, color: "#64748b" }}>
+              <p style={{ margin: "6px 0 10px", fontSize: 10, lineHeight: 1.45, color: "#78726a" }}>
                 Login ด้วย Google เพื่อจำ OpenAI / Replicate Key กับบัญชีของคุณ
               </p>
               <button
@@ -194,8 +194,8 @@ export default function ProfileMenu() {
                 style={{
                   ...menuButtonStyle,
                   justifyContent: "center",
-                  background: busy || !loaded ? "#f1f5f9" : "#ffffff",
-                  color: "#1e293b",
+                  background: busy || !loaded ? "#f8f4ef" : "#ffffff",
+                  color: "#2c2824",
                   fontWeight: 700,
                 }}
               >
@@ -222,10 +222,10 @@ const menuButtonStyle = {
   width: "100%",
   marginTop: 10,
   padding: "8px 9px",
-  border: "1px solid #e2e8f0",
+  border: "1px solid #ece7e0",
   borderRadius: 6,
-  background: "#f8fafc",
-  color: "#334155",
+  background: "#fcf9f5",
+  color: "#443f39",
   cursor: "pointer",
   fontSize: 10,
   textAlign: "left" as const,

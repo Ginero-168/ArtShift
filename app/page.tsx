@@ -1,23 +1,26 @@
 "use client";
 
 /**
- * / — ArtShift Landing & Google Sign-in Gate.
+ * / — ArtShift landing and Google sign-in gate.
  *
- * Requirements:
- * - Public Index Route
- * - Hero ArtShift wordmark + "AI Powered Design Tools"
- * - Single Primary "Log in with Google" button
- * - If already logged in, shows "Go to Projects"
+ * - Public index route with the hero ArtShift wordmark
+ * - One primary "Log in with Google" action, or "Go to Projects" when signed in
  * - Handles OAuth query parameters (?auth=...)
- * - Shape Wave canvas background (CodePen yyapzOP / donotfold) behind the hero
  */
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
-import HomeShapeWaveBackground from "@/components/Marketing/HomeShapeWaveBackground";
+import styles from "@/components/Marketing/HomeLanding.module.css";
 import { useAuth } from "@/lib/auth/useAuth";
+
+const AUTH_MESSAGES: Record<string, string> = {
+  "google-cancelled": "ยกเลิกการเข้าสู่ระบบด้วย Google แล้ว",
+  "google-unavailable": "ระบบยังไม่ได้เปิดใช้งาน Google OAuth หรือยังไม่ได้ตั้งค่า Credentials",
+  "google-error": "เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google กรุณาลองใหม่อีกครั้ง",
+  "session-expired": "เซสชันการใช้งานของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบใหม่",
+};
 
 export default function LandingRootPage() {
   return (
@@ -29,16 +32,7 @@ export default function LandingRootPage() {
 
 function LandingLoadingState() {
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#080808",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#ffffff",
-      }}
-    >
+    <div className={styles.loading}>
       <ArtShiftLogo size="header" />
     </div>
   );
@@ -51,241 +45,135 @@ function LandingPageContent() {
 
   useEffect(() => {
     const authCode = searchParams.get("auth");
-    if (authCode === "google-cancelled") {
-      setAuthAlert("ยกเลิกการเข้าสู่ระบบด้วย Google แล้ว");
-    } else if (authCode === "google-unavailable") {
-      setAuthAlert("ระบบยังไม่ได้เปิดใช้งาน Google OAuth หรือยังไม่ได้ตั้งค่า Credentials");
-    } else if (authCode === "google-error") {
-      setAuthAlert("เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google กรุณาลองใหม่อีกครั้ง");
-    } else if (authCode === "session-expired") {
-      setAuthAlert("เซสชันการใช้งานของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบใหม่");
-    }
+    setAuthAlert(authCode ? (AUTH_MESSAGES[authCode] ?? null) : null);
   }, [searchParams]);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#080808",
-        color: "#ffffff",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
-        position: "relative",
-        overflowX: "hidden",
-      }}
-    >
-      <HomeShapeWaveBackground />
+    <div className={styles.page}>
+      <nav className={styles.topNav} aria-label="ลิงก์หลัก">
+        <span className={styles.edition}>Campaign Artwork Studio</span>
+        <div className={styles.topLinks}>
+          <Link href="/features">ฟีเจอร์</Link>
+          <Link href="/privacy">Privacy</Link>
+        </div>
+      </nav>
 
-      {/* Hero Section */}
-      <main
-        style={{
-          position: "relative",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          padding: "48px 24px",
-          maxWidth: 880,
-          margin: "0 auto",
-          zIndex: 10,
-        }}
-      >
-        <div
-          data-shape-mask
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            width: "100%",
-          }}
-        >
-          {/* Auth Alert Banner */}
+      <main className={styles.main}>
+        <section className={styles.intro} aria-labelledby="landing-title">
           {authAlert && (
-            <div
-              style={{
-                padding: "10px 20px",
-                borderRadius: 8,
-                background: "rgba(239, 68, 68, 0.15)",
-                border: "1px solid rgba(239, 68, 68, 0.35)",
-                color: "#fca5a5",
-                fontSize: 13,
-                fontWeight: 500,
-                marginBottom: 28,
-              }}
-            >
+            <p className={styles.alert} role="alert">
               {authAlert}
-            </div>
+            </p>
           )}
 
-          <ArtShiftLogo as="h1" size="hero" style={{ margin: "0 0 24px" }} />
-
-          {/* Tagline */}
-          <p
-            style={{
-              fontSize: "clamp(16px, 2.5vw, 20px)",
-              color: "#cbd5e1",
-              lineHeight: 1.6,
-              maxWidth: 640,
-              margin: "0 0 48px",
-              textWrap: "balance",
-            }}
-          >
-            AI Powered Design Tools
+          <p className={styles.kicker}>
+            <span className={styles.kickerDot} aria-hidden="true" />
+            สำหรับนักออกแบบงานหนังสือ
           </p>
 
-          {/* Action Card: Sign in with Google OR Go to Projects */}
-          <div
-            style={{
-              background: "rgba(8, 8, 8, 0.72)",
-              border: "1px solid rgba(255, 255, 255, 0.14)",
-              borderRadius: 20,
-              padding: "32px 32px",
-              backdropFilter: "blur(18px)",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.45)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 16,
-              width: "100%",
-              maxWidth: 520,
-            }}
-          >
+          <ArtShiftLogo as="h1" size="hero" id="landing-title" className={styles.wordmark} />
+
+          <p className={styles.lead}>
+            ออกแบบงานแคมเปญหนังสือบนแคนวาสเดียว ตั้งแต่ปก ป้ายชั้นวาง ไปจนถึงโพสต์โซเชียล
+            <em> ดีไซน์ครั้งเดียว ได้ครบทุกไซส์</em>
+          </p>
+
+          <div className={styles.access}>
             {loading ? (
-              <div style={{ padding: "12px 0", color: "#94a3b8", fontSize: 13 }}>
-                กำลังโหลดสถานะผู้ใช้…
-              </div>
+              <p className={styles.status}>กำลังตรวจสอบบัญชี…</p>
             ) : authenticated ? (
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ fontSize: 13, color: "#cbd5e1" }}>
+              <>
+                <p className={styles.welcome}>
                   ยินดีต้อนรับกลับ, <strong>{user?.name || user?.email}</strong>
-                </div>
-
-                <Link
-                  href="/projects"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 10,
-                    width: "100%",
-                    minBlockSize: 56,
-                    padding: "16px 24px",
-                    borderRadius: 14,
-                    background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
-                    color: "#ffffff",
-                    fontSize: 16,
-                    fontWeight: 700,
-                    textDecoration: "none",
-                    boxShadow: "0 4px 20px rgba(99, 102, 241, 0.45)",
-                    transition: "transform 0.15s ease",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <span>เปิดหน้ารายการโปรเจกต์</span>
-                  <span>→</span>
+                </p>
+                <Link href="/projects" className={styles.primary}>
+                  <span>เปิดโปรเจกต์ของคุณ</span>
+                  <span aria-hidden="true" className={styles.arrow}>
+                    →
+                  </span>
                 </Link>
-
-                <button
-                  type="button"
-                  onClick={signOut}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#94a3b8",
-                    fontSize: 12,
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                    marginTop: 2,
-                  }}
-                >
-                  ออกจากระบบ (Sign out)
+                <button type="button" onClick={signOut} className={styles.textButton}>
+                  ออกจากระบบ
                 </button>
-              </div>
+              </>
             ) : (
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-                <button
-                  type="button"
-                  onClick={signInWithGoogle}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 14,
-                    width: "100%",
-                    minBlockSize: 56,
-                    padding: "18px 24px",
-                    borderRadius: 14,
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    fontSize: 17,
-                    fontWeight: 700,
-                    lineHeight: 1.3,
-                    border: "none",
-                    cursor: "pointer",
-                    boxSizing: "border-box",
-                    boxShadow: "0 8px 28px rgba(255, 255, 255, 0.28)",
-                    transition: "transform 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-                >
-                  <GoogleGIcon size={22} />
-                  <span>เข้าสู่ระบบด้วย Google (Log in with Google)</span>
+              <>
+                <button type="button" onClick={signInWithGoogle} className={styles.primary}>
+                  <GoogleGIcon size={20} />
+                  <span>เข้าสู่ระบบด้วย Google</span>
                 </button>
-
-                <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.4 }}>
-                  เข้าสู่ระบบเพื่อระบุตัวตนและเริ่มจัดการโปรเจกต์ของคุณ ข้อมูลทั้งหมดจะจัดเก็บในเครื่องของคุณอย่างปลอดภัย
-                </div>
-              </div>
+                <p className={styles.note}>
+                  ใช้บัญชี Google เพื่อยืนยันตัวตนเท่านั้น — ไฟล์งานทั้งหมดเก็บอยู่ในเครื่องของคุณ
+                </p>
+              </>
             )}
           </div>
-        </div>
+
+          <Link href="/features" className={styles.featuresLink}>
+            ดูฟีเจอร์ <span aria-hidden="true">↗</span>
+          </Link>
+        </section>
+
+        <CampaignSpecimen />
       </main>
 
-      <footer
-        style={{
-          position: "relative",
-          zIndex: 10,
-          padding: "0 24px 28px",
-          textAlign: "center",
-        }}
-      >
-        <Link
-          href="/features"
-          style={{
-            color: "#64748b",
-            fontSize: 12,
-            fontWeight: 500,
-            textDecoration: "underline",
-            textUnderlineOffset: 3,
-          }}
-        >
-          ดูฟีเจอร์
-        </Link>
-        <Link
-          href="/privacy"
-          style={{
-            color: "#64748b",
-            fontSize: 12,
-            fontWeight: 500,
-            textDecoration: "underline",
-            textUnderlineOffset: 3,
-            marginInlineStart: 16,
-          }}
-        >
-          Privacy
-        </Link>
+      <footer className={styles.footer}>
+        <span>© {new Date().getFullYear()} ArtShift</span>
+        <span className={styles.footerMeta}>Local-first · artshift.io</span>
       </footer>
+    </div>
+  );
+}
+
+/** One campaign set in three formats — shows the product idea without a screenshot. */
+function CampaignSpecimen() {
+  return (
+    <div className={styles.specimen} aria-hidden="true">
+      <figure className={`${styles.sheet} ${styles.poster}`}>
+        <div className={styles.art}>
+          <span className={styles.posterEyebrow}>Rainy Season Reads</span>
+          <span className={styles.posterTitle}>
+            อ่าน
+            <br />
+            จนหมด
+            <br />
+            ฝน
+          </span>
+          <span className={styles.posterBadge}>
+            ลดสูงสุด<strong>35%</strong>
+          </span>
+        </div>
+        <figcaption>Poster · 60 × 90 cm</figcaption>
+      </figure>
+
+      <figure className={`${styles.sheet} ${styles.square}`}>
+        <div className={styles.art}>
+          <span className={styles.squareTitle}>ใหม่</span>
+          <span className={styles.squareSub}>อ่านจนหมดฝน</span>
+        </div>
+        <figcaption>Social · 1040 × 1040 px</figcaption>
+      </figure>
+
+      <figure className={`${styles.sheet} ${styles.strip}`}>
+        <div className={styles.art}>
+          <span className={styles.stripTitle}>อ่านจนหมดฝน</span>
+          <span className={styles.stripBadge}>−35%</span>
+        </div>
+        <figcaption>Shelf talk · 29 × 7 cm</figcaption>
+      </figure>
     </div>
   );
 }
 
 function GoogleGIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      style={{ flexShrink: 0 }}
+      aria-hidden="true"
+    >
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

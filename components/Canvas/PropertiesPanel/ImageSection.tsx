@@ -19,10 +19,10 @@ export function ImageSection({
         style={{
           padding: "4px 10px",
           borderRadius: 5,
-          border: "1px solid var(--stroke, #e5e7eb)",
+          border: "1px solid var(--stroke, #eae6e1)",
           background:
             croppingImageId === firstImage.id
-              ? "var(--accent, #6366f1)"
+              ? "var(--accent, #d64418)"
               : "var(--surface-solid, #fff)",
           color: croppingImageId === firstImage.id ? "#fff" : "var(--ink, #111)",
           fontSize: 11,

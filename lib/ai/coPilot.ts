@@ -332,7 +332,7 @@ export async function executeCoPilotInstruction(
       return bound.carriedForward ? bound.refs : userRefs;
     })();
     const workspaceSlide = st.currentSlide();
-    const act = logAction("orchestrator", "🧠 Creative Director", "กำลังเตรียมบริบทก่อนส่งให้ Director");
+    const act = logAction("orchestrator", "Creative Director", "กำลังเตรียมบริบทก่อนส่งให้ Director");
     if (options.cloudConsent !== true) {
       updateActionStatus(act, "error", "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง AI provider");
       return {
@@ -462,7 +462,7 @@ export async function executeCoPilotInstruction(
       act.taskId = imageRun.id;
       const countLabel =
         imageRun.requestedOutputCount > 1 ? ` (${imageRun.requestedOutputCount} ภาพ)` : "";
-      act.title = `🧠 Creative Director → ${direction.specialist}${countLabel}`;
+      act.title = `Creative Director → ${direction.specialist}${countLabel}`;
       act.stage = "planned";
       act.detailScore = direction.detailScore;
       act.precisionScore = direction.precisionScore;
@@ -573,7 +573,7 @@ export async function executeCoPilotInstruction(
   ) {
     const act = logAction(
       "image_edit",
-      "✂️ Removing Background",
+      "Removing Background",
       "Analyzing image and isolating foreground object...",
     );
 
@@ -657,7 +657,7 @@ export async function executeCoPilotInstruction(
   ) {
     const act = logAction(
       "vectorizer",
-      "⚡ Auto-Tracing to Vector Paths",
+      "Auto-Tracing to Vector Paths",
       "Extracting color contours and fitting Bézier curves...",
     );
 
@@ -737,7 +737,7 @@ export async function executeCoPilotInstruction(
   ) {
     const act = logAction(
       "layout_designer",
-      "📐 Applying 60-30-10 Harmonic Layout",
+      "Applying 60-30-10 Harmonic Layout",
       "Optimizing visual hierarchy, padding, and alignments...",
     );
 
@@ -784,7 +784,7 @@ export async function executeCoPilotInstruction(
   // -------------------------------------------------------------
   const act = logAction(
     "copywriter",
-    "✍️ Composing Content & Visuals",
+    "Composing Content & Visuals",
     `Designing elements for: "${prompt}"...`,
   );
 
