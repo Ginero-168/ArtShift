@@ -32,6 +32,7 @@ import {
 } from "./creatingModelCatalog";
 import { absorbModelDelta } from "./directorStream";
 import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from "./executionGraph";
+import { assessGrill, formatGrillClarification, formatGrillProceedBlock } from "./grill";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
 import { computeDetailScore, computeEditPrecisionScore } from "./imageQualityPolicy";
 import type { ComposerImageRef } from "./imageReferences";
@@ -232,7 +233,7 @@ export const SEQUENTIAL_PLAN_TOOL = {
 const CREATIVE_DIRECTION_TOOL = {
   name: "propose_creative_direction",
   description:
-    "Return ArtShift's validated next decision. Use image-task only when the request is ready and one available image capability can execute it. Return concise review criteria rather than hidden reasoning.",
+    "Return ArtShift's validated next decision. Use image-task only when the request is ready and one available image capability can execute it. For clarification, ask one frontier question and include a recommended answer in the question text (➡️ แนะนำ:). Return concise review criteria rather than hidden reasoning.",
   inputSchema: {
     type: "object",
     additionalProperties: false,
@@ -370,7 +371,7 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "Use retrieved Knowledge guidance to improve the plan, but derive the actual direction from the user's prompt and context rather than a preset template.",
   "Request Search only when current facts or external references materially affect correctness. Provide narrow queries and sources; ArtShift performs search outside the model after consent.",
   "Choose one allowlisted specialist and capability. Respect an explicit user model preference only when that model is listed as available.",
-  "For supported Canvas edits, call propose_design_plan with exact current ids and a complete atomic command plan. Ask one focused clarification only when a missing fact materially changes the result.",
+  "For supported Canvas edits, call propose_design_plan with exact current ids and a complete atomic command plan. For image briefs, follow GRILL-ME PROTOCOL: ask one frontier question only when a missing decision would materially change the result.",
   "For image creation or image editing, call propose_creative_direction. For an answer that needs no execution, return answer. Never return competing plans or call both planning tools in one turn.",
   "IMAGE ANALYSIS ANSWER PROTOCOL (when the user asks to analyze / describe / inventory an attached image — e.g. 'วิเคราะห์รูปนี้', 'มีอะไรบ้าง', 'อ่านข้อความในรูป', 'what's in this image'):",
   "  - ONLY when the request is analysis/description alone (no create/mix/generate/edit).",
@@ -471,6 +472,13 @@ export const CREATIVE_DIRECTOR_SYSTEM = [
   "",
   "Define observable Review criteria for the generated result. Do not reveal chain-of-thought; return only the structured direction tool call.",
   "Track the user's corrections and prior answers. Do not ask again for facts already present in conversation or Artwork context. If execution evidence reports a failure, revise the plan or provide a precise recovery step.",
+  "GRILL-ME PROTOCOL (automatic — no slash command and no trigger phrase):",
+  "When a creative brief is under-specified, interview in rounds until every decision that would materially change the image is settled. Map the brief as a design tree. Each round asks only the current frontier: the single next decision whose prerequisites are already answered. Do not ask a later branch in the same turn.",
+  'For that one question, return kind clarification. Write it in the user\'s language. Include your recommended answer on its own line starting with "➡️ แนะนำ:" so the user can accept it. Put up to 4 short choices in options. The question text must stay readable on its own, including the recommendation and the choices.',
+  "Do not grill a brief that is already specific enough to execute, a follow-up that only tweaks a settled plan, or a fact already present in Vision, canvas, or earlier replies. Finding facts from context is your job — never ask the user for them.",
+  "If the user says ไม่ต้องถาม, ทำเลย, ข้าม, just generate, or otherwise tells you to stop asking, exit the interview and execute with the recommended defaults.",
+  "When earlier turns already contain grill questions and answers, treat those answers as settled. Continue at the new frontier, or return image-task / answer when the frontier is empty. Never restart the tree from zero.",
+  'If the user message contains "=== GRILL ASSESSMENT ===" with action PROCEED, that assessment is binding: do not return clarification.',
   "Reply in the user's latest language for answer or clarification text.",
 ].join("\n");
 
@@ -497,6 +505,11 @@ export async function prepareCreativeDirection(
     throw new Error("explicit cloud consent is required for the Creative Director");
   }
   assertSafeInput(input.prompt);
+  const grill = assessGrill(input);
+  if (grill.action === "ask") {
+    const formatted = formatGrillClarification(grill.question);
+    return { kind: "clarification", question: formatted.question, options: formatted.options };
+  }
   const knowledge = retrieveDesignKnowledge(input.prompt, 3);
   const searchImagesAvailable =
     Boolean(runtime.searchImages) && (runtime.searchImagesAvailable ?? true);
@@ -583,7 +596,9 @@ export async function prepareCreativeDirection(
       content: [
         {
           type: "text",
-          text: `User request:\n${input.prompt.slice(0, 20_000)}${lastPackageBlock}${
+          text: `User request:\n${input.prompt.slice(0, 20_000)}${
+            grill.action === "proceed" ? `\n\n${formatGrillProceedBlock(grill)}` : ""
+          }${lastPackageBlock}${
             inlineSynthesis?.semanticMappingText ? `\n\n${inlineSynthesis.semanticMappingText}` : ""
           }${referenceBlock}`,
         },
@@ -629,13 +644,28 @@ export async function prepareCreativeDirection(
     accountId: input.accountId,
     signal: runtime.signal,
   };
-  const firstDirection = await executeDirectorPass(
-    runtime,
-    messages,
-    options,
-    input,
-    knowledge.map((skill) => skill.id),
-  );
+  const knowledgeIds = knowledge.map((skill) => skill.id);
+  let firstDirection = await executeDirectorPass(runtime, messages, options, input, knowledgeIds);
+  if (grill.action === "proceed" && firstDirection.kind === "clarification") {
+    firstDirection = await executeDirectorPass(
+      runtime,
+      [
+        ...messages,
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "GRILL ASSESSMENT remains PROCEED. Do not return clarification. Execute the brief now with best defaults for any unspoken aesthetic choice.",
+            },
+          ],
+        },
+      ],
+      options,
+      input,
+      knowledgeIds,
+    );
+  }
   if (
     firstDirection.kind !== "image-task" ||
     !firstDirection.search.required ||
