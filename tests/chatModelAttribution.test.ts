@@ -8,6 +8,7 @@ import {
   displayModelSteps,
   FLORENCE_2_MODEL_ID,
   florenceModelStep,
+  formatImageModelDisclosure,
   formatModelChain,
   formatModelDisclosure,
   formatModelDisplayLabel,
@@ -76,6 +77,20 @@ describe("chat model attribution", () => {
       ),
     ).toBe("google/gemini-3-flash → openai/gpt-image-2.5-sunburst");
     expect(formatModelDisclosure([florenceModelStep()], "Florence-2")).toBe("");
+    expect(
+      formatImageModelDisclosure(
+        [
+          directorModelStep(),
+          { id: "openai/gpt-image-2.5-sunburst", role: "image" },
+          florenceModelStep(),
+        ],
+        "google/gemini-3-flash → openai/gpt-image-2.5-sunburst",
+      ),
+    ).toBe("openai/gpt-image-2.5-sunburst");
+    expect(formatImageModelDisclosure([directorModelStep()], "google/gemini-3-flash")).toBe("");
+    expect(formatImageModelDisclosure(undefined, "openai/gpt-image-2.5-sunburst")).toBe(
+      "openai/gpt-image-2.5-sunburst",
+    );
     expect(
       formatUsingStatus([
         directorModelStep(),

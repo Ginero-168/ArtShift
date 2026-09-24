@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import ChatActionCards, { type StagedVariationCard } from "@/components/AI/ChatActionCards";
 import ChatComposer, { type QualitySelection } from "@/components/AI/ChatComposer";
 import ChatThread, { type LiveAssistantState } from "@/components/AI/ChatThread";
@@ -576,16 +577,20 @@ export default function AICoPilotBar() {
     setStreamingText("");
     const controller = new AbortController();
     abortRef.current = controller;
+    let streamedThought = "";
     const publishDirectorThought = (text: string) => {
       const visible = text.trim();
       if (!visible || controller.signal.aborted) return;
-      setLiveAssistantState((prev) => {
-        if (!prev || prev.stage === "generating") return prev;
-        return {
-          ...prev,
-          thought: visible,
-          stage: prev.stage === "outputting" ? "planning" : prev.stage,
-        };
+      streamedThought = visible;
+      flushSync(() => {
+        setLiveAssistantState((prev) => {
+          if (!prev || prev.stage === "generating") return prev;
+          return {
+            ...prev,
+            thought: visible,
+            stage: prev.stage === "outputting" ? "planning" : prev.stage,
+          };
+        });
       });
     };
 
@@ -1075,10 +1080,10 @@ export default function AICoPilotBar() {
 
                 setLiveAssistantState({
                   stage: "generating",
-                  thought: thoughtText,
+                  thought: streamedThought || thoughtText,
                   toolLabel: chainLabel,
                   requestedCount: count,
-                  statusMessage: `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(chainLabel)}...`,
+                  statusMessage: `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(modelName)}...`,
                   prompt: rawPrompt,
                   isEdit: isEditTurn,
                   actions: [...actions],
@@ -1353,7 +1358,7 @@ export default function AICoPilotBar() {
                       id: crypto.randomUUID(),
                       role: "assistant",
                       content: reply,
-                      thought: thoughtText,
+                      thought: streamedThought || thoughtText,
                       toolLabel: turnModels.label() || modelName,
                       images: generatedImages,
                       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
@@ -1444,6 +1449,7 @@ export default function AICoPilotBar() {
             id: crypto.randomUUID(),
             role: "assistant",
             content: reply,
+            thought: streamedThought || undefined,
             timestamp: Date.now(),
             actions,
             suggestions,
@@ -1700,10 +1706,11 @@ export default function AICoPilotBar() {
             upsertCurrentAction(remoteActions[0]);
             setLiveAssistantState({
               stage: "generating",
+              thought: streamedThought || undefined,
               prompt: promptToSend,
               toolLabel: directedChain,
-              statusMessage: directedChain
-                ? `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(directedChain)}...`
+              statusMessage: directedImageModel?.id
+                ? `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(directedImageModel.id)}...`
                 : "กำลังสร้างรูปภาพ...",
               activeModels: turnModels.snapshot(),
             });
@@ -1822,6 +1829,7 @@ export default function AICoPilotBar() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: reply,
+        thought: streamedThought || undefined,
         toolLabel:
           turnModels.label() ||
           (remoteGeneratedImages

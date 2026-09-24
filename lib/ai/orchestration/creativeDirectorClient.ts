@@ -78,6 +78,9 @@ async function consumeDirectorEventStream(
       if (!event) continue;
       if (event.event === "thought") {
         onThoughtText?.(event.text);
+        // Let the Thought body paint this snapshot before the next one, and
+        // before `done` returns into the caller that clears the live turn.
+        await afterNextPaint();
       } else if (event.event === "done") {
         sawDone = true;
         direction = event.direction;
@@ -91,6 +94,26 @@ async function consumeDirectorEventStream(
     throw new Error("Creative Director stream ended before a plan was ready.");
   }
   return directionFromPayload(direction, model, input);
+}
+
+/** Wait until the browser has had a chance to paint the latest Thought snapshot. */
+function afterNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const raf =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : (callback: FrameRequestCallback) => {
+            setTimeout(() => callback(0), 16);
+          };
+    raf(() => raf(() => finish()));
+    setTimeout(finish, 48);
+  });
 }
 
 function directionFromPayload(

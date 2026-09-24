@@ -66,5 +66,10 @@ describe("director stream text", () => {
     expect(decodeReplicateOutputData(split.events[0]!.data)).toBe("สวัสดี");
     expect(split.rest.startsWith("event: output")).toBe(true);
     expect(decodeReplicateOutputData('"ครับ"')).toBe("ครับ");
+    expect(decodeReplicateOutputData('{"chunk":"แมว","index":0}')).toBe("แมว");
+    expect(decodeReplicateOutputData('["แมว","นั่ง"]')).toBe("แมวนั่ง");
+    const modelJson = '{"kind":"answer","text":"สวัสดีครับ"}';
+    expect(decodeReplicateOutputData(modelJson)).toBe(modelJson);
+    expect(extractDirectorStreamThought(decodeReplicateOutputData(modelJson))).toBe("สวัสดีครับ");
   });
 });

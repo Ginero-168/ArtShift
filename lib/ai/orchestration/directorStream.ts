@@ -118,18 +118,40 @@ export function parseDirectorSseFrame(frame: SseFrame): DirectorStreamEvent | nu
   return null;
 }
 
-/** Decode one Replicate `event: output` data payload into text. */
+/**
+ * Decode one Replicate `event: output` data payload into text.
+ * Plain tokens pass through. JSON-encoded strings are unwrapped.
+ * Stream envelopes (`chunk` / `output`) yield their text.
+ * A director JSON object is kept verbatim so summary/text can be extracted —
+ * dropping it made the Thought panel stay on the canned status until `done`.
+ */
 export function decodeReplicateOutputData(data: string): string {
   const trimmed = data.trim();
   if (!trimmed || trimmed === "[DONE]") return "";
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[") && !trimmed.startsWith('"')) {
+    return trimmed;
+  }
   try {
     const parsed = JSON.parse(trimmed) as unknown;
     if (typeof parsed === "string") return parsed;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item) => typeof item === "string").join("");
+    }
+    if (parsed && typeof parsed === "object") {
       const record = parsed as Record<string, unknown>;
+      if (typeof record.chunk === "string") return record.chunk;
       if (typeof record.output === "string") return record.output;
       if (Array.isArray(record.output)) {
         return record.output.filter((item) => typeof item === "string").join("");
+      }
+      if (
+        "kind" in record ||
+        "summary" in record ||
+        "calls" in record ||
+        "refinedPrompt" in record ||
+        "question" in record
+      ) {
+        return trimmed;
       }
     }
     return "";

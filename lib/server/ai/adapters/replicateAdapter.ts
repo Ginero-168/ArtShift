@@ -433,7 +433,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         };
 
     const wantsStream = typeof request.onTextDelta === "function";
-    const prediction = await this.createPrediction(
+    let prediction = await this.createPrediction(
       model,
       predictionInput,
       request.signal,
@@ -441,19 +441,36 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       wantsStream ? { stream: true, prefer: "respond-async" } : undefined,
     );
     let streamed = false;
+    const streamUrl = prediction.urls?.stream;
     if (
       wantsStream &&
-      prediction.urls?.stream &&
-      isReplicateStreamUrl(prediction.urls.stream) &&
+      streamUrl &&
+      isReplicateStreamUrl(streamUrl) &&
       prediction.status !== "succeeded"
     ) {
-      try {
-        await this.readReplicateOutputStream(prediction.urls.stream, request.signal, (delta) => {
-          streamed = true;
-          request.onTextDelta?.(delta);
-        });
-      } catch (error) {
-        if (request.signal.aborted) throw error;
+      // Replicate closes an idle stream after ~30s with a 408 comment while the
+      // prediction is still starting. Reconnect until the first token or `done`.
+      // Once tokens have arrived, do not reconnect — a replay would duplicate them.
+      for (let attempt = 0; attempt < 4 && !request.signal.aborted; attempt += 1) {
+        let sawDone = false;
+        try {
+          const read = await this.readReplicateOutputStream(streamUrl, request.signal, (delta) => {
+            streamed = true;
+            request.onTextDelta?.(delta);
+          });
+          sawDone = read.sawDone;
+        } catch (error) {
+          if (request.signal.aborted) throw error;
+          break;
+        }
+        if (sawDone || streamed) break;
+        try {
+          prediction = await this.refreshPrediction(prediction, request.signal);
+        } catch (error) {
+          if (request.signal.aborted) throw error;
+          break;
+        }
+        if (prediction.status !== "starting" && prediction.status !== "processing") break;
       }
     }
     const completed =
@@ -1337,15 +1354,29 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     }
   }
 
+  private async refreshPrediction(
+    prediction: ReplicatePrediction,
+    signal: AbortSignal,
+  ): Promise<ReplicatePrediction> {
+    if (!prediction.urls?.get) return prediction;
+    const response = await fetch(prediction.urls.get, {
+      headers: { Authorization: `Bearer ${this.apiToken}` },
+      signal,
+    });
+    await assertProviderResponse(response, this.id);
+    return (await response.json()) as ReplicatePrediction;
+  }
+
   private async readReplicateOutputStream(
     streamUrl: string,
     signal: AbortSignal,
     onDelta: (delta: string) => void,
-  ): Promise<void> {
+  ): Promise<{ sawDone: boolean }> {
     const response = await fetch(streamUrl, {
       headers: {
         Authorization: `Bearer ${this.apiToken}`,
         Accept: "text/event-stream",
+        "Cache-Control": "no-store",
       },
       signal,
     });
@@ -1359,10 +1390,12 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     const decoder = new TextDecoder();
     let buffer = "";
     let accumulated = "";
+    let sawDone = false;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      const chunkText = decoder.decode(value, { stream: true });
+      buffer += chunkText;
       const drained = drainSseBuffer(buffer);
       buffer = drained.rest;
       for (const frame of drained.events) {
@@ -1371,14 +1404,28 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
             provider: this.id,
           });
         }
+        if (frame.event === "done") {
+          sawDone = true;
+          continue;
+        }
         if (frame.event !== "output") continue;
         const chunk = decodeReplicateOutputData(frame.data);
         const next = absorbModelDelta(accumulated, chunk);
         const delta = next.startsWith(accumulated) ? next.slice(accumulated.length) : chunk;
         accumulated = next;
-        if (delta) onDelta(delta);
+        if (!delta) continue;
+        onDelta(delta);
+        // One turn per token so the director SSE route can flush before the next chunk.
+        await new Promise<void>((resolve) => {
+          setImmediate(resolve);
+        });
+      }
+      if (sawDone) break;
+      if (chunkText.includes("408 Request Timeout") || buffer.includes("408 Request Timeout")) {
+        break;
       }
     }
+    return { sawDone };
   }
 }
 

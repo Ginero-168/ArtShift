@@ -119,21 +119,46 @@ function streamDirectorTurn(
   let lastThought = "";
   const stream = new ReadableStream({
     async start(controller) {
+      let closed = false;
+      let sendChain = Promise.resolve();
       const send = (event: "thought" | "done" | "error", data: unknown) => {
-        controller.enqueue(encoder.encode(encodeDirectorSse(event, data)));
+        const frame = encoder.encode(encodeDirectorSse(event, data));
+        sendChain = sendChain.then(async () => {
+          if (closed) return;
+          try {
+            controller.enqueue(frame);
+          } catch {
+            return;
+          }
+          // Yield so the HTTP layer can flush this frame before the next snapshot.
+          await new Promise<void>((resolve) => {
+            setImmediate(resolve);
+          });
+        });
+        return sendChain;
       };
       try {
+        // Prime proxy and WebKit buffers so the first small thought is not held
+        // until the handler closes.
+        controller.enqueue(encoder.encode(`:${" ".repeat(2048)}\n\n`));
         const direction = await prepareOrchestratorTurn(input, {
           ...runtime,
           onDirectorStreamText: (snapshot) => {
             const thought = extractDirectorStreamThought(snapshot).slice(0, 4_000);
             if (!thought || thought === lastThought || containsSensitivePayload(thought)) return;
             lastThought = thought;
-            send("thought", { text: thought });
+            void send("thought", { text: thought });
           },
         });
         if (req.signal.aborted) return;
-        send("done", { direction, model: direction.runtimeModel ?? null });
+        if (!lastThought) {
+          const fallback = visibleThoughtFromDirection(direction);
+          if (fallback && !containsSensitivePayload(fallback)) {
+            lastThought = fallback;
+            await send("thought", { text: fallback.slice(0, 4_000) });
+          }
+        }
+        await send("done", { direction, model: direction.runtimeModel ?? null });
       } catch (error) {
         if (!(error instanceof CreativeDirectorValidationError)) {
           refundCharge(chargeEntryId, "creative director failed");
@@ -141,11 +166,12 @@ function streamDirectorTurn(
         if (req.signal.aborted) return;
         console.error("[Creative Director Route Error]:", error);
         const failure = directorFailurePayload(error);
-        send("error", {
+        await send("error", {
           error: failure.error,
           ...(failure.code ? { code: failure.code } : {}),
         });
       } finally {
+        closed = true;
         controller.close();
       }
     },
@@ -155,8 +181,20 @@ function streamDirectorTurn(
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "Content-Encoding": "none",
+      "X-Accel-Buffering": "no",
+      "X-Content-Type-Options": "nosniff",
     },
   });
+}
+
+function visibleThoughtFromDirection(
+  direction: Awaited<ReturnType<typeof prepareOrchestratorTurn>>,
+): string {
+  if (direction.kind === "answer") return direction.text.trim();
+  if (direction.kind === "clarification") return direction.question.trim();
+  if (direction.kind === "image-task") return direction.summary.trim();
+  return "";
 }
 
 function directorFailurePayload(error: unknown): { error: string; code?: string; status: number } {
