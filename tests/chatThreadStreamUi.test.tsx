@@ -44,10 +44,41 @@ describe("chat thread streaming UI", () => {
     expect(chip.textContent).not.toContain("@hidden");
     expect(chip.getAttribute("title")).toBe("google/gemini-3-flash");
     expect(screen.getByText("สวัสดีครับ วันนี้ช่วยวางแนวภาพได้เลย")).toBeTruthy();
+    expect(screen.getByTestId("thought-header").textContent).toContain("Thought");
+    expect(screen.getByTestId("thought-header").contains(screen.getByTestId("thought-rail"))).toBe(
+      false,
+    );
+    expect(screen.getByTestId("thought-body").textContent).toContain(
+      "สวัสดีครับ วันนี้ช่วยวางแนวภาพได้เลย",
+    );
   });
 
   it("shows growing director text in the live Thought body instead of the canned rotator", () => {
-    render(
+    const { rerender } = render(
+      <CollapsibleThought
+        thought="สวัสดี"
+        isLive
+        stage="planning"
+        statusMessage="กำลังเข้าใจคำสั่งและวางแผนจนจบงาน..."
+        toolLabel="google/gemini-3-flash"
+      />,
+    );
+
+    const header = screen.getByTestId("thought-header");
+    const body = screen.getByTestId("thought-body");
+    const rail = screen.getByTestId("thought-rail");
+    expect(header.querySelector('[data-testid="thought-icon"] svg')).toBeTruthy();
+    expect(header.textContent).toContain("Thought");
+    expect(header.contains(body)).toBe(false);
+    expect(header.contains(rail)).toBe(false);
+    expect(screen.getByTestId("thought-stream").contains(rail)).toBe(true);
+    expect(screen.getByTestId("thought-stream").contains(body)).toBe(true);
+    expect(body.textContent).toContain("สวัสดี");
+    expect(body.textContent).not.toContain("กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...");
+    expect(screen.queryByText("กำลังอ่านคำขอ...")).toBeNull();
+    expect(screen.queryByText("กำลังคิดแนวทางสร้างภาพให้ตรงคำขอ...")).toBeNull();
+
+    rerender(
       <CollapsibleThought
         thought="สวัสดีครับ กำลังดูโจทย์"
         isLive
@@ -56,10 +87,7 @@ describe("chat thread streaming UI", () => {
         toolLabel="google/gemini-3-flash"
       />,
     );
-
-    expect(screen.getByText("สวัสดีครับ กำลังดูโจทย์")).toBeTruthy();
-    expect(screen.queryByText("กำลังอ่านคำขอ...")).toBeNull();
-    expect(screen.queryByText("กำลังคิดแนวทางสร้างภาพให้ตรงคำขอ...")).toBeNull();
+    expect(screen.getByTestId("thought-body").textContent).toContain("สวัสดีครับ กำลังดูโจทย์");
     expect(screen.queryByText("กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...")).toBeNull();
   });
 

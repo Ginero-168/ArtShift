@@ -318,8 +318,13 @@ export function CollapsibleThought({
 
   if (!thoughtDisplay && !isLive && !toolLabel) return null;
 
+  const showStream = isOpen && (Boolean(thoughtDisplay) || isLive || Boolean(liveLine));
+  const bodyText = thoughtDisplay || (isLive && stage !== "generating" ? liveLine : "");
+  const generatingStatus = isLive && stage === "generating" ? liveLine : "";
+
   return (
     <div
+      data-testid="thought-panel"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -344,12 +349,13 @@ export function CollapsibleThought({
 
       <button
         type="button"
+        data-testid="thought-header"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         style={{
-          display: "inline-flex",
+          display: "flex",
           alignItems: "center",
-          gap: 6,
+          gap: 8,
           background: "transparent",
           border: "none",
           outline: "none",
@@ -357,91 +363,128 @@ export function CollapsibleThought({
           cursor: "pointer",
           textAlign: "left",
           color: "#78726a",
-          width: "fit-content",
+          width: "100%",
           maxWidth: "100%",
         }}
       >
-        <ThoughtBrainIcon
+        <span
+          data-testid="thought-icon"
           style={{
-            color: "#78726a",
-            width: 14,
-            height: 14,
-            animation: isLive ? "artshiftBrainPulse 2s ease-in-out infinite" : undefined,
-          }}
-        />
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#78726a" }}>Thought</span>
-        {isLive && liveLine ? (
-          <span
-            key={liveLine}
-            style={{
-              fontSize: 11.5,
-              color: "#a7a198",
-              maxWidth: 220,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              animation: "artshiftSlideFadeIn 0.3s ease",
-            }}
-          >
-            {liveLine}
-          </span>
-        ) : null}
-        {isLive ? (
-          <span style={{ display: "inline-flex", gap: 2, marginLeft: 2 }}>
-            {[0, 0.2, 0.4].map((delay) => (
-              <span
-                key={delay}
-                style={{
-                  width: 3.5,
-                  height: 3.5,
-                  borderRadius: "50%",
-                  background: "#a7a198",
-                  animation: `artshiftWaveDot 1.2s ease-in-out infinite ${delay}s`,
-                }}
-              />
-            ))}
-          </span>
-        ) : null}
-        <ChevronDownIcon
-          style={{
-            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-            width: 11,
-            height: 11,
-            color: "#a7a198",
-            transition: "transform 0.2s ease",
-          }}
-        />
-      </button>
-
-      {isOpen && thoughtDisplay ? (
-        <div
-          style={{
-            marginTop: 4,
-            marginLeft: 6,
-            paddingLeft: 12,
-            borderLeft: "1.5px solid #d9d3cc",
-            color: "#78726a",
-            fontSize: 12,
-            lineHeight: 1.55,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
+            width: 16,
+            display: "inline-flex",
+            justifyContent: "center",
+            flexShrink: 0,
           }}
         >
-          {thoughtDisplay}
-          {isLive && stage !== "generating" ? (
-            <span
-              aria-hidden="true"
+          <ThoughtBrainIcon
+            style={{
+              color: "#78726a",
+              width: 14,
+              height: 14,
+              animation: isLive ? "artshiftBrainPulse 2s ease-in-out infinite" : undefined,
+            }}
+          />
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#78726a" }}>Thought</span>
+          {isLive ? (
+            <span style={{ display: "inline-flex", gap: 2, marginLeft: 2 }}>
+              {[0, 0.2, 0.4].map((delay) => (
+                <span
+                  key={delay}
+                  style={{
+                    width: 3.5,
+                    height: 3.5,
+                    borderRadius: "50%",
+                    background: "#a7a198",
+                    animation: `artshiftWaveDot 1.2s ease-in-out infinite ${delay}s`,
+                  }}
+                />
+              ))}
+            </span>
+          ) : null}
+          <ChevronDownIcon
+            style={{
+              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+              width: 11,
+              height: 11,
+              color: "#a7a198",
+              transition: "transform 0.2s ease",
+            }}
+          />
+        </span>
+      </button>
+
+      {showStream ? (
+        <div
+          data-testid="thought-stream"
+          style={{
+            display: "flex",
+            alignItems: "stretch",
+            gap: 8,
+            marginTop: 2,
+            width: "100%",
+          }}
+        >
+          <div
+            style={{
+              width: 16,
+              display: "flex",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <div
+              data-testid="thought-rail"
               style={{
-                display: "inline-block",
-                width: 7,
-                height: 13,
-                marginLeft: 2,
-                verticalAlign: "text-bottom",
-                background: "#a7a198",
-                animation: "artshiftWaveDot 1.2s ease-in-out infinite",
+                width: 1.5,
+                height: "100%",
+                minHeight: 12,
+                borderRadius: 1,
+                background: "#d9d3cc",
               }}
             />
-          ) : null}
+          </div>
+          <div
+            data-testid="thought-body"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              color: "#78726a",
+              fontSize: 12,
+              lineHeight: 1.55,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {bodyText ? (
+              <span
+                key={thoughtDisplay ? "stream" : bodyText}
+                style={{ animation: thoughtDisplay ? undefined : "artshiftSlideFadeIn 0.3s ease" }}
+              >
+                {bodyText}
+              </span>
+            ) : null}
+            {generatingStatus ? (
+              <div style={{ marginTop: bodyText ? 4 : 0, color: "#a7a198" }}>
+                {generatingStatus}
+              </div>
+            ) : null}
+            {isLive && stage !== "generating" ? (
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 7,
+                  height: 13,
+                  marginLeft: 2,
+                  verticalAlign: "text-bottom",
+                  background: "#a7a198",
+                  animation: "artshiftWaveDot 1.2s ease-in-out infinite",
+                }}
+              />
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

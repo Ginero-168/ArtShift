@@ -91,6 +91,9 @@ describe("Creative Director route", () => {
     });
     const response = await POST(request(body, undefined, "text/event-stream"));
     expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(response.headers.get("x-accel-buffering")).toBe("no");
+    expect(response.headers.get("content-encoding")).toBe("none");
+    expect(response.headers.get("cache-control")).toContain("no-transform");
     const raw = await response.text();
     expect(raw).toContain("event: thought");
     expect(raw).toContain("สวัสดี");
