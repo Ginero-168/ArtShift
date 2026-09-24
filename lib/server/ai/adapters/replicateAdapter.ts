@@ -1,3 +1,8 @@
+import {
+  absorbModelDelta,
+  decodeReplicateOutputData,
+  drainSseBuffer,
+} from "@/lib/ai/orchestration/directorStream";
 import { REPLICATE_PREDICTION_CANCEL_AFTER } from "@/lib/ai/runtimeLimits";
 import type {
   AiAssistantChatInput,
@@ -144,7 +149,7 @@ type ReplicatePrediction = {
   status?: "starting" | "processing" | "succeeded" | "failed" | "canceled" | "aborted";
   output?: unknown;
   error?: unknown;
-  urls?: { get?: string; cancel?: string };
+  urls?: { get?: string; cancel?: string; stream?: string };
   metrics?: Record<string, unknown>;
 };
 
@@ -427,8 +432,34 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
           top_p: 1,
         };
 
-    const prediction = await this.createPrediction(model, predictionInput, request.signal);
-    const completed = await this.waitForPrediction(prediction, request.signal);
+    const wantsStream = typeof request.onTextDelta === "function";
+    const prediction = await this.createPrediction(
+      model,
+      predictionInput,
+      request.signal,
+      false,
+      wantsStream ? { stream: true, prefer: "respond-async" } : undefined,
+    );
+    let streamed = false;
+    if (
+      wantsStream &&
+      prediction.urls?.stream &&
+      isReplicateStreamUrl(prediction.urls.stream) &&
+      prediction.status !== "succeeded"
+    ) {
+      try {
+        await this.readReplicateOutputStream(prediction.urls.stream, request.signal, (delta) => {
+          streamed = true;
+          request.onTextDelta?.(delta);
+        });
+      } catch (error) {
+        if (request.signal.aborted) throw error;
+      }
+    }
+    const completed =
+      prediction.status === "succeeded"
+        ? prediction
+        : await this.waitForPrediction(prediction, request.signal);
     const raw = textFromUnknownOutput(completed.output).trim();
     if (!raw) {
       throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate returned an empty chat output.", {
@@ -436,7 +467,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       });
     }
     const parsed = parseReplicateAssistantOutput(raw, input.tools ?? []);
-    request.onTextDelta?.(parsed.output.text);
+    if (!streamed) request.onTextDelta?.(raw);
     const metrics = completed.metrics ?? {};
     return {
       output: parsed.output,
@@ -1179,7 +1210,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     input: Record<string, unknown>,
     signal: AbortSignal,
     safeErrors = false,
-    transport?: { prefer?: string; cancelAfter?: string; deployment?: string },
+    transport?: { prefer?: string; cancelAfter?: string; deployment?: string; stream?: boolean },
   ): Promise<ReplicatePrediction> {
     const deployment = transport?.deployment;
     const endpoint = deployment
@@ -1187,6 +1218,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
       : model.version
         ? "https://api.replicate.com/v1/predictions"
         : `https://api.replicate.com/v1/models/${model.slug}/predictions`;
+    const payload = deployment || !model.version ? { input } : { version: model.version, input };
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -1195,9 +1227,7 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
         Prefer: transport?.prefer ?? "wait=60",
         "Cancel-After": transport?.cancelAfter ?? REPLICATE_PREDICTION_CANCEL_AFTER,
       },
-      body: JSON.stringify(
-        deployment || !model.version ? { input } : { version: model.version, input },
-      ),
+      body: JSON.stringify(transport?.stream ? { ...payload, stream: true } : payload),
       signal,
     });
     if (safeErrors) await assertRecraftProviderResponse(response);
@@ -1305,6 +1335,64 @@ export class ReplicateAiAdapter implements AiProviderAdapter {
     } finally {
       signal.removeEventListener("abort", cancelRemote);
     }
+  }
+
+  private async readReplicateOutputStream(
+    streamUrl: string,
+    signal: AbortSignal,
+    onDelta: (delta: string) => void,
+  ): Promise<void> {
+    const response = await fetch(streamUrl, {
+      headers: {
+        Authorization: `Bearer ${this.apiToken}`,
+        Accept: "text/event-stream",
+      },
+      signal,
+    });
+    await assertProviderResponse(response, this.id);
+    if (!response.body) {
+      throw new AiRuntimeError("PROVIDER_SCHEMA", "Replicate omitted the prediction stream.", {
+        provider: this.id,
+      });
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let accumulated = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const drained = drainSseBuffer(buffer);
+      buffer = drained.rest;
+      for (const frame of drained.events) {
+        if (frame.event === "error") {
+          throw new AiRuntimeError("PROVIDER_UNAVAILABLE", "Replicate prediction stream failed.", {
+            provider: this.id,
+          });
+        }
+        if (frame.event !== "output") continue;
+        const chunk = decodeReplicateOutputData(frame.data);
+        const next = absorbModelDelta(accumulated, chunk);
+        const delta = next.startsWith(accumulated) ? next.slice(accumulated.length) : chunk;
+        accumulated = next;
+        if (delta) onDelta(delta);
+      }
+    }
+  }
+}
+
+function isReplicateStreamUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      (parsed.hostname === "stream.replicate.com" ||
+        parsed.hostname === "api.replicate.com" ||
+        parsed.hostname.endsWith(".replicate.com"))
+    );
+  } catch {
+    return false;
   }
 }
 

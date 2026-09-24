@@ -10,6 +10,7 @@ import {
   createChatTurnModels,
   DEFAULT_DIRECTOR_MODEL_ID,
   directorModelStep,
+  formatModelDisplayLabel,
   modelStepFromRuntime,
   visionModelStep,
 } from "@/lib/ai/chatModelAttribution";
@@ -173,7 +174,6 @@ export default function AICoPilotBar() {
     () => restoredChat?.pendingClarification ?? null,
   );
   const [liveAssistantState, setLiveAssistantState] = useState<LiveAssistantState | null>(null);
-  const [feedbackState, setFeedbackState] = useState<Record<string, "up" | "down">>({});
   const [promptRefinementData, setPromptRefinementData] = useState<PromptRefinementCardData | null>(
     null,
   );
@@ -197,13 +197,6 @@ export default function AICoPilotBar() {
   };
 
   const elementCount = (slide?.elements ?? []).filter((e) => !e.isDeleted).length;
-
-  const handleToggleFeedback = (messageId: string, type: "up" | "down") => {
-    setFeedbackState((prev) => ({
-      ...prev,
-      [messageId]: prev[messageId] === type ? undefined! : type,
-    }));
-  };
 
   const handleClearHistory = () => {
     setMessages([createDefaultGreeting()]);
@@ -583,6 +576,18 @@ export default function AICoPilotBar() {
     setStreamingText("");
     const controller = new AbortController();
     abortRef.current = controller;
+    const publishDirectorThought = (text: string) => {
+      const visible = text.trim();
+      if (!visible || controller.signal.aborted) return;
+      setLiveAssistantState((prev) => {
+        if (!prev || prev.stage === "generating") return prev;
+        return {
+          ...prev,
+          thought: visible,
+          stage: prev.stage === "outputting" ? "planning" : prev.stage,
+        };
+      });
+    };
 
     const userMsg: CoPilotMessage = {
       id: crypto.randomUUID(),
@@ -891,7 +896,11 @@ export default function AICoPilotBar() {
                   },
                   referenceAnalyses: analysesForTurn,
                 },
-                { signal: controller.signal, cloudConsent: consent },
+                {
+                  signal: controller.signal,
+                  cloudConsent: consent,
+                  onThoughtText: publishDirectorThought,
+                },
               ).catch((dirErr) => {
                 if (
                   (dirErr as Error).name !== "AbortError" &&
@@ -1069,7 +1078,7 @@ export default function AICoPilotBar() {
                   thought: thoughtText,
                   toolLabel: chainLabel,
                   requestedCount: count,
-                  statusMessage: `กำลังสร้างรูปภาพด้วย ${chainLabel}...`,
+                  statusMessage: `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(chainLabel)}...`,
                   prompt: rawPrompt,
                   isEdit: isEditTurn,
                   actions: [...actions],
@@ -1567,7 +1576,11 @@ export default function AICoPilotBar() {
               },
               referenceAnalyses: analysesForTurn,
             },
-            { signal: controller.signal, cloudConsent: remoteConsent },
+            {
+              signal: controller.signal,
+              cloudConsent: remoteConsent,
+              onThoughtText: publishDirectorThought,
+            },
           );
           turnModels.remember(directorModelStep(result.runtimeModel));
           setLiveAssistantState((prev) =>
@@ -1690,7 +1703,7 @@ export default function AICoPilotBar() {
               prompt: promptToSend,
               toolLabel: directedChain,
               statusMessage: directedChain
-                ? `กำลังสร้างรูปภาพด้วย ${directedChain}...`
+                ? `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(directedChain)}...`
                 : "กำลังสร้างรูปภาพ...",
               activeModels: turnModels.snapshot(),
             });
@@ -1925,49 +1938,8 @@ export default function AICoPilotBar() {
         liveAssistantState={liveAssistantState}
         streamingText={streamingText}
         currentActions={currentActions}
-        feedbackState={feedbackState}
         scrollRef={scrollRef}
         onSelectCanvasImage={handleSelectCanvasImage}
-        onSelectSuggestion={(sug, errorCard) => {
-          const isEditAction =
-            sug.startsWith("✏️") || /(?:ปรับแต่ง|ปรับปรุง|แก้ไขคำขอ|Edit prompt|แก้ brief)/i.test(sug);
-          const fallbackUserPrompt =
-            errorCard?.promptToEdit ||
-            messages
-              .slice()
-              .reverse()
-              .find((m) => m.role === "user")?.content ||
-            editorRef.current?.getValue() ||
-            input;
-          if (isEditAction) {
-            if (fallbackUserPrompt) {
-              setInput(fallbackUserPrompt);
-              editorRef.current?.setValue(fallbackUserPrompt);
-              editorRef.current?.focus();
-              setPromptRefinementData(createPromptRefinement(fallbackUserPrompt));
-              setPromptHelperPlanSource("baseline");
-              setPromptHelperRationale("");
-              setPromptHelperPlanError("");
-              if (ensureCloudConsent()) void requestPromptHelperPlan(fallbackUserPrompt);
-            }
-            return;
-          }
-          const isRetryAction =
-            sug.startsWith("🔄") || /(?:ลองสร้างใหม่อีกครั้ง|ลองใหม่อีกครั้ง|สร้างภาพที่เหลือใหม่)/i.test(sug);
-          if (isRetryAction) {
-            if (fallbackUserPrompt) {
-              handleSend(fallbackUserPrompt);
-              return;
-            }
-          }
-          if (sug.includes("ตรวจสอบภาพที่เลือกบน Canvas") || sug.includes("ตรวจสอบภาพที่เลือก")) {
-            handleSelectCanvasImage();
-            return;
-          }
-          if (sug.includes("ตรวจสอบการตั้งค่า API Token") || sug.startsWith("⚙️")) return;
-          handleSend(sug);
-        }}
-        onToggleFeedback={handleToggleFeedback}
         onClearHistory={handleClearHistory}
         onEditPromptFromError={(prompt) => {
           setInput(prompt);

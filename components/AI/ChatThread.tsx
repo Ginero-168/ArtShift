@@ -8,24 +8,18 @@ import {
   ImageSparkleIcon,
   SpinnerIcon,
   ThoughtBrainIcon,
-  ThumbsDownIcon,
-  ThumbsUpIcon,
   TrashIcon,
 } from "@/components/AI/ChatIcons";
 import { ChatResultImageThumb, ImageResultSummaryBlock } from "@/components/AI/ChatImageResult";
 import InlineTagRenderer from "@/components/AI/InlineTagRenderer";
+import { IconCamera } from "@/components/icons";
 import {
-  IconCamera,
-  IconLayoutGrid,
-  IconPenEdit,
-  IconRotate,
-  IconSettings,
-  IconSparkles,
-  IconUndo,
-  IconWand,
-} from "@/components/icons";
-import { type ChatModelStep, formatModelDisclosure } from "@/lib/ai/chatModelAttribution";
-import type { CoPilotErrorCard, CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
+  type ChatModelStep,
+  formatModelDisclosure,
+  formatModelDisplayLabel,
+  formatModelTechnicalTitle,
+} from "@/lib/ai/chatModelAttribution";
+import type { CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import {
@@ -57,17 +51,14 @@ export interface ChatThreadProps {
   liveAssistantState: LiveAssistantState | null;
   streamingText: string;
   currentActions: SubAgentActionLog[];
-  feedbackState: Record<string, "up" | "down">;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onSelectCanvasImage: (fileId?: string) => void;
-  onSelectSuggestion: (sug: string, errorCard?: CoPilotErrorCard) => void;
-  onToggleFeedback: (messageId: string, type: "up" | "down") => void;
   onClearHistory: () => void;
   onEditPromptFromError?: (prompt: string) => void;
   children?: React.ReactNode;
 }
 
-/** Same sparkle / spinner row image generation already uses for "using model X". */
+/** Readable model chip. Tooltip keeps the provider id for anyone who needs it. */
 export function ChatModelDisclosure({
   label,
   live = false,
@@ -76,30 +67,35 @@ export function ChatModelDisclosure({
   live?: boolean;
 }) {
   if (!label) return null;
+  const display = formatModelDisplayLabel(label);
+  const title = formatModelTechnicalTitle(label);
+  if (!display) return null;
   return (
     <div
       role={live ? "status" : undefined}
       aria-live={live ? "polite" : undefined}
       data-testid={live ? "chat-model-status" : "chat-model-meta"}
-      title={label}
+      title={title || display}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: live ? 6 : 5,
+        gap: 6,
         alignSelf: "flex-start",
-        padding: "2px 0",
-        marginLeft: 6,
-        color: "#78726a",
+        marginLeft: 2,
+        padding: "3px 9px 3px 6px",
+        borderRadius: 999,
+        background: "#f7f4ef",
+        border: "1px solid #e7e1d8",
+        color: "#5f5953",
         fontSize: 11.5,
         fontWeight: 600,
+        letterSpacing: "-0.01em",
+        lineHeight: 1.2,
       }}
     >
-      {live ? (
-        <SpinnerIcon style={{ color: "#78726a", width: 12, height: 12 }} />
-      ) : (
-        <ImageSparkleIcon style={{ color: "#78726a", width: 13, height: 13 }} />
-      )}
-      <span>{label}</span>
+      <ThoughtBrainIcon style={{ color: "#8a837a", width: 13, height: 13 }} />
+      {live ? <SpinnerIcon style={{ color: "#8a837a", width: 11, height: 11 }} /> : null}
+      <span>{display}</span>
     </div>
   );
 }
@@ -248,46 +244,6 @@ export function UserMessageImagePreviews({
   );
 }
 
-function renderSuggestionLabel(sug: string) {
-  let icon: React.ReactNode = null;
-  let text = sug;
-
-  if (sug.startsWith("✨")) {
-    icon = <IconSparkles size={12} color="#d64418" />;
-    text = sug.replace(/^✨\s*/, "");
-  } else if (sug.startsWith("🔄")) {
-    icon = <IconRotate size={12} color="#0284c7" />;
-    text = sug.replace(/^🔄\s*/, "");
-  } else if (
-    sug.startsWith("✏️") ||
-    sug.startsWith("✍️") ||
-    sug.startsWith("✍") ||
-    sug.startsWith("✏")
-  ) {
-    icon = <IconPenEdit size={12} color="#ea580c" />;
-    text = sug.replace(/^(?:✏️|✍️|✍|✏)\s*/, "");
-  } else if (sug.startsWith("📐")) {
-    icon = <IconLayoutGrid size={12} color="#059669" />;
-    text = sug.replace(/^📐\s*/, "");
-  } else if (sug.startsWith("↶")) {
-    icon = <IconUndo size={12} color="#78726a" />;
-    text = sug.replace(/^↶\s*/, "");
-  } else if (sug.startsWith("🧩")) {
-    icon = <IconWand size={12} color="#d64418" />;
-    text = sug.replace(/^🧩\s*/, "");
-  } else if (sug.startsWith("⚙️") || sug.startsWith("⚙")) {
-    icon = <IconSettings size={12} color="#78726a" />;
-    text = sug.replace(/^(?:⚙️|⚙)\s*/, "");
-  }
-
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-      {icon}
-      <span>{text}</span>
-    </span>
-  );
-}
-
 export function CollapsibleThought({
   thought,
   isLive = false,
@@ -318,11 +274,16 @@ export function CollapsibleThought({
   void prompt;
   void isEdit;
   void actions;
-  void stage;
+
+  const thoughtDisplay = React.useMemo(() => {
+    const cleaned = thought ? cleanTechnicalPromptText(thought) : "";
+    return cleaned.length > 0 ? cleaned : "";
+  }, [thought]);
+  const hasStreamThought = thoughtDisplay.length > 0;
 
   const messageList = React.useMemo(() => {
     if (customMessages && customMessages.length > 0) return customMessages;
-    if (isLive) {
+    if (isLive && !hasStreamThought && stage !== "generating" && stage !== "planning") {
       return [
         "กำลังอ่านคำขอ...",
         "กำลังจัดองค์ประกอบและโทนภาพ...",
@@ -331,9 +292,11 @@ export function CollapsibleThought({
       ];
     }
     return [];
-  }, [customMessages, isLive]);
+  }, [customMessages, hasStreamThought, isLive, stage]);
 
   const liveLine = React.useMemo(() => {
+    if (isLive && stage === "generating" && statusMessage) return statusMessage;
+    if (hasStreamThought) return "";
     if (
       statusMessage &&
       !statusMessage.startsWith("กำลังจัดเตรียม") &&
@@ -343,22 +306,15 @@ export function CollapsibleThought({
     }
     if (messageList.length === 0) return "";
     return messageList[messageIndex % messageList.length];
-  }, [statusMessage, messageList, messageIndex]);
+  }, [hasStreamThought, isLive, messageIndex, messageList, stage, statusMessage]);
 
   useEffect(() => {
-    if (!isLive || messageList.length === 0) return;
+    if (!isLive || hasStreamThought || stage === "generating" || messageList.length === 0) return;
     const interval = setInterval(() => {
       setMessageIndex((prev) => (prev + 1) % messageList.length);
     }, 2800);
     return () => clearInterval(interval);
-  }, [isLive, messageList.length]);
-
-  const thoughtDisplay = React.useMemo(() => {
-    const cleaned = thought ? cleanTechnicalPromptText(thought) : "";
-    if (cleaned && cleaned.length > 0) return cleaned;
-    if (isLive) return "กำลังคิดแนวทางสร้างภาพให้ตรงคำขอ...";
-    return "";
-  }, [thought, isLive]);
+  }, [hasStreamThought, isLive, messageList.length, stage]);
 
   if (!thoughtDisplay && !isLive && !toolLabel) return null;
 
@@ -472,6 +428,20 @@ export function CollapsibleThought({
           }}
         >
           {thoughtDisplay}
+          {isLive && stage !== "generating" ? (
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-block",
+                width: 7,
+                height: 13,
+                marginLeft: 2,
+                verticalAlign: "text-bottom",
+                background: "#a7a198",
+                animation: "artshiftWaveDot 1.2s ease-in-out infinite",
+              }}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -488,11 +458,8 @@ export default function ChatThread({
   liveAssistantState,
   streamingText,
   currentActions,
-  feedbackState,
   scrollRef,
   onSelectCanvasImage,
-  onSelectSuggestion,
-  onToggleFeedback,
   onClearHistory,
   onEditPromptFromError,
   children,
@@ -890,64 +857,6 @@ export default function ChatThread({
                 </div>
               )}
 
-              {/* Suggestion Chips */}
-              {msg.suggestions && msg.suggestions.length > 0 && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 6,
-                    marginTop: 8,
-                    marginBottom: 4,
-                  }}
-                >
-                  {msg.suggestions.map((sug, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => onSelectSuggestion(sug, msg.errorCard)}
-                      disabled={busy}
-                      style={{
-                        background: sug.startsWith("✨") ? "#fff0ea" : "#fcf9f5",
-                        border: `1px solid ${sug.startsWith("✨") ? "#ffc7b3" : "#ece7e0"}`,
-                        borderRadius: 20,
-                        padding: "5px 12px",
-                        fontSize: 11.5,
-                        color: sug.startsWith("✨") ? "#9b2500" : "#58534c",
-                        cursor: busy ? "default" : "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        transition: "all 0.15s ease",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!busy) {
-                          e.currentTarget.style.background = sug.startsWith("✨")
-                            ? "#ffe2d6"
-                            : "#f8f4ef";
-                          e.currentTarget.style.borderColor = sug.startsWith("✨")
-                            ? "#ff9f83"
-                            : "#d9d3cc";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!busy) {
-                          e.currentTarget.style.background = sug.startsWith("✨")
-                            ? "#fff0ea"
-                            : "#fcf9f5";
-                          e.currentTarget.style.borderColor = sug.startsWith("✨")
-                            ? "#ffc7b3"
-                            : "#ece7e0";
-                        }
-                      }}
-                    >
-                      {renderSuggestionLabel(sug)}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {/* Sub-agent Action logs (if any and not already structured) */}
               {!hasStructuredThought && msg.actions && msg.actions.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
@@ -997,94 +906,45 @@ export default function ChatThread({
                 </div>
               )}
 
-              {/* Feedback Thumbs */}
-              {hasStructuredThought && (
-                <div
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginTop: 2,
+                  alignSelf: "flex-start",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleCopyMessage(msg)}
+                  title={copiedMessageId === msg.id ? "คัดลอกแล้ว!" : "คัดลอกข้อความ"}
+                  aria-label="Copy assistant message"
+                  data-testid={`copy-assistant-message-${msg.id}`}
                   style={{
+                    background: "transparent",
+                    border: "none",
+                    color: copiedMessageId === msg.id ? "#10b981" : "#a7a198",
+                    cursor: "pointer",
+                    padding: 2,
                     display: "flex",
                     alignItems: "center",
-                    gap: 6,
-                    marginTop: 2,
-                    alignSelf: "flex-start",
+                    transition: "color 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#58534c";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#a7a198";
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onToggleFeedback(msg.id, "up")}
-                    title="คำตอบมีประโยชน์"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: feedbackState[msg.id] === "up" ? "#b52c00" : "#a7a198",
-                      cursor: "pointer",
-                      padding: 2,
-                      display: "flex",
-                      alignItems: "center",
-                      transition: "color 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#58534c";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (feedbackState[msg.id] !== "up") e.currentTarget.style.color = "#a7a198";
-                    }}
-                  >
-                    <ThumbsUpIcon />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleFeedback(msg.id, "down")}
-                    title="คำตอบยังไม่ตรงใจ"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: feedbackState[msg.id] === "down" ? "#dc2626" : "#a7a198",
-                      cursor: "pointer",
-                      padding: 2,
-                      display: "flex",
-                      alignItems: "center",
-                      transition: "color 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#58534c";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (feedbackState[msg.id] !== "down") e.currentTarget.style.color = "#a7a198";
-                    }}
-                  >
-                    <ThumbsDownIcon />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyMessage(msg)}
-                    title={copiedMessageId === msg.id ? "คัดลอกแล้ว!" : "คัดลอกข้อความ"}
-                    aria-label="Copy assistant message"
-                    data-testid={`copy-assistant-message-${msg.id}`}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: copiedMessageId === msg.id ? "#10b981" : "#a7a198",
-                      cursor: "pointer",
-                      padding: 2,
-                      display: "flex",
-                      alignItems: "center",
-                      transition: "color 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#58534c";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (copiedMessageId !== msg.id) e.currentTarget.style.color = "#a7a198";
-                    }}
-                  >
-                    {copiedMessageId === msg.id ? (
-                      <CheckIcon style={{ width: 13, height: 13 }} />
-                    ) : (
-                      <ChatCopyIcon size={13} />
-                    )}
-                  </button>
-                </div>
-              )}
+                  {copiedMessageId === msg.id ? (
+                    <CheckIcon style={{ width: 13, height: 13 }} />
+                  ) : (
+                    <ChatCopyIcon size={13} />
+                  )}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -1124,12 +984,7 @@ export default function ChatThread({
           >
             {/* Collapsible Thought block */}
             <CollapsibleThought
-              thought={
-                liveAssistantState.thought ||
-                (liveAssistantState.stage === "outputting"
-                  ? "กำลังจัดเตรียมผลลัพธ์..."
-                  : "กำลังคิดแนวทางสร้างภาพให้ตรงคำขอ...")
-              }
+              thought={liveAssistantState.thought || ""}
               isLive={true}
               defaultOpen={true}
               statusMessage={liveAssistantState.statusMessage}

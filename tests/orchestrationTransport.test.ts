@@ -259,6 +259,49 @@ describe("ORCH-01: Orchestration Transport & Normalization", () => {
     }
   });
 
+  it("grows thought text from the director event stream before resolving the plan", async () => {
+    const encoder = new TextEncoder();
+    const frames = [
+      'event: thought\ndata: {"text":"สวัสดี"}\n\n',
+      'event: thought\ndata: {"text":"สวัสดีครับ"}\n\n',
+      'event: done\ndata: {"direction":{"kind":"answer","text":"สวัสดีครับ"},"model":"google/gemini-3-flash"}\n\n',
+    ];
+    let index = 0;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "text/event-stream; charset=utf-8" }),
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (index >= frames.length) return { done: true, value: undefined };
+            const value = encoder.encode(frames[index]);
+            index += 1;
+            return { done: false, value };
+          },
+        }),
+      },
+    });
+    const thoughts: string[] = [];
+    const result = await prepareRemoteOrchestratorTurn(
+      {
+        prompt: "สวัสดี",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1920, height: 1080 },
+        referenceAnalyses: [],
+      },
+      { cloudConsent: true, onThoughtText: (text) => thoughts.push(text) },
+    );
+    expect(thoughts).toEqual(["สวัสดี", "สวัสดีครับ"]);
+    expect(result).toMatchObject({
+      kind: "answer",
+      text: "สวัสดีครับ",
+      runtimeModel: "google/gemini-3-flash",
+    });
+    const request = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as RequestInit;
+    expect((request.headers as Record<string, string>).accept).toBe("text/event-stream");
+  });
+
   it("throws clear error when HTTP response is not ok", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
