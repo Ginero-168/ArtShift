@@ -118,7 +118,7 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
       style={{
         padding: 10,
         background: "var(--surface-solid, #fff)",
-        border: "1px solid var(--stroke, #e5e7eb)",
+        border: "1px solid var(--stroke, #eae6e1)",
         borderRadius: 8,
         boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
         fontSize: 11,
@@ -138,7 +138,7 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
         <button
           onClick={handleRemoveBg}
           disabled={bgBusy}
-          style={{ ...btnStyle, background: "#7c3aed", color: "#fff" }}
+          style={{ ...btnStyle, background: "#b52c00", color: "#fff" }}
         >
           {bgBusy ? `Remove BG${bgProgress === null ? "..." : ` ${bgProgress}%`}` : "Remove BG"}
         </button>
@@ -148,8 +148,8 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
         <div
           style={{
             fontSize: 11,
-            color: "#374151",
-            background: "#f3f4f6",
+            color: "#43403b",
+            background: "#f6f4f0",
             padding: 6,
             borderRadius: 4,
             marginBottom: 8,
@@ -161,7 +161,7 @@ export default function AIImageTools({ style }: { style?: React.CSSProperties })
         </div>
       )}
 
-      <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>Color Adjustments</div>
+      <div style={{ fontWeight: 600, color: "#76716c", marginBottom: 4 }}>Color Adjustments</div>
       {(
         [
           ["exposure", -100, 100],
@@ -193,7 +193,7 @@ const btnStyle: React.CSSProperties = {
   fontSize: 11,
   padding: "4px 8px",
   borderRadius: 4,
-  border: "1px solid #d1d5db",
+  border: "1px solid #d9d4cf",
   background: "#fff",
   cursor: "pointer",
 };

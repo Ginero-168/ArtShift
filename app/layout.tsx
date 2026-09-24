@@ -4,8 +4,8 @@ import "./globals.css";
 import "./excalidraw-thai.css";
 
 export const metadata: Metadata = {
-  title: "ArtShift",
-  description: "Local-first artwork editor for book campaigns",
+  title: "ArtShift — สตูดิโอออกแบบงานแคมเปญหนังสือ",
+  description: "Campaign artwork studio for book publishing. Local-first, made for designers.",
   manifest: "/manifest.json",
   icons: { icon: "/icon.svg" },
 };
@@ -15,6 +15,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#1a1714",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

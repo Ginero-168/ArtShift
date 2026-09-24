@@ -810,7 +810,7 @@ export default function Transformer({
         <polyline
           points={lineScreenPts.map((p) => `${p.x},${p.y}`).join(" ")}
           fill="none"
-          stroke="var(--accent, #4f46e5)"
+          stroke="var(--selection, #b52c00)"
           strokeWidth={1}
           strokeOpacity={0.6}
           vectorEffect="non-scaling-stroke"
@@ -818,8 +818,8 @@ export default function Transformer({
       ) : outlineCorners ? (
         <polygon
           points={outlineCorners.map((p) => `${p.x},${p.y}`).join(" ")}
-          fill="rgba(99, 102, 241, 0.001)"
-          stroke="var(--accent, #4f46e5)"
+          fill="rgba(214, 68, 24, 0.001)"
+          stroke="var(--selection, #b52c00)"
           strokeWidth={1}
           shapeRendering="crispEdges"
           vectorEffect="non-scaling-stroke"
@@ -844,8 +844,8 @@ export default function Transformer({
             width={48}
             height={22}
             rx={4}
-            fill="#0f172a"
-            stroke="var(--accent, #4f46e5)"
+            fill="#1a1714"
+            stroke="var(--selection, #b52c00)"
             strokeWidth={1}
             filter="drop-shadow(0 2px 6px rgba(0,0,0,0.3))"
           />
@@ -909,12 +909,12 @@ export default function Transformer({
                   r={r}
                   fill={
                     active === h.id
-                      ? "var(--accent, #4f46e5)"
+                      ? "var(--selection, #b52c00)"
                       : isMidHandle
-                        ? "var(--accent-soft, #c7d2fe)"
+                        ? "var(--selection-soft, #ffc7b3)"
                         : "var(--surface-solid, #fff)"
                   }
-                  stroke={h.bound ? "#16a34a" : "var(--accent, #4f46e5)"}
+                  stroke={h.bound ? "#16a34a" : "var(--selection, #b52c00)"}
                   strokeWidth={1}
                   onPointerDown={onPointerDown(h.id)}
                   onPointerMove={onPointerMove}
@@ -944,8 +944,10 @@ export default function Transformer({
                   width={HANDLE}
                   height={HANDLE}
                   rx={0}
-                  fill={active === h.id ? "var(--accent, #4f46e5)" : "var(--surface-solid, #fff)"}
-                  stroke="var(--accent, #4f46e5)"
+                  fill={
+                    active === h.id ? "var(--selection, #b52c00)" : "var(--surface-solid, #fff)"
+                  }
+                  stroke="var(--selection, #b52c00)"
                   strokeWidth={1}
                   shapeRendering="crispEdges"
                   onPointerDown={onPointerDown(h.id)}

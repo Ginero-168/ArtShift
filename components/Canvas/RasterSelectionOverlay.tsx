@@ -87,8 +87,8 @@ function SelectionOperationPreview({
   );
   const points = screenPoints.map((point) => `${point.x},${point.y}`).join(" ");
   const isSubtract = operation.mode === "subtract";
-  const stroke = isSubtract ? "#ef4444" : "#2563eb";
-  const fill = isSubtract ? "rgba(239,68,68,0.08)" : "rgba(37,99,235,0.14)";
+  const stroke = isSubtract ? "#ef4444" : "#ca3701";
+  const fill = isSubtract ? "rgba(239,68,68,0.08)" : "rgba(202, 55, 1, 0.14)";
 
   if (operation.shape.kind === "bitmap") {
     const p0 = worldToScreen(imageLocalToWorld(image, [0, 0]));

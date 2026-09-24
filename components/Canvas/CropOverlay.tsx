@@ -144,7 +144,7 @@ export default function CropOverlay({ element, worldToScreen, scale }: Props) {
         top: tl.y,
         width: w,
         height: h,
-        outline: "2px solid #3b82f6",
+        outline: "2px solid #e7542b",
         pointerEvents: "none",
         zIndex: 10,
         transform: `rotate(${element.angle}rad)`,
@@ -243,7 +243,7 @@ export default function CropOverlay({ element, worldToScreen, scale }: Props) {
             setCroppingImageId(null);
           }}
           style={{
-            background: "#3b82f6",
+            background: "#e7542b",
             color: "white",
             padding: "4px 12px",
             borderRadius: 4,
@@ -289,7 +289,7 @@ function Handle({
         width: HANDLE_SIZE,
         height: HANDLE_SIZE,
         background: "white",
-        border: "1px solid #3b82f6",
+        border: "1px solid #e7542b",
         borderRadius: edge.includes("-") ? "50%" : 2, // circles for corners, squares for edges
         cursor,
         pointerEvents: "auto",

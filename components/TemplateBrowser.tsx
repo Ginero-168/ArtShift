@@ -185,7 +185,7 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
         width: 360,
         maxHeight: "70vh",
         background: "var(--surface-solid, #fff)",
-        border: "1px solid var(--stroke, #e5e7eb)",
+        border: "1px solid var(--stroke, #eae6e1)",
         borderRadius: 12,
         boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
         padding: 16,
@@ -213,7 +213,7 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
         style={{
           padding: "6px 10px",
           borderRadius: 6,
-          border: "1px solid var(--stroke, #e5e7eb)",
+          border: "1px solid var(--stroke, #eae6e1)",
           fontSize: 12,
           outline: "none",
         }}
@@ -229,7 +229,7 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
               borderRadius: 12,
               border: "none",
               background:
-                category === c ? "var(--accent, #6366f1)" : "var(--surface-hover, #f3f4f6)",
+                category === c ? "var(--accent, #d64418)" : "var(--surface-hover, #f6f4f0)",
               color: category === c ? "#fff" : "var(--ink, #111)",
               fontSize: 10,
               cursor: "pointer",
@@ -254,8 +254,8 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
             style={{
               minHeight: 32,
               borderRadius: 7,
-              border: `1px solid ${mode === value ? "var(--accent, #6366f1)" : "var(--stroke, #e5e7eb)"}`,
-              background: mode === value ? "#eef2ff" : "transparent",
+              border: `1px solid ${mode === value ? "var(--accent, #d64418)" : "var(--stroke, #eae6e1)"}`,
+              background: mode === value ? "#fff0ea" : "transparent",
               color: "var(--ink, #111)",
               fontSize: 11,
               fontWeight: 600,
@@ -266,7 +266,7 @@ export default function TemplateBrowser({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
-      <p style={{ margin: 0, color: "#64748b", fontSize: 10, lineHeight: 1.4 }}>
+      <p style={{ margin: 0, color: "#78726a", fontSize: 10, lineHeight: 1.4 }}>
         {mode === "replace"
           ? "Replaces the current artwork in one undoable action."
           : "Keeps the artwork and adds the template as a Free layer."}
@@ -348,7 +348,7 @@ function TemplateThumb({
         gap: 4,
         padding: 6,
         borderRadius: 8,
-        border: "1px solid var(--stroke, #e5e7eb)",
+        border: "1px solid var(--stroke, #eae6e1)",
         background: "var(--surface-solid, #fff)",
         cursor: disabled ? "wait" : "pointer",
         opacity: disabled && !status ? 0.55 : 1,

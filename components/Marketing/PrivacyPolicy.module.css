@@ -1,10 +1,8 @@
 .page {
   min-height: 100dvh;
-  color: #f8fafc;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, #1e1b4b 0%, transparent 58%),
-    #070a12;
-  font-family: var(--font-sans, "Sarabun", "Noto Sans Thai", system-ui, sans-serif);
+  color: var(--brand-ink, #1a1714);
+  background: var(--brand-paper, #f4f0e8);
+  font-family: var(--font-sans);
 }
 
 .skip {
@@ -13,9 +11,8 @@
   top: 0.75rem;
   z-index: 40;
   padding: 0.5rem 0.85rem;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--brand-ink, #1a1714);
+  color: var(--brand-paper, #f4f0e8);
   font-size: 0.875rem;
   font-weight: 700;
   text-decoration: none;
@@ -33,7 +30,7 @@
   gap: 1rem;
   min-height: 4rem;
   padding: 0.75rem clamp(1rem, 4vw, 2.5rem);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--brand-line, rgba(26, 23, 20, 0.12));
 }
 
 .brand {
@@ -43,60 +40,68 @@
 
 .nav {
   display: flex;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .nav a {
-  color: #94a3b8;
+  color: var(--brand-ink-soft, #443f39);
   font-size: 0.875rem;
   text-decoration: none;
 }
 
 .nav a:hover {
-  color: #f8fafc;
+  color: var(--brand-ink, #1a1714);
 }
 
 .main {
   width: min(42rem, calc(100% - 2rem));
   margin-inline: auto;
-  padding-block: 2.5rem 4rem;
+  padding-block: 3rem 5rem;
 }
 
 .kicker {
-  margin: 0 0 0.5rem;
-  color: #a5b4fc;
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
+  margin: 0 0 0.75rem;
+  color: var(--brand-muted, #78726a);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .main h1 {
-  margin: 0 0 1rem;
-  font-size: clamp(2rem, 4vw, 2.6rem);
+  margin: 0 0 1.5rem;
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 7vw, 4.5rem);
+  font-weight: 400;
   letter-spacing: -0.03em;
+  line-height: 1;
   text-wrap: balance;
 }
 
 .main h2 {
-  margin: 2rem 0 0.6rem;
+  margin: 2.5rem 0 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--brand-ink, #1a1714);
   font-size: 1.15rem;
+  font-weight: 600;
   text-wrap: balance;
 }
 
 .lead,
 .main p {
-  margin: 0 0 0.75rem;
-  color: #e2e8f0;
+  margin: 0 0 0.85rem;
+  color: var(--brand-ink-soft, #443f39);
   font-size: 1rem;
-  line-height: 1.65;
+  line-height: 1.75;
   text-wrap: pretty;
 }
 
 .english {
-  color: #94a3b8;
+  color: var(--brand-muted, #78726a);
   font-size: 0.95rem;
 }
 
 .page :focus-visible {
-  outline: 2px solid #a5b4fc;
+  outline: 2px solid var(--brand-ink, #1a1714);
   outline-offset: 3px;
 }

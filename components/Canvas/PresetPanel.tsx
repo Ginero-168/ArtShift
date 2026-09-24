@@ -60,7 +60,7 @@ export default function PresetPanel({ onClose }: Props) {
         maxHeight: "calc(100vh - 120px)",
         overflowY: "auto",
         background: "var(--surface-solid, #fff)",
-        border: "1px solid var(--stroke, #e5e7eb)",
+        border: "1px solid var(--stroke, #eae6e1)",
         borderRadius: 10,
         boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
         padding: 12,
@@ -76,7 +76,7 @@ export default function PresetPanel({ onClose }: Props) {
           alignItems: "center",
           marginBottom: 10,
           paddingBottom: 8,
-          borderBottom: "1px solid var(--stroke, #e5e7eb)",
+          borderBottom: "1px solid var(--stroke, #eae6e1)",
         }}
       >
         <span
@@ -92,7 +92,7 @@ export default function PresetPanel({ onClose }: Props) {
           <IconStar size={13} color="#f59e0b" fill="#f59e0b" />
           <span>My Presets</span>
         </span>
-        <span style={{ fontSize: 10, color: "var(--ink-muted, #9ca3af)" }}>
+        <span style={{ fontSize: 10, color: "var(--ink-muted, #a6a29c)" }}>
           {presets.length} saved
         </span>
       </div>
@@ -148,11 +148,11 @@ export default function PresetPanel({ onClose }: Props) {
           style={{
             padding: "2px 8px",
             borderRadius: 12,
-            border: "1px dashed var(--stroke, #d1d5db)",
+            border: "1px dashed var(--stroke, #d9d4cf)",
             background: "transparent",
             cursor: "pointer",
             fontSize: 10,
-            color: "var(--ink-muted, #6b7280)",
+            color: "var(--ink-muted, #76716c)",
           }}
           title="Create folder"
         >
@@ -170,7 +170,7 @@ export default function PresetPanel({ onClose }: Props) {
             marginBottom: 8,
           }}
         >
-          <span style={{ fontSize: 10, color: "var(--ink-muted, #9ca3af)" }}>
+          <span style={{ fontSize: 10, color: "var(--ink-muted, #a6a29c)" }}>
             {folders.find((f) => f.id === activeFolderId)?.name}
           </span>
           <select
@@ -181,7 +181,7 @@ export default function PresetPanel({ onClose }: Props) {
                 e.target.value === "root" ? null : e.target.value,
               )
             }
-            style={{ fontSize: 10, borderRadius: 4, border: "1px solid var(--stroke, #e5e7eb)" }}
+            style={{ fontSize: 10, borderRadius: 4, border: "1px solid var(--stroke, #eae6e1)" }}
           >
             <option value="root">Move to Unsorted</option>
             {folders
@@ -199,7 +199,7 @@ export default function PresetPanel({ onClose }: Props) {
         <div
           style={{
             textAlign: "center",
-            color: "var(--ink-muted, #9ca3af)",
+            color: "var(--ink-muted, #a6a29c)",
             padding: "24px 0",
           }}
         >
@@ -288,9 +288,9 @@ function FolderTab({
           padding: "2px 8px",
           borderRadius: 12,
           border: "1px solid",
-          borderColor: active ? "var(--accent, #6366f1)" : "var(--stroke, #e5e7eb)",
-          background: active ? "var(--accent-light, #eef2ff)" : "var(--surface, #f9fafb)",
-          color: active ? "var(--accent, #6366f1)" : "var(--ink, #111)",
+          borderColor: active ? "var(--accent, #d64418)" : "var(--stroke, #eae6e1)",
+          background: active ? "var(--accent-light, #fff0ea)" : "var(--surface, #fcfaf6)",
+          color: active ? "var(--accent, #d64418)" : "var(--ink, #111)",
           cursor: "pointer",
           fontSize: 10,
           display: "flex",
@@ -309,7 +309,7 @@ function FolderTab({
             left: 0,
             zIndex: 30,
             background: "var(--surface-solid, #fff)",
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             borderRadius: 6,
             boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
             padding: "2px 0",
@@ -488,14 +488,14 @@ function PresetCard({
         style={{
           width: "100%",
           aspectRatio: "1",
-          border: "1px solid var(--stroke, #e5e7eb)",
+          border: "1px solid var(--stroke, #eae6e1)",
           borderRadius: 6,
           overflow: "hidden",
           cursor: "pointer",
           background: "#fafafa",
           padding: 0,
           transition: "all 0.15s ease",
-          outline: hovered ? "2px solid var(--accent, #6366f1)" : "none",
+          outline: hovered ? "2px solid var(--accent, #d64418)" : "none",
           outlineOffset: -1,
         }}
       >
@@ -506,7 +506,7 @@ function PresetCard({
       <div
         style={{
           fontSize: 9,
-          color: "var(--ink-muted, #6b7280)",
+          color: "var(--ink-muted, #76716c)",
           textAlign: "center",
           marginTop: 3,
           overflow: "hidden",
@@ -569,14 +569,14 @@ function PresetCard({
             right: 2,
             zIndex: 30,
             background: "var(--surface-solid, #fff)",
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             borderRadius: 6,
             boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
             padding: "2px 0",
             minWidth: 120,
           }}
         >
-          <div style={{ padding: "2px 8px", fontSize: 9, color: "#9ca3af" }}>Move to</div>
+          <div style={{ padding: "2px 8px", fontSize: 9, color: "#a6a29c" }}>Move to</div>
           {(activeFolderId !== "root" || activeFolderId === null) && (
             <button
               onClick={() => {

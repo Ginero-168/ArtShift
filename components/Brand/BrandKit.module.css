@@ -14,10 +14,10 @@
   width: 100%;
   max-width: 780px;
   max-height: 90vh;
-  background-color: var(--surface-solid, #18181b);
+  background-color: var(--surface-solid, #1a1816);
   color: var(--ink, #fafafa);
   border-radius: 14px;
-  border: 1px solid var(--stroke, #27272a);
+  border: 1px solid var(--stroke, #292725);
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
@@ -26,7 +26,7 @@
 
 .header {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--stroke, #27272a);
+  border-bottom: 1px solid var(--stroke, #292725);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -44,13 +44,13 @@
 .subtitle {
   margin: 4px 0 0;
   font-size: 0.8rem;
-  color: #a1a1aa;
+  color: #a4a19e;
 }
 
 .closeBtn {
   background: transparent;
   border: none;
-  color: #a1a1aa;
+  color: #a4a19e;
   font-size: 1.25rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -78,7 +78,7 @@
 }
 
 .presetCard {
-  border: 1px solid var(--stroke, #3f3f46);
+  border: 1px solid var(--stroke, #423f3c);
   border-radius: 8px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.02);
@@ -88,8 +88,8 @@
 }
 
 .presetCardActive {
-  border-color: var(--accent, #6366f1);
-  background: rgba(99, 102, 241, 0.08);
+  border-color: var(--accent, #d64418);
+  background: rgba(214, 68, 24, 0.08);
 }
 
 .presetName {
@@ -108,7 +108,7 @@
 
 .section {
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--stroke, #27272a);
+  border: 1px solid var(--stroke, #292725);
   border-radius: 10px;
   padding: 16px;
 }
@@ -117,7 +117,7 @@
   margin: 0 0 12px;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #e4e4e7;
+  color: #e6e4e1;
 }
 
 .row {
@@ -136,13 +136,13 @@
 .label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #a1a1aa;
+  color: #a4a19e;
 }
 
 .input {
   padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid var(--stroke, #3f3f46);
+  border: 1px solid var(--stroke, #423f3c);
   background: rgba(0, 0, 0, 0.25);
   color: #fafafa;
   font-size: 0.85rem;
@@ -150,7 +150,7 @@
 }
 
 .input:focus {
-  border-color: var(--accent, #6366f1);
+  border-color: var(--accent, #d64418);
 }
 
 .colorPickerRow {
@@ -180,13 +180,13 @@
   align-items: center;
   gap: 10px;
   font-size: 0.8rem;
-  color: #e4e4e7;
+  color: #e6e4e1;
   cursor: pointer;
 }
 
 .footer {
   padding: 14px 20px;
-  border-top: 1px solid var(--stroke, #27272a);
+  border-top: 1px solid var(--stroke, #292725);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -197,7 +197,7 @@
   padding: 8px 16px;
   border-radius: 6px;
   border: none;
-  background: var(--accent, #6366f1);
+  background: var(--accent, #d64418);
   color: #fff;
   font-size: 0.85rem;
   font-weight: 600;

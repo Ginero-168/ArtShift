@@ -1,11 +1,11 @@
 {
   "name": "ArtShift",
   "short_name": "ArtShift",
-  "description": "AI-Powered Slide & Design Studio",
+  "description": "Campaign artwork studio for book publishing",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f0f14",
-  "theme_color": "#7c3aed",
+  "background_color": "#f4f0e8",
+  "theme_color": "#1a1714",
   "orientation": "landscape",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }

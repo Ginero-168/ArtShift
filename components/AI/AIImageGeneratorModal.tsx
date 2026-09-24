@@ -42,7 +42,7 @@ function renderStyleIcon(id: ImageStyleId) {
     case "anime":
       return <IconFlower size={14} color="#ec4899" />;
     default:
-      return <IconPalette size={14} color="#6366f1" />;
+      return <IconPalette size={14} color="#d64418" />;
   }
 }
 
@@ -185,7 +185,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
       style={{
         position: "fixed",
         inset: 0,
-        backgroundColor: "rgba(15, 23, 42, 0.75)",
+        backgroundColor: "rgba(26, 23, 20, 0.75)",
         backdropFilter: "blur(6px)",
         zIndex: 9999,
         display: "flex",
@@ -211,18 +211,18 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          border: "1px solid #e2e8f0",
+          border: "1px solid #ece7e0",
         }}
       >
         {/* Modal Header */}
         <div
           style={{
             padding: "16px 24px",
-            borderBottom: "1px solid #f1f5f9",
+            borderBottom: "1px solid #f8f4ef",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
+            background: "#f4f0e8",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -231,22 +231,22 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 width: 32,
                 height: 32,
                 borderRadius: 8,
-                background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)",
+                background: "#1a1714",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#fff",
                 fontSize: 16,
-                boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
+                boxShadow: "0 2px 8px rgba(214, 68, 24, 0.3)",
               }}
             >
               <IconSparkles size={16} color="#ffffff" />
             </div>
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", margin: 0 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a1714", margin: 0 }}>
                 AI Image Studio (Text-to-Image)
               </h2>
-              <p style={{ fontSize: 11, color: "#64748b", margin: 0, marginTop: 2 }}>
+              <p style={{ fontSize: 11, color: "#78726a", margin: 0, marginTop: 2 }}>
                 Replicate · openai/gpt-image-2.5-sunburst · Tier 1 (Low) / Tier 2 (Med) / Tier 3
                 (High)
               </p>
@@ -259,7 +259,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
             style={{
               background: "transparent",
               border: "none",
-              color: "#94a3b8",
+              color: "#a7a198",
               cursor: "pointer",
               padding: "4px 8px",
               borderRadius: 6,
@@ -268,7 +268,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
               justifyContent: "center",
             }}
           >
-            <IconClose size={18} color="#64748b" />
+            <IconClose size={18} color="#78726a" />
           </button>
         </div>
 
@@ -284,7 +284,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
           <div
             style={{
               padding: "20px 24px",
-              borderRight: "1px solid #f1f5f9",
+              borderRight: "1px solid #f8f4ef",
               display: "flex",
               flexDirection: "column",
               gap: 16,
@@ -302,7 +302,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
               >
                 <label
                   htmlFor="ai-prompt-input"
-                  style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}
+                  style={{ fontSize: 12, fontWeight: 700, color: "#2c2824" }}
                 >
                   Prompt Description
                 </label>
@@ -312,7 +312,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#6366f1",
+                    color: "#d64418",
                     fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -321,7 +321,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                     gap: 4,
                   }}
                 >
-                  <IconDice size={13} color="#6366f1" />
+                  <IconDice size={13} color="#d64418" />
                   <span>Inspire Me</span>
                 </button>
               </div>
@@ -336,7 +336,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                   width: "100%",
                   padding: "10px 12px",
                   borderRadius: 8,
-                  border: "1px solid #cbd5e1",
+                  border: "1px solid #d9d3cc",
                   fontSize: 12,
                   lineHeight: 1.5,
                   outline: "none",
@@ -352,7 +352,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 style={{
                   fontSize: 12,
                   fontWeight: 700,
-                  color: "#1e293b",
+                  color: "#2c2824",
                   display: "block",
                   marginBottom: 6,
                 }}
@@ -370,8 +370,8 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                       style={{
                         padding: "8px 10px",
                         borderRadius: 8,
-                        border: active ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
-                        background: active ? "#eef2ff" : "#fff",
+                        border: active ? "1.5px solid #d64418" : "1px solid #ece7e0",
+                        background: active ? "#fff0ea" : "#fff",
                         cursor: "pointer",
                         textAlign: "left",
                         display: "flex",
@@ -384,11 +384,11 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                         <span style={{ display: "inline-flex", alignItems: "center" }}>
                           {renderStyleIcon(style.id)}
                         </span>
-                        <strong style={{ fontSize: 11, color: active ? "#4338ca" : "#1e293b" }}>
+                        <strong style={{ fontSize: 11, color: active ? "#9b2500" : "#2c2824" }}>
                           {style.label}
                         </strong>
                       </div>
-                      <span style={{ fontSize: 9.5, color: "#64748b" }}>{style.description}</span>
+                      <span style={{ fontSize: 9.5, color: "#78726a" }}>{style.description}</span>
                     </button>
                   );
                 })}
@@ -401,7 +401,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 style={{
                   fontSize: 12,
                   fontWeight: 700,
-                  color: "#1e293b",
+                  color: "#2c2824",
                   display: "block",
                   marginBottom: 6,
                 }}
@@ -420,9 +420,9 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                         flex: 1,
                         padding: "6px 4px",
                         borderRadius: 6,
-                        border: active ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
-                        background: active ? "#6366f1" : "#f8fafc",
-                        color: active ? "#fff" : "#475569",
+                        border: active ? "1.5px solid #d64418" : "1px solid #ece7e0",
+                        background: active ? "#d64418" : "#fcf9f5",
+                        color: active ? "#fff" : "#58534c",
                         cursor: "pointer",
                         fontSize: 10,
                         fontWeight: 600,
@@ -447,7 +447,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 style={{
                   fontSize: 12,
                   fontWeight: 700,
-                  color: "#1e293b",
+                  color: "#2c2824",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -455,7 +455,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 }}
               >
                 <span>Image Quality</span>
-                <span style={{ fontSize: 10, color: "#6366f1", fontWeight: 600 }}>
+                <span style={{ fontSize: 10, color: "#d64418", fontWeight: 600 }}>
                   Sunburst Only
                 </span>
               </div>
@@ -470,9 +470,9 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                       style={{
                         padding: "6px 8px",
                         borderRadius: 6,
-                        border: active ? `1.5px solid ${opt.accentColor}` : "1px solid #e2e8f0",
-                        background: active ? "#f8fafc" : "#fff",
-                        color: active ? opt.accentColor : "#475569",
+                        border: active ? `1.5px solid ${opt.accentColor}` : "1px solid #ece7e0",
+                        background: active ? "#fcf9f5" : "#fff",
+                        color: active ? opt.accentColor : "#58534c",
                         cursor: "pointer",
                         fontSize: 10,
                         fontWeight: 600,
@@ -491,7 +491,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                           {opt.id.toUpperCase()}
                         </span>
                       </div>
-                      <span style={{ fontSize: 8.5, color: "#64748b" }}>{opt.price}</span>
+                      <span style={{ fontSize: 8.5, color: "#78726a" }}>{opt.price}</span>
                     </button>
                   );
                 })}
@@ -505,18 +505,18 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "8px 12px",
-                background: "#f8fafc",
+                background: "#fcf9f5",
                 borderRadius: 8,
-                border: "1px solid #e2e8f0",
+                border: "1px solid #ece7e0",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <IconSparkles size={14} color="#6366f1" />
+                <IconSparkles size={14} color="#d64418" />
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#1e293b" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#2c2824" }}>
                     AI Prompt Magic
                   </div>
-                  <div style={{ fontSize: 9.5, color: "#64748b" }}>
+                  <div style={{ fontSize: 9.5, color: "#78726a" }}>
                     Auto-enhance details, lighting & composition
                   </div>
                 </div>
@@ -553,12 +553,12 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 padding: "11px 16px",
                 borderRadius: 8,
                 border: "none",
-                background: "linear-gradient(135deg, #6366f1 0%, #9333ea 100%)",
+                background: "#1a1714",
                 color: "#fff",
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: loading ? "wait" : "pointer",
-                boxShadow: "0 4px 12px rgba(99, 102, 241, 0.35)",
+                boxShadow: "0 4px 12px rgba(214, 68, 24, 0.35)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -586,7 +586,7 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
             style={{
               display: "flex",
               flexDirection: "column",
-              background: "#0f172a",
+              background: "#1a1714",
               borderRadius: 12,
               padding: 16,
               color: "#fff",
@@ -600,12 +600,12 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
             {loading ? (
               <div style={{ textAlign: "center", padding: 20 }}>
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-                  <IconPalette size={38} color="#6366f1" />
+                  <IconPalette size={38} color="#d64418" />
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#ece7e0" }}>
                   Creating your masterpiece...
                 </div>
-                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: "#a7a198", marginTop: 4 }}>
                   The context-aware task is analyzing, generating, and placing the result safely.
                 </div>
               </div>
@@ -620,14 +620,14 @@ export default function AIImageGeneratorModal({ isOpen, onClose }: Props) {
                 </div>
               </div>
             ) : (
-              <div style={{ textAlign: "center", color: "#64748b", padding: 20 }}>
+              <div style={{ textAlign: "center", color: "#78726a", padding: 20 }}>
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-                  <IconPolaroid size={42} color="#64748b" />
+                  <IconPolaroid size={42} color="#78726a" />
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#94a3b8" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#a7a198" }}>
                   Ready to Create
                 </div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4, maxWidth: 240 }}>
+                <div style={{ fontSize: 11, color: "#78726a", marginTop: 4, maxWidth: 240 }}>
                   The verified task will analyze the brief, preload the output, and place a
                   duplicate on the Canvas.
                 </div>

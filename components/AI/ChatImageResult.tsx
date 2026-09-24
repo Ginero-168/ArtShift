@@ -59,7 +59,7 @@ function OverlayIconButton({
         height: 28,
         borderRadius: "50%",
         border: "none",
-        background: "rgba(15, 23, 42, 0.55)",
+        background: "rgba(26, 23, 20, 0.55)",
         backdropFilter: "blur(8px)",
         color: "#fff",
         display: "inline-flex",
@@ -120,7 +120,7 @@ export function ImageExpandOverlay({ url, onClose }: { url: string; onClose: () 
           height: 36,
           borderRadius: "50%",
           border: "1px solid rgba(255,255,255,0.18)",
-          background: "rgba(15, 23, 42, 0.7)",
+          background: "rgba(26, 23, 20, 0.7)",
           color: "#fff",
           display: "inline-flex",
           alignItems: "center",
@@ -189,10 +189,10 @@ export function PromptStructureModal({
           maxHeight: "86vh",
           overflow: "auto",
           borderRadius: 18,
-          background: "#0f172a",
-          color: "#f8fafc",
+          background: "#1a1714",
+          color: "#fcf9f5",
           boxShadow: "0 24px 64px rgba(0,0,0,0.45)",
-          border: "1px solid rgba(148, 163, 184, 0.18)",
+          border: "1px solid rgba(167, 161, 152, 0.18)",
           padding: "16px 18px 20px",
         }}
       >
@@ -233,8 +233,8 @@ export function PromptStructureModal({
               height: 28,
               borderRadius: 8,
               border: "none",
-              background: "rgba(148,163,184,0.15)",
-              color: "#e2e8f0",
+              background: "rgba(167, 161, 152, 0.15)",
+              color: "#ece7e0",
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
@@ -252,7 +252,7 @@ export function PromptStructureModal({
                 style={{
                   fontSize: 11,
                   fontWeight: 500,
-                  color: "#94a3b8",
+                  color: "#a7a198",
                   marginBottom: 3,
                 }}
               >
@@ -262,7 +262,7 @@ export function PromptStructureModal({
                 style={{
                   fontSize: 13.5,
                   lineHeight: 1.45,
-                  color: "#f1f5f9",
+                  color: "#f8f4ef",
                   fontWeight: 500,
                 }}
               >
@@ -285,24 +285,24 @@ export function ImageResultSummaryBlock({ summary }: { summary: ImageResultSumma
         gap: 10,
         maxWidth: "92%",
         padding: "8px 2px 2px",
-        color: "#1e293b",
+        color: "#2c2824",
         fontSize: 12.5,
         lineHeight: 1.5,
       }}
     >
-      <div style={{ fontWeight: 600, color: "#0f172a" }}>{summary.headline}</div>
+      <div style={{ fontWeight: 600, color: "#1a1714" }}>{summary.headline}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {summary.fields.map((field) => (
           <div key={field.label}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#78726a", marginBottom: 1 }}>
               {field.label}
             </div>
-            <div style={{ color: "#334155" }}>{field.value}</div>
+            <div style={{ color: "#443f39" }}>{field.value}</div>
           </div>
         ))}
       </div>
       {summary.printHint ? (
-        <div style={{ fontSize: 11.5, color: "#64748b", whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 11.5, color: "#78726a", whiteSpace: "pre-wrap" }}>
           {summary.printHint}
         </div>
       ) : null}
@@ -317,15 +317,15 @@ export function ImageResultSummaryBlock({ summary }: { summary: ImageResultSumma
                 gap: 5,
                 padding: "3px 8px",
                 borderRadius: 999,
-                background: "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                color: "#475569",
+                background: "#f8f4ef",
+                border: "1px solid #ece7e0",
+                color: "#58534c",
                 fontSize: 10.5,
                 fontWeight: 600,
               }}
             >
               {/gpt|image|sunburst|flare/i.test(pill) ? (
-                <ImageSparkleIcon style={{ width: 12, height: 12, color: "#4f46e5" }} />
+                <ImageSparkleIcon style={{ width: 12, height: 12, color: "#b52c00" }} />
               ) : null}
               {pill}
             </span>
@@ -333,7 +333,7 @@ export function ImageResultSummaryBlock({ summary }: { summary: ImageResultSumma
         </div>
       ) : null}
       {summary.footer ? (
-        <div style={{ fontSize: 12, color: "#64748b" }}>{summary.footer}</div>
+        <div style={{ fontSize: 12, color: "#78726a" }}>{summary.footer}</div>
       ) : null}
     </div>
   );
@@ -410,20 +410,20 @@ export function ChatResultImageThumb({
           aspectRatio: `${width} / ${height}`,
           borderRadius: 12,
           overflow: "hidden",
-          background: "#0f172a",
+          background: "#1a1714",
           cursor: "pointer",
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-          border: "1px solid #e2e8f0",
+          border: "1px solid #ece7e0",
           flexShrink: 0,
           transition: "transform 0.15s ease, border-color 0.15s ease",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "scale(1.015)";
-          e.currentTarget.style.borderColor = "#94a3b8";
+          e.currentTarget.style.borderColor = "#a7a198";
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = "scale(1)";
-          e.currentTarget.style.borderColor = "#e2e8f0";
+          e.currentTarget.style.borderColor = "#ece7e0";
         }}
       >
         <div
@@ -493,9 +493,9 @@ export function ChatResultImageThumb({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#94a3b8",
+              color: "#a7a198",
               fontSize: 11,
-              background: "#1e293b",
+              background: "#2c2824",
             }}
           >
             กำลังโหลดภาพ...

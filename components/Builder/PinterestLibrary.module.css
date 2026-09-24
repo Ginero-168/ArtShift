@@ -3,8 +3,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #f8f9fb;
-  color: #172033;
+  background: #fbf9f6;
+  color: #23201a;
 }
 
 .emptyState {
@@ -25,7 +25,7 @@
 .emptyCopy {
   margin: 0;
   max-width: 18rem;
-  color: #667085;
+  color: #746f69;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -37,7 +37,7 @@
   border-radius: 8px;
   background: #ffffff;
   color: #e60023;
-  font: 700 13px/1 "Sarabun", system-ui, sans-serif;
+  font: 700 13px/1 var(--font-sans);
   cursor: pointer;
 }
 
@@ -51,7 +51,7 @@
 .pinCard:focus-visible,
 .boardRow:focus-visible,
 .backButton:focus-visible {
-  outline: 2px solid rgba(24, 89, 255, 0.45);
+  outline: 2px solid rgba(26, 23, 20, 0.45);
   outline-offset: 2px;
 }
 
@@ -79,7 +79,7 @@
   margin: 0;
   min-width: 0;
   overflow: hidden;
-  color: #667085;
+  color: #746f69;
   font-size: 11px;
   line-height: 1.3;
   text-overflow: ellipsis;
@@ -99,14 +99,14 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #344054;
-  font: 600 11px/1 "Sarabun", system-ui, sans-serif;
+  color: #433f39;
+  font: 600 11px/1 var(--font-sans);
   cursor: pointer;
 }
 
 .textButton:hover,
 .backButton:hover {
-  background: #f2f5fa;
+  background: #f7f4f0;
 }
 
 .textButton:disabled {
@@ -126,14 +126,14 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: #7b8495;
-  font: 600 12px/1 "Sarabun", system-ui, sans-serif;
+  color: #87837d;
+  font: 600 12px/1 var(--font-sans);
   cursor: pointer;
 }
 
 .subTab:hover {
-  background: #f5f7fa;
-  color: #344054;
+  background: #f9f7f3;
+  color: #433f39;
 }
 
 .subTabActive {
@@ -161,7 +161,7 @@
   margin-block-end: 8px;
   padding: 0;
   break-inside: avoid;
-  border: 1px solid #dfe3ea;
+  border: 1px solid #e6e2de;
   border-radius: 8px;
   overflow: clip;
   background: #ffffff;
@@ -194,7 +194,7 @@
   width: 100%;
   min-height: 52px;
   padding: 6px;
-  border: 1px solid #dfe3ea;
+  border: 1px solid #e6e2de;
   border-radius: 8px;
   background: #ffffff;
   color: inherit;
@@ -212,7 +212,7 @@
   flex: 0 0 auto;
   border-radius: 6px;
   object-fit: cover;
-  background: #f2f5fa;
+  background: #f7f4f0;
 }
 
 .boardCopy {
@@ -233,7 +233,7 @@
 .boardMeta,
 .statusLine,
 .emptyLine {
-  color: #8a93a3;
+  color: #96928c;
   font-size: 11px;
 }
 
@@ -246,5 +246,5 @@
 .backButton {
   margin-block-end: 8px;
   padding-inline: 0;
-  color: #667085;
+  color: #746f69;
 }

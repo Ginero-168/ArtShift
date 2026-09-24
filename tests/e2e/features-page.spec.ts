@@ -19,6 +19,5 @@ test("home remains the sign-in gate and links to /features", async ({ page }) =>
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "ArtShift" })).toBeVisible();
   await expect(page.getByRole("button", { name: /เข้าสู่ระบบด้วย Google/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: "ดูฟีเจอร์" })).toHaveAttribute("href", "/features");
-  await expect(page.getByTestId("home-shape-wave")).toBeAttached();
+  await expect(page.getByRole("link", { name: /ดูฟีเจอร์/ })).toHaveAttribute("href", "/features");
 });

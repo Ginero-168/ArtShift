@@ -1904,10 +1904,9 @@ export default function AICoPilotBar() {
         flexDirection: "column",
         pointerEvents: "auto",
         overflow: "hidden",
-        background: "#ffffff",
-        color: "#0f172a",
-        fontFamily:
-          'Sarabun, "Noto Sans Thai", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        background: "#fdfcfa",
+        color: "#1a1714",
+        fontFamily: "var(--font-sans)",
       }}
     >
       <style>{`
@@ -1915,8 +1914,8 @@ export default function AICoPilotBar() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .artshift-custom-scroll::-webkit-scrollbar { width: 5px; }
         .artshift-custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .artshift-custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
-        .artshift-custom-scroll::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+        .artshift-custom-scroll::-webkit-scrollbar-thumb { background: #ece7e0; border-radius: 4px; }
+        .artshift-custom-scroll::-webkit-scrollbar-thumb:hover { background: #d9d3cc; }
       `}</style>
 
       {/* 1. Thread Header and Messages Area */}

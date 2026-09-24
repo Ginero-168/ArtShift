@@ -34,9 +34,9 @@ describe("BlockLibrary Default Tab & Tab Order", () => {
 
   it("styles libraryTabAssistant with active and hover states in CSS", () => {
     expect(cssSource).toContain(".libraryTabAssistant:hover {");
-    expect(cssSource).toContain(".libraryTabAssistant.libraryTabActive {");
-    expect(cssSource).toContain("background: #f4f2ff;");
-    expect(cssSource).toContain("color: #4f46e5;");
+    expect(cssSource).toContain(".libraryTabAssistant.libraryTabActive,");
+    expect(cssSource).not.toContain("#f4f2ff");
+    expect(cssSource).not.toContain("#4f46e5");
   });
 
   it("keeps libraryAssistantActive 476px width for AI Assistance", () => {

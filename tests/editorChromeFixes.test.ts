@@ -2,18 +2,21 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Editor chrome: logo, selection, Appearance image group", () => {
-  it("uses a centered two-peak M for IconBrand and the favicon", () => {
+  it("uses the off-register square mark for IconBrand and the favicon", () => {
     const icons = readFileSync("components/icons.tsx", "utf8");
     const favicon = readFileSync("public/icon.svg", "utf8");
     const css = readFileSync("app/globals.css", "utf8");
 
-    expect(icons).toContain('d="M7 17.5V6.5L12 14L17 6.5V17.5"');
-    expect(icons).not.toContain("M4 20V6l4 8 4-8 4 8 4-8v14");
-    expect(favicon).toContain('d="M7 17.5V6.5L12 14L17 6.5V17.5"');
+    expect(icons).toMatch(/<rect\s+x="3\.5"\s+y="3\.5"\s+width="11"\s+height="11"/);
+    expect(icons).toMatch(/<rect\s+x="9\.5"\s+y="9\.5"\s+width="11"\s+height="11"/);
+    expect(icons).not.toContain("M7 17.5V6.5L12 14L17 6.5V17.5");
+    expect(favicon).toContain('fill="#d64418"');
+    expect(favicon).toContain('fill="#1a1714"');
+    expect(favicon).not.toContain("#087fe5");
     expect(css).toContain("place-items: center");
   });
 
-  it("uses the shared Heatmap ArtShift wordmark in editor chrome", () => {
+  it("uses the shared ArtShift wordmark in editor chrome", () => {
     const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
     expect(editor).toContain('<ArtShiftLogo size="compact" />');
     expect(editor).not.toContain('<div className="brand-mark">');

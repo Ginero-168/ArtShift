@@ -138,9 +138,9 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
       pill.style.padding = "1px 6px 1px 2px";
       pill.style.margin = "0 2px";
       pill.style.borderRadius = "9999px";
-      pill.style.background = "#eef2ff";
-      pill.style.border = "1px solid #c7d2fe";
-      pill.style.color = "#3730a3";
+      pill.style.background = "#fff0ea";
+      pill.style.border = "1px solid #ffc7b3";
+      pill.style.color = "#7f1f00";
       pill.style.fontSize = "11px";
       pill.style.fontWeight = "600";
       pill.style.lineHeight = "1";
@@ -190,7 +190,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
         fallback.style.width = "16px";
         fallback.style.height = "16px";
         fallback.style.borderRadius = "3px";
-        fallback.style.background = "#c7d2fe";
+        fallback.style.background = "#ffc7b3";
         fallback.style.flexShrink = "0";
         pill.appendChild(fallback);
       }
@@ -218,7 +218,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
       removeBtn.style.height = "14px";
       removeBtn.style.marginLeft = "2px";
       removeBtn.style.borderRadius = "50%";
-      removeBtn.style.color = "#818cf8";
+      removeBtn.style.color = "#f16d4a";
       removeBtn.style.fontSize = "13px";
       removeBtn.style.lineHeight = "1";
       removeBtn.style.fontWeight = "bold";
@@ -226,12 +226,12 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
       removeBtn.style.transition = "all 0.15s ease";
 
       removeBtn.onmouseenter = () => {
-        removeBtn.style.background = "#c7d2fe";
+        removeBtn.style.background = "#ffc7b3";
         removeBtn.style.color = "#1e1b4b";
       };
       removeBtn.onmouseleave = () => {
         removeBtn.style.background = "transparent";
-        removeBtn.style.color = "#818cf8";
+        removeBtn.style.color = "#f16d4a";
       };
       removeBtn.onpointerdown = (e) => {
         e.stopPropagation();
@@ -735,7 +735,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
           color: inherit !important;
         }
         .artshift-inline-editor .artshift-inline-tag-pill {
-          color: #3730a3 !important;
+          color: #7f1f00 !important;
         }
       `}</style>
       {/* ContentEditable editor box */}
@@ -766,7 +766,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
           border: 0,
           fontSize: 13,
           lineHeight: 1.55,
-          color: "#0f172a",
+          color: "#1a1714",
           background: "transparent",
           fontFamily: "inherit",
           boxSizing: "border-box",
@@ -791,7 +791,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
             pointerEvents: "none",
             fontSize: 13,
             lineHeight: 1.55,
-            color: "#94a3b8",
+            color: "#a7a198",
             userSelect: "none",
           }}
         >
@@ -831,9 +831,9 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
             boxSizing: "border-box",
             padding: "0 6px",
             borderRadius: 9999,
-            background: "#f1f5f9",
-            border: "1px solid #cbd5e1",
-            color: "#475569",
+            background: "#f8f4ef",
+            border: "1px solid #d9d3cc",
+            color: "#58534c",
             fontSize: 10,
             fontWeight: 700,
             lineHeight: 1,
@@ -860,7 +860,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
             maxHeight: 180,
             overflowY: "auto",
             background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            border: "1px solid #ece7e0",
             borderRadius: 10,
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
             zIndex: 100,
@@ -872,7 +872,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
               padding: "4px 8px",
               fontSize: 10,
               fontWeight: 700,
-              color: "#94a3b8",
+              color: "#a7a198",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
             }}
@@ -895,8 +895,8 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
                   gap: 6,
                   padding: "5px 8px",
                   borderRadius: 6,
-                  background: isSelected ? "#eef2ff" : "transparent",
-                  color: isSelected ? "#3730a3" : "#1e293b",
+                  background: isSelected ? "#fff0ea" : "transparent",
+                  color: isSelected ? "#7f1f00" : "#2c2824",
                   cursor: "pointer",
                   fontSize: 12,
                   fontWeight: 500,
@@ -910,7 +910,7 @@ const InlineTagEditor = forwardRef<InlineTagEditorHandle, Props>(function Inline
                     style={{ width: 20, height: 20, borderRadius: 3, objectFit: "cover" }}
                   />
                 ) : (
-                  <span style={{ width: 20, height: 20, borderRadius: 3, background: "#c7d2fe" }} />
+                  <span style={{ width: 20, height: 20, borderRadius: 3, background: "#ffc7b3" }} />
                 )}
                 <span
                   style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}

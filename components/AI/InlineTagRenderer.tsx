@@ -118,24 +118,24 @@ export default function InlineTagRenderer({
               borderRadius: 9999,
               height: 22,
               boxSizing: "border-box",
-              background: isLight ? "#e0e7ff" : "rgba(255, 255, 255, 0.22)",
-              border: isLight ? "1px solid #a5b4fc" : "1px solid rgba(255, 255, 255, 0.45)",
-              color: isLight ? "#312e81" : "#ffffff",
+              background: isLight ? "#ffe2d6" : "rgba(255, 255, 255, 0.22)",
+              border: isLight ? "1px solid #ff9f83" : "1px solid rgba(255, 255, 255, 0.45)",
+              color: isLight ? "#661a00" : "#ffffff",
               fontSize: 11,
               fontWeight: 600,
               lineHeight: 1,
               cursor: "pointer",
               userSelect: "text",
-              boxShadow: isLight ? "0 1px 2px rgba(79, 70, 229, 0.08)" : "none",
+              boxShadow: isLight ? "0 1px 2px rgba(181, 44, 0, 0.08)" : "none",
               transition: "all 0.15s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = isLight ? "#c7d2fe" : "rgba(255, 255, 255, 0.32)";
-              e.currentTarget.style.borderColor = isLight ? "#818cf8" : "rgba(255, 255, 255, 0.6)";
+              e.currentTarget.style.background = isLight ? "#ffc7b3" : "rgba(255, 255, 255, 0.32)";
+              e.currentTarget.style.borderColor = isLight ? "#f16d4a" : "rgba(255, 255, 255, 0.6)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = isLight ? "#e0e7ff" : "rgba(255, 255, 255, 0.22)";
-              e.currentTarget.style.borderColor = isLight ? "#a5b4fc" : "rgba(255, 255, 255, 0.45)";
+              e.currentTarget.style.background = isLight ? "#ffe2d6" : "rgba(255, 255, 255, 0.22)";
+              e.currentTarget.style.borderColor = isLight ? "#ff9f83" : "rgba(255, 255, 255, 0.45)";
             }}
           >
             {dataUrl ? (
@@ -158,7 +158,7 @@ export default function InlineTagRenderer({
                   width: 16,
                   height: 16,
                   borderRadius: 3,
-                  background: isLight ? "#c7d2fe" : "rgba(255, 255, 255, 0.3)",
+                  background: isLight ? "#ffc7b3" : "rgba(255, 255, 255, 0.3)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -166,7 +166,7 @@ export default function InlineTagRenderer({
                   flexShrink: 0,
                 }}
               >
-                <IconCamera size={10} color={isLight ? "#4338ca" : "#ffffff"} />
+                <IconCamera size={10} color={isLight ? "#9b2500" : "#ffffff"} />
               </span>
             )}
             <span

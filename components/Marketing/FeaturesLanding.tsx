@@ -1,6 +1,5 @@
 import Link from "next/link";
 import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
-import { IconBrand } from "@/components/icons";
 import styles from "./FeaturesLanding.module.css";
 
 const FEATURES = [
@@ -66,7 +65,9 @@ function FeatureVisual({ kind }: { kind: (typeof FEATURES)[number]["visual"] }) 
   if (kind === "canvas") {
     return (
       <div className={styles.board}>
-        <div className={styles.artboard} />
+        <div className={styles.artboard}>
+          <span className={styles.artboardTitle}>อ่านจนหมดฝน</span>
+        </div>
         <span className={styles.smartBadge}>Smart Object</span>
       </div>
     );
@@ -75,19 +76,15 @@ function FeatureVisual({ kind }: { kind: (typeof FEATURES)[number]["visual"] }) 
     return (
       <div className={styles.board}>
         <div className={styles.polaroid}>
-          <div
-            className={styles.swatch}
-            style={{ background: "linear-gradient(135deg, #7dd3fc, #1d4ed8)" }}
-          />
+          <div className={`${styles.swatch} ${styles.swatchSignal}`} />
         </div>
         <div className={styles.polaroid}>
-          <div
-            className={styles.swatch}
-            style={{ background: "linear-gradient(135deg, #fde68a, #ea580c)" }}
-          />
+          <div className={`${styles.swatch} ${styles.swatchCobalt}`} />
+        </div>
+        <div className={styles.polaroid}>
+          <div className={`${styles.swatch} ${styles.swatchLemon}`} />
         </div>
         <span className={styles.searchChip}>9 · 16 · 25</span>
-        <span className={styles.searchChip}>Flare low</span>
       </div>
     );
   }
@@ -96,25 +93,19 @@ function FeatureVisual({ kind }: { kind: (typeof FEATURES)[number]["visual"] }) 
       <div className={styles.stack}>
         <div className={styles.layer}>
           <span>Fill</span>
-          <span className={styles.chip} style={{ background: "#6366f1" }} />
+          <span className={`${styles.chip} ${styles.chipSignal}`} />
         </div>
         <div className={styles.layer}>
           <span>Stroke</span>
-          <span
-            className={styles.chip}
-            style={{ background: "transparent", boxShadow: "inset 0 0 0 2px #f8fafc" }}
-          />
+          <span className={`${styles.chip} ${styles.chipOutline}`} />
         </div>
         <div className={styles.layer}>
           <span>Shadow / Glow</span>
-          <span className={styles.chip} style={{ background: "#22d3ee" }} />
+          <span className={`${styles.chip} ${styles.chipCobalt}`} />
         </div>
         <div className={styles.layer}>
           <span>Text Arc · Tones</span>
-          <span
-            className={styles.chip}
-            style={{ background: "linear-gradient(90deg, #64748b, #f8fafc)" }}
-          />
+          <span className={`${styles.chip} ${styles.chipTone}`} />
         </div>
       </div>
     );
@@ -166,9 +157,6 @@ export default function FeaturesLanding() {
       </a>
       <header className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="ArtShift หน้าแรก">
-          <span className={styles.mark} aria-hidden="true">
-            <IconBrand size={16} />
-          </span>
           <ArtShiftLogo size="header" />
         </Link>
         <nav className={styles.nav} aria-label="หน้าฟีเจอร์">
@@ -178,7 +166,7 @@ export default function FeaturesLanding() {
           <Link href="/" className={styles.navLink}>
             เข้าสู่ระบบ
           </Link>
-          <Link href="/projects" className={styles.navLink}>
+          <Link href="/projects" className={`${styles.navLink} ${styles.navCta}`}>
             เปิดโปรเจกต์
           </Link>
         </nav>
@@ -186,23 +174,24 @@ export default function FeaturesLanding() {
 
       <main id="features-main">
         <section className={`${styles.wrap} ${styles.hero}`}>
-          <ArtShiftLogo as="p" size="hero" className={styles.heroLogo} />
-          <p className={styles.kicker}>Local-first design tools</p>
+          <p className={styles.kicker}>Local-first design tools · ฟีเจอร์ทั้งหมด</p>
           <h1 className={styles.heroTitle}>ออกแบบงานโฆษณาบนแคนวาสที่คิดแบบนักออกแบบ</h1>
-          <p className={styles.heroLead}>
-            ArtShift รวมแคนวาสออกแบบ Moodboard ไร้ขอบ Appearance หลายชั้น ข้อความแบบ Illustrator การแก้
-            Raster ผ่าน Photopea และ AI Assistance ไว้ในตัวแก้ไขโปรเจกต์
-            <span className={styles.heroEnglish}>
-              Professional artwork tools. Local-first at artshift.io.
-            </span>
-          </p>
-          <div className={styles.ctaRow}>
-            <Link href="/" className={styles.btnPrimary}>
-              เข้าสู่ระบบ
-            </Link>
-            <Link href="/projects" className={styles.btnGhost}>
-              เปิดโปรเจกต์
-            </Link>
+          <div className={styles.heroFoot}>
+            <p className={styles.heroLead}>
+              ArtShift รวมแคนวาสออกแบบ Moodboard ไร้ขอบ Appearance หลายชั้น ข้อความแบบ Illustrator การแก้
+              Raster ผ่าน Photopea และ AI Assistance ไว้ในตัวแก้ไขโปรเจกต์
+              <span className={styles.heroEnglish}>
+                Professional artwork tools. Local-first at artshift.io.
+              </span>
+            </p>
+            <div className={styles.ctaRow}>
+              <Link href="/" className={styles.btnPrimary}>
+                เข้าสู่ระบบ
+              </Link>
+              <Link href="/projects" className={styles.btnGhost}>
+                เปิดโปรเจกต์
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -217,8 +206,10 @@ export default function FeaturesLanding() {
                 <FeatureVisual kind={feature.visual} />
               </div>
               <div className={styles.copy}>
-                <p className={styles.index}>{feature.index}</p>
-                <p className={styles.english}>{feature.english}</p>
+                <p className={styles.index}>
+                  {feature.index}
+                  <span className={styles.english}>{feature.english}</span>
+                </p>
                 <h2 className={styles.title}>{feature.title}</h2>
                 <p className={styles.body}>{feature.body}</p>
               </div>

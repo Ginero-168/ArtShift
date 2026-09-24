@@ -1,11 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="ArtShift">
-  <rect width="24" height="24" rx="6" fill="#087fe5" />
-  <path
-    d="M7 17.5V6.5L12 14L17 6.5V17.5"
-    fill="none"
-    stroke="#fff"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+  <rect width="24" height="24" rx="5" fill="#1a1714" />
+  <rect x="4.5" y="4.5" width="10.5" height="10.5" fill="#d64418" />
+  <rect x="9" y="9" width="10.5" height="10.5" fill="none" stroke="#f4f0e8" stroke-width="1.8" />
 </svg>

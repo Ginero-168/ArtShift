@@ -243,9 +243,9 @@ export default function BuilderInspector() {
                     style={
                       croppingImageId === imageElement.id
                         ? {
-                            background: "var(--accent, #6366f1)",
+                            background: "var(--accent, #d64418)",
                             color: "#ffffff",
-                            borderColor: "var(--accent, #6366f1)",
+                            borderColor: "var(--accent, #d64418)",
                           }
                         : undefined
                     }
@@ -357,7 +357,7 @@ export default function BuilderInspector() {
                   <span
                     style={{
                       fontSize: 9.5,
-                      color: "var(--accent, #6366f1)",
+                      color: "var(--accent, #d64418)",
                       fontWeight: 600,
                     }}
                   >
@@ -573,7 +573,7 @@ export default function BuilderInspector() {
                     width: "100%",
                     justifyContent: "center",
                     gap: 6,
-                    color: "var(--accent, #6366f1)",
+                    color: "var(--accent, #d64418)",
                     fontWeight: 600,
                   }}
                   onClick={() => {
@@ -724,7 +724,7 @@ function VectorPathOptions({ path, apply }: { path: VectorPathElement; apply: Ve
         </select>
       </label>
 
-      <div style={{ fontSize: 10.5, color: "#64748b", lineHeight: 1.4, marginTop: 4 }}>
+      <div style={{ fontSize: 10.5, color: "#78726a", lineHeight: 1.4, marginTop: 4 }}>
         <div>
           • <strong>Drag square nodes</strong> to move anchor points
         </div>
@@ -776,7 +776,7 @@ function FrameMaskOptions({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          background: "var(--surface-sunken, #f1f5f9)",
+          background: "var(--surface-sunken, #f8f4ef)",
           padding: "6px 10px",
           borderRadius: 6,
           marginBottom: 10,
@@ -789,10 +789,10 @@ function FrameMaskOptions({
             gap: 6,
             fontWeight: 600,
             fontSize: "0.82rem",
-            color: "var(--ink, #0f172a)",
+            color: "var(--ink, #1a1714)",
           }}
         >
-          <span style={{ display: "flex", alignItems: "center", color: "#2563eb" }}>
+          <span style={{ display: "flex", alignItems: "center", color: "#ca3701" }}>
             <BlockIcon
               kind={
                 (currentShape === "roundedRect"
@@ -816,7 +816,7 @@ function FrameMaskOptions({
           </span>
           <span>{activeShapeInfo?.label ?? "Frame"}</span>
         </div>
-        <span style={{ fontSize: "0.72rem", color: "var(--ink-muted, #64748b)" }}>Fixed Shape</span>
+        <span style={{ fontSize: "0.72rem", color: "var(--ink-muted, #78726a)" }}>Fixed Shape</span>
       </div>
 
       {/* Edge Feather (Soft Glow/Blur) */}
@@ -1029,7 +1029,7 @@ function FrameMaskOptions({
             <div className={styles.field} style={{ marginTop: 6 }}>
               <span>Border Color</span>
               <ColorPickerInput
-                value={frame.strokeColor ?? "#94a3b8"}
+                value={frame.strokeColor ?? "#a7a198"}
                 onChange={(color) => apply({ strokeColor: color }, "frame border color")}
                 allowTransparent={true}
               />
@@ -1040,7 +1040,7 @@ function FrameMaskOptions({
 
       {/* Object Clipping */}
       {candidateIds.length > 0 || frame.childIds.length > 0 ? (
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid #edf0f5" }}>
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid #f2efeb" }}>
           <div className={styles.metaRow}>
             <span>Clipped objects</span>
             <strong>{frame.childIds.length}</strong>

@@ -18,8 +18,8 @@ export default function Marquee({ rect }: Props) {
         top: rect.y,
         width: rect.width,
         height: rect.height,
-        background: "rgba(79, 70, 229, 0.06)",
-        border: "1px dashed var(--accent, #4f46e5)",
+        background: "rgba(181, 44, 0, 0.06)",
+        border: "1px dashed var(--selection, #b52c00)",
         pointerEvents: "none",
       }}
     />

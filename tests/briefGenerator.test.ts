@@ -187,7 +187,7 @@ describe("Brief Generator Service & Layout Geometry", () => {
       "components/Canvas/ProcessingPreviewOverlay.tsx",
       "utf8",
     );
-    expect(previewOverlaySource).toContain('brief: "#6366f1"');
+    expect(previewOverlaySource).toContain('brief: "#4d7c0f"');
     expect(previewOverlaySource).toContain("IconBrief");
   });
 

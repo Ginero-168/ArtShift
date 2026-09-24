@@ -1308,9 +1308,9 @@ export function VisionObjectIsolator({
     <div
       style={{
         padding: "8px 10px",
-        background: "rgba(99, 102, 241, 0.04)",
+        background: "rgba(214, 68, 24, 0.04)",
         borderRadius: 8,
-        border: "1px solid rgba(99, 102, 241, 0.15)",
+        border: "1px solid rgba(214, 68, 24, 0.15)",
         marginBottom: 8,
       }}
     >
@@ -1322,18 +1322,18 @@ export function VisionObjectIsolator({
           marginBottom: 6,
         }}
       >
-        <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent, #6366f1)" }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent, #d64418)" }}>
           {activeTool ? (
             `${IMAGE_ACTION_LABELS[activeTool]} Settings`
           ) : (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <IconSparkles size={13} color="var(--accent, #6366f1)" />
+              <IconSparkles size={13} color="var(--accent, #d64418)" />
               Image Intelligence
             </span>
           )}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {progress !== null && <span style={{ fontSize: 9, color: "#6b7280" }}>{progress}%</span>}
+          {progress !== null && <span style={{ fontSize: 9, color: "#76716c" }}>{progress}%</span>}
           <button
             type="button"
             onClick={handleResetCache}
@@ -1343,13 +1343,13 @@ export function VisionObjectIsolator({
               border: "none",
               padding: "1px 4px",
               fontSize: 9,
-              color: "#94a3b8",
+              color: "#a7a198",
               cursor: "pointer",
               borderRadius: 3,
             }}
           >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-              <IconTrash size={10} color="#94a3b8" />
+              <IconTrash size={10} color="#a7a198" />
               Clear
             </span>
           </button>
@@ -1391,10 +1391,10 @@ export function VisionObjectIsolator({
                 style={{
                   flex: 1,
                   padding: "5px 6px",
-                  border: selected ? "1px solid #6366f1" : "1px solid #cbd5e1",
+                  border: selected ? "1px solid #d64418" : "1px solid #d9d3cc",
                   borderRadius: 5,
-                  background: selected ? "#eef2ff" : "#fff",
-                  color: selected ? "#3730a3" : "#475569",
+                  background: selected ? "#fff0ea" : "#fff",
+                  color: selected ? "#7f1f00" : "#58534c",
                   fontSize: 9.5,
                   fontWeight: selected ? 700 : 600,
                   cursor: "pointer",
@@ -1419,8 +1419,8 @@ export function VisionObjectIsolator({
             flex: 1,
             padding: "5px 8px",
             background: "#fff",
-            color: "var(--accent, #6366f1)",
-            border: "1px solid rgba(99, 102, 241, 0.3)",
+            color: "var(--accent, #d64418)",
+            border: "1px solid rgba(214, 68, 24, 0.3)",
             borderRadius: 5,
             fontWeight: 600,
             fontSize: 10,
@@ -1432,7 +1432,7 @@ export function VisionObjectIsolator({
           }}
         >
           <span>
-            <IconWand size={12} color="var(--accent, #6366f1)" />
+            <IconWand size={12} color="var(--accent, #d64418)" />
           </span>
           <span>{busy ? "Processing..." : "RemoveBG"}</span>
         </button>
@@ -1445,7 +1445,7 @@ export function VisionObjectIsolator({
           style={{
             flex: 1,
             padding: "5px 6px",
-            background: "var(--accent, #6366f1)",
+            background: "var(--accent, #d64418)",
             color: "#fff",
             border: "none",
             borderRadius: 5,
@@ -1501,9 +1501,9 @@ export function VisionObjectIsolator({
           style={{
             flex: 1,
             padding: "6px 5px",
-            background: backend === "vtracer-wasm" && vectorizeOpen ? "#0f172a" : "#fff",
-            color: backend === "vtracer-wasm" && vectorizeOpen ? "#fff" : "var(--accent, #6366f1)",
-            border: "1px solid rgba(99, 102, 241, 0.3)",
+            background: backend === "vtracer-wasm" && vectorizeOpen ? "#1a1714" : "#fff",
+            color: backend === "vtracer-wasm" && vectorizeOpen ? "#fff" : "var(--accent, #d64418)",
+            border: "1px solid rgba(214, 68, 24, 0.3)",
             borderRadius: 5,
             fontWeight: 600,
             fontSize: 9.5,
@@ -1572,7 +1572,7 @@ export function VisionObjectIsolator({
         style={{
           display: controlledToolMode ? "none" : "block",
           marginTop: 3,
-          color: "#64748b",
+          color: "#78726a",
           fontSize: 8,
         }}
       >
@@ -1594,7 +1594,7 @@ export function VisionObjectIsolator({
           <strong style={{ display: "block", color: "#134e4a", fontSize: 10 }}>
             Vectorize(Cloud) Settings
           </strong>
-          <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+          <span style={{ display: "block", marginTop: 2, color: "#78726a", fontSize: 8.5 }}>
             Recraft Vectorize · Cloud opt-in · Replicate account required
           </span>
           <button
@@ -1632,14 +1632,14 @@ export function VisionObjectIsolator({
             marginTop: 6,
             padding: 8,
             background: "#fff",
-            border: "1px solid #c7d2fe",
+            border: "1px solid #ffc7b3",
             borderRadius: 6,
           }}
         >
-          <strong style={{ display: "block", color: "#3730a3", fontSize: 10 }}>
+          <strong style={{ display: "block", color: "#7f1f00", fontSize: 10 }}>
             P-Image-Upscale Settings
           </strong>
-          <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+          <span style={{ display: "block", marginTop: 2, color: "#78726a", fontSize: 8.5 }}>
             Pruna AI · Cloud opt-in · output target in megapixels
           </span>
           <label
@@ -1647,7 +1647,7 @@ export function VisionObjectIsolator({
             style={{
               display: "block",
               marginTop: 8,
-              color: "#334155",
+              color: "#443f39",
               fontSize: 9,
               fontWeight: 700,
             }}
@@ -1665,10 +1665,10 @@ export function VisionObjectIsolator({
               width: "100%",
               marginTop: 4,
               padding: "6px 7px",
-              border: "1px solid #cbd5e1",
+              border: "1px solid #d9d3cc",
               borderRadius: 5,
               background: "#fff",
-              color: "#0f172a",
+              color: "#1a1714",
               fontSize: 10,
             }}
           >
@@ -1680,7 +1680,7 @@ export function VisionObjectIsolator({
           </select>
           <span
             aria-live="polite"
-            style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 8.5 }}
+            style={{ display: "block", marginTop: 4, color: "#78726a", fontSize: 8.5 }}
           >
             Target output: {selectedUpscaleResolution.targetMegapixels} MP
           </span>
@@ -1695,7 +1695,7 @@ export function VisionObjectIsolator({
               padding: "6px 8px",
               border: "none",
               borderRadius: 5,
-              background: "#4f46e5",
+              background: "#b52c00",
               color: "#fff",
               fontSize: 10,
               fontWeight: 700,
@@ -1723,7 +1723,7 @@ export function VisionObjectIsolator({
             marginTop: 6,
             padding: 8,
             background: "#fff",
-            border: "1px solid var(--accent, #6366f1)",
+            border: "1px solid var(--accent, #d64418)",
             borderRadius: 6,
             fontSize: 9.5,
           }}
@@ -1732,13 +1732,13 @@ export function VisionObjectIsolator({
             style={{
               marginBottom: 7,
               paddingBottom: 5,
-              borderBottom: "1px solid #e0e7ff",
+              borderBottom: "1px solid #ffe2d6",
             }}
           >
             <strong style={{ display: "block", color: "#1e1b4b", fontSize: 10 }}>
               VTracer WASM Settings
             </strong>
-            <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+            <span style={{ display: "block", marginTop: 2, color: "#78726a", fontSize: 8.5 }}>
               Local Rust/WASM trace with independent native controls
             </span>
           </div>
@@ -1774,9 +1774,9 @@ export function VisionObjectIsolator({
                   fontWeight: preset === "highFidelity" ? 700 : 500,
                   borderRadius: 4,
                   border: "1px solid",
-                  borderColor: preset === "highFidelity" ? "#6366f1" : "#e2e8f0",
-                  background: preset === "highFidelity" ? "#e0e7ff" : "#f8fafc",
-                  color: preset === "highFidelity" ? "#4338ca" : "#334155",
+                  borderColor: preset === "highFidelity" ? "#d64418" : "#ece7e0",
+                  background: preset === "highFidelity" ? "#ffe2d6" : "#fcf9f5",
+                  color: preset === "highFidelity" ? "#9b2500" : "#443f39",
                   cursor: "pointer",
                   textAlign: "left",
                   display: "flex",
@@ -1796,9 +1796,9 @@ export function VisionObjectIsolator({
                   fontWeight: preset === "photoDetailed" ? 700 : 500,
                   borderRadius: 4,
                   border: "1px solid",
-                  borderColor: preset === "photoDetailed" ? "#6366f1" : "#e2e8f0",
-                  background: preset === "photoDetailed" ? "#e0e7ff" : "#f8fafc",
-                  color: preset === "photoDetailed" ? "#4338ca" : "#334155",
+                  borderColor: preset === "photoDetailed" ? "#d64418" : "#ece7e0",
+                  background: preset === "photoDetailed" ? "#ffe2d6" : "#fcf9f5",
+                  color: preset === "photoDetailed" ? "#9b2500" : "#443f39",
                   cursor: "pointer",
                   textAlign: "left",
                   display: "flex",
@@ -1818,9 +1818,9 @@ export function VisionObjectIsolator({
                   fontWeight: preset === "illustration" ? 700 : 500,
                   borderRadius: 4,
                   border: "1px solid",
-                  borderColor: preset === "illustration" ? "#6366f1" : "#e2e8f0",
-                  background: preset === "illustration" ? "#e0e7ff" : "#f8fafc",
-                  color: preset === "illustration" ? "#4338ca" : "#334155",
+                  borderColor: preset === "illustration" ? "#d64418" : "#ece7e0",
+                  background: preset === "illustration" ? "#ffe2d6" : "#fcf9f5",
+                  color: preset === "illustration" ? "#9b2500" : "#443f39",
                   cursor: "pointer",
                   textAlign: "left",
                   display: "flex",
@@ -1840,9 +1840,9 @@ export function VisionObjectIsolator({
                   fontWeight: preset === "clipart" ? 700 : 500,
                   borderRadius: 4,
                   border: "1px solid",
-                  borderColor: preset === "clipart" ? "#6366f1" : "#e2e8f0",
-                  background: preset === "clipart" ? "#e0e7ff" : "#f8fafc",
-                  color: preset === "clipart" ? "#4338ca" : "#334155",
+                  borderColor: preset === "clipart" ? "#d64418" : "#ece7e0",
+                  background: preset === "clipart" ? "#ffe2d6" : "#fcf9f5",
+                  color: preset === "clipart" ? "#9b2500" : "#443f39",
                   cursor: "pointer",
                   textAlign: "left",
                   display: "flex",
@@ -1862,9 +1862,9 @@ export function VisionObjectIsolator({
                   fontWeight: preset === "lineArt" ? 700 : 500,
                   borderRadius: 4,
                   border: "1px solid",
-                  borderColor: preset === "lineArt" ? "#6366f1" : "#e2e8f0",
-                  background: preset === "lineArt" ? "#e0e7ff" : "#f8fafc",
-                  color: preset === "lineArt" ? "#4338ca" : "#334155",
+                  borderColor: preset === "lineArt" ? "#d64418" : "#ece7e0",
+                  background: preset === "lineArt" ? "#ffe2d6" : "#fcf9f5",
+                  color: preset === "lineArt" ? "#9b2500" : "#443f39",
                   cursor: "pointer",
                   textAlign: "left",
                   display: "flex",
@@ -1872,7 +1872,7 @@ export function VisionObjectIsolator({
                   gap: 4,
                 }}
               >
-                <IconPenTool size={11} color="#6366f1" />
+                <IconPenTool size={11} color="#d64418" />
                 <span>Line Art (Ink)</span>
               </button>
               <button
@@ -1884,9 +1884,9 @@ export function VisionObjectIsolator({
                   fontWeight: preset === "silhouette" ? 700 : 500,
                   borderRadius: 4,
                   border: "1px solid",
-                  borderColor: preset === "silhouette" ? "#6366f1" : "#e2e8f0",
-                  background: preset === "silhouette" ? "#e0e7ff" : "#f8fafc",
-                  color: preset === "silhouette" ? "#4338ca" : "#334155",
+                  borderColor: preset === "silhouette" ? "#d64418" : "#ece7e0",
+                  background: preset === "silhouette" ? "#ffe2d6" : "#fcf9f5",
+                  color: preset === "silhouette" ? "#9b2500" : "#443f39",
                   cursor: "pointer",
                   textAlign: "left",
                   display: "flex",
@@ -1894,7 +1894,7 @@ export function VisionObjectIsolator({
                   gap: 4,
                 }}
               >
-                <IconContrast size={11} color="#1e293b" />
+                <IconContrast size={11} color="#2c2824" />
                 <span>Silhouette (B&W)</span>
               </button>
             </div>
@@ -1916,9 +1916,9 @@ export function VisionObjectIsolator({
                     fontWeight: preset === option.value ? 700 : 500,
                     borderRadius: 4,
                     border: "1px solid",
-                    borderColor: preset === option.value ? "#6366f1" : "#e2e8f0",
-                    background: preset === option.value ? "#e0e7ff" : "#f8fafc",
-                    color: preset === option.value ? "#4338ca" : "#334155",
+                    borderColor: preset === option.value ? "#d64418" : "#ece7e0",
+                    background: preset === option.value ? "#ffe2d6" : "#fcf9f5",
+                    color: preset === option.value ? "#9b2500" : "#443f39",
                     cursor: "pointer",
                     textAlign: "left",
                   }}
@@ -1939,7 +1939,7 @@ export function VisionObjectIsolator({
                 marginBottom: 6,
               }}
             >
-              <span style={{ fontWeight: 600, color: "#475569" }}>
+              <span style={{ fontWeight: 600, color: "#58534c" }}>
                 {backend === "vtracer-wasm" ? "Palette max:" : "Colors:"}
               </span>
               <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
@@ -1962,9 +1962,9 @@ export function VisionObjectIsolator({
                           borderRadius: 3,
                           border: "1px solid",
                           borderColor:
-                            vtracerMaxColors === num ? "var(--accent, #6366f1)" : "#e2e8f0",
-                          background: vtracerMaxColors === num ? "var(--accent, #6366f1)" : "#fff",
-                          color: vtracerMaxColors === num ? "#fff" : "#475569",
+                            vtracerMaxColors === num ? "var(--accent, #d64418)" : "#ece7e0",
+                          background: vtracerMaxColors === num ? "var(--accent, #d64418)" : "#fff",
+                          color: vtracerMaxColors === num ? "#fff" : "#58534c",
                           cursor: "pointer",
                         }}
                       >
@@ -1986,9 +1986,9 @@ export function VisionObjectIsolator({
                         borderRadius: 3,
                         border: "1px solid",
                         borderColor:
-                          vtracerMaxColors === null ? "var(--accent, #6366f1)" : "#e2e8f0",
-                        background: vtracerMaxColors === null ? "var(--accent, #6366f1)" : "#fff",
-                        color: vtracerMaxColors === null ? "#fff" : "#475569",
+                          vtracerMaxColors === null ? "var(--accent, #d64418)" : "#ece7e0",
+                        background: vtracerMaxColors === null ? "var(--accent, #d64418)" : "#fff",
+                        color: vtracerMaxColors === null ? "#fff" : "#58534c",
                         cursor: "pointer",
                       }}
                     >
@@ -2010,9 +2010,9 @@ export function VisionObjectIsolator({
                         fontWeight: colors === num ? 700 : 500,
                         borderRadius: 3,
                         border: "1px solid",
-                        borderColor: colors === num ? "var(--accent, #6366f1)" : "#e2e8f0",
-                        background: colors === num ? "var(--accent, #6366f1)" : "#fff",
-                        color: colors === num ? "#fff" : "#475569",
+                        borderColor: colors === num ? "var(--accent, #d64418)" : "#ece7e0",
+                        background: colors === num ? "var(--accent, #d64418)" : "#fff",
+                        color: colors === num ? "#fff" : "#58534c",
                         cursor: "pointer",
                       }}
                     >
@@ -2025,14 +2025,14 @@ export function VisionObjectIsolator({
           )}
 
           {/* Collapsible Advanced Parameters */}
-          <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 4, marginBottom: 6 }}>
+          <div style={{ borderTop: "1px solid #f8f4ef", paddingTop: 4, marginBottom: 6 }}>
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
               style={{
                 background: "none",
                 border: "none",
-                color: "#6366f1",
+                color: "#d64418",
                 fontWeight: 600,
                 fontSize: 8.5,
                 padding: "2px 0",
@@ -2064,16 +2064,16 @@ export function VisionObjectIsolator({
                       flexDirection: "column",
                       gap: 5,
                       padding: 6,
-                      border: "1px solid #c7d2fe",
+                      border: "1px solid #ffc7b3",
                       borderRadius: 5,
-                      background: "#eef2ff",
+                      background: "#fff0ea",
                     }}
                   >
-                    <strong style={{ color: "#312e81", fontSize: 9 }}>
+                    <strong style={{ color: "#661a00", fontSize: 9 }}>
                       VTracer Native Controls
                     </strong>
                     <label style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
-                      <span style={{ color: "#475569" }}>Geometry:</span>
+                      <span style={{ color: "#58534c" }}>Geometry:</span>
                       <select
                         aria-label="VTracer geometry"
                         value={vtracerMode}
@@ -2091,7 +2091,7 @@ export function VisionObjectIsolator({
                       </select>
                     </label>
                     <label style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
-                      <span style={{ color: "#475569" }}>Region edges:</span>
+                      <span style={{ color: "#58534c" }}>Region edges:</span>
                       <select
                         aria-label="VTracer composition"
                         value={vtracerComposition}
@@ -2110,7 +2110,7 @@ export function VisionObjectIsolator({
                       </select>
                     </label>
                     <label style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
-                      <span style={{ color: "#475569" }}>Color clustering:</span>
+                      <span style={{ color: "#58534c" }}>Color clustering:</span>
                       <select
                         aria-label="VTracer clustering"
                         value={vtracerClustering}
@@ -2132,8 +2132,8 @@ export function VisionObjectIsolator({
                       <div
                         style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}
                       >
-                        <span style={{ color: "#475569" }}>Color sensitivity:</span>
-                        <strong style={{ color: "#0f172a" }}>{vtracerLayerDifference}</strong>
+                        <span style={{ color: "#58534c" }}>Color sensitivity:</span>
+                        <strong style={{ color: "#1a1714" }}>{vtracerLayerDifference}</strong>
                       </div>
                       <input
                         type="range"
@@ -2149,7 +2149,7 @@ export function VisionObjectIsolator({
                         }}
                         style={{ width: "100%", height: 3, cursor: "pointer" }}
                       />
-                      <span style={{ display: "block", color: "#64748b", fontSize: 7.5 }}>
+                      <span style={{ display: "block", color: "#78726a", fontSize: 7.5 }}>
                         Lower keeps more color regions; higher merges similar colors.
                       </span>
                     </div>
@@ -2157,8 +2157,8 @@ export function VisionObjectIsolator({
                       <div
                         style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}
                       >
-                        <span style={{ color: "#475569" }}>Noise filter (side):</span>
-                        <strong style={{ color: "#0f172a" }}>{vtracerFilterSpeckle}px</strong>
+                        <span style={{ color: "#58534c" }}>Noise filter (side):</span>
+                        <strong style={{ color: "#1a1714" }}>{vtracerFilterSpeckle}px</strong>
                       </div>
                       <input
                         type="range"
@@ -2183,8 +2183,8 @@ export function VisionObjectIsolator({
                             fontSize: 8.5,
                           }}
                         >
-                          <span style={{ color: "#475569" }}>B&amp;W threshold:</span>
-                          <strong style={{ color: "#0f172a" }}>{vtracerBinaryThreshold}</strong>
+                          <span style={{ color: "#58534c" }}>B&amp;W threshold:</span>
+                          <strong style={{ color: "#1a1714" }}>{vtracerBinaryThreshold}</strong>
                         </div>
                         <input
                           type="range"
@@ -2199,7 +2199,7 @@ export function VisionObjectIsolator({
                           }}
                           style={{ width: "100%", height: 3, cursor: "pointer" }}
                         />
-                        <span style={{ display: "block", color: "#64748b", fontSize: 7.5 }}>
+                        <span style={{ display: "block", color: "#78726a", fontSize: 7.5 }}>
                           Higher includes lighter pixels in the foreground.
                         </span>
                       </div>
@@ -2209,7 +2209,7 @@ export function VisionObjectIsolator({
                         display: "flex",
                         alignItems: "center",
                         gap: 4,
-                        color: "#475569",
+                        color: "#58534c",
                         fontSize: 8.5,
                       }}
                     >
@@ -2230,8 +2230,8 @@ export function VisionObjectIsolator({
                 {/* Detail Level Slider */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}>
-                    <span style={{ color: "#475569" }}>Detail Resolution:</span>
-                    <strong style={{ color: "#0f172a" }}>Level {detailLevel} / 5</strong>
+                    <span style={{ color: "#58534c" }}>Detail Resolution:</span>
+                    <strong style={{ color: "#1a1714" }}>Level {detailLevel} / 5</strong>
                   </div>
                   <input
                     type="range"
@@ -2250,8 +2250,8 @@ export function VisionObjectIsolator({
                 {/* Corner Sharpness Slider */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}>
-                    <span style={{ color: "#475569" }}>Corner Sharpness:</span>
-                    <strong style={{ color: "#0f172a" }}>
+                    <span style={{ color: "#58534c" }}>Corner Sharpness:</span>
+                    <strong style={{ color: "#1a1714" }}>
                       {Math.round(cornerSharpness * 100)}%
                     </strong>
                   </div>
@@ -2272,8 +2272,8 @@ export function VisionObjectIsolator({
                 {/* Smoothing Slider */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}>
-                    <span style={{ color: "#475569" }}>Curve Smoothing:</span>
-                    <strong style={{ color: "#0f172a" }}>{smoothing.toFixed(2)}</strong>
+                    <span style={{ color: "#58534c" }}>Curve Smoothing:</span>
+                    <strong style={{ color: "#1a1714" }}>{smoothing.toFixed(2)}</strong>
                   </div>
                   <input
                     type="range"
@@ -2296,8 +2296,8 @@ export function VisionObjectIsolator({
                       <div
                         style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5 }}
                       >
-                        <span style={{ color: "#475569" }}>Noise Filter:</span>
-                        <strong style={{ color: "#0f172a" }}>{minArea}px</strong>
+                        <span style={{ color: "#58534c" }}>Noise Filter:</span>
+                        <strong style={{ color: "#1a1714" }}>{minArea}px</strong>
                       </div>
                       <input
                         type="range"
@@ -2331,14 +2331,14 @@ export function VisionObjectIsolator({
                 fontWeight: 700,
                 borderRadius: 5,
                 border: "none",
-                background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+                background: "linear-gradient(135deg, #d64418 0%, #b52c00 100%)",
                 color: "#fff",
                 cursor: busy ? "wait" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 4,
-                boxShadow: "0 1px 3px rgba(99, 102, 241, 0.3)",
+                boxShadow: "0 1px 3px rgba(214, 68, 24, 0.3)",
               }}
             >
               <IconZap size={12} color="#ffffff" fill="#ffffff" />
@@ -2367,7 +2367,7 @@ export function VisionObjectIsolator({
       )}
 
       {statusMessage && (
-        <div style={{ marginTop: 4, fontSize: 9.5, color: "#6b7280" }}>{statusMessage}</div>
+        <div style={{ marginTop: 4, fontSize: 9.5, color: "#76716c" }}>{statusMessage}</div>
       )}
     </div>
   );

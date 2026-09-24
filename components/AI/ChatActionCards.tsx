@@ -48,7 +48,7 @@ export function ContentPolicyErrorCard({
     <div
       data-testid={`error-card-${messageId}`}
       style={{
-        background: "#18181b",
+        background: "#1a1816",
         border: "1px solid rgba(255, 255, 255, 0.08)",
         borderRadius: 12,
         padding: "16px 18px",
@@ -62,7 +62,7 @@ export function ContentPolicyErrorCard({
     >
       <div
         style={{
-          color: "#f8fafc",
+          color: "#fcf9f5",
           fontSize: 13.5,
           fontWeight: 600,
           letterSpacing: "-0.01em",
@@ -72,7 +72,7 @@ export function ContentPolicyErrorCard({
       </div>
       <div
         style={{
-          color: "#cbd5e1",
+          color: "#d9d3cc",
           fontSize: 12,
           lineHeight: 1.45,
         }}
@@ -87,7 +87,7 @@ export function ContentPolicyErrorCard({
             borderRadius: 8,
             padding: "8px 12px",
             fontSize: 11.5,
-            color: "#94a3b8",
+            color: "#a7a198",
             fontFamily: "ui-monospace, monospace",
             maxHeight: 68,
             overflow: "hidden",
@@ -95,7 +95,7 @@ export function ContentPolicyErrorCard({
             lineHeight: 1.4,
           }}
         >
-          <span style={{ color: "#64748b", fontWeight: 600, marginRight: 6 }}>คำขอ:</span>
+          <span style={{ color: "#78726a", fontWeight: 600, marginRight: 6 }}>คำขอ:</span>
           {errorCard.promptToEdit}
         </div>
       )}
@@ -110,7 +110,7 @@ export function ContentPolicyErrorCard({
           style={{
             marginTop: 6,
             background: "#ffffff",
-            color: "#18181b",
+            color: "#1a1816",
             border: "none",
             borderRadius: 8,
             padding: "8px 14px",
@@ -125,7 +125,7 @@ export function ContentPolicyErrorCard({
             width: "100%",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#f1f5f9";
+            e.currentTarget.style.background = "#f8f4ef";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = "#ffffff";
@@ -198,7 +198,7 @@ export function ApprovalPlanProposalCard({
             border: 0,
             borderRadius: 6,
             padding: "5px 10px",
-            background: busy ? "#94a3b8" : "#d97706",
+            background: busy ? "#a7a198" : "#d97706",
             color: "#ffffff",
             cursor: busy ? "default" : "pointer",
             fontSize: 10.5,
@@ -254,15 +254,15 @@ export function SequentialPlanCard({
         alignSelf: "stretch",
         padding: "10px 12px",
         borderRadius: 8,
-        background: "#faf5ff",
-        border: "1px solid #e9d5ff",
+        background: "#fff0ea",
+        border: "1px solid #ffc7b3",
         color: "#581c87",
         fontSize: 11,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <BoltIcon style={{ color: "#7c3aed" }} />
+          <BoltIcon style={{ color: "#b52c00" }} />
           <strong style={{ fontSize: 11.5, color: "#581c87" }}>
             Multi-Specialist Plan ({plan.steps.length} steps)
           </strong>
@@ -272,8 +272,8 @@ export function SequentialPlanCard({
             fontSize: 9.5,
             padding: "2px 7px",
             borderRadius: 10,
-            background: "#f3e8ff",
-            color: "#7c3aed",
+            background: "#ffe2d6",
+            color: "#b52c00",
             fontWeight: 700,
           }}
         >
@@ -294,17 +294,17 @@ export function SequentialPlanCard({
               padding: "5px 8px",
               background: "#ffffff",
               borderRadius: 6,
-              border: "1px solid #f3e8ff",
+              border: "1px solid #ffe2d6",
               fontSize: 10,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontWeight: 700, color: "#7c3aed" }}>#{idx + 1}</span>
+              <span style={{ fontWeight: 700, color: "#b52c00" }}>#{idx + 1}</span>
               <strong style={{ color: "#1e1b4b" }}>{step.name}</strong>
               <span
                 style={{
                   fontSize: 9,
-                  background: "#f3e8ff",
+                  background: "#ffe2d6",
                   color: "#6b21a8",
                   padding: "1px 5px",
                   borderRadius: 4,
@@ -324,12 +324,12 @@ export function SequentialPlanCard({
                   step.status === "completed"
                     ? "#059669"
                     : step.status === "running"
-                      ? "#2563eb"
+                      ? "#ca3701"
                       : step.status === "paused_on_gate"
                         ? "#d97706"
                         : step.status === "failed"
                           ? "#dc2626"
-                          : "#64748b",
+                          : "#78726a",
               }}
             >
               {step.status === "completed" ? (
@@ -339,7 +339,7 @@ export function SequentialPlanCard({
                 </>
               ) : step.status === "running" ? (
                 <>
-                  <SpinnerIcon style={{ width: 11, height: 11, color: "#2563eb" }} />
+                  <SpinnerIcon style={{ width: 11, height: 11, color: "#ca3701" }} />
                   <span>Running</span>
                 </>
               ) : step.status === "paused_on_gate" ? (
@@ -365,7 +365,7 @@ export function SequentialPlanCard({
             border: 0,
             borderRadius: 6,
             padding: "6px 12px",
-            background: isExecutingPlan ? "#9333ea" : "#7c3aed",
+            background: isExecutingPlan ? "#b52c00" : "#b52c00",
             color: "#ffffff",
             fontWeight: 700,
             fontSize: 10.5,
@@ -383,11 +383,11 @@ export function SequentialPlanCard({
           onClick={onDiscardPlan}
           disabled={isExecutingPlan}
           style={{
-            border: "1px solid #ddd6fe",
+            border: "1px solid #ffc7b3",
             borderRadius: 6,
             padding: "6px 10px",
             background: "transparent",
-            color: "#7c3aed",
+            color: "#b52c00",
             fontSize: 10,
             cursor: "pointer",
           }}
@@ -495,7 +495,7 @@ export function StagedVariationsCard({
             style={{
               position: "relative",
               flex: "0 0 110px",
-              border: v.status === "accepted" ? "2px solid #10b981" : "1px solid #e2e8f0",
+              border: v.status === "accepted" ? "2px solid #10b981" : "1px solid #ece7e0",
               borderRadius: 8,
               padding: 5,
               background: "#ffffff",
@@ -512,7 +512,7 @@ export function StagedVariationsCard({
                 height: 64,
                 borderRadius: 4,
                 overflow: "hidden",
-                background: "#f8fafc",
+                background: "#fcf9f5",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -533,14 +533,14 @@ export function StagedVariationsCard({
                   }}
                 />
               ) : (
-                <ImageIcon style={{ width: 22, height: 22, color: "#94a3b8" }} />
+                <ImageIcon style={{ width: 22, height: 22, color: "#a7a198" }} />
               )}
             </div>
             <span
               style={{
                 fontSize: 9.5,
                 fontWeight: 600,
-                color: "#334155",
+                color: "#443f39",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -560,7 +560,7 @@ export function StagedVariationsCard({
                   padding: "3px 4px",
                   borderRadius: 4,
                   border: "none",
-                  background: v.status === "accepted" ? "#10b981" : "#4f46e5",
+                  background: v.status === "accepted" ? "#10b981" : "#b52c00",
                   color: "#ffffff",
                   fontSize: 9.5,
                   fontWeight: 700,
@@ -589,9 +589,9 @@ export function StagedVariationsCard({
                 style={{
                   padding: "3px 5px",
                   borderRadius: 4,
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid #ece7e0",
                   background: "#ffffff",
-                  color: "#64748b",
+                  color: "#78726a",
                   fontSize: 9,
                   cursor: "pointer",
                   display: "flex",

@@ -82,7 +82,7 @@ const RasterStudioShell = dynamic(() => import("@/components/RasterStudio/Raster
 const SLIDE_BG_PALETTE = [
   "#ffffff",
   "#f8f9fa",
-  "#e9ecef",
+  "#eeebe8",
   "#fff9db",
   "#ffe3e3",
   "#d3f9d8",
@@ -512,8 +512,8 @@ export default function ProjectEditorPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--bg, #f8fafc)",
-          color: "var(--ink, #0f172a)",
+          background: "var(--bg, #fcf9f5)",
+          color: "var(--ink, #1a1714)",
           padding: 24,
         }}
       >
@@ -522,7 +522,7 @@ export default function ProjectEditorPage() {
             maxWidth: 420,
             width: "100%",
             background: "var(--surface-solid, #ffffff)",
-            border: "1px solid var(--stroke, #e2e8f0)",
+            border: "1px solid var(--stroke, #ece7e0)",
             borderRadius: 16,
             padding: 32,
             textAlign: "center",
@@ -549,14 +549,14 @@ export default function ProjectEditorPage() {
             style={{
               margin: "0 0 24px",
               fontSize: 13,
-              color: "var(--ink-muted, #64748b)",
+              color: "var(--ink-muted, #78726a)",
               lineHeight: 1.5,
             }}
           >
             โปรเจกต์รหัส{" "}
             <code
               style={{
-                background: "var(--surface-hover, #f1f5f9)",
+                background: "var(--surface-hover, #f8f4ef)",
                 padding: "2px 6px",
                 borderRadius: 4,
               }}
@@ -572,13 +572,13 @@ export default function ProjectEditorPage() {
               alignItems: "center",
               justifyContent: "center",
               padding: "10px 20px",
-              background: "var(--accent, #6366f1)",
+              background: "var(--accent, #d64418)",
               color: "#ffffff",
               borderRadius: 8,
               fontSize: 13,
               fontWeight: 600,
               textDecoration: "none",
-              boxShadow: "0 4px 12px rgba(99, 102, 241, 0.25)",
+              boxShadow: "0 4px 12px rgba(214, 68, 24, 0.25)",
             }}
           >
             กลับไปหน้ารายการโปรเจกต์
@@ -646,7 +646,7 @@ export default function ProjectEditorPage() {
               style={{
                 fontSize: 13,
                 fontWeight: 600,
-                color: "var(--ink, #111827)",
+                color: "var(--ink, #1a1815)",
                 background: "transparent",
                 border: "1px solid transparent",
                 borderRadius: 6,
@@ -657,13 +657,13 @@ export default function ProjectEditorPage() {
               }}
               onFocus={(e) => {
                 e.currentTarget.style.background = "var(--surface-solid, #ffffff)";
-                e.currentTarget.style.borderColor = "var(--accent, #6366f1)";
-                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(99, 102, 241, 0.15)";
+                e.currentTarget.style.borderColor = "var(--accent, #d64418)";
+                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(214, 68, 24, 0.15)";
               }}
               onMouseEnter={(e) => {
                 if (document.activeElement !== e.currentTarget) {
-                  e.currentTarget.style.background = "var(--surface-hover, #f3f4f6)";
-                  e.currentTarget.style.borderColor = "var(--stroke, #e5e7eb)";
+                  e.currentTarget.style.background = "var(--surface-hover, #f6f4f0)";
+                  e.currentTarget.style.borderColor = "var(--stroke, #eae6e1)";
                 }
               }}
               onMouseLeave={(e) => {
@@ -682,9 +682,9 @@ export default function ProjectEditorPage() {
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: "#4338ca",
-                background: "#eef2ff",
-                border: "1px solid #c7d2fe",
+                color: "#9b2500",
+                background: "#fff0ea",
+                border: "1px solid #ffc7b3",
                 padding: "2px 8px",
                 borderRadius: 999,
                 display: "inline-flex",
@@ -694,7 +694,7 @@ export default function ProjectEditorPage() {
               }}
             >
               ∞ {INFINITY_CANVAS_LABEL}
-              <span style={{ fontWeight: 500, color: "#6366f1" }}>not exported</span>
+              <span style={{ fontWeight: 500, color: "#d64418" }}>not exported</span>
             </span>
           ) : null}
 
@@ -784,9 +784,9 @@ export default function ProjectEditorPage() {
                       padding: "8px 12px",
                       fontSize: 11,
                       lineHeight: 1.4,
-                      color: "#4338ca",
-                      background: "#eef2ff",
-                      borderBottom: "1px solid #c7d2fe",
+                      color: "#9b2500",
+                      background: "#fff0ea",
+                      borderBottom: "1px solid #ffc7b3",
                       maxWidth: 240,
                     }}
                   >
@@ -973,7 +973,7 @@ export default function ProjectEditorPage() {
                     width: 28,
                     height: 28,
                     borderRadius: 6,
-                    border: "1px solid var(--stroke, #e5e7eb)",
+                    border: "1px solid var(--stroke, #eae6e1)",
                     background: "var(--surface-solid, #fff)",
                     display: "flex",
                     alignItems: "center",
@@ -994,7 +994,7 @@ export default function ProjectEditorPage() {
                       left: 0,
                       width: 220,
                       background: "var(--surface-solid, #fff)",
-                      border: "1px solid var(--stroke, #e5e7eb)",
+                      border: "1px solid var(--stroke, #eae6e1)",
                       borderRadius: 9,
                       boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
                       padding: "6px 0",
@@ -1076,7 +1076,7 @@ export default function ProjectEditorPage() {
                     <HamburgerItem label="Reset the canvas" onClick={resetCanvas} danger />
 
                     <div
-                      style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "4px 0" }}
+                      style={{ height: 1, background: "var(--stroke, #eae6e1)", margin: "4px 0" }}
                     />
 
                     {/* Canvas background */}
@@ -1084,7 +1084,7 @@ export default function ProjectEditorPage() {
                       <div
                         style={{
                           fontSize: 9,
-                          color: "var(--ink-muted, #6b7280)",
+                          color: "var(--ink-muted, #76716c)",
                           marginBottom: 6,
                           fontWeight: 500,
                         }}
@@ -1104,8 +1104,8 @@ export default function ProjectEditorPage() {
                               borderRadius: 3,
                               border:
                                 currentSlideBackground === c
-                                  ? "2px solid var(--accent, #6366f1)"
-                                  : "1px solid var(--stroke, #d1d5db)",
+                                  ? "2px solid var(--accent, #d64418)"
+                                  : "1px solid var(--stroke, #d9d4cf)",
                               background: c,
                               cursor: "pointer",
                               padding: 0,
@@ -1131,7 +1131,7 @@ export default function ProjectEditorPage() {
               alignItems: "center",
               gap: 3,
               background: "var(--surface-solid, #fff)",
-              border: "1px solid var(--stroke, #e5e7eb)",
+              border: "1px solid var(--stroke, #eae6e1)",
               borderRadius: 8,
               padding: "3px 4px",
               boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
@@ -1152,7 +1152,7 @@ export default function ProjectEditorPage() {
                   borderRadius: 5,
                   border: "none",
                   background: "transparent",
-                  color: "var(--ink, #111827)",
+                  color: "var(--ink, #1a1815)",
                   cursor: "pointer",
                   transition: "all 0.12s ease",
                 }}
@@ -1172,7 +1172,7 @@ export default function ProjectEditorPage() {
                   borderRadius: 5,
                   border: "none",
                   background: "transparent",
-                  color: "var(--ink, #111827)",
+                  color: "var(--ink, #1a1815)",
                   cursor: "pointer",
                   transition: "all 0.12s ease",
                 }}
@@ -1185,7 +1185,7 @@ export default function ProjectEditorPage() {
               style={{
                 width: 1,
                 height: 16,
-                background: "var(--stroke, #e5e7eb)",
+                background: "var(--stroke, #eae6e1)",
                 margin: "0 2px",
               }}
             />
@@ -1208,7 +1208,7 @@ export default function ProjectEditorPage() {
                   borderRadius: 4,
                   border: "none",
                   background: "transparent",
-                  color: "var(--ink, #374151)",
+                  color: "var(--ink, #43403b)",
                   cursor: "pointer",
                 }}
               >
@@ -1228,7 +1228,7 @@ export default function ProjectEditorPage() {
                     borderRadius: 4,
                     border: "1px solid transparent",
                     background: "transparent",
-                    color: "var(--ink, #374151)",
+                    color: "var(--ink, #43403b)",
                     fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
@@ -1249,7 +1249,7 @@ export default function ProjectEditorPage() {
                       right: 0,
                       width: 140,
                       background: "var(--surface-solid, #fff)",
-                      border: "1px solid var(--stroke, #e5e7eb)",
+                      border: "1px solid var(--stroke, #eae6e1)",
                       borderRadius: 8,
                       boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                       padding: "6px 0",
@@ -1280,7 +1280,7 @@ export default function ProjectEditorPage() {
                       </button>
                     ))}
                     <div
-                      style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "4px 0" }}
+                      style={{ height: 1, background: "var(--stroke, #eae6e1)", margin: "4px 0" }}
                     />
                     <button
                       type="button"
@@ -1296,7 +1296,7 @@ export default function ProjectEditorPage() {
                         border: "none",
                         background: "transparent",
                         cursor: "pointer",
-                        color: "var(--accent, #6366f1)",
+                        color: "var(--accent, #d64418)",
                         fontWeight: 600,
                       }}
                     >
@@ -1322,7 +1322,7 @@ export default function ProjectEditorPage() {
                   borderRadius: 4,
                   border: "none",
                   background: "transparent",
-                  color: "var(--ink, #374151)",
+                  color: "var(--ink, #43403b)",
                   cursor: "pointer",
                 }}
               >
@@ -1418,7 +1418,7 @@ function StatsModal({ onClose }: { onClose: () => void }) {
             padding: "8px",
             borderRadius: 6,
             border: "none",
-            background: "var(--accent, #6366f1)",
+            background: "var(--accent, #d64418)",
             color: "#fff",
             fontSize: 12,
             cursor: "pointer",
@@ -1437,13 +1437,13 @@ function StatBox({ label, value }: { label: string; value: number }) {
       style={{
         padding: 12,
         borderRadius: 8,
-        border: "1px solid var(--stroke, #e5e7eb)",
-        background: "var(--surface-hover, #f3f4f6)",
+        border: "1px solid var(--stroke, #eae6e1)",
+        background: "var(--surface-hover, #f6f4f0)",
         textAlign: "center",
       }}
     >
-      <div style={{ fontSize: 22, fontWeight: 700, color: "var(--accent, #6366f1)" }}>{value}</div>
-      <div style={{ fontSize: 11, color: "var(--ink-muted, #6b7280)" }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: "var(--accent, #d64418)" }}>{value}</div>
+      <div style={{ fontSize: 11, color: "var(--ink-muted, #76716c)" }}>{label}</div>
     </div>
   );
 }
@@ -1476,13 +1476,13 @@ function HamburgerItem({
         textAlign: "left",
       }}
       onMouseEnter={(e) =>
-        (e.currentTarget.style.background = danger ? "#fef2f2" : "var(--surface-hover, #f3f4f6)")
+        (e.currentTarget.style.background = danger ? "#fef2f2" : "var(--surface-hover, #f6f4f0)")
       }
       onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
     >
       <span style={{ flex: 1 }}>{label}</span>
       {shortcut && (
-        <span style={{ fontSize: 9, color: "var(--ink-muted, #9ca3af)" }}>{shortcut}</span>
+        <span style={{ fontSize: 9, color: "var(--ink-muted, #a6a29c)" }}>{shortcut}</span>
       )}
     </button>
   );

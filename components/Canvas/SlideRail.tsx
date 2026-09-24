@@ -88,7 +88,7 @@ export default function SlideRail() {
       <aside
         style={{
           width: 20,
-          borderRight: "1px solid var(--stroke, #e5e7eb)",
+          borderRight: "1px solid var(--stroke, #eae6e1)",
           background: "var(--bg-elev, #fafafa)",
           display: "flex",
           flexDirection: "column",
@@ -104,14 +104,14 @@ export default function SlideRail() {
             width: 16,
             height: 16,
             borderRadius: 3,
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             background: "var(--surface-solid, #fff)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: 8,
-            color: "var(--ink-muted, #6b7280)",
+            color: "var(--ink-muted, #76716c)",
           }}
         >
           ›
@@ -128,7 +128,7 @@ export default function SlideRail() {
       }}
       style={{
         width: 150,
-        borderRight: "1px solid var(--stroke, #e5e7eb)",
+        borderRight: "1px solid var(--stroke, #eae6e1)",
         background: "var(--bg-elev, #fafafa)",
         display: "flex",
         flexDirection: "column",
@@ -142,7 +142,7 @@ export default function SlideRail() {
           justifyContent: "space-between",
           alignItems: "center",
           padding: "6px 8px",
-          borderBottom: "1px solid var(--stroke, #e5e7eb)",
+          borderBottom: "1px solid var(--stroke, #eae6e1)",
         }}
       >
         <button
@@ -152,14 +152,14 @@ export default function SlideRail() {
             width: 18,
             height: 18,
             borderRadius: 3,
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             background: "var(--surface-solid, #fff)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: 10,
-            color: "var(--ink-muted, #6b7280)",
+            color: "var(--ink-muted, #76716c)",
             lineHeight: 1,
             transition: "all 0.15s ease",
           }}
@@ -175,7 +175,7 @@ export default function SlideRail() {
               width: 18,
               height: 18,
               borderRadius: 3,
-              border: "1px solid var(--stroke, #d1d5db)",
+              border: "1px solid var(--stroke, #d9d4cf)",
               background: "var(--surface-solid, #fff)",
               cursor: canMoveUp ? "pointer" : "not-allowed",
               opacity: canMoveUp ? 1 : 0.35,
@@ -184,7 +184,7 @@ export default function SlideRail() {
               justifyContent: "center",
               fontSize: 10,
               fontWeight: 600,
-              color: "var(--ink-muted, #4b5563)",
+              color: "var(--ink-muted, #58544e)",
               lineHeight: 1,
               transition: "all 0.15s ease",
             }}
@@ -200,7 +200,7 @@ export default function SlideRail() {
               width: 18,
               height: 18,
               borderRadius: 3,
-              border: "1px solid var(--stroke, #d1d5db)",
+              border: "1px solid var(--stroke, #d9d4cf)",
               background: "var(--surface-solid, #fff)",
               cursor: canMoveDown ? "pointer" : "not-allowed",
               opacity: canMoveDown ? 1 : 0.35,
@@ -209,7 +209,7 @@ export default function SlideRail() {
               justifyContent: "center",
               fontSize: 10,
               fontWeight: 600,
-              color: "var(--ink-muted, #4b5563)",
+              color: "var(--ink-muted, #58544e)",
               lineHeight: 1,
               transition: "all 0.15s ease",
             }}
@@ -224,14 +224,14 @@ export default function SlideRail() {
               width: 18,
               height: 18,
               borderRadius: 3,
-              border: "1px solid var(--stroke, #d1d5db)",
+              border: "1px solid var(--stroke, #d9d4cf)",
               background: "var(--surface-solid, #fff)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontSize: 12,
-              color: "var(--ink-muted, #374151)",
+              color: "var(--ink-muted, #43403b)",
               lineHeight: 1,
               transition: "all 0.15s ease",
             }}
@@ -246,14 +246,14 @@ export default function SlideRail() {
               width: 18,
               height: 18,
               borderRadius: 3,
-              border: "1px solid var(--stroke, #d1d5db)",
+              border: "1px solid var(--stroke, #d9d4cf)",
               background: "var(--surface-solid, #fff)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontSize: 11,
-              color: "var(--ink-muted, #374151)",
+              color: "var(--ink-muted, #43403b)",
               lineHeight: 1,
               transition: "all 0.15s ease",
             }}
@@ -270,14 +270,14 @@ export default function SlideRail() {
               width: 18,
               height: 18,
               borderRadius: 3,
-              border: "1px solid var(--stroke, #d1d5db)",
+              border: "1px solid var(--stroke, #d9d4cf)",
               background: "var(--surface-solid, #fff)",
               cursor: canDelete ? "pointer" : "not-allowed",
               opacity: canDelete ? 1 : 0.35,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: canDelete ? "#ef4444" : "var(--ink-muted, #9ca3af)",
+              color: canDelete ? "#ef4444" : "var(--ink-muted, #a6a29c)",
               lineHeight: 1,
               transition: "all 0.15s ease",
             }}
@@ -353,7 +353,7 @@ export default function SlideRail() {
             left: ctxMenu.x,
             zIndex: 50,
             background: "var(--surface-solid, #fff)",
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             borderRadius: 8,
             boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
             padding: "4px 0",
@@ -389,7 +389,7 @@ export default function SlideRail() {
                   setCtxMenu(null);
                 }}
               />
-              <div style={{ height: 1, background: "var(--stroke, #e5e7eb)", margin: "3px 0" }} />
+              <div style={{ height: 1, background: "var(--stroke, #eae6e1)", margin: "3px 0" }} />
               <CtxItem
                 label="Delete"
                 danger
@@ -482,7 +482,7 @@ function SlideThumb({
       <div
         style={{
           fontSize: 8,
-          color: "var(--ink-muted, #9ca3af)",
+          color: "var(--ink-muted, #a6a29c)",
           paddingTop: 3,
           minWidth: 10,
           textAlign: "right",
@@ -515,10 +515,10 @@ function SlideThumb({
           position: "relative",
           flex: 1,
           border: active
-            ? "2px solid var(--accent, #6366f1)"
+            ? "2px solid var(--accent, #d64418)"
             : selected
               ? "2px solid #f59e0b"
-              : "1px solid var(--stroke, #e5e7eb)",
+              : "1px solid var(--stroke, #eae6e1)",
           borderRadius: 4,
           overflow: "hidden",
           cursor: "pointer",
@@ -545,7 +545,7 @@ function SlideThumb({
             right: 2,
             padding: "1px 3px",
             fontSize: 8,
-            color: "#9ca3af",
+            color: "#a6a29c",
             background: "rgba(255,255,255,0.7)",
             borderRadius: 2,
             pointerEvents: "none",
@@ -565,7 +565,7 @@ function SlideThumb({
               fontSize: 7,
               fontWeight: 700,
               letterSpacing: 0.2,
-              color: "#4338ca",
+              color: "#9b2500",
               background: "rgba(238, 242, 255, 0.92)",
               borderRadius: 2,
               pointerEvents: "none",
@@ -633,7 +633,7 @@ function CtxItem({
         padding: "6px 12px",
         border: "none",
         background: "transparent",
-        color: danger ? "#dc2626" : disabled ? "#9ca3af" : "var(--ink, #111)",
+        color: danger ? "#dc2626" : disabled ? "#a6a29c" : "var(--ink, #111)",
         fontSize: 12,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
@@ -695,7 +695,7 @@ function RenameOverlay({
             width: "100%",
             padding: "8px 10px",
             borderRadius: 6,
-            border: "1px solid var(--stroke, #e5e7eb)",
+            border: "1px solid var(--stroke, #eae6e1)",
             fontSize: 13,
             marginBottom: 10,
           }}
@@ -706,7 +706,7 @@ function RenameOverlay({
             style={{
               padding: "6px 12px",
               borderRadius: 6,
-              border: "1px solid var(--stroke, #e5e7eb)",
+              border: "1px solid var(--stroke, #eae6e1)",
               background: "var(--surface-solid, #fff)",
               fontSize: 12,
               cursor: "pointer",
@@ -720,7 +720,7 @@ function RenameOverlay({
               padding: "6px 12px",
               borderRadius: 6,
               border: "none",
-              background: "var(--accent, #6366f1)",
+              background: "var(--accent, #d64418)",
               color: "#fff",
               fontSize: 12,
               cursor: "pointer",

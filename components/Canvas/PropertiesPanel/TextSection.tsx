@@ -65,7 +65,7 @@ export function TextSection({
           const g = parseInt(hex.substring(2, 4), 16) || 255;
           const b = parseInt(hex.substring(4, 6), 16) || 255;
           const lum = 0.2126 * (r / 255) + 0.7152 * (g / 255) + 0.0722 * (b / 255);
-          optimalColor = lum < 0.5 ? "#ffffff" : "#0f172a";
+          optimalColor = lum < 0.5 ? "#ffffff" : "#1a1714";
         }
       }
 
@@ -97,7 +97,7 @@ export function TextSection({
       </Section>
       <Section>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 9, color: "#9ca3af" }}>Line</span>
+          <span style={{ fontSize: 9, color: "#a6a29c" }}>Line</span>
           <input
             type="range"
             min={100}
@@ -106,9 +106,9 @@ export function TextSection({
             onChange={(e) =>
               apply({ lineHeight: Number(e.currentTarget.value) / 100 }, "line spacing")
             }
-            style={{ width: 50, accentColor: "var(--accent, #6366f1)" }}
+            style={{ width: 50, accentColor: "var(--accent, #d64418)" }}
           />
-          <span style={{ fontSize: 9, color: "#9ca3af", minWidth: 20, textAlign: "right" }}>
+          <span style={{ fontSize: 9, color: "#a6a29c", minWidth: 20, textAlign: "right" }}>
             {firstText.lineHeight.toFixed(2)}
           </span>
         </div>
@@ -118,7 +118,7 @@ export function TextSection({
           style={{ display: "flex", alignItems: "center", gap: 6 }}
           title="Text on Path (Curved Text Arc)"
         >
-          <span style={{ fontSize: 9, color: "#9ca3af" }}>Curve</span>
+          <span style={{ fontSize: 9, color: "#a6a29c" }}>Curve</span>
           <input
             type="range"
             min={-100}
@@ -130,7 +130,7 @@ export function TextSection({
                 "text curvature",
               )
             }
-            style={{ width: 50, accentColor: "var(--accent, #6366f1)" }}
+            style={{ width: 50, accentColor: "var(--accent, #d64418)" }}
           />
           <button
             type="button"
@@ -141,7 +141,7 @@ export function TextSection({
               border: "none",
               cursor: "pointer",
               fontSize: 9,
-              color: (firstText.pathCurvature ?? 0) !== 0 ? "var(--accent, #6366f1)" : "#9ca3af",
+              color: (firstText.pathCurvature ?? 0) !== 0 ? "var(--accent, #d64418)" : "#a6a29c",
               padding: "0 2px",
             }}
           >
@@ -158,9 +158,9 @@ export function TextSection({
           style={{
             padding: "4px 8px",
             borderRadius: 5,
-            border: "1px solid rgba(99, 102, 241, 0.3)",
+            border: "1px solid rgba(214, 68, 24, 0.3)",
             background: "var(--surface-solid, #fff)",
-            color: "var(--accent, #6366f1)",
+            color: "var(--accent, #d64418)",
             fontSize: 10.5,
             fontWeight: 600,
             cursor: contrastBusy ? "wait" : "pointer",

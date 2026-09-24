@@ -46,9 +46,9 @@ function NewProjectGridCard({ onClick }: { onClick: () => void }) {
       }}
       style={{
         minHeight: 250,
-        background: "#f8fafc",
-        border: "2px dashed #cbd5e1",
-        borderRadius: 14,
+        background: "transparent",
+        border: "1.5px dashed rgba(26, 23, 20, 0.28)",
+        borderRadius: 10,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -62,13 +62,13 @@ function NewProjectGridCard({ onClick }: { onClick: () => void }) {
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-2px)";
-        e.currentTarget.style.borderColor = "#6366f1";
-        e.currentTarget.style.background = "#f5f3ff";
-        e.currentTarget.style.boxShadow = "0 8px 24px rgba(99, 102, 241, 0.12)";
+        e.currentTarget.style.borderColor = "#1a1714";
+        e.currentTarget.style.background = "#fdfcfa";
+        e.currentTarget.style.boxShadow = "4px 4px 0 #1a1714";
         const circle = e.currentTarget.querySelector(".new-proj-circle") as HTMLElement | null;
         if (circle) {
-          circle.style.background = "#6366f1";
-          circle.style.borderColor = "#6366f1";
+          circle.style.background = "#1a1714";
+          circle.style.borderColor = "#1a1714";
           circle.style.transform = "scale(1.08)";
         }
         const icon = e.currentTarget.querySelector(".new-proj-icon") as HTMLElement | null;
@@ -77,27 +77,27 @@ function NewProjectGridCard({ onClick }: { onClick: () => void }) {
         }
         const text = e.currentTarget.querySelector(".new-proj-text") as HTMLElement | null;
         if (text) {
-          text.style.color = "#4f46e5";
+          text.style.color = "#1a1714";
         }
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "none";
-        e.currentTarget.style.borderColor = "#cbd5e1";
-        e.currentTarget.style.background = "#f8fafc";
+        e.currentTarget.style.borderColor = "rgba(26, 23, 20, 0.28)";
+        e.currentTarget.style.background = "transparent";
         e.currentTarget.style.boxShadow = "none";
         const circle = e.currentTarget.querySelector(".new-proj-circle") as HTMLElement | null;
         if (circle) {
           circle.style.background = "#ffffff";
-          circle.style.borderColor = "#e2e8f0";
+          circle.style.borderColor = "#ece7e0";
           circle.style.transform = "scale(1)";
         }
         const icon = e.currentTarget.querySelector(".new-proj-icon") as HTMLElement | null;
         if (icon) {
-          icon.style.color = "#6366f1";
+          icon.style.color = "#1a1714";
         }
         const text = e.currentTarget.querySelector(".new-proj-text") as HTMLElement | null;
         if (text) {
-          text.style.color = "#334155";
+          text.style.color = "#443f39";
         }
       }}
     >
@@ -107,8 +107,8 @@ function NewProjectGridCard({ onClick }: { onClick: () => void }) {
           width: 50,
           height: 50,
           borderRadius: "50%",
-          background: "#ffffff",
-          border: "1.5px solid #e2e8f0",
+          background: "#fdfcfa",
+          border: "1.5px solid rgba(26, 23, 20, 0.2)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -120,7 +120,7 @@ function NewProjectGridCard({ onClick }: { onClick: () => void }) {
           className="new-proj-icon"
           style={{
             display: "inline-flex",
-            color: "#6366f1",
+            color: "#1a1714",
             transition: "color 0.2s ease",
           }}
         >
@@ -132,8 +132,8 @@ function NewProjectGridCard({ onClick }: { onClick: () => void }) {
         className="new-proj-text"
         style={{
           fontSize: 14,
-          fontWeight: 700,
-          color: "#334155",
+          fontWeight: 600,
+          color: "#443f39",
           letterSpacing: "-0.01em",
           transition: "color 0.2s ease",
         }}
@@ -226,11 +226,11 @@ function ProjectSlideThumbnail({ project }: { project: ProjectMetadata }) {
           background: "#ffffff",
           borderRadius: 6,
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
-          border: "1px solid #e2e8f0",
+          border: "1px solid #ece7e0",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#94a3b8",
+          color: "#a7a198",
         }}
       >
         <IconBrand />
@@ -436,7 +436,7 @@ export default function ProjectsPage() {
       <div style={fullScreenCenterStyle}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
           <ArtShiftLogo size="header" />
-          <span style={{ fontSize: 13, color: "#64748b", fontWeight: 500 }}>
+          <span style={{ fontSize: 13, color: "#78726a", fontWeight: 500 }}>
             กำลังตรวจสอบข้อมูลผู้ใช้…
           </span>
         </div>
@@ -448,8 +448,8 @@ export default function ProjectsPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
-        color: "#0f172a",
+        background: "#f4f0e8",
+        color: "#1a1714",
         display: "flex",
         flexDirection: "column",
         fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
@@ -467,9 +467,10 @@ export default function ProjectsPage() {
       {/* Top Navbar */}
       <header
         style={{
-          height: 60,
-          background: "#ffffff",
-          borderBottom: "1px solid #e2e8f0",
+          height: 64,
+          background: "rgba(244, 240, 232, 0.9)",
+          backdropFilter: "blur(14px)",
+          borderBottom: "1px solid rgba(26, 23, 20, 0.12)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -477,7 +478,6 @@ export default function ProjectsPage() {
           position: "sticky",
           top: 0,
           zIndex: 40,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
         }}
       >
         {/* Brand: wordmark navigates to Index home; PROJECTS is the current-page label */}
@@ -497,11 +497,12 @@ export default function ProjectsPage() {
             </Link>
             <span
               style={{
-                fontSize: 10,
-                fontWeight: 600,
-                color: "#6366f1",
-                letterSpacing: "0.02em",
-                marginTop: 2,
+                fontFamily: "var(--font-mono)",
+                fontSize: 9.5,
+                fontWeight: 500,
+                color: "#78726a",
+                letterSpacing: "0.14em",
+                marginTop: 3,
               }}
             >
               PROJECTS
@@ -538,7 +539,7 @@ export default function ProjectsPage() {
             <span>สร้างโปรเจกต์ใหม่</span>
           </button>
 
-          <div style={{ width: 1, height: 24, background: "#e2e8f0", margin: "0 4px" }} />
+          <div style={{ width: 1, height: 24, background: "#ece7e0", margin: "0 4px" }} />
 
           <ProfileMenu />
         </div>
@@ -552,8 +553,8 @@ export default function ProjectsPage() {
         {hasLegacy && (
           <div
             style={{
-              background: "linear-gradient(90deg, #eff6ff 0%, #e0e7ff 100%)",
-              border: "1px solid #bfdbfe",
+              background: "linear-gradient(90deg, #fff3ed 0%, #ffe2d6 100%)",
+              border: "1px solid #ffcebb",
               borderRadius: 12,
               padding: "16px 20px",
               marginBottom: 24,
@@ -561,7 +562,7 @@ export default function ProjectsPage() {
               alignItems: "center",
               justifyContent: "space-between",
               gap: 16,
-              boxShadow: "0 4px 14px rgba(59, 130, 246, 0.08)",
+              boxShadow: "0 4px 14px rgba(231, 84, 43, 0.08)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -570,7 +571,7 @@ export default function ProjectsPage() {
                   width: 36,
                   height: 36,
                   borderRadius: "50%",
-                  background: "#3b82f6",
+                  background: "#e7542b",
                   color: "#ffffff",
                   display: "flex",
                   alignItems: "center",
@@ -581,10 +582,10 @@ export default function ProjectsPage() {
                 <IconBrand />
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#7a1f02" }}>
                   ตรวจพบผลงานเดิมในระบบ (Legacy Workspace)
                 </div>
-                <div style={{ fontSize: 12, color: "#3b82f6", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "#e7542b", marginTop: 2 }}>
                   คุณมีชิ้นงานที่เคยบันทึกไว้ ต้องการนำเข้ามาเป็น Project เพื่อแก้ไขต่อในระบบใหม่หรือไม่?
                 </div>
               </div>
@@ -599,7 +600,7 @@ export default function ProjectsPage() {
                   padding: "8px 16px",
                   borderRadius: 7,
                   border: "none",
-                  background: "#2563eb",
+                  background: "#ca3701",
                   color: "#ffffff",
                   fontSize: 12,
                   fontWeight: 600,
@@ -615,9 +616,9 @@ export default function ProjectsPage() {
                 style={{
                   padding: "8px 12px",
                   borderRadius: 7,
-                  border: "1px solid #bfdbfe",
+                  border: "1px solid #ffcebb",
                   background: "#ffffff",
-                  color: "#64748b",
+                  color: "#78726a",
                   fontSize: 12,
                   fontWeight: 500,
                   cursor: "pointer",
@@ -699,20 +700,21 @@ export default function ProjectsPage() {
             <h1
               style={{
                 margin: 0,
-                fontSize: 24,
-                fontWeight: 800,
-                letterSpacing: "-0.02em",
-                color: "#0f172a",
+                fontSize: 30,
+                fontWeight: 600,
+                letterSpacing: "-0.025em",
+                color: "#1a1714",
               }}
             >
               โปรเจกต์ของคุณ
             </h1>
             <span
               style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#6366f1",
-                background: "#e0e7ff",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                fontWeight: 500,
+                color: "#443f39",
+                border: "1px solid rgba(26, 23, 20, 0.2)",
                 padding: "3px 10px",
                 borderRadius: 20,
               }}
@@ -734,7 +736,7 @@ export default function ProjectsPage() {
                 style={{
                   position: "absolute",
                   left: 10,
-                  color: "#94a3b8",
+                  color: "#a7a198",
                   display: "flex",
                   alignItems: "center",
                   pointerEvents: "none",
@@ -751,21 +753,21 @@ export default function ProjectsPage() {
                   height: 36,
                   padding: "0 12px 0 32px",
                   borderRadius: 8,
-                  border: "1px solid #cbd5e1",
+                  border: "1px solid #d9d3cc",
                   background: "#ffffff",
                   fontSize: 12,
                   outline: "none",
-                  color: "#0f172a",
+                  color: "#1a1714",
                   width: 200,
                   transition: "all 0.15s ease",
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#6366f1";
-                  e.currentTarget.style.boxShadow = "0 0 0 2px rgba(99, 102, 241, 0.15)";
+                  e.currentTarget.style.borderColor = "#1a1714";
+                  e.currentTarget.style.boxShadow = "0 0 0 2px rgba(26, 23, 20, 0.08)";
                   e.currentTarget.style.width = "260px";
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#cbd5e1";
+                  e.currentTarget.style.borderColor = "#d9d3cc";
                   e.currentTarget.style.boxShadow = "none";
                   e.currentTarget.style.width = "200px";
                 }}
@@ -780,11 +782,11 @@ export default function ProjectsPage() {
                 height: 36,
                 padding: "0 12px",
                 borderRadius: 8,
-                border: "1px solid #cbd5e1",
+                border: "1px solid #d9d3cc",
                 background: "#ffffff",
                 fontSize: 12,
                 fontWeight: 500,
-                color: "#334155",
+                color: "#443f39",
                 cursor: "pointer",
                 outline: "none",
               }}
@@ -798,14 +800,14 @@ export default function ProjectsPage() {
 
         {/* Project Grid / Empty State */}
         {loadingProjects ? (
-          <div style={{ textAlign: "center", padding: "64px 0", color: "#64748b" }}>
+          <div style={{ textAlign: "center", padding: "64px 0", color: "#78726a" }}>
             กำลังโหลดรายการโปรเจกต์…
           </div>
         ) : filteredProjects.length === 0 && searchQuery ? (
           <div
             style={{
               background: "#ffffff",
-              border: "2px dashed #e2e8f0",
+              border: "2px dashed #ece7e0",
               borderRadius: 16,
               padding: "64px 24px",
               textAlign: "center",
@@ -821,8 +823,8 @@ export default function ProjectsPage() {
                 width: 64,
                 height: 64,
                 borderRadius: "50%",
-                background: "#f1f5f9",
-                color: "#94a3b8",
+                background: "#f8f4ef",
+                color: "#a7a198",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -831,10 +833,10 @@ export default function ProjectsPage() {
               <IconBrand />
             </div>
             <div style={{ maxWidth: 360 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1714", marginBottom: 6 }}>
                 ไม่พบโปรเจกต์ที่ค้นหา
               </div>
-              <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 13, color: "#78726a", lineHeight: 1.5 }}>
                 {`ไม่พบโปรเจกต์ที่ตรงกับ "${searchQuery}" ลองค้นหาด้วยคำอื่น`}
               </div>
             </div>
@@ -857,13 +859,13 @@ export default function ProjectsPage() {
                 <div
                   key={p.id}
                   style={{
-                    background: "#ffffff",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 14,
+                    background: "#fdfcfa",
+                    border: "1px solid rgba(26, 23, 20, 0.14)",
+                    borderRadius: 10,
                     overflow: "hidden",
                     display: "flex",
                     flexDirection: "column",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                    boxShadow: "none",
                     transition:
                       "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
                     cursor: "pointer",
@@ -871,25 +873,25 @@ export default function ProjectsPage() {
                   onClick={() => router.push(`/projects/${p.id}/editor`)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = "translateY(-2px)";
-                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.08)";
-                    e.currentTarget.style.borderColor = "#cbd5e1";
+                    e.currentTarget.style.boxShadow = "4px 4px 0 #1a1714";
+                    e.currentTarget.style.borderColor = "#1a1714";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = "none";
-                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.03)";
-                    e.currentTarget.style.borderColor = "#e2e8f0";
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.borderColor = "rgba(26, 23, 20, 0.14)";
                   }}
                 >
                   {/* Thumbnail / Preview Header */}
                   <div
                     style={{
                       height: 150,
-                      background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
+                      background: "#ebe5da",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       position: "relative",
-                      borderBottom: "1px solid #edf2f7",
+                      borderBottom: "1px solid rgba(26, 23, 20, 0.1)",
                       overflow: "hidden",
                     }}
                   >
@@ -901,7 +903,7 @@ export default function ProjectsPage() {
                         position: "absolute",
                         bottom: 8,
                         right: 10,
-                        background: "rgba(15, 23, 42, 0.75)",
+                        background: "rgba(26, 23, 20, 0.75)",
                         backdropFilter: "blur(4px)",
                         color: "#ffffff",
                         fontSize: 10,
@@ -928,7 +930,7 @@ export default function ProjectsPage() {
                       style={{
                         fontSize: 14,
                         fontWeight: 700,
-                        color: "#0f172a",
+                        color: "#1a1714",
                         marginBottom: 4,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -939,7 +941,7 @@ export default function ProjectsPage() {
                       {p.name}
                     </div>
 
-                    <div style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: "#78726a", marginBottom: 12 }}>
                       แก้ไขล่าสุด: {formattedDate}
                     </div>
 
@@ -948,7 +950,7 @@ export default function ProjectsPage() {
                       style={{
                         marginTop: "auto",
                         paddingTop: 10,
-                        borderTop: "1px solid #f1f5f9",
+                        borderTop: "1px solid #f8f4ef",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
@@ -961,7 +963,7 @@ export default function ProjectsPage() {
                         style={{
                           fontSize: 12,
                           fontWeight: 600,
-                          color: "#6366f1",
+                          color: "#d64418",
                           background: "none",
                           border: "none",
                           cursor: "pointer",
@@ -982,7 +984,7 @@ export default function ProjectsPage() {
                           title="เปลี่ยนชื่อโปรเจกต์"
                           style={cardActionIconBtnStyle}
                         >
-                          <IconPenEdit size={12} color="#64748b" />
+                          <IconPenEdit size={12} color="#78726a" />
                         </button>
 
                         {/* Export button */}
@@ -992,7 +994,7 @@ export default function ProjectsPage() {
                           title="ส่งออกไฟล์ .artshift (สำรองข้อมูล)"
                           style={cardActionIconBtnStyle}
                         >
-                          <IconDownload size={12} color="#64748b" />
+                          <IconDownload size={12} color="#78726a" />
                         </button>
 
                         {/* Delete button */}
@@ -1019,13 +1021,13 @@ export default function ProjectsPage() {
             marginTop: 48,
             padding: "16px 20px",
             background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            border: "1px solid #ece7e0",
             borderRadius: 12,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             fontSize: 12,
-            color: "#64748b",
+            color: "#78726a",
             flexWrap: "wrap",
             gap: 12,
           }}
@@ -1047,10 +1049,10 @@ export default function ProjectsPage() {
       {deleteTarget && (
         <div style={modalBackdropStyle} onClick={() => setDeleteTarget(null)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 10px", fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: "0 0 10px", fontSize: 16, fontWeight: 700, color: "#1a1714" }}>
               ยืนยันการลบโปรเจกต์
             </h3>
-            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#78726a", lineHeight: 1.5 }}>
               คุณแน่ใจหรือไม่ว่าต้องการลบโปรเจกต์ <strong>"{deleteTarget.name}"</strong>?
               การกระทำนี้จะลบข้อมูลออกจากเครื่องและไม่สามารถกู้คืนได้
             </p>
@@ -1074,7 +1076,7 @@ export default function ProjectsPage() {
       {renameTarget && (
         <div style={modalBackdropStyle} onClick={() => setRenameTarget(null)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700, color: "#1a1714" }}>
               เปลี่ยนชื่อโปรเจกต์
             </h3>
             <input
@@ -1089,7 +1091,7 @@ export default function ProjectsPage() {
                 width: "100%",
                 padding: "8px 12px",
                 borderRadius: 8,
-                border: "1px solid #cbd5e1",
+                border: "1px solid #d9d3cc",
                 fontSize: 13,
                 outline: "none",
                 marginBottom: 20,
@@ -1135,22 +1137,22 @@ const fullScreenCenterStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#f8fafc",
+  background: "#f4f0e8",
 };
 
 const primaryBtnStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  padding: "8px 16px",
-  borderRadius: 8,
-  border: "none",
-  background: "#6366f1",
-  color: "#ffffff",
-  fontSize: 12,
+  padding: "8px 18px",
+  borderRadius: 999,
+  border: "1.5px solid #1a1714",
+  background: "#1a1714",
+  color: "#f4f0e8",
+  fontSize: 12.5,
   fontWeight: 600,
   cursor: "pointer",
-  boxShadow: "0 2px 6px rgba(99, 102, 241, 0.2)",
+  boxShadow: "2px 2px 0 #d64418",
   transition: "all 0.15s ease",
 };
 
@@ -1158,13 +1160,13 @@ const secondaryBtnStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  padding: "8px 14px",
-  borderRadius: 8,
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#334155",
-  fontSize: 12,
-  fontWeight: 600,
+  padding: "8px 16px",
+  borderRadius: 999,
+  border: "1px solid rgba(26, 23, 20, 0.2)",
+  background: "transparent",
+  color: "#1a1714",
+  fontSize: 12.5,
+  fontWeight: 500,
   cursor: "pointer",
   transition: "all 0.15s ease",
 };
@@ -1173,8 +1175,8 @@ const cardActionIconBtnStyle: React.CSSProperties = {
   width: 26,
   height: 26,
   borderRadius: 5,
-  border: "1px solid #e2e8f0",
-  background: "#f8fafc",
+  border: "1px solid #ece7e0",
+  background: "#fcf9f5",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1185,7 +1187,7 @@ const cardActionIconBtnStyle: React.CSSProperties = {
 const modalBackdropStyle: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(15, 23, 42, 0.5)",
+  background: "rgba(26, 23, 20, 0.5)",
   backdropFilter: "blur(4px)",
   zIndex: 100,
   display: "flex",

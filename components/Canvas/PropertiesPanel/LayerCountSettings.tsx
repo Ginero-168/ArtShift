@@ -12,10 +12,10 @@ import {
 const stepButtonStyle = {
   width: 32,
   height: 32,
-  border: "1px solid #cbd5e1",
+  border: "1px solid #d9d3cc",
   borderRadius: 5,
   background: "#fff",
-  color: "#0f172a",
+  color: "#1a1714",
   fontSize: 16,
   fontWeight: 700,
   lineHeight: 1,
@@ -69,7 +69,7 @@ export function LayerCountSettings({
       }}
     >
       <strong style={{ display: "block", color: "#86198f", fontSize: 10 }}>Layer count</strong>
-      <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 8.5 }}>
+      <span style={{ display: "block", marginTop: 2, color: "#78726a", fontSize: 8.5 }}>
         Qwen Image Layered · RGBA layers at Preload
       </span>
       <div
@@ -118,10 +118,10 @@ export function LayerCountSettings({
             width: 52,
             height: 32,
             padding: "0 4px",
-            border: resolution.status === "valid" ? "1px solid #cbd5e1" : "1px solid #f59e0b",
+            border: resolution.status === "valid" ? "1px solid #d9d3cc" : "1px solid #f59e0b",
             borderRadius: 5,
             background: "#fff",
-            color: "#0f172a",
+            color: "#1a1714",
             fontSize: 13,
             fontWeight: 700,
             textAlign: "center",
@@ -142,7 +142,7 @@ export function LayerCountSettings({
       </div>
       <span
         id="layer-count-hint"
-        style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 8.5 }}
+        style={{ display: "block", marginTop: 4, color: "#78726a", fontSize: 8.5 }}
       >
         {DECOMPOSE_LAYERS_MIN}–{DECOMPOSE_LAYERS_MAX} layers. Default {DEFAULT_DECOMPOSE_LAYERS} if
         unchanged.
@@ -170,9 +170,9 @@ export function LayerCountSettings({
           width: "100%",
           marginTop: 7,
           padding: "6px 8px",
-          border: canRun ? "none" : "1px solid #e9d5ff",
+          border: canRun ? "none" : "1px solid #ffc7b3",
           borderRadius: 5,
-          background: canRun ? "#a21caf" : "#faf5ff",
+          background: canRun ? "#a21caf" : "#fff0ea",
           color: canRun ? "#fff" : "#6b21a8",
           fontSize: 10,
           fontWeight: 700,

@@ -211,8 +211,8 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
         padding: 14,
         borderRadius: 10,
         background: "#ffffff",
-        border: "1px solid #dbe2ea",
-        boxShadow: "0 12px 28px rgba(15, 23, 42, 0.14)",
+        border: "1px solid #e4e1dc",
+        boxShadow: "0 12px 28px rgba(26, 23, 20, 0.14)",
       }}
     >
       <div
@@ -220,7 +220,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
       >
         <div>
           <strong style={{ display: "block", fontSize: 12, color: "#172554" }}>AI Provider</strong>
-          <span style={{ display: "block", marginTop: 2, fontSize: 10, color: "#64748b" }}>
+          <span style={{ display: "block", marginTop: 2, fontSize: 10, color: "#78726a" }}>
             Google Account · OpenAI + Replicate BYOK
           </span>
         </div>
@@ -232,7 +232,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
             style={{
               border: 0,
               background: "transparent",
-              color: "#64748b",
+              color: "#78726a",
               cursor: "pointer",
               fontSize: 16,
             }}
@@ -243,7 +243,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
       </div>
 
       {auth === null ? (
-        <p style={{ margin: "14px 0 0", fontSize: 10, color: "#64748b" }}>กำลังตรวจสอบบัญชี…</p>
+        <p style={{ margin: "14px 0 0", fontSize: 10, color: "#78726a" }}>กำลังตรวจสอบบัญชี…</p>
       ) : !auth.authenticated ? (
         <>
           <div
@@ -251,16 +251,16 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
               marginTop: 12,
               padding: "9px 10px",
               borderRadius: 7,
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              color: "#1e3a8a",
+              background: "#fff3ed",
+              border: "1px solid #ffcebb",
+              color: "#7a1f02",
               fontSize: 10,
               lineHeight: 1.45,
             }}
           >
             Login ด้วย Google เพื่อผูก OpenAI / Replicate Key กับบัญชีของคุณและใช้งานข้าม Session ได้อย่างปลอดภัย
           </div>
-          <p style={{ margin: "12px 0 0", fontSize: 10, lineHeight: 1.45, color: "#64748b" }}>
+          <p style={{ margin: "12px 0 0", fontSize: 10, lineHeight: 1.45, color: "#78726a" }}>
             กรุณา Login ด้วย Google จากปุ่ม Profile มุมขวาบนก่อนจัดการ API Key
           </p>
         </>
@@ -274,8 +274,8 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
               marginTop: 12,
               padding: "7px 9px",
               borderRadius: 7,
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
+              background: "#fcf9f5",
+              border: "1px solid #ece7e0",
             }}
           >
             {auth.user?.picture ? (
@@ -292,14 +292,14 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
               <strong
                 style={{
                   display: "block",
-                  color: "#0f172a",
+                  color: "#1a1714",
                   fontSize: 10,
                   overflowWrap: "anywhere",
                 }}
               >
                 {auth.user?.name || "Google user"}
               </strong>
-              <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 9.5 }}>
+              <span style={{ display: "block", marginTop: 2, color: "#78726a", fontSize: 9.5 }}>
                 {auth.user?.email}
               </span>
             </div>
@@ -310,7 +310,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
               style={{
                 border: 0,
                 background: "transparent",
-                color: "#64748b",
+                color: "#78726a",
                 cursor: anyBusy ? "default" : "pointer",
                 fontSize: 9.5,
               }}
@@ -349,7 +349,7 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
             onRemove={() => void removeProvider("replicate")}
           />
 
-          <p style={{ margin: "10px 0 0", fontSize: 9.5, lineHeight: 1.45, color: "#64748b" }}>
+          <p style={{ margin: "10px 0 0", fontSize: 9.5, lineHeight: 1.45, color: "#78726a" }}>
             Key จะถูกเข้ารหัสบน server และผูกกับ Google Account ไม่เก็บใน Browser storage หรือส่งเข้า Prompt
           </p>
 
@@ -361,10 +361,10 @@ export default function AIProviderSettings({ onClose }: { onClose?: () => void }
               marginTop: 12,
               padding: "8px 9px",
               borderRadius: 7,
-              background: cloudConsent ? "#ecfdf5" : "#f8fafc",
-              border: `1px solid ${cloudConsent ? "#a7f3d0" : "#e2e8f0"}`,
+              background: cloudConsent ? "#ecfdf5" : "#fcf9f5",
+              border: `1px solid ${cloudConsent ? "#a7f3d0" : "#ece7e0"}`,
               fontSize: 10,
-              color: "#334155",
+              color: "#443f39",
               lineHeight: 1.45,
               cursor: "pointer",
             }}
@@ -429,9 +429,9 @@ function ProviderKeyBlock({
         style={{
           padding: "7px 9px",
           borderRadius: 7,
-          background: credential?.configured ? "#ecfdf5" : "#f8fafc",
-          border: `1px solid ${credential?.configured ? "#a7f3d0" : "#e2e8f0"}`,
-          color: credential?.configured ? "#065f46" : "#475569",
+          background: credential?.configured ? "#ecfdf5" : "#fcf9f5",
+          border: `1px solid ${credential?.configured ? "#a7f3d0" : "#ece7e0"}`,
+          color: credential?.configured ? "#065f46" : "#58534c",
           fontSize: 10,
         }}
         aria-live="polite"
@@ -440,9 +440,9 @@ function ProviderKeyBlock({
           ? `${title.replace(" API Key", "")} connected · ${credential.keyHint}`
           : `ยังไม่ได้เชื่อมต่อ ${title.replace(" API Key", "")}`}
       </div>
-      <p style={{ margin: "6px 0 0", fontSize: 9.5, color: "#64748b", lineHeight: 1.4 }}>{hint}</p>
+      <p style={{ margin: "6px 0 0", fontSize: 9.5, color: "#78726a", lineHeight: 1.4 }}>{hint}</p>
 
-      <label style={{ display: "block", marginTop: 8, fontSize: 10, color: "#475569" }}>
+      <label style={{ display: "block", marginTop: 8, fontSize: 10, color: "#58534c" }}>
         {title}
         <input
           type="password"
@@ -460,11 +460,11 @@ function ProviderKeyBlock({
             width: "100%",
             marginTop: 5,
             boxSizing: "border-box",
-            border: "1px solid #cbd5e1",
+            border: "1px solid #d9d3cc",
             borderRadius: 6,
             padding: "8px 9px",
             fontSize: 11,
-            color: "#0f172a",
+            color: "#1a1714",
             outline: "none",
           }}
         />
@@ -480,7 +480,7 @@ function ProviderKeyBlock({
             border: 0,
             borderRadius: 6,
             padding: "7px 8px",
-            background: disabled || !value ? "#cbd5e1" : "#4f46e5",
+            background: disabled || !value ? "#d9d3cc" : "#b52c00",
             color: "#ffffff",
             cursor: disabled || !value ? "default" : "pointer",
             fontSize: 10,
@@ -513,7 +513,7 @@ function ProviderKeyBlock({
         href={createUrl}
         target="_blank"
         rel="noreferrer"
-        style={{ display: "inline-block", marginTop: 8, fontSize: 9.5, color: "#4f46e5" }}
+        style={{ display: "inline-block", marginTop: 8, fontSize: 9.5, color: "#b52c00" }}
       >
         {createLabel}
       </a>

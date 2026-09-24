@@ -25,11 +25,11 @@
   gap: 4px;
   max-width: 100%;
   padding: 4px 6px;
-  border: 1px solid var(--stroke, #e5e7eb);
+  border: 1px solid var(--stroke, #eae6e1);
   border-radius: 10px;
   background: var(--surface-solid, #fff);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
-  color: var(--ink, #111827);
+  box-shadow: 0 4px 16px rgba(26, 23, 20, 0.08);
+  color: var(--ink, #1a1815);
   font-size: 12px;
   pointer-events: auto;
 }
@@ -70,7 +70,7 @@
   min-width: 140px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--stroke, #e5e7eb);
+  border: 1px solid var(--stroke, #eae6e1);
   border-radius: 6px;
   background: #fff;
   color: inherit;
@@ -93,7 +93,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #374151;
+  color: #43403b;
   font: inherit;
   text-align: left;
   white-space: nowrap;
@@ -103,11 +103,11 @@
 }
 
 .summary[data-empty="true"] {
-  color: #9ca3af;
+  color: #a6a29c;
 }
 
 .summary:hover {
-  background: #f3f4f6;
+  background: #f6f4f0;
 }
 
 .summary:focus-visible {
@@ -145,10 +145,10 @@
   gap: 4px;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid var(--stroke, #e5e7eb);
+  border: 1px solid var(--stroke, #eae6e1);
   border-radius: 6px;
   background: #fff;
-  color: #111827;
+  color: #1a1815;
   font-size: 11px;
   font-weight: 650;
   white-space: nowrap;
@@ -171,7 +171,7 @@
 
 .grid {
   font-weight: 500;
-  color: #6b7280;
+  color: #76716c;
 }
 
 .trailing {
@@ -183,7 +183,7 @@
 }
 
 .cost {
-  color: #6b7280;
+  color: #76716c;
   font-size: 10px;
   white-space: nowrap;
 }
@@ -216,9 +216,9 @@
 }
 
 .cancel {
-  border: 1px solid var(--stroke, #e5e7eb);
+  border: 1px solid var(--stroke, #eae6e1);
   background: transparent;
-  color: var(--ink, #111827);
+  color: var(--ink, #1a1815);
 }
 
 .toggle {
@@ -230,10 +230,10 @@
   width: 28px;
   height: 30px;
   padding: 0;
-  border: 1px solid var(--stroke, #e5e7eb);
+  border: 1px solid var(--stroke, #eae6e1);
   border-radius: 6px;
   background: #fff;
-  color: #374151;
+  color: #43403b;
   cursor: pointer;
 }
 
@@ -249,7 +249,7 @@
 .status {
   min-width: 0;
   padding: 0 4px 2px;
-  color: #4b5563;
+  color: #58544e;
   font-size: 11px;
   line-height: 1.35;
 }
@@ -268,7 +268,7 @@
   height: 3px;
   margin-top: 4px;
   border-radius: 999px;
-  background: #e5e7eb;
+  background: #eae6e1;
   overflow: hidden;
 }
 
