@@ -13,6 +13,7 @@ import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
+import { refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ const MAX_BODY_BYTES = 16_000;
 const MAX_PROMPT_CHARS = 2_000;
 
 /**
- * One Moodboard AI image via Replicate gpt-image-2.5-flare at quality low (BYOK).
+ * One Moodboard AI image via Replicate gpt-image-2.5-flare at quality low.
+ * Uses the platform Replicate key and prepaid credits.
  * Clients call this once per idea (9, 16, or 25). Each call asks for one image.
  * ~$0.012 per image. A 9-pack is ~$0.11.
  */
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const access = requireEndUserCloudAi(req, body.cloudConsent);
+  const access = requireEndUserCloudAi(req, body.cloudConsent, "moodboard.image");
   if (!access.ok) return access.response;
 
   const index =
@@ -130,6 +132,9 @@ export async function POST(req: NextRequest) {
         : new AiRuntimeError("PROVIDER_UNAVAILABLE", "Moodboard image generation failed.", {
             cause: error,
           });
+    if (!normalized.outcomeUnknown) {
+      refundCharge(access.charge?.entryId, "moodboard image failed");
+    }
     return NextResponse.json(
       {
         error: {
@@ -149,7 +154,7 @@ function publicErrorMessage(error: AiRuntimeError): string {
     case "POLICY_DENIED":
       return "This AI operation requires explicit cloud consent.";
     case "PROVIDER_AUTH":
-      return "AI provider is not configured for this session. Add your Replicate API key in AI Provider Settings.";
+      return "แพลตฟอร์มยังไม่ได้ตั้งค่า AI provider ติดต่อผู้ดูแลระบบ";
     case "PROVIDER_RATE_LIMIT":
       return "AI provider rate limit reached. Please try again later.";
     case "BUDGET_EXCEEDED":

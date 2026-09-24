@@ -15,6 +15,7 @@ import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { chargeCredits, refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
   if (!prompt) {
     return NextResponse.json({ error: "prompt is required." }, { status: 400 });
   }
+
+  const charge = chargeCredits(account.id, "prompt.plan");
+  if (!charge.ok) return charge.response;
 
   const baseline = createPromptRefinement(prompt);
   let card: PromptRefinementCardData = baseline;
@@ -133,6 +137,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     planError = error instanceof Error ? error.message.slice(0, 200) : "planner_failed";
     console.error("[prompt-helper-plan] ✗", planError);
+    refundCharge(charge.entryId, "prompt plan failed");
   }
 
   return NextResponse.json({

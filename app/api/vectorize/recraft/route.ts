@@ -5,6 +5,7 @@ import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { chargeCredits, refundCharge } from "@/lib/server/credits/gate";
 import { jsonNoStore } from "@/lib/server/http";
 
 export const runtime = "nodejs";
@@ -58,6 +59,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const charge = chargeCredits(account.id, "vectorize.recraft");
+  if (!charge.ok) return charge.response;
+
   try {
     const ai = getServerAiRuntime({
       replicateToken: getSessionReplicateToken(req),
@@ -82,6 +86,7 @@ export async function POST(req: NextRequest) {
         : new AiRuntimeError("PROVIDER_UNAVAILABLE", "Recraft vectorization failed.", {
             cause: error,
           });
+    if (!normalized.outcomeUnknown) refundCharge(charge.entryId, "vectorize failed");
     return jsonNoStore(
       {
         error: {

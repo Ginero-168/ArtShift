@@ -4,6 +4,7 @@ import { GPT_IMAGE_2_EXECUTION_TIMEOUT_MS } from "@/lib/ai/runtimeLimits";
 import type { AiImageGenerateInput, AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { isAllowedImageAspectRatio } from "@/lib/ai-runtime/contracts";
 import { AiRuntimeError } from "@/lib/ai-runtime/errors";
+import { imageGenerateAction } from "@/lib/credits/pricing";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { imageGenerationFallbackEnabled } from "@/lib/server/ai/imageGenerationProvider";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
@@ -13,6 +14,7 @@ import {
   getSessionReplicateToken,
   getUserAccount,
 } from "@/lib/server/ai/userCredentials";
+import { chargeCredits, refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,6 +90,8 @@ export async function POST(req: NextRequest) {
   }
   const mask = parsedMask.value;
   const enhance = body.enhance !== false;
+  const charge = chargeCredits(account.id, imageGenerateAction(quality.value));
+  if (!charge.ok) return charge.response;
   const replicateToken = getSessionReplicateToken(req);
   const openAiApiKey = getSessionOpenAiToken(req);
   const ai = getServerAiRuntime({
@@ -167,6 +171,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[api/ai/image error]", error);
     const outcomeUnknown = error instanceof AiRuntimeError && error.outcomeUnknown;
+    if (!outcomeUnknown) refundCharge(charge.entryId, "image generation failed");
     const isAuth = error instanceof AiRuntimeError && error.code === "PROVIDER_AUTH";
     const isPolicy = error instanceof AiRuntimeError && error.code === "POLICY_DENIED";
     const isInvalid = error instanceof AiRuntimeError && error.code === "INVALID_INPUT";

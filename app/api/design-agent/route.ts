@@ -4,6 +4,7 @@ import { type DesignAgentContext, prepareDesignTurn } from "@/lib/designAgent/se
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { chargeCredits, refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const charge = chargeCredits(account.id, "llm.turn");
+  if (!charge.ok) return charge.response;
+
   try {
     const result = await prepareDesignTurn(messages, context, {
       replicateToken: getSessionReplicateToken(req),
@@ -69,6 +73,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ result });
   } catch {
+    refundCharge(charge.entryId, "design agent failed");
     return NextResponse.json(
       { error: "Design agent is temporarily unavailable." },
       { status: 502 },

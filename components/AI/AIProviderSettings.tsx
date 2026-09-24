@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Legacy BYOK panel. Core AI no longer asks users to paste provider keys;
+ * the profile menu shows prepaid credits instead. Kept so older imports
+ * still compile, but it is not mounted.
+ */
 import { useEffect, useState } from "react";
 import { hasStoredCloudConsent, setAccountCloudConsent } from "@/lib/ai/cloudConsent";
 

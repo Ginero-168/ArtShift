@@ -28,7 +28,7 @@ export const POSE_SKELETON_PROCESSING_MESSAGE = "กำลังตรวจจ�
 export const POSE_SKELETON_REJECTED_MESSAGE =
   "โมเดล Skeleton อ่านไฟล์ภาพนี้ไม่ได้ ลองใช้ภาพ JPEG, PNG หรือ WebP ที่ไม่เสียและไม่เกิน 5 MB";
 export const POSE_SKELETON_MISSING_KEY_MESSAGE =
-  "ยังไม่ได้ตั้งค่า Replicate API key สำหรับบัญชีนี้ เพิ่มคีย์ใน AI Provider Settings แล้วลองอีกครั้ง";
+  "แพลตฟอร์มยังไม่ได้ตั้งค่า AI หรือเครดิตไม่พอ ตรวจสอบเครดิตแล้วลองอีกครั้ง";
 export const POSE_SKELETON_AUTH_MESSAGE = "กรุณาเข้าสู่ระบบก่อนใช้ Skeleton";
 export const POSE_SKELETON_INVALID_IMAGE_MESSAGE = "ภาพนี้เล็กหรือเสียจนวาดโครงร่างไม่ได้";
 

@@ -15,6 +15,7 @@ import { isImageSearchConfigured, searchImageReferences } from "@/lib/server/ai/
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { chargeCredits, refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,6 +65,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid Creative Director request." }, { status: 400 });
   }
 
+  const charge = chargeCredits(account.id, "llm.turn");
+  if (!charge.ok) return charge.response;
+
   const ai = getServerAiRuntime({
     replicateToken: getSessionReplicateToken(req),
     accountId: account.id,
@@ -83,7 +87,7 @@ export async function POST(req: NextRequest) {
   };
 
   if (req.headers.get("accept")?.includes("text/event-stream")) {
-    return streamDirectorTurn(req, directorInput, runtime);
+    return streamDirectorTurn(req, directorInput, runtime, charge.entryId);
   }
 
   try {
@@ -94,6 +98,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[Creative Director Route Error]:", error);
+    if (!(error instanceof CreativeDirectorValidationError)) {
+      refundCharge(charge.entryId, "creative director failed");
+    }
     const failure = directorFailurePayload(error);
     return NextResponse.json(
       { error: failure.error, ...(failure.code ? { code: failure.code } : {}) },
@@ -106,6 +113,7 @@ function streamDirectorTurn(
   req: NextRequest,
   input: Parameters<typeof prepareOrchestratorTurn>[0],
   runtime: Omit<Parameters<typeof prepareOrchestratorTurn>[1], "onDirectorStreamText">,
+  chargeEntryId: string,
 ): Response {
   const encoder = new TextEncoder();
   let lastThought = "";
@@ -127,6 +135,9 @@ function streamDirectorTurn(
         if (req.signal.aborted) return;
         send("done", { direction, model: direction.runtimeModel ?? null });
       } catch (error) {
+        if (!(error instanceof CreativeDirectorValidationError)) {
+          refundCharge(chargeEntryId, "creative director failed");
+        }
         if (req.signal.aborted) return;
         console.error("[Creative Director Route Error]:", error);
         const failure = directorFailurePayload(error);

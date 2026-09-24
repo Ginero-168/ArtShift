@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/ai/poseSkeletonJob";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
+import { refundCharge } from "@/lib/server/credits/gate";
 import { jsonNoStore } from "@/lib/server/http";
 import { isPoseSkeletonImageFailureMessage } from "@/lib/vision/poseImageFailure";
 
@@ -84,7 +85,7 @@ async function startPose(req: NextRequest, body: Record<string, unknown>) {
     return invalidRequest("Invalid Skeleton payload.");
   }
 
-  const access = requireEndUserCloudAi(req, request.options.cloudConsent);
+  const access = requireEndUserCloudAi(req, request.options.cloudConsent, "image.poseSkeleton");
   if (!access.ok) return access.response;
 
   const deadline = AbortSignal.timeout(START_DEADLINE_MS);
@@ -105,10 +106,13 @@ async function startPose(req: NextRequest, body: Record<string, unknown>) {
     });
   } catch (error) {
     if (deadline.aborted && !req.signal.aborted) {
+      refundCharge(access.charge?.entryId, "skeleton start timed out");
       return poseError(
         new AiRuntimeError("TIMEOUT", "Skeleton pose failed to start before the proxy deadline."),
       );
     }
+    const outcomeUnknown = error instanceof AiRuntimeError && error.outcomeUnknown;
+    if (!outcomeUnknown) refundCharge(access.charge?.entryId, "skeleton start failed");
     return poseError(error);
   }
 }

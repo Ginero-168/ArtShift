@@ -39,7 +39,7 @@ export async function prepareDesignTurn(
   if (!options.replicateToken) {
     return {
       type: "text",
-      text: "งานนี้ต้องใช้ Replicate AI กรุณาเพิ่ม Key ที่ AI Provider Settings ก่อนครับ",
+      text: "แพลตฟอร์มยังไม่ได้ตั้งค่า AI สำหรับงานนี้ กรุณาติดต่อผู้ดูแลระบบครับ",
     };
   }
   if (options.cloudConsent !== true) {

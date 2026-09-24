@@ -102,6 +102,24 @@ export function getAccountById(accountId: string): AccountPublic | null {
   return user ? toPublicUser(user) : null;
 }
 
+export type AccountDirectoryEntry = AccountPublic & {
+  updatedAt: number;
+};
+
+export function listAccounts(): AccountDirectoryEntry[] {
+  return Object.values(readStore().users)
+    .map((user) => ({ ...toPublicUser(user), updatedAt: user.updatedAt }))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function touchAccount(accountId: string): void {
+  const store = readStore();
+  const user = store.users[accountId];
+  if (!user) return;
+  user.updatedAt = Date.now();
+  writeStore(store);
+}
+
 export function saveReplicateApiKey(accountId: string, token: string): void {
   saveProviderApiKey(accountId, "replicate", token);
 }

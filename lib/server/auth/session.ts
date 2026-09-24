@@ -10,8 +10,7 @@ const AUTH_AAD = Buffer.from("artshift-auth-session-v1", "utf8");
 type AuthSessionResponse = Pick<NextResponse, "cookies">;
 type AuthClaims = { sub: string; iat: number; exp: number; nonce: string };
 
-export function getAuthenticatedAccount(request: NextRequest): AccountPublic | null {
-  const value = request.cookies?.get(AUTH_SESSION_COOKIE)?.value;
+export function getAccountFromSessionToken(value: string | undefined | null): AccountPublic | null {
   if (!value || value.length > 2_000) return null;
   const claims = decryptClaims(value);
   if (!claims || claims.exp <= Math.floor(Date.now() / 1_000)) return null;
@@ -20,6 +19,10 @@ export function getAuthenticatedAccount(request: NextRequest): AccountPublic | n
   } catch {
     return null;
   }
+}
+
+export function getAuthenticatedAccount(request: NextRequest): AccountPublic | null {
+  return getAccountFromSessionToken(request.cookies?.get(AUTH_SESSION_COOKIE)?.value);
 }
 
 export function setAuthCookie(response: AuthSessionResponse, accountId: string): void {

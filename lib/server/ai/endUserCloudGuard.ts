@@ -1,11 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
+import type { CreditAction } from "@/lib/credits/pricing";
 import { getAccountReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
 import type { AccountPublic } from "@/lib/server/auth/accountStore";
+import { type CreditCharge, chargeCredits } from "@/lib/server/credits/gate";
 
 export type EndUserCloudAiOk = {
   ok: true;
   account: AccountPublic;
   replicateToken: string;
+  charge: CreditCharge | null;
 };
 
 export type EndUserCloudAiDenied = {
@@ -14,12 +17,15 @@ export type EndUserCloudAiDenied = {
 };
 
 /**
- * Auth + explicit consent + per-account Replicate BYOK for end-user AI routes.
- * Never falls back to a shared `REPLICATE_API_TOKEN`.
+ * Auth + explicit consent + platform Replicate key for end-user AI routes.
+ * Optional `action` reserves prepaid credits before the provider call.
+ * User-pasted BYOK keys are not accepted for core AI.
  */
 export function requireEndUserCloudAi(
   req: NextRequest,
   cloudConsent: unknown,
+  action?: CreditAction,
+  units = 1,
 ): EndUserCloudAiOk | EndUserCloudAiDenied {
   const account = getUserAccount(req);
   if (!account) {
@@ -52,15 +58,22 @@ export function requireEndUserCloudAi(
       ok: false,
       response: NextResponse.json(
         {
-          error:
-            "AI provider is not configured for this session. Add your Replicate API key in AI Provider Settings.",
+          error: "แพลตฟอร์มยังไม่ได้ตั้งค่า AI provider ติดต่อผู้ดูแลระบบ (REPLICATE_API_KEY)",
           code: "PROVIDER_AUTH",
         },
         { status: 503 },
       ),
     };
   }
-  return { ok: true, account, replicateToken };
+  if (!action) return { ok: true, account, replicateToken, charge: null };
+  const charge = chargeCredits(account.id, action, units);
+  if (!charge.ok) return { ok: false, response: charge.response };
+  return {
+    ok: true,
+    account,
+    replicateToken,
+    charge: { entryId: charge.entryId, credits: charge.credits, balance: charge.balance },
+  };
 }
 
 export function requireAuthenticatedAccount(

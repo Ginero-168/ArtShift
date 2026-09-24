@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { ensureAccountCredits } from "@/lib/credits/ledger";
 import { upsertGoogleAccount } from "@/lib/server/auth/accountStore";
 import {
   clearGoogleStateCookie,
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
   try {
     const profile = await exchangeGoogleCode(config, code, verifier, req.signal);
     const user = upsertGoogleAccount(profile);
+    ensureAccountCredits(user.id);
     const response = redirect(`${publicUrl}/projects`);
     clearGoogleStateCookie(response);
     setAuthCookie(response, user.id);

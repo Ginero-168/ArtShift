@@ -13,6 +13,7 @@ import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
+import { refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
   }
   const count = body.count;
 
-  const access = requireEndUserCloudAi(req, body.cloudConsent);
+  const access = requireEndUserCloudAi(req, body.cloudConsent, "moodboard.expand");
   if (!access.ok) return access.response;
 
   const ai = getServerAiRuntime({
@@ -113,6 +114,7 @@ export async function POST(req: NextRequest) {
       model: execution.metadata.model,
     });
   } catch {
+    refundCharge(access.charge?.entryId, "moodboard expand failed");
     return NextResponse.json(
       { error: { code: "PROVIDER_UNAVAILABLE", message: "Moodboard expand failed." } },
       { status: 502 },

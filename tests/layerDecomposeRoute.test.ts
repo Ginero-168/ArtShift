@@ -89,7 +89,11 @@ describe("Layer decompose API", () => {
         },
       },
     });
-    expect(requireEndUserCloudAiMock).toHaveBeenCalledWith(expect.anything(), true);
+    expect(requireEndUserCloudAiMock).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      "image.decomposeLayers",
+    );
     expect(runtimeMock.execute).toHaveBeenCalledWith(
       "image.decomposeLayers",
       expect.objectContaining({ numLayers: 4 }),

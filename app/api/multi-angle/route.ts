@@ -6,6 +6,7 @@ import { requireEndUserCloudAi } from "@/lib/server/ai/endUserCloudGuard";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
+import { refundCharge } from "@/lib/server/credits/gate";
 import { jsonNoStore } from "@/lib/server/http";
 
 export const runtime = "nodejs";
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     return invalidRequest("Invalid Multi-Angle payload.");
   }
 
-  const access = requireEndUserCloudAi(req, request.options.cloudConsent);
+  const access = requireEndUserCloudAi(req, request.options.cloudConsent, "image.multiAngle");
   if (!access.ok) return access.response;
 
   try {
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest) {
         : new AiRuntimeError("PROVIDER_UNAVAILABLE", "Multi-Angle edit failed.", {
             cause: error,
           });
+    if (!normalized.outcomeUnknown) {
+      refundCharge(access.charge?.entryId, "multi-angle failed");
+    }
     return jsonNoStore(
       {
         error: {

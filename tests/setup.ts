@@ -1,3 +1,7 @@
+// Route tests share one credit file. A large welcome grant keeps those
+// fixtures from tripping the prepaid gate. Production default is 200.
+process.env.ARTSHIFT_WELCOME_CREDITS ??= "1000000";
+
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
 

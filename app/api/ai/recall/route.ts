@@ -9,6 +9,7 @@ import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { RequestBodyTooLargeError, readBoundedJson } from "@/lib/server/ai/requestBody";
 import { getServerAiRuntime } from "@/lib/server/ai/runtime";
 import { getSessionReplicateToken, getUserAccount } from "@/lib/server/ai/userCredentials";
+import { chargeCredits, refundCharge } from "@/lib/server/credits/gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid follow-up recall request." }, { status: 400 });
   }
 
+  const charge = chargeCredits(account.id, "llm.turn");
+  if (!charge.ok) return charge.response;
+
   try {
     const ai = getServerAiRuntime({
       replicateToken: getSessionReplicateToken(req),
@@ -70,6 +74,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[Follow-up Recall Route Error]:", error);
+    refundCharge(charge.entryId, "follow-up recall failed");
     return NextResponse.json(
       { error: "Follow-up recall is temporarily unavailable." },
       { status: 502 },
