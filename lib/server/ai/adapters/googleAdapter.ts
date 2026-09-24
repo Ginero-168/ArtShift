@@ -361,6 +361,8 @@ export class GoogleAiAdapter implements AiProviderAdapter {
                 if (part.text && !part.thought) {
                   accumulatedText += part.text;
                   onTextDelta(part.text);
+                } else if (part.functionCall?.args) {
+                  onTextDelta(JSON.stringify(part.functionCall.args));
                 }
               }
             }

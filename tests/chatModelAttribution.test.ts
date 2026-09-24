@@ -10,6 +10,8 @@ import {
   florenceModelStep,
   formatModelChain,
   formatModelDisclosure,
+  formatModelDisplayLabel,
+  formatModelTechnicalTitle,
   formatUsingStatus,
   modelStepFromRuntime,
   normalizeRuntimeModelId,
@@ -104,6 +106,18 @@ describe("chat model attribution", () => {
     expect(
       displayModelSteps([directorModelStep(), visionModelStep()!, florenceModelStep()]),
     ).toEqual([{ id: "google/gemini-3-flash", role: "vision" }]);
+  });
+
+  it("shows a readable model label and keeps the provider id for the tooltip", () => {
+    expect(formatModelDisplayLabel("google/gemini-3-flash@hidden")).toBe("Gemini 3 Flash");
+    expect(formatModelTechnicalTitle("google/gemini-3-flash@hidden")).toBe("google/gemini-3-flash");
+    expect(formatModelDisplayLabel("google/gemini-3-flash → openai/gpt-image-2.5-sunburst")).toBe(
+      "Gemini 3 Flash → GPT Image 2.5 Sunburst",
+    );
+    expect(formatModelDisplayLabel("GPT Image 2")).toBe("GPT Image 2");
+    expect(formatModelTechnicalTitle("openai/gpt-image-2.5-sunburst@hidden then Florence-2")).toBe(
+      "openai/gpt-image-2.5-sunburst then Florence-2",
+    );
   });
 
   it("upserts the same role to the adapter-reported id instead of stacking expected+actual", () => {

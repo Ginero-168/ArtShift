@@ -521,6 +521,66 @@ describe("Replicate AI adapter", () => {
     expect(body.input.max_output_tokens).toBeGreaterThanOrEqual(4_096);
   });
 
+  it("streams gemini chat tokens when onTextDelta is set", async () => {
+    const sse = [
+      `event: output\ndata: ${JSON.stringify('{"kind":"answer","text":"สวัสดี')}\n\n`,
+      `event: output\ndata: ${JSON.stringify('ครับ"}')}\n\n`,
+      "event: done\ndata: {}\n\n",
+    ].join("");
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      const target = String(url);
+      if (target.includes("stream.replicate.com")) {
+        return new Response(sse, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
+      if (target.includes("/predictions/prediction-stream-1")) {
+        return new Response(
+          JSON.stringify({
+            id: "prediction-stream-1",
+            status: "succeeded",
+            output: ['{"kind":"answer","text":"สวัสดีครับ"}'],
+            metrics: { input_token_count: 8, output_token_count: 3 },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          id: "prediction-stream-1",
+          status: "processing",
+          urls: {
+            stream: "https://stream.replicate.com/v1/files/abc",
+            get: "https://api.replicate.com/v1/predictions/prediction-stream-1",
+            cancel: "https://api.replicate.com/v1/predictions/prediction-stream-1/cancel",
+          },
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new ReplicateAiAdapter("test-token");
+    const deltas: string[] = [];
+
+    const result = await adapter.execute({
+      task: "assistant.chat",
+      input: {
+        messages: [{ role: "user", content: "สวัสดี" }],
+      },
+      model: "google/gemini-3-flash",
+      signal: new AbortController().signal,
+      onTextDelta: (delta) => deltas.push(delta),
+    });
+
+    expect(deltas.join("")).toBe('{"kind":"answer","text":"สวัสดีครับ"}');
+    expect(result.output.text).toBe("สวัสดีครับ");
+    const create = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(create.body));
+    expect(body.stream).toBe(true);
+    expect((create.headers as Record<string, string>).Prefer).toBe("respond-async");
+  });
+
   it("executes google/gemini-3-flash prompt enhancement with thinking_level: none", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

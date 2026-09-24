@@ -5,6 +5,10 @@ import {
   CreativeDirectorValidationError,
   prepareOrchestratorTurn,
 } from "@/lib/ai/orchestration/creativeDirector";
+import {
+  encodeDirectorSse,
+  extractDirectorStreamThought,
+} from "@/lib/ai/orchestration/directorStream";
 import { parsePriorImageGenerationPayload } from "@/lib/ai/orchestration/priorGenerationParse";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { isImageSearchConfigured, searchImageReferences } from "@/lib/server/ai/contextImageSearch";
@@ -60,46 +64,100 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid Creative Director request." }, { status: 400 });
   }
 
+  const ai = getServerAiRuntime({
+    replicateToken: getSessionReplicateToken(req),
+    accountId: account.id,
+  });
+  const directorInput = {
+    ...input,
+    availableCapabilities: [...AVAILABLE_DIRECTOR_CAPABILITIES],
+    cloudConsent: true as const,
+    accountId: account.id,
+  };
+  const runtime = {
+    execute: ai.execute.bind(ai),
+    signal: req.signal,
+    searchImagesAvailable: isImageSearchConfigured(),
+    searchImages: (query: string, limit: number, signal?: AbortSignal) =>
+      searchImageReferences(query, limit, { signal }),
+  };
+
+  if (req.headers.get("accept")?.includes("text/event-stream")) {
+    return streamDirectorTurn(req, directorInput, runtime);
+  }
+
   try {
-    const ai = getServerAiRuntime({
-      replicateToken: getSessionReplicateToken(req),
-      accountId: account.id,
-    });
-    const direction = await prepareOrchestratorTurn(
-      {
-        ...input,
-        availableCapabilities: [...AVAILABLE_DIRECTOR_CAPABILITIES],
-        cloudConsent: true,
-        accountId: account.id,
-      },
-      {
-        execute: ai.execute.bind(ai),
-        signal: req.signal,
-        searchImagesAvailable: isImageSearchConfigured(),
-        searchImages: (query, limit, signal) => searchImageReferences(query, limit, { signal }),
-      },
-    );
+    const direction = await prepareOrchestratorTurn(directorInput, runtime);
     return NextResponse.json({
       direction,
       model: direction.runtimeModel ?? null,
     });
   } catch (error) {
     console.error("[Creative Director Route Error]:", error);
-    if (error instanceof CreativeDirectorValidationError) {
-      return NextResponse.json(
-        {
-          code: error.code,
-          error:
-            "Creative Director ส่งแผนไม่ครบตามรูปแบบที่กำหนด ยังไม่ได้สร้าง Task หรือเรียก Image Model กรุณาลองใหม่",
-        },
-        { status: 502 },
-      );
-    }
+    const failure = directorFailurePayload(error);
     return NextResponse.json(
-      { error: "Creative Director is temporarily unavailable." },
-      { status: 502 },
+      { error: failure.error, ...(failure.code ? { code: failure.code } : {}) },
+      { status: failure.status },
     );
   }
+}
+
+function streamDirectorTurn(
+  req: NextRequest,
+  input: Parameters<typeof prepareOrchestratorTurn>[0],
+  runtime: Omit<Parameters<typeof prepareOrchestratorTurn>[1], "onDirectorStreamText">,
+): Response {
+  const encoder = new TextEncoder();
+  let lastThought = "";
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: "thought" | "done" | "error", data: unknown) => {
+        controller.enqueue(encoder.encode(encodeDirectorSse(event, data)));
+      };
+      try {
+        const direction = await prepareOrchestratorTurn(input, {
+          ...runtime,
+          onDirectorStreamText: (snapshot) => {
+            const thought = extractDirectorStreamThought(snapshot).slice(0, 4_000);
+            if (!thought || thought === lastThought || containsSensitivePayload(thought)) return;
+            lastThought = thought;
+            send("thought", { text: thought });
+          },
+        });
+        if (req.signal.aborted) return;
+        send("done", { direction, model: direction.runtimeModel ?? null });
+      } catch (error) {
+        if (req.signal.aborted) return;
+        console.error("[Creative Director Route Error]:", error);
+        const failure = directorFailurePayload(error);
+        send("error", {
+          error: failure.error,
+          ...(failure.code ? { code: failure.code } : {}),
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+function directorFailurePayload(error: unknown): { error: string; code?: string; status: number } {
+  if (error instanceof CreativeDirectorValidationError) {
+    return {
+      status: 502,
+      code: error.code,
+      error:
+        "Creative Director ส่งแผนไม่ครบตามรูปแบบที่กำหนด ยังไม่ได้สร้าง Task หรือเรียก Image Model กรุณาลองใหม่",
+    };
+  }
+  return { status: 502, error: "Creative Director is temporarily unavailable." };
 }
 
 function parseDirectorInput(

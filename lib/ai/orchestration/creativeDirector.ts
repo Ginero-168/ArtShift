@@ -30,6 +30,7 @@ import {
   detectRequestedCreatingModel,
   resolveCreatingModel,
 } from "./creatingModelCatalog";
+import { absorbModelDelta } from "./directorStream";
 import { type SequentialExecutionPlan, validateSequentialExecutionPlan } from "./executionGraph";
 import { buildHarnessSystemPrompt } from "./harnessPolicy";
 import { computeDetailScore, computeEditPrecisionScore } from "./imageQualityPolicy";
@@ -129,6 +130,11 @@ export type CreativeSearchResult = {
 
 export type CreativeDirectorExecutor = Pick<AiRuntime, "execute"> & {
   signal?: AbortSignal;
+  /**
+   * Current-pass raw model text (cumulative). Each director pass starts a new snapshot
+   * so a follow-up search pass replaces the previous stream instead of concatenating JSON.
+   */
+  onDirectorStreamText?: (snapshot: string) => void;
   searchImagesAvailable?: boolean;
   searchImages?: (
     query: string,
@@ -753,6 +759,16 @@ async function executeDirectorPass(
   retryCount = 0,
 ): Promise<CreativeDirection> {
   let execution: AiExecution<import("@/lib/ai-runtime/contracts").AiAssistantChatOutput>;
+  let passText = "";
+  const executionOptions: AiExecutionOptions = runtime.onDirectorStreamText
+    ? {
+        ...options,
+        onTextDelta: (delta: string) => {
+          passText = absorbModelDelta(passText, delta);
+          runtime.onDirectorStreamText?.(passText);
+        },
+      }
+    : options;
   try {
     execution = (await runtime.execute(
       "assistant.chat",
@@ -762,7 +778,7 @@ async function executeDirectorPass(
         tools: [CREATIVE_DIRECTION_TOOL, DESIGN_PLAN_TOOL, SEQUENTIAL_PLAN_TOOL],
         maxTokens: 8_192,
       },
-      options,
+      executionOptions,
     )) as AiExecution<import("@/lib/ai-runtime/contracts").AiAssistantChatOutput>;
   } catch (error) {
     if (isTransientEmptyOutputError(error) && retryCount < 1) {

@@ -199,6 +199,74 @@ export function formatModelDisclosure(
   return extra;
 }
 
+const MODEL_CHAIN_SEPARATOR = /(\s→\s|\sthen\s)/;
+
+/**
+ * Chip label. Strips `google/` and internal suffixes such as `@hidden`.
+ * `google/gemini-3-flash@hidden` → `Gemini 3 Flash`.
+ */
+export function formatModelDisplayLabel(raw: string): string {
+  return raw
+    .split(MODEL_CHAIN_SEPARATOR)
+    .map((part) => (part === " → " || part === " then " ? part : humanizeRuntimeModelId(part)))
+    .join("");
+}
+
+/** Tooltip id. Drops the `@hidden` placeholder and keeps a real provider slug. */
+export function formatModelTechnicalTitle(raw: string): string {
+  return raw
+    .split(MODEL_CHAIN_SEPARATOR)
+    .map((part) => (part === " → " || part === " then " ? part : stripHiddenModelSuffix(part)))
+    .join("");
+}
+
+export function humanizeRuntimeModelId(raw: string): string {
+  const cleaned = stripHiddenModelSuffix(raw)
+    .replace(/@[a-f0-9]{64}$/iu, "")
+    .trim();
+  if (!cleaned) return "";
+  if (cleaned === "Florence-2" || cleaned === FLORENCE_2_MODEL_ID) return "Florence-2";
+  if (!cleaned.includes("/") && !cleaned.includes("@") && /\s/u.test(cleaned)) return cleaned;
+  const slug = cleaned.includes("/") ? cleaned.slice(cleaned.lastIndexOf("/") + 1) : cleaned;
+  return humanizeModelSlug(slug);
+}
+
+function stripHiddenModelSuffix(raw: string): string {
+  return raw.trim().replace(/@hidden$/iu, "");
+}
+
+function humanizeModelSlug(slug: string): string {
+  const gemini = /^gemini-(.+)$/iu.exec(slug);
+  if (gemini?.[1]) {
+    const parts = gemini[1]
+      .split("-")
+      .filter(Boolean)
+      .map((part) => (/^\d+(?:\.\d+)?$/u.test(part) ? part : titleToken(part)));
+    return ["Gemini", ...parts].join(" ");
+  }
+  const gptImage = /^gpt-image-(.+)$/iu.exec(slug);
+  if (gptImage?.[1]) {
+    const parts = gptImage[1].split("-").filter(Boolean);
+    const version = parts[0] ?? "";
+    const variant = parts.slice(1).map(titleToken).join(" ");
+    return variant ? `GPT Image ${version} ${variant}` : `GPT Image ${version}`;
+  }
+  if (/^gpt-4o-mini$/iu.test(slug)) return "GPT-4o mini";
+  const oss = /^gpt-oss-(\d+b)$/iu.exec(slug);
+  if (oss?.[1]) return `GPT-OSS ${oss[1].toUpperCase()}`;
+  if (/^florence-2$/iu.test(slug)) return "Florence-2";
+  return slug.split("-").filter(Boolean).map(titleToken).join(" ");
+}
+
+function titleToken(token: string): string {
+  if (/^gpt$/iu.test(token)) return "GPT";
+  if (/^ai$/iu.test(token)) return "AI";
+  if (/^oss$/iu.test(token)) return "OSS";
+  if (/^\d+(?:\.\d+)?$/u.test(token)) return token;
+  if (/^\d+(?:\.\d+)?[a-z]+$/iu.test(token)) return token.toUpperCase();
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
 /**
  * In-flight Thought phrasing, matching image gen `กำลังสร้างรูปภาพด้วย {id}...`
  */

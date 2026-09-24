@@ -36,11 +36,13 @@ const body = {
   cloudConsent: true,
 };
 
-function request(value: unknown, contentLength?: number): NextRequest {
+function request(value: unknown, contentLength?: number, accept?: string): NextRequest {
+  const headers = new Headers(
+    contentLength === undefined ? undefined : { "content-length": String(contentLength) },
+  );
+  if (accept) headers.set("accept", accept);
   return {
-    headers: new Headers(
-      contentLength === undefined ? undefined : { "content-length": String(contentLength) },
-    ),
+    headers,
     json: async () => value,
     signal: new AbortController().signal,
   } as unknown as NextRequest;
@@ -68,6 +70,34 @@ describe("Creative Director route", () => {
       passed: true,
       summary: "Matches the approved direction.",
     });
+  });
+
+  it("streams visible thought text before the final direction", async () => {
+    prepareMock.mockImplementation(async (_input, runtime) => {
+      const executor = runtime as {
+        onDirectorStreamText?: (snapshot: string) => void;
+      };
+      executor.onDirectorStreamText?.(
+        '{"kind":"tool_calls","text":"","calls":[{"input":{"kind":"answer","text":"สวัสดี"}}]}',
+      );
+      executor.onDirectorStreamText?.(
+        '{"kind":"tool_calls","text":"","calls":[{"input":{"kind":"answer","text":"สวัสดีครับ"}}]}',
+      );
+      return {
+        kind: "answer",
+        text: "สวัสดีครับ",
+        runtimeModel: "google/gemini-3-flash",
+      };
+    });
+    const response = await POST(request(body, undefined, "text/event-stream"));
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const raw = await response.text();
+    expect(raw).toContain("event: thought");
+    expect(raw).toContain("สวัสดี");
+    expect(raw).toContain("สวัสดีครับ");
+    expect(raw).toContain("event: done");
+    expect(raw).toContain("google/gemini-3-flash");
+    expect(raw).not.toContain("refinedPrompt");
   });
 
   it("rejects unauthenticated requests", async () => {

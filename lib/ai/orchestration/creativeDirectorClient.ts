@@ -6,18 +6,40 @@ import type {
   CreativeOutputReviewInput,
 } from "@/lib/ai/orchestration/creativeDirector";
 import { parseCreativeDirection } from "@/lib/ai/orchestration/creativeDirector";
+import { drainSseBuffer, parseDirectorSseFrame } from "@/lib/ai/orchestration/directorStream";
+
+type RemoteDirectorInput = Omit<
+  CreativeDirectorInput,
+  "availableCapabilities" | "cloudConsent" | "accountId"
+>;
 
 export async function prepareRemoteOrchestratorTurn(
-  input: Omit<CreativeDirectorInput, "availableCapabilities" | "cloudConsent" | "accountId">,
-  options: { signal?: AbortSignal; cloudConsent?: boolean } = {},
+  input: RemoteDirectorInput,
+  options: {
+    signal?: AbortSignal;
+    cloudConsent?: boolean;
+    /** Growing user-visible Director text. Omit to keep the JSON request/response path. */
+    onThoughtText?: (text: string) => void;
+  } = {},
 ): Promise<CreativeDirection> {
+  const wantsStream = typeof options.onThoughtText === "function";
   const response = await fetch("/api/ai/director", {
     method: "POST",
     cache: "no-store",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: {
+      "content-type": "application/json",
+      accept: wantsStream ? "text/event-stream" : "application/json",
+    },
     body: JSON.stringify({ ...input, cloudConsent: options.cloudConsent === true }),
     signal: options.signal,
   });
+  if (
+    wantsStream &&
+    response.ok &&
+    (response.headers.get("content-type") ?? "").includes("text/event-stream")
+  ) {
+    return consumeDirectorEventStream(response, input, options.onThoughtText);
+  }
   const payload = (await response.json().catch(() => null)) as {
     direction?: unknown;
     model?: unknown;
@@ -28,7 +50,55 @@ export async function prepareRemoteOrchestratorTurn(
     throw new Error(payload?.error || `Creative Director request failed: ${response.status}`);
   }
 
-  let rawDirection = payload?.direction;
+  return directionFromPayload(payload?.direction, payload?.model, input);
+}
+
+async function consumeDirectorEventStream(
+  response: Response,
+  input: RemoteDirectorInput,
+  onThoughtText?: (text: string) => void,
+): Promise<CreativeDirection> {
+  if (!response.body) {
+    throw new Error("Creative Director stream was empty.");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let direction: unknown;
+  let model: unknown;
+  let sawDone = false;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const drained = drainSseBuffer(buffer);
+    buffer = drained.rest;
+    for (const frame of drained.events) {
+      const event = parseDirectorSseFrame(frame);
+      if (!event) continue;
+      if (event.event === "thought") {
+        onThoughtText?.(event.text);
+      } else if (event.event === "done") {
+        sawDone = true;
+        direction = event.direction;
+        model = event.model;
+      } else if (event.event === "error") {
+        throw new Error(event.error);
+      }
+    }
+  }
+  if (!sawDone) {
+    throw new Error("Creative Director stream ended before a plan was ready.");
+  }
+  return directionFromPayload(direction, model, input);
+}
+
+function directionFromPayload(
+  directionValue: unknown,
+  model: unknown,
+  input: RemoteDirectorInput,
+): CreativeDirection {
+  let rawDirection = directionValue;
   if (
     isRecord(rawDirection) &&
     rawDirection.kind === "answer" &&
@@ -75,15 +145,13 @@ export async function prepareRemoteOrchestratorTurn(
   try {
     const direction = normalizeCreativeDirection(rawDirection, input);
     const runtimeModel =
-      normalizeRuntimeModelId(typeof payload?.model === "string" ? payload.model : null) ??
+      normalizeRuntimeModelId(typeof model === "string" ? model : null) ??
       (isRecord(rawDirection) && typeof rawDirection.runtimeModel === "string"
         ? normalizeRuntimeModelId(rawDirection.runtimeModel)
         : null);
     return runtimeModel ? { ...direction, runtimeModel } : direction;
   } catch (err) {
-    throw new Error(
-      payload?.error || `Invalid Creative Director response: ${(err as Error).message}`,
-    );
+    throw new Error(`Invalid Creative Director response: ${(err as Error).message}`);
   }
 }
 
