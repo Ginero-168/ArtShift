@@ -93,6 +93,20 @@ export default function PromptRefinementCard({
   const [thumbVersions, setThumbVersions] = useState<Record<string, number>>({});
   const optionIds = data.dimensions.flatMap((dim) => dim.options.map((o) => o.id));
   const optionIdsKey = optionIds.join(",");
+  const thumbQueueRef = useRef({
+    options: [] as Array<{ id: string; label: string; modifier: string }>,
+    baseSubject: "",
+  });
+  thumbQueueRef.current = {
+    options: data.dimensions.flatMap((dim) =>
+      dim.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+        modifier: option.modifier,
+      })),
+    ),
+    baseSubject: data.baseSubject,
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -124,9 +138,13 @@ export default function PromptRefinementCard({
 
     async function queueMissing(missingIds: string[]) {
       if (missingIds.length === 0) return;
+      const wanted = new Set(missingIds);
+      const hints = thumbQueueRef.current;
       try {
         await requestPromptHelperThumbGeneration(missingIds, {
           cloudConsent: hasStoredCloudConsent(),
+          options: hints.options.filter((option) => wanted.has(option.id)),
+          baseSubject: hints.baseSubject,
         });
       } catch {
         // Helper still works with SVG/swatch fallbacks.

@@ -1,6 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
+import { isPromptHelperThumbId } from "@/lib/ai/orchestration/promptHelperThumbManifest";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
@@ -11,7 +12,6 @@ export const dynamic = "force-dynamic";
  * Runtime-generated Prompt Helper thumbs must be streamed from disk via this route.
  */
 const THUMB_DIR = path.join(process.cwd(), "public/prompt-helper/thumbs");
-const SAFE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/;
 /** Generous — Helper can request dozens of chips at once. */
 const limiter = new RateLimiter(240, 60_000);
 
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
   const { id: rawId } = await context.params;
   const id = decodeURIComponent(rawId || "").replace(/\.jpe?g$/i, "");
-  if (!SAFE_ID.test(id)) {
+  if (!isPromptHelperThumbId(id)) {
     return NextResponse.json({ error: "Invalid thumb id" }, { status: 400 });
   }
 

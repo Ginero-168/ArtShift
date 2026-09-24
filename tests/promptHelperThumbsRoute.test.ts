@@ -95,4 +95,45 @@ describe("Prompt Helper thumbs API", () => {
       }),
     );
   });
+
+  it("forwards invented option modifiers and the card subject", async () => {
+    const response = await POST(
+      postRequest({
+        optionIds: ["wings__bat", "flat"],
+        options: [
+          { id: "wings__bat", label: "ปีกค้างคาว", modifier: "มังกรปีกค้างคาว" },
+          { id: "flat", label: "แบน", modifier: "should-not-replace-catalog" },
+        ],
+        baseSubject: "ภาพมังกร",
+        cloudConsent: true,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(ensureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        optionIds: ["wings__bat", "flat"],
+        baseSubject: "ภาพมังกร",
+        options: [
+          { id: "wings__bat", label: "ปีกค้างคาว", modifier: "มังกรปีกค้างคาว" },
+          { id: "flat", label: "แบน", modifier: "should-not-replace-catalog" },
+        ],
+        token: "r8_account-token",
+      }),
+    );
+  });
+
+  it("drops option ids that cannot be cache filenames", async () => {
+    const response = await POST(
+      postRequest({
+        optionIds: ["../secret", "wings__bat"],
+        cloudConsent: true,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(ensureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        optionIds: ["wings__bat"],
+      }),
+    );
+  });
 });
