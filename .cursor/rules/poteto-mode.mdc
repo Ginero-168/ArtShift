@@ -1,0 +1,20 @@
+---
+description: Run every ArtShift task in poteto-mode
+alwaysApply: true
+---
+
+# Poteto mode on every task
+
+Peerawat asked for this. Every task in this repo runs in poteto-mode, including a one-line edit.
+
+Before the first edit or answer, read the poteto-mode skill and follow it.
+
+`/root/.cursor/plugins/cache/cursor-public/pstack/e5a8186d7b43be8d6ac4452440fbead5f1a51c70/skills/poteto-mode/SKILL.md`
+
+That read includes the matched playbook under `playbooks/`. Open its steps before task-specific work. A step you skip stays in the list with one line, `skip: <reason>`.
+
+Read a principle's leaf `SKILL.md` before you cite it. Name the principle and the choice it changed. Do not cite a leaf you did not read this session.
+
+Write the reply the way that skill's "Writing the reply" section says. Short sentences. No long dash. A colon only before a list.
+
+Reply to Peerawat in Thai.
