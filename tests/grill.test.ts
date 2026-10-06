@@ -69,7 +69,12 @@ describe("grill trigger judgment", () => {
     const formatted = formatGrillClarification(assessment.question);
     expect(formatted.question).toContain("โปรโมทอะไรเป็นหลัก");
     expect(formatted.question).toContain("➡️ แนะนำ:");
-    expect(formatted.question).toContain(assessment.question.options[0]);
+    expect(formatted.question).toContain("A) เครื่องดื่ม / กาแฟ");
+    expect(formatted.question).toContain("B) อาหาร");
+    expect(formatted.question).toContain("C) สินค้าความงาม");
+    expect(formatted.question).toContain("D) พิมพ์คำตอบเอง");
+    expect(formatted.question).not.toContain("- ");
+    expect(formatted.options).toEqual(["เครื่องดื่ม / กาแฟ", "อาหาร", "สินค้าความงาม"]);
     expect(formatted.options.length).toBeLessThanOrEqual(4);
     expect(formatted.question.length).toBeLessThanOrEqual(1000);
   });

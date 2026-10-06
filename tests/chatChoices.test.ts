@@ -19,11 +19,7 @@ describe("chat choices", () => {
         { key: "A", label: "สร้างรูปภาพใหม่ตามไอเดียของคุณ", action: "send" },
         { key: "B", label: "แก้ไขหรือปรับแต่งภาพที่มีอยู่บน Canvas", action: "send" },
         { key: "C", label: "ออกแบบแบนเนอร์หรือป้ายหมวดหมู่เพิ่มเติม", action: "send" },
-        {
-          key: "OTHER",
-          label: "อื่นๆ (สามารถพิมพ์บอกสิ่งที่ต้องการได้เลยครับ)",
-          action: "compose",
-        },
+        { key: "D", label: "พิมพ์คำตอบเอง", action: "compose" },
       ],
     });
   });

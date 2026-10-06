@@ -1,4 +1,5 @@
 import { isImageFollowUpPrompt } from "./chatContinuity";
+import { formatChoiceQuestion, isFreeTextChoice } from "./chatChoices";
 
 /**
  * Grill-me for ArtShift chat.
@@ -167,15 +168,10 @@ export function formatGrillClarification(question: GrillQuestion): {
   question: string;
   options: string[];
 } {
-  const options = question.options.slice(0, 4);
-  const text = [
-    `**${question.ask}**`,
-    "",
+  const options = question.options.filter((option) => !isFreeTextChoice(option)).slice(0, 3);
+  const text = formatChoiceQuestion(question.ask, options, [
     `${RECOMMENDED_MARK} ${question.recommended}`,
-    "",
-    "เลือกแนวที่ใกล้สุด หรือพิมพ์คำตอบเอง:",
-    ...options.map((option) => `- ${option}`),
-  ].join("\n");
+  ]);
   return {
     question: text.length > 1_000 ? text.slice(0, 1_000) : text,
     options,

@@ -586,6 +586,7 @@ function AssistantReply({
                 cursor: busy || !onChooseChoice ? "default" : "pointer",
               }}
             >
+              <span style={{ display: "inline-block", width: 18, fontWeight: 650 }}>{choice.key}</span>
               {choice.label}
             </button>
           ))}

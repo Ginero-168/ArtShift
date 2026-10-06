@@ -270,15 +270,13 @@ describe("chat thread streaming UI", () => {
 
     expect(screen.getByText("ไม่ทราบว่าวันนี้คุณอยากให้ผมช่วยเรื่องไหนดีครับ?")).toBeTruthy();
     expect(screen.queryByText("A) สร้างรูปภาพใหม่ตามไอเดียของคุณ")).toBeNull();
+    expect(screen.getByTestId("chat-choice-ask-1-A").textContent).toContain("A");
+    expect(screen.getByTestId("chat-choice-ask-1-D").textContent).toContain("พิมพ์คำตอบเอง");
     fireEvent.click(screen.getByTestId("chat-choice-ask-1-A"));
-    fireEvent.click(screen.getByTestId("chat-choice-ask-1-OTHER"));
+    fireEvent.click(screen.getByTestId("chat-choice-ask-1-D"));
     expect(onChooseChoice.mock.calls.map((call) => call[0])).toEqual([
       { key: "A", label: "สร้างรูปภาพใหม่ตามไอเดียของคุณ", action: "send" },
-      {
-        key: "OTHER",
-        label: "อื่นๆ (สามารถพิมพ์บอกสิ่งที่ต้องการได้เลยครับ)",
-        action: "compose",
-      },
+      { key: "D", label: "พิมพ์คำตอบเอง", action: "compose" },
     ]);
   });
 });

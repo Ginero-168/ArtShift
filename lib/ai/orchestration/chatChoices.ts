@@ -4,7 +4,36 @@ export type ChatChoice = {
   action: "send" | "compose";
 };
 
+export const FREE_TEXT_CHOICE_LABEL = "พิมพ์คำตอบเอง";
+
+const LETTERS = ["A", "B", "C"] as const;
 const CHOICE_LINE = /^(?:([A-Za-z])\)|(Other)\))\s+(\S.*?)\s*$/i;
+
+export function isFreeTextChoice(label: string): boolean {
+  return /พิมพ์|อื่นๆ|อื่น ๆ|something else|^other$/i.test(label.trim());
+}
+
+/** One question, then A B C and a D line the user can type themselves. */
+export function formatChoiceQuestion(
+  ask: string,
+  options: readonly string[],
+  preface: readonly string[] = [],
+): string {
+  const concrete = options
+    .map((option) => option.trim())
+    .filter((option) => option.length > 0 && !isFreeTextChoice(option))
+    .slice(0, 3);
+  const lines = [ask.trim(), ""];
+  for (const line of preface) {
+    if (line.trim()) lines.push(line);
+  }
+  if (preface.some((line) => line.trim())) lines.push("");
+  concrete.forEach((option, index) => {
+    lines.push(`${LETTERS[index]}) ${option}`);
+  });
+  lines.push(`D) ${FREE_TEXT_CHOICE_LABEL}`);
+  return lines.join("\n");
+}
 
 /** Pull a lettered menu out of a reply. A normal paragraph stays one block. */
 export function splitChatChoices(text: string): { prose: string; choices: ChatChoice[] } {
@@ -34,12 +63,26 @@ export function splitChatChoices(text: string): { prose: string; choices: ChatCh
   }
 
   if (choices.length < 2) return { prose: text, choices: [] };
-  return { prose: trimBlankEdges(kept).join("\n"), choices };
+  const menu = toAbcdMenu(choices);
+  if (menu.length < 2) return { prose: text, choices: [] };
+  return { prose: trimBlankEdges(kept).join("\n"), choices: menu };
+}
+
+function toAbcdMenu(raw: readonly ChatChoice[]): ChatChoice[] {
+  const send = raw.filter((choice) => choice.action === "send").slice(0, 3);
+  if (send.length === 0) return [];
+  const menu: ChatChoice[] = send.map((choice, index) => ({
+    key: LETTERS[index] ?? "C",
+    label: choice.label,
+    action: "send",
+  }));
+  menu.push({ key: "D", label: FREE_TEXT_CHOICE_LABEL, action: "compose" });
+  return menu;
 }
 
 function choiceAction(key: string, label: string): "send" | "compose" {
-  if (key === "OTHER") return "compose";
-  if (/พิมพ์|อื่นๆ|อื่น ๆ|something else/i.test(label)) return "compose";
+  if (key === "OTHER" || key === "D") return "compose";
+  if (isFreeTextChoice(label)) return "compose";
   return "send";
 }
 
