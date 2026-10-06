@@ -740,15 +740,6 @@ function drawInfinityBoard(
     ctx.lineTo(right, y);
   }
   ctx.stroke();
-
-  ctx.strokeStyle = "rgba(214, 68, 24, 0.35)";
-  ctx.lineWidth = 1.25 / view.scale;
-  ctx.beginPath();
-  ctx.moveTo(left, 0);
-  ctx.lineTo(right, 0);
-  ctx.moveTo(0, top);
-  ctx.lineTo(0, bottom);
-  ctx.stroke();
   ctx.restore();
 }
 

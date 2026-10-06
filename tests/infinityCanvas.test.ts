@@ -308,5 +308,6 @@ describe("Infinity Canvas UI wiring", () => {
     expect(root).toContain("isInfinityCanvasSlide");
     expect(root).toContain("fillBackground: !infinite");
     expect(root).toContain("drawInfinityBoard");
+    expect(root).not.toContain("rgba(214, 68, 24, 0.35)");
   });
 });
