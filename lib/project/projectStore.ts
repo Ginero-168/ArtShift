@@ -50,15 +50,6 @@ export type AllProjectsArchive = {
 
 export type ProjectSaveResult = { ok: true; savedAt: number } | { ok: false; message: string };
 
-export function localProjectsToUpload(
-  projects: readonly ProjectMetadata[],
-  accountId: string,
-): ProjectMetadata[] {
-  return projects.filter(
-    (project) => project.ownerKey === accountId || project.ownerKey === "local-default",
-  );
-}
-
 export interface ProjectStoreBackend {
   list(ownerKey?: string): Promise<ProjectMetadata[]>;
   get(projectId: string): Promise<ProjectMetadata | null>;
@@ -670,34 +661,6 @@ class ResilientProjectStore {
 
   async clearAll(): Promise<void> {
     await this.backend.clearAll();
-  }
-
-  async migrateLocalIndexedDb(accountId: string): Promise<number> {
-    if (!accountId || typeof indexedDB === "undefined") return 0;
-    const flag = `artshift.cloudMigrated.v1.${accountId}`;
-    if (typeof localStorage !== "undefined" && localStorage.getItem(flag) === "1") return 0;
-    const local = new IndexedDbProjectBackend();
-    const mine = localProjectsToUpload(await local.list(), accountId);
-    let uploaded = 0;
-    for (const metadata of mine) {
-      const record = await local.getDocument(metadata.id);
-      if (!record) continue;
-      const remote = await this.backend.get(metadata.id);
-      if (!remote) await this.backend.putProject({ ...metadata, ownerKey: accountId });
-      const remoteDocument = await this.backend.getDocument(metadata.id);
-      if (!remoteDocument) {
-        await this.backend.saveDocument(
-          metadata.id,
-          accountId,
-          record.doc,
-          record.files,
-          metadata.thumbnail,
-        );
-        uploaded += 1;
-      }
-    }
-    if (typeof localStorage !== "undefined") localStorage.setItem(flag, "1");
-    return uploaded;
   }
 }
 

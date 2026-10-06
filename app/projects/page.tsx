@@ -192,11 +192,6 @@ export default function ProjectsPage() {
   useEffect(() => {
     if (!authenticated || !user?.id) return;
     void (async () => {
-      try {
-        await projectStore.migrateLocalIndexedDb(user.id);
-      } catch {
-        setActionError("ยังย้ายงานจากเครื่องนี้ขึ้นบัญชีไม่สำเร็จ");
-      }
       await refreshProjects();
       const legacyDoc = await projectStore.detectLegacyWorkspace();
       if (legacyDoc) setHasLegacy(true);

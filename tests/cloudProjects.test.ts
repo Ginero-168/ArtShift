@@ -7,7 +7,7 @@ import { NextRequest } from "next/server";
 import { beforeAll, describe, expect, it } from "vitest";
 import { GET as listProjects } from "@/app/api/projects/route";
 import { createEmptyEngineDoc } from "@/lib/engine/store";
-import { localProjectsToUpload, type ProjectMetadata } from "@/lib/project/projectStore";
+import type { ProjectMetadata } from "@/lib/project/projectStore";
 import {
   deleteOwnedProject,
   getOwnedProject,
@@ -58,25 +58,6 @@ describe("cloud projects", () => {
     expect(readOwnedDocument("account-b", "poster")).toBeNull();
     expect(deleteOwnedProject("account-b", "poster")).toBe(false);
     expect(getOwnedProject("account-a", "poster")?.name).toBe("Poster");
-  });
-
-  it("uploads only this account's local projects and unowned local projects", () => {
-    const now = Date.now();
-    const base = {
-      createdAt: now,
-      updatedAt: now,
-      lastOpenedAt: now,
-      schemaVersion: 1,
-    };
-    const selected = localProjectsToUpload(
-      [
-        { ...base, id: "mine", ownerKey: "account-a", name: "Mine" },
-        { ...base, id: "old", ownerKey: "local-default", name: "Old" },
-        { ...base, id: "theirs", ownerKey: "account-b", name: "Theirs" },
-      ],
-      "account-a",
-    );
-    expect(selected.map((project) => project.id)).toEqual(["mine", "old"]);
   });
 
   it("rejects a project list without a session", async () => {
