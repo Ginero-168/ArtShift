@@ -31,6 +31,7 @@ import {
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import { formatFriendlyAspectRatio } from "@/lib/ai/imageResultPresentation";
 import { canvasSummaryForChat } from "@/lib/ai/orchestration/canvasChatContext";
+import type { ChatChoice } from "@/lib/ai/orchestration/chatChoices";
 import {
   classifyImageFollowUpPrompt,
   composeFollowUpDirectorPrompt,
@@ -1934,6 +1935,14 @@ export default function AICoPilotBar() {
         scrollRef={scrollRef}
         onSelectCanvasImage={handleSelectCanvasImage}
         onClearHistory={handleClearHistory}
+        onChooseChoice={(choice: ChatChoice) => {
+          if (busy) return;
+          if (choice.action === "compose") {
+            editorRef.current?.focus();
+            return;
+          }
+          void handleSend(choice.label);
+        }}
         onEditPromptFromError={(prompt) => {
           setInput(prompt);
           editorRef.current?.setValue(prompt);

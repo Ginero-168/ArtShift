@@ -1,5 +1,5 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import ChatThread, { CollapsibleThought } from "@/components/AI/ChatThread";
 import type { CoPilotMessage } from "@/lib/ai/coPilot";
 
@@ -237,5 +237,48 @@ describe("chat thread streaming UI", () => {
     });
     expect(screen.getByTestId("thought-body").textContent).toContain("กำลังอ่านคำขอ");
     expect(screen.getByTestId("thought-body").textContent).not.toContain("โทนครีม");
+  });
+
+  it("sends a lettered choice and opens the composer for Other", () => {
+    const onChooseChoice = vi.fn();
+    const reply = [
+      "ไม่ทราบว่าวันนี้คุณอยากให้ผมช่วยเรื่องไหนดีครับ?",
+      "",
+      "A) สร้างรูปภาพใหม่ตามไอเดียของคุณ",
+      "Other) อื่นๆ (สามารถพิมพ์บอกสิ่งที่ต้องการได้เลยครับ)",
+    ].join("\n");
+    render(
+      <ChatThread
+        messages={[
+          {
+            id: "ask-1",
+            role: "assistant",
+            content: reply,
+            timestamp: 3,
+          },
+        ]}
+        busy={false}
+        liveAssistantState={null}
+        streamingText=""
+        currentActions={[]}
+        scrollRef={{ current: null }}
+        onSelectCanvasImage={() => undefined}
+        onClearHistory={() => undefined}
+        onChooseChoice={onChooseChoice}
+      />,
+    );
+
+    expect(screen.getByText("ไม่ทราบว่าวันนี้คุณอยากให้ผมช่วยเรื่องไหนดีครับ?")).toBeTruthy();
+    expect(screen.queryByText("A) สร้างรูปภาพใหม่ตามไอเดียของคุณ")).toBeNull();
+    fireEvent.click(screen.getByTestId("chat-choice-ask-1-A"));
+    fireEvent.click(screen.getByTestId("chat-choice-ask-1-OTHER"));
+    expect(onChooseChoice.mock.calls.map((call) => call[0])).toEqual([
+      { key: "A", label: "สร้างรูปภาพใหม่ตามไอเดียของคุณ", action: "send" },
+      {
+        key: "OTHER",
+        label: "อื่นๆ (สามารถพิมพ์บอกสิ่งที่ต้องการได้เลยครับ)",
+        action: "compose",
+      },
+    ]);
   });
 });

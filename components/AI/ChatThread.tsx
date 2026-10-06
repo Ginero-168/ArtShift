@@ -20,6 +20,7 @@ import {
   formatModelTechnicalTitle,
 } from "@/lib/ai/chatModelAttribution";
 import type { CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
+import { type ChatChoice, splitChatChoices } from "@/lib/ai/orchestration/chatChoices";
 import { advanceThoughtReveal } from "@/lib/ai/orchestration/directorStream";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
@@ -56,6 +57,7 @@ export interface ChatThreadProps {
   onSelectCanvasImage: (fileId?: string) => void;
   onClearHistory: () => void;
   onEditPromptFromError?: (prompt: string) => void;
+  onChooseChoice?: (choice: ChatChoice) => void;
   children?: React.ReactNode;
 }
 
@@ -510,6 +512,89 @@ export function buildPromptWithTagsForCopy(msg: CoPilotMessage): string {
   return buildCanonicalPromptWithTags(msg.content || "", msg.imageRefs);
 }
 
+function AssistantReply({
+  messageId,
+  content,
+  busy,
+  isError,
+  imageRefs,
+  onSelectCanvasImage,
+  onChooseChoice,
+}: {
+  messageId: string;
+  content: string;
+  busy: boolean;
+  isError: boolean;
+  imageRefs?: ComposerImageRef[];
+  onSelectCanvasImage: (fileId?: string) => void;
+  onChooseChoice?: (choice: ChatChoice) => void;
+}) {
+  const split = splitChatChoices(content);
+  const shown = split.choices.length > 0 ? split.prose : content;
+  return (
+    <>
+      {shown ? (
+        <div
+          style={{
+            alignSelf: "flex-start",
+            maxWidth: "92%",
+            padding: "8px 12px",
+            borderRadius: "3px 14px 14px 14px",
+            background: isError ? "#fff1f2" : "#fcf9f5",
+            color: isError ? "#991b1b" : "#2c2824",
+            fontSize: 12.5,
+            lineHeight: 1.55,
+            wordBreak: "break-word",
+            border: isError ? "1px solid #fecdd3" : "1px solid #f8f4ef",
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
+          }}
+        >
+          <InlineTagRenderer
+            theme="light"
+            content={shown}
+            imageRefs={imageRefs}
+            onSelect={(fileId) => onSelectCanvasImage(fileId)}
+          />
+        </div>
+      ) : null}
+      {split.choices.length > 0 ? (
+        <div
+          role="group"
+          aria-label="ตัวเลือก"
+          style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: "92%" }}
+        >
+          {split.choices.map((choice) => (
+            <button
+              key={choice.key}
+              type="button"
+              disabled={busy || !onChooseChoice}
+              data-testid={`chat-choice-${messageId}-${choice.key}`}
+              onClick={() => onChooseChoice?.(choice)}
+              style={{
+                minHeight: 36,
+                padding: "8px 12px",
+                borderRadius: 10,
+                border:
+                  choice.action === "compose"
+                    ? "1px dashed rgba(26,23,20,0.28)"
+                    : "1px solid rgba(26,23,20,0.14)",
+                background: "#fff",
+                color: "#1a1714",
+                fontSize: 12.5,
+                lineHeight: 1.4,
+                textAlign: "left",
+                cursor: busy || !onChooseChoice ? "default" : "pointer",
+              }}
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export default function ChatThread({
   messages,
   busy,
@@ -520,6 +605,7 @@ export default function ChatThread({
   onSelectCanvasImage,
   onClearHistory,
   onEditPromptFromError,
+  onChooseChoice,
   children,
 }: ChatThreadProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -893,43 +979,30 @@ export default function ChatThread({
               {msg.resultSummary && !msg.isError ? (
                 <ImageResultSummaryBlock summary={msg.resultSummary} />
               ) : (
-                <div
-                  style={{
-                    alignSelf: "flex-start",
-                    maxWidth: "92%",
-                    padding: "8px 12px",
-                    borderRadius: "3px 14px 14px 14px",
-                    background: msg.isError ? "#fff1f2" : "#fcf9f5",
-                    color: msg.isError ? "#991b1b" : "#2c2824",
-                    fontSize: 12.5,
-                    lineHeight: 1.55,
-                    wordBreak: "break-word",
-                    border: msg.isError ? "1px solid #fecdd3" : "1px solid #f8f4ef",
-                    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
-                  }}
-                >
-                  <InlineTagRenderer
-                    theme="light"
-                    content={msg.content}
-                    imageRefs={
-                      msg.imageRefs ||
-                      (msg.images
-                        ? msg.images.map((im) => ({
-                            objectId: im.fileId || "",
-                            elementVersion: 1,
-                            fileId: im.fileId || "",
-                            displayName: im.label || "ภาพ",
-                            sourceWidth: im.width || 1024,
-                            sourceHeight: im.height || 1024,
-                            width: im.width || 1024,
-                            height: im.height || 1024,
-                            angle: 0,
-                          }))
-                        : undefined)
-                    }
-                    onSelect={(fileId) => onSelectCanvasImage(fileId)}
-                  />
-                </div>
+                <AssistantReply
+                  messageId={msg.id}
+                  content={msg.content}
+                  busy={busy}
+                  onChooseChoice={onChooseChoice}
+                  imageRefs={
+                    msg.imageRefs ||
+                    (msg.images
+                      ? msg.images.map((im) => ({
+                          objectId: im.fileId || "",
+                          elementVersion: 1,
+                          fileId: im.fileId || "",
+                          displayName: im.label || "ภาพ",
+                          sourceWidth: im.width || 1024,
+                          sourceHeight: im.height || 1024,
+                          width: im.width || 1024,
+                          height: im.height || 1024,
+                          angle: 0,
+                        }))
+                      : undefined)
+                  }
+                  onSelectCanvasImage={onSelectCanvasImage}
+                  isError={Boolean(msg.isError)}
+                />
               )}
 
               {/* Sub-agent Action logs (if any and not already structured) */}
