@@ -22,7 +22,6 @@ import BuilderInspector from "@/components/Builder/BuilderInspector";
 import LayerPanel from "@/components/Builder/LayerPanel";
 import CanvasEditor, { type CanvasEditorHandle } from "@/components/Canvas/CanvasEditor";
 import EditorOptionBar from "@/components/Canvas/EditorOptionBar";
-import SlideRail from "@/components/Canvas/SlideRail";
 import { useCanvasHotkeys } from "@/components/Canvas/useCanvasHotkeys";
 import {
   IconBrand,
@@ -51,12 +50,7 @@ import { exportPPTX } from "@/lib/engine/exportPPTX";
 import { exportAllSVG, exportCurrentSlideSVG } from "@/lib/engine/exportSVG";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { importLegacyStoreDocument } from "@/lib/engine/legacyBridge";
-import {
-  getExportableSlides,
-  INFINITY_CANVAS_EXPORT_NOTE,
-  INFINITY_CANVAS_LABEL,
-  isInfinityCanvasSlide,
-} from "@/lib/engine/slideKind";
+import { getExportableSlides } from "@/lib/engine/slideKind";
 import { createEmptyEngineDoc, useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
 import { loadThaiFonts } from "@/lib/fonts";
@@ -192,9 +186,7 @@ export default function ProjectEditorPage() {
   const currentSlide = useEngine((s) =>
     s.doc.slides.find((slide) => slide.id === s.currentSlideId),
   );
-  const currentSlideIsInfinity = isInfinityCanvasSlide(currentSlide);
   const exportableSlideCount = useEngine((s) => getExportableSlides(s.doc).length);
-  const hasInfinityCanvas = useEngine((s) => s.doc.slides.some(isInfinityCanvasSlide));
   const currentSlideBackground = currentSlide?.background ?? "#ffffff";
   const aiImageModalOpen = useEngine((s) => s.aiImageModalOpen);
   const setAiImageModalOpen = useEngine((s) => s.setAiImageModalOpen);
@@ -439,9 +431,6 @@ export default function ProjectEditorPage() {
   ) {
     if (exportBusy) return;
     const { doc, currentSlideId: activeSlideId } = useEngine.getState();
-    const current = doc.slides.find((sl) => sl.id === activeSlideId);
-    const currentExport = kind === "png" || kind === "webp" || kind === "jpg" || kind === "svg";
-    if (currentExport && current && isInfinityCanvasSlide(current)) return;
     if (
       (kind === "pngAll" || kind === "svgAll" || kind === "pdf" || kind === "pptx") &&
       getExportableSlides(doc).length === 0
@@ -634,13 +623,6 @@ export default function ProjectEditorPage() {
             <AutoSaveIndicator status={saveStatus} />
           </div>
 
-          {currentSlideIsInfinity ? (
-            <span className="notice-chip" title={INFINITY_CANVAS_EXPORT_NOTE}>
-              ∞ {INFINITY_CANVAS_LABEL}
-              <span>not exported</span>
-            </span>
-          ) : null}
-
           {saveError && (
             <span className="notice-chip is-error" title={saveError}>
               Autosave failed: {saveError}
@@ -688,7 +670,7 @@ export default function ProjectEditorPage() {
               >
                 <ModelManagerPanel
                   onResetProject={async () => {
-                    if (confirm("Reset all slides in this project? This cannot be undone.")) {
+                    if (confirm("Reset this canvas? This cannot be undone.")) {
                       const emptyDoc = createEmptyEngineDoc(projectName);
                       loadDoc(emptyDoc);
                       if (projectId) {
@@ -714,9 +696,6 @@ export default function ProjectEditorPage() {
             </button>
             {exportOpen && (
               <div className="menu" style={{ position: "absolute", top: 32, right: 0, zIndex: 30 }}>
-                {hasInfinityCanvas ? (
-                  <div className="menu-note">{INFINITY_CANVAS_EXPORT_NOTE}</div>
-                ) : null}
                 <button
                   onClick={() => {
                     runExport("pptx");
@@ -740,8 +719,6 @@ export default function ProjectEditorPage() {
                     runExport("png");
                     setExportOpen(false);
                   }}
-                  disabled={currentSlideIsInfinity}
-                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download .png (current)
                 </button>
@@ -750,8 +727,6 @@ export default function ProjectEditorPage() {
                     runExport("webp");
                     setExportOpen(false);
                   }}
-                  disabled={currentSlideIsInfinity}
-                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download .webp (Optimized Ads)
                 </button>
@@ -760,8 +735,6 @@ export default function ProjectEditorPage() {
                     runExport("jpg");
                     setExportOpen(false);
                   }}
-                  disabled={currentSlideIsInfinity}
-                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download .jpg (High Quality)
                 </button>
@@ -779,8 +752,6 @@ export default function ProjectEditorPage() {
                     runExport("svg");
                     setExportOpen(false);
                   }}
-                  disabled={currentSlideIsInfinity}
-                  title={currentSlideIsInfinity ? INFINITY_CANVAS_EXPORT_NOTE : undefined}
                 >
                   <IconDownload size={13} /> Download editable .svg (current)
                 </button>
@@ -825,12 +796,8 @@ export default function ProjectEditorPage() {
             const ratio = Math.min(maxW / entry.width, maxH / entry.height, 1);
             const w = entry.width * ratio;
             const h = entry.height * ratio;
-            const x = (sw - w) / 2;
+            const x = (sw - w) / 2 + i * (sw + 80);
             const y = (sh - h) / 2;
-            if (i > 0) {
-              const newSlideId = useEngine.getState().addSlide();
-              useEngine.getState().setCurrentSlide(newSlideId);
-            }
             useEngine.getState().addElement(
               createImage({
                 x,
@@ -850,7 +817,6 @@ export default function ProjectEditorPage() {
 
       {/* ——— Main area ——— */}
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <SlideRail />
         <BlockLibrary />
         <div
           style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}
@@ -860,19 +826,17 @@ export default function ProjectEditorPage() {
             <CanvasEditor ref={canvasEditorRef} onViewChange={(v) => setZoomScale(v.scale)} />
           )}
           <LayerPanel />
-          {currentSlideIsInfinity ? (
-            <div
-              data-moodboard-anchor="true"
-              style={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 12,
-                pointerEvents: "none",
-              }}
-            >
-              <MoodboardControl />
-            </div>
-          ) : null}
+          <div
+            data-moodboard-anchor="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 12,
+              pointerEvents: "none",
+            }}
+          >
+            <MoodboardControl />
+          </div>
 
           {/* ——— Left toolbar (top-left of workspace) ——— */}
           <div
@@ -1273,7 +1237,6 @@ export default function ProjectEditorPage() {
 
 function StatsModal({ onClose }: { onClose: () => void }) {
   const doc = useEngine.getState().doc;
-  const slides = doc.slides.length;
   const elements = doc.slides.reduce(
     (acc: number, sl) => acc + sl.elements.filter((e) => !e.isDeleted).length,
     0,
@@ -1315,7 +1278,6 @@ function StatsModal({ onClose }: { onClose: () => void }) {
       >
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Stats</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <StatBox label="Slides" value={slides} />
           <StatBox label="Elements" value={elements} />
           <StatBox label="Text boxes" value={textElements} />
           <StatBox label="Images" value={imageElements} />

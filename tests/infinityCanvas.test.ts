@@ -8,12 +8,12 @@ import {
 } from "@/lib/engine/exportPNG";
 import { exportPPTX } from "@/lib/engine/exportPPTX";
 import { exportAllSVG, exportCurrentSlideSVG } from "@/lib/engine/exportSVG";
+import { createRect } from "@/lib/engine/factory";
 import { fromJSON } from "@/lib/engine/serialize";
 import {
   getExportableSlides,
   INFINITY_CANVAS_EMPTY_EXPORT_MESSAGE,
   INFINITY_CANVAS_LABEL,
-  INFINITY_CANVAS_SKIPPED_MESSAGE,
   isExportableSlide,
   isInfinityCanvasSlide,
   normalizeSlideKind,
@@ -120,40 +120,34 @@ describe("Infinity Canvas slide kind", () => {
     vi.restoreAllMocks();
   });
 
-  it("normalizes missing and leftover kinds", () => {
-    expect(normalizeSlideKind(undefined)).toBe("artwork");
-    expect(normalizeSlideKind("artwork")).toBe("artwork");
+  it("treats every board as the infinite canvas", () => {
+    expect(normalizeSlideKind(undefined)).toBe("infinityCanvas");
+    expect(normalizeSlideKind("artwork")).toBe("infinityCanvas");
     expect(normalizeSlideKind("infinityCanvas")).toBe("infinityCanvas");
     expect(normalizeSlideKind("moodboard")).toBe("infinityCanvas");
-    expect(normalizeSlideKind("unknown")).toBe("artwork");
+    expect(normalizeSlideKind("unknown")).toBe("infinityCanvas");
   });
 
-  it("creates an Infinity Canvas slide with the same empty toolchain as artwork", () => {
-    useEngine.getState().loadDoc(createEmptyEngineDoc("Kind"));
-    const id = useEngine.getState().addInfinityCanvasSlide();
-    const created = useEngine.getState().doc.slides.find((slide) => slide.id === id);
-    expect(created).toMatchObject({
+  it("opens a new project as one infinite canvas and does not add another page", () => {
+    const doc = createEmptyEngineDoc("Kind");
+    useEngine.getState().loadDoc(doc);
+    const before = useEngine.getState().doc.slides;
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({
       kind: "infinityCanvas",
-      name: INFINITY_CANVAS_LABEL,
+      name: "Canvas",
       width: 1920,
       height: 1080,
     });
-    expect(created?.layers.length).toBeGreaterThan(0);
-    expect(created?.elements).toEqual([]);
-    expect(useEngine.getState().currentSlideId).toBe(id);
-    expect(isInfinityCanvasSlide(created)).toBe(true);
-    expect(isExportableSlide(created)).toBe(false);
-  });
-
-  it("keeps addSlide as a normal exportable artwork", () => {
-    useEngine.getState().loadDoc(createEmptyEngineDoc("Kind"));
+    expect(isInfinityCanvasSlide(before[0])).toBe(true);
+    expect(isExportableSlide(before[0])).toBe(true);
     const id = useEngine.getState().addSlide();
-    const created = useEngine.getState().doc.slides.find((slide) => slide.id === id);
-    expect(created?.kind).toBe("artwork");
-    expect(isExportableSlide(created)).toBe(true);
+    useEngine.getState().addInfinityCanvasSlide();
+    expect(useEngine.getState().doc.slides).toHaveLength(1);
+    expect(useEngine.getState().currentSlideId).toBe(id);
   });
 
-  it("migrates older documents without kind to artwork and leftover moodboard to Infinity Canvas", () => {
+  it("folds an older deck into one infinite canvas", () => {
     const migrated = fromJSON({
       id: "legacy",
       title: "Legacy",
@@ -187,16 +181,54 @@ describe("Infinity Canvas slide kind", () => {
 
     expect(migrated.schemaVersion).toBe(ENGINE_SCHEMA_VERSION);
     expect(ENGINE_SCHEMA_VERSION).toBe(12);
-    expect(migrated.slides[0].kind).toBe("artwork");
-    expect(migrated.slides[1].kind).toBe("infinityCanvas");
+    expect(migrated.slides).toHaveLength(1);
+    expect(migrated.slides[0]).toMatchObject({ id: "old", kind: "infinityCanvas" });
   });
 
-  it("omits Infinity Canvas from exportable slides while keeping artwork", () => {
+  it("places a second page to the right of the first", () => {
+    const first = createRect({ x: 0, y: 0, width: 100, height: 40 });
+    const second = createRect({ x: 0, y: 0, width: 80, height: 40 });
+    const migrated = fromJSON({
+      id: "deck",
+      title: "Deck",
+      width: 1920,
+      height: 1080,
+      snapGrid: null,
+      updatedAt: 1,
+      schemaVersion: ENGINE_SCHEMA_VERSION,
+      slides: [
+        {
+          id: "left",
+          name: "Left",
+          background: "#fff",
+          elements: [first],
+          layers: [],
+          width: 1920,
+          height: 1080,
+        },
+        {
+          id: "right",
+          name: "Right",
+          background: "#fff",
+          elements: [second],
+          layers: [],
+          width: 1920,
+          height: 1080,
+        },
+      ],
+    });
+    const placed = migrated.slides[0]?.elements.find((element) => element.id === second.id);
+    expect(migrated.slides).toHaveLength(1);
+    expect(placed?.x).toBe(260);
+  });
+
+  it("exports a mixed deck as one canvas", () => {
     const exportable = getExportableSlides(mixedDoc());
-    expect(exportable.map((slide) => slide.id)).toEqual(["a1", "a2"]);
+    expect(exportable.map((slide) => slide.id)).toEqual(["a1"]);
+    expect(exportable[0]?.kind).toBe("infinityCanvas");
   });
 
-  it("skips Infinity Canvas when exporting all PNGs and still exports artwork", async () => {
+  it("exports the infinite canvas as PNG", async () => {
     const downloads: string[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(
       this: HTMLAnchorElement,
@@ -206,31 +238,37 @@ describe("Infinity Canvas slide kind", () => {
 
     await exportAllPNG(mixedDoc());
 
-    expect(downloads).toEqual(["01-keep-me.png", "02-keep-two.png"]);
-    await expect(exportAllPNG({ ...mixedDoc(), slides: [infinitySlide("only")] })).rejects.toThrow(
+    expect(downloads).toEqual(["01-keep-me.png"]);
+    await exportAllPNG({ ...mixedDoc(), slides: [infinitySlide("only")] });
+    expect(downloads).toEqual(["01-keep-me.png", "01-infinity-canvas.png"]);
+    await expect(exportAllPNG({ ...mixedDoc(), slides: [] })).rejects.toThrow(
       INFINITY_CANVAS_EMPTY_EXPORT_MESSAGE,
     );
   });
 
-  it("refuses current-slide raster export of an Infinity Canvas", async () => {
-    await expect(exportCurrentSlidePNG(infinitySlide("i1"), mixedDoc())).rejects.toThrow(
-      INFINITY_CANVAS_SKIPPED_MESSAGE,
-    );
-    const blob = await exportSlideToPNG(artworkSlide("a1"), 1920, 1080);
-    expect(blob.type).toBe("image/png");
+  it("exports the current infinite canvas as PNG", async () => {
+    const downloads: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download);
+    });
+    await exportCurrentSlidePNG(infinitySlide("i1"), mixedDoc());
+    expect(downloads).toEqual(["infinity-canvas.png"]);
+    const artwork = await exportSlideToPNG(artworkSlide("a1"), 1920, 1080);
+    expect(artwork.type).toBe("image/png");
   });
 
-  it("skips Infinity Canvas in PDF export", async () => {
+  it("exports a mixed deck as one PDF page", async () => {
     await exportPDF(mixedDoc());
-    expect(pdfSpies.addImage).toHaveBeenCalledTimes(2);
-    expect(pdfSpies.addPage).toHaveBeenCalledTimes(1);
+    expect(pdfSpies.addImage).toHaveBeenCalledTimes(1);
+    expect(pdfSpies.addPage).not.toHaveBeenCalled();
     expect(pdfSpies.save).toHaveBeenCalled();
-    await expect(exportPDF({ ...mixedDoc(), slides: [infinitySlide("only")] })).rejects.toThrow(
-      INFINITY_CANVAS_EMPTY_EXPORT_MESSAGE,
-    );
+    await exportPDF({ ...mixedDoc(), slides: [infinitySlide("only")] });
+    expect(pdfSpies.addImage).toHaveBeenCalledTimes(2);
   });
 
-  it("skips Infinity Canvas in SVG export", () => {
+  it("exports a mixed deck as one SVG", () => {
     const downloads: string[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(
       this: HTMLAnchorElement,
@@ -238,16 +276,14 @@ describe("Infinity Canvas slide kind", () => {
       downloads.push(this.download);
     });
     exportAllSVG(mixedDoc());
-    expect(downloads).toEqual(["01-keep-me.svg", "02-keep-two.svg"]);
-    expect(() => exportCurrentSlideSVG(infinitySlide("i1"))).toThrow(
-      INFINITY_CANVAS_SKIPPED_MESSAGE,
-    );
+    expect(downloads).toEqual(["01-keep-me.svg"]);
+    expect(() => exportCurrentSlideSVG(infinitySlide("i1"))).not.toThrow();
   });
 
-  it("sends only exportable slides to the PPTX route", async () => {
+  it("sends the folded canvas to the PPTX route", async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
-      expect(body.doc.slides.map((slide: EngineSlide) => slide.id)).toEqual(["a1", "a2"]);
+      expect(body.doc.slides.map((slide: EngineSlide) => slide.id)).toEqual(["a1"]);
       return {
         ok: true,
         blob: async () => new Blob(["pptx"]),
@@ -261,11 +297,10 @@ describe("Infinity Canvas slide kind", () => {
 });
 
 describe("Infinity Canvas UI wiring", () => {
-  it("lets the slide rail create Infinity Canvas and documents the export skip", () => {
-    const rail = readFileSync("components/Canvas/SlideRail.tsx", "utf8");
-    expect(rail).toContain("addInfinityCanvasSlide");
-    expect(rail).toContain("New ${INFINITY_CANVAS_LABEL}");
-    expect(rail).toContain("INFINITY_CANVAS_EXPORT_NOTE");
+  it("does not mount a slide rail in the editor", () => {
+    const editor = readFileSync("app/projects/[projectId]/editor/page.tsx", "utf8");
+    expect(editor).not.toContain("SlideRail");
+    expect(editor).not.toContain("not exported");
   });
 
   it("draws a frameless infinite board in the editor canvas", () => {

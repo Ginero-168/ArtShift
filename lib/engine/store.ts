@@ -73,7 +73,7 @@ import {
 } from "./layers";
 import { isMediaElement, normalizeMediaPatch } from "./mediaLayout";
 import { resizeArtworkSlide } from "./resizeArtwork";
-import { INFINITY_CANVAS_LABEL, SLIDE_KIND_ARTWORK, SLIDE_KIND_INFINITY_CANVAS } from "./slideKind";
+import { collapseToInfinityCanvas, SLIDE_KIND_INFINITY_CANVAS } from "./slideKind";
 import { type SmartArrangeOptions, type SmartArrangePatch, solveSmartArrange } from "./smartLayout";
 import { publishEngineClipboard } from "./systemClipboard";
 import { applyTemplateToSlide, type TemplateApplyMode } from "./templateApplication";
@@ -360,7 +360,39 @@ function isVectorTool(tool: Tool): boolean {
   );
 }
 
-function newSlide(name: string, kind: SlideKind = SLIDE_KIND_ARTWORK): EngineSlide {
+function retargetBoard(slide: EngineSlide): EngineSlide {
+  const ids = new Map<string, string>();
+  const groups = new Map<string, string>();
+  const elements = slide.elements.map((element) => {
+    const id = crypto.randomUUID();
+    ids.set(element.id, id);
+    return {
+      ...element,
+      id,
+      groupIds: element.groupIds.map((groupId) => {
+        const next = groups.get(groupId) ?? crypto.randomUUID();
+        groups.set(groupId, next);
+        return next;
+      }),
+    };
+  });
+  return {
+    ...slide,
+    id: crypto.randomUUID(),
+    elements: elements.map((element) =>
+      element.type === "frame"
+        ? { ...element, childIds: element.childIds.map((id) => ids.get(id) ?? id) }
+        : element,
+    ),
+    layers: slide.layers.map((layer) => ({
+      ...layer,
+      id: crypto.randomUUID(),
+      objectIds: layer.objectIds.map((id) => ids.get(id) ?? id),
+    })),
+  };
+}
+
+function newSlide(name: string, kind: SlideKind = SLIDE_KIND_INFINITY_CANVAS): EngineSlide {
   const layer = createEngineLayer({ name: "Layer 1" });
   return {
     id: crypto.randomUUID(),
@@ -375,7 +407,7 @@ function newSlide(name: string, kind: SlideKind = SLIDE_KIND_ARTWORK): EngineSli
 }
 
 export function createEmptyEngineDoc(title = "Untitled Project"): EngineDoc {
-  const slide = newSlide("1");
+  const slide = newSlide("Canvas");
   return {
     id: crypto.randomUUID(),
     title,
@@ -1399,43 +1431,27 @@ export const useEngine = create<EngineState>((set, get) => {
       return frame;
     },
 
-    addSlide: () => {
-      const s = get();
-      pushHistory(s.history, s.doc, "add slide");
-      const sl = newSlide(`${s.doc.slides.length + 1}`);
-      set((cur) => ({
-        doc: { ...cur.doc, slides: [...cur.doc.slides, sl], updatedAt: Date.now() },
-        currentSlideId: sl.id,
-        activeLayerId: sl.layers[0].id,
-        selectedIds: new Set(),
-      }));
-      return sl.id;
-    },
+    addSlide: () => get().currentSlideId,
 
-    addInfinityCanvasSlide: () => {
-      const s = get();
-      pushHistory(s.history, s.doc, "add infinity canvas");
-      const sl = newSlide(INFINITY_CANVAS_LABEL, SLIDE_KIND_INFINITY_CANVAS);
-      set((cur) => ({
-        doc: { ...cur.doc, slides: [...cur.doc.slides, sl], updatedAt: Date.now() },
-        currentSlideId: sl.id,
-        activeLayerId: sl.layers[0].id,
-        selectedIds: new Set(),
-      }));
-      return sl.id;
-    },
+    addInfinityCanvasSlide: () => get().currentSlideId,
 
     appendSlides: (slides) => {
       if (!slides.length) return;
       const s = get();
       pushHistory(s.history, s.doc, "import campaign");
-      set((cur) => ({
-        doc: {
+      set((cur) => {
+        const doc = collapseToInfinityCanvas({
           ...cur.doc,
           slides: [...cur.doc.slides, ...slides],
           updatedAt: Date.now(),
-        },
-      }));
+        });
+        const board = doc.slides[0];
+        return {
+          doc,
+          currentSlideId: board?.id ?? cur.currentSlideId,
+          activeLayerId: board?.layers[0]?.id ?? cur.activeLayerId,
+        };
+      });
     },
 
     groupElements: (ids) => {
@@ -1673,24 +1689,27 @@ export const useEngine = create<EngineState>((set, get) => {
       const s = get();
       const source = s.doc.slides.find((slide) => slide.id === sourceId);
       if (!source) return "";
-      const id = crypto.randomUUID();
-      const rootId = source.variantOf ?? source.id;
       const draft: EngineSlide = {
         ...structuredClone(source),
-        id,
+        id: crypto.randomUUID(),
         name: name ?? `${source.name} · ${Math.round(width)}×${Math.round(height)}`,
-        variantOf: rootId,
-        variantLabel: `${Math.round(width)}×${Math.round(height)}`,
       };
-      const variant = resizeArtworkSlide(draft, width, height, resizeContents);
+      const copy = retargetBoard(resizeArtworkSlide(draft, width, height, resizeContents));
       pushHistory(s.history, s.doc, "create artwork variant");
-      set((cur) => ({
-        doc: { ...cur.doc, slides: [...cur.doc.slides, variant], updatedAt: Date.now() },
-        currentSlideId: id,
-        activeLayerId: variant.layers.toSorted((a, b) => b.z - a.z)[0]?.id ?? "",
-        selectedIds: new Set(),
-      }));
-      return id;
+      set((cur) => {
+        const doc = collapseToInfinityCanvas({
+          ...cur.doc,
+          slides: [...cur.doc.slides, copy],
+          updatedAt: Date.now(),
+        });
+        const board = doc.slides[0];
+        return {
+          doc,
+          currentSlideId: board?.id ?? cur.currentSlideId,
+          activeLayerId: board?.layers[0]?.id ?? cur.activeLayerId,
+        };
+      });
+      return get().currentSlideId;
     },
 
     syncElementsToVariants: (ids) => {

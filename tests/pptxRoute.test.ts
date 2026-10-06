@@ -79,7 +79,7 @@ describe("PPTX export route boundary", () => {
     expect(bytes.byteLength).toBeGreaterThan(1000);
   });
 
-  it("omits Infinity Canvas slides from the PPTX deck", async () => {
+  it("exports the canvas when the document is an infinite board", async () => {
     const { createEmptyEngineDoc } = await import("@/lib/engine/store");
     const doc = createEmptyEngineDoc("Mixed");
     doc.slides.push({
@@ -97,11 +97,7 @@ describe("PPTX export route boundary", () => {
     expect(response.status).toBe(200);
 
     const empty = createEmptyEngineDoc("Only infinity");
-    empty.slides[0].kind = "infinityCanvas";
-    const skipped = await POST(request(JSON.stringify({ doc: empty })));
-    expect(skipped.status).toBe(400);
-    await expect(skipped.json()).resolves.toMatchObject({
-      error: "No exportable slides. Infinity Canvas slides are excluded from export.",
-    });
+    const exported = await POST(request(JSON.stringify({ doc: empty })));
+    expect(exported.status).toBe(200);
   });
 });

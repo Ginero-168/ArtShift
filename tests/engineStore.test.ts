@@ -490,7 +490,7 @@ describe("engine store", () => {
     expect(element.y + element.height).toBeLessThanOrEqual(resized.height);
   });
 
-  it("creates a resized Artwork variant with stable object and asset identity", () => {
+  it("places a resized copy on the same canvas", () => {
     const st = useEngine.getState();
     const mockup = createBookMockup({
       x: 200,
@@ -505,46 +505,45 @@ describe("engine store", () => {
     });
     st.addElement(mockup);
 
-    const variantId = st.createArtworkVariant("s1", 1080, 1350, "Portrait");
+    const boardId = st.createArtworkVariant("s1", 1080, 1350, "Portrait");
     const state = useEngine.getState();
-    const variant = state.doc.slides.find((slide) => slide.id === variantId)!;
-    const variantMockup = variant.elements.find((element) => element.id === mockup.id);
-
-    expect(variant).toMatchObject({ width: 1080, height: 1350, variantOf: "s1" });
-    expect(variantMockup?.type).toBe("bookMockup");
-    if (variantMockup?.type === "bookMockup") {
-      expect(variantMockup.fileId).toBe("cover-asset");
-      expect(variantMockup.yaw).toBe(24);
-      expect(variantMockup.pitch).toBe(-8);
+    expect(state.doc.slides).toHaveLength(1);
+    expect(boardId).toBe(state.currentSlideId);
+    const mockups = state.doc.slides[0]?.elements.filter(
+      (element) => element.type === "bookMockup",
+    );
+    expect(mockups).toHaveLength(2);
+    const copy = mockups?.find((element) => element.id !== mockup.id);
+    expect(copy?.type).toBe("bookMockup");
+    if (copy?.type === "bookMockup") {
+      expect(copy.fileId).toBe("cover-asset");
+      expect(copy.yaw).toBe(24);
+      expect(copy.pitch).toBe(-8);
+      expect(copy.x).toBeGreaterThan(mockup.x);
     }
   });
 
-  it("syncs content to sibling variants while preserving their geometry", () => {
+  it("keeps the size copy independent when the original text changes", () => {
     const st = useEngine.getState();
     const title = createText({ x: 100, y: 100, width: 500, height: 120, text: "Original" });
     st.addElement(title);
-    const variantId = st.createArtworkVariant("s1", 1080, 1350, "Portrait");
-    const beforeMaster = useEngine
-      .getState()
-      .doc.slides.find((slide) => slide.id === "s1")!
-      .elements.find((element) => element.id === title.id)!;
+    st.createArtworkVariant("s1", 1080, 1350, "Portrait");
+    const board = useEngine.getState().doc.slides[0];
+    const copy = board?.elements.find(
+      (element) => element.id !== title.id && element.type === "text",
+    );
 
     useEngine.getState().updateElements([{ id: title.id, patch: { text: "Synced title" } }]);
     useEngine.getState().syncElementsToVariants([title.id]);
 
     const master = useEngine
       .getState()
-      .doc.slides.find((slide) => slide.id === "s1")!
-      .elements.find((element) => element.id === title.id);
+      .doc.slides[0]?.elements.find((element) => element.id === title.id);
     expect(master?.type).toBe("text");
     if (master?.type === "text") expect(master.text).toBe("Synced title");
-    expect(master).toMatchObject({
-      x: beforeMaster.x,
-      y: beforeMaster.y,
-      width: beforeMaster.width,
-      height: beforeMaster.height,
-    });
-    expect(useEngine.getState().currentSlideId).toBe(variantId);
+    expect(copy?.type).toBe("text");
+    if (copy?.type === "text") expect(copy.text).toBe("Original");
+    expect(useEngine.getState().doc.slides).toHaveLength(1);
   });
 
   it("renames a layer and updates slide state with history", () => {
@@ -593,14 +592,22 @@ describe("engine store", () => {
     expect(useEngine.getState().activeRasterSelection?.imageId).toBe(image.id);
   });
 
-  it("appends campaign slides and stays on the current slide", () => {
+  it("places a campaign board on the current canvas", () => {
     const beforeId = useEngine.getState().currentSlideId;
     const source = useEngine.getState().doc.slides[0];
-    useEngine.getState().appendSlides([{ ...source, id: "campaign-1", name: "Campaign" }]);
+    const poster = createRect({ x: 10, y: 10, width: 80, height: 40 });
+    useEngine
+      .getState()
+      .appendSlides([{ ...source, id: "campaign-1", name: "Campaign", elements: [poster] }]);
     expect(useEngine.getState().currentSlideId).toBe(beforeId);
-    expect(useEngine.getState().doc.slides.map((slide) => slide.id)).toEqual(["s1", "campaign-1"]);
+    expect(useEngine.getState().doc.slides).toHaveLength(1);
+    expect(
+      useEngine.getState().doc.slides[0]?.elements.some((element) => element.id === poster.id),
+    ).toBe(true);
     useEngine.getState().undo();
-    expect(useEngine.getState().doc.slides.map((slide) => slide.id)).toEqual(["s1"]);
+    expect(
+      useEngine.getState().doc.slides[0]?.elements.some((element) => element.id === poster.id),
+    ).toBe(false);
     expect(useEngine.getState().currentSlideId).toBe(beforeId);
   });
 });

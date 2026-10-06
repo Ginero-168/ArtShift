@@ -29,8 +29,6 @@ export function usePasteDrop(
   clientToWorld: (x: number, y: number) => { x: number; y: number },
 ) {
   const addElement = useEngine((s) => s.addElement);
-  const addSlide = useEngine((s) => s.addSlide);
-  const setCurrentSlide = useEngine((s) => s.setCurrentSlide);
 
   useEffect(() => {
     function currentSlideSize() {
@@ -92,7 +90,6 @@ export function usePasteDrop(
 
     async function handleFiles(files: FileList | null, world: { x: number; y: number }) {
       if (!files) return;
-      const { w: sw, h: sh } = currentSlideSize();
       for (const file of Array.from(files)) {
         // PDF import
         if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
@@ -113,13 +110,8 @@ export function usePasteDrop(
             const ratio = Math.min(maxW / entry.width, maxH / entry.height, 1);
             const w = entry.width * ratio;
             const h = entry.height * ratio;
-            const x = (csw - w) / 2;
+            const x = (csw - w) / 2 + i * (csw + 80);
             const y = (csh - h) / 2;
-            // First page goes to current slide; subsequent pages get new slides
-            if (i > 0) {
-              const newSlideId = addSlide();
-              setCurrentSlide(newSlideId);
-            }
             addElement(
               createImage({
                 x,
@@ -355,7 +347,7 @@ export function usePasteDrop(
       el?.removeEventListener("drop", onDrop);
       el?.removeEventListener("dragover", onDragOver);
     };
-  }, [addElement, addSlide, clientToWorld, container, setCurrentSlide]);
+  }, [addElement, clientToWorld, container]);
 
   // Re-export cache getter so consumers can pass it to CanvasRoot.
   return { getImageCache };

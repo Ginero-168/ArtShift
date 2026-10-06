@@ -438,10 +438,8 @@ export type EngineSlide = {
   id: string;
   name: string;
   /**
-   * Artwork (default) has a fixed page frame and is exported.
-   * Infinity Canvas is a frameless infinite artboard with the same tools
-   * and is omitted from PNG / PDF / PPTX / SVG / Present.
-   * Missing on older documents — treat as `"artwork"`.
+   * The board is always an infinite canvas.
+   * Older artwork pages are folded onto this board when a document loads.
    */
   kind?: SlideKind;
   /** Root Artwork id shared by resized variants. Missing means this is a master. */

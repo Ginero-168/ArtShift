@@ -60,42 +60,36 @@ describe("cross-slide clipboard", () => {
     useEngine.getState().loadDoc(twoSlideDoc());
   });
 
-  it("copies from one slide and pastes onto another", () => {
+  it("copies an object and pastes it on the same canvas", () => {
     const st = useEngine.getState();
-    st.setCurrentSlide("s1");
     const rect = createRect({ x: 40, y: 40, width: 120, height: 80 });
     st.addElement(rect);
     st.copyElements([rect.id]);
 
-    st.setCurrentSlide("s2");
     expect(useEngine.getState().clipboard?.length).toBe(1);
     handleCanvasHotkey(
       new KeyboardEvent("keydown", { key: "v", code: "KeyV", metaKey: true, cancelable: true }),
     );
 
-    const s2 = useEngine.getState().doc.slides.find((slide) => slide.id === "s2");
-    const live = s2?.elements.filter((el) => !el.isDeleted) ?? [];
-    expect(live).toHaveLength(1);
-    expect(live[0]?.type).toBe("rect");
-    expect(
-      useEngine.getState().doc.slides.find((slide) => slide.id === "s1")?.elements,
-    ).toHaveLength(1);
+    const live =
+      useEngine
+        .getState()
+        .doc.slides[0]?.elements.filter((el) => !el.isDeleted && el.type === "rect") ?? [];
+    expect(live).toHaveLength(2);
+    expect(useEngine.getState().doc.slides).toHaveLength(1);
   });
 
-  it("cuts from one slide and pastes onto another", () => {
+  it("cuts an object and pastes it back on the same canvas", () => {
     const st = useEngine.getState();
-    st.setCurrentSlide("s1");
     const text = createText({ x: 40, y: 40, text: "move me" });
     st.addElement(text);
     st.cutElements([text.id]);
 
-    const s1 = useEngine.getState().doc.slides.find((slide) => slide.id === "s1");
-    expect(s1?.elements.find((el) => el.id === text.id)?.isDeleted).toBe(true);
+    const board = useEngine.getState().doc.slides[0];
+    expect(board?.elements.find((el) => el.id === text.id)?.isDeleted).toBe(true);
 
-    st.setCurrentSlide("s2");
     st.pasteElements();
-    const s2 = useEngine.getState().doc.slides.find((slide) => slide.id === "s2");
-    const live = s2?.elements.filter((el) => !el.isDeleted) ?? [];
+    const live = useEngine.getState().doc.slides[0]?.elements.filter((el) => !el.isDeleted) ?? [];
     expect(live).toHaveLength(1);
     expect(live[0]?.type).toBe("text");
   });

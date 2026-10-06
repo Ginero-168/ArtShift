@@ -11,7 +11,7 @@ import {
   remapBlockPlacement,
 } from "./legacyBlockMigrate";
 import { fitMediaElementToRect, isMediaElement } from "./mediaLayout";
-import { normalizeSlideKind } from "./slideKind";
+import { collapseToInfinityCanvas, normalizeSlideKind } from "./slideKind";
 import {
   ENGINE_SCHEMA_VERSION,
   type EngineDoc,
@@ -74,7 +74,7 @@ export function normalizeDocumentLayers(doc: EngineDoc): EngineDoc {
   const adaptiveGridMigration = sourceVersion < 3;
   const mediaGeometryMigration = sourceVersion < 4;
   const strictness = normalizeStrictness(doc.workspaceStrictness);
-  return {
+  return collapseToInfinityCanvas({
     ...doc,
     schemaVersion: ENGINE_SCHEMA_VERSION,
     workspaceStrictness: strictness,
@@ -104,7 +104,7 @@ export function normalizeDocumentLayers(doc: EngineDoc): EngineDoc {
         }),
       );
     }),
-  };
+  });
 }
 
 export function normalizeSlideLayers(

@@ -19,8 +19,8 @@ describe("Multi-Project Store & Local Isolation", () => {
     expect(docRecord1).not.toBeNull();
     expect(docRecord1!.doc.title).toBe("Project Alpha");
 
-    // Modify Project 1 by adding a slide
     const doc1 = docRecord1!.doc;
+    doc1.slides[0].background = "#111111";
     doc1.slides.push({
       id: "slide-2",
       name: "Slide 2",
@@ -33,9 +33,9 @@ describe("Multi-Project Store & Local Isolation", () => {
     doc1.updatedAt = Date.now() + 100;
     await store.saveProjectDocument(p1.id, doc1);
 
-    // Verify Project 1 has 2 slides now
     const reloaded1 = await store.loadProjectDocument(p1.id);
-    expect(reloaded1!.doc.slides.length).toBe(2);
+    expect(reloaded1!.doc.slides).toHaveLength(1);
+    expect(reloaded1!.doc.slides[0]?.background).toBe("#111111");
 
     // Verify Project 2 is unaffected and still has 1 slide
     const docRecord2 = await store.loadProjectDocument(p2.id);

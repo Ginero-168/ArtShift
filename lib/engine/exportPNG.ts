@@ -7,7 +7,7 @@
  */
 
 import { renderSlide } from "../renderer/canvas";
-import { assertExportableSlide, requireExportableSlides } from "./slideKind";
+import { assertExportableSlide, frameBoard, requireExportableSlides } from "./slideKind";
 import type { EngineDoc, EngineSlide } from "./types";
 
 export async function exportSlideToPNG(
@@ -121,7 +121,8 @@ export async function exportCurrentSlidePNG(
   images?: Map<string, HTMLImageElement>,
 ) {
   assertExportableSlide(slide);
-  const blob = await exportSlideToPNG(slide, slide.width, slide.height, images, 2);
+  const framed = frameBoard(slide);
+  const blob = await exportSlideToPNG(framed, framed.width, framed.height, images, 2);
   download(blob, `${slugify(slide.name || "slide")}.png`);
 }
 
@@ -133,7 +134,8 @@ export async function exportCurrentSlideWebP(
   quality = 0.88,
 ) {
   assertExportableSlide(slide);
-  const blob = await exportSlideToWebP(slide, slide.width, slide.height, images, quality, 2);
+  const framed = frameBoard(slide);
+  const blob = await exportSlideToWebP(framed, framed.width, framed.height, images, quality, 2);
   download(blob, `${slugify(slide.name || "slide")}.webp`);
 }
 
@@ -145,7 +147,8 @@ export async function exportCurrentSlideJPEG(
   quality = 0.9,
 ) {
   assertExportableSlide(slide);
-  const blob = await exportSlideToJPEG(slide, slide.width, slide.height, images, quality, 2);
+  const framed = frameBoard(slide);
+  const blob = await exportSlideToJPEG(framed, framed.width, framed.height, images, quality, 2);
   download(blob, `${slugify(slide.name || "slide")}.jpg`);
 }
 

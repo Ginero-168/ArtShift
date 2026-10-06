@@ -9,7 +9,7 @@ import { getFramePolaroidCutout, getFrameShapeSVGPath } from "./frameMask";
 import { strokeOutlineFor } from "./freehand";
 import { getCached } from "./imageCache";
 import { getRenderableElements } from "./layers";
-import { assertExportableSlide, requireExportableSlides } from "./slideKind";
+import { assertExportableSlide, frameBoard, requireExportableSlides } from "./slideKind";
 import { layoutText, letterSpacingPx, parseRichText } from "./textLayout";
 import type {
   ArrowElement,
@@ -58,7 +58,7 @@ export function serializeSlideToSVG(slide: EngineSlide): string {
 
 export function exportCurrentSlideSVG(slide: EngineSlide) {
   assertExportableSlide(slide);
-  downloadSVG(slide, `${slugify(slide.name || "artwork")}.svg`);
+  downloadSVG(frameBoard(slide), `${slugify(slide.name || "artwork")}.svg`);
 }
 
 export function exportAllSVG(doc: EngineDoc) {

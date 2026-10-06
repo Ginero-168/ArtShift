@@ -5,11 +5,7 @@ import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
 import { absorbWorkspaceWheel } from "@/lib/editor/overscrollLock";
 import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
 import { getImageCache } from "@/lib/engine/imageCache";
-import {
-  getExportableSlides,
-  INFINITY_CANVAS_EXPORT_NOTE,
-  INFINITY_CANVAS_LABEL,
-} from "@/lib/engine/slideKind";
+import { getExportableSlides } from "@/lib/engine/slideKind";
 import type { EngineDoc, EngineSlide } from "@/lib/engine/types";
 import { leavePresent, loadPresentDocument, presentSlideIndex } from "@/lib/project/presentProject";
 import { projectStore } from "@/lib/project/projectStore";
@@ -142,10 +138,7 @@ export default function PresentPage() {
     return (
       <div className="present-room present-note">
         <ArtShiftLogo size="header" />
-        <p>
-          This project has no exportable slides. {INFINITY_CANVAS_LABEL} slides are skipped in
-          Present. {INFINITY_CANVAS_EXPORT_NOTE}
-        </p>
+        <p>This project has no canvas to present.</p>
         <a className="present-link" href="/projects">
           Back to Projects
         </a>
