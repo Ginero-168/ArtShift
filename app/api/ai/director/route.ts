@@ -9,6 +9,7 @@ import {
   encodeDirectorSse,
   extractDirectorStreamThought,
 } from "@/lib/ai/orchestration/directorStream";
+import { assessGrill, formatGrillClarification } from "@/lib/ai/orchestration/grill";
 import { parsePriorImageGenerationPayload } from "@/lib/ai/orchestration/priorGenerationParse";
 import { getClientIp, RateLimiter } from "@/lib/rateLimit";
 import { isImageSearchConfigured, searchImageReferences } from "@/lib/server/ai/contextImageSearch";
@@ -53,16 +54,33 @@ export async function POST(req: NextRequest) {
       { status: 401 },
     );
   }
-  if (!isRecord(raw) || raw.cloudConsent !== true) {
-    return NextResponse.json(
-      { error: "Explicit cloud consent is required for the Creative Director." },
-      { status: 403 },
-    );
+  if (!isRecord(raw)) {
+    return NextResponse.json({ error: "Invalid Creative Director request." }, { status: 400 });
   }
 
   const input = parseDirectorInput(raw);
   if (!input) {
     return NextResponse.json({ error: "Invalid Creative Director request." }, { status: 400 });
+  }
+
+  const grill = assessGrill(input);
+  if (grill.action === "ask") {
+    const formatted = formatGrillClarification(grill.question);
+    return NextResponse.json({
+      direction: {
+        kind: "clarification",
+        question: formatted.question,
+        options: formatted.options,
+      },
+      model: null,
+    });
+  }
+
+  if (raw.cloudConsent !== true) {
+    return NextResponse.json(
+      { error: "Explicit cloud consent is required for the Creative Director." },
+      { status: 403 },
+    );
   }
 
   const charge = chargeCredits(account.id, "llm.turn");
@@ -193,7 +211,7 @@ function visibleThoughtFromDirection(
 ): string {
   if (direction.kind === "answer") return direction.text.trim();
   if (direction.kind === "clarification") return direction.question.trim();
-  if (direction.kind === "image-task") return direction.summary.trim();
+  if (direction.kind === "stuck") return direction.text.trim();
   return "";
 }
 
@@ -220,7 +238,7 @@ function parseDirectorInput(
     !isBoundedNumber(canvas.selectedCount, 0, 1_000) ||
     !isBoundedNumber(canvas.width, 1, 100_000) ||
     !isBoundedNumber(canvas.height, 1, 100_000) ||
-    (canvas.brandName !== undefined && !isSafeString(canvas.brandName, 200, 1))
+    (canvas.visibleText !== undefined && !isSafeString(canvas.visibleText, 800, 1))
   ) {
     return null;
   }
@@ -290,7 +308,7 @@ function parseDirectorInput(
       selectedCount: canvas.selectedCount,
       width: canvas.width,
       height: canvas.height,
-      ...(typeof canvas.brandName === "string" ? { brandName: canvas.brandName } : {}),
+      ...(typeof canvas.visibleText === "string" ? { visibleText: canvas.visibleText } : {}),
     },
     referenceAnalyses,
   };

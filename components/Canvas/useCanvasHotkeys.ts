@@ -8,6 +8,7 @@ import { VECTOR_TOOL_HOTKEYS } from "./rasterHotkeys";
 /** True when the event target is (or is inside) a text-editing field. */
 export function isEditableHotkeyTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
+  if (target.closest("dialog[open]")) return true;
   if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") {
     return true;
   }

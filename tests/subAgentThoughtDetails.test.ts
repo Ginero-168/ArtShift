@@ -26,7 +26,11 @@ describe("Sub-Agent Thought Details & Execution Tracking", () => {
     expect(barSource).toContain("directorModelStep().id");
     expect(barSource).toContain('directorAction.status = "success";');
     expect(barSource).toContain("const imageTaskAction: SubAgentActionLog = {");
-    expect(barSource).toContain("formatThoughtText");
+    expect(barSource).toContain("CHAT_STATUS_READING");
+    expect(barSource).toContain("CHAT_STATUS_MAKING");
+    expect(barSource).not.toContain("formatThoughtText");
+    expect(barSource).not.toContain("กด Apply plan");
+    expect(barSource).not.toContain("Approve & Execute");
     expect(barSource).toContain("buildImageCompletionSummary");
   });
 

@@ -29,7 +29,20 @@ const SLIDE_H = 720;
 const STORAGE_KEY = "mighty-slides:doc:v1";
 const UI_STORAGE_KEY = "mighty-slides:ui:v1";
 
-export type ThemeName = "midnight" | "paper" | "cool";
+function readStoredUi(): { stripCollapsed?: boolean } {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(UI_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as { stripCollapsed?: unknown };
+    return {
+      stripCollapsed:
+        typeof parsed.stripCollapsed === "boolean" ? parsed.stripCollapsed : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
 
 export type CanvasView = {
   stageX: number;
@@ -156,7 +169,6 @@ type Store = {
   tool: Tool;
   lastShape: ShapeKind;
   zoom: number;
-  theme: ThemeName;
   stripCollapsed: boolean;
   canvasView: CanvasView;
   clipboard: SlideObject[] | null;
@@ -166,9 +178,8 @@ type Store = {
   deckPlan: DeckPlan | null;
 
   hydrate: () => void;
+  hydrateUiPreferences: () => void;
   persist: () => void;
-  setTheme: (t: ThemeName) => void;
-  cycleTheme: () => void;
   setStripCollapsed: (v: boolean) => void;
   setCanvasView: (v: CanvasView) => void;
   pushHistory: (coalesceKey?: string) => void;
@@ -223,7 +234,7 @@ type Store = {
 };
 
 /** @deprecated Use `lib/engine/store` for artwork state. This store remains
- * only for theme preferences and the one-way legacy import bridge. */
+ * only for the slide-strip preference and the one-way legacy import bridge. */
 export const useStore = create<Store>((set, get) => ({
   doc: defaultDoc(),
   currentSlideId: "",
@@ -231,7 +242,6 @@ export const useStore = create<Store>((set, get) => ({
   tool: "select",
   lastShape: "rect",
   zoom: 1,
-  theme: "cool",
   stripCollapsed: false,
   canvasView: { stageX: 0, stageY: 0, scale: 1, containerLeft: 0, containerTop: 0 },
   clipboard: null,
@@ -255,20 +265,20 @@ export const useStore = create<Store>((set, get) => ({
     const base = doc ?? defaultDoc();
     if (!base.slides.length) base.slides.push(emptySlide("Slide 1"));
 
-    let ui: { theme?: ThemeName; stripCollapsed?: boolean } = {};
-    try {
-      const raw2 = localStorage.getItem(UI_STORAGE_KEY);
-      if (raw2) ui = JSON.parse(raw2);
-    } catch {
-      /* ignore */
-    }
+    const ui = readStoredUi();
 
     set({
       doc: base,
       currentSlideId: base.slides[0].id,
-      theme: ui.theme ?? "cool",
       stripCollapsed: ui.stripCollapsed ?? false,
       hydrated: true,
+    });
+  },
+
+  hydrateUiPreferences: () => {
+    const ui = readStoredUi();
+    set({
+      stripCollapsed: ui.stripCollapsed ?? get().stripCollapsed,
     });
   },
 
@@ -282,32 +292,11 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  setTheme: (t) => {
-    set({ theme: t });
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem(
-          UI_STORAGE_KEY,
-          JSON.stringify({ theme: t, stripCollapsed: get().stripCollapsed }),
-        );
-      } catch {
-        /* ignore */
-      }
-    }
-  },
-  cycleTheme: () => {
-    const order: ThemeName[] = ["midnight", "paper", "cool"];
-    const i = order.indexOf(get().theme);
-    get().setTheme(order[(i + 1) % order.length]);
-  },
   setStripCollapsed: (v) => {
     set({ stripCollapsed: v });
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(
-          UI_STORAGE_KEY,
-          JSON.stringify({ theme: get().theme, stripCollapsed: v }),
-        );
+        localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({ stripCollapsed: v }));
       } catch {
         /* ignore */
       }

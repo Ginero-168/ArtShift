@@ -9,7 +9,6 @@
  */
 
 import { useEffect, useRef } from "react";
-import { usePresetStore } from "@/lib/engine/presetStore";
 import { analyzeSelectionGroups } from "@/lib/engine/selectionGroups";
 import { useEngine } from "@/lib/engine/store";
 import { convertElementToVectorPath } from "@/lib/engine/vectorPath";
@@ -151,24 +150,6 @@ export default function ContextMenu({ position, onClose }: Props) {
     }
     items.push(
       { kind: "sep" },
-      {
-        kind: "item",
-        label: "Save to Preset",
-        onClick: () => {
-          const slide = useEngine
-            .getState()
-            .doc.slides.find((sl) => sl.id === useEngine.getState().currentSlideId);
-          if (!slide) return;
-          const elements = slide.elements.filter((el) => ids.includes(el.id) && !el.isDeleted);
-          if (!elements.length) return;
-          const name = prompt(
-            "Preset name:",
-            `Preset ${usePresetStore.getState().presets.length + 1}`,
-          );
-          if (!name) return;
-          usePresetStore.getState().savePreset(name, elements);
-        },
-      },
       { kind: "item", label: "Delete", onClick: () => deleteElements(ids) },
     );
   } else {

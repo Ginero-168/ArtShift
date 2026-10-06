@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import ChatThread, { CollapsibleThought } from "@/components/AI/ChatThread";
 import type { CoPilotMessage } from "@/lib/ai/coPilot";
@@ -99,7 +99,7 @@ describe("chat thread streaming UI", () => {
     expect(screen.getByTestId("copy-assistant-message-img-1")).toBeTruthy();
   });
 
-  it("hides the model chip while the director is thinking and shows it only when generating", () => {
+  it("hides the model chip while the director is thinking and shows it only when generating", async () => {
     const { rerender } = render(
       <ChatThread
         messages={[]}
@@ -121,7 +121,9 @@ describe("chat thread streaming UI", () => {
 
     expect(screen.queryByTestId("chat-model-status")).toBeNull();
     expect(screen.getByTestId("thought-panel").textContent).not.toContain("Gemini");
-    expect(screen.getByTestId("thought-body").textContent).toContain("กำลังดูโจทย์");
+    await waitFor(() => {
+      expect(screen.getByTestId("thought-body").textContent).toContain("กำลังดูโจทย์");
+    });
 
     rerender(
       <ChatThread
@@ -151,7 +153,7 @@ describe("chat thread streaming UI", () => {
     expect(screen.getByText("กำลังสร้างรูปภาพด้วย GPT Image 2.5 Sunburst...")).toBeTruthy();
   });
 
-  it("shows growing director text in the live Thought body instead of the canned rotator", () => {
+  it("shows growing director text in the live Thought body instead of the canned rotator", async () => {
     const { rerender } = render(
       <CollapsibleThought
         thought="สวัสดี"
@@ -174,7 +176,9 @@ describe("chat thread streaming UI", () => {
     expect(header.contains(rail)).toBe(false);
     expect(screen.getByTestId("thought-stream").contains(rail)).toBe(true);
     expect(screen.getByTestId("thought-stream").contains(body)).toBe(true);
-    expect(body.textContent).toContain("สวัสดี");
+    await waitFor(() => {
+      expect(body.textContent).toContain("สวัสดี");
+    });
     expect(body.textContent).not.toContain("กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...");
     expect(screen.queryByText("กำลังอ่านคำขอ...")).toBeNull();
     expect(screen.queryByText("กำลังคิดแนวทางสร้างภาพให้ตรงคำขอ...")).toBeNull();
@@ -188,11 +192,13 @@ describe("chat thread streaming UI", () => {
         toolLabel="google/gemini-3-flash"
       />,
     );
-    expect(screen.getByTestId("thought-body").textContent).toContain("สวัสดีครับ กำลังดูโจทย์");
+    await waitFor(() => {
+      expect(screen.getByTestId("thought-body").textContent).toContain("สวัสดีครับ กำลังดูโจทย์");
+    });
     expect(screen.queryByText("กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...")).toBeNull();
   });
 
-  it("keeps an image-generation status instead of pretending pixels are tokens", () => {
+  it("keeps an image-generation status instead of pretending pixels are tokens", async () => {
     render(
       <CollapsibleThought
         thought="แมวนั่งริมหน้าต่าง โทนอบอุ่น"
@@ -202,7 +208,34 @@ describe("chat thread streaming UI", () => {
       />,
     );
 
-    expect(screen.getByText("แมวนั่งริมหน้าต่าง โทนอบอุ่น")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText("แมวนั่งริมหน้าต่าง โทนอบอุ่น")).toBeTruthy();
+    });
     expect(screen.getByText("กำลังสร้างรูปภาพด้วย Gemini 3 Flash...")).toBeTruthy();
+  });
+
+  it("types the reply in the bubble and keeps Thought on a short status", async () => {
+    render(
+      <ChatThread
+        messages={[]}
+        busy
+        liveAssistantState={{
+          stage: "planning",
+          thought: "กำลังอ่านคำขอ",
+          statusMessage: "กำลังอ่านคำขอ",
+        }}
+        streamingText="โทนครีมใช้ได้"
+        currentActions={[]}
+        scrollRef={{ current: null }}
+        onSelectCanvasImage={() => undefined}
+        onClearHistory={() => undefined}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("chat-stream-bubble").textContent).toBe("โทนครีมใช้ได้");
+    });
+    expect(screen.getByTestId("thought-body").textContent).toContain("กำลังอ่านคำขอ");
+    expect(screen.getByTestId("thought-body").textContent).not.toContain("โทนครีม");
   });
 });

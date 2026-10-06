@@ -67,14 +67,12 @@ describe("Moodboard AI surface", () => {
     expect(generate).not.toContain("recraft");
   });
 
-  it("leaves shared stock search available outside Moodboard", () => {
-    const stockApi = readFileSync("app/api/stock/route.ts", "utf8");
-    const imagePanel = readFileSync("components/AIImagePanel.tsx", "utf8");
+  it("keeps reference search on the director path and out of the moodboard client", () => {
+    const search = readFileSync("lib/server/ai/contextImageSearch.ts", "utf8");
     const client = readFileSync("lib/moodboard/aiBatchClient.ts", "utf8");
 
-    expect(stockApi).toContain('source === "unsplash"');
-    expect(stockApi).toContain('source === "pexels"');
-    expect(imagePanel).toContain("/api/stock");
+    expect(search).toContain("api.unsplash.com/search/photos");
+    expect(search).toContain("api.pexels.com/v1/search");
     expect(client).not.toContain("/api/stock");
   });
 });

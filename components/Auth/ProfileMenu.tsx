@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { hasStoredCloudConsent, setAccountCloudConsent } from "@/lib/ai/cloudConsent";
+import { UNLIMITED_CREDIT_LABEL } from "@/lib/credits/creditLabel";
 
 type AuthUser = {
   id: string;
@@ -16,13 +17,14 @@ type AuthUser = {
 type AuthResponse = {
   authenticated?: boolean;
   user?: AuthUser | null;
-  credits?: { balance: number } | null;
+  credits?: { balance: number; unlimited?: boolean } | null;
   error?: string;
 };
 
 export default function ProfileMenu() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [credits, setCredits] = useState<number | null>(null);
+  const [unlimitedCredits, setUnlimitedCredits] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
   const [cloudConsent, setCloudConsent] = useState(false);
@@ -42,6 +44,7 @@ export default function ProfileMenu() {
         if (!cancelled) {
           setUser(payload.authenticated ? (payload.user ?? null) : null);
           setCredits(payload.authenticated && payload.credits ? payload.credits.balance : null);
+          setUnlimitedCredits(Boolean(payload.authenticated && payload.credits?.unlimited));
         }
       })
       .catch(() => {
@@ -179,7 +182,11 @@ export default function ProfileMenu() {
                   fontWeight: 700,
                 }}
               >
-                {credits === null ? "เครดิต …" : `${credits.toLocaleString("th-TH")} เครดิต`}
+                {unlimitedCredits
+                  ? UNLIMITED_CREDIT_LABEL
+                  : credits === null
+                    ? "เครดิต …"
+                    : `${credits.toLocaleString("th-TH")} เครดิต`}
               </div>
               <Link
                 href="/account/credits"

@@ -1,6 +1,5 @@
 import { DIRECTOR_CONVERSATION_HISTORY_LIMIT } from "@/lib/ai/orchestration/chatContinuity";
 import { prepareRemoteOrchestratorTurn } from "@/lib/ai/orchestration/creativeDirectorClient";
-import { getActiveBrandKit } from "@/lib/brand/brandKit";
 import { type EngineState, useEngine } from "@/lib/engine/store";
 import type { ArtworkExecutionContext, PlanProposal } from "./contracts";
 
@@ -21,8 +20,6 @@ export function buildDesignAgentContext(
   const selectedObjectIds = Array.from(state.selectedIds).filter((id) =>
     elements.some((element) => element.id === id),
   );
-  const brand = getActiveBrandKit();
-
   return {
     docId: state.doc.id,
     baseRevision: state.doc.updatedAt,
@@ -54,13 +51,6 @@ export function buildDesignAgentContext(
         locked: layer.locked,
       })),
       objects: elements.slice(0, 300).map((element) => summarizeElement(element)),
-      brandKit: {
-        id: brand.id,
-        name: brand.name,
-        colors: brand.colors,
-        typography: brand.typography,
-        rules: brand.rules,
-      },
     },
   };
 }

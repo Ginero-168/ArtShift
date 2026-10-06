@@ -143,8 +143,9 @@ prompt/keyword/vibe and a batch size of **9, 16, or 25** (default 9).
    Gemini is not used for pixels. Chat image routes stay on Sunburst.
 5. Successful images are placed as upright EngineElements in an **N×N grid**
    whose origin is `getProcessingPreviewPlacement` (so a dragged Preload card
-   wins). Partial failures are shown in the UI. The shared `/api/stock` route
-   remains for other surfaces; Moodboard no longer starts a stock fill.
+   wins). Partial failures are shown in the UI. Reference search for the
+   director stays in `lib/server/ai/contextImageSearch.ts`. Moodboard does not
+   start a stock fill.
 
 During Remove BG, Extract, Layer, Multi-Angle, and Vectorize, the browser renders a transient duplicate
 preview at the source size to the right of the source. The preview owns the loading

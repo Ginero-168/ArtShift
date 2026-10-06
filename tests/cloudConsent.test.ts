@@ -39,7 +39,7 @@ describe("cloud consent helper", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses a stored AI Provider Settings flag without prompting", () => {
+  it("uses a stored profile-menu consent flag without prompting", () => {
     const local = memoryStorage();
     const session = memoryStorage();
     local.setItem(CLOUD_CONSENT_STORAGE_KEY, "granted");

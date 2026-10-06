@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getCreditBalance, listLedgerEntries } from "@/lib/credits/ledger";
+import { creditSnapshot, listLedgerEntries } from "@/lib/credits/ledger";
 import { CREDIT_THB, WELCOME_GRANT_CREDITS } from "@/lib/credits/pricing";
 import { getUserAccount } from "@/lib/server/ai/userCredentials";
 import { jsonNoStore } from "@/lib/server/http";
@@ -14,8 +14,10 @@ export async function GET(req: NextRequest) {
   }
   const limitRaw = Number(req.nextUrl.searchParams.get("limit") ?? "30");
   const limit = Number.isFinite(limitRaw) ? limitRaw : 30;
+  const snapshot = creditSnapshot(account.id);
   return jsonNoStore({
-    balance: getCreditBalance(account.id),
+    balance: snapshot.balance,
+    unlimited: snapshot.unlimited,
     creditThb: CREDIT_THB,
     welcomeGrant: WELCOME_GRANT_CREDITS,
     entries: listLedgerEntries(account.id, limit),

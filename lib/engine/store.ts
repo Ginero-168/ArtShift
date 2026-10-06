@@ -232,9 +232,13 @@ export type EngineState = {
 
   addSlide: () => string;
   addInfinityCanvasSlide: () => string;
+  /** Append slides and keep the slide the designer is on. One undo step. */
+  appendSlides: (slides: EngineSlide[]) => void;
   deleteSlide: (id: string) => void;
   renameSlide: (id: string, name: string) => void;
   setSlideBackground: (id: string, color: string) => void;
+  /** Commit a Color Studio preview only if its original Artwork is still current. */
+  commitColorStudio: (source: EngineSlide, result: EngineSlide) => boolean;
   setSlideDimensions: (id: string, width: number, height: number, resizeContents?: boolean) => void;
   createArtworkVariant: (
     sourceId: string,
@@ -1421,6 +1425,19 @@ export const useEngine = create<EngineState>((set, get) => {
       return sl.id;
     },
 
+    appendSlides: (slides) => {
+      if (!slides.length) return;
+      const s = get();
+      pushHistory(s.history, s.doc, "import campaign");
+      set((cur) => ({
+        doc: {
+          ...cur.doc,
+          slides: [...cur.doc.slides, ...slides],
+          updatedAt: Date.now(),
+        },
+      }));
+    },
+
     groupElements: (ids) => {
       if (ids.length < 2) return;
       const s = get();
@@ -1602,6 +1619,16 @@ export const useEngine = create<EngineState>((set, get) => {
         return true;
       }
       return false;
+    },
+
+    commitColorStudio: (source, result) => {
+      interactionController.flush();
+      const state = get();
+      if (state.currentSlide() !== source || result.id !== source.id) return false;
+      if (result === source) return true;
+      pushHistory(state.history, state.doc, "Color Studio");
+      set((current) => mapDoc(current, () => result));
+      return true;
     },
 
     setSlideBackground: (id, color) => {

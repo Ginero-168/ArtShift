@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "@/lib/store";
 import type { SlideObject } from "@/lib/types";
 
@@ -6,6 +6,37 @@ function reset() {
   useStore.getState().resetDoc();
   useStore.setState({ history: [], future: [] });
 }
+
+describe("studio preferences", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("restores the saved slide strip without replacing the artwork document", () => {
+    const data = new Map<string, string>();
+    const localStorage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        data.set(key, value);
+      },
+      removeItem: (key: string) => {
+        data.delete(key);
+      },
+      clear: () => data.clear(),
+      key: (index: number) => [...data.keys()][index] ?? null,
+      get length() {
+        return data.size;
+      },
+    };
+    localStorage.setItem("mighty-slides:ui:v1", JSON.stringify({ stripCollapsed: true }));
+    vi.stubGlobal("window", { localStorage });
+    const titleBefore = useStore.getState().doc.title;
+    useStore.setState({ stripCollapsed: false });
+    useStore.getState().hydrateUiPreferences();
+    expect(useStore.getState().stripCollapsed).toBe(true);
+    expect(useStore.getState().doc.title).toBe(titleBefore);
+  });
+});
 
 describe("store undo/redo", () => {
   beforeEach(() => reset());

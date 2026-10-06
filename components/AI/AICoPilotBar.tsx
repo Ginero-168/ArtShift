@@ -11,11 +11,10 @@ import {
   createChatTurnModels,
   DEFAULT_DIRECTOR_MODEL_ID,
   directorModelStep,
-  formatModelDisplayLabel,
   modelStepFromRuntime,
   visionModelStep,
 } from "@/lib/ai/chatModelAttribution";
-import { ensureCloudConsent } from "@/lib/ai/cloudConsent";
+import { ensureCloudConsent, hasStoredCloudConsent } from "@/lib/ai/cloudConsent";
 import {
   type CoPilotMessage,
   diagnoseOrchestratorError,
@@ -28,10 +27,10 @@ import {
   buildImageCompletionSummary,
   extractSubject,
   formatImageCompletionReply,
-  formatThoughtText,
 } from "@/lib/ai/imageCompletionReply";
 import { isImageGenerationPrompt } from "@/lib/ai/imageGeneration";
 import { formatFriendlyAspectRatio } from "@/lib/ai/imageResultPresentation";
+import { canvasSummaryForChat } from "@/lib/ai/orchestration/canvasChatContext";
 import {
   classifyImageFollowUpPrompt,
   composeFollowUpDirectorPrompt,
@@ -52,6 +51,11 @@ import {
   saveChatHistorySnapshot,
 } from "@/lib/ai/orchestration/chatHistoryStore";
 import {
+  CHAT_ONE_STEP_TEXT,
+  CHAT_STATUS_MAKING,
+  CHAT_STATUS_READING,
+} from "@/lib/ai/orchestration/chatTurn";
+import {
   DEFAULT_CREATING_MODEL_LABEL,
   formatCreatingModelLabel,
 } from "@/lib/ai/orchestration/creatingModelCatalog";
@@ -59,6 +63,7 @@ import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
 } from "@/lib/ai/orchestration/creativeDirectorClient";
+import { DIRECTOR_FAILED_TEXT } from "@/lib/ai/orchestration/directorStuck";
 import {
   FOLLOW_UP_RECALL_STATUS_MESSAGE,
   type FollowUpRecallResult,
@@ -577,17 +582,17 @@ export default function AICoPilotBar() {
     setStreamingText("");
     const controller = new AbortController();
     abortRef.current = controller;
-    let streamedThought = "";
     const publishDirectorThought = (text: string) => {
       const visible = text.trim();
       if (!visible || controller.signal.aborted) return;
-      streamedThought = visible;
       flushSync(() => {
+        setStreamingText(visible);
         setLiveAssistantState((prev) => {
           if (!prev || prev.stage === "generating") return prev;
           return {
             ...prev,
-            thought: visible,
+            thought: CHAT_STATUS_READING,
+            statusMessage: CHAT_STATUS_READING,
             stage: prev.stage === "outputting" ? "planning" : prev.stage,
           };
         });
@@ -846,7 +851,7 @@ export default function AICoPilotBar() {
         let suggestions: string[] = [];
         if (contextDecision.kind === "answer") {
           reply = contextDecision.reply;
-          suggestions = ["ถามเกี่ยวกับ Object บน Canvas", "วิเคราะห์ภาพนี้ละเอียดขึ้น"];
+          suggestions = [];
         } else {
           const directorAction: SubAgentActionLog = {
             id: crypto.randomUUID(),
@@ -866,8 +871,9 @@ export default function AICoPilotBar() {
           setLiveAssistantState((prev) => ({
             ...(prev || { prompt: promptToSend, isEdit: refsForTurn.length > 0 }),
             stage: "planning",
+            thought: CHAT_STATUS_READING,
             toolLabel: directorModelStep().id,
-            statusMessage: "Creative Director กำลังวางแผนงาน...",
+            statusMessage: CHAT_STATUS_READING,
             actions: [...actions],
             activeModels: turnModels.snapshot(),
           }));
@@ -875,71 +881,71 @@ export default function AICoPilotBar() {
           let resolvedModelLabel = DEFAULT_CREATING_MODEL_LABEL;
           // Creative Director disclosure copy:
           // งานนี้จะส่งคำสั่งไปยัง Gemini 3 Flash Creative Director เพื่อวางแผน อาจค้น Reference ผ่าน Unsplash/Pexels เมื่อจำเป็น แล้วเรียก Image Model เพื่อสร้างและตรวจผลลัพธ์
-          const consent = ensureCloudConsent();
-          if (!consent) {
-            directorAction.status = "error";
-            directorAction.stage = "cancelled";
-            directorAction.description =
-              "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
-            reply = "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider";
-          } else {
-            try {
-              const direction = await prepareRemoteCreativeDirection(
-                {
-                  prompt: directorPrompt,
-                  conversationHistory: serializeConversationHistoryForDirector(
-                    historyForContinuity,
-                    { currentPrompt: promptToSend },
-                  ),
-                  ...(priorGeneration ? { lastGeneration: priorGeneration } : {}),
-                  designContext: buildDesignAgentContext(),
-                  canvasSummary: {
-                    objectCount: elementCount,
-                    selectedCount: selectedIds.size,
-                    width: slide?.width ?? 1920,
-                    height: slide?.height ?? 1080,
-                  },
-                  referenceAnalyses: analysesForTurn,
-                },
-                {
-                  signal: controller.signal,
-                  cloudConsent: consent,
-                  onThoughtText: publishDirectorThought,
-                },
-              ).catch((dirErr) => {
-                if (
-                  (dirErr as Error).name !== "AbortError" &&
-                  !controller.signal.aborted &&
-                  (isImageGenerationPrompt(promptToSend) || refsForTurn.length > 0)
-                ) {
-                  console.warn(
-                    "Creative Director error, activating self-healing fallback:",
-                    dirErr,
-                  );
-                  const isEdit = refsForTurn.length > 0;
-                  return {
-                    kind: "image-task" as const,
-                    requestedOutputCount: 1,
-                    outputBriefs: ["ภาพผลลัพธ์"],
-                    summary: isEdit ? "แก้ไขและปรับแต่งภาพตามที่เลือก" : "สร้างสรรค์ภาพใหม่ตามคำอธิบาย",
-                    refinedPrompt: directorPrompt,
-                    specialist: isEdit ? ("image_editor" as const) : ("image_generator" as const),
-                    capability: isEdit ? ("IMAGE_EDIT" as const) : ("IMAGE_DEFAULT" as const),
-                    modelAlias: "image-gpt-2" as const,
-                    knowledgeSkillIds: [],
-                    reviewCriteria: [],
-                    search: { required: false, queries: [], sources: [] },
-                    detailScore: 8,
-                    precisionScore: 8,
-                    runtimeModel: undefined,
+          const chatCanvas = canvasSummaryForChat({
+            elements: slide?.elements ?? [],
+            selectedCount: selectedIds.size,
+            width: slide?.width ?? 1920,
+            height: slide?.height ?? 1080,
+          });
+          const directorBody = {
+            prompt: directorPrompt,
+            conversationHistory: serializeConversationHistoryForDirector(historyForContinuity, {
+              currentPrompt: promptToSend,
+            }),
+            ...(priorGeneration ? { lastGeneration: priorGeneration } : {}),
+            designContext: buildDesignAgentContext(),
+            canvasSummary: chatCanvas,
+            referenceAnalyses: analysesForTurn,
+          };
+          let consent = hasStoredCloudConsent();
+          let direction: Awaited<ReturnType<typeof prepareRemoteCreativeDirection>> | null = null;
+          try {
+            direction = await prepareRemoteCreativeDirection(directorBody, {
+              signal: controller.signal,
+              cloudConsent: consent,
+              onThoughtText: publishDirectorThought,
+            });
+          } catch (dirErr) {
+            if ((dirErr as Error).name === "AbortError" || controller.signal.aborted) throw dirErr;
+            if (!consent && isCloudConsentError(dirErr)) {
+              consent = ensureCloudConsent();
+              if (!consent) {
+                directorAction.status = "error";
+                directorAction.stage = "cancelled";
+                directorAction.description =
+                  "ยังไม่ได้รับอนุญาตให้ส่งงานไปยัง Creative Director หรือ Image Model";
+                reply = "ยกเลิกการวางแผนแล้วครับ ยังไม่ได้สร้าง Task หรือส่ง prompt, ภาพ ไปยัง AI provider";
+              } else {
+                try {
+                  direction = await prepareRemoteCreativeDirection(directorBody, {
+                    signal: controller.signal,
+                    cloudConsent: true,
+                    onThoughtText: publishDirectorThought,
+                  });
+                } catch (retryErr) {
+                  if ((retryErr as Error).name === "AbortError" || controller.signal.aborted) {
+                    throw retryErr;
+                  }
+                  console.warn("Creative Director failed:", retryErr);
+                  direction = {
+                    kind: "stuck",
+                    cause: "director-failed",
+                    text: DIRECTOR_FAILED_TEXT,
                   };
                 }
-                throw dirErr;
-              });
-
+              }
+            } else {
+              console.warn("Creative Director failed:", dirErr);
+              direction = { kind: "stuck", cause: "director-failed", text: DIRECTOR_FAILED_TEXT };
+            }
+          }
+          if (direction) {
+            try {
               activeRunningAction = directorAction;
-              turnModels.remember(directorModelStep(direction.runtimeModel));
-              directorAction.title = `Creative Director (${directorModelStep(direction.runtimeModel).id})`;
+              if (direction.kind !== "clarification") {
+                turnModels.remember(directorModelStep(direction.runtimeModel));
+                directorAction.title = `Creative Director (${directorModelStep(direction.runtimeModel).id})`;
+              }
               upsertCurrentAction({ ...directorAction });
               setLiveAssistantState((prev) =>
                 prev
@@ -972,7 +978,14 @@ export default function AICoPilotBar() {
                   } catch {}
                 }
                 reply = cleanAnswer;
-                suggestions = ["ระบุงานออกแบบที่ต้องการ", "เลือกภาพบน Canvas แล้วขอให้วิเคราะห์"];
+                suggestions = [];
+              } else if (direction.kind === "stuck") {
+                setPendingClarification(null);
+                directorAction.status = "error";
+                directorAction.stage = "failed";
+                directorAction.description = direction.text;
+                reply = direction.text;
+                suggestions = ["ส่งคำขอเดิมอีกครั้ง", "บอกรายละเอียดที่ขาด"];
               } else if (direction.kind === "clarification") {
                 directorAction.status = "success";
                 directorAction.stage = "clarifying";
@@ -991,21 +1004,25 @@ export default function AICoPilotBar() {
                 });
               } else if (direction.kind === "design-plan") {
                 setPendingClarification(null);
-                setPendingPlan(direction.proposal);
-                directorAction.status = "success";
-                directorAction.stage = "planned";
-                directorAction.description = `เตรียมแผนแก้ Canvas ${direction.proposal.commands.length} รายการ รอการอนุมัติ`;
-                reply =
-                  "ArtShift Orchestrator เตรียมแผนแก้ไข Canvas แล้วครับ ตรวจสอบและกด Apply plan เพื่อดำเนินงาน";
-                suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน"];
+                setPendingPlan(null);
+                const applied = applyAiPlan(direction.proposal, { approved: true });
+                directorAction.status = applied.ok ? "success" : "error";
+                directorAction.stage = applied.ok ? "succeeded" : "failed";
+                directorAction.description = applied.ok
+                  ? `แก้บนสไลด์แล้ว ${applied.receipts.length} รายการ`
+                  : applied.error;
+                reply = applied.ok
+                  ? `แก้บนสไลด์แล้ว ${applied.receipts.length} รายการ ย้อนกลับได้จาก Undo`
+                  : `ยังไม่ได้แก้สไลด์ ${applied.error}`;
+                suggestions = applied.ok ? ["ย้อนกลับด้วย Undo"] : ["บอกรายละเอียดที่ขาด"];
               } else if (direction.kind === "sequential-plan") {
                 setPendingClarification(null);
-                setPendingSequentialPlan(direction.plan);
-                directorAction.status = "success";
-                directorAction.stage = "planned";
-                directorAction.description = `Creative Director เสนอแผนงาน ${direction.plan.steps.length} ขั้นตอน`;
-                reply = `ArtShift Creative Director เสนอแผนงานต่อเนื่อง ${direction.plan.steps.length} ขั้นตอน เพื่อความแม่นยำ กรุณาตรวจสอบและกด Approve & Execute เพื่อเริ่มงานครับ`;
-                suggestions = ["อนุมัติและเริ่มรันแผน", "ยกเลิกแผนนี้"];
+                setPendingSequentialPlan(null);
+                directorAction.status = "error";
+                directorAction.stage = "failed";
+                directorAction.description = CHAT_ONE_STEP_TEXT;
+                reply = CHAT_ONE_STEP_TEXT;
+                suggestions = [];
               } else if (direction.search.required) {
                 directorAction.status = "success";
                 directorAction.stage = "analyzing";
@@ -1038,22 +1055,6 @@ export default function AICoPilotBar() {
                 const count = imageRun.requestedOutputCount;
                 const isEditTurn =
                   direction.specialist === "image_editor" || refsForTurn.length > 0;
-                const plannedAspects = imageRun.tasks
-                  .map((task) => task.requestedDimensions?.aspectRatio)
-                  .filter((ratio): ratio is string => Boolean(ratio));
-                const thoughtText = [
-                  followUpCarriedForward ? LAST_GENERATION_FOLLOW_UP_NOTE : "",
-                  formatThoughtText(
-                    rawPrompt,
-                    direction.summary,
-                    count,
-                    isEditTurn,
-                    plannedAspects.length > 1 ? undefined : imageRun.tasks[0]?.requestedDimensions,
-                    plannedAspects,
-                  ),
-                ]
-                  .filter(Boolean)
-                  .join(" — ");
                 const imageModel =
                   catalogModelStep(direction.modelAlias) ??
                   modelStepFromRuntime(direction.runtimeModel, "image");
@@ -1078,12 +1079,12 @@ export default function AICoPilotBar() {
                 actions = [...actions, imageTaskAction];
                 upsertCurrentAction({ ...imageTaskAction });
 
+                setStreamingText("");
                 setLiveAssistantState({
                   stage: "generating",
-                  thought: streamedThought || thoughtText,
                   toolLabel: chainLabel,
                   requestedCount: count,
-                  statusMessage: `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(modelName)}...`,
+                  statusMessage: CHAT_STATUS_MAKING,
                   prompt: rawPrompt,
                   isEdit: isEditTurn,
                   actions: [...actions],
@@ -1358,7 +1359,6 @@ export default function AICoPilotBar() {
                       id: crypto.randomUUID(),
                       role: "assistant",
                       content: reply,
-                      thought: streamedThought || thoughtText,
                       toolLabel: turnModels.label() || modelName,
                       images: generatedImages,
                       imageRefs: refsForTurn.length > 0 ? refsForTurn : undefined,
@@ -1449,7 +1449,6 @@ export default function AICoPilotBar() {
             id: crypto.randomUUID(),
             role: "assistant",
             content: reply,
-            thought: streamedThought || undefined,
             timestamp: Date.now(),
             actions,
             suggestions,
@@ -1549,9 +1548,10 @@ export default function AICoPilotBar() {
         turnModels.remember(directorModelStep());
         setLiveAssistantState({
           stage: "planning",
+          thought: CHAT_STATUS_READING,
           prompt: promptToSend,
           isEdit: refsForTurn.length > 0,
-          statusMessage: "กำลังเข้าใจคำสั่งและวางแผนจนจบงาน...",
+          statusMessage: CHAT_STATUS_READING,
           activeModels: turnModels.snapshot(),
         });
         const history = serializeConversationHistoryForDirector(historyForContinuity, {
@@ -1574,12 +1574,12 @@ export default function AICoPilotBar() {
               conversationHistory: history,
               ...(priorGeneration ? { lastGeneration: priorGeneration } : {}),
               designContext,
-              canvasSummary: {
-                objectCount: elementCount,
+              canvasSummary: canvasSummaryForChat({
+                elements: slide?.elements ?? [],
                 selectedCount: selectedIds.size,
                 width: slide?.width ?? 1920,
                 height: slide?.height ?? 1080,
-              },
+              }),
               referenceAnalyses: analysesForTurn,
             },
             {
@@ -1600,35 +1600,19 @@ export default function AICoPilotBar() {
           );
 
           if (result.kind === "design-plan") {
-            if (result.proposal.requiresApproval) {
-              setPendingPlan(result.proposal);
-              remoteActions[0] = {
-                ...remoteActions[0],
-                status: "success",
-                description: `เตรียมแผน ${result.proposal.commands.length} รายการ รอการอนุมัติ`,
-              };
-              reply = "ผมเตรียมแผนแก้ไข Artwork ให้แล้วครับ ตรวจสอบสรุปด้านล่างและกด Apply plan เมื่อพร้อม";
-              suggestions = ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน", "ทิ้งแผนนี้"];
-            } else {
-              const applied = applyAiPlan(result.proposal, { approved: true });
-              if (applied.ok) {
-                remoteActions[0] = {
-                  ...remoteActions[0],
-                  status: "success",
-                  description: `ดำเนินการแบบ atomic สำเร็จ ${applied.receipts.length} รายการ`,
-                };
-                reply = `ดำเนินการตามแผนเรียบร้อยแล้วครับ (${applied.receipts.length} รายการ) และสร้าง Undo boundary เดียวให้แล้ว`;
-                suggestions = ["↶ Undo แผนล่าสุด", "📐 ตรวจสอบ Layout", "✍️ ปรับรายละเอียดต่อ"];
-              } else {
-                remoteActions[0] = {
-                  ...remoteActions[0],
-                  status: "error",
-                  description: applied.error,
-                };
-                reply = `ยังไม่ได้แก้ Artwork ครับ: ${applied.error}`;
-                suggestions = ["รีเฟรชบริบทแล้วลองใหม่", "ตรวจสอบ Object ที่เลือก"];
-              }
-            }
+            setPendingPlan(null);
+            const applied = applyAiPlan(result.proposal, { approved: true });
+            remoteActions[0] = {
+              ...remoteActions[0],
+              status: applied.ok ? "success" : "error",
+              description: applied.ok
+                ? `แก้บนสไลด์แล้ว ${applied.receipts.length} รายการ`
+                : applied.error,
+            };
+            reply = applied.ok
+              ? `แก้บนสไลด์แล้ว ${applied.receipts.length} รายการ ย้อนกลับได้จาก Undo`
+              : `ยังไม่ได้แก้สไลด์ ${applied.error}`;
+            suggestions = applied.ok ? ["ย้อนกลับด้วย Undo"] : ["บอกรายละเอียดที่ขาด"];
           } else if (result.kind === "clarification") {
             remoteActions[0] = {
               ...remoteActions[0],
@@ -1646,6 +1630,14 @@ export default function AICoPilotBar() {
               options: result.options.map((label, index) => ({ id: String(index), label })),
               round: (pending?.round ?? 0) + 1,
             });
+          } else if (result.kind === "stuck") {
+            remoteActions[0] = {
+              ...remoteActions[0],
+              status: "error",
+              description: result.text,
+            };
+            reply = result.text;
+            suggestions = ["ส่งคำขอเดิมอีกครั้ง", "บอกรายละเอียดที่ขาด"];
           } else if (result.kind === "answer") {
             remoteActions[0] = {
               ...remoteActions[0],
@@ -1668,20 +1660,16 @@ export default function AICoPilotBar() {
               } catch {}
             }
             reply = cleanAnswer;
-            suggestions = [
-              "📐 ขอให้จัด Layout ต่อ",
-              "✍️ ขอให้สร้าง direction ใหม่",
-              "🧩 ใช้เครื่องมือแก้ไขเฉพาะทาง",
-            ];
+            suggestions = [];
           } else if (result.kind === "sequential-plan") {
-            setPendingSequentialPlan(result.plan);
+            setPendingSequentialPlan(null);
             remoteActions[0] = {
               ...remoteActions[0],
-              status: "success",
-              description: `เตรียมแผนงานต่อเนื่อง ${result.plan.steps.length} ขั้นตอน รอการอนุมัติ`,
+              status: "error",
+              description: CHAT_ONE_STEP_TEXT,
             };
-            reply = `ArtShift Creative Director เสนอแผนงานต่อเนื่อง ${result.plan.steps.length} ขั้นตอน เพื่อความแม่นยำ กรุณาตรวจสอบและกด Approve & Execute เพื่อเริ่มงานครับ`;
-            suggestions = ["อนุมัติและเริ่มรันแผน", "ทิ้งแผนนี้"];
+            reply = CHAT_ONE_STEP_TEXT;
+            suggestions = [];
           } else {
             const directedTask = createDirectedImageTask(
               {
@@ -1704,14 +1692,12 @@ export default function AICoPilotBar() {
               description: `กำลังดำเนินงานด้วย ${directedChain ?? result.modelAlias}`,
             };
             upsertCurrentAction(remoteActions[0]);
+            setStreamingText("");
             setLiveAssistantState({
               stage: "generating",
-              thought: streamedThought || undefined,
               prompt: promptToSend,
               toolLabel: directedChain,
-              statusMessage: directedImageModel?.id
-                ? `กำลังสร้างรูปภาพด้วย ${formatModelDisplayLabel(directedImageModel.id)}...`
-                : "กำลังสร้างรูปภาพ...",
+              statusMessage: CHAT_STATUS_MAKING,
               activeModels: turnModels.snapshot(),
             });
             const generated = await runContextAwareImageTask(directedTask, refsForTurn, {
@@ -1829,7 +1815,6 @@ export default function AICoPilotBar() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: reply,
-        thought: streamedThought || undefined,
         toolLabel:
           turnModels.label() ||
           (remoteGeneratedImages
@@ -2019,6 +2004,11 @@ export default function AICoPilotBar() {
       />
     </div>
   );
+}
+
+function isCloudConsentError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  return /cloud consent/i.test(message);
 }
 
 function findClarificationOption(

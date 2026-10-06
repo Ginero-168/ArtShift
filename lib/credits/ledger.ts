@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type CreditAction, creditsForAction, welcomeGrantCredits } from "@/lib/credits/pricing";
+import { accountHasUnlimitedCredits } from "@/lib/credits/unlimited";
 
 const STORE_VERSION = 1;
 const LOCK_STALE_MS = 10_000;
@@ -72,6 +73,13 @@ export function getCreditBalance(accountId: string): number {
   return withStoreLock(() => readStore().accounts[accountId]?.balance ?? 0);
 }
 
+export function creditSnapshot(accountId: string): { balance: number; unlimited: boolean } {
+  return {
+    balance: getCreditBalance(accountId),
+    unlimited: accountHasUnlimitedCredits(accountId),
+  };
+}
+
 export function getCreditState(accountId: string): AccountCreditState {
   return withStoreLock(() => {
     const state = readStore().accounts[accountId];
@@ -120,6 +128,14 @@ export function spendCredits(
   reason?: string,
 ): SpendSuccess | SpendDenied {
   const credits = creditsForAction(action, units);
+  if (accountHasUnlimitedCredits(accountId)) {
+    return {
+      ok: true,
+      entryId: "",
+      credits: 0,
+      balance: getCreditBalance(accountId),
+    };
+  }
   return withStoreLock(() => {
     const store = readStore();
     grantWelcome(store, accountId);

@@ -57,6 +57,15 @@ export function absorbModelDelta(previous: string, delta: string): string {
  * `refinedPrompt` and other pipeline fields stay hidden.
  * Plain prose (a greeting with no JSON yet) is shown as-is.
  */
+/** Reveal the next slice of a thought. A full snapshot still arrives one character-run at a time. */
+export function advanceThoughtReveal(shown: string, target: string): string {
+  if (!target) return "";
+  const base = target.startsWith(shown) ? shown.length : 0;
+  if (base >= target.length) return target;
+  const step = Math.min(3, target.length - base);
+  return target.slice(0, base + step);
+}
+
 export function extractDirectorStreamThought(raw: string): string {
   const source = raw.replace(/^\uFEFF/, "");
   if (!source.trim()) return "";
@@ -197,6 +206,7 @@ function lastDirectionKind(source: string): string | null {
 }
 
 function pickDisplayField(fields: readonly DisplayField[], kind: string | null): string {
+  if (kind === "image-task" || kind === "design-plan" || kind === "sequential-plan") return "";
   const visible = fields.filter((field) => field.value.trim().length > 0);
   if (visible.length === 0) return "";
   const order: DisplayKey[] =

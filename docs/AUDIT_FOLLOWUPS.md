@@ -13,6 +13,5 @@ Short list of known remaining work after PRs #4–#6 landed on `main`.
 - **`@huggingface/transformers` → `sharp` / `adm-zip` / `onnxruntime-node`** — remaining high/moderate. `npm audit fix --force` would jump transformers to 4.3.0 (breaking). The repo already overrides `sharp` to `^0.35.3` and `adm-zip` to `^0.6.0`; Next 15.5.25 prefers `sharp ^0.35.4` for AVIF re-enable, but that patch is not taken here because transformers still reports the 4.3.0 major as the audit fix.
 - **Server-side account consent flag** — #5 uses localStorage + session confirm, not an encrypted account record.
 - **`GEMINI_API_KEY` on account runtimes** — end-user BYOK is Replicate/OpenAI; Creative Director prefers Replicate Gemini via the user Replicate key. Direct Google env key is still ops/unscoped.
-- **Present menu `?projectId=`** — editor still opens `/present` without the current project id. #5 hydrates from last-opened / query; wiring the menu would overlap `editor/page.tsx` with #4.
+- **Present menu `?projectId=`** — the editor menu saves, then opens `/present?projectId=&slideId=`. Exit closes that tab when the editor opened it, otherwise it returns to the editor on that slide.
 - **`AI_MONTHLY_BUDGET_USD`** — documented in README / `.env.local.example`; `getAiBudgetStatus()` still returns `monthlyBudgetUsd: null`. Wire it into `RoutedAiRuntime` or drop the env var.
-- **Linked Assets** — `lib/engine/linkedAssets.ts` File System Access adapter exists; ship a visible editor path or delete the unused surface.

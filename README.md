@@ -104,21 +104,18 @@ app/
     ai/execute/route.ts    Validated task endpoint with consent/budget policy
     ai/status/route.ts     Provider, model, usage and cache status
     generate/route.ts      Retired provider-passthrough tombstone
-    stock/route.ts         Unsplash + Pexels
     health/route.ts        Health check
   page.tsx                 Main slide editor
 components/
   Builder/                 Block library, layer manager, inspector and artwork resize
   Canvas/                  Precision canvas, gestures, path nodes and overlays
   TemplateBrowser.tsx      Atomic replace/add template workflow
-  AIImageTools.tsx         AI tools panel (vision + color + bg removal)
 lib/
   engine/                  Document model, store, layout, persistence and exporters
     textLayout.ts          Shared Thai-aware text measurement and wrapping
     resizeArtwork.ts       Pure ratio-aware artwork resize policy
     templateApplication.ts Atomic template application boundary
     vectorPath.ts          Vector-node geometry
-    linkedAssets.ts        File System Access API adapter for linked images
     exportSVG.ts           Editable SVG serializer
   renderer/canvas.ts       Shared editor, thumbnail and raster-export renderer
   raster/                  Selection, Worker jobs, shared processor adapters and retouch tools

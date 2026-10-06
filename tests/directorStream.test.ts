@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   absorbModelDelta,
+  advanceThoughtReveal,
   decodeReplicateOutputData,
   drainSseBuffer,
   encodeDirectorSse,
@@ -9,11 +10,31 @@ import {
 } from "@/lib/ai/orchestration/directorStream";
 
 describe("director stream text", () => {
-  it("grows a partial summary without revealing the image prompt", () => {
+  it("reveals a finished thought a few characters at a time", () => {
+    const target = "สวัสดีครับ วันนี้ช่วยอะไรได้บ้าง";
+    const first = advanceThoughtReveal("", target);
+    expect(first).toBe(target.slice(0, 3));
+    expect(first).not.toBe(target);
+    let shown = "";
+    let steps = 0;
+    while (shown !== target && steps < 40) {
+      shown = advanceThoughtReveal(shown, target);
+      steps += 1;
+    }
+    expect(shown).toBe(target);
+    expect(steps).toBe(Math.ceil(target.length / 3));
+  });
+
+  it("restarts the reveal when the thought is replaced", () => {
+    expect(advanceThoughtReveal("สวัสดี", "กำลังจัดองค์ประกอบ")).toBe("กำลังจัดองค์ประกอบ".slice(0, 3));
+  });
+
+  it("hides an image plan and the image prompt from the live sentence", () => {
     const partial =
       '{"kind":"image-task","summary":"แมวนั่งริมหน้าต่าง","refinedPrompt":"a photorealistic cat';
-    expect(extractDirectorStreamThought(partial)).toBe("แมวนั่งริมหน้าต่าง");
+    expect(extractDirectorStreamThought(partial)).toBe("");
     expect(extractDirectorStreamThought(partial)).not.toContain("photorealistic");
+    expect(extractDirectorStreamThought(partial)).not.toContain("แมวนั่งริมหน้าต่าง");
   });
 
   it("reads the nested answer inside a tool-call envelope as tokens arrive", () => {

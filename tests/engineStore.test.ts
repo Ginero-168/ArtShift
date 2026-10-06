@@ -592,4 +592,15 @@ describe("engine store", () => {
     expect(useEngine.getState().currentSlide()?.elements).toHaveLength(1);
     expect(useEngine.getState().activeRasterSelection?.imageId).toBe(image.id);
   });
+
+  it("appends campaign slides and stays on the current slide", () => {
+    const beforeId = useEngine.getState().currentSlideId;
+    const source = useEngine.getState().doc.slides[0];
+    useEngine.getState().appendSlides([{ ...source, id: "campaign-1", name: "Campaign" }]);
+    expect(useEngine.getState().currentSlideId).toBe(beforeId);
+    expect(useEngine.getState().doc.slides.map((slide) => slide.id)).toEqual(["s1", "campaign-1"]);
+    useEngine.getState().undo();
+    expect(useEngine.getState().doc.slides.map((slide) => slide.id)).toEqual(["s1"]);
+    expect(useEngine.getState().currentSlideId).toBe(beforeId);
+  });
 });

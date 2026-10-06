@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { ensureAccountCredits, getCreditBalance } from "@/lib/credits/ledger";
+import { creditSnapshot, ensureAccountCredits } from "@/lib/credits/ledger";
 import { touchAccount } from "@/lib/server/auth/accountStore";
 import { getAuthenticatedAccount } from "@/lib/server/auth/session";
 import { jsonNoStore } from "@/lib/server/http";
@@ -16,6 +16,6 @@ export async function GET(req: NextRequest) {
   return jsonNoStore({
     authenticated: Boolean(user),
     user,
-    credits: user ? { balance: getCreditBalance(user.id) } : null,
+    credits: user ? creditSnapshot(user.id) : null,
   });
 }

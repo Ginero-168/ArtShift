@@ -11,6 +11,7 @@ import {
   streamlinePromptForImageGen,
 } from "@/lib/ai/imageGeneration";
 import type { ImageResultSummary } from "@/lib/ai/imageResultPresentation";
+import { canvasSummaryForChat } from "@/lib/ai/orchestration/canvasChatContext";
 import {
   classifyImageFollowUpPrompt,
   composeFollowUpDirectorPrompt,
@@ -19,6 +20,7 @@ import {
   resolveFollowUpImageRefs,
   serializeConversationHistoryForDirector,
 } from "@/lib/ai/orchestration/chatContinuity";
+import { CHAT_ONE_STEP_TEXT } from "@/lib/ai/orchestration/chatTurn";
 import {
   prepareRemoteCreativeDirection,
   reviewRemoteCreativeOutput,
@@ -41,7 +43,7 @@ import { removeBackground } from "@/lib/ai/removeBg";
 import type { VisualRoutePlan } from "@/lib/ai/visualOrchestrator";
 import type { AiImageRenderQuality } from "@/lib/ai-runtime/contracts";
 import { buildDesignAgentContext } from "@/lib/designAgent/client";
-import type { PlanProposal } from "@/lib/designAgent/contracts";
+import { applyAiPlan } from "@/lib/engine/applyAiPlan";
 import { compute603010AutoLayout } from "@/lib/engine/autoLayout603010";
 import { createRect, createText } from "@/lib/engine/factory";
 import { getCached, loadDataURL } from "@/lib/engine/imageCache";
@@ -227,7 +229,6 @@ export async function executeCoPilotInstruction(
   suggestions: string[];
   pendingClarification?: PendingClarification;
   imageCreated?: boolean;
-  planProposal?: PlanProposal;
 }> {
   const pending = options.pendingClarification;
   const prompt = pending
@@ -381,20 +382,28 @@ export async function executeCoPilotInstruction(
             currentPrompt: prompt,
           }),
           ...(priorGeneration ? { lastGeneration: priorGeneration } : {}),
-          canvasSummary: {
-            objectCount: context.elementCount,
+          canvasSummary: canvasSummaryForChat({
+            elements,
             selectedCount: context.selectedIds.length,
             width: context.width,
             height: context.height,
-          },
+          }),
           designContext: buildDesignAgentContext(st),
           referenceAnalyses: analyses,
         },
         { signal: options.signal, cloudConsent: true },
       );
+      if (direction.kind === "stuck") {
+        updateActionStatus(act, "error", direction.text);
+        return {
+          reply: direction.text,
+          actions,
+          suggestions: ["ส่งคำขอเดิมอีกครั้ง", "บอกรายละเอียดที่ขาด"],
+        };
+      }
       if (direction.kind === "answer") {
         updateActionStatus(act, "success", "Creative Director ตอบโดยไม่เรียก Image Model");
-        return { reply: direction.text, actions, suggestions: ["ระบุ brief สำหรับสร้างภาพ"] };
+        return { reply: direction.text, actions, suggestions: [] };
       }
       if (direction.kind === "clarification") {
         updateActionStatus(act, "success", "Creative Director ต้องการรายละเอียดเพิ่มก่อนสร้างภาพ");
@@ -414,28 +423,28 @@ export async function executeCoPilotInstruction(
         };
       }
       if (direction.kind === "design-plan") {
-        updateActionStatus(
-          act,
-          "success",
-          `Creative Director เตรียมแผนแก้ Canvas ${direction.proposal.commands.length} รายการ`,
-        );
+        const applied = applyAiPlan(direction.proposal, { approved: true });
+        if (applied.ok) {
+          updateActionStatus(act, "success", `แก้บนสไลด์แล้ว ${applied.receipts.length} รายการ`);
+          return {
+            reply: `แก้บนสไลด์แล้ว ${applied.receipts.length} รายการ ย้อนกลับได้จาก Undo`,
+            actions,
+            suggestions: ["ย้อนกลับด้วย Undo"],
+          };
+        }
+        updateActionStatus(act, "error", applied.error);
         return {
-          reply: `Creative Director เตรียมแผนแก้ไข Canvas แล้วครับ (${direction.proposal.summary}) ตรวจสอบและกด Apply plan เพื่อดำเนินงาน`,
+          reply: `ยังไม่ได้แก้สไลด์ ${applied.error}`,
           actions,
-          suggestions: ["ตรวจสอบแผนแล้วกด Apply plan", "แก้ brief ก่อนเริ่มงาน"],
-          planProposal: direction.proposal,
+          suggestions: ["บอกรายละเอียดที่ขาด"],
         };
       }
       if (direction.kind === "sequential-plan") {
-        updateActionStatus(
-          act,
-          "success",
-          `Creative Director เสนอแผนงาน ${direction.plan.steps.length} ขั้นตอน`,
-        );
+        updateActionStatus(act, "error", CHAT_ONE_STEP_TEXT);
         return {
-          reply: `Creative Director เสนอแผนงานต่อเนื่อง ${direction.plan.steps.length} ขั้นตอน (${direction.plan.summary}) กรุณาตรวจสอบและกด Approve & Execute เพื่อเริ่มงานครับ`,
+          reply: CHAT_ONE_STEP_TEXT,
           actions,
-          suggestions: ["อนุมัติและเริ่มรันแผน", "ยกเลิกแผนนี้"],
+          suggestions: [],
         };
       }
       if (direction.search.required) {
@@ -766,7 +775,7 @@ export async function executeCoPilotInstruction(
       return {
         reply: "จัดองค์ประกอบภาพตามสัดส่วนสีทอง 60-30-10 และปรับตำแหน่งให้สมดุลเรียบร้อยครับ!",
         actions,
-        suggestions: ["🎨 เปลี่ยนโทนสีด้วย Brand Kit", "✍️ ปรับข้อความพาดหัว", "✨ เพิ่ม Badge โปรโมชั่น"],
+        suggestions: ["🎨 เปลี่ยนโทนสี", "✍️ ปรับข้อความพาดหัว", "✨ เพิ่ม Badge โปรโมชั่น"],
       };
     } catch (err) {
       updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);
@@ -878,11 +887,7 @@ export async function executeCoPilotInstruction(
     return {
       reply: `ออกแบบองค์ประกอบและพาดหัวข้อความสำหรับ "${prompt}" วางลงบน Canvas ให้เรียบร้อยแล้วครับ!`,
       actions,
-      suggestions: [
-        "✨ สร้างรูปภาพประกอบตรงกลาง",
-        "📐 จัด Layout 60-30-10",
-        "🎨 เปลี่ยนชุดสีตาม Brand Kit",
-      ],
+      suggestions: ["✨ สร้างรูปภาพประกอบตรงกลาง", "📐 จัด Layout 60-30-10", "🎨 เปลี่ยนโทนสี"],
     };
   } catch (err) {
     updateActionStatus(act, "error", `Failed: ${(err as Error).message}`);

@@ -40,3 +40,50 @@ export async function loadPresentDocument(
     name: latest.name,
   };
 }
+
+export type PresentTarget = {
+  projectId: string;
+  slideId: string;
+};
+
+export function presentHref(target: PresentTarget): string {
+  const params = new URLSearchParams();
+  params.set("projectId", target.projectId);
+  params.set("slideId", target.slideId);
+  return `/present?${params.toString()}`;
+}
+
+export function editorHref(projectId: string, slideId?: string | null): string {
+  const path = `/projects/${encodeURIComponent(projectId)}/editor`;
+  if (!slideId) return path;
+  const params = new URLSearchParams();
+  params.set("slideId", slideId);
+  return `${path}?${params.toString()}`;
+}
+
+export function presentSlideIndex(
+  slides: readonly { id: string }[],
+  slideId: string | null,
+): number {
+  if (!slideId) return 0;
+  const index = slides.findIndex((slide) => slide.id === slideId);
+  return index >= 0 ? index : 0;
+}
+
+export function leavePresent(input: {
+  hasOpener: boolean;
+  projectId: string | null;
+  slideId: string | null;
+  close: () => void;
+  go: (href: string) => void;
+}): void {
+  if (input.hasOpener) {
+    input.close();
+    return;
+  }
+  if (input.projectId) {
+    input.go(editorHref(input.projectId, input.slideId));
+    return;
+  }
+  input.go("/projects");
+}

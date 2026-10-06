@@ -10,7 +10,7 @@ import { isImageFollowUpPrompt } from "./chatContinuity";
 
 export type GrillNode = "campaign-subject" | "offer" | "depict";
 
-export type GrillProceedReason = "skip" | "specific" | "follow-up" | "frontier-clear";
+export type GrillProceedReason = "skip" | "specific" | "follow-up" | "frontier-clear" | "defaults";
 
 export type GrillQuestion = {
   node: GrillNode;
@@ -27,7 +27,10 @@ export type GrillAssessment =
 export type GrillContext = {
   prompt: string;
   conversationHistory?: readonly { role: "user" | "assistant"; content: string }[];
-  canvasSummary?: { brandName?: string };
+  canvasSummary?: {
+    objectCount?: number;
+    visibleText?: string;
+  };
   referenceAnalyses?: readonly {
     caption?: string;
     objects?: readonly string[];
@@ -261,7 +264,16 @@ export function assessGrill(input: GrillContext): GrillAssessment {
   }
 
   const candidate = isGrillCandidate(userText);
-  if (!candidate && !answeringGrill) return { action: "defer" };
+  if (!candidate && !answeringGrill) {
+    if (isSimpleSubjectImageAsk(userText)) {
+      return {
+        action: "proceed",
+        reason: "defaults",
+        settled: describeSettled(userText, contextText, dialogueSettled, thai),
+      };
+    }
+    return { action: "defer" };
+  }
 
   const subjectKnown =
     dialogueSettled.has("campaign-subject") ||
@@ -468,16 +480,19 @@ function isCampaignBrief(text: string): boolean {
   );
 }
 
-function isBareImageAsk(text: string): boolean {
+function isImageAsk(text: string): boolean {
   if (isCampaignBrief(text)) return false;
-  if (
-    !/(?:สร้าง|วาด|ทำ)\s*(?:รูป|ภาพ)|สร้างรูป|สร้างภาพ|วาดรูป|วาดภาพ|(?:generate|create|draw)\s+(?:an?\s+)?(?:image|picture)/i.test(
-      text,
-    )
-  ) {
-    return false;
-  }
-  return !hasSubject(text);
+  return /(?:สร้าง|วาด|ทำ)\s*(?:รูป|ภาพ)|สร้างรูป|สร้างภาพ|วาดรูป|วาดภาพ|(?:generate|create|draw)\s+(?:an?\s+)?(?:image|picture)/i.test(
+    text,
+  );
+}
+
+function isBareImageAsk(text: string): boolean {
+  return isImageAsk(text) && !hasSubject(text);
+}
+
+function isSimpleSubjectImageAsk(text: string): boolean {
+  return isImageAsk(text) && hasSubject(text);
 }
 
 function isGrillCandidate(text: string): boolean {
@@ -524,6 +539,8 @@ function stripNonAnswers(text: string): string {
 
 function contextFactText(input: GrillContext): string {
   const parts: string[] = [];
+  const canvas = input.canvasSummary;
+  if (canvas?.visibleText?.trim()) parts.push(canvas.visibleText);
   for (const ref of input.referenceAnalyses ?? []) {
     if (ref.visibleText?.trim()) parts.push(ref.visibleText);
     if (ref.caption?.trim()) parts.push(ref.caption);

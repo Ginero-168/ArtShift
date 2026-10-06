@@ -30,7 +30,7 @@ import { POST as REVIEW_POST } from "../app/api/ai/director/review/route";
 import { POST } from "../app/api/ai/director/route";
 
 const body = {
-  prompt: "สร้างภาพโฆษณาขวดเซรั่มแบบ studio สำหรับ Instagram 1:1",
+  prompt: "โปสเตอร์โปรโมชันกาแฟลาเต้ ลด 50% สไตล์มินิมอล พื้นหลังครีม ตัวหนังสือไทย ขนาด 1080x1350",
   canvasSummary: { objectCount: 2, selectedCount: 0, width: 1080, height: 1080 },
   referenceAnalyses: [],
   cloudConsent: true,
@@ -113,6 +113,23 @@ describe("Creative Director route", () => {
   it("rejects missing cloud consent", async () => {
     const response = await POST(request({ ...body, cloudConsent: false }));
     expect(response.status).toBe(403);
+    expect(prepareMock).not.toHaveBeenCalled();
+  });
+
+  it("asks one question for a vague promo without consent or the planner", async () => {
+    const response = await POST(
+      request({
+        ...body,
+        prompt: "ทำโฆษณาโปรโมชัน",
+        cloudConsent: false,
+      }),
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.direction.kind).toBe("clarification");
+    expect(payload.direction.question).toContain("โปรโมทอะไรเป็นหลัก");
+    expect(payload.direction.question).toContain("➡️ แนะนำ:");
+    expect(payload.model).toBeNull();
     expect(prepareMock).not.toHaveBeenCalled();
   });
 

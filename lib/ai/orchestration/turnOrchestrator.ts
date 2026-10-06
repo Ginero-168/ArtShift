@@ -822,7 +822,7 @@ async function executeDefaultSpecialistStep(
           appliedTo: patches.map((patch) => patch.id),
         },
         reviewStatus: "not_checked",
-        notes: `Brand Kit ${brand.name} applied to ${patches.length} Objects`,
+        notes: `Applied palette and type to ${patches.length} objects`,
       };
     }
     default:

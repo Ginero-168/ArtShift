@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ArtShiftLogo from "@/components/Brand/ArtShiftLogo";
 import { absorbWorkspaceWheel } from "@/lib/editor/overscrollLock";
 import { useEditorOverscrollLock } from "@/lib/editor/useEditorOverscrollLock";
@@ -11,7 +11,7 @@ import {
   INFINITY_CANVAS_LABEL,
 } from "@/lib/engine/slideKind";
 import type { EngineDoc, EngineSlide } from "@/lib/engine/types";
-import { loadPresentDocument } from "@/lib/project/presentProject";
+import { leavePresent, loadPresentDocument, presentSlideIndex } from "@/lib/project/presentProject";
 import { projectStore } from "@/lib/project/projectStore";
 import { renderSlide } from "@/lib/renderer/canvas";
 
@@ -24,9 +24,12 @@ export default function PresentPage() {
   useEditorOverscrollLock();
 
   useEffect(() => {
-    const projectId = new URLSearchParams(window.location.search).get("projectId");
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get("projectId");
+    const slideId = params.get("slideId");
     loadPresentDocument(projectStore, projectId).then((result) => {
       if (result.status === "loaded") {
+        setIndex(presentSlideIndex(getExportableSlides(result.doc), slideId));
         setDoc(result.doc);
         return;
       }
@@ -44,6 +47,19 @@ export default function PresentPage() {
 
   const presentSlides: EngineSlide[] = doc ? getExportableSlides(doc) : [];
   const slide = presentSlides[index];
+
+  const exitPresent = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    leavePresent({
+      hasOpener: Boolean(window.opener && !window.opener.closed),
+      projectId: params.get("projectId"),
+      slideId: slide?.id ?? params.get("slideId"),
+      close: () => window.close(),
+      go: (href) => {
+        window.location.assign(href);
+      },
+    });
+  }, [slide?.id]);
 
   useEffect(() => {
     if (!slide || !canvasRef.current || !containerRef.current) return;
@@ -65,7 +81,7 @@ export default function PresentPage() {
     const tx = (w - slide.width * scale) / 2;
     const ty = (h - slide.height * scale) / 2;
 
-    ctx.fillStyle = "#111";
+    ctx.fillStyle = "#0e1218";
     ctx.fillRect(0, 0, w, h);
     ctx.save();
     ctx.translate(tx, ty);
@@ -90,12 +106,12 @@ export default function PresentPage() {
         e.preventDefault();
         setIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === "Escape") {
-        window.location.href = "/projects";
+        exitPresent();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [presentSlides.length]);
+  }, [presentSlides.length, exitPresent]);
 
   useEffect(() => {
     if (!doc) return;
@@ -110,24 +126,11 @@ export default function PresentPage() {
 
   if (!doc) {
     return (
-      <div
-        style={{
-          height: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#111",
-          color: "#fff",
-          gap: 16,
-          padding: 24,
-          textAlign: "center",
-        }}
-      >
+      <div className="present-room present-note">
         <ArtShiftLogo size="header" />
-        <p style={{ maxWidth: 480, lineHeight: 1.5 }}>{loadError ?? "Loading…"}</p>
+        <p>{loadError ?? "Loading…"}</p>
         {loadError ? (
-          <a href="/projects" style={{ color: "#ffad92", fontSize: 14 }}>
+          <a className="present-link" href="/projects">
             Back to Projects
           </a>
         ) : null}
@@ -137,26 +140,13 @@ export default function PresentPage() {
 
   if (!presentSlides.length) {
     return (
-      <div
-        style={{
-          height: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#111",
-          color: "#fff",
-          gap: 16,
-          padding: 24,
-          textAlign: "center",
-        }}
-      >
+      <div className="present-room present-note">
         <ArtShiftLogo size="header" />
-        <p style={{ maxWidth: 480, lineHeight: 1.5 }}>
+        <p>
           This project has no exportable slides. {INFINITY_CANVAS_LABEL} slides are skipped in
           Present. {INFINITY_CANVAS_EXPORT_NOTE}
         </p>
-        <a href="/projects" style={{ color: "#ffad92", fontSize: 14 }}>
+        <a className="present-link" href="/projects">
           Back to Projects
         </a>
       </div>
@@ -168,15 +158,7 @@ export default function PresentPage() {
   return (
     <div
       ref={containerRef}
-      style={{
-        position: "relative",
-        width: "100vw",
-        height: "100vh",
-        background: "#111",
-        overflow: "hidden",
-        overscrollBehavior: "contain",
-        overscrollBehaviorX: "none",
-      }}
+      className="present-room present-stage"
       onClick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -189,67 +171,27 @@ export default function PresentPage() {
     >
       <canvas ref={canvasRef} style={{ position: "absolute", inset: 0 }} />
 
-      <div
-        style={{
-          position: "absolute",
-          bottom: 20,
-          left: "50%",
-          transform: "translateX(-50%)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          background: "rgba(0,0,0,0.5)",
-          padding: "8px 16px",
-          borderRadius: 20,
-          color: "#fff",
-          fontSize: 13,
-          zIndex: 10,
-        }}
-      >
+      <div className="present-dock" onClick={(event) => event.stopPropagation()}>
         <button
+          type="button"
           onClick={() => setIndex((i) => Math.max(i - 1, 0))}
           disabled={index === 0}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#fff",
-            fontSize: 16,
-            cursor: "pointer",
-            opacity: index === 0 ? 0.3 : 1,
-          }}
+          aria-label="Previous slide"
         >
-          ◀
+          Prev
         </button>
-        <span>
+        <span className="present-count">
           {index + 1} / {total}
         </span>
         <button
+          type="button"
           onClick={() => setIndex((i) => Math.min(i + 1, total - 1))}
           disabled={index === total - 1}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#fff",
-            fontSize: 16,
-            cursor: "pointer",
-            opacity: index === total - 1 ? 0.3 : 1,
-          }}
+          aria-label="Next slide"
         >
-          ▶
+          Next
         </button>
-        <button
-          onClick={() => {
-            window.location.href = "/projects";
-          }}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#fff",
-            fontSize: 12,
-            cursor: "pointer",
-            marginLeft: 8,
-          }}
-        >
+        <button type="button" onClick={exitPresent}>
           Exit
         </button>
       </div>

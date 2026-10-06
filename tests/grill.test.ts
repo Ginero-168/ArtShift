@@ -80,7 +80,10 @@ describe("grill trigger judgment", () => {
   });
 
   it("does not grill a simple subject that can take defaults", () => {
-    expect(assessGrill(grillInput({ prompt: "สร้างรูปแมว" })).action).toBe("defer");
+    expect(assessGrill(grillInput({ prompt: "สร้างรูปแมว" }))).toMatchObject({
+      action: "proceed",
+      reason: "defaults",
+    });
   });
 
   it("asks what to depict when the image request has no subject", () => {
@@ -301,10 +304,84 @@ describe("prepareCreativeDirection grill gate", () => {
     expect(result.kind).toBe("image-task");
   });
 
-  it("teaches the orchestrator the grill protocol", () => {
-    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("GRILL-ME PROTOCOL");
-    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("➡️ แนะนำ:");
-    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("ไม่ต้องถาม");
-    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("just generate");
+  it("keeps the question format out of the planner prompt", () => {
+    expect(CREATIVE_DIRECTOR_SYSTEM).not.toContain("GRILL-ME PROTOCOL");
+    expect(CREATIVE_DIRECTOR_SYSTEM).not.toContain("➡️ แนะนำ:");
+  });
+
+  it("plans a simple subject instead of asking", async () => {
+    const execute = vi.fn().mockResolvedValue(imageTaskResult);
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "สร้างรูปแมว",
+        canvasSummary: canvas,
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+    expect(execute).toHaveBeenCalledTimes(1);
+    const payload = JSON.stringify(execute.mock.calls[0]?.[1]);
+    expect(payload).toContain("action: PROCEED");
+    expect(payload).toContain("reason: defaults");
+    expect(result.kind).toBe("image-task");
+  });
+
+  it("stops when the planner still asks after the execute retry", async () => {
+    const execute = vi.fn().mockResolvedValue(clarificationResult);
+    const result = await prepareCreativeDirection(
+      {
+        prompt: specificPromo,
+        canvasSummary: canvas,
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({
+      kind: "stuck",
+      cause: "refused-to-execute",
+      text: "ยังไม่สร้างภาพครับ รอบนี้ยังวางแผนต่อไม่ได้",
+    });
+  });
+
+  it("reads text on the canvas before asking what to promote", () => {
+    const assessment = assessGrill(
+      grillInput({
+        prompt: vaguePromo,
+        canvasSummary: {
+          objectCount: 2,
+          visibleText: "นิยายรัก\nลด 30%",
+        },
+      }),
+    );
+    expect(assessment).toMatchObject({ action: "proceed", reason: "specific" });
+  });
+
+  it("does not send a brand kit to the model", async () => {
+    const execute = vi.fn().mockResolvedValue(imageTaskResult);
+    await prepareCreativeDirection(
+      {
+        prompt: specificPromo,
+        canvasSummary: canvas,
+        artworkContext: {
+          brandKit: { name: "Siam Editorial", publisherName: "สำนักพิมพ์สยามวรรณ" },
+          objects: [{ id: "text-1", type: "text", text: "นิยายรัก" }],
+        },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT"],
+        cloudConsent: true,
+      },
+      { execute },
+    );
+    const payload = JSON.stringify(execute.mock.calls[0]?.[1]);
+    expect(payload).not.toContain("Siam Editorial");
+    expect(payload).not.toContain("brandKit");
+    expect(payload).not.toContain("สำนักพิมพ์สยามวรรณ");
+    expect(payload).toContain("นิยายรัก");
+    expect(CREATIVE_DIRECTOR_SYSTEM).toContain("ArtShift has no Brand Kit");
   });
 });

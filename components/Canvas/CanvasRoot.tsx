@@ -755,6 +755,7 @@ function drawInfinityBoard(
 function isEditableTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el) return false;
+  if (el.closest("dialog[open]")) return true;
   if (["INPUT", "TEXTAREA"].includes(el.tagName)) return true;
   if (el.isContentEditable) return true;
   return false;

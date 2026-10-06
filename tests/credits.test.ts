@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   adminChangeCredits,
+  creditSnapshot,
   ensureAccountCredits,
   getCreditBalance,
   refundSpend,
@@ -19,6 +20,7 @@ import {
   WELCOME_GRANT_CREDITS,
   welcomeGrantCredits,
 } from "@/lib/credits/pricing";
+import { resetAccountStoreForTests, upsertGoogleAccount } from "@/lib/server/auth/accountStore";
 
 describe("credit pricing", () => {
   it("converts provider USD to credits at 0.01 THB with a 25% margin", () => {
@@ -134,5 +136,40 @@ describe("credit ledger", () => {
         actorEmail: "admin@example.com",
       }).ok,
     ).toBe(false);
+  });
+
+  it("lets the operator account generate without a balance and still blocks everyone else", () => {
+    const accountDir = mkdtempSync(join(tmpdir(), "artshift-accounts-"));
+    const previousAccountStore = process.env.ARTSHIFT_ACCOUNT_STORE_PATH;
+    process.env.ARTSHIFT_ACCOUNT_STORE_PATH = join(accountDir, "store.json");
+    process.env.ARTSHIFT_WELCOME_CREDITS = "0";
+    resetAccountStoreForTests();
+    try {
+      const operator = upsertGoogleAccount({
+        sub: "peerawat-google",
+        email: "mhoomheemah@gmail.com",
+        emailVerified: true,
+        name: "Peerawat R",
+      });
+      const spent = spendCredits(operator.id, "image.generate.xhigh");
+      expect(spent).toEqual({ ok: true, entryId: "", credits: 0, balance: 0 });
+      expect(getCreditBalance(operator.id)).toBe(0);
+      expect(creditSnapshot(operator.id)).toEqual({ balance: 0, unlimited: true });
+
+      const other = upsertGoogleAccount({
+        sub: "other-google",
+        email: "other@example.com",
+        emailVerified: true,
+        name: "Other",
+      });
+      const denied = spendCredits(other.id, "image.generate.xhigh");
+      expect(denied.ok).toBe(false);
+      if (!denied.ok) expect(denied.code).toBe("INSUFFICIENT_CREDITS");
+      expect(creditSnapshot(other.id).unlimited).toBe(false);
+    } finally {
+      if (previousAccountStore === undefined) delete process.env.ARTSHIFT_ACCOUNT_STORE_PATH;
+      else process.env.ARTSHIFT_ACCOUNT_STORE_PATH = previousAccountStore;
+      rmSync(accountDir, { recursive: true, force: true });
+    }
   });
 });

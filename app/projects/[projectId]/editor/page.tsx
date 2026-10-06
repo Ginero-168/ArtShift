@@ -51,7 +51,6 @@ import { exportPPTX } from "@/lib/engine/exportPPTX";
 import { exportAllSVG, exportCurrentSlideSVG } from "@/lib/engine/exportSVG";
 import { getImageCache } from "@/lib/engine/imageCache";
 import { importLegacyStoreDocument } from "@/lib/engine/legacyBridge";
-import { usePresetStore } from "@/lib/engine/presetStore";
 import {
   getExportableSlides,
   INFINITY_CANVAS_EXPORT_NOTE,
@@ -61,6 +60,7 @@ import {
 import { createEmptyEngineDoc, useEngine } from "@/lib/engine/store";
 import type { EngineSlide } from "@/lib/engine/types";
 import { loadThaiFonts } from "@/lib/fonts";
+import { presentHref } from "@/lib/project/presentProject";
 import { createProjectAutosave, type ProjectAutosaveStatus } from "@/lib/project/projectAutosave";
 import { type ProjectMetadata, projectStore } from "@/lib/project/projectStore";
 import { useStore } from "@/lib/store";
@@ -68,10 +68,10 @@ import { useStore } from "@/lib/store";
 const AIImageGeneratorModal = dynamic(() => import("@/components/AI/AIImageGeneratorModal"), {
   ssr: false,
 });
-const BrandKitModal = dynamic(() => import("@/components/Brand/BrandKitModal"), { ssr: false });
 const CampaignStudioModal = dynamic(() => import("@/components/Campaign/CampaignStudioModal"), {
   ssr: false,
 });
+const ColorStudio = dynamic(() => import("@/components/ColorStudio/ColorStudio"), { ssr: false });
 const TemplateBrowser = dynamic(() => import("@/components/TemplateBrowser"), { ssr: false });
 const ModelManagerPanel = dynamic(() => import("@/components/ModelManagerPanel"), { ssr: false });
 const RasterStudioShell = dynamic(() => import("@/components/RasterStudio/RasterStudioShell"), {
@@ -187,8 +187,6 @@ export default function ProjectEditorPage() {
   const redo = useEngine((s) => s.redo);
   const loadDoc = useEngine((s) => s.loadDoc);
   const setDocTitle = useEngine((s) => s.setDocTitle);
-  const theme = useStore((s) => s.theme);
-  const cycleTheme = useStore((s) => s.cycleTheme);
   const setSlideBackground = useEngine((s) => s.setSlideBackground);
   const currentSlideId = useEngine((s) => s.currentSlideId);
   const currentSlide = useEngine((s) =>
@@ -212,12 +210,11 @@ export default function ProjectEditorPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportBusy, setExportBusy] = useState<string | null>(null);
-  const [_showGSlidesModal, setShowGSlidesModal] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [templateBrowserOpen, setTemplateBrowserOpen] = useState(false);
   const [campaignStudioOpen, setCampaignStudioOpen] = useState(false);
-  const [brandKitOpen, setBrandKitOpen] = useState(false);
+  const [colorStudioOpen, setColorStudioOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const projectNameMeasureRef = useRef<HTMLSpanElement | null>(null);
   const persistedRevision = useRef<number | null>(null);
@@ -248,10 +245,13 @@ export default function ProjectEditorPage() {
   }, [zoomDropdownOpen]);
 
   // Load project document
+  useLayoutEffect(() => {
+    useStore.getState().hydrateUiPreferences();
+  }, []);
+
   useEffect(() => {
     if (!projectId) return;
     loadThaiFonts();
-    usePresetStore.getState().hydrate();
     let cancelled = false;
 
     (async () => {
@@ -272,6 +272,10 @@ export default function ProjectEditorPage() {
 
         if (loadedRecord?.doc) {
           loadDoc(loadedRecord.doc);
+          const slideId = new URLSearchParams(window.location.search).get("slideId");
+          if (slideId && loadedRecord.doc.slides.some((slide) => slide.id === slideId)) {
+            useEngine.getState().setCurrentSlide(slideId);
+          }
           persistedRevision.current = loadedRecord.doc.updatedAt;
         }
 
@@ -449,7 +453,6 @@ export default function ProjectEditorPage() {
       const images = getImageCache();
       if (kind === "pptx") {
         await exportPPTX(doc, images);
-        setShowGSlidesModal(true);
       } else if (kind === "pdf") {
         await exportPDF(doc, images);
       } else if (kind === "png") {
@@ -476,14 +479,7 @@ export default function ProjectEditorPage() {
 
   function handleLoadCampaignIntoCanvas(newSlides: EngineSlide[]) {
     if (!newSlides.length) return;
-    const st = useEngine.getState();
-    const currentDoc = st.doc;
-    const updatedDoc = {
-      ...currentDoc,
-      slides: [...currentDoc.slides, ...newSlides],
-      updatedAt: Date.now(),
-    };
-    loadDoc(updatedDoc);
+    useEngine.getState().appendSlides(newSlides);
     if (projectId) {
       void persistCurrentDoc();
     }
@@ -505,7 +501,7 @@ export default function ProjectEditorPage() {
   if (notFound) {
     return (
       <div
-        className={`app-root theme-${theme}`}
+        className="app-root theme-cool"
         style={{
           position: "fixed",
           inset: 0,
@@ -590,7 +586,7 @@ export default function ProjectEditorPage() {
 
   return (
     <div
-      className={`app-root theme-${theme}`}
+      className="app-root theme-cool"
       style={{
         position: "fixed",
         inset: 0,
@@ -606,16 +602,6 @@ export default function ProjectEditorPage() {
           <Link
             href="/projects"
             title="กลับไปหน้ารายการโปรเจกต์ (Back to Projects)"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              textDecoration: "none",
-              color: "inherit",
-              padding: "4px 6px",
-              borderRadius: 6,
-              transition: "background 0.15s ease",
-            }}
             className="brand-link"
           >
             <ArtShiftLogo size="compact" />
@@ -643,76 +629,20 @@ export default function ProjectEditorPage() {
               placeholder="Untitled Project"
               aria-label="Project Title"
               className="project-title-input"
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--ink, #1a1815)",
-                background: "transparent",
-                border: "1px solid transparent",
-                borderRadius: 6,
-                padding: "4px 8px",
-                outline: "none",
-                width: projectNameWidth,
-                transition: "all 0.15s ease",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.background = "var(--surface-solid, #ffffff)";
-                e.currentTarget.style.borderColor = "var(--accent, #d64418)";
-                e.currentTarget.style.boxShadow = "0 0 0 2px rgba(214, 68, 24, 0.15)";
-              }}
-              onMouseEnter={(e) => {
-                if (document.activeElement !== e.currentTarget) {
-                  e.currentTarget.style.background = "var(--surface-hover, #f6f4f0)";
-                  e.currentTarget.style.borderColor = "var(--stroke, #eae6e1)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (document.activeElement !== e.currentTarget) {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.borderColor = "transparent";
-                }
-              }}
+              style={{ width: projectNameWidth }}
             />
             <AutoSaveIndicator status={saveStatus} />
           </div>
 
           {currentSlideIsInfinity ? (
-            <span
-              title={INFINITY_CANVAS_EXPORT_NOTE}
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#9b2500",
-                background: "#fff0ea",
-                border: "1px solid #ffc7b3",
-                padding: "2px 8px",
-                borderRadius: 999,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                whiteSpace: "nowrap",
-              }}
-            >
+            <span className="notice-chip" title={INFINITY_CANVAS_EXPORT_NOTE}>
               ∞ {INFINITY_CANVAS_LABEL}
-              <span style={{ fontWeight: 500, color: "#d64418" }}>not exported</span>
+              <span>not exported</span>
             </span>
           ) : null}
 
           {saveError && (
-            <span
-              style={{
-                fontSize: 11,
-                color: "#dc2626",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                padding: "2px 8px",
-                borderRadius: 4,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-              title={saveError}
-            >
+            <span className="notice-chip is-error" title={saveError}>
               Autosave failed: {saveError}
             </span>
           )}
@@ -723,8 +653,14 @@ export default function ProjectEditorPage() {
         </div>
 
         <div className="topbar-right">
-          <button className="ghost-btn" onClick={cycleTheme} title="Toggle theme">
+          <button
+            className="ghost-btn"
+            onClick={() => setColorStudioOpen(true)}
+            title="Color Studio"
+            aria-label="Open Color Studio"
+          >
             <IconPalette size={15} />
+            <span style={{ marginLeft: 5 }}>Color</span>
           </button>
           <button className="ghost-btn" onClick={() => setStatsOpen(true)} title="Stats">
             <IconStats size={15} />
@@ -779,19 +715,7 @@ export default function ProjectEditorPage() {
             {exportOpen && (
               <div className="menu" style={{ position: "absolute", top: 32, right: 0, zIndex: 30 }}>
                 {hasInfinityCanvas ? (
-                  <div
-                    style={{
-                      padding: "8px 12px",
-                      fontSize: 11,
-                      lineHeight: 1.4,
-                      color: "#9b2500",
-                      background: "#fff0ea",
-                      borderBottom: "1px solid #ffc7b3",
-                      maxWidth: 240,
-                    }}
-                  >
-                    {INFINITY_CANVAS_EXPORT_NOTE}
-                  </div>
+                  <div className="menu-note">{INFINITY_CANVAS_EXPORT_NOTE}</div>
                 ) : null}
                 <button
                   onClick={() => {
@@ -968,39 +892,15 @@ export default function ProjectEditorPage() {
               {/* Hamburger menu */}
               <div ref={menuRef} style={{ position: "relative" }}>
                 <button
+                  className="icon-btn"
                   onClick={() => setMenuOpen((v) => !v)}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
-                    border: "1px solid var(--stroke, #eae6e1)",
-                    background: "var(--surface-solid, #fff)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    color: "var(--ink, #111)",
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                  }}
                   title="Menu"
+                  aria-expanded={menuOpen}
                 >
                   <IconMenu size={12} />
                 </button>
                 {menuOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 34,
-                      left: 0,
-                      width: 220,
-                      background: "var(--surface-solid, #fff)",
-                      border: "1px solid var(--stroke, #eae6e1)",
-                      borderRadius: 9,
-                      boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
-                      padding: "6px 0",
-                      zIndex: 20,
-                    }}
-                  >
+                  <div className="menu studio-menu">
                     {/* Return to projects */}
                     <HamburgerItem
                       label="Back to Projects"
@@ -1062,16 +962,26 @@ export default function ProjectEditorPage() {
                         setMenuOpen(false);
                       }}
                     />
+                    <HamburgerItem
+                      label="Color Studio"
+                      onClick={() => {
+                        setColorStudioOpen(true);
+                        setMenuOpen(false);
+                      }}
+                    />
                     {/* Present */}
                     <HamburgerItem
                       label="Present"
                       onClick={() => {
-                        window.open("/present", "_blank");
-                        setMenuOpen(false);
+                        void (async () => {
+                          const saved = await persistCurrentDoc();
+                          if (!saved.ok || !projectId) return;
+                          const slideId = useEngine.getState().currentSlideId;
+                          window.open(presentHref({ projectId, slideId }), "_blank");
+                          setMenuOpen(false);
+                        })();
                       }}
                     />
-                    {/* Help */}
-                    <HamburgerItem label="Help" onClick={() => setMenuOpen(false)} />
                     {/* Reset */}
                     <HamburgerItem label="Reset the canvas" onClick={resetCanvas} danger />
 
@@ -1337,6 +1247,8 @@ export default function ProjectEditorPage() {
       {/* ——— Modals ——— */}
       {statsOpen && <StatsModal onClose={() => setStatsOpen(false)} />}
 
+      {colorStudioOpen && <ColorStudio modal onClose={() => setColorStudioOpen(false)} />}
+
       {templateBrowserOpen && <TemplateBrowser onClose={() => setTemplateBrowserOpen(false)} />}
 
       {campaignStudioOpen && (
@@ -1345,10 +1257,6 @@ export default function ProjectEditorPage() {
           onClose={() => setCampaignStudioOpen(false)}
           onLoadIntoCanvas={handleLoadCampaignIntoCanvas}
         />
-      )}
-
-      {brandKitOpen && (
-        <BrandKitModal isOpen={brandKitOpen} onClose={() => setBrandKitOpen(false)} />
       )}
 
       {aiImageModalOpen && (
@@ -1461,24 +1369,9 @@ function HamburgerItem({
 }) {
   return (
     <button
+      className="studio-menu-item"
+      data-danger={danger ? "true" : undefined}
       onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 9,
-        width: "100%",
-        padding: "7px 12px",
-        border: "none",
-        background: "none",
-        fontSize: 11,
-        color: danger ? "#dc2626" : "var(--ink, #111)",
-        cursor: "pointer",
-        textAlign: "left",
-      }}
-      onMouseEnter={(e) =>
-        (e.currentTarget.style.background = danger ? "#fef2f2" : "var(--surface-hover, #f6f4f0)")
-      }
-      onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
     >
       <span style={{ flex: 1 }}>{label}</span>
       {shortcut && (

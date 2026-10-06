@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { UNLIMITED_CREDIT_LABEL } from "@/lib/credits/creditLabel";
 
 type LedgerEntry = {
   id: string;
@@ -23,6 +24,7 @@ const TYPE_LABEL: Record<LedgerEntry["type"], string> = {
 
 export default function CreditsPage() {
   const [balance, setBalance] = useState<number | null>(null);
+  const [unlimited, setUnlimited] = useState(false);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState("");
 
@@ -32,6 +34,7 @@ export default function CreditsPage() {
       .then(async (response) => {
         const payload = (await response.json()) as {
           balance?: number;
+          unlimited?: boolean;
           entries?: LedgerEntry[];
           error?: string;
         };
@@ -39,6 +42,7 @@ export default function CreditsPage() {
         if (!response.ok) throw new Error(payload.error || "อ่านเครดิตไม่สำเร็จ");
         if (!cancelled) {
           setBalance(payload.balance ?? 0);
+          setUnlimited(Boolean(payload.unlimited));
           setEntries(payload.entries ?? []);
         }
       })
@@ -81,8 +85,14 @@ export default function CreditsPage() {
         >
           <div style={{ fontSize: 12, color: "#78726a" }}>ยอดคงเหลือ</div>
           <div style={{ fontSize: 36, fontWeight: 700, marginTop: 4 }}>
-            {balance === null ? "…" : balance.toLocaleString("th-TH")}
-            <span style={{ fontSize: 16, fontWeight: 500, marginLeft: 8 }}>เครดิต</span>
+            {unlimited
+              ? UNLIMITED_CREDIT_LABEL
+              : balance === null
+                ? "…"
+                : balance.toLocaleString("th-TH")}
+            {unlimited ? null : (
+              <span style={{ fontSize: 16, fontWeight: 500, marginLeft: 8 }}>เครดิต</span>
+            )}
           </div>
           {error ? <p style={{ color: "#b52c00", fontSize: 13 }}>{error}</p> : null}
         </section>

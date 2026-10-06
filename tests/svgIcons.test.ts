@@ -75,17 +75,4 @@ describe("Vector SVG Icons & Zero-Emoji Enforcement", () => {
     expect(content).toContain("<IconWarning");
     expect(content).toContain("<IconPolaroid");
   });
-
-  it("verifies that BrandKitModal uses vector SVGs instead of emoji icons", () => {
-    const brandKitPath = path.join(rootDir, "components/Brand/BrandKitModal.tsx");
-    const content = fs.readFileSync(brandKitPath, "utf-8");
-
-    expect(content).not.toContain("👑 Publisher Brand Kit");
-    expect(content).not.toContain("🏢 สำนักพิมพ์");
-    expect(content).not.toContain("🎨 ชุดสี");
-    expect(content).not.toContain("⚖️ กฎเกณฑ์");
-    expect(content).toContain("<IconCrown");
-    expect(content).toContain("<IconBuilding");
-    expect(content).toContain("<IconScale");
-  });
 });

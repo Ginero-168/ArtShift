@@ -518,7 +518,7 @@ describe("gpt-oss-120b Creative Director", () => {
     );
   });
 
-  it("recovers a clarification direction when the remote assistant returns JSON in text without tool calls", async () => {
+  it("stops after a closed brief still comes back as clarification JSON", async () => {
     const clarificationJson = JSON.stringify({
       kind: "clarification",
       question: "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
@@ -547,15 +547,11 @@ describe("gpt-oss-120b Creative Director", () => {
       { execute },
     );
 
+    expect(execute).toHaveBeenCalledTimes(2);
     expect(result).toEqual({
-      kind: "clarification",
-      question: "คุณต้องการสไตล์ของรูปหมูอย่างไร?",
-      options: [
-        "การ์ตูน (Cartoon)",
-        "ภาพถ่ายจริง (Realistic)",
-        "สไตล์มินิมอล (Minimalist)",
-        "อื่น ๆ (Other)",
-      ],
+      kind: "stuck",
+      cause: "refused-to-execute",
+      text: "ยังไม่สร้างภาพครับ รอบนี้ยังวางแผนต่อไม่ได้",
     });
   });
 

@@ -20,6 +20,7 @@ import {
   formatModelTechnicalTitle,
 } from "@/lib/ai/chatModelAttribution";
 import type { CoPilotMessage, SubAgentActionLog } from "@/lib/ai/coPilot";
+import { advanceThoughtReveal } from "@/lib/ai/orchestration/directorStream";
 import type { ComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import { resolveComposerImageRef } from "@/lib/ai/orchestration/imageReferences";
 import {
@@ -279,7 +280,20 @@ export function CollapsibleThought({
     const cleaned = thought ? cleanTechnicalPromptText(thought) : "";
     return cleaned.length > 0 ? cleaned : "";
   }, [thought]);
+  const [shownThought, setShownThought] = useState(isLive ? "" : thoughtDisplay);
   const hasStreamThought = thoughtDisplay.length > 0;
+
+  useEffect(() => {
+    if (!isLive) {
+      setShownThought(thoughtDisplay);
+      return;
+    }
+    if (shownThought === thoughtDisplay) return;
+    const timer = window.setTimeout(() => {
+      setShownThought((current) => advanceThoughtReveal(current, thoughtDisplay));
+    }, 20);
+    return () => window.clearTimeout(timer);
+  }, [isLive, shownThought, thoughtDisplay]);
 
   const messageList = React.useMemo(() => {
     if (customMessages && customMessages.length > 0) return customMessages;
@@ -319,7 +333,8 @@ export function CollapsibleThought({
   if (!thoughtDisplay && !isLive && !toolLabel) return null;
 
   const showStream = isOpen && (Boolean(thoughtDisplay) || isLive || Boolean(liveLine));
-  const bodyText = thoughtDisplay || (isLive && stage !== "generating" ? liveLine : "");
+  const revealedThought = isLive ? shownThought : thoughtDisplay;
+  const bodyText = revealedThought || (isLive && stage !== "generating" ? liveLine : "");
   const generatingStatus = isLive && stage === "generating" ? liveLine : "";
 
   return (
@@ -508,6 +523,19 @@ export default function ChatThread({
   children,
 }: ChatThreadProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [shownStream, setShownStream] = useState("");
+
+  useEffect(() => {
+    if (!busy || !streamingText) {
+      setShownStream("");
+      return;
+    }
+    if (shownStream === streamingText) return;
+    const timer = window.setTimeout(() => {
+      setShownStream((current) => advanceThoughtReveal(current, streamingText));
+    }, 20);
+    return () => window.clearTimeout(timer);
+  }, [busy, shownStream, streamingText]);
 
   const handleCopyMessage = async (msg: CoPilotMessage) => {
     const textToCopy = buildPromptWithTagsForCopy(msg);
@@ -1000,8 +1028,9 @@ export default function ChatThread({
         {children}
 
         {/* Streaming text bubble */}
-        {busy && streamingText && (
+        {busy && shownStream ? (
           <div
+            data-testid="chat-stream-bubble"
             style={{
               alignSelf: "flex-start",
               maxWidth: "85%",
@@ -1012,11 +1041,12 @@ export default function ChatThread({
               fontSize: 12.5,
               lineHeight: 1.45,
               border: "1px solid #ece7e0",
+              whiteSpace: "pre-wrap",
             }}
           >
-            {streamingText}
+            {shownStream}
           </div>
-        )}
+        ) : null}
 
         {/* Live In-Progress State */}
         {busy && liveAssistantState && (

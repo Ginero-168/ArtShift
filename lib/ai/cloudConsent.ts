@@ -1,7 +1,7 @@
 /**
  * Client-side cloud-AI consent.
  *
- * Stored preference (AI Provider Settings) survives reloads.
+ * Stored preference (profile menu) survives reloads.
  * A one-time session confirm is enough for the rest of the tab.
  * Local-only chat/canvas paths must not call `ensureCloudConsent`.
  */
@@ -39,7 +39,7 @@ export function hasStoredCloudConsent(): boolean {
   );
 }
 
-/** Persist a durable account/browser preference from AI Provider Settings. */
+/** Persist a durable account/browser preference from the profile menu. */
 export function setAccountCloudConsent(granted: boolean): void {
   if (typeof window === "undefined") return;
   writeFlag(window.localStorage, CLOUD_CONSENT_STORAGE_KEY, granted);

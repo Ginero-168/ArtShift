@@ -65,7 +65,8 @@ describe("ArtShift Project Flow and Local Storage (acceptance criteria)", () => 
     // First slot: New Project button with dashed border, '+' in center, and 'New Project' label
     expect(projectsSource).toContain("NewProjectGridCard");
     expect(projectsSource).toContain("New Project");
-    expect(projectsSource).toContain("2px dashed");
+    expect(projectsSource).toContain("catalog-new");
+    expect(readFileSync("app/globals.css", "utf8")).toContain("border: 1.5px dashed");
 
     // Project cards render the first slide thumbnail
     expect(projectsSource).toContain("ProjectSlideThumbnail");

@@ -35,6 +35,7 @@ import { renderSlideToDataUrl } from "@/lib/renderer/thumbnail";
 function NewProjectGridCard({ onClick }: { onClick: () => void }) {
   return (
     <div
+      className="catalog-new"
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -44,102 +45,11 @@ function NewProjectGridCard({ onClick }: { onClick: () => void }) {
           onClick();
         }
       }}
-      style={{
-        minHeight: 250,
-        background: "transparent",
-        border: "1.5px dashed rgba(26, 23, 20, 0.28)",
-        borderRadius: 10,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        cursor: "pointer",
-        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-        userSelect: "none",
-        padding: "24px 16px",
-        boxSizing: "border-box",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-2px)";
-        e.currentTarget.style.borderColor = "#1a1714";
-        e.currentTarget.style.background = "#fdfcfa";
-        e.currentTarget.style.boxShadow = "4px 4px 0 #1a1714";
-        const circle = e.currentTarget.querySelector(".new-proj-circle") as HTMLElement | null;
-        if (circle) {
-          circle.style.background = "#1a1714";
-          circle.style.borderColor = "#1a1714";
-          circle.style.transform = "scale(1.08)";
-        }
-        const icon = e.currentTarget.querySelector(".new-proj-icon") as HTMLElement | null;
-        if (icon) {
-          icon.style.color = "#ffffff";
-        }
-        const text = e.currentTarget.querySelector(".new-proj-text") as HTMLElement | null;
-        if (text) {
-          text.style.color = "#1a1714";
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "none";
-        e.currentTarget.style.borderColor = "rgba(26, 23, 20, 0.28)";
-        e.currentTarget.style.background = "transparent";
-        e.currentTarget.style.boxShadow = "none";
-        const circle = e.currentTarget.querySelector(".new-proj-circle") as HTMLElement | null;
-        if (circle) {
-          circle.style.background = "#ffffff";
-          circle.style.borderColor = "#ece7e0";
-          circle.style.transform = "scale(1)";
-        }
-        const icon = e.currentTarget.querySelector(".new-proj-icon") as HTMLElement | null;
-        if (icon) {
-          icon.style.color = "#1a1714";
-        }
-        const text = e.currentTarget.querySelector(".new-proj-text") as HTMLElement | null;
-        if (text) {
-          text.style.color = "#443f39";
-        }
-      }}
     >
-      <div
-        className="new-proj-circle"
-        style={{
-          width: 50,
-          height: 50,
-          borderRadius: "50%",
-          background: "#fdfcfa",
-          border: "1.5px solid rgba(26, 23, 20, 0.2)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
-          transition: "all 0.2s ease",
-        }}
-      >
-        <span
-          className="new-proj-icon"
-          style={{
-            display: "inline-flex",
-            color: "#1a1714",
-            transition: "color 0.2s ease",
-          }}
-        >
-          <IconPlus size={24} />
-        </span>
+      <div className="catalog-new-mark">
+        <IconPlus size={24} />
       </div>
-
-      <span
-        className="new-proj-text"
-        style={{
-          fontSize: 14,
-          fontWeight: 600,
-          color: "#443f39",
-          letterSpacing: "-0.01em",
-          transition: "color 0.2s ease",
-        }}
-      >
-        New Project
-      </span>
+      <span className="catalog-new-label">New Project</span>
     </div>
   );
 }
@@ -433,10 +343,10 @@ export default function ProjectsPage() {
 
   if (authLoading) {
     return (
-      <div style={fullScreenCenterStyle}>
+      <div className="catalog theme-cool catalog-note">
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
           <ArtShiftLogo size="header" />
-          <span style={{ fontSize: 13, color: "#78726a", fontWeight: 500 }}>
+          <span style={{ fontSize: 13, color: "var(--ink-muted)", fontWeight: 500 }}>
             กำลังตรวจสอบข้อมูลผู้ใช้…
           </span>
         </div>
@@ -445,16 +355,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f4f0e8",
-        color: "#1a1714",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
-      }}
-    >
+    <div className="catalog theme-cool">
       {/* Hidden file input for import */}
       <input
         ref={fileInputRef}
@@ -465,21 +366,7 @@ export default function ProjectsPage() {
       />
 
       {/* Top Navbar */}
-      <header
-        style={{
-          height: 64,
-          background: "rgba(244, 240, 232, 0.9)",
-          backdropFilter: "blur(14px)",
-          borderBottom: "1px solid rgba(26, 23, 20, 0.12)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 28px",
-          position: "sticky",
-          top: 0,
-          zIndex: 40,
-        }}
-      >
+      <header className="catalog-bar">
         {/* Brand: wordmark navigates to Index home; PROJECTS is the current-page label */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
@@ -495,18 +382,7 @@ export default function ProjectsPage() {
             >
               <ArtShiftLogo size="header" />
             </Link>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9.5,
-                fontWeight: 500,
-                color: "#78726a",
-                letterSpacing: "0.14em",
-                marginTop: 3,
-              }}
-            >
-              PROJECTS
-            </span>
+            <span className="catalog-kicker">PROJECTS</span>
           </div>
         </div>
 
@@ -697,30 +573,8 @@ export default function ProjectsPage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 30,
-                fontWeight: 600,
-                letterSpacing: "-0.025em",
-                color: "#1a1714",
-              }}
-            >
-              โปรเจกต์ของคุณ
-            </h1>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 11,
-                fontWeight: 500,
-                color: "#443f39",
-                border: "1px solid rgba(26, 23, 20, 0.2)",
-                padding: "3px 10px",
-                borderRadius: 20,
-              }}
-            >
-              {projects.length} โปรเจกต์
-            </span>
+            <h1 className="catalog-title">โปรเจกต์ของคุณ</h1>
+            <span className="catalog-count">{projects.length} โปรเจกต์</span>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -745,32 +599,11 @@ export default function ProjectsPage() {
                 <IconSearch size={14} />
               </div>
               <input
+                className="catalog-search"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหาชื่อโปรเจกต์..."
-                style={{
-                  height: 36,
-                  padding: "0 12px 0 32px",
-                  borderRadius: 8,
-                  border: "1px solid #d9d3cc",
-                  background: "#ffffff",
-                  fontSize: 12,
-                  outline: "none",
-                  color: "#1a1714",
-                  width: 200,
-                  transition: "all 0.15s ease",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "#1a1714";
-                  e.currentTarget.style.boxShadow = "0 0 0 2px rgba(26, 23, 20, 0.08)";
-                  e.currentTarget.style.width = "260px";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#d9d3cc";
-                  e.currentTarget.style.boxShadow = "none";
-                  e.currentTarget.style.width = "200px";
-                }}
               />
             </div>
 
@@ -1130,30 +963,20 @@ function formatTimestamp(ts: number): string {
   });
 }
 
-// Styles
-const fullScreenCenterStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "#f4f0e8",
-};
-
 const primaryBtnStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
   padding: "8px 18px",
   borderRadius: 999,
-  border: "1.5px solid #1a1714",
-  background: "#1a1714",
-  color: "#f4f0e8",
+  border: "1.5px solid var(--ink)",
+  background: "var(--ink)",
+  color: "var(--accent-ink)",
   fontSize: 12.5,
   fontWeight: 600,
   cursor: "pointer",
-  boxShadow: "2px 2px 0 #d64418",
-  transition: "all 0.15s ease",
+  boxShadow: "var(--shadow-pop)",
+  transition: "transform 0.15s ease",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
