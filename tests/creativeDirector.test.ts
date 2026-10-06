@@ -904,6 +904,37 @@ describe("gpt-oss-120b Creative Director", () => {
     });
   });
 
+  it("recovers a greeting when the tool envelope has a bare word before the last brace", async () => {
+    const envelope =
+      '{"kind":"tool_calls","text":"","calls":[{"id":"call-89273410","name":"propose_creative_direction","input":{"kind":"answer","text":"สวัสดีครับ\\nA) สร้างรูป"}}] logic}';
+
+    const execute = vi.fn().mockResolvedValue({
+      output: {
+        text: envelope,
+        toolCalls: [],
+        stopReason: "end_turn",
+        assistantMessage: { role: "assistant", content: envelope },
+      },
+      metadata: {},
+    });
+
+    const result = await prepareCreativeDirection(
+      {
+        prompt: "สวัสดี",
+        canvasSummary: { objectCount: 0, selectedCount: 0, width: 1024, height: 1024 },
+        referenceAnalyses: [],
+        availableCapabilities: ["IMAGE_DEFAULT", "IMAGE_EDIT"],
+        cloudConsent: true,
+      },
+      { execute, searchImages: vi.fn(), searchImagesAvailable: false },
+    );
+
+    expect(result).toMatchObject({
+      kind: "answer",
+      text: "สวัสดีครับ\nA) สร้างรูป",
+    });
+  });
+
   it("recovers direction via extractDirectionFromUnparsedText when JSON parsing completely fails", async () => {
     // Unparseable JSON due to unquoted key, invalid characters, but containing tool call fields
     const corruptedText =
