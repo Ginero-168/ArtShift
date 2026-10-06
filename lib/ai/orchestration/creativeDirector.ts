@@ -2102,6 +2102,15 @@ function parseJsonCandidate(text: string): unknown {
     try {
       return JSON.parse(sanitizeJsonString(sliced));
     } catch {}
+    const withoutBareWord = sliced.replace(/(\])\s+[A-Za-z_][A-Za-z0-9_]*\s*(\})$/, "$1$2");
+    if (withoutBareWord !== sliced) {
+      try {
+        return JSON.parse(withoutBareWord);
+      } catch {}
+      try {
+        return JSON.parse(sanitizeJsonString(withoutBareWord));
+      } catch {}
+    }
   }
 
   const candidateToRepair =
