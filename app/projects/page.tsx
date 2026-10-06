@@ -5,7 +5,7 @@
  *
  * Requirements:
  * - Protected route (redirects to / if unauthenticated)
- * - Lists all projects from local IndexedDB
+ * - Lists projects stored on the signed-in Google account
  * - "New Project" button (creates UUID project and navigates to editor)
  * - Project Cards with title, slide count, last updated timestamp, actions
  * - Rename & Delete (with confirmation dialog)
@@ -183,24 +183,25 @@ export default function ProjectsPage() {
       const list = await projectStore.listProjects();
       setProjects(list);
     } catch {
-      setActionError("Failed to load projects from local storage.");
+      setActionError("โหลดโปรเจกต์จากบัญชีไม่สำเร็จ");
     } finally {
       setLoadingProjects(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!authenticated) return;
-    refreshProjects();
-
-    // Check legacy workspace
+    if (!authenticated || !user?.id) return;
     void (async () => {
-      const legacyDoc = await projectStore.detectLegacyWorkspace();
-      if (legacyDoc) {
-        setHasLegacy(true);
+      try {
+        await projectStore.migrateLocalIndexedDb(user.id);
+      } catch {
+        setActionError("ยังย้ายงานจากเครื่องนี้ขึ้นบัญชีไม่สำเร็จ");
       }
+      await refreshProjects();
+      const legacyDoc = await projectStore.detectLegacyWorkspace();
+      if (legacyDoc) setHasLegacy(true);
     })();
-  }, [authenticated, refreshProjects]);
+  }, [authenticated, refreshProjects, user?.id]);
 
   // Filter & Sort
   const filteredProjects = useMemo(() => {
@@ -868,8 +869,7 @@ export default function ProjectsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span>🔒</span>
             <span>
-              <strong>Local Project Storage:</strong> โปรเจกต์ทั้งหมดถูกเก็บไว้เฉพาะใน Browser IndexedDB
-              เครื่องนี้ ไม่มีการซิงก์ข้อมูลขึ้นคลาวด์ภายนอก
+              <strong>บัญชี Google:</strong> โปรเจกต์อยู่กับบัญชีที่ล็อกอิน เปิดเครื่องอื่นด้วยบัญชีเดียวกันแล้วจะเห็นงานชุดนี้
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

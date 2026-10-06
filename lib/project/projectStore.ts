@@ -4,6 +4,7 @@ import { deserializeWithImages, serializeWithImages } from "../engine/serialize"
 import { createEmptyEngineDoc } from "../engine/store";
 import type { EngineDoc } from "../engine/types";
 import { renderSlideToDataUrl } from "../renderer/thumbnail";
+import { HttpProjectBackend } from "./httpProjectBackend";
 
 export const PROJECT_SCHEMA_VERSION = 1;
 const DB_NAME = "artshift-projects-v1";
@@ -48,6 +49,15 @@ export type AllProjectsArchive = {
 };
 
 export type ProjectSaveResult = { ok: true; savedAt: number } | { ok: false; message: string };
+
+export function localProjectsToUpload(
+  projects: readonly ProjectMetadata[],
+  accountId: string,
+): ProjectMetadata[] {
+  return projects.filter(
+    (project) => project.ownerKey === accountId || project.ownerKey === "local-default",
+  );
+}
 
 export interface ProjectStoreBackend {
   list(ownerKey?: string): Promise<ProjectMetadata[]>;
@@ -315,6 +325,8 @@ class ResilientProjectStore {
   constructor(backendOverride?: ProjectStoreBackend) {
     if (backendOverride) {
       this.backend = backendOverride;
+    } else if (typeof window !== "undefined") {
+      this.backend = new HttpProjectBackend();
     } else if (typeof indexedDB !== "undefined") {
       this.backend = new IndexedDbProjectBackend();
     } else {
@@ -327,11 +339,7 @@ class ResilientProjectStore {
   }
 
   async listProjects(ownerKey?: string): Promise<ProjectMetadata[]> {
-    try {
-      return await this.backend.list(ownerKey);
-    } catch {
-      return [];
-    }
+    return this.backend.list(ownerKey);
   }
 
   async getProject(projectId: string): Promise<ProjectMetadata | null> {
@@ -662,6 +670,34 @@ class ResilientProjectStore {
 
   async clearAll(): Promise<void> {
     await this.backend.clearAll();
+  }
+
+  async migrateLocalIndexedDb(accountId: string): Promise<number> {
+    if (!accountId || typeof indexedDB === "undefined") return 0;
+    const flag = `artshift.cloudMigrated.v1.${accountId}`;
+    if (typeof localStorage !== "undefined" && localStorage.getItem(flag) === "1") return 0;
+    const local = new IndexedDbProjectBackend();
+    const mine = localProjectsToUpload(await local.list(), accountId);
+    let uploaded = 0;
+    for (const metadata of mine) {
+      const record = await local.getDocument(metadata.id);
+      if (!record) continue;
+      const remote = await this.backend.get(metadata.id);
+      if (!remote) await this.backend.putProject({ ...metadata, ownerKey: accountId });
+      const remoteDocument = await this.backend.getDocument(metadata.id);
+      if (!remoteDocument) {
+        await this.backend.saveDocument(
+          metadata.id,
+          accountId,
+          record.doc,
+          record.files,
+          metadata.thumbnail,
+        );
+        uploaded += 1;
+      }
+    }
+    if (typeof localStorage !== "undefined") localStorage.setItem(flag, "1");
+    return uploaded;
   }
 }
 
