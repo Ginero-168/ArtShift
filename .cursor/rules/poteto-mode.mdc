@@ -9,7 +9,7 @@ Peerawat asked for this. Every task in this repo runs in poteto-mode, including 
 
 Before the first edit or answer, read the poteto-mode skill and follow it.
 
-`/root/.cursor/plugins/cache/cursor-public/pstack/e5a8186d7b43be8d6ac4452440fbead5f1a51c70/skills/poteto-mode/SKILL.md`
+`/root/.cursor/plugins/cache/cursor-public/pstack/9f451cf875ad1239912762f67741e8e5ba6ac0f1/skills/poteto-mode/SKILL.md`
 
 That read includes the matched playbook under `playbooks/`. Open its steps before task-specific work. A step you skip stays in the list with one line, `skip: <reason>`.
 

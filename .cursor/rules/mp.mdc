@@ -1,0 +1,12 @@
+---
+description: Apply the MP skill on every ArtShift task
+alwaysApply: true
+---
+
+# MP on every task
+
+Peerawat asked for this. Every task in this repo runs the MP skill. No slash command is required.
+
+Before the first edit or answer, read `.cursor/skills/mp/SKILL.md` and follow it.
+
+pstack is the base. The poteto-mode rule still applies. Read that skill first. MP then decides who chooses, and how the work ships.
